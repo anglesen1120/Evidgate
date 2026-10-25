@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -244,7 +245,15 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
 
     /// <summary>A client that neither follows the 302 nor keeps cookies, so each request is explicit.</summary>
     internal HttpClient CreateLoginClient() =>
-        CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+        CreateClient(new WebApplicationFactoryClientOptions
+        {
+            // HTTPS, as the deployment is: the antiforgery cookie of 02.3.2-T1 is `Secure=Always`, and ASP.NET
+            // Core refuses to mint the pair on a request that did not arrive over TLS. A plain-http client
+            // would prove a login route no browser can reach.
+            BaseAddress = new Uri("https://localhost"),
+            AllowAutoRedirect = false,
+            HandleCookies = false,
+        });
 
     /// <summary>Sends one request with the case's token.</summary>
     internal static Task<HttpResponseMessage> SendAsync(HttpClient client, HttpRequestMessage request)
@@ -418,10 +427,17 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
                 services.AddSingleton<ILoginCompletion>(_completion);
             }
 
-            // 02.3.1-T2 Q4: the link seam, which the callback resolves only for a link-purpose state.
+            // 02.3.1-T2 Q4: the link seam, which the callback resolves only for a link-purpose state. The module
+            // registers the real one (02.3.2-T1 composed it, since its store now resolves the session itself), so
+            // "this host has no link seam" — the composition gap the callback must fail closed on — is expressed
+            // by REMOVING it rather than by never adding one.
             if (_linkCompletion is not null)
             {
                 services.AddSingleton<ILinkCompletion>(_linkCompletion);
+            }
+            else
+            {
+                services.RemoveAll<ILinkCompletion>();
             }
 
             // Added to the container, so the host's own logging filters apply to it exactly as they do to the

@@ -145,7 +145,15 @@ internal sealed class LinkTestHost : WebApplicationFactory<Program>
 
     /// <summary>A client that neither follows the 302 nor keeps cookies, so each request is explicit.</summary>
     internal HttpClient CreateLinkClient() =>
-        CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+        CreateClient(new WebApplicationFactoryClientOptions
+        {
+            // HTTPS, as the deployment is: the antiforgery cookie of 02.3.2-T1 is `Secure=Always`, and ASP.NET
+            // Core refuses to mint the pair on a request that did not arrive over TLS. A plain-http client
+            // would prove a login route no browser can reach.
+            BaseAddress = new Uri("https://localhost"),
+            AllowAutoRedirect = false,
+            HandleCookies = false,
+        });
 
     // ------------------------------------------------------------------ the three-step flow
 
@@ -178,19 +186,20 @@ internal sealed class LinkTestHost : WebApplicationFactory<Program>
     /// </summary>
     /// <param name="client">A client of this host.</param>
     /// <param name="provider">The provider route value.</param>
-    /// <param name="sessionCookie">The <c>__Host-evidgate_session</c> value of the signed-in user.</param>
+    /// <param name="session">The signed-in browser's session and its antiforgery pair.</param>
     /// <param name="returnUrl">The optional body <c>return_url</c>, or null for no body at all.</param>
     internal async Task<(HttpResponseMessage Response, LoginStatePayload Payload, string StateCookie)> StartLinkAsync(
         HttpClient client,
         string provider,
-        string sessionCookie,
+        LinkSession session,
         string? returnUrl = null)
     {
         ArgumentNullException.ThrowIfNull(client);
-        ArgumentNullException.ThrowIfNull(sessionCookie);
+        ArgumentNullException.ThrowIfNull(session);
 
         using var request = Request(HttpMethod.Post, "/v1/auth/link/" + provider);
-        request.Headers.Add("Cookie", SessionCookieName + "=" + sessionCookie);
+        request.Headers.Add("Cookie", string.Join("; ", session.Cookies().Select(cookie => cookie.Name + "=" + cookie.Value)));
+        request.Headers.Add(RequestTokenHeaderName, session.RequestToken);
 
         if (returnUrl is not null)
         {
@@ -213,19 +222,19 @@ internal sealed class LinkTestHost : WebApplicationFactory<Program>
     /// <param name="provider">The provider route value.</param>
     /// <param name="stateCookie">The pending-login cookie <see cref="StartLinkAsync"/> wrote.</param>
     /// <param name="state">The one-time state inside that cookie.</param>
-    /// <param name="sessionCookie">The caller's session cookie, or null to send none.</param>
+    /// <param name="session">The caller's session, or null to send none.</param>
     internal static async Task<HttpResponseMessage> LinkCallbackAsync(
         HttpClient client,
         string provider,
         string stateCookie,
         string state,
-        string? sessionCookie)
+        LinkSession? session)
     {
         var request = CallbackRequest(provider, stateCookie, state);
 
-        if (sessionCookie is not null)
+        if (session is not null)
         {
-            request.Headers.Add("Cookie", SessionCookieName + "=" + sessionCookie);
+            request.Headers.Add("Cookie", SessionCookieName + "=" + session.Session);
         }
 
         return await client.SendAsync(request, Token).ConfigureAwait(false);
@@ -242,7 +251,8 @@ internal sealed class LinkTestHost : WebApplicationFactory<Program>
         HttpMethod method,
         string path,
         (string Name, string Value)[] cookies,
-        string? origin = null)
+        string? origin = null,
+        string? requestToken = null)
     {
         ArgumentNullException.ThrowIfNull(client);
 
@@ -258,8 +268,32 @@ internal sealed class LinkTestHost : WebApplicationFactory<Program>
             request.Headers.Add("Origin", origin);
         }
 
+        if (requestToken is not null)
+        {
+            request.Headers.Add(RequestTokenHeaderName, requestToken);
+        }
+
         return await client.SendAsync(request, Token).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// One request on a linking route from a signed-in browser: its session, antiforgery cookie, the staged link cookie
+    /// when given, and the request token a cookie-authenticated mutation echoes in its header.
+    /// </summary>
+    /// <param name="client">A client of this host.</param>
+    /// <param name="method">The verb.</param>
+    /// <param name="path">The path below <c>/v1/auth</c>.</param>
+    /// <param name="session">The browser state the sign-in left.</param>
+    /// <param name="linkCookie">The staged link cookie value, or null for none.</param>
+    /// <param name="origin">An <c>Origin</c> header to send, or null for none.</param>
+    internal static Task<HttpResponseMessage> SendAsync(
+        HttpClient client,
+        HttpMethod method,
+        string path,
+        LinkSession session,
+        string? linkCookie = null,
+        string? origin = null) =>
+        SendAsync(client, method, path, session.Cookies(linkCookie), origin, session.RequestToken);
 
     // ------------------------------------------------------------------ reading what the server wrote
 
@@ -325,6 +359,40 @@ internal sealed class LinkTestHost : WebApplicationFactory<Program>
 
     /// <summary>The name of the session cookie, pinned here so a rename fails this suite instead of passing silently.</summary>
     internal const string SessionCookieName = "__Host-evidgate_session";
+
+    /// <summary>The antiforgery cookie a sign-in issues beside the session (D6), pinned as <see cref="SessionCookieName"/> is.</summary>
+    internal const string AntiforgeryCookieName = "__Host-evidgate_af";
+
+    /// <summary>The request-token cookie a page script reads and echoes in <see cref="RequestTokenHeaderName"/>.</summary>
+    internal const string RequestTokenCookieName = "XSRF-TOKEN";
+
+    /// <summary>The header a cookie-authenticated link mutation carries (00 §9.1, T38).</summary>
+    internal const string RequestTokenHeaderName = "X-XSRF-TOKEN";
+
+    /// <summary>
+    /// The browser state one sign-in leaves behind (D6): the session cookie and the antiforgery pair the same response
+    /// issued. A cookie-authenticated link mutation carries all of it, as the page does.
+    /// </summary>
+    internal sealed record LinkSession(string Session, string Antiforgery, string RequestToken)
+    {
+        /// <summary>Reads the session and its pair from a sign-in response; throws when the response issued one out.</summary>
+        /// <param name="response">The sign-in callback response.</param>
+        internal static LinkSession FromSignIn(HttpResponseMessage response) => new(
+            CookieValue(response, SessionCookieName) ?? throw new InvalidOperationException("the sign-in issued no session cookie"),
+            CookieValue(response, AntiforgeryCookieName) ?? throw new InvalidOperationException("the sign-in issued no antiforgery cookie"),
+            CookieValue(response, RequestTokenCookieName) ?? throw new InvalidOperationException("the sign-in issued no request token"));
+
+        /// <summary>The cookies a link request sends: the session, its antiforgery cookie and the staged link cookie when given.</summary>
+        /// <param name="linkCookie">The staged link cookie value, or null for none.</param>
+        internal (string Name, string Value)[] Cookies(string? linkCookie = null)
+        {
+            (string Name, string Value)[] cookies = linkCookie is null
+                ? [(SessionCookieName, Session), (AntiforgeryCookieName, Antiforgery)]
+                : [(SessionCookieName, Session), (AntiforgeryCookieName, Antiforgery), (LinkConfirmCookie.Name, linkCookie)];
+
+            return cookies;
+        }
+    }
 
     /// <summary>Every <c>Set-Cookie</c> value of <paramref name="name"/> the response carries.</summary>
     internal static IReadOnlyList<string> Cookies(HttpResponseMessage response, string name)

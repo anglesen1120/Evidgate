@@ -311,7 +311,15 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
 
     /// <summary>A client that neither follows the 302 nor keeps cookies, so each request is explicit.</summary>
     internal HttpClient CreateLoginClient() =>
-        CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+        CreateClient(new WebApplicationFactoryClientOptions
+        {
+            // HTTPS, as the deployment is: the antiforgery cookie of 02.3.2-T1 is `Secure=Always`, and ASP.NET
+            // Core refuses to mint the pair on a request that did not arrive over TLS. A plain-http client
+            // would prove a login route no browser can reach.
+            BaseAddress = new Uri("https://localhost"),
+            AllowAutoRedirect = false,
+            HandleCookies = false,
+        });
 
     /// <summary>One whole sign-in: <c>start</c>, read the pending-login cookie, then the <c>callback</c>.</summary>
     /// <param name="client">A client of that host (never following redirects).</param>

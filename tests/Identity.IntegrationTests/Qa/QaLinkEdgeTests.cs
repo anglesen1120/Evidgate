@@ -163,18 +163,19 @@ public sealed class QaLinkEdgeTests : HarnessTest
             client,
             HttpMethod.Post,
             "/link/saml",
-            [(LinkTestHost.SessionCookieName, sessionA)]);
+            sessionA);
 
         start.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await LinkTestHost.ErrorCodeAsync(start)).ShouldBe(ApiErrorCode.NotFound);
     }
 
     /// <summary>
-    /// D-S81-M1, mid-flow: staging succeeds, then the account is disabled, and the confirm answers 401
-    /// (the session no longer resolves) with no identity row and nothing audited.
+    /// D-S81-M1, mid-flow, under the 02.3.2-T1 contract (D7): staging succeeds, then the account is disabled, and
+    /// the confirm answers 403 <c>account_disabled</c> — the authenticator now tells "disabled" from "no session",
+    /// which is what D-S81-M1 handed to this task — with no identity row and nothing audited.
     /// </summary>
     [Fact]
-    public async Task Confirm_AfterTheAccountWasDisabled_Answers401_AndWritesNothing()
+    public async Task Confirm_AfterTheAccountWasDisabled_Answers403AccountDisabled_AndWritesNothing()
     {
         using var host = TwoAccountHost();
         using var client = host.CreateLinkClient();
@@ -189,8 +190,9 @@ public sealed class QaLinkEdgeTests : HarnessTest
         using var confirm = await ConfirmAsync(client, session, staged);
 
         confirm.StatusCode.ShouldBe(
-            HttpStatusCode.Unauthorized,
-            "a disabled account's cookie resolves to nobody until 02.3.2-T1.1 (D-S81-M1)");
+            HttpStatusCode.Forbidden,
+            "a disabled account's live session is a 403 account_disabled, not a signed-out 401 (D7)");
+        (await LinkTestHost.ErrorCodeAsync(confirm)).ShouldBe(ApiErrorCode.AccountDisabled);
         (await host.CountAsync(
             "select count(*) from public.user_identity where provider = @provider and subject = @subject",
             ("provider", LinkTestHost.GitHub),
@@ -419,7 +421,7 @@ public sealed class QaLinkEdgeTests : HarnessTest
     /// <param name="client">A client of the host.</param>
     /// <param name="provider">The provider route value.</param>
     /// <param name="subject">The subject its fake verifies.</param>
-    private async Task<(Guid UserId, string Session, Guid OrgId)> MemberAsync(
+    private async Task<(Guid UserId, LinkTestHost.LinkSession Session, Guid OrgId)> MemberAsync(
         LinkTestHost host,
         HttpClient client,
         string provider,
@@ -438,20 +440,19 @@ public sealed class QaLinkEdgeTests : HarnessTest
         using var second = await host.SignInAsync(client, provider);
         second.StatusCode.ShouldBe(HttpStatusCode.Found);
 
-        return (userId, LinkTestHost.SessionCookieValue(second)
-            ?? throw new InvalidOperationException("the member sign-in issued no session"), orgId);
+        return (userId, LinkTestHost.LinkSession.FromSignIn(second), orgId);
     }
 
     /// <summary>Runs <c>start</c> and the callback and returns the staged link cookie's value.</summary>
     /// <param name="host">The running host.</param>
     /// <param name="client">A client of the host.</param>
     /// <param name="provider">The provider to add.</param>
-    /// <param name="session">The signed-in account's session cookie value.</param>
+    /// <param name="session">The signed-in account's session, as the sign-in left it.</param>
     private static async Task<string> StageAsync(
         LinkTestHost host,
         HttpClient client,
         string provider,
-        string session)
+        LinkTestHost.LinkSession session)
     {
         var start = await host.StartLinkAsync(client, provider, session);
         using var startResponse = start.Response;
@@ -470,29 +471,17 @@ public sealed class QaLinkEdgeTests : HarnessTest
 
     /// <summary><c>GET /v1/auth/link/pending</c> with the two cookies a browser would send.</summary>
     /// <param name="client">A client of the host.</param>
-    /// <param name="session">The session cookie value.</param>
+    /// <param name="session">The session, as the sign-in left it.</param>
     /// <param name="linkCookie">The staged link cookie value, or null for none.</param>
-    private static Task<HttpResponseMessage> PendingAsync(HttpClient client, string session, string? linkCookie) =>
-        LinkTestHost.SendAsync(
-            client,
-            HttpMethod.Get,
-            "/link/pending",
-            linkCookie is null
-                ? [(LinkTestHost.SessionCookieName, session)]
-                : [(LinkTestHost.SessionCookieName, session), (LinkConfirmCookie.Name, linkCookie)]);
+    private static Task<HttpResponseMessage> PendingAsync(HttpClient client, LinkTestHost.LinkSession session, string? linkCookie) =>
+        LinkTestHost.SendAsync(client, HttpMethod.Get, "/link/pending", session, linkCookie);
 
     /// <summary><c>POST /v1/auth/link/confirm</c> with the two cookies a browser would send.</summary>
     /// <param name="client">A client of the host.</param>
-    /// <param name="session">The session cookie value.</param>
+    /// <param name="session">The session, as the sign-in left it.</param>
     /// <param name="linkCookie">The staged link cookie value, or null for none.</param>
-    private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, string session, string? linkCookie) =>
-        LinkTestHost.SendAsync(
-            client,
-            HttpMethod.Post,
-            "/link/confirm",
-            linkCookie is null
-                ? [(LinkTestHost.SessionCookieName, session)]
-                : [(LinkTestHost.SessionCookieName, session), (LinkConfirmCookie.Name, linkCookie)]);
+    private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, LinkTestHost.LinkSession session, string? linkCookie) =>
+        LinkTestHost.SendAsync(client, HttpMethod.Post, "/link/confirm", session, linkCookie);
 
     /// <summary>Replaces the protected cookie's trailing bytes, which its MAC no longer covers.</summary>
     /// <param name="value">A real staged cookie value.</param>

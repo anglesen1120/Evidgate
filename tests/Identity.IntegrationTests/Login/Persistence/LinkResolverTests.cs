@@ -31,49 +31,42 @@ public sealed class LinkResolverTests : SessionTestBase
     {
     }
 
-    // ------------------------------------------------------------------ session_user (AC1/AC3)
+    // ------------------------------------------------------------------ session liveness (AC1/AC3)
 
     /// <summary>
-    /// Done-when: a live, unrevoked session of an active user resolves to its user — the one thing the
-    /// request path is allowed to ask of the platform identity tables.
+    /// A revoked session is dead the moment the column is stamped, without waiting for the row to expire. The
+    /// removed <c>session_user</c> lookup had no caller left, so the link function judges liveness itself: a
+    /// revoked cookie answers <c>unauthenticated</c> and nothing is written.
     /// </summary>
     [Fact]
-    public async Task SessionUser_ResolvesALiveSession()
-    {
-        var userId = await SeedUserAsync("live-session@example.com");
-        var hmac = ExpectedHmac("live");
-
-        await SeedSessionAsync(userId, hmac);
-
-        (await SessionUserAsync(hmac, PepperVersion)).ShouldBe(userId);
-    }
-
-    /// <summary>A revoked session is dead the moment the column is stamped, without waiting for the row to expire.</summary>
-    [Fact]
-    public async Task SessionUser_IgnoresARevokedSession()
+    public async Task Link_AnswersUnauthenticated_ForARevokedSession()
     {
         var userId = await SeedUserAsync("revoked-session@example.com");
-        var hmac = ExpectedHmac("revoked");
+        var subject = $"revoked-{Guid.NewGuid():N}";
+        var cookie = ExpectedHmac("revoked");
 
-        await SeedSessionAsync(userId, hmac, revokedAt: DateTimeOffset.UtcNow.AddMinutes(-1));
+        await SeedSessionAsync(userId, cookie, revokedAt: DateTimeOffset.UtcNow.AddMinutes(-1));
 
-        (await SessionUserAsync(hmac, PepperVersion)).ShouldBeNull();
+        (await LinkAsync([cookie], Provider, subject, "revoked@example.test")).Outcome.ShouldBe("unauthenticated");
+        (await OwnerScalarAsync<long>("select count(*) from public.user_identity")).ShouldBe(0);
     }
 
-    /// <summary>Idle expiry alone ends the lookup; the absolute deadline is a separate clock (02.3.2 §4).</summary>
+    /// <summary>Idle expiry alone refuses the cookie as <c>unauthenticated</c>; the absolute deadline is a separate clock (02.3.2 §4).</summary>
     [Fact]
-    public async Task SessionUser_IgnoresAnIdleExpiredSession()
+    public async Task Link_AnswersUnauthenticated_ForAnIdleExpiredSession()
     {
         var userId = await SeedUserAsync("idle-expired@example.com");
-        var hmac = ExpectedHmac("idle-expired");
+        var subject = $"idle-{Guid.NewGuid():N}";
+        var cookie = ExpectedHmac("idle-expired");
 
         await SeedSessionAsync(
             userId,
-            hmac,
+            cookie,
             expiresAt: DateTimeOffset.UtcNow.AddMinutes(-1),
             absoluteExpiresAt: DateTimeOffset.UtcNow.AddDays(7));
 
-        (await SessionUserAsync(hmac, PepperVersion)).ShouldBeNull();
+        (await LinkAsync([cookie], Provider, subject, "idle-expired@example.test")).Outcome.ShouldBe("unauthenticated");
+        (await OwnerScalarAsync<long>("select count(*) from public.user_identity")).ShouldBe(0);
     }
 
     /// <summary>
@@ -87,10 +80,11 @@ public sealed class LinkResolverTests : SessionTestBase
     /// refuse the session and the case would pass with the absolute predicate removed.
     /// </remarks>
     [Fact]
-    public async Task SessionUser_IgnoresAnAbsoluteExpiredSession()
+    public async Task Link_AnswersUnauthenticated_ForAnAbsoluteExpiredSession()
     {
         var userId = await SeedUserAsync("absolute-expired@example.com");
-        var hmac = ExpectedHmac("absolute-expired");
+        var subject = $"absolute-{Guid.NewGuid():N}";
+        var cookie = ExpectedHmac("absolute-expired");
 
         await OwnerExecuteAsync("alter table public.session drop constraint session_expiry_check");
 
@@ -98,11 +92,12 @@ public sealed class LinkResolverTests : SessionTestBase
         {
             await SeedSessionAsync(
                 userId,
-                hmac,
+                cookie,
                 expiresAt: DateTimeOffset.UtcNow.AddHours(2),
                 absoluteExpiresAt: DateTimeOffset.UtcNow.AddHours(-1));
 
-            (await SessionUserAsync(hmac, PepperVersion)).ShouldBeNull(
+            (await LinkAsync([cookie], Provider, subject, "absolute-expired@example.test")).Outcome.ShouldBe(
+                "unauthenticated",
                 "the idle deadline is two hours away, so only absolute_expires_at ends this session");
         }
         finally
@@ -111,7 +106,7 @@ public sealed class LinkResolverTests : SessionTestBase
             // goes before the check comes back, or the re-add would refuse to validate.
             await OwnerExecuteAsync(
                 "delete from public.session where cookie_hmac = @cookie_hmac",
-                ("cookie_hmac", hmac));
+                ("cookie_hmac", cookie));
             await OwnerExecuteAsync(
                 "alter table public.session add constraint session_expiry_check check (expires_at <= absolute_expires_at)");
         }
@@ -123,138 +118,41 @@ public sealed class LinkResolverTests : SessionTestBase
     }
 
     /// <summary>
-    /// Disabling an account ends its sessions' usefulness at the lookup, so no sweep has to race the
-    /// admin path (02.3.1 §6: <c>active -&gt; disabled</c> is the only transition).
-    /// </summary>
-    [Fact]
-    public async Task SessionUser_IgnoresADisabledUser()
-    {
-        var userId = await SeedDisabledUserAsync("disabled-session@example.com");
-        var hmac = ExpectedHmac("disabled");
-
-        await SeedSessionAsync(userId, hmac);
-
-        (await SessionUserAsync(hmac, PepperVersion)).ShouldBeNull();
-    }
-
-    /// <summary>
-    /// The pepper version travels with the hash (0042:6-13), so a session minted under a drained pepper
-    /// is not resolvable after a rotation: the caller passes the version it holds, not the stored one.
-    /// </summary>
-    [Fact]
-    public async Task SessionUser_IgnoresAnotherPepperVersion()
-    {
-        var userId = await SeedUserAsync("pepper@example.com");
-        var hmac = ExpectedHmac("pepper");
-
-        await SeedSessionAsync(userId, hmac);
-
-        (await SessionUserAsync(hmac, PepperVersion + 1)).ShouldBeNull();
-    }
-
-    /// <summary>An unknown, forged or rotated-away cookie value resolves to nothing, not to an error.</summary>
-    [Fact]
-    public async Task SessionUser_IgnoresAnUnknownHash()
-    {
-        var userId = await SeedUserAsync("known@example.com");
-
-        await SeedSessionAsync(userId, ExpectedHmac("known"));
-
-        (await SessionUserAsync(ExpectedHmac("never-minted"), PepperVersion)).ShouldBeNull();
-    }
-
-    /// <summary>
-    /// The lookup is read-only (contract C6): it runs inside the caller's read-only transaction — the
-    /// shape a query path uses — and leaves the session row's clocks and revocation untouched, because
-    /// sliding expiry is 02.3.2-T1's write and not a side effect of a read.
-    /// </summary>
-    [Fact]
-    public async Task SessionUser_WritesNothing_AndRunsInAReadOnlyTransaction()
-    {
-        var userId = await SeedUserAsync("read-only@example.com");
-        var hmac = ExpectedHmac("read-only");
-
-        await SeedSessionAsync(userId, hmac);
-
-        // `xmin` is the row's transaction stamp: an UPDATE of any kind replaces it, even one that writes the
-        // same values back, so an unchanged `xmin` is the precise "the lookup wrote nothing" probe.
-        var before = await OwnerScalarAsync<string>(
-            "select xmin::text from public.session where cookie_hmac = @cookie_hmac",
-            ("cookie_hmac", hmac));
-
-        await using var connection = await AppDataSource.OpenConnectionAsync(Token);
-        await using var transaction = await connection.BeginTransactionAsync(Token);
-
-        await using (var readOnly = connection.CreateCommand())
-        {
-            readOnly.Transaction = transaction;
-            readOnly.CommandText = "set transaction read only";
-            await readOnly.ExecuteNonQueryAsync(Token);
-        }
-
-        await using (var resolve = connection.CreateCommand())
-        {
-            resolve.Transaction = transaction;
-            resolve.CommandText = "select user_id from evidgate_resolve.session_user(@cookie_hmac, @pepper_version)";
-            resolve.Parameters.AddWithValue("cookie_hmac", hmac);
-            resolve.Parameters.AddWithValue("pepper_version", PepperVersion);
-
-            (await resolve.ExecuteScalarAsync(Token)).ShouldBe(userId);
-        }
-
-        await transaction.CommitAsync(Token);
-
-        var after = await OwnerScalarAsync<string>(
-            "select xmin::text from public.session where cookie_hmac = @cookie_hmac",
-            ("cookie_hmac", hmac));
-
-        after.ShouldBe(before);
-    }
-
-    /// <summary>
     /// The privilege posture of 0044, the 02.9.1 §8 T1 rule the login resolvers follow: EXECUTE is the
     /// app role's only way in. A direct read of <c>session</c> is <c>permission denied</c> (not zero
     /// rows), and a runtime role that was not granted the functions cannot call them either.
     /// </summary>
     [Fact]
-    public async Task SessionUser_IsTheAppRolesOnlyWayIn()
+    public async Task Link_IsTheAppRolesOnlyWayIn()
     {
         var userId = await SeedUserAsync("privileges@example.com");
-        var hmac = ExpectedHmac("privileges");
-        await SeedSessionAsync(userId, hmac);
+        var cookie = ExpectedHmac("privileges");
+        await SeedSessionAsync(userId, cookie);
 
-        (await SessionUserAsync(hmac, PepperVersion)).ShouldBe(userId);
+        (await LinkAsync([cookie], Provider, $"privileges-{Guid.NewGuid():N}", "privileges@example.test"))
+            .Outcome.ShouldBe("linked");
 
         foreach (var table in PlatformTables)
         {
-            var refused = await AppRefusalAsync($"select count(*) from public.\"{table}\"");
-            refused.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, $"{table}: evidgate_app holds no SELECT");
+            var tableRefused = await AppRefusalAsync($"select count(*) from public.\"{table}\"");
+            tableRefused.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, $"{table}: evidgate_app holds no SELECT");
         }
 
         await using var asOperator = await OpenAsRoleAsync("evidgate_operator");
 
-        string[] functionCalls =
-        [
-            "select user_id from evidgate_resolve.session_user(@cookie_hmac, @pepper_version)",
+        await using var command = asOperator.CreateCommand();
+        command.CommandText =
             "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-            + "@user_id, @provider, @subject, @email, @identity_id)",
-        ];
+            + "@cookie_hmacs, @now, @provider, @subject, @email, @identity_id)";
+        command.Parameters.AddWithValue("cookie_hmacs", new[] { cookie });
+        command.Parameters.AddWithValue("now", DateTimeOffset.UtcNow);
+        command.Parameters.AddWithValue("provider", Provider);
+        command.Parameters.AddWithValue("subject", $"operator-{Guid.NewGuid():N}");
+        command.Parameters.AddWithValue("email", "operator@example.test");
+        command.Parameters.AddWithValue("identity_id", Guid.CreateVersion7());
 
-        foreach (var sql in functionCalls)
-        {
-            await using var command = asOperator.CreateCommand();
-            command.CommandText = sql;
-            command.Parameters.AddWithValue("cookie_hmac", hmac);
-            command.Parameters.AddWithValue("pepper_version", PepperVersion);
-            command.Parameters.AddWithValue("user_id", userId);
-            command.Parameters.AddWithValue("provider", Provider);
-            command.Parameters.AddWithValue("subject", $"operator-{Guid.NewGuid():N}");
-            command.Parameters.AddWithValue("email", "operator@example.test");
-            command.Parameters.AddWithValue("identity_id", Guid.CreateVersion7());
-
-            var refused = await Should.ThrowAsync<PostgresException>(() => command.ExecuteNonQueryAsync(Token));
-            refused.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, sql);
-        }
+        var operatorRefusal = await Should.ThrowAsync<PostgresException>(() => command.ExecuteNonQueryAsync(Token));
+        operatorRefusal.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, "login_link_identity");
     }
 
     // ------------------------------------------------------------------ login_link_identity (AC6)
@@ -266,7 +164,8 @@ public sealed class LinkResolverTests : SessionTestBase
         var userId = await SeedUserAsync("first-provider@example.com");
         var subject = $"first-{Guid.NewGuid():N}";
 
-        var (outcome, movedFrom) = await LinkAsync(userId, Provider, subject, "first-provider@example.com");
+        var cookie = await SignedInAsync(userId, "first");
+        var (outcome, movedFrom) = await LinkAsync(cookie, Provider, subject, "first-provider@example.com");
 
         outcome.ShouldBe("linked");
         movedFrom.ShouldBeNull();
@@ -283,9 +182,10 @@ public sealed class LinkResolverTests : SessionTestBase
         var userId = await SeedUserAsync("second-confirm@example.com");
         var subject = $"repeat-{Guid.NewGuid():N}";
 
-        (await LinkAsync(userId, Provider, subject, "first@example.test")).Outcome.ShouldBe("linked");
+        var cookie = await SignedInAsync(userId, "second-confirm");
+        (await LinkAsync(cookie, Provider, subject, "first@example.test")).Outcome.ShouldBe("linked");
 
-        var (outcome, movedFrom) = await LinkAsync(userId, Provider, subject, "changed@example.test");
+        var (outcome, movedFrom) = await LinkAsync(cookie, Provider, subject, "changed@example.test");
 
         outcome.ShouldBe("already_linked");
         movedFrom.ShouldBeNull();
@@ -307,17 +207,21 @@ public sealed class LinkResolverTests : SessionTestBase
         var userId = await SeedUserAsync("no-rename@example.com", displayName: "First Name");
         var subject = $"rename-{Guid.NewGuid():N}";
 
-        (await LinkAsync(userId, Provider, subject, "no-rename@example.com")).Outcome.ShouldBe("linked");
+        var cookie = await SignedInAsync(userId, "no-rename");
+        (await LinkAsync(cookie, Provider, subject, "no-rename@example.com")).Outcome.ShouldBe("linked");
 
         (await OwnerScalarAsync<string>("select display_name from public.\"user\" where id = @id", ("id", userId)))
             .ShouldBe("First Name");
 
         // The removed shape is not a function at all: a caller that still passes a profile name gets 42883 rather
-        // than an argument that is silently ignored.
+        // than an argument that is silently ignored. The hash value is irrelevant — the call never resolves a
+        // function — but it must be typed as the `bytea[]` the surviving signature takes, so the refusal comes
+        // from the server's resolution and not from binding a string array to that parameter.
         var refused = await AppRefusalAsync(
             "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-            + "@user_id, @provider, @subject, @email, @display_name, @identity_id)",
-            ("user_id", userId),
+            + "@cookie_hmacs, @now, @provider, @subject, @email, @display_name, @identity_id)",
+            ("cookie_hmacs", new[] { new byte[32] }),
+            ("now", DateTimeOffset.UtcNow),
             ("provider", Provider),
             ("subject", $"{subject}-extra"),
             ("email", "no-rename@example.com"),
@@ -340,7 +244,8 @@ public sealed class LinkResolverTests : SessionTestBase
 
         await SeedIdentityAsync(emptyUserId, Provider, subject, "source@example.test");
 
-        var (outcome, movedFrom) = await LinkAsync(userId, Provider, subject, "source@example.test");
+        var cookie = await SignedInAsync(userId, "move-target");
+        var (outcome, movedFrom) = await LinkAsync(cookie, Provider, subject, "source@example.test");
 
         outcome.ShouldBe("moved");
         movedFrom.ShouldBe(emptyUserId);
@@ -361,7 +266,8 @@ public sealed class LinkResolverTests : SessionTestBase
         await SeedIdentityAsync(memberId, Provider, subject, "member@example.test");
         await SeedMembershipAsync(await Fixture.SeedOrgAsync(cancellationToken: Token), memberId, "pending");
 
-        var (outcome, movedFrom) = await LinkAsync(userId, Provider, subject, "member@example.test");
+        var cookie = await SignedInAsync(userId, "member-target");
+        var (outcome, movedFrom) = await LinkAsync(cookie, Provider, subject, "member@example.test");
 
         outcome.ShouldBe("conflict");
         movedFrom.ShouldBeNull();
@@ -379,7 +285,8 @@ public sealed class LinkResolverTests : SessionTestBase
         await SeedIdentityAsync(signedInId, Provider, subject, "signed-in@example.test");
         await SeedSessionAsync(signedInId, ExpectedHmac("signed-in"));
 
-        var (outcome, movedFrom) = await LinkAsync(userId, Provider, subject, "signed-in@example.test");
+        var cookie = await SignedInAsync(userId, "session-target");
+        var (outcome, movedFrom) = await LinkAsync(cookie, Provider, subject, "signed-in@example.test");
 
         outcome.ShouldBe("conflict");
         movedFrom.ShouldBeNull();
@@ -405,22 +312,23 @@ public sealed class LinkResolverTests : SessionTestBase
             expiresAt: DateTimeOffset.UtcNow.AddHours(-2),
             absoluteExpiresAt: DateTimeOffset.UtcNow.AddHours(-1));
 
-        var (outcome, movedFrom) = await LinkAsync(userId, Provider, subject, "stale@example.test");
+        var cookie = await SignedInAsync(userId, "stale-target");
+        var (outcome, movedFrom) = await LinkAsync(cookie, Provider, subject, "stale@example.test");
 
         outcome.ShouldBe("moved");
         movedFrom.ShouldBe(staleId);
         (await IdentityRowAsync(Provider, subject))[0].ShouldBe(userId);
     }
 
-    /// <summary>An unknown target account is a value, never an exception, and no identity row appears.</summary>
+    /// <summary>An unknown cookie is a value, never an exception: it answers <c>unauthenticated</c> and no identity row appears.</summary>
     [Fact]
-    public async Task Link_AnswersUnknownUser_AndWritesNothing()
+    public async Task Link_AnswersUnauthenticated_ForAnUnknownCookie_AndWritesNothing()
     {
         var subject = $"unknown-{Guid.NewGuid():N}";
 
-        var (outcome, movedFrom) = await LinkAsync(Guid.CreateVersion7(), Provider, subject, "ghost@example.test");
+        var (outcome, movedFrom) = await LinkAsync([ExpectedHmac("never-minted")], Provider, subject, "ghost@example.test");
 
-        outcome.ShouldBe("unknown_user");
+        outcome.ShouldBe("unauthenticated");
         movedFrom.ShouldBeNull();
         (await OwnerScalarAsync<long>("select count(*) from public.user_identity")).ShouldBe(0);
     }
@@ -431,8 +339,9 @@ public sealed class LinkResolverTests : SessionTestBase
     {
         var userId = await SeedDisabledUserAsync("disabled-link@example.com");
         var subject = $"disabled-{Guid.NewGuid():N}";
+        var cookie = await SignedInAsync(userId, "disabled-link");
 
-        var (outcome, movedFrom) = await LinkAsync(userId, Provider, subject, "disabled-link@example.com");
+        var (outcome, movedFrom) = await LinkAsync(cookie, Provider, subject, "disabled-link@example.com");
 
         outcome.ShouldBe("disabled");
         movedFrom.ShouldBeNull();
@@ -449,9 +358,11 @@ public sealed class LinkResolverTests : SessionTestBase
         var userId = await SeedUserAsync("concurrent@example.com");
         var subject = $"concurrent-{Guid.NewGuid():N}";
 
+        var cookie = await SignedInAsync(userId, "concurrent");
+
         var results = await Task.WhenAll(
-            LinkAsync(userId, Provider, subject, "concurrent@example.test"),
-            LinkAsync(userId, Provider, subject, "concurrent@example.test"));
+            LinkAsync(cookie, Provider, subject, "concurrent@example.test"),
+            LinkAsync(cookie, Provider, subject, "concurrent@example.test"));
 
         var outcomes = results
             .Select(result => result.Outcome)
@@ -553,33 +464,35 @@ public sealed class LinkResolverTests : SessionTestBase
             Token);
     }
 
-    /// <summary><c>evidgate_resolve.session_user(hmac, version)</c> as the app role, no tenant setting.</summary>
-    private async Task<Guid?> SessionUserAsync(byte[] cookieHmac, int pepperVersion)
+    /// <summary>
+    /// One live session for <paramref name="userId"/>, returned as the candidate hashes a link call presents. The
+    /// caller holds the cookie, never the user id, so every link is made through a session.
+    /// </summary>
+    private async Task<byte[][]> SignedInAsync(Guid userId, string label)
     {
-        await using var command = AppDataSource.CreateCommand(
-            "select user_id from evidgate_resolve.session_user(@cookie_hmac, @pepper_version)");
-        command.Parameters.AddWithValue("cookie_hmac", cookieHmac);
-        command.Parameters.AddWithValue("pepper_version", pepperVersion);
+        var cookieHmac = ExpectedHmac(label);
 
-        var value = await command.ExecuteScalarAsync(Token);
+        await SeedSessionAsync(userId, cookieHmac);
 
-        return value is null or DBNull ? null : (Guid)value;
+        return [cookieHmac];
     }
 
     /// <summary>
-    /// <c>evidgate_resolve.login_link_identity(...)</c> as the app role, no tenant setting. There is no
-    /// profile-name argument: the function has none, so the signature this call builds is the whole contract.
+    /// <c>evidgate_resolve.login_link_identity(...)</c> as the app role, no tenant setting. The function takes the
+    /// candidate cookie hashes, never a user id: it resolves the live session and its account from them. There is
+    /// no profile-name argument: the function has none, so the signature this call builds is the whole contract.
     /// </summary>
     private async Task<(string Outcome, Guid? MovedFrom)> LinkAsync(
-        Guid userId,
+        byte[][] cookieHmacs,
         string provider,
         string subject,
         string email)
     {
         await using var command = AppDataSource.CreateCommand(
             "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-            + "@user_id, @provider, @subject, @email, @identity_id)");
-        command.Parameters.AddWithValue("user_id", userId);
+            + "@cookie_hmacs, @now, @provider, @subject, @email, @identity_id)");
+        command.Parameters.AddWithValue("cookie_hmacs", cookieHmacs);
+        command.Parameters.AddWithValue("now", DateTimeOffset.UtcNow);
         command.Parameters.AddWithValue("provider", provider);
         command.Parameters.AddWithValue("subject", subject);
         command.Parameters.AddWithValue("email", email);

@@ -2013,7 +2013,7 @@ public sealed class RouteProbeRunner
     /// <paramref name="expectedCode"/> is null for the bodiless 204 of the invite staging route: there is no
     /// envelope to compare, so the exact status plus the identical shape carry the case. The link routes answer
     /// the typed 503 <c>unavailable</c> in this host: it provisions no session pepper
-    /// (<c>EVIDGATE__SESSION__PEPPER</c>), so <c>ISessionUserReader</c> refuses before any tenant read — an
+    /// (<c>EVIDGATE__SESSION__PEPPER</c>), so <c>ISessionRequestAuthenticator</c> refuses before any tenant read — an
     /// answer of the route, not a fault, which is why the case asserts it exactly and must be revisited if this
     /// host ever mints sessions.
     /// </remarks>

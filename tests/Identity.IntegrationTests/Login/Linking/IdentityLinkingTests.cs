@@ -177,6 +177,74 @@ public sealed class IdentityLinkingTests : HarnessTest
         LinkTestHost.SessionCookieValue(signIn).ShouldNotBeNullOrEmpty();
     }
 
+    /// <summary>
+    /// A confirm that carries the session cookies but no <c>X-XSRF-TOKEN</c> is refused as <c>csrf_failed</c> before any
+    /// link runs: the cookies alone do not authorise a mutation (00 §9.1, T38).
+    /// </summary>
+    [Fact]
+    public async Task Confirm_WithoutTheRequestToken_Answers403CsrfFailedAndWritesNothing()
+    {
+        using var host = LinkTestHost.Start(
+            Fixture,
+            LinkTestHost.Provider(LinkTestHost.Google, GoogleSubject, Email),
+            LinkTestHost.Provider(LinkTestHost.GitHub, GitHubSubject, Email));
+        using var client = host.CreateLinkClient();
+
+        var (userId, session, _) = await MemberAsync(host, client, LinkTestHost.Google, GoogleSubject);
+        var linkCookie = await StageAsync(host, client, LinkTestHost.GitHub, session);
+
+        // The session and its antiforgery cookie are sent; the header the page echoes is the one left out.
+        using var confirm = await LinkTestHost.SendAsync(
+            client,
+            HttpMethod.Post,
+            "/link/confirm",
+            session.Cookies(linkCookie));
+
+        confirm.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await LinkTestHost.ErrorCodeAsync(confirm)).ShouldBe("csrf_failed");
+        (await host.UserIdAsync(LinkTestHost.GitHub, GitHubSubject)).ShouldBeNull();
+        (await host.CountAsync(
+            "select count(*) from public.user_identity where user_id = @id",
+            ("id", userId))).ShouldBe(1L);
+    }
+
+    /// <summary>
+    /// A confirm on a session a privilege change flagged for rotation (02.3.2 D5, D8): the request's own pair authorises
+    /// the mutation, the authenticator rotates the session once, and the link resolves on the successor by the proof of
+    /// its new cookie. The browser receives the successor's cookie and the predecessor is dead afterwards.
+    /// </summary>
+    [Fact]
+    public async Task Confirm_OnAFlaggedSession_RotatesOnceAndLinksOnTheSuccessor()
+    {
+        using var host = LinkTestHost.Start(
+            Fixture,
+            LinkTestHost.Provider(LinkTestHost.Google, GoogleSubject, Email),
+            LinkTestHost.Provider(LinkTestHost.GitHub, GitHubSubject, Email));
+        using var client = host.CreateLinkClient();
+
+        var (userId, session, _) = await MemberAsync(host, client, LinkTestHost.Google, GoogleSubject);
+        var linkCookie = await StageAsync(host, client, LinkTestHost.GitHub, session);
+
+        // A privilege change on this user flags the live session for rotation (migration 0045's column).
+        await host.ArrangeAsync(
+            "update public.session set rotation_required_at = now() where user_id = @id",
+            ("id", userId));
+
+        using var confirm = await ConfirmAsync(client, session, linkCookie);
+        confirm.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await LinkTestHost.MemberAsync(confirm, "outcome")).ShouldBe("linked");
+
+        // The browser receives the successor's cookie, which is not the one it presented.
+        var successor = LinkTestHost.SessionCookieValue(confirm).ShouldNotBeNull();
+        successor.ShouldNotBe(session.Session);
+
+        // Exactly one live session remains for the user: the successor. The predecessor was revoked by the rotation.
+        (await host.CountAsync(
+            "select count(*) from public.session where user_id = @id and revoked_at is null and expires_at > now() and absolute_expires_at > now()",
+            ("id", userId))).ShouldBe(1L);
+        (await host.UserIdAsync(LinkTestHost.GitHub, GitHubSubject)).ShouldBe(userId);
+    }
+
     // ------------------------------------------------------------------ start: who may begin
 
     /// <summary>A start without a session is the 00 §9.2 401, not a redirect to the provider.</summary>
@@ -193,7 +261,7 @@ public sealed class IdentityLinkingTests : HarnessTest
         LinkTestHost.CookieValue(response, LoginStateCookie.Name).ShouldBeNull();
     }
 
-    /// <summary>A revoked session resolves to no user, so the start is refused and no state is written.</summary>
+    /// <summary>A revoked session is refused as <c>session_revoked</c>, and no state is written.</summary>
     [Fact]
     public async Task Start_WithARevokedSession_Answers401()
     {
@@ -207,14 +275,14 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Post,
             "/link/github",
-            [(LinkTestHost.SessionCookieName, session)]);
+            session);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        (await LinkTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.Unauthenticated);
+        (await LinkTestHost.ErrorCodeAsync(response)).ShouldBe("session_revoked");
         LinkTestHost.CookieValue(response, LoginStateCookie.Name).ShouldBeNull();
     }
 
-    /// <summary>An expired session is refused the same way (the resolver filters on the deadline).</summary>
+    /// <summary>An expired session is refused as <c>session_expired</c>, and no state is written.</summary>
     [Fact]
     public async Task Start_WithAnExpiredSession_Answers401()
     {
@@ -229,19 +297,18 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Post,
             "/link/github",
-            [(LinkTestHost.SessionCookieName, session)]);
+            session);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        (await LinkTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.Unauthenticated);
+        (await LinkTestHost.ErrorCodeAsync(response)).ShouldBe("session_expired");
     }
 
     /// <summary>
-    /// A disabled account cannot start a link. The answer is the session's own 401 rather than
-    /// <c>account_disabled</c>: <c>evidgate_resolve.session_user</c> filters on <c>user.status = 'active'</c>, so a
-    /// disabled user is indistinguishable from no session, which is also the account-enumeration-safe answer.
+    /// A disabled account is refused as <c>account_disabled</c> (403), the authenticator's own answer for a
+    /// non-active user. It is an authorization verdict, not a credential one, so it is not hidden as a 401.
     /// </summary>
     [Fact]
-    public async Task Start_ForADisabledAccount_Answers401LikeNoSession()
+    public async Task Start_ForADisabledAccount_Answers403AccountDisabled()
     {
         using var host = MinimalHost();
         using var client = host.CreateLinkClient();
@@ -253,10 +320,10 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Post,
             "/link/github",
-            [(LinkTestHost.SessionCookieName, session)]);
+            session);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        (await LinkTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.Unauthenticated);
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await LinkTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.AccountDisabled);
         LinkTestHost.CookieValue(response, LoginStateCookie.Name).ShouldBeNull();
     }
 
@@ -273,7 +340,7 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Post,
             "/link/gitlab",
-            [(LinkTestHost.SessionCookieName, session)]);
+            session);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await LinkTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.NotFound);
@@ -299,7 +366,7 @@ public sealed class IdentityLinkingTests : HarnessTest
             LinkTestHost.GitHub,
             start.StateCookie,
             start.Payload.State,
-            sessionCookie: null);
+            session: null);
 
         callback.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await LinkTestHost.ErrorCodeAsync(callback)).ShouldBe(ApiErrorCode.Unauthenticated);
@@ -450,7 +517,7 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Post,
             "/link/confirm",
-            [(LinkTestHost.SessionCookieName, session)]);
+            session);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await LinkTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.TokenInvalid);
@@ -581,7 +648,7 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Delete,
             "/link/pending",
-            [(LinkTestHost.SessionCookieName, session), (LinkConfirmCookie.Name, linkCookie)]))
+            session, linkCookie))
         {
             delete.StatusCode.ShouldBe(HttpStatusCode.NoContent);
             LinkTestHost.CookieValue(delete, LinkConfirmCookie.Name).ShouldBe(string.Empty);
@@ -615,7 +682,7 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Get,
             "/link/pending",
-            [(LinkTestHost.SessionCookieName, sessionA)]))
+            sessionA))
         {
             nothing.StatusCode.ShouldBe(HttpStatusCode.NotFound);
             (await LinkTestHost.ErrorCodeAsync(nothing)).ShouldBe(ApiErrorCode.NotFound);
@@ -625,7 +692,7 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Get,
             "/link/pending",
-            [(LinkTestHost.SessionCookieName, sessionB), (LinkConfirmCookie.Name, linkCookie)]);
+            sessionB, linkCookie);
 
         foreign.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         LinkTestHost.CookieValue(foreign, LinkConfirmCookie.Name).ShouldBe(string.Empty);
@@ -649,7 +716,7 @@ public sealed class IdentityLinkingTests : HarnessTest
         // The github identity belongs to a second account that has a live membership.
         var (_, sessionA, _) = await MemberAsync(host, client, LinkTestHost.Google, GoogleSubject);
         var (githubUser, sessionB, _) = await MemberAsync(host, client, LinkTestHost.GitHub, GitHubSubject);
-        sessionB.ShouldNotBeNullOrEmpty();
+        sessionB.Session.ShouldNotBeNullOrEmpty();
 
         var linkCookie = await StageAsync(host, client, LinkTestHost.GitHub, sessionA);
 
@@ -746,6 +813,7 @@ public sealed class IdentityLinkingTests : HarnessTest
     /// <param name="stagingSpent">Whether the staged cookie must be spent by that answer.</param>
     [Theory]
     [InlineData((int)LinkResult.Disabled, HttpStatusCode.Forbidden, ApiErrorCode.AccountDisabled, true)]
+    [InlineData((int)LinkResult.Unauthenticated, HttpStatusCode.Unauthorized, ApiErrorCode.Unauthenticated, true)]
     [InlineData((int)LinkResult.Unrecognised, HttpStatusCode.ServiceUnavailable, ApiErrorCode.Unavailable, false)]
     public async Task Confirm_StoreOutcome_IsMappedAndTheStagingFollowsTheAnswer(
         int outcome,
@@ -809,8 +877,8 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Post,
             "/link/github",
-            [(LinkTestHost.SessionCookieName, session)],
-            Foreign))
+            session,
+            origin: Foreign))
         {
             refusedStart.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
             (await LinkTestHost.ErrorCodeAsync(refusedStart)).ShouldBe(ApiErrorCode.Forbidden);
@@ -830,8 +898,8 @@ public sealed class IdentityLinkingTests : HarnessTest
                 client,
                 method,
                 path,
-                [(LinkTestHost.SessionCookieName, session), (LinkConfirmCookie.Name, linkCookie)],
-                Foreign);
+                session, linkCookie,
+                origin: Foreign);
 
             refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
             (await LinkTestHost.ErrorCodeAsync(refused)).ShouldBe(ApiErrorCode.Forbidden);
@@ -844,8 +912,8 @@ public sealed class IdentityLinkingTests : HarnessTest
             client,
             HttpMethod.Post,
             "/link/github",
-            [(LinkTestHost.SessionCookieName, session)],
-            LinkTestHost.PublicBaseUrl);
+            session,
+            origin: LinkTestHost.PublicBaseUrl);
 
         accepted.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
@@ -1153,7 +1221,15 @@ public sealed class IdentityLinkingTests : HarnessTest
 
         confirm.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var sensitive = new[] { session, stateCookie, state, linkCookie };
+        var sensitive = new[]
+        {
+            session.Session,
+            session.Antiforgery,
+            session.RequestToken,
+            stateCookie,
+            state,
+            linkCookie,
+        };
 
         foreach (var response in new[] { startResponse, callback, pending, confirm })
         {
@@ -1208,7 +1284,7 @@ public sealed class IdentityLinkingTests : HarnessTest
     /// <param name="client">A client of the host.</param>
     /// <param name="provider">The provider route value.</param>
     /// <param name="subject">The subject its fake verifies.</param>
-    private static async Task<(Guid UserId, string Session, Guid OrgId)> MemberAsync(
+    private static async Task<(Guid UserId, LinkTestHost.LinkSession Session, Guid OrgId)> MemberAsync(
         LinkTestHost host,
         HttpClient client,
         string provider,
@@ -1229,8 +1305,7 @@ public sealed class IdentityLinkingTests : HarnessTest
         using var second = await host.SignInAsync(client, provider);
         second.StatusCode.ShouldBe(HttpStatusCode.Found);
 
-        var session = LinkTestHost.SessionCookieValue(second)
-            ?? throw new InvalidOperationException("the member sign-in issued no session");
+        var session = LinkTestHost.LinkSession.FromSignIn(second);
 
         return (userId, session, orgId);
     }
@@ -1239,12 +1314,12 @@ public sealed class IdentityLinkingTests : HarnessTest
     /// <param name="host">The running host.</param>
     /// <param name="client">A client of the host.</param>
     /// <param name="provider">The provider to add.</param>
-    /// <param name="session">The user's session cookie value.</param>
+    /// <param name="session">The user's session, as the sign-in left it.</param>
     private static async Task<(HttpResponseMessage Response, LoginStatePayload Payload, string StateCookie)> StartLinkAsync(
         LinkTestHost host,
         HttpClient client,
         string provider,
-        string session)
+        LinkTestHost.LinkSession session)
     {
         var started = await host.StartLinkAsync(client, provider, session);
 
@@ -1255,12 +1330,12 @@ public sealed class IdentityLinkingTests : HarnessTest
     /// <param name="host">The running host.</param>
     /// <param name="client">A client of the host.</param>
     /// <param name="provider">The provider to add.</param>
-    /// <param name="session">The user's session cookie value.</param>
+    /// <param name="session">The user's session, as the sign-in left it.</param>
     private static async Task<string> StageAsync(
         LinkTestHost host,
         HttpClient client,
         string provider,
-        string session)
+        LinkTestHost.LinkSession session)
     {
         var start = await StartLinkAsync(host, client, provider, session);
         using var startResponse = start.Response;
@@ -1280,28 +1355,20 @@ public sealed class IdentityLinkingTests : HarnessTest
 
     /// <summary><c>GET /v1/auth/link/pending</c> with the given cookies.</summary>
     /// <param name="client">A client of the host.</param>
-    /// <param name="session">The session cookie value.</param>
+    /// <param name="session">The session, as the sign-in left it.</param>
     /// <param name="linkCookie">The staged link cookie value, or null for none.</param>
-    private static Task<HttpResponseMessage> PendingAsync(HttpClient client, string session, string? linkCookie)
+    private static Task<HttpResponseMessage> PendingAsync(HttpClient client, LinkTestHost.LinkSession session, string? linkCookie)
     {
-        (string Name, string Value)[] cookies = linkCookie is null
-            ? [(LinkTestHost.SessionCookieName, session)]
-            : [(LinkTestHost.SessionCookieName, session), (LinkConfirmCookie.Name, linkCookie)];
-
-        return LinkTestHost.SendAsync(client, HttpMethod.Get, "/link/pending", cookies);
+        return LinkTestHost.SendAsync(client, HttpMethod.Get, "/link/pending", session, linkCookie);
     }
 
     /// <summary><c>POST /v1/auth/link/confirm</c> with the given cookies.</summary>
     /// <param name="client">A client of the host.</param>
-    /// <param name="session">The session cookie value.</param>
+    /// <param name="session">The session, as the sign-in left it.</param>
     /// <param name="linkCookie">The staged link cookie value, or null for a browser that no longer has one.</param>
-    private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, string session, string? linkCookie)
+    private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, LinkTestHost.LinkSession session, string? linkCookie)
     {
-        (string Name, string Value)[] cookies = linkCookie is null
-            ? [(LinkTestHost.SessionCookieName, session)]
-            : [(LinkTestHost.SessionCookieName, session), (LinkConfirmCookie.Name, linkCookie)];
-
-        return LinkTestHost.SendAsync(client, HttpMethod.Post, "/link/confirm", cookies);
+        return LinkTestHost.SendAsync(client, HttpMethod.Post, "/link/confirm", session, linkCookie);
     }
 
     /// <summary>
@@ -1330,7 +1397,7 @@ public sealed class IdentityLinkingTests : HarnessTest
     {
         /// <inheritdoc />
         public ValueTask<Result<LinkOutcome>> LinkAsync(
-            Guid userId,
+            byte[]? sessionProof,
             string provider,
             string subject,
             string email,
