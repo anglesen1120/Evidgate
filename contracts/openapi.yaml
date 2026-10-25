@@ -5979,7 +5979,12 @@ paths:
         a valid file is applied in one transaction under one `batch_id`. A case row is matched by
         `code`: a code outside the project's `case_prefix` is `code_conflict`, a code that names a
         live case updates it, one that names a soft-deleted case restores it (`change_kind =
-        restore`), and an empty code allocates a fresh number from one batch allocation per file. A
+        restore`), and an empty code allocates a fresh number from one batch allocation per file; an
+        explicit code number above 999 999 is `code_conflict` (a write-only caller cannot exhaust the
+        project's counter). An empty `state` cell keeps an existing row's stored state (new rows start
+        `draft` for a case and `active` for an item), a non-empty one must be a move the state routes
+        allow (otherwise `value_invalid` at `/state`), a restored case is always `draft`, and a case
+        under a retired item is refused. A
         `dry_run=true` answers the same report and writes nothing (no version row, no code
         allocation, no audit row); a file whose every row is unchanged writes nothing either and
         answers `batch_id: null`. `Idempotency-Key` is required: the same key with the same file
@@ -6054,10 +6059,11 @@ paths:
         tree. `node_id` scopes the export to one node's subtree, `include` is a comma list of
         `nodes`, `items` and `cases` (default all three; an unknown token is 422 `request_invalid`
         with `details[].path = /include`), and only live rows are exported. A spreadsheet text cell
-        that would start a formula (`=`, `+`, `-`, `@`, TAB, CR) is written with one leading
+        that would start a formula (`=`, `+`, `-`, `@`, TAB, CR, LF) is written with one leading
         apostrophe; the import strips exactly that apostrophe back and stores literal text, so a
-        round trip returns the authored value. At most 5 000 data rows — the import cap, so every
-        export re-imports — are served: a larger scope is 413 `payload_too_large` with one detail,
+        round trip returns the authored value. At most 5 000 data rows and 5 MiB of emitted text —
+        the import caps, so every export re-imports — are served: a larger scope is 413
+        `payload_too_large` with one detail,
         `details[].path = /node_id` and `details[].reason = body_too_large`, never a truncated file. An unknown or soft-deleted `node_id`, or another tenant's project, is 404
         `not_found`; an absent or unknown `format` is 422 with `/format`, as on the import.
       x-permission: authoring:read
