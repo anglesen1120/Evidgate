@@ -135,13 +135,15 @@ paths:
         and answers 302 whose `Location` is the provider's authorization URL (`response_type=code`,
         `code_challenge_method=S256`, the nonce and the provider's scopes). `returnUrl` is the post-login
         destination and is allowlisted (see the parameter); a refused value lands on `/` and is not an
-        error. Every response of this route carries `Cache-Control: no-store`. Failures: 404 `not_found`
-        when no provider is registered under the route value (`google` is 02.3.1-T1.2; `github` answers
-        404 until 02.3.1-T1.3 registers it, which is why the enum already carries the value); 503
-        `unavailable` with `Retry-After` when the provider has no client credential
-        (`EVIDGATE__OIDC__GOOGLE__CLIENTID` + `…CLIENTSECRET`) or the deployment has no
+        error. Every response of this route carries `Cache-Control: no-store`. 404 `not_found` means no
+        provider is registered under the route value at all (`google` registers in 02.3.1-T1.2, `github`
+        in 02.3.1-T1.3). A registered provider whose client credential is missing is NOT a 404: it answers
+        503 `unavailable` with `Retry-After`, because registration is composition and the credential is
+        runtime configuration. The same 503 covers a deployment with no
         `EVIDGATE__LOGIN__PUBLICBASEURL` — one answer for both causes, so the route is no oracle for the
-        deployment's configuration (02.3.1 AC8). No password field exists anywhere in this flow (AC7):
+        deployment's configuration (02.3.1 AC8); the credential keys are
+        `EVIDGATE__OIDC__GOOGLE__CLIENTID` + `…CLIENTSECRET` and `EVIDGATE__OAUTH__GITHUB__CLIENTID` +
+        `…CLIENTSECRET`. No password field exists anywhere in this flow (AC7):
         the only login credential the platform accepts is the provider's.
       x-permission: none
       x-auth: anonymous
@@ -196,13 +198,14 @@ paths:
         token, nonce, verifier, email or subject is echoed or logged. 404 `not_found` and 503 `unavailable`
         with `Retry-After` mean what they mean on `start`, and a provider timeout, transport failure, 5xx,
         429 or unusable JWKS is 503 rather than 401 (02.3.1 AC8). Every response carries
-        `Cache-Control: no-store`. **Current build (02.3.1-T1.1/T1.2):** once the identity is verified this
-        route answers 501 `login_not_completed` — a typed failure, never a success — because the completion
-        (the `user`/`user_identity` upsert, the `session` row and the `__Host-evidgate` session cookie) is
-        02.3.1-T1.4's task. **02.3.1-T1.4** replaces that 501 with the documented 302: `Location` is the
-        allowlisted `returnUrl` (or `/`) and the response sets the session cookie. There is no 200 body at
-        any point: the browser flow ends in a redirect, and a verified-but-uncompleted identity is never
-        reported as signed in.
+        `Cache-Control: no-store`. Once the identity is verified the completion (02.3.1-T1.4) upserts the
+        `user`/`user_identity` on `(provider, subject)`, requires an active membership
+        (`evidgate_resolve.member_orgs`), inserts the platform-scoped `session` row, sets the
+        `__Host-evidgate_session` cookie and answers the 302. A verified account that no active
+        organization admits is 403 `no_membership` with no session and no cookie (AC3) — the rows the
+        upsert wrote stay, so a later invite binds to them — and a disabled account is 403
+        `account_disabled`. There is no 200 body at any point: the browser flow ends in a redirect, and a
+        verified-but-refused identity is never reported as signed in.
       x-permission: none
       x-auth: anonymous
       x-version: v1
@@ -215,32 +218,49 @@ paths:
       responses:
         '302':
           description: >-
-            02.3.1-T1.4's answer, not this build's: the login completed, the browser is sent to the
-            allowlisted `returnUrl` (or `/`) and the session cookie is set. Until 02.3.1-T1.4 lands, the
-            same request answers 501 `login_not_completed` instead.
+            The login completed: the `session` row is written, the browser is sent to the allowlisted
+            `returnUrl` (or `/`) and the session cookie is set.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
             Location:
-              description: The allowlisted app path (`returnUrl`) or `/`; never another origin.
+              description: >-
+                The allowlisted app path (`returnUrl`) or `/`, percent-encoded where the path carries a
+                non-ASCII or unsafe character; never another origin.
               schema:
                 type: string
             Set-Cookie:
               description: >-
-                `__Host-evidgate=<session>` (02.3.1-T1.4, the session cookie of 02.3.2). The pending-login
-                cookie of the same name family is deleted on this response like on every other.
+                `__Host-evidgate_session=<opaque value>; Path=/; Secure; HttpOnly; SameSite=Lax;
+                Expires=<the session's sliding deadline>` (00 §8.9; the value is stored server-side only
+                as an HMAC and never shown again). No `Domain` attribute, as the `__Host-` prefix demands.
+                The pending-login cookie of the `__Host-evidgate_login` name is deleted on this response
+                like on every other.
               schema:
                 type: string
             Cache-Control:
               $ref: '#/components/headers/NoStore'
         '401':
           $ref: '#/components/responses/TokenInvalid'
+        '403':
+          description: >-
+            403 `no_membership` — the identity is verified but the account holds no membership in an
+            active organization, so no session row and no session cookie are created (02.3.1 AC3); or 403
+            `account_disabled` — the account's `user.status` is `disabled` (02.3.1 §6). Both are
+            `retryable: false`.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
-        '501':
-          $ref: '#/components/responses/LoginNotCompleted'
         '503':
           $ref: '#/components/responses/Unavailable'
   /projects/{p}/manifests:
@@ -5075,9 +5095,9 @@ components:
       required: true
       description: >-
         Login provider, matched exactly in lower case against the providers the deployment registers
-        (02.3.1 §5). `google` is registered by 02.3.1-T1.2; `github` is in the enum because the browser
-        button of 09.1.1 can already name it, and answers 404 `not_found` until 02.3.1-T1.3 lands the
-        provider.
+        (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers. A route
+        value no provider is registered under answers 404 `not_found`; a registered provider without a
+        client credential answers 503 `unavailable`, never 404.
       schema:
         type: string
         enum: [google, github]
@@ -5700,20 +5720,6 @@ components:
           $ref: '#/components/headers/XRequestId'
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-    LoginNotCompleted:
-      description: >-
-        501 `login_not_completed` — the provider verified the identity, but completing the login (the
-        `user`/`user_identity` upsert, the `session` row and the `__Host-evidgate` session cookie) is
-        02.3.1-T1.4's task (02.3.1 §5). This build answers a typed failure rather than a silent success,
-        so a caller can never mistake "verified" for "signed in"; the code leaves the API when 02.3.1-T1.4
-        replaces the `ILoginCompletion` seam.
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:

@@ -20,19 +20,25 @@ public sealed record SessionTicket(Guid SessionId, string CookieValue, DateTimeO
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>It replaces nothing yet.</b> There is no implementation and no DI registration in this build:
-/// 02.3.2-T1 implements it over the <c>session</c> table (created by 02.3.1-T1.1's migration) and
-/// 02.3.1-T1.4's <c>CompleteLoginCommand</c> is its first caller, through
-/// <c>Login.ILoginCompletion</c>. Until then the login callback answers 501 <c>login_not_completed</c> and
-/// no code resolves this interface.
+/// <b>Implemented and registered.</b> <c>SessionStore</c> (module <c>Evidgate.Modules.Identity.Sessions</c>)
+/// implements this contract and <c>AddSessions</c> registers it, so a host that composes federated login has
+/// exactly one implementation; 02.3.1-T1.4's <c>CompleteLoginCommand</c> is its first caller, reached by the
+/// login callback through <c>Login.ILoginCompletion</c>.
 /// </para>
 /// <para>
 /// The implementation writes the platform-scoped <c>session</c> row (no <c>org_id</c>, D12) with
 /// <c>created_at</c>/<c>last_seen_at</c> defaulted to now, a sliding <c>expires_at</c> and an
-/// <c>absolute_expires_at</c> that is never earlier than it (the table's check constraint), and it must
-/// run in a scope that is allowed to write that table: the app role holds no privilege on
-/// <c>user</c>/<c>user_identity</c>/<c>session</c>, so the write goes through the owner-scoped completion
-/// path that 02.3.2-T1 defines, never through an <c>evidgate_app</c> insert.
+/// <c>absolute_expires_at</c> that is never earlier than it (the table's check constraint). Because the app
+/// role holds no privilege on <c>user</c>/<c>user_identity</c>/<c>session</c>, the write is an
+/// <c>evidgate_app</c> EXECUTE of the <c>SECURITY DEFINER</c> <c>evidgate_resolve.session_create</c> function
+/// of migration 0042 — never a direct <c>evidgate_app</c> insert and never an owner connection. <see cref="SessionTicket.CookieValue"/> is returned once and stored only as
+/// HMAC-SHA256 of the configured pepper, beside that pepper's version (<c>session.cookie_hmac</c>,
+/// <c>session.pepper_version</c>) — the raw value never reaches the database.
+/// </para>
+/// <para>
+/// 02.3.2-T1 takes over the LIFECYCLE, not the implementation: cookie verification on the request path,
+/// rotation, idle and absolute expiry enforcement and the sweeps. It adds columns, indexes and readers; it
+/// replaces neither this contract nor its implementation.
 /// </para>
 /// </remarks>
 public interface ISessions

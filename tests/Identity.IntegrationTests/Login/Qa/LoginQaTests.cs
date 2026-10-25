@@ -98,7 +98,7 @@ public sealed class LoginQaTests
             client,
             LoginTestHost.CallbackRequest("fake", cookieValue, payload.State));
 
-        callback.StatusCode.ShouldBe(HttpStatusCode.NotImplemented);
+        callback.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable, "the gates admitted the callback and completion could not reach its dead database");
         provider.Completions.ShouldBe(1);
     }
 
@@ -147,7 +147,7 @@ public sealed class LoginQaTests
             client,
             LoginTestHost.CallbackRequest("fake", cookieValue, payload.State));
 
-        callback.StatusCode.ShouldBe(HttpStatusCode.NotImplemented);
+        callback.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable, "the gates admitted the callback and completion could not reach its dead database");
         provider.Completions.ShouldBe(1);
     }
 
@@ -193,7 +193,7 @@ public sealed class LoginQaTests
             client,
             LoginTestHost.CallbackRequest("fake", cookieValue, payload.State, code: new string('c', 2048)));
 
-        callback.StatusCode.ShouldBe(HttpStatusCode.NotImplemented);
+        callback.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable, "the gates admitted the callback and completion could not reach its dead database");
         provider.Completions.ShouldBe(1);
     }
 
@@ -305,7 +305,7 @@ public sealed class LoginQaTests
         var responses = await Task.WhenAll(inFlight);
         try
         {
-            responses.Count(response => response.StatusCode == HttpStatusCode.NotImplemented).ShouldBe(1);
+            responses.Count(response => response.StatusCode == HttpStatusCode.ServiceUnavailable).ShouldBe(1);
             responses.Count(response => response.StatusCode == HttpStatusCode.Unauthorized).ShouldBe(7);
             provider.Completions.ShouldBe(1);
         }

@@ -1,3 +1,5 @@
+using Evidgate.Modules.Identity.Login.Completion;
+using Evidgate.Modules.Identity.Sessions;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,13 +9,14 @@ using Microsoft.Extensions.Options;
 namespace Evidgate.Modules.Identity.Login;
 
 /// <summary>
-/// Composition of the federated login PROTOCOL (02.3.1-T1.1): the options of <c>EVIDGATE:Login</c>, the
-/// pending-login cookie, the one-time <c>state</c> record and the login-completion seam. The providers
-/// themselves are registered by each provider's own extension (slice 02.3.1-T1.2's
-/// <c>AddGoogleLogin</c>, 02.3.1-T1.3's <c>AddGitHubLogin</c>), and the routes resolve them as
-/// <see cref="ILoginProvider"/>.
+/// Composition of the federated login (02.3.1-T1.1, 02.3.1-T1.4): the options of <c>EVIDGATE:Login</c>, the
+/// pending-login cookie, the one-time <c>state</c> record, the session store of 02.3.2-T1 and the login
+/// completion that turns a verified identity into a session. The providers themselves are registered by each
+/// provider's own extension (02.3.1-T1.2's <c>AddGoogleLogin</c>, 02.3.1-T1.3's <c>AddGitHubLogin</c>), and
+/// the routes resolve them as <see cref="ILoginProvider"/>.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Called by <c>IdentityModule.AddIdentityModule</c> in both entry points, before the provider
 /// registrations, so a provider can rely on the cookie and options already being registered. A host without
 /// any provider still boots: both routes then answer 404 <c>not_found</c> for every route value.
@@ -57,10 +60,12 @@ internal static class FederatedLoginServiceCollectionExtensions
         services.TryAddSingleton<LoginStateCookie>();
         services.TryAddSingleton<LoginReplayCache>();
 
-        // 02.3.1-T1.4 replaces this registration with the real completion (user upsert, session row,
-        // __Host- session cookie, redirect). Until then a verified identity answers 501
-        // login_not_completed instead of pretending to be signed in.
-        services.TryAddSingleton<ILoginCompletion, LoginNotCompletedCompletion>();
+        // 02.3.1-T1.4: the real completion — the user/identity upsert, the active-membership check, the
+        // session row and the __Host- session cookie — composed with the session store 02.3.2-T1 ships
+        // (AddSessions: EVIDGATE:SESSION options, the pepper secret, ILoginIdentityStore, ISessions).
+        services.AddSessions(configuration);
+        services.TryAddSingleton<CompleteLoginCommandHandler>();
+        services.TryAddSingleton<ILoginCompletion, LoginCommandCompletion>();
 
         return services;
     }

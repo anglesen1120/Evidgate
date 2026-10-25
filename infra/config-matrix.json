@@ -684,6 +684,238 @@
       "note": "`EVIDGATE:OIDC:GOOGLE:MaxResponseBytes` (02.3.1-T1.2): largest provider response body the server reads, in bytes; default 65536, and a longer body is refused unread rather than buffered. No environment provides it."
     },
     {
+      "key": "EVIDGATE__OAUTH__GITHUB__CLIENTID",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:OAUTH:GITHUB:ClientId` (02.3.1-T1.3): OAuth client id of the platform's own GitHub OAuth app; plain configuration, safe to log by name only and never a secret. Absent — or present without the client secret — leaves the provider unconfigured (`GitHubLoginProvider.IsConfigured`) and both GitHub routes answer 503 `unavailable` + `Retry-After`; there is no flag that enables login. dev sets neither credential (no https origin to complete a login on); staging and prod inject their own client id as a plain variable at deploy."
+    },
+    {
+      "key": "EVIDGATE__OAUTH__GITHUB__CLIENTSECRET",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:OAUTH:GITHUB:ClientSecret` (02.3.1-T1.3): OAuth client secret of the GitHub login client, declared once in `SecretNames` (`OauthGithubClientSecret`), resolved through `ISecretProvider` by `GitHubLoginOptionsSecretPostConfigure` — the property has an internal setter, so the binder never reads it from configuration — and never logged or put in an exception message. Absent with the client id, both GitHub routes answer 503 `unavailable` + `Retry-After` (no flag); staging and prod hold it in the provider secret store (10.1.1-T3), dev does not set it because the dev stack has no https origin to complete a login on."
+    },
+    {
+      "key": "EVIDGATE__OAUTH__GITHUB__AUTHORIZEURL",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OAUTH:GITHUB:AuthorizeUrl` (02.3.1-T1.3): browser-facing authorization endpoint, the target of the `start` redirect and never called by the server; default `https://github.com/login/oauth/authorize`. The validator refuses at boot a value that is not https on `github.com` with no userinfo and the default port (S4), so no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__OAUTH__GITHUB__TOKENURL",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OAUTH:GITHUB:TokenUrl` (02.3.1-T1.3): token endpoint of the authorization-code exchange; default `https://github.com/login/oauth/access_token`. It must stay an https allowlisted GitHub host (`GitHubEndpoints.OutboundHosts`), checked at boot by the validator and again before every send by `GitHubOutboundAllowlistHandler` (S4), so no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__OAUTH__GITHUB__APIBASEURL",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OAUTH:GITHUB:ApiBaseUrl` (02.3.1-T1.3): base address of the REST API the provider reads the numeric subject from (`GET /user`) and the verified email from (`GET /user/emails`); default `https://api.github.com`. Same S4 allowlist and the same boot-time and per-send refusal as the token endpoint; no environment provides it."
+    },
+    {
+      "key": "EVIDGATE__OAUTH__GITHUB__HTTPTIMEOUTSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 30
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OAUTH:GITHUB:HttpTimeoutSeconds` (02.3.1-T1.3): hard timeout of one outbound provider call, in seconds (P6); default 5. A call that times out is an outage, so the callback answers 503 rather than 401 (02.3.1 AC8). No environment provides it."
+    },
+    {
+      "key": "EVIDGATE__OAUTH__GITHUB__MAXRESPONSEBYTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1024,
+        "max": 1048576
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:OAUTH:GITHUB:MaxResponseBytes` (02.3.1-T1.3): largest provider response body the server reads, in bytes; default 65536, and a longer body is refused unread rather than buffered. No environment provides it."
+    },
+    {
+      "key": "EVIDGATE__SESSION__PEPPER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:SESSION:Pepper` (02.3.1-T1.3/T1.4 session group): base64 current pepper (at least 32 bytes) behind the HMAC of the session cookie value; the cookie value itself is never stored, only `HMAC-SHA256(pepper_vN, value)` in `session.cookie_hmac`. Declared once in `SecretNames` (`SessionPepper`) and resolved through `ISecretProvider` by the session options post-configurer — the property has an internal setter, so the binder never reads it from configuration — and never logged or put in an exception message. Absent: creating a session answers 503 `unavailable` + `Retry-After`; dev reads it from the dev env file, staging and prod from the provider secret store (10.1.1-T3)."
+    },
+    {
+      "key": "EVIDGATE__SESSION__PEPPERVERSION",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:SESSION:PepperVersion` (02.3.1-T1.3/T1.4 session group): version stored beside every session HMAC (`session.pepper_version`); bump it when the pepper rotates so an old cookie keeps verifying until the rotation window closes. Default 1."
+    },
+    {
+      "key": "EVIDGATE__SESSION__IDLESECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 60,
+        "max": 31536000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:SESSION:IdleSeconds` (02.3.1-T1.3/T1.4 session group): idle lifetime of a session, in seconds; the provisional default 28800 (8 h) is a [DECISION] value, not a contract figure, and it must not exceed AbsoluteSeconds. No environment provides it."
+    },
+    {
+      "key": "EVIDGATE__SESSION__ABSOLUTESECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 60,
+        "max": 31536000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:SESSION:AbsoluteSeconds` (02.3.1-T1.3/T1.4 session group): absolute lifetime of a session, in seconds, after which it cannot be refreshed at all; the provisional default 604800 (7 d) is a [DECISION] value, not a contract figure. No environment provides it."
+    },
+    {
       "key": "EVIDGATE__ISOLATION__SELFCHECK",
       "scope": "runtime",
       "consumers": ["api", "worker"],
