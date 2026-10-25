@@ -70,10 +70,11 @@ export interface FixtureDocument {
  * limited subset holds
  * `audit:read`, `authoring:read`, `membership:read`, `project:read` and `role:read`, copied verbatim
  * from `contracts/permissions.json` (only `authoring:read` is on the first page of
- * `permissions-list/`). It deliberately leaves `organization:read` out: that row's `resource` value
- * is the production bundle's own `organization:read` registry literal, and the T12 leak gate
- * (`scripts/check-no-fixture-code.mjs`) rejects every corpus string of 12+ characters that survives
- * into the output — a corpus row would fail the build for a word production needs.
+ * `permissions-list/`). It leaves `organization:read` out on purpose: the limited session needs one
+ * G1 route it may not open, and `settings` (gated by `organization:read`) is that route — the e2e
+ * suite asserts its 403 (`apps/web/e2e/shell/adversarial.spec.ts`). The T12 leak gate
+ * (`scripts/check-no-fixture-code.mjs`) no longer forces the omission: it skips a catalogue row's
+ * `code`, `resource` and `action` as protocol vocabulary the production registry shares.
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;

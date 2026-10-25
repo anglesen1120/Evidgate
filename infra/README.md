@@ -213,6 +213,9 @@ policy for every request of that origin. Neither input is a .NET option, so neit
 appears in `infra/config-matrix.json` (`scripts/check-env-matrix.mjs` validates the
 `EVIDGATE_*` options surface only); `docs/runbooks/environments.md` §2 carries the same
 rule from the environment side.
+Because both failures are silent at run time, 10.2.1-T1.4's Done-when (planned) makes
+the deploy refuse a non-`https:` endpoint or one whose origin is missing from
+`EVIDGATE_WEB_CONNECT_SRC`, and adds a post-deploy CORS preflight + test-span smoke.
 
 ## Build inputs the context must keep
 

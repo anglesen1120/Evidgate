@@ -287,6 +287,8 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: 'Install npm workspaces (locked)'
         run: npm ci --ignore-scripts
+      - name: 'Build @evidgate/sdk (the web app imports its dist/)'
+        run: npm run build -w packages/sdk
       - name: 'Install Playwright browsers'
         run: npx playwright install --with-deps chromium
       - name: 'Playwright e2e — apps/web'
@@ -297,6 +299,43 @@ jobs:
         with:
           name: playwright-report
           path: apps/web/playwright-report
+          retention-days: 14
+
+  # 09.1.1-T4 hand-over (S68, STATUS "Shell e2e suite is not in CI"): the shell
+  # suite runs against the FIXTURES build (apps/web/playwright.fixtures.config.ts),
+  # which needs the dev-only fixture backend, so it cannot share the production
+  # e2e job above. Non-blocking for the same reason as that job. The config
+  # launches `channel: 'chrome'`, so the runner installs Google Chrome, not the
+  # bundled Chromium.
+  e2e-fixtures:
+    name: 'e2e fixtures (playwright shell suite, non-blocking until 09)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: 'Install npm workspaces (locked)'
+        run: npm ci --ignore-scripts
+      - name: 'Build @evidgate/sdk (the web app imports its dist/)'
+        run: npm run build -w packages/sdk
+      - name: 'Install Google Chrome for Playwright'
+        run: npx playwright install --with-deps chrome
+      - name: 'Playwright shell suite — apps/web fixtures build'
+        run: npm run e2e:fixtures -w apps/web
+      - name: 'Upload the Playwright report on failure'
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-fixtures
+          path: apps/web/playwright-report-fixtures
           retention-days: 14
 
   # 01.7.1-T2/T4 (AC4, AC6, AC7): licence deny-list + vulnerability gates +

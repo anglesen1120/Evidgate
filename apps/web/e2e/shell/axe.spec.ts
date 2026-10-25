@@ -77,26 +77,6 @@ test.describe('the UI gallery is WCAG 2.2 AA clean (AC6, T7 hand-over)', () => {
     }, theme);
   }
 
-  /**
-   * The one violation the gallery currently has, and the only one these cases tolerate. It is a
-   * `shared/ui` defect, not a shell one, so it is pinned here instead of being fixed (the T7
-   * hand-over owns `data-table`):
-   *
-   *   - rule: `aria-required-children` (impact: critical)
-   *   - target: `div[aria-rowcount="251"]` — the `role="table"` wrapper of the VIRTUAL table
-   *     (`src/app/shared/ui/data-table/data-table.component.html:12`), whose second child is
-   *     `<cdk-virtual-scroll-viewport>` (`:45`). Role `table` may only own `row`/`rowgroup`
-   *     children; CDK's viewport is a plain element that wraps the body rows, so the accessibility
-   *     tree is invalid for every virtual table in the product.
-   *   - repro: open `/dev/ui-gallery`, run axe; the violation appears in both themes and locales.
-   *   - exit criterion: when `shared/ui` wraps the viewport as a `rowgroup` (or drops the outer
-   *     `role="table"`), this case must be switched back to `expectNoA11yViolations` — the
-   *     assertion below fails if the list changes in EITHER direction.
-   */
-  const KNOWN_GALLERY_VIOLATIONS = [
-    { id: 'aria-required-children', target: 'div[aria-rowcount="251"]' },
-  ];
-
   for (const locale of LOCALES) {
     for (const theme of THEMES) {
       test(`gallery, ${locale} bundle, ${theme} tokens`, async ({ page }) => {
@@ -113,6 +93,9 @@ test.describe('the UI gallery is WCAG 2.2 AA clean (AC6, T7 hand-over)', () => {
         ).toBeGreaterThan(0);
 
         // axe's first selector is an array (it may cross frames); the leaf is what names the node.
+        // Zero tolerated: the virtual table's `aria-required-children` defect (the viewport sat
+        // between `role="table"` and its rows) was fixed in `shared/ui/data-table` by making the
+        // viewport the body rowgroup, so any violation here is a regression.
         const found = axeViolations(results).map((violation) => {
           const first = violation.targets[0];
           const leaf = Array.isArray(first) ? (first as readonly unknown[])[0] : first;
@@ -121,9 +104,7 @@ test.describe('the UI gallery is WCAG 2.2 AA clean (AC6, T7 hand-over)', () => {
             target: typeof leaf === 'string' ? leaf : JSON.stringify(leaf),
           };
         });
-        expect(found, `axe violations on ui-gallery ${locale}/${theme}`).toEqual(
-          KNOWN_GALLERY_VIOLATIONS,
-        );
+        expect(found, `axe violations on ui-gallery ${locale}/${theme}`).toEqual([]);
       });
     }
   }

@@ -422,7 +422,7 @@ initializer that starts the facade.
 
 ## i18n
 
-Angular's built-in i18n (`@angular/localize` 22.2.0, ADR-0008 row f) is the only translation
+Angular's built-in i18n (`@angular/localize` 22.2.3, ADR-0002; spiked at 22.2.0 in ADR-0008 row f) is the only translation
 mechanism in this app. `angular.json` → `projects.web.i18n` declares `sourceLocale: "en"` and one
 translation, `vi`:
 

@@ -71,21 +71,23 @@ describe('DataTableValueComponent', () => {
 
   it('R4: guards zero-layout jsdom and never focuses content which is not actually clipped', () => {
     expect(value.hasAttribute('tabindex')).toBe(false);
-    expect(value.hasAttribute('aria-describedby')).toBe(false);
+    expect(value.hasAttribute('aria-hidden')).toBe(false);
     expect(root.querySelector('[popover]')).toBeNull();
   });
 
-  it('R4: creates a focusable trigger, full description and native top-layer popover only for real clipping', async () => {
+  it('R4: creates a focusable trigger and native top-layer popover only for real clipping, exposing the value once', async () => {
     await clip();
     expect(value.getAttribute('tabindex')).toBe('0');
-    const description = root.querySelector(`#${value.getAttribute('aria-describedby')}`);
-    expect(description?.textContent).toBe(fixture.componentInstance.value());
-    expect(root.querySelector('[popover]')?.getAttribute('popover')).toBe('manual');
-    expect(root.querySelector('[role="tooltip"]')?.textContent).toBe(
-      fixture.componentInstance.value(),
-    );
+    // The focusable span is the one accessible copy: no description pointing at a second copy.
+    expect(value.hasAttribute('aria-describedby')).toBe(false);
+    expect(value.textContent).toBe(String(fixture.componentInstance.value()));
+    const popover = root.querySelector('[popover]');
+    expect(popover?.getAttribute('popover')).toBe('manual');
+    expect(popover?.getAttribute('aria-hidden')).toBe('true');
+    expect(popover?.textContent).toBe(fixture.componentInstance.value());
+    expect(root.querySelector('[role="tooltip"], .sr-only')).toBeNull();
     expect(root.querySelector('[title],script')).toBeNull();
-    expect(root.querySelector('.sr-only')?.textContent).toContain('<script>not markup</script>');
+    expect(value.textContent).toContain('<script>not markup</script>');
   });
 
   it('R4: exposes full text on focus and hover, supports touch click and Escape without title-only content', async () => {
@@ -119,7 +121,7 @@ describe('DataTableValueComponent', () => {
     expect(hide).toHaveBeenCalled();
   });
 
-  it('R4: dismisses a recycled clipped value and resets its description and open state', async () => {
+  it('R4: dismisses a recycled clipped value and resets its text and open state', async () => {
     await clip();
     value.dispatchEvent(new MouseEvent('click'));
     expect(show).toHaveBeenCalledTimes(1);
@@ -128,9 +130,8 @@ describe('DataTableValueComponent', () => {
     await fixture.whenStable();
     expect(hide).toHaveBeenCalledTimes(1);
     expect(value.getAttribute('tabindex')).toBe('0');
-    const descriptionId = value.getAttribute('aria-describedby');
-    expect(descriptionId).toBe(fixture.componentInstance.descriptionId);
-    expect(root.querySelector(`#${descriptionId}`)?.textContent).toBe(
+    expect(value.textContent).toBe('sha256:replacement-value-still-clipped');
+    expect(root.querySelector('[popover]')?.textContent).toBe(
       'sha256:replacement-value-still-clipped',
     );
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

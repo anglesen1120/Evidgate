@@ -1,18 +1,5 @@
 {
   "$comment": "01.7.1-T4.2 (AC6): vulnerability-scan allowlist consumed by scripts/audit-deps.sh. Keyed by advisory id (GHSA-xxxx-yyyy-zzzz or CVE-YYYY-NNNNN — the last path segment of the advisory URL from 'npm audit --json' or 'dotnet list package --vulnerable --format json'). Every entry must name the accepting ADR (adr), the affected package, and the reason; 'expires' (YYYY-MM-DD) is optional — an expired exception no longer exempts. An empty object means no exceptions: every vulnerability found by the scanners fails the gate.",
   "version": 1,
-  "exceptions": {
-    "GHSA-62vg-58rm-qff7": {
-      "adr": "ADR-0002",
-      "package": "@angular/router",
-      "reason": "Denial of Service via unmatched empty-path outlet route matching in server-side rendering; affects >=22.0.0 <22.2.1. The web app is client-rendered and has no @angular/ssr, so the SSR code path is not reachable. Fixed in 22.2.1; the lockstep bump of every @angular/* package to 22.2.3 is tracked in STATUS section 6 (Angular lockstep bump).",
-      "expires": "2026-11-30"
-    },
-    "GHSA-57xq-rjx2-v5xh": {
-      "adr": "ADR-0002",
-      "package": "@angular/router",
-      "reason": "Denial of Service via RouterLink query parameter retention in server-side rendering; affects >=22.0.0 <22.2.1. The web app is client-rendered and has no @angular/ssr, so the SSR code path is not reachable. Fixed in 22.2.1; the lockstep bump of every @angular/* package to 22.2.3 is tracked in STATUS section 6 (Angular lockstep bump).",
-      "expires": "2026-11-30"
-    }
-  }
+  "exceptions": {}
 }

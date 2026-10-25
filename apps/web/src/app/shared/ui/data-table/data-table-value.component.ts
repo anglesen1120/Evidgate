@@ -12,8 +12,6 @@ import {
   viewChild,
 } from '@angular/core';
 
-let nextValueId = 0;
-
 /** Internal text renderer. Native popovers enter the top layer, outside scroll clipping. */
 @Component({
   selector: 'app-data-table-value',
@@ -24,7 +22,6 @@ let nextValueId = 0;
       [class.truncate]="truncate()"
       [class.clipped]="clipped()"
       [attr.tabindex]="clipped() ? 0 : null"
-      [attr.aria-describedby]="clipped() ? descriptionId : null"
       (focus)="show()"
       (blur)="hide()"
       (mouseenter)="show()"
@@ -34,12 +31,14 @@ let nextValueId = 0;
       >{{ value() }}</span
     >
     @if (clipped()) {
-      <span class="sr-only" [id]="descriptionId">{{ value() }}</span>
+      <!-- The value span already holds the whole text (clipping is visual only), so it is the
+        one copy assistive technology reads. The popover is a sighted-user duplicate: hidden
+        from the accessibility tree so an open popover never announces the value again. -->
       <span
         #popover
         class="full-value"
         popover="manual"
-        role="tooltip"
+        aria-hidden="true"
         (mouseenter)="cancelHide()"
         (mouseleave)="scheduleHide()"
         (keydown.escape)="dismiss($event)"
@@ -53,7 +52,6 @@ let nextValueId = 0;
 export class DataTableValueComponent {
   readonly value = input.required<string | number>();
   readonly truncate = input(false);
-  readonly descriptionId = `eg-table-value-${nextValueId++}`;
   private readonly measuredClipped = signal(false);
   readonly clipped = computed(() => this.truncate() && this.measuredClipped());
   private readonly valueElement = viewChild.required<ElementRef<HTMLElement>>('valueElement');

@@ -246,8 +246,8 @@ test.describe('a clipped value in the accessibility tree (T7 report item)', () =
     await openGallery(page, 'en', 'light');
     const cell = page.locator('[data-demo="table-small"] .body-table tr:first-child td').first();
 
-    // The DOM contract first: one visible value, one visually-hidden description the value points
-    // at, and one popover that is not rendered until it opens.
+    // The DOM contract first: one visible value (the accessible copy) and one popover that is
+    // hidden from assistive technology and not rendered until it opens.
     const domCopies = await cell.evaluate(
       (element, value) =>
         Array.from(element.querySelectorAll('span')).filter(
@@ -255,7 +255,7 @@ test.describe('a clipped value in the accessibility tree (T7 report item)', () =
         ).length,
       HASH_OF_FIRST_ROW,
     );
-    expect(domCopies, 'visible span + sr-only description + popover').toBe(3);
+    expect(domCopies, 'visible span + aria-hidden popover').toBe(2);
 
     // Chromium's accessibility tree, split by the way each copy is exposed: the cell's accessible
     // NAME (what a reader announces when the cell is reached, built from every text node inside it)
@@ -272,19 +272,17 @@ test.describe('a clipped value in the accessibility tree (T7 report item)', () =
 
     const closed = await cell.ariaSnapshot();
     const closedExposure = exposures(closed);
-    // TWO copies in one closed cell: the visible span, plus the `sr-only` span it points at with
-    // `aria-describedby` — so the value is announced and then announced again as the description.
-    // This is the count the report quotes (`shared/ui`, not fixable from the shell).
-    expect(closedExposure.nameCopies, `aria snapshot while closed:\n${closed}`).toBe(2);
+    // ONE copy in a closed cell: the value span itself (no `sr-only` description repeating it).
+    expect(closedExposure.nameCopies, `aria snapshot while closed:\n${closed}`).toBe(1);
     expect(closedExposure.tooltipCopies).toBe(0);
 
     await cell.locator('.value').focus();
     await expect(cell.locator('.full-value')).toBeVisible();
     const open = await cell.ariaSnapshot();
     const openExposure = exposures(open);
-    // The open popover adds a third copy to the name and exactly one tooltip node.
-    expect(openExposure.nameCopies, `aria snapshot while open:\n${open}`).toBe(3);
-    expect(openExposure.tooltipCopies).toBe(1);
+    // The open popover is `aria-hidden`: still one copy, and no tooltip node.
+    expect(openExposure.nameCopies, `aria snapshot while open:\n${open}`).toBe(1);
+    expect(openExposure.tooltipCopies).toBe(0);
     test.info().annotations.push({
       type: 'clipped-value-exposure',
       description:
