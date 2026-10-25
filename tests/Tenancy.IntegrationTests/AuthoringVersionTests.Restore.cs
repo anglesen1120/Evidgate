@@ -690,6 +690,80 @@ public sealed partial class AuthoringVersionTests
     }
 
     /// <summary>
+    /// AC2's cap does not refuse a restore that adds no member (review F3, the gap the delta named): route 24 re-applies
+    /// a version of a LIVE node inside the group it already sits in, which is at the 1 000 cap. The write grows nothing,
+    /// so it lands as a new version rather than <c>children_limit_exceeded</c>.
+    /// </summary>
+    [Fact]
+    public async Task Restore_Version_LiveNodeInOwnFullGroup_NotRefused()
+    {
+        await using var world = await StartRestoreAsync();
+
+        var module = await CreateNodeAsync(world, parent: null, kind: "module", title: "Checkout");
+        var feature = await CreateNodeAsync(world, parent: module, kind: "feature", title: "Payment");
+        var versionOne = await VersionIdAsync(world, feature, versionNo: 1);
+
+        await SeedSiblingsAsync(world, module, count: 999, firstPosition: 1, tag: "own-group");
+        (await LiveChildrenAsync(world, module)).ShouldBe(1000);
+
+        var answer = await SendAsync(world, world.VersionRestore(versionOne), ifMatch: null);
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Body.GetProperty("version").GetInt32().ShouldBe(2);
+        (await RestoreVersionCountAsync(world, "feature_node", feature)).ShouldBe(2);
+        (await LiveChildrenAsync(world, module)).ShouldBe(1000);
+    }
+
+    /// <summary>
+    /// AC2's cap on route 24's move-in branch (review F3, the gap the delta named): the version's snapshot names group A,
+    /// the live row now sits in group B, and A is at 1 000 live members, so re-applying the snapshot would bring a 1 001st
+    /// into A. It answers <c>422 request_invalid</c> / <c>/parent_id</c> / <c>children_limit_exceeded</c> and writes
+    /// nothing: the row stays in B at its own version and its history keeps its one row.
+    /// </summary>
+    [Fact]
+    public async Task Restore_Version_MoveIntoFullGroup_422()
+    {
+        await using var world = await StartRestoreAsync();
+
+        var groupA = await CreateNodeAsync(world, parent: null, kind: "module", title: "Checkout");
+        var groupB = await CreateNodeAsync(world, parent: null, kind: "module", title: "Billing");
+        var feature = await CreateNodeAsync(world, parent: groupA, kind: "feature", title: "Payment");
+        var versionOne = await VersionIdAsync(world, feature, versionNo: 1);
+
+        // The row moves to B behind the history's back (an owner-role UPDATE, as the delete tests do for a gone row), so
+        // the snapshot of version 1 (parent A) and the stored row (parent B) differ; A then fills to the cap.
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.feature_node set parent_id = '{groupB:D}', position = 0 where id = '{feature:D}'");
+        await SeedSiblingsAsync(world, groupA, count: 1000, firstPosition: 0, tag: "move-in");
+        (await LiveChildrenAsync(world, groupA)).ShouldBe(1000);
+
+        var refused = await SendAsync(world, world.VersionRestore(versionOne), ifMatch: null);
+        refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        refused.ErrorCode.ShouldBe("request_invalid");
+        Paths(refused).ShouldContain("/parent_id");
+        Reasons(refused).ShouldContain("children_limit_exceeded");
+
+        (await RestoreVersionCountAsync(world, "feature_node", feature)).ShouldBe(1);
+        (await LiveChildrenAsync(world, groupA)).ShouldBe(1000);
+        (await LiveChildrenAsync(world, groupB)).ShouldBe(1);
+    }
+
+    private Task SeedSiblingsAsync(RestoreWorld world, Guid parent, int count, int firstPosition, string tag) =>
+        _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+             insert into public.feature_node (id, org_id, project_id, parent_id, kind, title, position)
+             select cast(md5('s80-{tag}-' || g) as uuid),
+                    '{world.Org:D}',
+                    '{world.Project:D}',
+                    '{parent:D}',
+                    'feature',
+                    'Seeded ' || g,
+                    g - 1 + {firstPosition}
+               from generate_series(1, {count}) as g
+             """);
+
+    /// <summary>
     /// AC8 against a retired parent (review F8): route 24 re-applies a version of a live case whose checklist item is
     /// <c>retired</c>, so the case parent guard answers <c>409 invalid_transition</c> — "restore the item first" — and
     /// nothing is written: the case stays live at its own version and its history keeps its one row.
