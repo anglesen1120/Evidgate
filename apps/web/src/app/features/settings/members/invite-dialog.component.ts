@@ -16,6 +16,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { MembersStore } from './members.store';
 import { MEMBERS_COPY } from './member-list.component';
+import { wrapDialogFocus } from './dialog-focus-wrap';
 import { RoleScopePreviewComponent } from './role-scope-preview.component';
 
 @Component({
@@ -26,9 +27,12 @@ import { RoleScopePreviewComponent } from './role-scope-preview.component';
   template: `
     <dialog
       #dialog
+      tabindex="-1"
       [attr.data-members-dialog]="'invite'"
       aria-labelledby="members-invite-title"
       (cancel)="cancel($event)"
+      (keydown.tab)="wrapFocus($event)"
+      (keydown.shift.tab)="wrapFocus($event)"
       [cdkTrapFocus]="opened()"
     >
       <form #form (submit)="submit($event, form)">
@@ -162,6 +166,12 @@ export class InviteDialogComponent {
     event.preventDefault();
     this.close();
   }
+
+  /** Tab/Shift+Tab wrap at the dialog's edges; see `wrapDialogFocus`. */
+  protected wrapFocus(event: Event): void {
+    wrapDialogFocus(event, this.dialog().nativeElement);
+  }
+
   protected updateEmail(event: Event): void {
     if (event.target instanceof HTMLInputElement) this.email.set(event.target.value);
   }

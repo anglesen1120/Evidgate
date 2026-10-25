@@ -7,6 +7,7 @@ import type { Intent } from '../../../core/http/intent';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
 import type { RolePreview } from './role-preview';
+import type { RoleChange } from './members.store';
 
 const role: RoleView = {
   id: 'role1',
@@ -54,6 +55,12 @@ class FakeMembersStore {
   readonly hasMore = signal(false);
   readonly inviteState = signal<Mutation>({ phase: 'idle', error: null });
   readonly removeState = signal<Mutation>({ phase: 'idle', error: null });
+  readonly editState = signal<Mutation>({ phase: 'idle', error: null });
+  readonly editApplied = signal<readonly Pick<RoleChange, 'kind' | 'roleId'>[]>([]);
+  readonly changeRoles = vi.fn<(id: string, changes: readonly RoleChange[]) => Promise<boolean>>(
+    () => Promise.resolve(true),
+  );
+  readonly memberById = (id: string) => this.members().find((value) => value.id === id);
   readonly load = vi.fn(() => Promise.resolve());
   readonly loadMore = vi.fn(() => Promise.resolve());
   readonly invite = vi.fn<
@@ -89,6 +96,8 @@ class FakeMembersStore {
   resetMutations(): void {
     this.inviteState.set({ phase: 'idle', error: null });
     this.removeState.set({ phase: 'idle', error: null });
+    this.editState.set({ phase: 'idle', error: null });
+    this.editApplied.set([]);
   }
 }
 const showModalDescriptor = Object.getOwnPropertyDescriptor(
@@ -169,16 +178,81 @@ describe('Members page (09.7.1-T2)', () => {
     expect(root.querySelector('[data-members-status="removed"] [data-members-remove]')).toBeNull();
   });
 
-  it('omits Invite and Remove from the DOM without membership:write; renders them with it', async () => {
+  it('omits Invite, Edit and Remove from the DOM without membership:write; renders them with it', async () => {
     granted.set(false);
     const { fixture, root } = await render();
     expect(root.querySelector('[data-members-invite-open]')).toBeNull();
     expect(root.querySelector('[data-members-remove]')).toBeNull();
+    expect(root.querySelector('[data-members-edit-open]')).toBeNull();
+    expect(root.querySelector('app-edit-roles-dialog')).toBeNull();
     expect(root.querySelector('dialog')).toBeNull();
     granted.set(true);
     fixture.detectChanges();
     expect(root.querySelector('[data-members-invite-open]')).not.toBeNull();
     expect(root.querySelectorAll('[data-members-remove]')).toHaveLength(2);
+    expect(root.querySelectorAll('[data-members-edit-open]')).toHaveLength(2);
+    expect(root.querySelector('app-edit-roles-dialog')).not.toBeNull();
+  });
+
+  it('opens row role editing, announces success and closes editing when the organization switches', async () => {
+    const { fixture, root } = await render();
+    const opener = button(root, '[data-members-edit-open]');
+    opener.click();
+    fixture.detectChanges();
+    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="edit-roles"]')!;
+    expect(dialog.open).toBe(true);
+    const checkbox = dialog.querySelector<HTMLInputElement>('[data-members-role-option]')!;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    button(dialog, '[data-members-submit]').click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(store.changeRoles).toHaveBeenCalledTimes(1);
+    expect(dialog.open).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(root.textContent).toContain('Membership updated.');
+    opener.click();
+    fixture.detectChanges();
+    const session = TestBed.inject(SessionStore);
+    (session.currentOrg as unknown as WritableSignal<{ id: string }>).set({ id: 'org2' });
+    fixture.detectChanges();
+    expect(dialog.open).toBe(false);
+    expect(store.load).toHaveBeenLastCalledWith('org2');
+  });
+
+  it('keeps role chips and the matrix on server data until the role mutation is confirmed', async () => {
+    // This project targets ES2022, before Promise.withResolvers.
+    let resolve!: (success: boolean) => void;
+    const promise = new Promise<boolean>((complete) => {
+      resolve = complete;
+    });
+    store.changeRoles.mockImplementation(() => {
+      store.editState.set({ phase: 'submitting', error: null });
+      return promise;
+    });
+    const { fixture, root } = await render();
+    button(root, '[data-members-edit-open]').click();
+    fixture.detectChanges();
+    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="edit-roles"]')!;
+    const checkbox = dialog.querySelector<HTMLInputElement>('[data-members-role-option]')!;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    button(dialog, '[data-members-submit]').click();
+    fixture.detectChanges();
+    const row = root.querySelector('[data-membership-id="owner"]')!;
+    expect(row.querySelector('.role-name')?.textContent?.trim()).toBe(role.name);
+    expect(root.querySelector('[data-members-matrix] [data-granted="true"]')).not.toBeNull();
+    store.members.update((members) =>
+      members.map((value) => (value.id === 'owner' ? { ...value, roles: [] } : value)),
+    );
+    store.editState.set({ phase: 'done', error: null });
+    resolve(true);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(row.querySelector('.role-name')).toBeNull();
+    expect(dialog.open).toBe(false);
   });
 
   it('renders the shared empty state rather than a matrix with invented rows', async () => {

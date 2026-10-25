@@ -18,6 +18,19 @@
       <trans-unit id="settings.members.submitting" datatype="html"><source>Submitting…</source><target>Đang gửi…</target></trans-unit>
       <trans-unit id="settings.members.remove-title" datatype="html"><source>Remove this member?</source><target>Xoá thành viên này?</target></trans-unit>
       <trans-unit id="settings.members.remove-description" datatype="html"><source>Organization access will be revoked. Authored history stays attributed.</source><target>Quyền truy cập tổ chức sẽ bị thu hồi. Lịch sử đã tạo vẫn giữ tên tác giả.</target></trans-unit>
+      <trans-unit id="settings.members.edit-roles" datatype="html"><source>Edit roles</source><target>Sửa vai trò</target></trans-unit>
+      <trans-unit id="settings.members.edit-title" datatype="html"><source>Edit organization roles</source><target>Sửa vai trò trong tổ chức</target></trans-unit>
+      <trans-unit id="settings.members.edit-description" datatype="html"><source>Select the organization roles for this member.</source><target>Chọn vai trò trong tổ chức cho thành viên này.</target></trans-unit>
+      <trans-unit id="settings.members.edit-roles-legend" datatype="html"><source>Organization roles for this member</source><target>Vai trò trong tổ chức của thành viên này</target></trans-unit>
+      <trans-unit id="settings.members.save" datatype="html"><source>Save changes</source><target>Lưu thay đổi</target></trans-unit>
+      <trans-unit id="settings.members.saving" datatype="html"><source>Saving…</source><target>Đang lưu…</target></trans-unit>
+      <trans-unit id="settings.members.last-admin-hint" datatype="html"><source>The server refuses to demote the last organization admin. Grant tenant_admin to another member first.</source><target>Máy chủ không cho phép hạ vai trò của quản trị viên cuối cùng trong tổ chức. Hãy cấp vai trò tenant_admin cho một thành viên khác trước.</target></trans-unit>
+      <trans-unit id="settings.members.roles-unavailable-edit" datatype="html"><source>Organization roles are unavailable. Try again when the role catalogue is available.</source><target>Chưa tải được vai trò trong tổ chức. Hãy thử lại khi danh mục vai trò khả dụng.</target></trans-unit>
+      <trans-unit id="settings.members.applied" datatype="html"><source>Applied changes</source><target>Thay đổi đã áp dụng</target></trans-unit>
+      <trans-unit id="settings.members.not-applied" datatype="html"><source>Not applied</source><target>Chưa áp dụng</target></trans-unit>
+      <trans-unit id="settings.members.role-granted" datatype="html"><source>Grant role</source><target>Cấp vai trò</target></trans-unit>
+      <trans-unit id="settings.members.role-revoked" datatype="html"><source>Revoke role</source><target>Thu hồi vai trò</target></trans-unit>
+      <trans-unit id="settings.members.partial-current" datatype="html"><source>The list now shows the server's current roles. The remaining changes have not been applied.</source><target>Danh sách hiện hiển thị vai trò theo dữ liệu mới nhất từ máy chủ. Các thay đổi còn lại chưa được áp dụng.</target></trans-unit>
       <trans-unit id="settings.members.matrix" datatype="html"><source>Organization-wide role matrix</source><target>Ma trận vai trò toàn tổ chức</target></trans-unit>
       <trans-unit id="settings.members.granted" datatype="html"><source>Granted</source><target>Đã cấp</target></trans-unit>
       <trans-unit id="settings.members.not-granted" datatype="html"><source>Not granted</source><target>Chưa cấp</target></trans-unit>
@@ -34,7 +47,7 @@
       <trans-unit id="settings.members.previous" datatype="html"><source>Previous members</source><target>Thành viên trước đó</target></trans-unit>
       <trans-unit id="settings.members.saved" datatype="html"><source>Membership updated.</source><target>Đã cập nhật thành viên.</target></trans-unit>
       <trans-unit id="settings.members.load-more-failed" datatype="html"><source>The next members page could not be loaded. The members already shown are unchanged.</source><target>Không tải được trang thành viên tiếp theo. Các thành viên đang hiển thị vẫn giữ nguyên.</target></trans-unit>
-      <trans-unit id="settings.members.narrow" datatype="html"><source>Use a wider screen to invite or remove members.</source><target>Dùng màn hình rộng hơn để mời hoặc xoá thành viên.</target></trans-unit>
+      <trans-unit id="settings.members.narrow" datatype="html"><source>Use a wider screen to invite, edit or remove members.</source><target>Dùng màn hình rộng hơn để mời, sửa vai trò hoặc xoá thành viên.</target></trans-unit>
       <trans-unit id="settings.members.pending" datatype="html"><source>Pending invitation</source><target>Lời mời đang chờ</target></trans-unit>
       <trans-unit id="settings.members.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
       <trans-unit id="settings.members.removed" datatype="html"><source>Removed</source><target>Đã xoá</target></trans-unit>

@@ -210,6 +210,15 @@ code {
   color: inherit;
   white-space: pre-wrap;
 }
+[data-members-applied-summary] {
+  display: grid;
+  gap: var(--eg-space-3);
+  margin-block-start: var(--eg-space-4);
+}
+[data-members-applied-summary] ul {
+  margin: 0;
+  padding-inline-start: var(--eg-space-5);
+}
 .narrow-notice {
   display: none;
 }

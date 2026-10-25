@@ -1,0 +1,18 @@
+{
+  "operation_id": "revokeMembershipRole",
+  "variant": "last-admin",
+  "status": 409,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000da"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "last_admin",
+      "message": "the organization must keep at least one active tenant_admin (AC4)",
+      "request_id": "018f0000-0000-7000-8000-0000000000da",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

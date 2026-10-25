@@ -19,6 +19,19 @@ export const MEMBERS_COPY = {
   submitting: $localize`:@@settings.members.submitting:Submitting…`,
   removeTitle: $localize`:@@settings.members.remove-title:Remove this member?`,
   removeDescription: $localize`:@@settings.members.remove-description:Organization access will be revoked. Authored history stays attributed.`,
+  editRoles: $localize`:@@settings.members.edit-roles:Edit roles`,
+  editTitle: $localize`:@@settings.members.edit-title:Edit organization roles`,
+  editDescription: $localize`:@@settings.members.edit-description:Select the organization roles for this member.`,
+  editRolesLegend: $localize`:@@settings.members.edit-roles-legend:Organization roles for this member`,
+  save: $localize`:@@settings.members.save:Save changes`,
+  saving: $localize`:@@settings.members.saving:Saving…`,
+  lastAdminHint: $localize`:@@settings.members.last-admin-hint:The server refuses to demote the last organization admin. Grant tenant_admin to another member first.`,
+  rolesUnavailableEdit: $localize`:@@settings.members.roles-unavailable-edit:Organization roles are unavailable. Try again when the role catalogue is available.`,
+  applied: $localize`:@@settings.members.applied:Applied changes`,
+  notApplied: $localize`:@@settings.members.not-applied:Not applied`,
+  roleGranted: $localize`:@@settings.members.role-granted:Grant role`,
+  roleRevoked: $localize`:@@settings.members.role-revoked:Revoke role`,
+  partialCurrent: $localize`:@@settings.members.partial-current:The list now shows the server's current roles. The remaining changes have not been applied.`,
   matrix: $localize`:@@settings.members.matrix:Organization-wide role matrix`,
   granted: $localize`:@@settings.members.granted:Granted`,
   notGranted: $localize`:@@settings.members.not-granted:Not granted`,
@@ -35,7 +48,7 @@ export const MEMBERS_COPY = {
   previous: $localize`:@@settings.members.previous:Previous members`,
   saved: $localize`:@@settings.members.saved:Membership updated.`,
   loadMoreFailed: $localize`:@@settings.members.load-more-failed:The next members page could not be loaded. The members already shown are unchanged.`,
-  narrow: $localize`:@@settings.members.narrow:Use a wider screen to invite or remove members.`,
+  narrow: $localize`:@@settings.members.narrow:Use a wider screen to invite, edit or remove members.`,
   pending: $localize`:@@settings.members.pending:Pending invitation`,
   active: $localize`:@@settings.members.active:Active`,
   removed: $localize`:@@settings.members.removed:Removed`,
@@ -89,6 +102,15 @@ export const MEMBERS_COPY = {
               </td>
               @if (canWrite()) {
                 <td class="mutation">
+                  @if (member.status === 'active' || member.status === 'pending') {
+                    <button
+                      type="button"
+                      data-members-edit-open
+                      (click)="requestEditRoles(member, $event)"
+                    >
+                      {{ copy.editRoles }}
+                    </button>
+                  }
                   @if (member.status !== 'removed') {
                     <button
                       type="button"
@@ -111,10 +133,15 @@ export class MemberListComponent {
   readonly members = input.required<readonly MembershipView[]>();
   readonly canWrite = input(false);
   readonly remove = output<{ member: MembershipView; opener: HTMLElement }>();
+  readonly editRoles = output<{ member: MembershipView; opener: HTMLElement }>();
   protected readonly copy = MEMBERS_COPY;
   protected requestRemove(member: MembershipView, event: Event): void {
     if (event.currentTarget instanceof HTMLElement)
       this.remove.emit({ member, opener: event.currentTarget });
+  }
+  protected requestEditRoles(member: MembershipView, event: Event): void {
+    if (event.currentTarget instanceof HTMLElement)
+      this.editRoles.emit({ member, opener: event.currentTarget });
   }
 
   /**

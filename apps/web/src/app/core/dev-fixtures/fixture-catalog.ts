@@ -36,9 +36,15 @@ import ingestTokensListOnboardingRun from '../../../../../../fixtures/web-api/in
 import ingestTokensListOnboardingToken from '../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import membershipCreateInviteExists from '../../../../../../fixtures/web-api/membership-create-invite-exists/input.json';
 import membershipCreateOk from '../../../../../../fixtures/web-api/membership-create-ok/input.json';
+import membershipGetAfterGrant from '../../../../../../fixtures/web-api/membership-get-after-grant/input.json';
 import membershipRemoveInvalidTransition from '../../../../../../fixtures/web-api/membership-remove-invalid-transition/input.json';
 import membershipRemoveLastAdmin from '../../../../../../fixtures/web-api/membership-remove-last-admin/input.json';
 import membershipRemoveOk from '../../../../../../fixtures/web-api/membership-remove-ok/input.json';
+import membershipRoleGrantForbidden from '../../../../../../fixtures/web-api/membership-role-grant-forbidden/input.json';
+import membershipRoleGrantOk from '../../../../../../fixtures/web-api/membership-role-grant-ok/input.json';
+import membershipRoleGrantUnknownRole from '../../../../../../fixtures/web-api/membership-role-grant-unknown-role/input.json';
+import membershipRoleRevokeLastAdmin from '../../../../../../fixtures/web-api/membership-role-revoke-last-admin/input.json';
+import membershipRoleRevokeOk from '../../../../../../fixtures/web-api/membership-role-revoke-ok/input.json';
 import membershipsList from '../../../../../../fixtures/web-api/memberships-list/input.json';
 import membershipsListEmpty from '../../../../../../fixtures/web-api/memberships-list-empty/input.json';
 import orgsList from '../../../../../../fixtures/web-api/orgs-list/input.json';
@@ -236,6 +242,33 @@ export interface FixtureDocument {
  * for a word that is not data. That half of the flag rule is pinned by the `AuditStore` and
  * `AuditTableComponent` specs instead. `audit-list-empty`
  * (`?fixture.variant.listAudit=empty`) is the empty page the shared empty pattern answers.
+ *
+ * 09.7.1-F6 adds the role-edit dialog's three calls. `getMembership` is answered by
+ * `membership-get-after-grant`: the corpus page's second row (`qa@acme.test`) with `tenant_admin`
+ * added and `version` 3 — the state that member must show *after* a confirmed grant, which is what
+ * the store re-reads instead of patching optimistically. `membership-role-grant-ok` is
+ * `grantMembershipRole`'s 200 with the same membership and its `ETag`, so the grant answer and the
+ * follow-up read cannot describe different role sets; both name that one member because the corpus
+ * is static and the dialog's reachable grant is `tenant_admin` on that row (the one role the corpus
+ * member does not hold). `membership-role-revoke-ok` is the 204 — the corpus's second bodyless
+ * document, after `membership-remove-ok`.
+ *
+ * The three refusals are documents for the reason 09.7.1-T2's are: the `fixtures` build answers the
+ * API in process (`HttpBackend`), so Playwright cannot intercept a submit and the state has to be
+ * selected per operation (`?fixture.variant.<operationId>=<variant>`, `withVariants` in
+ * `apps/web/e2e/shell/support.ts`). `membership-role-grant-forbidden`
+ * (`?fixture.variant.grantMembershipRole=forbidden`) is the 403 `forbidden` of the self-escalation
+ * rule carrying `SelfEscalation.Refused`'s own text
+ * (`src/Modules/Evidgate.Modules.Identity/Application/Commands/SelfEscalation.cs:46-47`);
+ * `membership-role-grant-unknown-role` (`?fixture.variant.grantMembershipRole=unknown-role`) is that
+ * operation's 409 `unknown_role` (`GrantRole.cs`); `membership-role-revoke-last-admin`
+ * (`?fixture.variant.revokeMembershipRole=last-admin`) is the 409 `last_admin` of demoting the last
+ * admin (`RevokeRole.cs:108-110` — the same sentence is the guard's own wording in
+ * `RemoveMember.cs:97-98` and `UpdateMembership.cs:134-135`, so it is the organization's rule, not
+ * one operation's). Variant names follow the corpus convention (`forbidden`, `last-admin`,
+ * `unknown-role`) rather than the wire code, and each refusal text is the server's current one: the
+ * revoke row spells `tenant_admin` with the underscore, unlike the older `membership-remove-*` rows,
+ * which are left as they were instead of being rewritten behind their own suite.
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
@@ -263,9 +296,15 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'ingest-tokens-list-onboarding-token', document: ingestTokensListOnboardingToken },
   { name: 'membership-create-invite-exists', document: membershipCreateInviteExists },
   { name: 'membership-create-ok', document: membershipCreateOk },
+  { name: 'membership-get-after-grant', document: membershipGetAfterGrant },
   { name: 'membership-remove-invalid-transition', document: membershipRemoveInvalidTransition },
   { name: 'membership-remove-last-admin', document: membershipRemoveLastAdmin },
   { name: 'membership-remove-ok', document: membershipRemoveOk },
+  { name: 'membership-role-grant-forbidden', document: membershipRoleGrantForbidden },
+  { name: 'membership-role-grant-ok', document: membershipRoleGrantOk },
+  { name: 'membership-role-grant-unknown-role', document: membershipRoleGrantUnknownRole },
+  { name: 'membership-role-revoke-last-admin', document: membershipRoleRevokeLastAdmin },
+  { name: 'membership-role-revoke-ok', document: membershipRoleRevokeOk },
   { name: 'memberships-list', document: membershipsList },
   { name: 'memberships-list-empty', document: membershipsListEmpty },
   { name: 'orgs-list', document: orgsList },

@@ -84,5 +84,32 @@ describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
     fixture.detectChanges();
     expect(root.querySelectorAll('th[scope="col"]')).toHaveLength(3);
     expect(root.querySelector('[data-members-remove]')).toBeNull();
+    expect(root.querySelector('[data-members-edit-open]')).toBeNull();
   });
+
+  it.each(['active', 'pending'] as const)(
+    'offers editing for a writable %s member and emits its opener',
+    (status) => {
+      const membership = member(status);
+      const editRoles = vi.fn();
+      fixture.componentInstance.editRoles.subscribe(editRoles);
+      fixture.componentRef.setInput('canWrite', true);
+      fixture.componentRef.setInput('members', [membership]);
+      fixture.detectChanges();
+      const opener = root.querySelector<HTMLButtonElement>('[data-members-edit-open]')!;
+      expect(opener.closest('.mutation')).not.toBeNull();
+      opener.click();
+      expect(editRoles).toHaveBeenCalledWith({ member: membership, opener });
+    },
+  );
+
+  it.each(['removed', 'revoked', 'expired'] as const)(
+    'never offers editing for a terminal %s member',
+    (status) => {
+      fixture.componentRef.setInput('canWrite', true);
+      fixture.componentRef.setInput('members', [member(status)]);
+      fixture.detectChanges();
+      expect(root.querySelector('[data-members-edit-open]')).toBeNull();
+    },
+  );
 });
