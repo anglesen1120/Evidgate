@@ -107,7 +107,8 @@ records the option's `[Range]` bounds (1 MiB..64 MiB and 1..1000), which the lin
 attributes.
 
 One more shape is a feature that stays **absent until it is configured**: the federated-login rows
-(`EVIDGATE__LOGIN__*`, `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.1/T1.2) are `requiredAtBoot: false` and
+(`EVIDGATE__LOGIN__*`, `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.1/T1.2, and `EVIDGATE__OAUTH__GITHUB__*`,
+02.3.1-T1.3) are `requiredAtBoot: false` and
 `required: false` in every environment, because a host without them serves every other route and answers
 `GET /v1/auth/oidc/{provider}/start` and `/callback` with 503 `unavailable` plus `Retry-After` — no flag
 enables the routes, only the configuration. `EVIDGATE__LOGIN__PUBLICBASEURL` is the browser-facing https
@@ -117,7 +118,13 @@ configuration and `EVIDGATE__OIDC__GOOGLE__CLIENTSECRET` is `secret: true` and r
 `ISecretProvider`. The other eleven rows (`StateLifetimeSeconds`, `RetryAfterSeconds`, the three Google
 endpoints, the clock-skew and JWKS lifetimes, the outbound timeout and the response-body cap) keep their
 code defaults in every environment, and the three provider endpoints are refused at boot unless they stay
-on the fixed Google allowlist (S4).
+on the fixed Google allowlist (S4). The GitHub half has the same shape: `EVIDGATE__OAUTH__GITHUB__CLIENTID`
+is plain configuration, `EVIDGATE__OAUTH__GITHUB__CLIENTSECRET` is `secret: true` and resolved through
+`ISecretProvider`, and its five other rows (`AuthorizeUrl`, `TokenUrl`, `ApiBaseUrl`, the outbound timeout
+and the response-body cap) keep their code defaults, with the three endpoints refused at boot unless they
+stay on the fixed GitHub allowlist (`github.com` for the browser redirect and the token exchange,
+`api.github.com` for the two profile reads, S4). GitHub is OAuth2 only (ruling T6): there is no ID token,
+so the section carries no issuer, JWKS or clock-skew key.
 
 `required` is the lint's per-environment rule: the environment must declare the key whatever the boot
 would do without it. That is how a security-relevant default stays visible — every environment declares
@@ -142,8 +149,11 @@ connection string (`EVIDGATE__DATABASE__CONNECTIONSTRING`), the task sweep conne
 (`EVIDGATE__TASKS__SWEEPCONNECTIONSTRING`), the CI signing key, pepper and previous pepper
 (`EVIDGATE__CI__SIGNINGKEY`, `EVIDGATE__CI__PEPPER`, `EVIDGATE__CI__PREVIOUSPEPPER`), the object-storage
 identity (`EVIDGATE__OBJECT__ACCESSKEY`, `EVIDGATE__OBJECT__SECRETKEY`), the Migrator
-connection string (`EVIDGATE_MIGRATOR__CONNECTIONSTRING`) and the Google login client secret
-(`EVIDGATE__OIDC__GOOGLE__CLIENTSECRET`, 02.3.1-T1.2). A name outside the registry is refused with an
+connection string (`EVIDGATE_MIGRATOR__CONNECTIONSTRING`), the Google login client secret
+(`EVIDGATE__OIDC__GOOGLE__CLIENTSECRET`, 02.3.1-T1.2), the GitHub login client secret
+(`EVIDGATE__OAUTH__GITHUB__CLIENTSECRET`, 02.3.1-T1.3) and the session-cookie pepper
+(`EVIDGATE__SESSION__PEPPER`, 02.3.1-T1.4: the cookie value is stored only as
+`HMAC-SHA256(pepper_vN, value)` in `session.cookie_hmac`). A name outside the registry is refused with an
 `ArgumentException` that names only the name. The registry is not the list of `secret: true` rows in
 `infra/config-matrix.json`: a matrix row that only the dev stack uses (for example the S3 keys in
 `.env.dev.template`) joins `SecretNames` when a process starts to consume it, not before. The

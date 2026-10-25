@@ -29,6 +29,7 @@ using Evidgate.Modules.Policy.Endpoints;
 using Evidgate.Modules.Tenancy;
 using Evidgate.Modules.Tenancy.Endpoints;
 using Mediator;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -51,6 +52,16 @@ public static partial class ApiHost
     public static WebApplicationBuilder CreateBuilder(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+
+        // 02.3.1 §5/§8 (S3), hand-over (viii) of #160: ASP.NET's request log — the category
+        // `Microsoft.AspNetCore.Hosting.Diagnostics` — writes "Request starting … GET <url?query>" at
+        // Information, and the login callback's query carries the authorization `code` and the one-time
+        // `state`. The span of the same request is redacted below (`LoginTraceRedaction`), but the log line
+        // cannot be: the framework composes it before any middleware of ours runs, so nothing on our side can
+        // take the query out of it. That category therefore starts at Warning for the whole Api: a request
+        // stays observable through the (redacted) span — method, route, status, duration — and no framework
+        // log line can ever carry a code or a state again, whatever route reaches us.
+        builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
 

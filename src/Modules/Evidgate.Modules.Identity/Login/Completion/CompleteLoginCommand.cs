@@ -1,0 +1,47 @@
+namespace Evidgate.Modules.Identity.Login.Completion;
+
+/// <summary>
+/// The business half of a federated login (02.3.1 §5, 02.3.1-T1.4): the callback verified the provider
+/// identity and allowlisted the <c>returnUrl</c>, and this command turns that verified identity into a
+/// session.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Not a Mediator message, deliberately.</b> The C2 pipeline opens a tenant transaction for every
+/// <c>Result</c>-carrying message (<c>TenantTransactionBehaviour</c>) and its authorization stage reads that
+/// tenant, so a dispatched command needs a resolved tenant before the handler runs. A login has none: the
+/// browser has no session yet and the orgs of the account are exactly what the handler has still to resolve,
+/// so the callback publishes no tenant and must not invent one. The pre-tenant CI exchanges are dispatched
+/// only because their endpoints publish a tenant and a service principal first. This command therefore runs
+/// from <see cref="LoginCommandCompletion"/> (the <see cref="ILoginCompletion"/> the protocol calls) and
+/// writes no tenant-scoped row: <c>user</c>, <c>user_identity</c> and <c>session</c> are platform-scoped
+/// tables reached through <c>evidgate_resolve</c>, and the membership question is the pre-tenant resolver
+/// call, exactly as 02.3.1 §5 and 00 §5.4.8 prescribe.
+/// </para>
+/// <para>
+/// <b>No outbound call, no shared transaction (P5).</b> Every provider call already happened in the
+/// callback; these are three independent statements in the order of 02.3.1 §5, each with its own failure.
+/// </para>
+/// </remarks>
+/// <param name="Identity">The provider-verified identity; <c>(Provider, Subject)</c> is the only key (D3).</param>
+/// <param name="ReturnUrl">The allowlisted app path the browser lands on after the login.</param>
+/// <param name="ClientIpAddress">The client address as the request reported it (sanitised before the write).</param>
+/// <param name="UserAgent">The client's user agent, already bounded by the callback (never logged).</param>
+internal sealed record CompleteLoginCommand(
+    VerifiedIdentity Identity,
+    string ReturnUrl,
+    string? ClientIpAddress,
+    string? UserAgent);
+
+/// <summary>What a completed login hands back to the protocol: the session to cookie and where to redirect.</summary>
+/// <param name="UserId">The platform user the identity resolved to (the same one a later login reuses).</param>
+/// <param name="SessionId">The new <c>session</c> row (never written to a log, a metric or a body).</param>
+/// <param name="SessionCookieValue">The one-time cookie value; the store keeps only its HMAC.</param>
+/// <param name="ExpiresAt">The session's sliding deadline, which becomes the cookie's <c>Expires</c>.</param>
+/// <param name="RedirectPath">A <c>Location</c>-safe app path (percent-encoded, allowlist re-checked).</param>
+internal sealed record LoginResult(
+    Guid UserId,
+    Guid SessionId,
+    string SessionCookieValue,
+    DateTimeOffset ExpiresAt,
+    string RedirectPath);

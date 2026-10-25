@@ -1590,7 +1590,7 @@ export type BindingId = string;
 export type IngestTokenId = string;
 
 /**
- * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` is registered by 02.3.1-T1.2; `github` is in the enum because the browser button of 09.1.1 can already name it, and answers 404 `not_found` until 02.3.1-T1.3 lands the provider.
+ * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers; a deployment that registers neither — no client credential configured — answers 404 `not_found` for both.
  */
 export type ProviderPath = 'google' | 'github';
 
@@ -1860,7 +1860,7 @@ export type StartFederatedLoginData = {
     body?: never;
     path: {
         /**
-         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` is registered by 02.3.1-T1.2; `github` is in the enum because the browser button of 09.1.1 can already name it, and answers 404 `not_found` until 02.3.1-T1.3 lands the provider.
+         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers; a deployment that registers neither — no client credential configured — answers 404 `not_found` for both.
          */
         provider: 'google' | 'github';
     };
@@ -1894,7 +1894,7 @@ export type CompleteFederatedLoginData = {
     body?: never;
     path: {
         /**
-         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` is registered by 02.3.1-T1.2; `github` is in the enum because the browser button of 09.1.1 can already name it, and answers 404 `not_found` until 02.3.1-T1.3 lands the provider.
+         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers; a deployment that registers neither — no client credential configured — answers 404 `not_found` for both.
          */
         provider: 'google' | 'github';
     };
@@ -1921,6 +1921,10 @@ export type CompleteFederatedLoginErrors = {
      */
     401: ErrorEnvelope;
     /**
+     * 403 `no_membership` — the identity is verified but the account holds no membership in an active organization, so no session row and no session cookie are created (02.3.1 AC3); or 403 `account_disabled` — the account's `user.status` is `disabled` (02.3.1 §6). Both are `retryable: false`.
+     */
+    403: ErrorEnvelope;
+    /**
      * 404 not found — also for other-tenant ids (00 §9.2)
      */
     404: ErrorEnvelope;
@@ -1928,10 +1932,6 @@ export type CompleteFederatedLoginErrors = {
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
-    /**
-     * 501 `login_not_completed` — the provider verified the identity, but completing the login (the `user`/`user_identity` upsert, the `session` row and the `__Host-evidgate` session cookie) is 02.3.1-T1.4's task (02.3.1 §5). This build answers a typed failure rather than a silent success, so a caller can never mistake "verified" for "signed in"; the code leaves the API when 02.3.1-T1.4 replaces the `ILoginCompletion` seam.
-     */
-    501: ErrorEnvelope;
     /**
      * 503 unavailable — always `Retry-After` (00 §9.2)
      */

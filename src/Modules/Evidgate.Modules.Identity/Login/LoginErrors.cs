@@ -7,9 +7,10 @@ using Microsoft.AspNetCore.Http;
 namespace Evidgate.Modules.Identity.Login;
 
 /// <summary>
-/// The fixed answers of the login routes (02.3.1 §5, AC8): an invalid callback, an unusable provider, an
-/// unknown route value and the uncompleted-login seam. Every message is written here and none is taken
-/// from the provider: no error query value, code, token, subject or email can reach a response body.
+/// The fixed answers of the login routes (02.3.1 §5, AC3, AC8): an invalid callback, an unusable provider, an
+/// unknown route value, and the completion's own refusals (no membership, a disabled account). Every message
+/// is written here and none is taken from the provider or the database: no error query value, code, token,
+/// subject, email or SQL text can reach a response body.
 /// </summary>
 /// <remarks>
 /// The two helpers are also the single place a failed attempt is counted
@@ -20,10 +21,15 @@ internal static class LoginErrors
 {
     /// <summary>
     /// 503 <c>unavailable</c>, retryable, with <c>Retry-After</c>: the provider is unconfigured, a call to
-    /// it timed out or failed, or the deployment has no <see cref="LoginOptions.PublicBaseUrl"/> (AC8).
-    /// The same answer serves every one of those causes, so the route is no oracle for the deployment's
+    /// it timed out or failed, or the deployment has no <see cref="LoginOptions.PublicBaseUrl"/> (AC8). The
+    /// same answer serves every one of those causes, so the route is no oracle for the deployment's
     /// configuration.
     /// </summary>
+    /// <remarks>
+    /// The completion reuses this value for its own infrastructure faults (a database failure while the
+    /// session is written, 02.3.1-T1.4), so a caller sees one 503 shape and one fixed message on the whole
+    /// path — and never a database, SQL or host name in the body.
+    /// </remarks>
     public static Error ProviderUnavailable { get; } = new(
         ApiErrorCode.Unavailable,
         "the identity provider is not available; retry shortly",
@@ -47,15 +53,23 @@ internal static class LoginErrors
         StatusCodes.Status404NotFound);
 
     /// <summary>
-    /// 501 <c>login_not_completed</c>: the provider verified the identity but the login's business
-    /// completion is not part of this build. A typed failure rather than a silent success, so a caller can
-    /// never mistake "verified" for "signed in" (the seam <see cref="ILoginCompletion"/> is replaced by
-    /// 02.3.1-T1.4).
+    /// 403 <c>no_membership</c>: the identity is verified but the account holds no membership in an active
+    /// organization (AC3, 02 §4.3). No session row and no session cookie are created; the user row the
+    /// login's upsert wrote stays, so a later invite binds to it (02.3.1-T2).
     /// </summary>
-    public static Error LoginNotCompleted { get; } = new(
-        ApiErrorCode.LoginNotCompleted,
-        "the sign-in cannot be completed on this deployment yet",
-        StatusCodes.Status501NotImplemented);
+    public static Error NoMembership { get; } = new(
+        ApiErrorCode.NoMembership,
+        "this account belongs to no organization that admits it; ask an administrator for an invitation",
+        StatusCodes.Status403Forbidden);
+
+    /// <summary>
+    /// 403 <c>account_disabled</c>: <c>user.status</c> is <c>disabled</c> (02.3.1 §6), or the session store
+    /// refused the account for the same reason. Not retryable — an administrator has to re-enable it.
+    /// </summary>
+    public static Error AccountDisabled { get; } = new(
+        ApiErrorCode.AccountDisabled,
+        "this account is disabled; contact an administrator",
+        StatusCodes.Status403Forbidden);
 
     /// <summary>The 401 for one callback, so every invalid path answers with the same code and message.</summary>
     /// <param name="provider">The provider the outcome is counted under (a registered name, never a raw route value).</param>
