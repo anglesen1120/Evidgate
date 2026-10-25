@@ -19,12 +19,14 @@
 .filters {
   margin-block-end: var(--eg-space-5);
 }
+h1,
 h2,
 h3,
 p {
   margin: 0;
   overflow-wrap: anywhere;
 }
+h1,
 h2 {
   font-family: var(--eg-font-display);
   font-size: var(--eg-text-lg);
@@ -109,7 +111,7 @@ button:disabled {
   color: var(--eg-text-muted);
   cursor: not-allowed;
 }
-:where(button, input, select, .table-scroll, .support-access, h2):focus-visible {
+:where(button, input, select, .table-scroll, .support-access, h1, h2):focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);
   outline-offset: var(--eg-focus-offset);
 }

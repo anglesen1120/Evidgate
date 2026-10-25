@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute } from '@angular/router';
 import type { AuditEntryDto, AuditListResponse } from '@evidgate/sdk';
 import { AuditDataService, type AuditListQuery } from '../../../core/data/audit-data.service';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
@@ -63,17 +64,18 @@ class FakeAuditDataService {
 describe('AuditPage (09.7.1-T6)', () => {
   let data: FakeAuditDataService;
   const org = signal<{ id: string } | null>({ id: 'org1' });
+  let routeData: Record<string, unknown>;
+  const providers = () => [
+    provideZonelessChangeDetection(),
+    { provide: AuditDataService, useValue: data },
+    { provide: SessionStore, useValue: { currentOrg: org } },
+    { provide: ActivatedRoute, useFactory: () => ({ snapshot: { data: routeData } }) },
+  ];
   beforeEach(() => {
+    routeData = {};
     data = new FakeAuditDataService();
     org.set({ id: 'org1' });
-    TestBed.configureTestingModule({
-      imports: [AuditPage],
-      providers: [
-        provideZonelessChangeDetection(),
-        { provide: AuditDataService, useValue: data },
-        { provide: SessionStore, useValue: { currentOrg: org } },
-      ],
-    });
+    TestBed.configureTestingModule({ imports: [AuditPage], providers: providers() });
   });
   afterEach(() => {
     TestBed.resetTestingModule();
@@ -229,6 +231,18 @@ describe('AuditPage (09.7.1-T6)', () => {
     clear.click();
     await fixture.whenStable();
     expect(root.textContent).toContain('No activity recorded');
+  });
+  it('renders the heading as an h2 under the Settings shell and as the page h1 as a sidebar entry', async () => {
+    const tab = await render();
+    expect(tab.root.querySelectorAll('h1')).toHaveLength(0);
+    expect(tab.root.querySelector('h2')?.textContent).toContain('Audit log');
+    TestBed.resetTestingModule();
+    routeData = { pageHeadingLevel: 1 };
+    TestBed.configureTestingModule({ imports: [AuditPage], providers: providers() });
+    const entryPage = await render();
+    expect(entryPage.root.querySelectorAll('h1')).toHaveLength(1);
+    expect(entryPage.root.querySelector('h1')?.textContent).toContain('Audit log');
+    expect(entryPage.root.querySelectorAll('h2')).toHaveLength(0);
   });
   it('bounds semantic rows to 200 and moves windows with heading focus', async () => {
     const entries = Array.from({ length: 201 }, (_, index) => entry(`row-${index}`));

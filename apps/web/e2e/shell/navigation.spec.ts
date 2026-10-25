@@ -179,13 +179,17 @@ test.describe('lazy route boundaries (AC4)', () => {
 
     // A deep link loads a handful of files, not the whole app: a regression that preloads every
     // feature chunk would blow past this bound long before the disjointness check explains itself.
+    // `+4`: the audit area (page, store, export, table and the form/request-state code it shares
+    // with the members page) is split by the bundler into four route-specific chunks since
+    // 09.7.1-T6, one more than the three this bound once allowed; the fixtures bundle holds 49
+    // chunks, so a preload-everything regression still exceeds it by a wide margin.
     for (const [name, chunks] of [
       ['overview', overviewChunks],
       ['authoring', authoringChunks],
       ['audit', auditChunks],
     ] as const) {
       expect(chunks.length, `${name} fetched chunks: ${chunks.join(', ')}`).toBeLessThanOrEqual(
-        shared.length + 3,
+        shared.length + 4,
       );
     }
   });
