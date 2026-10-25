@@ -12,9 +12,12 @@ namespace Evidgate.Modules.Identity.Domain;
 /// <remarks>
 /// <see cref="InvitedEmail"/> is personal data (02.1.2 §8): it is stored normalised
 /// (the migration's check constraint refuses a non-normalised value) and never
-/// logged. <see cref="InviteSecretPrefix"/>/<see cref="InviteTokenHash"/> stay unset
-/// in this task: 02.1.2-T2 mints the single-use invite secret (T75). A pending row
-/// with those columns unset is a complete row, not a placeholder.
+/// logged. The token columns (<see cref="InviteSecretPrefix"/>,
+/// <see cref="InviteTokenHash"/>, <see cref="InvitePepperVersion"/>,
+/// <see cref="InviteExpiresAt"/>) are minted by 02.1.2-T2's create/resend commands
+/// (T75) and are set all together or not at all (migration 0043's
+/// <c>membership_invite_token_all_or_none</c>). A pending row with those columns
+/// unset is a complete row, not a placeholder.
 /// </remarks>
 internal sealed class Membership
 {
@@ -41,6 +44,15 @@ internal sealed class Membership
 
     /// <summary>HMAC-SHA256 of the invite link secret (T5 pattern); null until 02.1.2-T2.</summary>
     public byte[]? InviteTokenHash { get; set; }
+
+    /// <summary>
+    /// The pepper version the <see cref="InviteTokenHash"/> was computed under (T5, migration
+    /// 0043's <c>membership_invite_token_all_or_none</c>). Exactly one pepper is configured and
+    /// <c>InviteSecrets.Verify</c> accepts that version only, so a bump does not keep older
+    /// invites verifiable: every pending invite fails closed and an admin resend re-mints it
+    /// under the current pepper. Null when no token was minted.
+    /// </summary>
+    public int? InvitePepperVersion { get; set; }
 
     /// <summary>When the pending invite stops being bindable (02.1.2 §6); null until 02.1.2-T2.</summary>
     public DateTimeOffset? InviteExpiresAt { get; set; }

@@ -605,6 +605,10 @@ internal static class RouteRequests
         Add("POST", "/v1/orgs/{o}/memberships/{m}/roles", ctx =>
             new(HttpMethod.Post, $"/v1/orgs/{ctx.OrgId}/memberships/{ctx.MembershipId}/roles",
                 new JsonObject { ["role_id"] = ctx.RoleId.ToString() }, IdempotencyKey: Key()));
+        Add("POST", "/v1/orgs/{o}/memberships/{m}/resend", ctx =>
+            new(HttpMethod.Post, $"/v1/orgs/{ctx.OrgId}/memberships/{ctx.MembershipId}/resend"));
+        Add("POST", "/v1/orgs/{o}/memberships/{m}/cancel-invite", ctx =>
+            new(HttpMethod.Post, $"/v1/orgs/{ctx.OrgId}/memberships/{ctx.MembershipId}/cancel-invite"));
         Add("DELETE", "/v1/orgs/{o}/memberships/{m}/roles/{r}", ctx =>
             new(HttpMethod.Delete, $"/v1/orgs/{ctx.OrgId}/memberships/{ctx.MembershipId}/roles/{ctx.RoleId}", IfMatch: "\"1\""));
 
