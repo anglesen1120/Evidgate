@@ -14,7 +14,7 @@
         "name": "CI upload (fixture)",
         "prefix": "egt_fixture",
         "status": "active",
-        "scopes": ["event:write", "artifact:write", "run:create"],
+        "scopes": ["event:write", "run:create"],
         "expires_at": null,
         "overlap_ends_at": null,
         "last_used_at": null,
