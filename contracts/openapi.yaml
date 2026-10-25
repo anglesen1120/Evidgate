@@ -5275,8 +5275,9 @@ paths:
         A case that is not soft-deleted is 409 `invalid_transition`; an unknown, another
         tenant's or another project's case 404 `not_found`; a parent checklist item that is
         still soft-deleted is 422 `authoring_parent_invalid` with `details[].reason =
-        parent_deleted`, and one that is `retired` is 409 `invalid_transition` instead — a retired
-        item takes no new content, so it has to be restored first. Missing `Idempotency-Key` is 400
+        parent_deleted`, and one that is `retired` is 409 `invalid_transition` instead — the guard
+        the case create applies, with the message "a retired checklist item takes no new content;
+        restore it first". Missing `Idempotency-Key` is 400
         `request_invalid`, and a replay answers the stored 200 with no second version or audit row
         (AC18). A lock timeout is 503 `unavailable` with `Retry-After`.
       x-permission: authoring:write
@@ -5435,8 +5436,8 @@ paths:
         404 `not_found` (AC10), and a version whose entity row is gone is that same 404. A parent
         that is still soft-deleted is 422 `authoring_parent_invalid` with `details[].reason =
         `parent_deleted`. A snapshot that names a parent checklist item which is `retired` is 409
-        `invalid_transition` and writes nothing: a retired item takes no new content, so it has to
-        be restored first (the same parent guard the case-create route applies). A snapshot of a
+        `invalid_transition` and writes nothing, with the case-create guard's message "a retired
+        checklist item takes no new content; restore it first". A snapshot of a
         feature node that would bring its sibling group past 1000 live nodes is 422
         `request_invalid` with `details[].path = /parent_id` and
         `details[].reason = children_limit_exceeded`, exactly as route 6 and the create refuse it,
