@@ -91,6 +91,15 @@ export function withVariant(path: string, variantQuery: string): string {
   return `${base}?${existing}&${extra}`;
 }
 
+/**
+ * `withVariant` over several queries, applied left to right: a case that needs two overrides at
+ * once (`listPermissions` for the grants, `removeMember` for the answer) passes both here instead of
+ * re-spelling the `?fixture.variant.` prefix.
+ */
+export function withVariants(path: string, variantQueries: readonly string[]): string {
+  return variantQueries.reduce(withVariant, path);
+}
+
 /** The base URL the worker's config resolved, for the cases that open their own context. */
 export function fixturesBaseUrl(): string {
   const port = process.env['EVIDGATE_WEB_FIXTURES_E2E_PORT'];
@@ -239,9 +248,10 @@ export async function expectNoA11yViolations(page: Page, context: string): Promi
 // ---------------------------------------------------------------------------------------------
 // Settings shell (09.7.1-T1). The tab strip's DOM contract is fixed by the plan (09.7.1 §10 T1.1):
 // `app-settings-shell` hosts the strip, each visible tab is a link carrying
-// `data-settings-tab="<tab.id>"`, the active one carries `aria-current="page"`, the tab body is
-// `app-settings-tab-placeholder[data-settings-tab-body="<tab.id>"]` and a session with no tab at
-// all gets `app-settings-no-tabs`. The three grant sets below are corpus variants
+// `data-settings-tab="<tab.id>"`, the active one carries `aria-current="page"`, a tab whose story
+// has not shipped a body yet answers with `app-settings-tab-placeholder[data-settings-tab-body=
+// "<tab.id>"]` (09.7.1-T2 replaced the members body with `app-members-page`) and a session with no
+// tab at all gets `app-settings-no-tabs`. The grant sets below are corpus variants
 // (`fixtures/web-api/permissions-list-settings-*`), never a role name: the client derives the
 // grants from the `tenant_assignable` catalogue rows alone.
 // ---------------------------------------------------------------------------------------------
@@ -255,6 +265,33 @@ export const SETTINGS_AUDIT_ONLY_GRANTS = '?fixture.variant.listPermissions=sett
 /** `?fixture.variant.listPermissions=settings-no-tab` — `organization:read` alone, so no tab. */
 export const SETTINGS_NO_TAB_GRANTS = '?fixture.variant.listPermissions=settings-no-tab';
 
+/**
+ * `?fixture.variant.listPermissions=settings-members-readonly` — `membership:read`,
+ * `organization:read` and `role:read`, so the Members tab opens while `membership:write` is absent.
+ */
+export const MEMBERS_READONLY_GRANTS = '?fixture.variant.listPermissions=settings-members-readonly';
+
+// ---------------------------------------------------------------------------------------------
+// Members and roles tab (09.7.1-T2). Its DOM contract is the plan's §10 T2 hooks:
+// `app-members-page[data-members-phase]`, rows `[data-members-row][data-membership-id]`, the
+// matrix `[data-members-matrix]`, `[data-members-invite-open]` / `[data-members-remove]`, native
+// dialogs `[data-members-dialog="invite|remove"]`, `[data-members-submit]` and the mutation error
+// region `[data-members-error]` + `[data-members-error-code]`. Every variant below is a corpus
+// directory (`fixtures/web-api/membership*`), selected per operation.
+// ---------------------------------------------------------------------------------------------
+
+/** `?fixture.variant.listMemberships=empty` — the members page with no membership at all. */
+export const MEMBERS_EMPTY_LIST = '?fixture.variant.listMemberships=empty';
+
+/** `?fixture.variant.createMembership=invite-exists` — the 409 `invite_exists` of an invite. */
+export const MEMBERS_INVITE_EXISTS = '?fixture.variant.createMembership=invite-exists';
+
+/** `?fixture.variant.removeMember=last-admin` — the 409 `last_admin` of AC2. */
+export const MEMBERS_REMOVE_LAST_ADMIN = '?fixture.variant.removeMember=last-admin';
+
+/** `?fixture.variant.removeMember=invalid-transition` — the 409 `invalid_transition` of a pending. */
+export const MEMBERS_REMOVE_INVALID_TRANSITION = '?fixture.variant.removeMember=invalid-transition';
+
 /** `/orgs/:orgId/settings` — the shell's index address, which redirects to the first open tab. */
 export function settingsPath(locale: ShellLocale, orgId: string = ORG_ACME): string {
   return localePath(locale, `/orgs/${orgId}/settings`);
@@ -267,6 +304,14 @@ export function settingsTabPath(
   orgId: string = ORG_ACME,
 ): string {
   return localePath(locale, `/orgs/${orgId}/settings/${tab}`);
+}
+
+/**
+ * `/orgs/:orgId/settings/members` — the Members and roles tab (09.7.1-T2). Spelled once so the
+ * members suite never repeats the segment or the shell's path shape.
+ */
+export function membersPath(locale: ShellLocale, orgId: string = ORG_ACME): string {
+  return settingsTabPath(locale, 'members', orgId);
 }
 
 /**
@@ -287,10 +332,64 @@ export async function activeSettingsTabId(page: Page): Promise<string | null> {
   return active[0] ?? null;
 }
 
-/** The `data-settings-tab-body` of the rendered tab body, or `null` when no body is rendered. */
+/**
+ * The `data-settings-tab-body` of the rendered tab body, or `null` when no body is rendered.
+ *
+ * This answers the PLACEHOLDER bodies only: a tab whose story has shipped renders its own host
+ * (`app-members-page` for `members`, 09.7.1-T2), which deliberately carries no
+ * `data-settings-tab-body` — its own hooks (`data-members-phase`) say which state it is in. A case
+ * that visits a real tab body asserts that host instead.
+ */
 export async function settingsTabBodyId(page: Page): Promise<string | null> {
   const bodies = await page
     .locator('app-settings-tab-placeholder[data-settings-tab-body]')
     .evaluateAll((list) => list.map((body) => body.getAttribute('data-settings-tab-body') ?? ''));
   return bodies[0] ?? null;
+}
+
+/** What an address rendered, for the identity comparison a 404 claim needs. */
+export interface RenderedAddress {
+  readonly pathname: string;
+  readonly url: string;
+  readonly heading: string;
+  readonly text: string;
+}
+
+/**
+ * Opens each address, records what the page says, and asserts each one rendered the not-found
+ * pattern IN PLACE: same address still in the bar, one heading and one body text for all of them,
+ * and never the forbidden page (a refusal leaking into the 404 copy would confirm the tab exists).
+ *
+ * Shared by the shell's tab-strip suite (09.7.1-T1) and the Members tab's (09.7.1-T2), because
+ * both make the same claim: a destination the caller may not open is indistinguishable from one
+ * that never existed.
+ */
+export async function expectIndistinguishableNotFound(
+  page: Page,
+  attempts: readonly string[],
+): Promise<readonly RenderedAddress[]> {
+  const rendered: RenderedAddress[] = [];
+  for (const attempted of attempts) {
+    const address = new URL(attempted, 'http://127.0.0.1');
+    await page.goto(attempted);
+    await expect(page.locator('#main-content h1')).toHaveCount(1);
+    await expect(page.locator('app-not-found-pattern')).toHaveCount(1);
+    await expect(page.locator('app-forbidden-pattern')).toHaveCount(0);
+    rendered.push({
+      pathname: address.pathname,
+      url: page.url(),
+      heading: (await page.locator('#main-content h1').innerText()).trim(),
+      text: await mainText(page),
+    });
+  }
+
+  for (const [index, entry] of rendered.entries()) {
+    const landed = new URL(entry.url).pathname;
+    expect(landed, `attempt ${index} kept the address it was given`).toBe(entry.pathname);
+    expect(landed.endsWith('/forbidden'), `attempt ${index} is not the refusal page`).toBe(false);
+  }
+
+  expect(new Set(rendered.map((entry) => entry.heading)).size).toBe(1);
+  expect(new Set(rendered.map((entry) => entry.text)).size).toBe(1);
+  return rendered;
 }

@@ -1,0 +1,18 @@
+{
+  "operation_id": "removeMember",
+  "variant": "last-admin",
+  "status": 409,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000d4"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "last_admin",
+      "message": "the organization must keep at least one active tenant admin",
+      "request_id": "018f0000-0000-7000-8000-0000000000d4",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

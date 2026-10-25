@@ -20,6 +20,7 @@ import {
 import { RouterTestingHarness } from '@angular/router/testing';
 
 import { SessionStore, type SessionState } from '../../core/session/session.store';
+import { MembersPage } from './members/members.page';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
@@ -81,6 +82,7 @@ const PAGE_STUBS = new Map<unknown, Type<unknown>>([
   [SettingsShellPage, SettingsShellStub],
   [SettingsTabPlaceholderPage, SettingsTabStub],
   [SettingsNoTabsPage, SettingsNoTabsStub],
+  [MembersPage, SettingsTabStub],
 ]);
 
 /** The real shell table with only its page components swapped. */
@@ -148,6 +150,20 @@ function refusedTabs(codes: ReadonlySet<string>): readonly string[] {
 }
 
 describe('Settings shell route table (09.7.1-T1.2)', () => {
+  it('mounts the Members page only for members and keeps the other tabs as placeholders', async () => {
+    const tabs = shellRoutes[0]?.children?.filter((route) => route.data?.['settingsTabId']);
+    expect(tabs?.find((route) => route.path === 'members')?.component).toBe(MembersPage);
+    expect(
+      tabs
+        ?.filter((route) => route.path !== 'members')
+        .every((route) => route.component === SettingsTabPlaceholderPage),
+    ).toBe(true);
+    const harness = await setUp(new Set(['membership:read']));
+    await harness.navigateByUrl('/orgs/o1/settings/members');
+    expect(
+      document.querySelector('[data-settings-tab-body]')?.getAttribute('data-settings-tab-body'),
+    ).toBe('members');
+  });
   it('renders the placeholder of a tab the caller may use, with its id in the route data', async () => {
     const harness = await setUp(new Set(['audit:read']));
 

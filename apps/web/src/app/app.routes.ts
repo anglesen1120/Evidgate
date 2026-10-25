@@ -105,6 +105,7 @@ const ENTRY_PAGES: Readonly<Record<string, () => Promise<Type<unknown>>>> = {
  */
 const ENTRY_ROUTES: Readonly<Record<string, () => Promise<Routes>>> = {
   settings: () => import('./features/settings/settings-shell.routes').then((m) => m.routes),
+  members: () => import('./features/settings/members/members.routes').then((m) => m.routes),
 };
 
 /** The lazy loader of one area, or a load-time failure naming the missing folder. */

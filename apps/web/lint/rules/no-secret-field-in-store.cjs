@@ -16,11 +16,14 @@
 //     `private_key`/`privateKey`, `apiKey`, `accessToken`, `refreshToken`, `bearerToken`,
 //     `clientSecret` (matched on the joined words, so either spelling and any case matches);
 //   - a bare secret word followed by one VALUE word: `value`, `text`, `plain`, `plaintext`,
-//     `raw`, `string`, `key` — `tokenValue`, `secret_text`, `passwordRaw`, `secretKey`;
+//     `raw`, `string`, `key` — `tokenValue`, `secret_text`, `passwordRaw`, `secretKey`. The pair
+//     counts at ANY position in the name, so a secret word in the middle is reported too:
+//     `rawTokenValue`, `signingSecretText`, `pageTokenText` (09.7.1-T2);
 //   - a bare secret word in the TRAILING position of a compound name — `ingestToken`,
-//     `apiToken`, `webhookSecret`, `rawToken`, `plainSecret`. Only a presence word in front of it
-//     makes the name metadata: `hasToken`, `hasSecret`, `isToken` report whether a value exists,
-//     they do not hold it.
+//     `apiToken`, `webhookSecret`, `rawToken`, `plainSecret`, `pageToken`. Only a presence word in
+//     front of it makes the name metadata: `hasToken`, `hasSecret`, `isToken` report whether a
+//     value exists, they do not hold it. A presence word in front of a secret word excuses it in
+//     every position, so `hasTokenValue` stays legal.
 //
 // Everything else is metadata and stays legal: `tokenPrefix`, `token_prefix`, `last4`,
 // `rotationState`, `secretRef`, `secret_reference`, `secretName`, `tokenName`, `ingestTokens`,
@@ -28,16 +31,26 @@
 // deliberately narrow: a plural (`tokens`) and a secret word with a metadata suffix — `Prefix`,
 // `Suffix`, `Ref`, `Reference`, `Name`, `Count`, `At`, `Hash`, `State`, `Id`, `Kind`, `Label` —
 // (`passwordHash`, `tokenCount`, `tokenExpiresAt`) are not reported, because a lint rule that
-// cries wolf is switched off. Every match is a set lookup over the split words or a single-pass
-// regex, so no quantifier in this rule can backtrack over the same text twice (ReDoS).
+// cries wolf is switched off. A name is split on word boundaries only, so a neutral word that
+// merely contains a secret word stays legal: `tokenizer`, `secretary`, `passwordless`
+// (`passwordless` is one word after the split, and `passwordLess` splits to `password` + `less`
+// with no value word behind it — both describe an authentication mode, not a stored value).
+// Every match is a set lookup over the split words or a single-pass regex, so no quantifier in
+// this rule can backtrack over the same text twice (ReDoS), and the split is bounded: a name
+// longer than `MAX_NAME_CHARS` is examined as its first and last `NAME_WINDOW_CHARS`
+// characters, so the work per identifier stays constant (09.7.1-T2).
 //
 // Reported positions, once per occurrence:
 //   1. an object-literal key of the state literal handed to a `withState(...)`,
 //      `patchState(...)` or `signalState(...)` call, nested objects included — the state of a
 //      SignalStore. A `signalStore(...)` argument is not walked on its own: its state is the
-//      literal of the `withState(...)` calls inside it, each visited once. Nothing inside a
-//      function body is state: `withMethods({ save() { post('/x', { token }) } })` sends a
-//      payload, it does not store the value;
+//      literal of the `withState(...)` calls inside it, each visited once. A state FACTORY or
+//      updater is walked too (09.7.1-T2): the object a `withState(() => ({ ... }))` or
+//      `patchState(store, (s) => ({ ... }))` argument returns — a concise body, or a top-level
+//      `return` of a block body — is the state, and a `signal({ ... })` wrapping it inside that
+//      factory is unwrapped. A closure that is not the factory itself is still not state:
+//      `withMethods({ save() { post('/x', { token }) } })` sends a payload, it does not store
+//      the value, and neither does a nested function inside a returned literal;
 //   2. a property signature of an `interface`/`type` whose declaration name matches
 //      `/(State|Store)$/` (`interface SecretsState { password: string }`), and a member of the
 //      type-argument literal of `withState<{ ... }>(...)`;
@@ -60,7 +73,21 @@
 //   - an inline `template:` that is a template literal with `${}` expressions is not folded, so
 //     only a constant template string is scanned;
 //   - a store field reached only through a string key (`state()['token']`) is not a property
-//     name this rule sees.
+//     name this rule sees;
+//   - a name longer than `MAX_NAME_CHARS` is examined only in its first and last
+//     `NAME_WINDOW_CHARS` characters: a secret word buried in the middle of a 150-character
+//     identifier is not reported. The cap is what keeps the split linear, and no real field name
+//     reaches it;
+//   - a secret word in the middle of a name is reported only when the word behind it is a VALUE
+//     word: `rawTokenValue` and `signingSecretText` are, `rawTokenMaterial` and
+//     `nextTokenRefreshAt` are not — the second names when the token refreshes, which is
+//     metadata;
+//   - a factory whose state is reached through a nested closure (`withState(() => make())`) or
+//     through a `return` inside a block other than the factory's own body (`if (x) return {...}`)
+//     is not walked: only a concise body and a top-level `return` are;
+//   - a `signal({ token: '' })` at field level (`readonly state = signal({ token: '' })` in a
+//     `/Store$/` class) is checked as a field NAME only (`state`, which is neutral); the literal
+//     inside it is walked only when a state call hands it over, directly or through a factory.
 //
 // Two reviewed exemptions, both checked against the path segments below the last
 // `apps/web/src/app` marker (mirroring `no-bypass-security-trust.cjs`):
@@ -147,6 +174,28 @@ const STORE_CLASS = /Store$/;
 const STATE_LITERAL_CALLS = new Set(['withState', 'patchState', 'signalState']);
 const STATE_CALLS = new Set([...STATE_LITERAL_CALLS, 'signalStore']);
 
+/**
+ * The functions a state call's argument may be: the factory (`withState(() => ({ ... }))`) or the
+ * updater (`patchState(store, (state) => ({ ... }))`) whose RETURNED literal is the state.
+ */
+const FACTORY_TYPES = new Set(['ArrowFunctionExpression', 'FunctionExpression']);
+
+/**
+ * The calls that wrap a state object without being state themselves: inside a state call's
+ * argument, the literal `signal({ ... })` hands over is state too (09.7.1-T2). Nowhere else is a
+ * `signal(...)` argument read — a field-level initialiser is checked as a field name only.
+ */
+const WRAPPED_STATE_CALLS = new Set(['signal']);
+
+/**
+ * The split is bounded: a name longer than `MAX_NAME_CHARS` is examined as its first and last
+ * `NAME_WINDOW_CHARS` characters, so the work per identifier is constant however long the source
+ * name is (09.7.1-T2). A secret word buried between the two windows is not seen — the header's
+ * blind spots say so.
+ */
+const MAX_NAME_CHARS = 128;
+const NAME_WINDOW_CHARS = 64;
+
 /** The class member kinds that declare a field a template can read. */
 const FIELD_KINDS = new Set([
   'PropertyDefinition',
@@ -168,14 +217,29 @@ const FIELD_KINDS = new Set([
  */
 const TEMPLATE_MEMBER_READ = /(?<=[\w$]|\)|\])\??\.([A-Za-z_$][\w$]*)/g;
 
-/** The name split into lower-cased words on camelCase, snake_case and kebab-case boundaries. */
+/**
+ * The name — bounded first, see `examinedName` — split into lower-cased words on camelCase,
+ * snake_case and kebab-case boundaries.
+ */
 function nameWords(name) {
-  return name
+  return examinedName(name)
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
     .split(/[^A-Za-z0-9]+/)
     .filter((word) => word !== '')
     .map((word) => word.toLowerCase());
+}
+
+/**
+ * The text the split runs over: the name itself while it is short enough, otherwise its first and
+ * last window, joined by a separator so the two windows never fuse into one word. Bounded work per
+ * identifier, whatever the source length (`MAX_NAME_CHARS`).
+ */
+function examinedName(name) {
+  if (name.length <= MAX_NAME_CHARS) {
+    return name;
+  }
+  return `${name.slice(0, NAME_WINDOW_CHARS)} ${name.slice(-NAME_WINDOW_CHARS)}`;
 }
 
 /** Whether a field name names a secret value rather than its metadata. See the header table. */
@@ -188,15 +252,27 @@ function isSecretShaped(name) {
   if (BARE_SECRET_WORDS.has(joined) || COMPOUND_SECRET_NAMES.has(joined)) {
     return true;
   }
-  if (BARE_SECRET_WORDS.has(words[0]) && words.length > 1 && VALUE_WORDS.has(words[1])) {
-    return true;
-  }
-  // A trailing secret word names the value (`ingestToken`, `webhookSecret`) unless the word in
-  // front of it reports whether the value exists (`hasToken`). A metadata suffix (`tokenCount`,
-  // `tokenExpiresAt`) never reaches this branch: it is not a secret word.
-  if (words.length > 1) {
-    const last = words.length - 1;
-    return BARE_SECRET_WORDS.has(words[last]) && !PRESENCE_WORDS.has(words[last - 1]);
+  for (let index = 0; index < words.length; index += 1) {
+    if (!BARE_SECRET_WORDS.has(words[index])) {
+      continue;
+    }
+    // A presence word in front of it reports whether the value exists (`hasToken`, `isToken`,
+    // and `hasTokenValue`): metadata, in every position.
+    if (index > 0 && PRESENCE_WORDS.has(words[index - 1])) {
+      continue;
+    }
+    // A VALUE word behind it makes it the value itself, whatever stands in front of it:
+    // `tokenValue`, `rawTokenValue`, `signingSecretText`. A metadata word behind it
+    // (`tokenCount`, `passwordHash`) and a bare word behind it (`tokenPrefix`) do not.
+    const next = words[index + 1];
+    if (next !== undefined && VALUE_WORDS.has(next)) {
+      return true;
+    }
+    // A trailing secret word names the value (`ingestToken`, `webhookSecret`, `pageToken`): no
+    // word behind it turns it into metadata.
+    if (index === words.length - 1 && words.length > 1) {
+      return true;
+    }
   }
   return false;
 }
@@ -362,6 +438,60 @@ function stateLiteralsIn(node, found) {
 }
 
 /**
+ * The expressions a factory returns: the concise body itself, or the argument of each top-level
+ * `return` of a block body. A `return` inside a nested block or a nested function is not walked,
+ * and neither is a factory that hands its state over through a helper call (header blind spots).
+ */
+function returnedExpressions(factory) {
+  const body = factory.body;
+  if (!body) {
+    return [];
+  }
+  if (body.type !== 'BlockStatement') {
+    return [body];
+  }
+  const returned = [];
+  for (const statement of body.body) {
+    if (statement.type === 'ReturnStatement' && statement.argument) {
+      returned.push(statement.argument);
+    }
+  }
+  return returned;
+}
+
+/**
+ * The object literals a state call's argument hands over as state (09.7.1-T2): the literal itself,
+ * the literal a factory or updater RETURNS (`withState(() => ({ token: '' }))`,
+ * `patchState(store, (state) => ({ ...state, token }))`), or the literal a `signal({ ... })` inside
+ * one wraps. Anything else — a call that is not a `signal`, an identifier, a ternary — yields
+ * nothing, so a payload a factory builds for a request is not state.
+ */
+function stateObjectsIn(expression, found) {
+  if (expression === null || typeof expression !== 'object') {
+    return found;
+  }
+  if (expression.type === 'ObjectExpression') {
+    found.push(expression);
+    return found;
+  }
+  if (FACTORY_TYPES.has(expression.type)) {
+    for (const returned of returnedExpressions(expression)) {
+      stateObjectsIn(returned, found);
+    }
+    return found;
+  }
+  if (
+    expression.type === 'CallExpression' &&
+    WRAPPED_STATE_CALLS.has(calleeName(expression) ?? '')
+  ) {
+    for (const argument of expression.arguments) {
+      stateObjectsIn(argument, found);
+    }
+  }
+  return found;
+}
+
+/**
  * The identifier a constructor parameter property declares, or null: `constructor(private token:
  * string)` is a field of the instance exactly like a declared one.
  */
@@ -454,14 +584,14 @@ module.exports = {
           return;
         }
         // Only the literal handed to a state call is state: a `signalStore(...)` argument is a
-        // feature list whose `withState(...)` members are visited on their own.
+        // feature list whose `withState(...)` members are visited on their own. A factory or
+        // updater argument hands over the literal it returns (09.7.1-T2).
         if (STATE_LITERAL_CALLS.has(name)) {
           for (const argument of node.arguments) {
-            if (argument.type !== 'ObjectExpression') {
-              continue;
-            }
-            for (const literal of stateLiteralsIn(argument, [])) {
-              reportObjectLiteral(literal);
+            for (const handed of stateObjectsIn(argument, [])) {
+              for (const literal of stateLiteralsIn(handed, [])) {
+                reportObjectLiteral(literal);
+              }
             }
           }
         }

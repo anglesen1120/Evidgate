@@ -164,19 +164,25 @@ npm run e2e -w apps/web    # builds first, then runs Playwright incl. e2e/csp.sp
 npm run test -w apps/web   # unit tests incl. scripts/csp.test.mjs
 ```
 
-## Lint blind spots (09.7.1-T1)
+## Lint blind spots (09.7.1-T1, extended 09.7.1-T2)
 
 `evidgate/no-secret-field-in-store` (`lint/rules/no-secret-field-in-store.cjs`) fails a
 Settings-feature file that names a secret-shaped field in a store: an object-literal key of the
-literal handed to `withState`/`patchState`/`signalState` (nested objects included, never an
-argument of `signalStore` itself or a payload inside a closure), a member of an `interface`/`type`
-named `…State`/`…Store` or of `withState<{…}>`, a field, private field, accessor, getter or
-constructor parameter property of a `…Store` class, or a member read in a constant inline
-`template:` string such as `{{ store.token() }}` (plan 09.7.1 §8 S3, AC3). The header of the rule
-file is the name table it matches (`token`, `secret`, `signing_secret`, `private_key`, `apiKey`,
-`ingestToken`, …) and the metadata names it must let through (`token_prefix`, `tokenPrefix`,
-`secretRef`, `rotationState`, `last4`, `hasToken`, …). Its blind spots are deliberate — lint is
-defence in depth, not the only defence:
+literal handed to `withState`/`patchState`/`signalState` — nested objects included, and including
+the literal a state factory or updater returns (`withState(() => ({ token: '' }))`,
+`patchState(store, (s) => ({ ...s, token: '' }))`, a block body's top-level `return`, and a
+`signal({ … })` wrapping it — never an argument of `signalStore` itself or a payload inside
+another closure), a member of an `interface`/`type` named `…State`/`…Store` or of `withState<{…}>`,
+a field, private field, accessor, getter or constructor parameter property of a `…Store` class, or
+a member read in a constant inline `template:` string such as `{{ store.token() }}` (plan 09.7.1
+§8 S3, AC3).
+The header of the rule file is the name table it matches (`token`, `secret`, `signing_secret`,
+`private_key`, `apiKey`, `ingestToken`, `rawTokenValue`, …) and the metadata names it must let
+through (`token_prefix`, `tokenPrefix`, `secretRef`, `rotationState`, `last4`, `hasToken`, …). A
+name is split on word boundaries only, so a neutral word that merely contains a secret word stays
+legal — `tokenizer`, `secretary`, `passwordless`, and `passwordLess`, which splits to `password` +
+`less` with no value word behind it, describe a mode rather than a value. Its blind spots are
+deliberate — lint is defence in depth, not the only defence:
 
 - a `templateUrl` `.html` file is not scanned by this rule — only a constant inline `template:`
   string is read, and the Angular template rules that run over `.html` do not look for a
@@ -189,10 +195,21 @@ defence in depth, not the only defence:
   to match, and a secret word with a metadata suffix (`tokenCount`, `tokenExpiresAt`,
   `passwordHash`, `hasToken`) is not reported: the rule stays narrow enough that nobody switches
   it off;
+- a secret word in the middle of a name is reported only when a VALUE word follows it
+  (`rawTokenValue`, `signingSecretText`); `rawTokenMaterial` and `nextTokenRefreshAt` are not, and
+  the second one should not be — it names when the token refreshes. A presence word in front of
+  the secret word excuses it in every position (`hasTokenValue`);
+- the split is bounded: a name longer than 128 characters is examined as its first and last 64, so
+  a secret word buried between the two windows of a 150-character identifier is not seen. The cap
+  is what keeps the walk linear, and no real field name reaches it;
+- a state factory is walked only when the state is a concise body or a top-level `return` of the
+  factory itself: `withState(() => make())` and `if (x) return { token: '' }` inside a factory are
+  not, and a field-level `readonly state = signal({ token: '' })` in a `…Store` class is checked
+  as a field name (`state`, neutral) only — the literal inside it is read when a state call hands
+  it over;
 - a top-level `const token = signal('')` is not store state and is not reported. The rule's two
   exemptions — a `*.spec.ts` file and the one-time reveal component (a `reveal/` directory, or
   `reveal` as a whole word of the file name) — are its own allow-list, reviewed with the rule.
-- a state factory or updater (`withState(() => ({ token: '' }))`, `patchState(store, (s) => ({ token }))`) is not walked, a secret word that is neither first nor last in a name (`rawTokenValue`) is not reported, and a lone very long identifier is split word by word without a length cap; the first store (09.7.1-T2) extends the rule or records why not.
 
 The bypass rule's own blind spots are listed in the CSP section above.
 
