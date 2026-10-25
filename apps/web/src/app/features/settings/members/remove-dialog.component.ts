@@ -17,6 +17,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { MembersStore } from './members.store';
 import { MEMBERS_COPY } from './member-list.component';
+import { wrapDialogFocus } from './dialog-focus-wrap';
 
 @Component({
   selector: 'app-remove-dialog',
@@ -26,10 +27,13 @@ import { MEMBERS_COPY } from './member-list.component';
   template: `
     <dialog
       #dialog
+      tabindex="-1"
       [attr.data-members-dialog]="'remove'"
       aria-labelledby="members-remove-title"
       [attr.aria-describedby]="'members-remove-description'"
       (cancel)="cancel($event)"
+      (keydown.tab)="wrapFocus($event)"
+      (keydown.shift.tab)="wrapFocus($event)"
       [cdkTrapFocus]="opened()"
     >
       <header>
@@ -130,6 +134,12 @@ export class RemoveDialogComponent {
     event.preventDefault();
     this.close();
   }
+
+  /** Tab/Shift+Tab wrap at the dialog's edges; see `wrapDialogFocus`. */
+  protected wrapFocus(event: Event): void {
+    wrapDialogFocus(event, this.dialog().nativeElement);
+  }
+
   protected async submit(): Promise<void> {
     const member = this.member();
     if (

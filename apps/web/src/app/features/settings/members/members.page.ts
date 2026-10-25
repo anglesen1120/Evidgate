@@ -12,6 +12,7 @@ import {
 import type { MembershipView } from '@evidgate/sdk';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { EditRolesDialogComponent } from './edit-roles-dialog.component';
 import { InviteDialogComponent } from './invite-dialog.component';
 import { MemberListComponent, MEMBERS_COPY } from './member-list.component';
 import { MembersStore } from './members.store';
@@ -27,6 +28,7 @@ import { RoleMatrixComponent } from './role-matrix.component';
     RoleMatrixComponent,
     InviteDialogComponent,
     RemoveDialogComponent,
+    EditRolesDialogComponent,
   ],
   providers: [MembersStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -89,6 +91,7 @@ export class MembersPage {
   private readonly heading = viewChild.required<ElementRef<HTMLHeadingElement>>('heading');
   private readonly inviteDialog = viewChild(InviteDialogComponent);
   private readonly removeDialog = viewChild(RemoveDialogComponent);
+  private readonly editDialog = viewChild(EditRolesDialogComponent);
 
   constructor() {
     effect(() => {
@@ -99,6 +102,7 @@ export class MembersPage {
         this.clearPagingAlert();
         this.inviteDialog()?.close();
         this.removeDialog()?.close();
+        this.editDialog()?.close();
         if (org) void this.store.load(org.id);
       });
     });
@@ -126,6 +130,9 @@ export class MembersPage {
   }
   protected openRemove(event: { member: MembershipView; opener: HTMLElement }): void {
     if (this.canWrite()) this.removeDialog()?.open(event.member, event.opener);
+  }
+  protected openEditRoles(event: { member: MembershipView; opener: HTMLElement }): void {
+    if (this.canWrite()) this.editDialog()?.open(event.member, event.opener);
   }
   protected completed(removed = false): void {
     this.saved.set(true);

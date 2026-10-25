@@ -292,6 +292,35 @@ export const MEMBERS_REMOVE_LAST_ADMIN = '?fixture.variant.removeMember=last-adm
 /** `?fixture.variant.removeMember=invalid-transition` — the 409 `invalid_transition` of a pending. */
 export const MEMBERS_REMOVE_INVALID_TRANSITION = '?fixture.variant.removeMember=invalid-transition';
 
+// ---------------------------------------------------------------------------------------------
+// Members and roles tab: the role-edit dialog (09.7.1-F6). Its DOM contract is the plan's §10
+// F6 hooks: one row button `[data-members-edit-open]`, the native dialog
+// `[data-members-dialog="edit-roles"]` with a checkbox group `[data-members-role-option]
+// [data-role-id]`, `[data-members-submit]`, the verbatim error region `[data-members-error]` +
+// `[data-members-error-code]`, the static last-admin hint `[data-members-last-admin-hint]` and the
+// partial-apply summary `[data-members-applied-summary]` with one
+// `[data-members-applied-item]` / `[data-members-not-applied-item]` per role change. The three
+// variants below are the corpus directories `fixtures/web-api/membership-role-*`, selected per
+// operation: the role edit is four calls (`getMembership`, grant, revoke, and the reads the tab
+// already makes), so a case that needs two answers at once (`grantMembershipRole` for the change,
+// `revokeMembershipRole` for its refusal) passes both to `withVariants`.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * `?fixture.variant.grantMembershipRole=forbidden` — the 403 `forbidden` of the self-escalation
+ * rule (00 §2: a role never widens the caller's own access), with the server's own message.
+ */
+export const MEMBERS_GRANT_FORBIDDEN = '?fixture.variant.grantMembershipRole=forbidden';
+
+/** `?fixture.variant.grantMembershipRole=unknown-role` — that operation's 409 `unknown_role`. */
+export const MEMBERS_GRANT_UNKNOWN_ROLE = '?fixture.variant.grantMembershipRole=unknown-role';
+
+/**
+ * `?fixture.variant.revokeMembershipRole=last-admin` — the 409 `last_admin` of demoting the org's
+ * last active admin, the role-edit counterpart of `MEMBERS_REMOVE_LAST_ADMIN`.
+ */
+export const MEMBERS_REVOKE_LAST_ADMIN = '?fixture.variant.revokeMembershipRole=last-admin';
+
 /** `/orgs/:orgId/settings` — the shell's index address, which redirects to the first open tab. */
 export function settingsPath(locale: ShellLocale, orgId: string = ORG_ACME): string {
   return localePath(locale, `/orgs/${orgId}/settings`);

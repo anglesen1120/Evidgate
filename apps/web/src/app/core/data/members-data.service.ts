@@ -1,6 +1,7 @@
 // 09.7.1-T2 (plan 09.7.1 §5 members row, §6 Membership/Invite rows; 02.1.2 §4/§5): the org
 // membership, the role list and the live permission catalogue the Members and roles tab reads, and
-// the two mutations it performs — invite by address and remove.
+// the mutations it performs — invite by address, remove, and the per-role grant/revoke pair the
+// edit-roles dialog applies (09.7.1-T2's edit-roles row, `F6`).
 //
 // It lives in `core/data` with the rest of the data services because `apps/web/lint` owns the HTTP
 // boundary there: a page, store or component never imports an `@evidgate/sdk` operation (the
@@ -14,16 +15,20 @@
 // caller-owned `Idempotency-Key` the server replays on (00 §9.1, ADR-0008 rule 2). Both mutations
 // require that header, so the signature takes an `Intent` rather than inventing a key per call.
 //
-// The role grant/revoke operations (`grantMembershipRole`, `revokeMembershipRole`) are NOT exposed:
-// the plan's rows need the matrix (read), the invite (with optional initial roles) and the remove.
-// Adding them here would put an unused capability on the UI's reach with no screen behind it.
+// `grantRole` and `revokeRole` take ONE role each, because the contract does: a role change is one
+// request with one key, so the dialog mints a key per role (a retried grant replays that key, and
+// two roles can never share one). Ordering and stopping at the first refusal belong to the store,
+// which owns the dialog's attempt.
 
 import { inject, Injectable } from '@angular/core';
 import {
   createMembership,
+  getMembership,
+  grantMembershipRole,
   listMemberships,
   listRoles,
   removeMember,
+  revokeMembershipRole,
   type InviteMemberRequest,
   type MembershipListResponse,
   type MembershipView,
@@ -111,6 +116,64 @@ export class MembersDataService {
       removeMember({
         client,
         path: { o: orgId, m: membershipId },
+        headers: intentHeaders(intent),
+      }),
+    );
+  }
+
+  /**
+   * One membership (`GET /v1/orgs/{o}/memberships/{m}`), with the role set the server currently
+   * holds — the row the edit-roles dialog replaces in the list after a grant or a revoke, so the
+   * matrix shows the server's answer instead of the dialog's draft.
+   *
+   * It answers an `ETag`, which the SDK surfaces as a header and no caller needs here: neither
+   * role route takes `If-Match` (the server's guard is the role set, not the row version).
+   */
+  getMembership(orgId: string, membershipId: string): Promise<MembershipView> {
+    return this.gateway.call((client) =>
+      getMembership({ client, path: { o: orgId, m: membershipId } }),
+    );
+  }
+
+  /**
+   * Grant one role (`POST /v1/orgs/{o}/memberships/{m}/roles`, body `{ role_id }`): `200` with the
+   * membership's new role set. The write is idempotent by `unique (membership_id, role_id)`, so a
+   * grant of a role the membership already holds answers the current state rather than creating
+   * anything. A role the tenant cannot see is 409 `unknown_role`, and a grant that would widen the
+   * caller's own permissions is 403 `forbidden` (02.1.2 §3b self-escalation) — both arrive as the
+   * typed failure carrying the server's message and code.
+   */
+  grantRole(
+    orgId: string,
+    membershipId: string,
+    roleId: string,
+    intent: Intent,
+  ): Promise<MembershipView> {
+    return this.gateway.call((client) =>
+      grantMembershipRole({
+        client,
+        path: { o: orgId, m: membershipId },
+        body: { role_id: roleId },
+        headers: intentHeaders(intent),
+      }),
+    );
+  }
+
+  /**
+   * Revoke one role (`DELETE /v1/orgs/{o}/memberships/{m}/roles/{r}`): `204`, nothing to read.
+   * Revoking `tenant_admin` from the org's last active admin is 409 `last_admin` (the same guard as
+   * removal, AC2), and a pair that was never granted is 404 — both typed, never a value.
+   */
+  async revokeRole(
+    orgId: string,
+    membershipId: string,
+    roleId: string,
+    intent: Intent,
+  ): Promise<void> {
+    await this.gateway.call((client) =>
+      revokeMembershipRole({
+        client,
+        path: { o: orgId, m: membershipId, r: roleId },
         headers: intentHeaders(intent),
       }),
     );
