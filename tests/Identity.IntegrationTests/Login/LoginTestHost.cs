@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Identity.IntegrationTests.Login;
@@ -59,6 +60,37 @@ internal sealed class FakeLoginCompletion : ILoginCompletion
 }
 
 /// <summary>
+/// A link seam for the callback-plumbing cases (02.3.1-T2 Q4): it records what the protocol handed over —
+/// including the account the state cookie named — and answers a redirect target or a scripted failure, standing
+/// in for the linking slice's implementation.
+/// </summary>
+internal sealed class FakeLinkCompletion : ILinkCompletion
+{
+    /// <summary>Where a successful link sends the browser.</summary>
+    public string Target { get; set; } = "/settings/security";
+
+    /// <summary>A scripted failure (e.g. the 409 of an identity that still belongs to a live account), or null.</summary>
+    public Error? Failure { get; set; }
+
+    /// <summary>How many verified identities reached this seam.</summary>
+    public int Calls { get; private set; }
+
+    /// <summary>The last request, so a case can read the identity, the link account and the staged token.</summary>
+    public LoginCompletionRequest? Last { get; private set; }
+
+    /// <inheritdoc />
+    public ValueTask<Result<string>> CompleteAsync(LoginCompletionRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        Calls++;
+        Last = request;
+
+        return ValueTask.FromResult(Failure is { } failure ? Result.Failure<string>(failure) : Result.Success(Target));
+    }
+}
+
+/// <summary>
 /// The host the login protocol tests drive: the real composition (<c>Program</c> → <c>ApiHost</c>) with the
 /// login options of a configured deployment, a clock the test moves, the fake providers it registers and —
 /// where the case is about the completion — a completion seam that signs in.
@@ -83,12 +115,21 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
     private readonly MutableClock _clock;
     private readonly ILoginProvider[] _providers;
     private readonly ILoginCompletion? _completion;
+    private readonly ILinkCompletion? _linkCompletion;
+    private readonly ILoggerProvider? _logs;
 
-    private LoginTestHost(MutableClock clock, ILoginProvider[] providers, ILoginCompletion? completion)
+    private LoginTestHost(
+        MutableClock clock,
+        ILoginProvider[] providers,
+        ILoginCompletion? completion,
+        ILinkCompletion? linkCompletion = null,
+        ILoggerProvider? logs = null)
     {
         _clock = clock;
         _providers = providers;
         _completion = completion;
+        _linkCompletion = linkCompletion;
+        _logs = logs;
     }
 
     /// <summary>The running test's cancellation token, which every wait of a case passes on.</summary>
@@ -106,6 +147,38 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
     internal static LoginTestHost Start(MutableClock clock, ILoginCompletion completion, params ILoginProvider[] providers) =>
         new(clock, providers, completion);
 
+    /// <summary>
+    /// A deployment with a completion seam that signs in AND a link seam, so both halves of the callback's
+    /// purpose dispatch (02.3.1-T2 Q4) can be observed on one host. The linking slice registers the real
+    /// <see cref="ILinkCompletion"/>; until then a case substitutes it exactly like the completion.
+    /// </summary>
+    internal static LoginTestHost Start(
+        MutableClock clock,
+        ILoginCompletion completion,
+        ILinkCompletion linkCompletion,
+        params ILoginProvider[] providers) =>
+        new(clock, providers, completion, linkCompletion);
+
+    /// <summary>A deployment with no link seam at all: a link attempt must then fail closed, never sign in.</summary>
+    internal static LoginTestHost Start(MutableClock clock, ILinkCompletion linkCompletion, params ILoginProvider[] providers) =>
+        new(clock, providers, completion: null, linkCompletion);
+
+    /// <summary>
+    /// The same deployment plus an extra logger provider in its container, for the redaction cases
+    /// (<c>RequestLogRedactionTests</c>' mechanism: the host's own filters apply to it as to the deployment's
+    /// sinks).
+    /// </summary>
+    /// <param name="clock">The clock the test moves.</param>
+    /// <param name="logs">The provider to add.</param>
+    /// <param name="completion">A completion seam that signs in.</param>
+    /// <param name="providers">The providers to register.</param>
+    internal static LoginTestHost StartWithLogs(
+        MutableClock clock,
+        ILoggerProvider logs,
+        ILoginCompletion completion,
+        params ILoginProvider[] providers) =>
+        new(clock, providers, completion, linkCompletion: null, logs);
+
     /// <summary>An <c>start</c> request, optionally naming a <c>returnUrl</c>.</summary>
     internal static HttpRequestMessage StartRequest(string provider, string? returnUrl = null) =>
         new(
@@ -113,13 +186,21 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
             "/v1/auth/oidc/" + provider + "/start"
             + (returnUrl is null ? string.Empty : "?returnUrl=" + Uri.EscapeDataString(returnUrl)));
 
-    /// <summary>A <c>callback</c> request carrying whatever cookie value the case presents.</summary>
+    /// <summary>A <c>callback</c> request carrying whatever cookies the case presents.</summary>
+    /// <param name="provider">The provider route value.</param>
+    /// <param name="cookieValue">The raw <c>__Host-evidgate_login</c> value, or null for none.</param>
+    /// <param name="state">The <c>state</c> query value, or null for none.</param>
+    /// <param name="code">The <c>code</c> query value, or null for none.</param>
+    /// <param name="error">The provider's <c>error</c> query value, or null for none.</param>
+    /// <param name="inviteCookieValue">The raw <c>__Host-evidgate_invite</c> value a landing page staged, or
+    /// null when the case staged none (02.3.1-T2 Q1).</param>
     internal static HttpRequestMessage CallbackRequest(
         string provider,
         string? cookieValue,
         string? state,
         string? code = "authorization-code",
-        string? error = null)
+        string? error = null,
+        string? inviteCookieValue = null)
     {
         var query = new List<string>();
         if (state is not null)
@@ -142,9 +223,20 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
             "/v1/auth/oidc/" + provider + "/callback"
             + (query.Count == 0 ? string.Empty : "?" + string.Join("&", query)));
 
+        var cookies = new List<string>();
         if (cookieValue is not null)
         {
-            request.Headers.Add("Cookie", LoginStateCookie.Name + "=" + cookieValue);
+            cookies.Add(LoginStateCookie.Name + "=" + cookieValue);
+        }
+
+        if (inviteCookieValue is not null)
+        {
+            cookies.Add(InviteTokenCookie.Name + "=" + inviteCookieValue);
+        }
+
+        if (cookies.Count > 0)
+        {
+            request.Headers.Add("Cookie", string.Join("; ", cookies));
         }
 
         return request;
@@ -204,6 +296,69 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
         return (payload, cookieValue);
     }
 
+    /// <summary>Every <c>Set-Cookie</c> of the response that sets <c>__Host-evidgate_invite</c>.</summary>
+    internal static IReadOnlyList<string> InviteCookies(HttpResponseMessage response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        return response.Headers.TryGetValues("Set-Cookie", out var values)
+            ? [.. values.Where(value => value.StartsWith(InviteTokenCookie.Name + "=", StringComparison.Ordinal))]
+            : [];
+    }
+
+    /// <summary>The one <c>__Host-evidgate_invite</c> deletion a callback must always emit.</summary>
+    internal static string? InviteCookieDeletion(HttpResponseMessage response) =>
+        InviteCookies(response).FirstOrDefault(cookie =>
+            cookie.Contains("expires=Thu, 01 Jan 1970", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Protects an arbitrary pending-attempt payload with this host's own key ring, so a case can present a
+    /// state cookie the current routes would never write: a link attempt (whose start route lands with a later
+    /// slice) or a legacy payload of the previous shape.
+    /// </summary>
+    /// <param name="payload">The payload to protect.</param>
+    internal string ProtectPending(LoginStatePayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        return Protect(JsonSerializer.Serialize(payload, LoginStateJsonContext.Default.LoginStatePayload));
+    }
+
+    /// <summary>Protects a raw JSON body as a pending-attempt cookie value (the legacy-cookie cases).</summary>
+    /// <param name="json">The payload JSON exactly as the case wrote it.</param>
+    internal string ProtectRawPending(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+
+        return Protect(json);
+    }
+
+    /// <summary>
+    /// Protects a raw JSON body as a staged-invite cookie value, so a case can present a token the route would
+    /// have staged without posting it first.
+    /// </summary>
+    /// <param name="token">The invite token to stage.</param>
+    /// <param name="issuedAt">When the staging happened, for the lifetime check.</param>
+    internal string ProtectInvite(string token, DateTimeOffset issuedAt)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+
+        var json = JsonSerializer.Serialize(
+            new InviteTokenPayload(InviteTokenCookie.PayloadVersion, token, issuedAt),
+            InviteTokenJsonContext.Default.InviteTokenPayload);
+
+        return Services.GetRequiredService<IDataProtectionProvider>()
+            .CreateProtector(InviteTokenCookie.ProtectorPurpose)
+            .Protect(json);
+    }
+
+    /// <summary>Protects a payload JSON with this host's pending-login protector.</summary>
+    /// <param name="json">The payload JSON.</param>
+    private string Protect(string json) =>
+        Services.GetRequiredService<IDataProtectionProvider>()
+            .CreateProtector(LoginStateCookie.ProtectorPurpose)
+            .Protect(json);
+
     /// <summary>The 00 §9.2 <c>error.code</c> of a response body, or null when it carries none.</summary>
     internal static async Task<string?> ErrorCodeAsync(HttpResponseMessage response)
     {
@@ -261,6 +416,19 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
             if (_completion is not null)
             {
                 services.AddSingleton<ILoginCompletion>(_completion);
+            }
+
+            // 02.3.1-T2 Q4: the link seam, which the callback resolves only for a link-purpose state.
+            if (_linkCompletion is not null)
+            {
+                services.AddSingleton<ILinkCompletion>(_linkCompletion);
+            }
+
+            // Added to the container, so the host's own logging filters apply to it exactly as they do to the
+            // deployment's sinks (the RequestLogRedactionTests mechanism).
+            if (_logs is not null)
+            {
+                services.AddSingleton(_logs);
             }
         });
     }

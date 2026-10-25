@@ -112,6 +112,7 @@ public sealed class PolicyRunPinningTests
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
+            insert into public."user" (id, email) values ('{user}', '{roleCode}@example.test');
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values (gen_random_uuid(), '{world.Org}', '{user}', '{roleCode}@example.test', 'active');
             insert into public.membership_role (id, org_id, membership_id, role_id)

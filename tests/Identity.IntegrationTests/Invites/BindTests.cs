@@ -32,7 +32,7 @@ public sealed class BindTests : BindTestBase
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: false);
         var invite = await SeedInviteAsync(org, "Invitee@Example.com");
-        var userId = Guid.CreateVersion7();
+        var userId = await SeedUserAsync();
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(userId, "github", "invitee@example.com", EmailVerified: true, invite.Token, HostedDomain: null),
@@ -67,7 +67,7 @@ public sealed class BindTests : BindTestBase
         var binder = CreateBinder();
 
         var unverified = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: false, invite.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", invite.Email, EmailVerified: false, invite.Token, HostedDomain: null),
             Token);
 
         unverified.IsSuccess.ShouldBeTrue("an unverified login is not an error, it just binds nothing");
@@ -75,7 +75,7 @@ public sealed class BindTests : BindTestBase
         (await MembershipStateAsync(org, invite.MembershipId)).Status.ShouldBe(MembershipStatus.Pending);
 
         var otherAddress = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", "someone.else@example.com", EmailVerified: true, invite.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", "someone.else@example.com", EmailVerified: true, invite.Token, HostedDomain: null),
             Token);
 
         otherAddress.Value.Bound.ShouldBeEmpty("the token belongs to another address");
@@ -85,7 +85,7 @@ public sealed class BindTests : BindTestBase
         // opted in, matching hd, and still refused.
         var googleUnverified = await binder.BindAsync(
             new BindPendingMembershipsRequest(
-                Guid.CreateVersion7(),
+                await SeedUserAsync(),
                 "google",
                 invite.Email,
                 EmailVerified: false,
@@ -110,13 +110,13 @@ public sealed class BindTests : BindTestBase
         var binder = CreateBinder();
 
         var noToken = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, InviteToken: null, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", invite.Email, EmailVerified: true, InviteToken: null, HostedDomain: null),
             Token);
 
         noToken.Value.Bound.ShouldBeEmpty();
 
         var garbled = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, "evgi_garbled", HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", invite.Email, EmailVerified: true, "evgi_garbled", HostedDomain: null),
             Token);
 
         garbled.Value.Bound.ShouldBeEmpty();
@@ -125,14 +125,14 @@ public sealed class BindTests : BindTestBase
         var foreign = InviteTokenFormat.Generate();
         var wrongSecret = string.Concat("evgi_", invite.Prefix, "_", foreign.Secret);
         var mismatched = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, wrongSecret, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", invite.Email, EmailVerified: true, wrongSecret, HostedDomain: null),
             Token);
 
         mismatched.Value.Bound.ShouldBeEmpty();
 
         // A well-formed token whose prefix no invite carries.
         var unknownPrefix = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, foreign.Full, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", invite.Email, EmailVerified: true, foreign.Full, HostedDomain: null),
             Token);
 
         unknownPrefix.Value.Bound.ShouldBeEmpty();
@@ -150,7 +150,7 @@ public sealed class BindTests : BindTestBase
         var org = await SeedOrgAsync(autobindVerifiedDomain: false);
         var invite = await SeedInviteAsync(org, "invitee@example.com");
         var binder = CreateBinder();
-        var firstUser = Guid.CreateVersion7();
+        var firstUser = await SeedUserAsync();
 
         var first = await binder.BindAsync(
             new BindPendingMembershipsRequest(firstUser, "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
@@ -159,7 +159,7 @@ public sealed class BindTests : BindTestBase
         first.Value.Bound.Count.ShouldBe(1);
 
         var replay = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
             Token);
 
         replay.IsSuccess.ShouldBeTrue();
@@ -184,14 +184,14 @@ public sealed class BindTests : BindTestBase
         var binder = CreateBinder();
 
         var cancelledResult = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", cancelled.Email, EmailVerified: true, cancelled.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", cancelled.Email, EmailVerified: true, cancelled.Token, HostedDomain: null),
             Token);
 
         cancelledResult.Value.Bound.ShouldBeEmpty();
         (await MembershipStateAsync(org, cancelled.MembershipId)).Status.ShouldBe(MembershipStatus.Revoked);
 
         var expiredResult = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", expired.Email, EmailVerified: true, expired.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", expired.Email, EmailVerified: true, expired.Token, HostedDomain: null),
             Token);
 
         expiredResult.Value.Bound.ShouldBeEmpty();
@@ -210,7 +210,7 @@ public sealed class BindTests : BindTestBase
         var invite = await SeedInviteAsync(org, "invitee@example.com", expiresIn: TimeSpan.FromMinutes(5));
 
         var result = await CreateBinder(clockOffset: TimeSpan.FromMinutes(10)).BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
             Token);
 
         result.Value.Bound.ShouldBeEmpty();
@@ -231,7 +231,7 @@ public sealed class BindTests : BindTestBase
         var inviteB = await SeedInviteAsync(orgB, "shared@example.com");
 
         var result = await CreateBinder().BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", "shared@example.com", EmailVerified: true, inviteA.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", "shared@example.com", EmailVerified: true, inviteA.Token, HostedDomain: null),
             Token);
 
         result.Value.Bound.Count.ShouldBe(1);
@@ -253,7 +253,7 @@ public sealed class BindTests : BindTestBase
         var inviteB = await SeedInviteAsync(orgB, "bob@example.com");
 
         var result = await CreateBinder().BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", inviteB.Email, EmailVerified: true, inviteA.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", inviteB.Email, EmailVerified: true, inviteA.Token, HostedDomain: null),
             Token);
 
         result.Value.Bound.ShouldBeEmpty();
@@ -271,7 +271,7 @@ public sealed class BindTests : BindTestBase
         var org = await SeedOrgAsync(autobindVerifiedDomain: false);
         var invite = await SeedInviteAsync(org, "invitee@example.com");
         var binder = CreateBinder();
-        var userId = Guid.CreateVersion7();
+        var userId = await SeedUserAsync();
 
         var request = new BindPendingMembershipsRequest(userId, "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null);
         (await binder.BindAsync(request, Token)).Value.Bound.Count.ShouldBe(1);

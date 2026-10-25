@@ -1,7 +1,12 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Text;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Modules.Identity.Login.Audit;
 using Evidgate.Testing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
@@ -17,6 +22,36 @@ using Shouldly;
 using Xunit;
 
 namespace Identity.IntegrationTests.Login.Completion;
+
+/// <summary>
+/// What one <see cref="LoginCompletionTestHost"/> composes over the deployment's own registrations
+/// (02.3.1-T1.4, 02.3.1-T2.1): the login providers a case scripts, and the doubles of the two seams the login
+/// CALLS — the invite binder of 02.1.2-T2 and the <c>auth.login</c> audit writer of 02.3.1-T2.2 — plus the
+/// invite key material a seeded invite row must be hashed with.
+/// </summary>
+internal sealed record LoginHostSettings
+{
+    /// <summary>The client address every request of the host reports, or null for the socket's own.</summary>
+    internal IPAddress? RemoteIpAddress { get; init; }
+
+    /// <summary>A logger provider every entry is also handed to, or null.</summary>
+    internal ILoggerProvider? LogProvider { get; init; }
+
+    /// <summary>A double of the invite binder, or null to keep the deployment's own.</summary>
+    internal IMembershipBinder? Binder { get; init; }
+
+    /// <summary>A double of the identity audit writer, or null to keep the deployment's own.</summary>
+    internal IIdentityAuditWriter? AuditWriter { get; init; }
+
+    /// <summary>The invite pepper to configure, or null for a per-host random one.</summary>
+    internal byte[]? InvitePepper { get; init; }
+
+    /// <summary>The version stored beside every invite hash (<c>EVIDGATE:Invite:PepperVersion</c>).</summary>
+    internal int InvitePepperVersion { get; init; } = 1;
+
+    /// <summary>Exactly the providers the case scripted (the host's real ones would shadow a fake name).</summary>
+    internal ILoginProvider[] Providers { get; init; } = [];
+}
 
 /// <summary>
 /// The host the login-COMPLETION suites drive (02.3.1-T1.4): the real Api composition
@@ -60,6 +95,15 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
     /// <summary>A user agent the session row carries, so the case can prove it was stored.</summary>
     internal const string UserAgent = "evidgate-login-completion-tests/1.0";
 
+    /// <summary>The invite token's cookie, so a case can present what <c>stage</c> set (02.3.1-T2 Q1).</summary>
+    internal const string InviteCookieName = "__Host-evidgate_invite";
+
+    /// <summary>The <c>POST /v1/auth/invite-token</c> route that stages a token for the next login.</summary>
+    internal const string InviteTokenRoute = "/v1/auth/invite-token";
+
+    /// <summary>The invite pepper's length in bytes (<c>InviteSecrets.MinKeyBytes</c>).</summary>
+    internal const int InvitePepperBytes = 32;
+
     private const int StateLifetimeSeconds = 600;
 
     private const int RetryAfterSeconds = 30;
@@ -71,23 +115,17 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
         "Host=127.0.0.1;Port=1;Username=evidgate_app;Database=evidgate;Timeout=2";
 
     private readonly string _connectionString;
-    private readonly ILoginProvider[] _providers;
-    private readonly IPAddress? _remoteIpAddress;
-    private readonly ILoggerProvider? _logProvider;
+    private readonly LoginHostSettings _settings;
 
-    private LoginCompletionTestHost(
-        string connectionString,
-        ILoginProvider[] providers,
-        IPAddress? remoteIpAddress,
-        ILoggerProvider? logProvider)
+    private LoginCompletionTestHost(string connectionString, LoginHostSettings settings)
     {
         _connectionString = connectionString;
-        _providers = providers;
-        _remoteIpAddress = remoteIpAddress;
-        _logProvider = logProvider;
+        _settings = settings;
 
         // Generated per host, never a literal in the tree (scripts/check-no-secret-literals.sh).
         Pepper = System.Security.Cryptography.RandomNumberGenerator.GetBytes(SessionPepperBytes);
+        InvitePepper = settings.InvitePepper
+            ?? System.Security.Cryptography.RandomNumberGenerator.GetBytes(InvitePepperBytes);
     }
 
     /// <summary>
@@ -95,6 +133,12 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
     /// the cookie value itself is never stored.
     /// </summary>
     internal byte[] Pepper { get; }
+
+    /// <summary>
+    /// The invite pepper this host configured (02.1.2-T2's HMAC key), so a case can seed an invite row whose
+    /// hash the deployment's own binder verifies.
+    /// </summary>
+    internal byte[] InvitePepper { get; }
 
     /// <summary>The running test's cancellation token.</summary>
     internal static CancellationToken Token => TestContext.Current.CancellationToken;
@@ -104,7 +148,9 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
     {
         ArgumentNullException.ThrowIfNull(fixture);
 
-        return new LoginCompletionTestHost(fixture.AppConnectionString, providers, remoteIpAddress: null, logProvider: null);
+        return new LoginCompletionTestHost(
+            fixture.AppConnectionString,
+            new LoginHostSettings { Providers = providers });
     }
 
     /// <summary>A configured deployment whose socket reports <paramref name="remoteIpAddress"/> for the client.</summary>
@@ -116,7 +162,9 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
         ArgumentNullException.ThrowIfNull(fixture);
         ArgumentNullException.ThrowIfNull(remoteIpAddress);
 
-        return new LoginCompletionTestHost(fixture.AppConnectionString, providers, remoteIpAddress, logProvider: null);
+        return new LoginCompletionTestHost(
+            fixture.AppConnectionString,
+            new LoginHostSettings { RemoteIpAddress = remoteIpAddress, Providers = providers });
     }
 
     /// <summary>A configured deployment that also hands every log entry to <paramref name="logProvider"/>.</summary>
@@ -128,7 +176,24 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
         ArgumentNullException.ThrowIfNull(fixture);
         ArgumentNullException.ThrowIfNull(logProvider);
 
-        return new LoginCompletionTestHost(fixture.AppConnectionString, providers, remoteIpAddress: null, logProvider);
+        return new LoginCompletionTestHost(
+            fixture.AppConnectionString,
+            new LoginHostSettings { LogProvider = logProvider, Providers = providers });
+    }
+
+    /// <summary>
+    /// A configured deployment over the harness database with whatever the case substitutes: the providers,
+    /// the invite key material of a seeded invite row, and — for the cases that prove how the login calls it —
+    /// a double of the invite binder (02.1.2-T2) or of the <c>auth.login</c> audit writer (02.3.1-T2.2).
+    /// </summary>
+    /// <param name="fixture">The harness's migrated database.</param>
+    /// <param name="settings">What this host composes over the deployment's own registrations.</param>
+    internal static LoginCompletionTestHost Start(DatabaseFixture fixture, LoginHostSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(fixture);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return new LoginCompletionTestHost(fixture.AppConnectionString, settings);
     }
 
     /// <summary>
@@ -136,7 +201,7 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
     /// port, so the completion's own database fault is produced by the real Npgsql path.
     /// </summary>
     internal static LoginCompletionTestHost StartWithoutDatabase(params ILoginProvider[] providers) =>
-        new(UnreachableDatabase, providers, remoteIpAddress: null, logProvider: null);
+        new(UnreachableDatabase, new LoginHostSettings { Providers = providers });
 
     /// <summary>A <c>google</c> provider that verifies <paramref name="subject"/>'s identity.</summary>
     internal static FakeLoginProvider GoogleProvider(string subject = GoogleSubject) =>
@@ -164,7 +229,29 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
                 new VerifiedIdentity(GitHub, subject, email, emailVerified, "Test Member")),
         };
 
-    /// <summary>An <c>start</c> request, optionally naming a <c>returnUrl</c>.</summary>
+    /// <summary>
+    /// A provider that verifies exactly the identity a case names, including the address it reports, whether
+    /// it calls that address verified and the Workspace <c>hd</c> claim — the three inputs the email-verified
+    /// rule and the domain allowlist of AC4/AC5 read (02.3.1-T2.1).
+    /// </summary>
+    /// <param name="provider">The provider name (<see cref="Google"/>, <see cref="GitHub"/>).</param>
+    /// <param name="subject">The provider-verified subject.</param>
+    /// <param name="email">The address the provider reports.</param>
+    /// <param name="emailVerified">The provider's verdict on that address.</param>
+    /// <param name="hostedDomain">The <c>hd</c> claim, or null (GitHub never asserts one).</param>
+    internal static FakeLoginProvider IdentityProvider(
+        string provider,
+        string subject,
+        string email,
+        bool emailVerified = true,
+        string? hostedDomain = null) =>
+        new(provider)
+        {
+            Result = LoginProviderResult.Ok(
+                new VerifiedIdentity(provider, subject, email, emailVerified, "Test Member", hostedDomain)),
+        };
+
+    /// <summary>A <c>start</c> request, optionally naming a <c>returnUrl</c>.</summary>
     internal static HttpRequestMessage StartRequest(string provider, string? returnUrl = null) =>
         new(
             HttpMethod.Get,
@@ -172,11 +259,20 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
             + (returnUrl is null ? string.Empty : "?returnUrl=" + Uri.EscapeDataString(returnUrl)));
 
     /// <summary>A <c>callback</c> request carrying whatever pending-login cookie value the case presents.</summary>
+    /// <param name="provider">The provider route value.</param>
+    /// <param name="cookieValue">The pending-login cookie's value.</param>
+    /// <param name="state">The <c>state</c> query value.</param>
+    /// <param name="code">The authorization code, or null to omit it.</param>
+    /// <param name="inviteCookieValue">
+    /// The staged-invite cookie's value to present with the pending login (02.3.1-T2 Q1), or null for a login
+    /// that staged no token. Both cookies travel in one header, as a browser sends them.
+    /// </param>
     internal static HttpRequestMessage CallbackRequest(
         string provider,
         string? cookieValue,
         string? state,
-        string? code = "authorization-code")
+        string? code = "authorization-code",
+        string? inviteCookieValue = null)
     {
         var query = new List<string>();
         if (state is not null)
@@ -194,9 +290,20 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
             "/v1/auth/oidc/" + provider + "/callback"
             + (query.Count == 0 ? string.Empty : "?" + string.Join("&", query)));
 
+        var cookies = new List<string>();
         if (cookieValue is not null)
         {
-            request.Headers.Add("Cookie", LoginStateCookie.Name + "=" + cookieValue);
+            cookies.Add(LoginStateCookie.Name + "=" + cookieValue);
+        }
+
+        if (inviteCookieValue is not null)
+        {
+            cookies.Add(InviteCookieName + "=" + inviteCookieValue);
+        }
+
+        if (cookies.Count > 0)
+        {
+            request.Headers.Add("Cookie", string.Join("; ", cookies));
         }
 
         return request;
@@ -207,15 +314,19 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
         CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
 
     /// <summary>One whole sign-in: <c>start</c>, read the pending-login cookie, then the <c>callback</c>.</summary>
-    /// <param name="host">The host the two requests run on.</param>
     /// <param name="client">A client of that host (never following redirects).</param>
     /// <param name="provider">The provider route value.</param>
     /// <param name="returnUrl">The post-login destination to ask for, or null.</param>
+    /// <param name="inviteCookieValue">
+    /// The staged-invite cookie's value the callback presents (02.3.1-T2 Q1), or null when the case staged no
+    /// token.
+    /// </param>
     /// <returns>The callback's response, which the case asserts on and disposes.</returns>
     internal async Task<HttpResponseMessage> SignInAsync(
         HttpClient client,
         string provider = Google,
-        string? returnUrl = null)
+        string? returnUrl = null,
+        string? inviteCookieValue = null)
     {
         ArgumentNullException.ThrowIfNull(client);
 
@@ -227,8 +338,75 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
         var (payload, cookieValue) = PendingLogin(start);
 
         return await client
-            .SendAsync(CallbackRequest(provider, cookieValue, payload.State), Token)
+            .SendAsync(CallbackRequest(provider, cookieValue, payload.State, inviteCookieValue: inviteCookieValue), Token)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// One whole invited sign-in (02.3.1-T2 Q1/AC4): the token is staged on <c>POST /v1/auth/invite-token</c>,
+    /// then the usual <c>start</c> + <c>callback</c> presents the staged cookie.
+    /// </summary>
+    /// <param name="client">A client of that host (never following redirects, never keeping cookies).</param>
+    /// <param name="inviteToken">The <c>evgi_…</c> token a seeded invite row was minted for.</param>
+    /// <param name="provider">The provider route value.</param>
+    /// <param name="returnUrl">The post-login destination to ask for, or null.</param>
+    /// <returns>The callback's response, which the case asserts on and disposes.</returns>
+    internal async Task<HttpResponseMessage> SignInWithInviteAsync(
+        HttpClient client,
+        string inviteToken,
+        string provider = Google,
+        string? returnUrl = null)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+
+        using var stage = await client
+            .SendAsync(StageInviteRequest(inviteToken), Token)
+            .ConfigureAwait(false);
+        stage.StatusCode.ShouldBe(
+            HttpStatusCode.NoContent,
+            "the invite-token route stages a well-formed token and answers 204");
+
+        return await SignInAsync(client, provider, returnUrl, InviteCookieValue(stage)).ConfigureAwait(false);
+    }
+
+    /// <summary>The <c>POST /v1/auth/invite-token</c> request that stages <paramref name="inviteToken"/>.</summary>
+    /// <param name="inviteToken">The token, as the landing page received it.</param>
+    internal static HttpRequestMessage StageInviteRequest(string inviteToken)
+    {
+        ArgumentNullException.ThrowIfNull(inviteToken);
+
+        // The body the route reads: the web JSON defaults with snake_case names (`invite_token`).
+        return new HttpRequestMessage(HttpMethod.Post, InviteTokenRoute)
+        {
+            Content = new StringContent(
+                "{\"invite_token\":" + JsonSerializer.Serialize(inviteToken) + "}",
+                Encoding.UTF8,
+                "application/json"),
+        };
+    }
+
+    /// <summary>Every <c>Set-Cookie</c> of the response that sets the staged-invite cookie.</summary>
+    internal static IReadOnlyList<string> InviteCookies(HttpResponseMessage response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        return response.Headers.TryGetValues("Set-Cookie", out var values)
+            ? [.. values.Where(value => value.StartsWith(InviteCookieName + "=", StringComparison.Ordinal))]
+            : [];
+    }
+
+    /// <summary>The staged-invite cookie's value as a browser would store it, or null when none is set.</summary>
+    internal static string? InviteCookieValue(HttpResponseMessage response)
+    {
+        var cookies = InviteCookies(response);
+        if (cookies.Count == 0)
+        {
+            return null;
+        }
+
+        var cookie = cookies[0];
+
+        return cookie[(InviteCookieName.Length + 1)..cookie.IndexOf(';', StringComparison.Ordinal)];
     }
 
     /// <summary>Unprotects the pending-login cookie with this host's own protector and serializer.</summary>
@@ -391,6 +569,46 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
     internal static async Task<int> CountAsync(DatabaseFixture fixture, string sql) =>
         (int)await OwnerScalarAsync<long>(fixture, sql, []).ConfigureAwait(false);
 
+    /// <summary>
+    /// The status of one <c>membership</c> row, read as the owner: the assertion that a login bound an invite
+    /// (<c>active</c>) or left it alone (<c>pending</c>), 02.3.1-T2 AC4.
+    /// </summary>
+    /// <param name="fixture">The harness whose owner connection reads the row.</param>
+    /// <param name="membershipId">The row.</param>
+    internal static Task<string> MembershipStatusAsync(DatabaseFixture fixture, Guid membershipId) =>
+        OwnerScalarAsync<string>(
+            fixture,
+            "select status from public.membership where id = @id",
+            [("id", membershipId)]);
+
+    /// <summary>The <c>user_id</c> a membership row is bound to, or null, read as the owner.</summary>
+    /// <param name="fixture">The harness whose owner connection reads the row.</param>
+    /// <param name="membershipId">The row.</param>
+    internal static Task<Guid?> MembershipUserIdAsync(DatabaseFixture fixture, Guid membershipId) =>
+        OwnerScalarAsync<Guid?>(
+            fixture,
+            "select user_id from public.membership where id = @id",
+            [("id", membershipId)]);
+
+    /// <summary>How many <c>auth.login</c> rows the chain of <paramref name="orgId"/> holds (Q5).</summary>
+    /// <param name="fixture">The harness whose owner connection reads the chain.</param>
+    /// <param name="orgId">The org whose <c>audit_log</c> rows are counted.</param>
+    internal static async Task<int> LoginAuditRowsAsync(DatabaseFixture fixture, Guid orgId) =>
+        (int)await OwnerScalarAsync<long>(
+            fixture,
+            "select count(*) from public.audit_log where org_id = @org_id and action = 'auth.login'",
+            [("org_id", orgId)]).ConfigureAwait(false);
+
+    /// <summary>Sets <c>user.status</c>, the owner's administrative act of 02.3.1 §6.</summary>
+    /// <param name="fixture">The harness whose owner connection writes the row.</param>
+    /// <param name="userId">The user.</param>
+    /// <param name="status"><c>active</c> or <c>disabled</c>.</param>
+    internal static Task<int> SetUserStatusAsync(DatabaseFixture fixture, Guid userId, string status) =>
+        fixture.SeedAsync(
+            "update public.\"user\" set status = @status, updated_at = now() where id = @id",
+            [("id", userId), ("status", status)],
+            Token);
+
     /// <summary>The session row <paramref name="sessionId"/> names, read as the owner.</summary>
     internal static async Task<SessionRow> SessionAsync(DatabaseFixture fixture, Guid sessionId)
     {
@@ -513,6 +731,11 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
                 // reads it from configuration by its own spelling, so an in-memory key resolves exactly as the
                 // deployed environment variable does.
                 ["EVIDGATE:Session:Pepper"] = Convert.ToBase64String(Pepper),
+                // 02.3.1-T2.1: the same for the invite pepper (EVIDGATE__INVITE__PEPPER), so the deployment's
+                // own binder verifies the hash a case seeded with this host's InvitePepper.
+                ["EVIDGATE:Invite:Pepper"] = Convert.ToBase64String(InvitePepper),
+                ["EVIDGATE:Invite:PepperVersion"] = _settings.InvitePepperVersion
+                    .ToString(System.Globalization.CultureInfo.InvariantCulture),
             }));
 
         builder.ConfigureTestServices(services =>
@@ -522,17 +745,32 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
             // Exactly the case's providers: the host's real ones are unconfigured anyway, and `Find` takes the
             // first provider registered under a name, so leaving them in would shadow a fake named `google`.
             services.RemoveAll<ILoginProvider>();
-            foreach (var provider in _providers)
+            foreach (var provider in _settings.Providers)
             {
                 services.AddSingleton(provider);
             }
 
-            if (_remoteIpAddress is { } remoteIpAddress)
+            // The two seams the login calls: a case substitutes one only to prove HOW it is called (the
+            // ambient tenant of the bind, the fail-closed audit of 02.3.1-T2.2); the deployment's own stay
+            // registered otherwise, so every other case asserts on the real path.
+            if (_settings.Binder is { } binder)
+            {
+                services.RemoveAll<IMembershipBinder>();
+                services.AddSingleton(binder);
+            }
+
+            if (_settings.AuditWriter is { } auditWriter)
+            {
+                services.RemoveAll<IIdentityAuditWriter>();
+                services.AddSingleton(auditWriter);
+            }
+
+            if (_settings.RemoteIpAddress is { } remoteIpAddress)
             {
                 services.AddSingleton<IStartupFilter>(new RemoteAddressStartupFilter(remoteIpAddress));
             }
 
-            if (_logProvider is { } logProvider)
+            if (_settings.LogProvider is { } logProvider)
             {
                 services.AddSingleton(logProvider);
             }
@@ -608,5 +846,104 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider
 
             entries.Enqueue(new LogEntry(category, logLevel, formatter(state, exception)));
         }
+    }
+}
+
+/// <summary>
+/// A double of the invite binder (02.1.2-T2) that records HOW the login calls it: the request handed over and
+/// whether a tenant scope was already open at that moment (02.3.1-T2: the login must bind OUTSIDE one, since
+/// the binder opens and commits one transaction per org itself).
+/// </summary>
+internal sealed class RecordingMembershipBinder : IMembershipBinder
+{
+    private readonly List<BinderCall> _calls = [];
+
+    /// <summary>
+    /// The ambient scope accessor, set by the case once the host's services exist; when it is null the call is
+    /// recorded without an ambient observation.
+    /// </summary>
+    internal ITenantScopeAccessor? Scopes { get; set; }
+
+    /// <summary>What to answer instead of an empty success, or null for "nothing bound".</summary>
+    internal Error? Failure { get; set; }
+
+    /// <summary>Every call, in the order the login made them.</summary>
+    internal IReadOnlyList<BinderCall> Calls => _calls;
+
+    /// <inheritdoc />
+    public ValueTask<Result<BindPendingMembershipsResult>> BindAsync(
+        BindPendingMembershipsRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        _calls.Add(new BinderCall(request, Scopes?.Current is not null));
+
+        return ValueTask.FromResult(Failure is { } failure
+            ? Result.Failure<BindPendingMembershipsResult>(failure)
+            : Result.Success(new BindPendingMembershipsResult([])));
+    }
+
+    /// <summary>One recorded call and the ambient tenant scope the login had open at that moment.</summary>
+    /// <param name="Request">Exactly what the login asked the binder to do.</param>
+    /// <param name="AmbientTenantScope">True when a tenant scope was open, which the caller must never do.</param>
+    internal sealed record BinderCall(BindPendingMembershipsRequest Request, bool AmbientTenantScope);
+}
+
+/// <summary>
+/// A double of the identity audit writer (02.3.1-T2.2) that records every event instead of writing a chain,
+/// so a case can prove which orgs a login audited — or that it audited nothing at all.
+/// </summary>
+internal sealed class RecordingAuditWriter : IIdentityAuditWriter
+{
+    private readonly List<RecordedWrite> _writes = [];
+
+    /// <summary>Every write, in order.</summary>
+    internal IReadOnlyList<RecordedWrite> Writes => _writes;
+
+    /// <inheritdoc />
+    public ValueTask WriteAsync(
+        IdentityAuditEvent auditEvent,
+        IReadOnlyCollection<Guid> orgIds,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(auditEvent);
+        ArgumentNullException.ThrowIfNull(orgIds);
+
+        _writes.Add(new RecordedWrite(auditEvent, [.. orgIds]));
+
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>One recorded write: the event and the orgs it was addressed to.</summary>
+    /// <param name="AuditEvent">The action, user and provider.</param>
+    /// <param name="OrgIds">The orgs the login resolved for the row.</param>
+    internal sealed record RecordedWrite(IdentityAuditEvent AuditEvent, IReadOnlyList<Guid> OrgIds);
+}
+
+/// <summary>
+/// A double of the identity audit writer that fails the way the producer does on a database fault or a busy
+/// chain, so a case can prove the login is fail-closed: 503 <c>unavailable</c>, no session row, no cookie.
+/// </summary>
+internal sealed class FaultingAuditWriter : IIdentityAuditWriter
+{
+    private readonly Exception _fault;
+
+    /// <summary>Creates the double over the fault it raises.</summary>
+    /// <param name="fault">What the writer throws when the login reaches it.</param>
+    internal FaultingAuditWriter(Exception fault) => _fault = fault;
+
+    /// <summary>How many times the login reached the writer.</summary>
+    internal int Calls { get; private set; }
+
+    /// <inheritdoc />
+    public ValueTask WriteAsync(
+        IdentityAuditEvent auditEvent,
+        IReadOnlyCollection<Guid> orgIds,
+        CancellationToken cancellationToken)
+    {
+        Calls++;
+
+        throw _fault;
     }
 }

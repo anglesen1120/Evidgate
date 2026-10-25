@@ -36,7 +36,7 @@ public sealed class BindOrgStatusTests : BindTestBase
         var org = await SeedOrgAsync(autobindVerifiedDomain: false, status: "suspended");
         await SetMaxSeatsAsync(org, maxSeats: 5);
         var invite = await SeedInviteAsync(org, "invitee@example.com");
-        var userId = Guid.CreateVersion7();
+        var userId = await SeedUserAsync();
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(userId, "github", "invitee@example.com", EmailVerified: true, invite.Token, HostedDomain: null),
@@ -62,7 +62,7 @@ public sealed class BindOrgStatusTests : BindTestBase
         var org = await SeedOrgAsync(autobindVerifiedDomain: false, status: "suspended");
         await SetMaxSeatsAsync(org, maxSeats: null);
         var invite = await SeedInviteAsync(org, "invitee@example.com");
-        var userId = Guid.CreateVersion7();
+        var userId = await SeedUserAsync();
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(userId, "github", "invitee@example.com", EmailVerified: true, invite.Token, HostedDomain: null),
@@ -87,7 +87,7 @@ public sealed class BindOrgStatusTests : BindTestBase
         var org = await SeedOrgAsync(autobindVerifiedDomain: false, status: "active");
         await SetMaxSeatsAsync(org, maxSeats: 5);
         var invite = await SeedInviteAsync(org, "invitee@example.com");
-        var userId = Guid.CreateVersion7();
+        var userId = await SeedUserAsync();
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(userId, "github", "invitee@example.com", EmailVerified: true, invite.Token, HostedDomain: null),

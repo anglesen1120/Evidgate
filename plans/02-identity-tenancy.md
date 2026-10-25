@@ -86,6 +86,7 @@ Owned (shapes land in `contracts/openapi.yaml`; mutations follow 00 §9.1):
 | `GET /v1/orgs/{o}/audit`, `GET /v1/orgs/{o}/audit/export` | `audit:read` | cursor pagination (00 §9.1) |
 | `POST /v1/support-grants`, `POST /v1/support-grants/{g}/approve`, `…/revoke` | `support:grant` / `support:approve` | approve by `tenant_admin` of the target org, approver ≠ requester |
 | `GET /v1/auth/oidc/{provider}/start`, `GET /v1/auth/oidc/{provider}/callback`, `POST /v1/auth/logout`, `GET /v1/auth/sessions`, `DELETE /v1/auth/sessions/{s}` | session cookie | `__Host-` cookie + `X-XSRF-TOKEN` antiforgery on mutating routes (T38); not in the 00 core list; documented here and in `contracts/` |
+| `POST /v1/auth/invite-token`, `POST /v1/auth/link/{provider}`, `GET /v1/auth/link/pending`, `DELETE /v1/auth/link/pending`, `POST /v1/auth/link/confirm` | invite-token: anonymous (stages an encrypted cookie); link routes: session cookie | 02.3.1-T2: the token never travels in a URL; linking is staged then confirmed explicitly, never auto-merged; `X-XSRF-TOKEN` is required by the contract on the link mutations and enforced when 02.3.2-T1.2 lands (`contracts/README.md`) |
 | `GET /v1/me`, `PATCH /v1/me` | session cookie (own user only) | current user profile (`id`, `email`, `display_name`, `preferred_locale`); PATCH accepts only `preferred_locale ∈ {vi, en}`, `If-Match` on `user.version`; 02.3.1-T3 |
 
 Used: every other plan's endpoints inherit these guards; 04 calls `POST /v1/ci/token` from the CLI/adapter.
