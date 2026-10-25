@@ -177,9 +177,11 @@ public sealed class SessionStoreTests : SessionTestBase
     }
 
     /// <summary>
-    /// The client address and the user agent are untrusted client input: an address that is not an
-    /// <c>inet</c> literal is stored as NULL, an IPv6 zone id is stripped (the logins of 02.3.1-T1.1 hand-over
-    /// vi), and a user agent longer than the column's 512 characters is bounded instead of failing the login.
+    /// The client address and the user agent are untrusted client input. The store hands the address through
+    /// unchanged — <c>ClientAddress</c> in the completion handler is the one owner of the literal, an IPv6
+    /// zone id included — so a value that is not an <c>inet</c> literal is stored as NULL by the
+    /// <c>session_create</c> exception block instead of failing a login, a valid literal is kept exactly as it
+    /// arrived, and a user agent longer than the column's 512 characters is bounded rather than failing.
     /// </summary>
     [Fact]
     public async Task Bad_Address_Is_Stored_As_Null_And_The_User_Agent_Is_Bounded()
@@ -196,11 +198,13 @@ public sealed class SessionStoreTests : SessionTestBase
             "select char_length(user_agent) from public.session where id = @id",
             ("id", bad.Value.SessionId))).ShouldBe(512);
 
-        var zoned = await store.CreateAsync(new SessionCreation(userId, "fe80::1%eth0", null), Token);
-        zoned.IsSuccess.ShouldBeTrue();
+        // Pass-through: the store adds no second rewrite of its own, so what the completion sanitised is what
+        // the column holds. `host(ip)` is the read LoginCompletionTestHost uses (`ip::text` would append the /128 prefix).
+        var valid = await store.CreateAsync(new SessionCreation(userId, "2001:db8::1", null), Token);
+        valid.IsSuccess.ShouldBeTrue();
         (await OwnerScalarAsync<string>(
             "select host(ip) from public.session where id = @id",
-            ("id", zoned.Value.SessionId))).ShouldBe("fe80::1");
+            ("id", valid.Value.SessionId))).ShouldBe("2001:db8::1");
     }
 
     /// <summary>The store's own row is a live session: <c>revoked_at</c> and <c>rotated_from</c> stay null.</summary>

@@ -24,7 +24,9 @@ namespace Evidgate.Modules.Identity.Login.Completion;
 /// a refusal leaves the browser with the deleted pending-login cookie and nothing else. A database fault
 /// (<see cref="NpgsqlException"/>, <see cref="TimeoutException"/>, or a cancellation that is not the client
 /// hanging up) is 503 <c>unavailable</c> with <c>Retry-After</c>, the same fixed message and header the
-/// provider-outage path uses: no database text, no SQL, no host name ever reaches the body.
+/// provider-outage path uses: no database text, no SQL, no host name ever reaches the body. That 503 ends
+/// the attempt — the header says when to sign in again, because the callback it answered is already spent
+/// (cookie deleted, <c>state</c> consumed) and replaying it is 401 <c>token_invalid</c>.
 /// </para>
 /// <para>
 /// Telemetry is not recorded here: the callback counts the attempt from the failure's code, so an outcome is
@@ -87,7 +89,9 @@ internal sealed class LoginCommandCompletion(
 
     /// <summary>
     /// <paramref name="error"/> as the seam's failure, with <c>Retry-After</c> set when the answer is the 503
-    /// of 00 §9.2 (a refusal of the completion is retryable exactly when the same callback could succeed later).
+    /// of 00 §9.2. The header answers when to sign in again, not when to replay: the callback has already
+    /// deleted the pending-login cookie and spent its one-time <c>state</c> before this seam is reached, so the
+    /// same callback answers 401 <c>token_invalid</c> and the browser restarts the login from <c>start</c>.
     /// </summary>
     private Result<string> Fail(Error error, HttpContext context)
     {

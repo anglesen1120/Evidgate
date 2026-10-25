@@ -21,6 +21,13 @@ namespace Evidgate.Modules.Identity.Sessions;
 /// rotation can keep an old pepper alive while its sessions drain.
 /// </para>
 /// <para>
+/// Client metadata is not rewritten here, except for the user agent's length. The client address is stored
+/// exactly as it was handed in: <c>ClientAddress</c> in the completion handler is the one owner of what an
+/// <c>inet</c> literal may be, and the <c>session_create</c> function nulls a literal the column still
+/// refuses (its exception block) instead of failing a login every other gate admitted. The user agent is
+/// bounded surrogate-safely here, ahead of the column's own 512-character bound.
+/// </para>
+/// <para>
 /// Failures are values, not exceptions: a disabled account is 403 <c>account_disabled</c>, and a missing
 /// pepper, an unknown user or a database fault (including a timeout) is 503 <c>unavailable</c> with
 /// <c>Retryable: true</c>. Nothing here opens a transaction that spans an outbound call — the login flow
@@ -99,7 +106,10 @@ internal sealed class SessionStore : ISessions
             command.Parameters.AddWithValue("user_id", request.UserId);
             command.Parameters.AddWithValue("cookie_hmac", cookieHmac);
             command.Parameters.AddWithValue("pepper_version", pepperVersion);
-            command.Parameters.AddWithValue("ip", (object?)WithoutZoneId(request.IpAddress) ?? DBNull.Value);
+            // The address is handed through unchanged: ClientAddress.Sanitise (the completion handler) is the
+            // one owner of what an inet literal may be, and the function's exception block nulls a literal the
+            // column still refuses instead of failing a login every other gate admitted.
+            command.Parameters.AddWithValue("ip", (object?)request.IpAddress ?? DBNull.Value);
             command.Parameters.AddWithValue("user_agent", (object?)BoundUserAgent(request.UserAgent) ?? DBNull.Value);
             command.Parameters.AddWithValue("expires_at", expiresAt);
             command.Parameters.AddWithValue("absolute_expires_at", absoluteExpiresAt);
@@ -146,23 +156,6 @@ internal sealed class SessionStore : ISessions
             .TrimEnd('=')
             .Replace('+', '-')
             .Replace('/', '_');
-
-    /// <summary>
-    /// The client address as an <c>inet</c> literal, with an IPv6 zone id removed: <c>fe80::1%eth0</c> is not
-    /// a valid <c>inet</c> value, so leaving the zone in would make the insert fail (02.3.1-T1.1 hand-over vi).
-    /// </summary>
-    /// <param name="value">The address the callback resolved, or null.</param>
-    private static string? WithoutZoneId(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var zone = value.IndexOf('%');
-
-        return zone < 0 ? value : value[..zone];
-    }
 
     /// <summary>
     /// The user agent bounded to the column's 512 characters (0041), without splitting a surrogate pair: the

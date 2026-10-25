@@ -132,7 +132,9 @@ begin
     values (p_identity_id, p_user_id, p_provider, p_subject, p_email)
     on conflict (provider, subject) do nothing;
 
-    if not found then
+    if found then
+      v_user_id := p_user_id;
+    else
       -- Lost the race: the user row this call created has no identity and never will, so it must not
       -- survive — an orphan account would hold an email a later explicit merge could not account for.
       delete from public."user" u

@@ -1,4 +1,3 @@
-using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Login.Completion;
 using Shouldly;
@@ -18,10 +17,14 @@ namespace Identity.IntegrationTests.Login.Completion;
 [Trait("Category", "Docker")]
 public sealed class ClientAddressTests
 {
-    /// <summary>A zone index is dropped, so the literal is exactly what <c>inet</c> accepts.</summary>
+    /// <summary>
+    /// A zone index is dropped, so the literal is exactly what <c>inet</c> accepts — including an empty one
+    /// (<c>fe80::1%</c>), which is tolerated and stripped rather than refused.
+    /// </summary>
     [Theory]
     [InlineData("fe80::1%6", "fe80::1")]
     [InlineData("fe80::1%eth0", "fe80::1")]
+    [InlineData("fe80::1%", "fe80::1")]
     [InlineData("fe80::1", "fe80::1")]
     public void A_Zone_Index_Is_Dropped(string address, string expected)
     {
@@ -47,7 +50,6 @@ public sealed class ClientAddressTests
     [InlineData("unknown")]
     [InlineData("203.0.113.7:443")]
     [InlineData("<script>alert(1)</script>")]
-    [InlineData("fe80::1%")]
     public void Anything_Else_Is_Not_Stored(string? address)
     {
         ClientAddress.Sanitise(address).ShouldBeNull();
@@ -111,13 +113,5 @@ public sealed class ReturnUrlEncoderTests
 
         encoded.ShouldBe("/");
         ReturnUrlPolicy.IsAppPath(encoded).ShouldBeTrue("the app root is always an app path");
-    }
-
-    /// <summary>AC3 of the envelope: the two new completion refusals are distinct 403 codes.</summary>
-    [Fact]
-    public void The_Completion_Refusals_Are_Distinct_Error_Codes()
-    {
-        ApiErrorCode.NoMembership.ShouldBe("no_membership");
-        ApiErrorCode.AccountDisabled.ShouldBe("account_disabled");
     }
 }

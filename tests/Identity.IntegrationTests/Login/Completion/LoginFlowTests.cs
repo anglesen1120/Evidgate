@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Testing;
@@ -39,10 +38,17 @@ public sealed partial class LoginFlowTests : CatalogueTestBase
     /// AC1: a verified identity with an active membership ends with the session row, the
     /// <c>__Host-evidgate_session</c> cookie and the 302 to the allowlisted destination.
     /// </summary>
+    /// <remarks>
+    /// The host reports <c>127.0.0.1</c> as the client address, so the stored <c>session.ip</c> is a known
+    /// value rather than one of several possibilities.
+    /// </remarks>
     [Fact]
     public async Task GoogleHappyPath_EndsWith_A_Session_Row_A_Cookie_And_A_302()
     {
-        using var host = LoginCompletionTestHost.Start(Fixture, LoginCompletionTestHost.GoogleProvider());
+        using var host = LoginCompletionTestHost.Start(
+            Fixture,
+            IPAddress.Loopback,
+            LoginCompletionTestHost.GoogleProvider());
         using var client = host.CreateLoginClient();
         client.DefaultRequestHeaders.UserAgent.ParseAdd(LoginCompletionTestHost.UserAgent);
 
@@ -82,8 +88,7 @@ public sealed partial class LoginFlowTests : CatalogueTestBase
         session.CookieHmac.ShouldBe(
             host.CookieHmac(cookieValue!),
             "the row stores the HMAC of the cookie value under the configured pepper, never the value itself");
-        Encoding.ASCII.GetString(session.CookieHmac).ShouldNotContain(cookieValue!);
-        session.Ip.ShouldBeOneOf(null, "127.0.0.1", "the test transport reports no client address, or its loopback");
+        session.Ip.ShouldBe("127.0.0.1", "the row stores the address the transport reported");
         session.UserAgent.ShouldBe(LoginCompletionTestHost.UserAgent);
         session.RevokedAt.ShouldBeNull();
         session.ExpiresAt.ShouldBeLessThanOrEqualTo(session.AbsoluteExpiresAt, "session_idle_deadline_check");

@@ -21,9 +21,13 @@ internal static class SessionErrors
         StatusCodes.Status403Forbidden);
 
     /// <summary>
-    /// 503 <c>unavailable</c>, retryable: the pepper is not provisioned, the user row is gone, or the write
-    /// failed (database or timeout). Retrying the same callback is safe — the session key is the row id and
-    /// the unique cookie hash, so a retry cannot alias another session.
+    /// 503 <c>unavailable</c>: the pepper is not provisioned, the user row is gone, or the write failed
+    /// (database or timeout). <c>Retryable</c> means a fresh sign-in may succeed shortly — never that the same
+    /// callback may be replayed: <c>LoginEndpoints.CallbackAsync</c> deletes the pending-login cookie and
+    /// consumes the one-time <c>state</c> before any completion runs, so a replay of that callback is 401
+    /// <c>token_invalid</c> and the browser restarts the login from <c>start</c>. What the session key does
+    /// guarantee is that a later login cannot alias an existing session: the row id is minted per attempt and
+    /// the cookie hash is unique (0042).
     /// </summary>
     public static Error Unavailable { get; } = new(
         ApiErrorCode.Unavailable,

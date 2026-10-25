@@ -222,7 +222,7 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
         using var start = await client
             .SendAsync(StartRequest(provider, returnUrl), Token)
             .ConfigureAwait(false);
-        start.EnsureSuccessStatusCode();
+        start.StatusCode.ShouldBe(HttpStatusCode.Found, "the start route answers the 302 to the provider");
 
         var (payload, cookieValue) = PendingLogin(start);
 
@@ -242,7 +242,7 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
             throw new InvalidOperationException("the start response set no " + LoginStateCookie.Name + " cookie");
         }
 
-        var cookieValue = cookies[0][(LoginStateCookie.Name.Length + 1)..];
+        var cookieValue = cookies[0].Split(';', 2)[0][(LoginStateCookie.Name.Length + 1)..];
 
         var protector = Services.GetRequiredService<IDataProtectionProvider>()
             .CreateProtector(LoginStateCookie.ProtectorPurpose);
@@ -388,8 +388,8 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
             [("provider", provider), ("subject", subject)]);
 
     /// <summary>How many rows <paramref name="sql"/> counts, read as the owner.</summary>
-    internal static Task<int> CountAsync(DatabaseFixture fixture, string sql) =>
-        OwnerScalarAsync<int>(fixture, sql, []);
+    internal static async Task<int> CountAsync(DatabaseFixture fixture, string sql) =>
+        (int)await OwnerScalarAsync<long>(fixture, sql, []).ConfigureAwait(false);
 
     /// <summary>The session row <paramref name="sessionId"/> names, read as the owner.</summary>
     internal static async Task<SessionRow> SessionAsync(DatabaseFixture fixture, Guid sessionId)
@@ -400,7 +400,7 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            select id, user_id, octet_length(cookie_hmac), ip::text, user_agent, expires_at,
+            select id, user_id, cookie_hmac, host(ip), user_agent, expires_at,
                    absolute_expires_at, revoked_at
               from public.session
              where id = @id

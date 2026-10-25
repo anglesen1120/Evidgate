@@ -82,7 +82,7 @@ public sealed partial class LoginFlowTests
         var cookieValue = LoginCompletionTestHost.SessionCookieValue(completed);
         cookieValue.ShouldNotBeNullOrEmpty("AC1 GitHub path: the completed login sets the session cookie");
 
-        (await LoginCompletionTestHost.OwnerScalarAsync<int>(
+        (await LoginCompletionTestHost.OwnerScalarAsync<long>(
             Fixture,
             "select count(*) from public.session where user_id = @user_id",
             [("user_id", userId)]))

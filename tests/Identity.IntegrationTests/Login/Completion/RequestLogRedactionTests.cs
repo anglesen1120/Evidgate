@@ -80,7 +80,17 @@ public sealed class RequestLogRedactionTests : CatalogueTestBase
         logs.Entries.ShouldContain(entry => entry.Message.Contains("code=probe-value", StringComparison.Ordinal));
         logs.Clear();
 
-        using var completed = await host.SignInAsync(client, returnUrl: "/runs/42");
+        // The start route's RedirectResult legitimately logs the provider authorization URL (it carries the state the
+        // browser is sent anyway), so only the callback request is observed: clear the capture between the two.
+        using var start = await client.SendAsync(
+            LoginCompletionTestHost.StartRequest(LoginCompletionTestHost.Google, "/runs/42"),
+            LoginCompletionTestHost.Token);
+        var (payload, cookieValue) = host.PendingLogin(start);
+        logs.Clear();
+
+        using var completed = await client.SendAsync(
+            LoginCompletionTestHost.CallbackRequest(LoginCompletionTestHost.Google, cookieValue, payload.State),
+            LoginCompletionTestHost.Token);
         completed.StatusCode.ShouldBe(HttpStatusCode.Found, "the request really went through the pipeline");
 
         var informational = logs.Entries.Where(entry => entry.Level <= LogLevel.Information).ToArray();
