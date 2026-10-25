@@ -10,8 +10,8 @@ namespace Identity.IntegrationTests.Login;
 /// <summary>
 /// 02.3.1-T1.1 / AC8 / 02.3.1 §9 (<c>ProviderOutageTests</c>): a provider that is down, times out or is not
 /// configured answers 503 <c>unavailable</c> with <c>Retry-After</c> and no provider text; a rejected code
-/// answers 401 <c>token_invalid</c>; and a verified identity in this build answers the typed 501
-/// <c>login_not_completed</c> rather than a session that does not exist.
+/// answers 401 <c>token_invalid</c>. The verified-identity half — the user upsert, the membership check, the
+/// session row and the cookie — is <c>Login/Completion/LoginFlowTests</c>', which runs on a real database.
 /// </summary>
 // The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
@@ -141,35 +141,6 @@ public sealed class ProviderOutageTests
         callback.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await LoginTestHost.ErrorCodeAsync(callback)).ShouldBe(ApiErrorCode.TokenInvalid);
         (await LoginTestHost.BodyAsync(callback)).ShouldNotContain(FakeLoginProvider.Canary);
-    }
-
-    [Fact]
-    public async Task Verified_Identity_Answers_501_Login_Not_Completed_In_This_Build()
-    {
-        var provider = new FakeLoginProvider("fake")
-        {
-            Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity("fake")),
-        };
-
-        // The V1 default completion: the provider verified the identity, but 02.3.1-T1.4 has not landed.
-        using var host = LoginTestHost.Start(new MutableClock(Now), provider);
-        using var client = host.CreateLoginClient();
-
-        using var start = await LoginTestHost.SendAsync(client, LoginTestHost.StartRequest("fake"));
-        var (payload, cookieValue) = host.PendingLogin(start);
-
-        using var callback = await LoginTestHost.SendAsync(
-            client,
-            LoginTestHost.CallbackRequest("fake", cookieValue, payload.State));
-
-        callback.StatusCode.ShouldBe(HttpStatusCode.NotImplemented);
-        (await LoginTestHost.ErrorCodeAsync(callback)).ShouldBe(ApiErrorCode.LoginNotCompleted);
-        (await LoginTestHost.BodyAsync(callback)).ShouldNotContain(FakeLoginProvider.Canary);
-
-        // No session cookie of any name: a 501 must never look like a sign-in that happened.
-        callback.Headers.TryGetValues("Set-Cookie", out var cookies).ShouldBeTrue();
-        cookies!.Count(value => !value.StartsWith(LoginStateCookie.Name + "=", StringComparison.Ordinal))
-            .ShouldBe(0);
     }
 
     [Fact]

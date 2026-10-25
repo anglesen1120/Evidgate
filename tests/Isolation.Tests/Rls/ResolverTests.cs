@@ -36,6 +36,20 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate_resolve.member_organizations"] = ["org_id", "slug", "name", "status"],
         ["evidgate_resolve.resolve_ci_binding"] = ["org_id", "project_id", "binding_id", "status"],
         ["evidgate_resolve.resolve_ingest_token"] = ["org_id", "project_id", "binding_id", "status"],
+        ["evidgate_resolve.login_upsert_identity"] = ["user_id", "status"],
+        ["evidgate_resolve.session_create"] = ["session_id", "expires_at", "status"],
+    };
+
+    /// <summary>
+    /// The resolvers that act on platform-scope rows (<c>user</c>, <c>user_identity</c>, <c>session</c>, 0041:
+    /// no <c>org_id</c> column, owner-only policies) before any tenant exists: a federated login (02.3.1-T1.4)
+    /// resolves a person, not an org, so the tenant-tuple rule of 00 §5.4.8 does not apply to their first
+    /// column. Their documented tuple above is still pinned exactly, and every other resolver keeps the rule.
+    /// </summary>
+    private static readonly HashSet<string> PlatformScopeResolvers = new(StringComparer.Ordinal)
+    {
+        "evidgate_resolve.login_upsert_identity",
+        "evidgate_resolve.session_create",
     };
 
     /// <summary>
@@ -191,8 +205,9 @@ public sealed class ResolverTests : HarnessTest
                 failures.Add($"{resolver.Signature}: evidgate_app has no EXECUTE — the pre-tenant path cannot resolve a tenant");
             }
 
-            if (resolver.ResultColumns.Count == 0
-                || !string.Equals(resolver.ResultColumns[0], "org_id", StringComparison.Ordinal))
+            if (!PlatformScopeResolvers.Contains(key)
+                && (resolver.ResultColumns.Count == 0
+                    || !string.Equals(resolver.ResultColumns[0], "org_id", StringComparison.Ordinal)))
             {
                 failures.Add($"{resolver.Signature}: the first result column must be org_id (the tenant tuple of 00 §5.4.8)");
             }

@@ -288,9 +288,8 @@ public static class ApiErrorCode
     public const string CasePrefixTaken = "case_prefix_taken";
 
     /// <summary>
-    /// 501: the provider verified the identity but the login cannot be completed on this deployment yet
-    /// (02.3.1-T1.1's <c>ILoginCompletion</c> seam; 02.3.1-T1.4 supplies the real completion). A typed
-    /// refusal, never a silent success that would report a session which does not exist.
+    /// 403: the account is disabled (<c>user.status = 'disabled'</c>, 02.3.1 §6), so a verified federated
+    /// login issues no session. Not retryable: only an administrator re-enables the account.
     /// </summary>
-    public const string LoginNotCompleted = "login_not_completed";
+    public const string AccountDisabled = "account_disabled";
 }

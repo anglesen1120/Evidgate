@@ -57,7 +57,8 @@ public static class EvidgateTelemetry
     /// Counter of federated login attempts on the <c>start</c>/<c>callback</c> routes, tagged by provider and
     /// outcome code (02.3.1-T1.1). The vocabulary is closed: provider ∈ the registered names (or
     /// <c>unknown</c>), outcome ∈ <c>started</c>, <c>completed</c> and the 00 §9.2 codes the routes answer
-    /// (<c>token_invalid</c>, <c>unavailable</c>, <c>not_found</c>, <c>login_not_completed</c>). Never
+    /// (<c>token_invalid</c>, <c>unavailable</c>, <c>not_found</c>, <c>no_membership</c>,
+    /// <c>account_disabled</c>). Never
     /// labelled with an email, a subject, a state, a nonce, a verifier or an authorization code.
     /// </summary>
     public const string LoginAttemptMetricName = "evidgate_login_attempts_total";

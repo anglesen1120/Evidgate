@@ -8,6 +8,7 @@ using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Identity.Infrastructure.Persistence;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Modules.Identity.Login.GitHub;
 using Evidgate.Modules.Identity.Login.Google;
 using Evidgate.Modules.Identity.Options;
 using FluentValidation;
@@ -113,13 +114,14 @@ internal static class IdentityModule
 
         services.AddCiAuthentication(configuration);
 
-        // 02.3.1-T1 (AC8): the federated login protocol — EVIDGATE:Login options, the pending-login
-        // cookie, the one-time state record and the login-completion seam (which answers 501
-        // login_not_completed until 02.3.1-T1.4 lands) — then each provider's own registration. The
-        // protocol comes first so a provider can rely on the cookie being registered; the routes resolve
-        // every ILoginProvider and answer 404 not_found for a value none is registered under.
+        // 02.3.1-T1 (AC8): the federated login — EVIDGATE:Login and EVIDGATE:SESSION options, the
+        // pending-login cookie, the one-time state record, the session store and the completion that issues
+        // the session — then each provider's own registration. The login services come first so a provider
+        // can rely on the cookie being registered; the routes resolve every ILoginProvider and answer 404
+        // not_found for a value none is registered under.
         services.AddFederatedLogin(configuration);
         services.AddGoogleLogin(configuration);
+        services.AddGitHubLogin(configuration);
 
         // 02.4.1-T4.1: the daily purge of the OIDC replay cache. Registered in both hosts like every module
         // piece; only the Worker runs a consumer and a schedule runner.

@@ -28,7 +28,7 @@ internal sealed class MutableClock(DateTimeOffset start) : TimeProvider
 }
 
 /// <summary>
-/// A login-completion seam that signs in instead of answering the V1 default 501: it records what the
+/// A login-completion seam that signs in instead of handing the identity to the real completion: it records what the
 /// protocol handed over and answers the redirect target (or a scripted failure), which is what
 /// 02.3.1-T1.4's real implementation will do once it lands.
 /// </summary>
@@ -94,7 +94,11 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
     /// <summary>The running test's cancellation token, which every wait of a case passes on.</summary>
     internal static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    /// <summary>A deployment with the given providers registered and the V1 default (501) completion.</summary>
+    /// <summary>
+    /// A deployment with the given providers registered and the REAL completion. The protocol cases never reach
+    /// it (they stop at a refusal or at their own fake seam), and the cases that do complete run on the
+    /// database-backed host of <c>Login/Completion</c> instead.
+    /// </summary>
     internal static LoginTestHost Start(MutableClock clock, params ILoginProvider[] providers) =>
         new(clock, providers, completion: null);
 
