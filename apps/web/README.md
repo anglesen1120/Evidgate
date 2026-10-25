@@ -192,6 +192,7 @@ defence in depth, not the only defence:
 - a top-level `const token = signal('')` is not store state and is not reported. The rule's two
   exemptions — a `*.spec.ts` file and the one-time reveal component (a `reveal/` directory, or
   `reveal` as a whole word of the file name) — are its own allow-list, reviewed with the rule.
+- a state factory or updater (`withState(() => ({ token: '' }))`, `patchState(store, (s) => ({ token }))`) is not walked, a secret word that is neither first nor last in a name (`rawTokenValue`) is not reported, and a lone very long identifier is split word by word without a length cap; the first store (09.7.1-T2) extends the rule or records why not.
 
 The bypass rule's own blind spots are listed in the CSP section above.
 
