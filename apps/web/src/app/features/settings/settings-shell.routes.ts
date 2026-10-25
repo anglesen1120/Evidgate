@@ -22,6 +22,7 @@ import type { Route, Routes } from '@angular/router';
 import { AuditPage } from './audit/audit.page';
 import { MembersPage } from './members/members.page';
 import { SecretsPage } from './secrets/secrets.page';
+import { PolicyPage } from './policy/policy.page';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
@@ -34,6 +35,7 @@ const TAB_BODIES: Readonly<Partial<Record<SettingsTabId, Type<unknown>>>> = {
   members: MembersPage,
   audit: AuditPage,
   secrets: SecretsPage,
+  policy: PolicyPage,
 };
 
 /** One child route per tab, in strip order (the id reaches the body through `data.settingsTabId`). */

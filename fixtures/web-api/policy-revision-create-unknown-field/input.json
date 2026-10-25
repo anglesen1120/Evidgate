@@ -1,0 +1,23 @@
+{
+  "operation_id": "createPolicyRevision",
+  "variant": "unknown-field",
+  "status": 422,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000106"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "policy_unknown_field",
+      "message": "the body carries a field policy-revision.v1 does not declare",
+      "request_id": "018f0000-0000-7000-8000-000000000106",
+      "retryable": false,
+      "details": [
+        {
+          "path": "/flaky_budget_max",
+          "reason": "additional_properties"
+        }
+      ]
+    }
+  }
+}

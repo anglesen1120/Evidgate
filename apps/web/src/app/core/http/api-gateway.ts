@@ -8,6 +8,12 @@
 // instead, and the compiler carries the success type from the operation:
 // `gateway.call((client) => listRuns({ client, path: { p } }))` is `Promise<RunPage>` without a
 // hand-written wire type anywhere in `apps/web`.
+//
+// Two entry points share that classification: `call` resolves the body, and `callWithResponse`
+// also hands back the response's status and headers (09.7.1-T4: the policy list's `ETag` is the
+// head revision the next publish quotes in `If-Match`, and a publish's `201`/`200` is the
+// "appended" versus "already stored" answer). `call` is `callWithResponse` without them, so a
+// caller sees one classification table, not two.
 
 import { inject, Injectable } from '@angular/core';
 import type { Client } from '@evidgate/sdk';
@@ -84,6 +90,22 @@ export class ApiGateway {
   /**
    * Runs one SDK operation and resolves its 2xx body.
    *
+   * It is exactly {@link ApiGateway.callWithResponse} without the response: the body when the
+   * call succeeded, and the same typed refusal, cancellation, deadline or transport failure
+   * otherwise. A caller that also needs the status or a response header (`ETag` for the next
+   * `If-Match`, or a `201` that means "appended" rather than "already stored") calls that method
+   * directly; nothing else about the classification changes.
+   */
+  async call<TResult extends SdkResult>(
+    operation: (client: Client) => Promise<TResult>,
+  ): Promise<SdkSuccess<TResult>> {
+    const { data } = await this.callWithResponse(operation);
+    return data;
+  }
+
+  /**
+   * The same run, plus the success response's status and headers.
+   *
    * - an `AbortError` — rejected by the operation or handed back as `result.error` — is
    *   re-thrown unchanged, because the caller aborted it on purpose; never an `ApiRequestError`.
    *   This applies even when `result` also carries a response: an abort during the SDK's body
@@ -105,10 +127,14 @@ export class ApiGateway {
    *   non-abort, non-timeout rejection is a programming error and is re-thrown unchanged;
    * - a 2xx without a body (a `202`/`204` operation) resolves the SDK's empty-data value, `{}`
    *   for a JSON response — never `undefined`.
+   *
+   * A success answers the body together with the response's status and headers; the headers are
+   * the only place an `ETag` exists, so a caller that stores one for a later `If-Match` reads it
+   * here rather than from the body.
    */
-  async call<TResult extends SdkResult>(
+  async callWithResponse<TResult extends SdkResult>(
     operation: (client: Client) => Promise<TResult>,
-  ): Promise<SdkSuccess<TResult>> {
+  ): Promise<{ data: SdkSuccess<TResult>; status: number; headers: Headers }> {
     let result: TResult;
     try {
       result = await operation(this.client);
@@ -166,6 +192,10 @@ export class ApiGateway {
 
     // The SDK's `data` is present on a 2xx; a no-content operation carries the SDK's empty JSON
     // object, which its declared `unknown` type accepts.
-    return result.data as SdkSuccess<TResult>;
+    return {
+      data: result.data as SdkSuccess<TResult>,
+      status: response.status,
+      headers: response.headers,
+    };
   }
 }

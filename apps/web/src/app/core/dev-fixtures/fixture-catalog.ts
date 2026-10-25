@@ -70,7 +70,21 @@ import permissionsListSettingsAdmin from '../../../../../../fixtures/web-api/per
 import permissionsListSettingsAuditOnly from '../../../../../../fixtures/web-api/permissions-list-settings-audit-only/input.json';
 import permissionsListSettingsMembersReadonly from '../../../../../../fixtures/web-api/permissions-list-settings-members-readonly/input.json';
 import permissionsListSettingsNoTab from '../../../../../../fixtures/web-api/permissions-list-settings-no-tab/input.json';
+import permissionsListSettingsPolicyReadonly from '../../../../../../fixtures/web-api/permissions-list-settings-policy-readonly/input.json';
+import permissionsListSettingsPolicyWrite from '../../../../../../fixtures/web-api/permissions-list-settings-policy-write/input.json';
 import permissionsListSettingsSecretsWrite from '../../../../../../fixtures/web-api/permissions-list-settings-secrets-write/input.json';
+import policyRevisionCreate from '../../../../../../fixtures/web-api/policy-revision-create/input.json';
+import policyRevisionCreateCriticalCaseQuarantined from '../../../../../../fixtures/web-api/policy-revision-create-critical-case-quarantined/input.json';
+import policyRevisionCreatePreconditionFailed from '../../../../../../fixtures/web-api/policy-revision-create-precondition-failed/input.json';
+import policyRevisionCreateUnchanged from '../../../../../../fixtures/web-api/policy-revision-create-unchanged/input.json';
+import policyRevisionCreateUnknownField from '../../../../../../fixtures/web-api/policy-revision-create-unknown-field/input.json';
+import policyRevisionFirst from '../../../../../../fixtures/web-api/policy-revision-first/input.json';
+import policyRevisionHead from '../../../../../../fixtures/web-api/policy-revision-head/input.json';
+import policyRevisionPrevious from '../../../../../../fixtures/web-api/policy-revision-previous/input.json';
+import policyRevisionPublished from '../../../../../../fixtures/web-api/policy-revision-published/input.json';
+import policyRevisionsList from '../../../../../../fixtures/web-api/policy-revisions-list/input.json';
+import policyRevisionsListAfterPublish from '../../../../../../fixtures/web-api/policy-revisions-list-after-publish/input.json';
+import policyRevisionsListConflictHead from '../../../../../../fixtures/web-api/policy-revisions-list-conflict-head/input.json';
 import projectCreate from '../../../../../../fixtures/web-api/project-create/input.json';
 import projectDetail from '../../../../../../fixtures/web-api/project-detail/input.json';
 import projectDetailOnboardingConnected from '../../../../../../fixtures/web-api/project-detail-onboarding-connected/input.json';
@@ -337,6 +351,59 @@ export interface FixtureDocument {
  * three, so no list or detail read may grow the member. Because the catalogue is static, the
  * lifecycle needs no new list document: `memberships-list` already holds the `pending` row these
  * calls address.
+ *
+ * 09.7.1-T4 adds the Settings > Policy tab's states. The corpus holds one project's revision
+ * history — `018f0000-0000-7000-8000-000000000011`, the `Storefront web` project of
+ * `projects-list` and `PROJECT_STOREFRONT` in `apps/web/e2e/shell/support.ts` — as four
+ * `policy-revision.v1` bodies plus the three list pages they add up to. Revision 1 (`…a001`,
+ * retired), 2 (`…a002`, retired) and 3 (`…a003`, `active`, the head) are joined by revision 4
+ * (`…a004`, `draft`), which is what a publish of the tab's seeded body returns; a diff of 2 against
+ * 3 therefore carries added (`storefront-catalog`, `storefront/catalog/price`, `video`,
+ * `quarantine_ids`), removed (`legacy-cart`, `checkout/billing/refund-manual`, `freshness_minutes`)
+ * and changed rows (`flaky_budget`, `collection_timeout_minutes`, and a nested change inside
+ * `gating_refs`), and a diff of 3 against 4 adds `checkout/pay/apple-pay`. Every `hash` is the
+ * `sha256:` digest of the RFC 8785 canonical body — this corpus has no body whose hash a reader
+ * cannot recompute — and every body is far below the 64 KiB transport cap. A body is reachable from
+ * a browser page load only through a variant, never by asking for another revision id, so the
+ * revision-vs-revision diff is a `revision-diff.component.spec.ts` state (its store double answers
+ * two different bodies) rather than a fixtures-build one: `getPolicyRevision` answers whatever its
+ * selected variant holds for every id.
+ *
+ * Because the fixture backend answers one variant per operation (a path parameter never selects a
+ * document), the four bodies are four variants of `getPolicyRevision`: `ok` is the head, and
+ * `?fixture.variant.getPolicyRevision=previous` (revision 2), `=first` (revision 1) and `=created`
+ * (revision 4) are the other three, so a review opens any single revision it needs. The list pages
+ * are `policy-revisions-list` (`ok`, revisions 1..3, `ETag` the head `…a003`),
+ * `policy-revisions-list-after-publish` (`?fixture.variant.listPolicyRevisions=after-publish`, the
+ * same page with revision 4 on it and the head moved to `…a004`: the head is the highest
+ * `revision_no`, so a published DRAFT is the `ETag` while `…a003` stays the one `active` row the
+ * store reports as `activeRevision`) and
+ * `policy-revisions-list-conflict-head` (`=conflict-head`, head `…a005`, the revision another writer
+ * published while this session held `…a003` — the state the 412 below refuses; on that page `…a003`
+ * is `retired` `version: 3`, because activating `…a005` retires it: one `active` revision per
+ * project is a database invariant, `policy_revision_active_key` in
+ * `migrations/0033_policy_add_policy_activation.sql`, so a page with two `active` rows would not
+ * exist).
+ *
+ * `policy-revision-create` is publish's `201`: revision 4, `state: draft`, `ETag` its id.
+ * `policy-revision-create-unchanged` (`?fixture.variant.createPolicyRevision=unchanged`) is the
+ * contract's `200` — a body already stored returns that revision, here the head `…a003` — and is
+ * the one answer a publish may not report as a new revision. The three refusals are the error
+ * states the tab must render verbatim: `=precondition_failed` (`PolicyErrors.Stale`, details
+ * `If-Match`/`stale` plus the current head's id in `revision_id`, as `PolicyRules.cs:45-52` builds
+ * it), `=unknown-field` (`422 policy_unknown_field`, the closed schema's refusal with the offending
+ * member's JSON pointer and the `additional_properties` reason `PolicyBodyPaths` reports) and
+ * `=critical-case-quarantined` (`422 critical_case_quarantined`, the detail naming the quarantined
+ * critical case the way `PolicyActivationStore.cs:128` writes it: `critical_cases/<case id>`,
+ * reason `quarantined`). The quarantine guard gates ACTIVATION today — the create path has no
+ * quarantine read — so this last document pins the envelope the tab must render verbatim when the
+ * server sends it, not a route that answers it yet.
+ *
+ * `permissions-list-settings-policy-write` and `permissions-list-settings-policy-readonly` are the
+ * Policy tab's two grant sets: the `release_approver` and `viewer` grants of
+ * `contracts/permissions.json`, rows copied verbatim and ordered by `code`, so the pair differs in
+ * `policy:write` — the one code that decides whether `[data-policy-publish-open]` exists at all —
+ * and both hold `policy:read`, which is what keeps the tab itself reachable.
  */
 export const FIXTURE_CATALOG: readonly {
   readonly name: string;
@@ -417,8 +484,40 @@ export const FIXTURE_CATALOG: readonly {
   },
   { name: 'permissions-list-settings-no-tab', document: permissionsListSettingsNoTab },
   {
+    name: 'permissions-list-settings-policy-readonly',
+    document: permissionsListSettingsPolicyReadonly,
+  },
+  {
+    name: 'permissions-list-settings-policy-write',
+    document: permissionsListSettingsPolicyWrite,
+  },
+  {
     name: 'permissions-list-settings-secrets-write',
     document: permissionsListSettingsSecretsWrite,
+  },
+  { name: 'policy-revision-create', document: policyRevisionCreate },
+  {
+    name: 'policy-revision-create-critical-case-quarantined',
+    document: policyRevisionCreateCriticalCaseQuarantined,
+  },
+  {
+    name: 'policy-revision-create-precondition-failed',
+    document: policyRevisionCreatePreconditionFailed,
+  },
+  { name: 'policy-revision-create-unchanged', document: policyRevisionCreateUnchanged },
+  { name: 'policy-revision-create-unknown-field', document: policyRevisionCreateUnknownField },
+  { name: 'policy-revision-first', document: policyRevisionFirst },
+  { name: 'policy-revision-head', document: policyRevisionHead },
+  { name: 'policy-revision-previous', document: policyRevisionPrevious },
+  { name: 'policy-revision-published', document: policyRevisionPublished },
+  { name: 'policy-revisions-list', document: policyRevisionsList },
+  {
+    name: 'policy-revisions-list-after-publish',
+    document: policyRevisionsListAfterPublish,
+  },
+  {
+    name: 'policy-revisions-list-conflict-head',
+    document: policyRevisionsListConflictHead,
   },
   { name: 'project-create', document: projectCreate },
   { name: 'project-detail', document: projectDetail },

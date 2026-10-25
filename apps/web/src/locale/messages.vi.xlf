@@ -2398,6 +2398,57 @@
       <trans-unit id="settings.secrets.pages-label" datatype="html"><source>Secret references pages</source><target>Các trang tham chiếu bí mật</target></trans-unit>
       <trans-unit id="settings.secrets.rotate-unavailable-hint" datatype="html"><source>The rotation may have been applied. Reload the list and check the status before rotating again.</source><target>Việc xoay có thể đã được áp dụng. Hãy tải lại danh sách và kiểm tra trạng thái trước khi xoay lần nữa.</target></trans-unit>
       <trans-unit id="settings.secrets.reload" datatype="html"><source>Reload</source><target>Tải lại</target></trans-unit>
+      <trans-unit id="settings.policy.title" datatype="html"><source>Policy</source><target>Chính sách</target></trans-unit>
+      <trans-unit id="settings.policy.description" datatype="html"><source>Inspect policy revisions and compare their fields. Open a revision using its identifier.</source><target>Xem các phiên bản chính sách và so sánh từng trường. Mở một phiên bản bằng mã định danh.</target></trans-unit>
+      <trans-unit id="settings.policy.revision-id" datatype="html"><source>Revision ID</source><target>Mã phiên bản</target></trans-unit>
+      <trans-unit id="settings.policy.open" datatype="html"><source>Open revision</source><target>Mở phiên bản</target></trans-unit>
+      <trans-unit id="settings.policy.narrow" datatype="html"><source>Inspection only on narrow screens. Use a wider screen to publish a revision.</source><target>Chỉ xem trên màn hình hẹp. Dùng màn hình rộng hơn để xuất bản phiên bản.</target></trans-unit>
+      <trans-unit id="settings.policy.no-selection" datatype="html"><source>No revision selected. Enter a revision ID to inspect its policy.</source><target>Chưa chọn phiên bản. Nhập mã phiên bản để xem chính sách.</target></trans-unit>
+      <trans-unit id="settings.policy.not-found" datatype="html"><source>Revision not found.</source><target>Không tìm thấy phiên bản.</target></trans-unit>
+      <trans-unit id="settings.policy.loading" datatype="html"><source>Loading revisions…</source><target>Đang tải các phiên bản…</target></trans-unit>
+      <trans-unit id="settings.policy.reload" datatype="html"><source>Reload revisions</source><target>Tải lại các phiên bản</target></trans-unit>
+      <trans-unit id="settings.policy.published-new" datatype="html"><source>New revision published.</source><target>Đã xuất bản phiên bản mới.</target></trans-unit>
+      <trans-unit id="settings.policy.published-unchanged" datatype="html"><source>Policy unchanged. Existing revision returned.</source><target>Chính sách không thay đổi. Máy chủ trả về phiên bản hiện có.</target></trans-unit>
+      <trans-unit id="settings.policy.revisions" datatype="html"><source>Revisions</source><target>Các phiên bản</target></trans-unit>
+      <trans-unit id="settings.policy.revisions-empty" datatype="html"><source>No revisions available.</source><target>Chưa có phiên bản nào.</target></trans-unit>
+      <trans-unit id="settings.policy.revision" datatype="html"><source>Revision</source><target>Phiên bản</target></trans-unit>
+      <trans-unit id="settings.policy.head" datatype="html"><source>Head</source><target>Mới nhất</target></trans-unit>
+      <trans-unit id="settings.policy.hash" datatype="html"><source>Hash</source><target>Mã băm</target></trans-unit>
+      <trans-unit id="settings.policy.created" datatype="html"><source>Created</source><target>Thời điểm tạo</target></trans-unit>
+      <trans-unit id="settings.policy.more" datatype="html"><source>Load more</source><target>Tải thêm</target></trans-unit>
+      <trans-unit id="settings.policy.gating" datatype="html"><source>Gating</source><target>Chặn theo chính sách</target></trans-unit>
+      <trans-unit id="settings.policy.advisory" datatype="html"><source>Advisory</source><target>Chỉ tư vấn</target></trans-unit>
+      <trans-unit id="settings.policy.mode" datatype="html"><source>Mode</source><target>Chế độ</target></trans-unit>
+      <trans-unit id="settings.policy.mode-unavailable" datatype="html"><source>Mode unavailable</source><target>Chưa có thông tin chế độ</target></trans-unit>
+      <trans-unit id="settings.policy.diff-title" datatype="html"><source>Compare revisions</source><target>So sánh các phiên bản</target></trans-unit>
+      <trans-unit id="settings.policy.diff-base" datatype="html"><source>Base revision</source><target>Phiên bản gốc</target></trans-unit>
+      <trans-unit id="settings.policy.diff-target" datatype="html"><source>Target revision</source><target>Phiên bản đích</target></trans-unit>
+      <trans-unit id="settings.policy.diff-choose" datatype="html"><source>Choose a revision</source><target>Chọn một phiên bản</target></trans-unit>
+      <trans-unit id="settings.policy.diff-loading" datatype="html"><source>Loading revision bodies…</source><target>Đang tải nội dung các phiên bản…</target></trans-unit>
+      <trans-unit id="settings.policy.diff-error" datatype="html"><source>Revision bodies could not be loaded.</source><target>Không tải được nội dung các phiên bản.</target></trans-unit>
+      <trans-unit id="settings.policy.diff-retry" datatype="html"><source>Reload comparison</source><target>Tải lại phần so sánh</target></trans-unit>
+      <trans-unit id="settings.policy.diff-empty" datatype="html"><source>Select two revisions to compare their fields.</source><target>Chọn hai phiên bản để so sánh từng trường.</target></trans-unit>
+      <trans-unit id="settings.policy.diff-same" datatype="html"><source>No field differences.</source><target>Không có trường nào khác biệt.</target></trans-unit>
+      <trans-unit id="settings.policy.diff-before" datatype="html"><source>Before</source><target>Trước</target></trans-unit>
+      <trans-unit id="settings.policy.diff-after" datatype="html"><source>After</source><target>Sau</target></trans-unit>
+      <trans-unit id="settings.policy.diff-absent" datatype="html"><source>Not present</source><target>Không có</target></trans-unit>
+      <trans-unit id="settings.policy.diff-added" datatype="html"><source>Added</source><target>Đã thêm</target></trans-unit>
+      <trans-unit id="settings.policy.diff-removed" datatype="html"><source>Removed</source><target>Đã xóa</target></trans-unit>
+      <trans-unit id="settings.policy.diff-changed" datatype="html"><source>Changed</source><target>Đã thay đổi</target></trans-unit>
+      <trans-unit id="settings.policy.diff-truncated" datatype="html"><source>This comparison is truncated. Not all field differences are shown.</source><target>Phần so sánh đã được rút gọn. Không hiển thị toàn bộ các trường khác biệt.</target></trans-unit>
+      <trans-unit id="settings.policy.publish-title" datatype="html"><source>Publish revision</source><target>Xuất bản phiên bản</target></trans-unit>
+      <trans-unit id="settings.policy.publish-description" datatype="html"><source>Review the JSON policy body before publishing. Publishing does not change the activation mode.</source><target>Kiểm tra nội dung chính sách dạng JSON trước khi xuất bản. Việc xuất bản không thay đổi chế độ kích hoạt.</target></trans-unit>
+      <trans-unit id="settings.policy.body" datatype="html"><source>Policy body (JSON object)</source><target>Nội dung chính sách (đối tượng JSON)</target></trans-unit>
+      <trans-unit id="settings.policy.bytes" datatype="html"><source>UTF-8 bytes</source><target>Số byte UTF-8</target></trans-unit>
+      <trans-unit id="settings.policy.seed-loading" datatype="html"><source>Loading policy body…</source><target>Đang tải nội dung chính sách…</target></trans-unit>
+      <trans-unit id="settings.policy.publishing" datatype="html"><source>Publishing revision…</source><target>Đang xuất bản phiên bản…</target></trans-unit>
+      <trans-unit id="settings.policy.seed-error" datatype="html"><source>The policy body could not be loaded. Close and reopen to try again.</source><target>Không tải được nội dung chính sách. Đóng rồi mở lại để thử lại.</target></trans-unit>
+      <trans-unit id="settings.policy.invalid-json" datatype="html"><source>Enter a valid JSON object.</source><target>Nhập một đối tượng JSON hợp lệ.</target></trans-unit>
+      <trans-unit id="settings.policy.too-large" datatype="html"><source>The policy body exceeds the 65536-byte limit.</source><target>Nội dung chính sách vượt quá giới hạn 65536 byte.</target></trans-unit>
+      <trans-unit id="settings.policy.cancel" datatype="html"><source>Cancel</source><target>Hủy</target></trans-unit>
+      <trans-unit id="settings.policy.conflict-not-set" datatype="html"><source>(not set)</source><target>(chưa đặt)</target></trans-unit>
+      <trans-unit id="settings.policy.load-failed" datatype="html"><source>The policy revisions could not be loaded.</source><target>Không tải được các phiên bản chính sách.</target></trans-unit>
+      <trans-unit id="settings.policy.load-retry" datatype="html"><source>Retry</source><target>Thử lại</target></trans-unit>
     </body>
   </file>
 </xliff>

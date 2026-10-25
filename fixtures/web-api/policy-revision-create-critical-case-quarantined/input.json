@@ -1,0 +1,23 @@
+{
+  "operation_id": "createPolicyRevision",
+  "variant": "critical-case-quarantined",
+  "status": 422,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000107"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "critical_case_quarantined",
+      "message": "a critical case of this revision has an active quarantine entry in the project",
+      "request_id": "018f0000-0000-7000-8000-000000000107",
+      "retryable": false,
+      "details": [
+        {
+          "path": "critical_cases/018f0000-0000-7000-8000-00000000b002",
+          "reason": "quarantined"
+        }
+      ]
+    }
+  }
+}
