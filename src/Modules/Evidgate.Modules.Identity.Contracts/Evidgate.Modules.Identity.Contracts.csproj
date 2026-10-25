@@ -2,4 +2,12 @@
   <PropertyGroup>
     <RootNamespace>Evidgate.Modules.Identity.Contracts</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- 02.3.1-T1: ISessions.CreateAsync returns Result&lt;SessionTicket&gt; (00 §5.5 C8), the shape every
+         business handler returns, so 02.3.1-T1.4's completion maps the outcome straight to the 00 §9.2
+         envelope. SharedKernel is a BuildingBlock, not a module, so the reference keeps the
+         module-to-module rule (00 §5.5) intact (same shape as Evidgate.Modules.Ingestion.Contracts and
+         Evidgate.Modules.Orchestrator.Contracts). -->
+    <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
 </Project>

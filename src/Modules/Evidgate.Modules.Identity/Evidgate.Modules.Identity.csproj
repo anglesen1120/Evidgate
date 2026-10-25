@@ -17,6 +17,10 @@
     <!-- 02.4.1-T1/T3.3: GitHub OIDC validation and the minted ci_producer JWT (D7). Already
          pinned in Directory.Packages.props; MIT. -->
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <!-- 02.3.1-T1.2: the Google login JWKS client gets one bounded retry and a total timeout from a
+         resilience handler (P6). Already pinned in Directory.Packages.props and registered in
+         ADR-0002; no other package is added. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>
   <!--
     02.2.1-T1.2: this module owns public minimal-API routes (00 §5.5 `Endpoints/`,

@@ -119,6 +119,126 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /auth/oidc/{provider}/start:
+    get:
+      operationId: startFederatedLogin
+      tags: [identity]
+      summary: >-
+        Start a federated login: write the pending-login cookie and redirect the browser to the provider
+        (02.3.1)
+      description: >-
+        Pre-tenant browser route (00 §5.4.8, 02 §4.2): no session, no bearer token and no tenant, so
+        `x-permission: none` / `x-auth: anonymous` and never `X-XSRF-TOKEN`. Generates a 256-bit `state`,
+        a nonce and a PKCE S256 verifier, writes them integrity-protected (ASP.NET Core Data Protection
+        under a fixed purpose) into the `__Host-evidgate_login` cookie — `Secure`, `Path=/`, no `Domain`,
+        `HttpOnly`, `SameSite=Lax`, `Max-Age` = `EVIDGATE__LOGIN__STATELIFETIMESECONDS` (600 s default) —
+        and answers 302 whose `Location` is the provider's authorization URL (`response_type=code`,
+        `code_challenge_method=S256`, the nonce and the provider's scopes). `returnUrl` is the post-login
+        destination and is allowlisted (see the parameter); a refused value lands on `/` and is not an
+        error. Every response of this route carries `Cache-Control: no-store`. Failures: 404 `not_found`
+        when no provider is registered under the route value (`google` is 02.3.1-T1.2; `github` answers
+        404 until 02.3.1-T1.3 registers it, which is why the enum already carries the value); 503
+        `unavailable` with `Retry-After` when the provider has no client credential
+        (`EVIDGATE__OIDC__GOOGLE__CLIENTID` + `…CLIENTSECRET`) or the deployment has no
+        `EVIDGATE__LOGIN__PUBLICBASEURL` — one answer for both causes, so the route is no oracle for the
+        deployment's configuration (02.3.1 AC8). No password field exists anywhere in this flow (AC7):
+        the only login credential the platform accepts is the provider's.
+      x-permission: none
+      x-auth: anonymous
+      x-version: v1
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderPath'
+        - $ref: '#/components/parameters/LoginReturnUrl'
+      responses:
+        '302':
+          description: >-
+            The browser is sent to the provider's authorization endpoint, and the pending-login cookie
+            carries `state`, the nonce and the PKCE verifier for one attempt.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Location:
+              description: Absolute https authorization URL of the provider (`accounts.google.com` for Google).
+              schema:
+                type: string
+                format: uri
+            Set-Cookie:
+              description: >-
+                `__Host-evidgate_login=<protected payload>; Path=/; Secure; HttpOnly; SameSite=Lax;
+                Max-Age=600` (the lifetime is `EVIDGATE__LOGIN__STATELIFETIMESECONDS`). The value is
+                encrypted and integrity-protected; a client can neither read the verifier nor alter a field.
+              schema:
+                type: string
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /auth/oidc/{provider}/callback:
+    get:
+      operationId: completeFederatedLogin
+      tags: [identity]
+      summary: >-
+        Provider callback: verify the one-time state, exchange the code with PKCE and complete the login
+        (02.3.1)
+      description: >-
+        Pre-tenant browser route (00 §5.4.8, 02 §4.2), the second half of `start`: no session, no bearer
+        token, no tenant (`x-permission: none`, `x-auth: anonymous`). Deletes the `__Host-evidgate_login`
+        cookie on **every** outcome — including the 404 and 503 ones — then compares `state` with the one
+        the cookie carried in constant time, records it as consumed before calling the provider (so a
+        replay is refused even when the first attempt failed) and exchanges the code with the stored PKCE
+        verifier. A provider `error` value, a missing or oversized `code` (over 2048 characters), a state
+        mismatch and a provider rejection all answer the same 401 `token_invalid`; no provider text, code,
+        token, nonce, verifier, email or subject is echoed or logged. 404 `not_found` and 503 `unavailable`
+        with `Retry-After` mean what they mean on `start`, and a provider timeout, transport failure, 5xx,
+        429 or unusable JWKS is 503 rather than 401 (02.3.1 AC8). Every response carries
+        `Cache-Control: no-store`. **Current build (02.3.1-T1.1/T1.2):** once the identity is verified this
+        route answers 501 `login_not_completed` — a typed failure, never a success — because the completion
+        (the `user`/`user_identity` upsert, the `session` row and the `__Host-evidgate` session cookie) is
+        02.3.1-T1.4's task. **02.3.1-T1.4** replaces that 501 with the documented 302: `Location` is the
+        allowlisted `returnUrl` (or `/`) and the response sets the session cookie. There is no 200 body at
+        any point: the browser flow ends in a redirect, and a verified-but-uncompleted identity is never
+        reported as signed in.
+      x-permission: none
+      x-auth: anonymous
+      x-version: v1
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderPath'
+        - $ref: '#/components/parameters/OidcCode'
+        - $ref: '#/components/parameters/OidcState'
+        - $ref: '#/components/parameters/OidcError'
+      responses:
+        '302':
+          description: >-
+            02.3.1-T1.4's answer, not this build's: the login completed, the browser is sent to the
+            allowlisted `returnUrl` (or `/`) and the session cookie is set. Until 02.3.1-T1.4 lands, the
+            same request answers 501 `login_not_completed` instead.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Location:
+              description: The allowlisted app path (`returnUrl`) or `/`; never another origin.
+              schema:
+                type: string
+            Set-Cookie:
+              description: >-
+                `__Host-evidgate=<session>` (02.3.1-T1.4, the session cookie of 02.3.2). The pending-login
+                cookie of the same name family is deleted on this response like on every other.
+              schema:
+                type: string
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '401':
+          $ref: '#/components/responses/TokenInvalid'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '501':
+          $ref: '#/components/responses/LoginNotCompleted'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/manifests:
     post:
       operationId: createManifest
@@ -4945,6 +5065,61 @@ components:
       schema:
         type: string
         format: uuid
+    ProviderPath:
+      name: provider
+      in: path
+      required: true
+      description: >-
+        Login provider, matched exactly in lower case against the providers the deployment registers
+        (02.3.1 §5). `google` is registered by 02.3.1-T1.2; `github` is in the enum because the browser
+        button of 09.1.1 can already name it, and answers 404 `not_found` until 02.3.1-T1.3 lands the
+        provider.
+      schema:
+        type: string
+        enum: [google, github]
+    LoginReturnUrl:
+      name: returnUrl
+      in: query
+      required: false
+      description: >-
+        Post-login destination, allowlisted by `ReturnUrlPolicy` (02.3.1 §8): a same-origin path with
+        exactly one leading `/`, no backslash or control character, at most 512 characters, re-checked
+        through up to four percent-decoding passes. Any other value — `//host`, `/\host`, a scheme — is
+        replaced by `/` and is not an error. The value travels only inside the protected pending-login
+        cookie, never in a URL to the provider.
+      schema:
+        type: string
+        maxLength: 512
+    OidcCode:
+      name: code
+      in: query
+      required: false
+      description: >-
+        Authorization code of the provider redirect. Required in practice: a missing, empty or longer
+        than 2048-character value answers 401 `token_invalid`, the same typed refusal as a mismatch, so
+        the route is no oracle for which check failed.
+      schema:
+        type: string
+        maxLength: 2048
+    OidcState:
+      name: state
+      in: query
+      required: false
+      description: >-
+        The one-time `state` `start` generated and put in the pending-login cookie. Compared in constant
+        time; a missing, mismatched or already consumed value answers 401 `token_invalid`.
+      schema:
+        type: string
+    OidcError:
+      name: error
+      in: query
+      required: false
+      description: >-
+        The provider's own error code when it refused the request (`access_denied` and the like). Its
+        presence alone answers 401 `token_invalid`, and its value is never echoed — it can carry the code
+        or a description.
+      schema:
+        type: string
     AuditExportFormat:
       name: format
       in: query
@@ -5407,6 +5582,13 @@ components:
       description: The row's `version`, quoted; send it back in `If-Match` (00 §9.1).
       schema:
         type: string
+    NoStore:
+      description: >-
+        `Cache-Control: no-store` — a browser-flow answer is never reusable (02.3.1 §5: the pending-login
+        and session cookies of both login routes).
+      schema:
+        type: string
+        enum: [no-store]
   responses:
     BadRequest:
       description: >-
@@ -5421,6 +5603,20 @@ components:
             $ref: '#/components/schemas/ErrorEnvelope'
     Unauthorized:
       description: 401 unauthenticated (00 §9.2)
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    TokenInvalid:
+      description: >-
+        401 `token_invalid` — the federated login could not be verified (02.3.1 AC8): the pending-login
+        cookie is missing, expired or tampered with, the `state` does not match or was already used, the
+        callback named another provider, the provider reported an `error`, the `code` is missing or
+        oversized, or the provider rejected the exchange. One code and one message for every one of
+        those causes, and no provider text, code, token, subject or email in the body.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
@@ -5500,6 +5696,20 @@ components:
           $ref: '#/components/headers/XRequestId'
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    LoginNotCompleted:
+      description: >-
+        501 `login_not_completed` — the provider verified the identity, but completing the login (the
+        `user`/`user_identity` upsert, the `session` row and the `__Host-evidgate` session cookie) is
+        02.3.1-T1.4's task (02.3.1 §5). This build answers a typed failure rather than a silent success,
+        so a caller can never mistake "verified" for "signed in"; the code leaves the API when 02.3.1-T1.4
+        replaces the `ILoginCompletion` seam.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:

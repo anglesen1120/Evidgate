@@ -53,6 +53,15 @@ public static class EvidgateTelemetry
     /// <summary>Histogram of pipeline-handler durations in milliseconds (01.4.2-T4.1, the C2 telemetry stage).</summary>
     public const string PipelineDurationMetricName = "evidgate.pipeline.duration";
 
+    /// <summary>
+    /// Counter of federated login attempts on the <c>start</c>/<c>callback</c> routes, tagged by provider and
+    /// outcome code (02.3.1-T1.1). The vocabulary is closed: provider ∈ the registered names (or
+    /// <c>unknown</c>), outcome ∈ <c>started</c>, <c>completed</c> and the 00 §9.2 codes the routes answer
+    /// (<c>token_invalid</c>, <c>unavailable</c>, <c>not_found</c>, <c>login_not_completed</c>). Never
+    /// labelled with an email, a subject, a state, a nonce, a verifier or an authorization code.
+    /// </summary>
+    public const string LoginAttemptMetricName = "evidgate_login_attempts_total";
+
     /// <summary>Span tag naming the message type a pipeline span ran (e.g. <c>CreateRun</c>).</summary>
     public const string PipelineMessageTag = "evidgate.message";
 
@@ -107,6 +116,11 @@ public static class EvidgateTelemetry
         PipelineDurationMetricName,
         unit: "ms",
         description: "C2 pipeline handler duration by message type.");
+
+    private static readonly Counter<long> LoginAttempts = Meter.CreateCounter<long>(
+        LoginAttemptMetricName,
+        unit: "{attempt}",
+        description: "Federated login attempts by provider and outcome code (02.3.1). Never labelled with an email, a subject, a state, a nonce, a verifier or a code.");
 
     /// <summary>
     /// Starts the span for one module operation, tagged with the module name
@@ -208,6 +222,19 @@ public static class EvidgateTelemetry
     /// the stored declaration stays authoritative — D3/Q1). No labels; the values themselves are never recorded.
     /// </summary>
     public static void RecordFinalizeDeclarationMismatch() => FinalizeDeclarationMismatch.Add(1);
+
+    /// <summary>
+    /// Counts one federated login attempt (02.3.1-T1.1) under the closed vocabulary of
+    /// <see cref="LoginAttemptMetricName"/>: the provider's registered name (or <c>unknown</c> for a route
+    /// value nothing answers to) and an outcome code — never a value from the request or the provider.
+    /// </summary>
+    /// <param name="provider">A registered provider name, or <c>unknown</c>.</param>
+    /// <param name="outcome">One of <c>started</c>, <c>completed</c>, or the 00 §9.2 code the route answered.</param>
+    public static void RecordLoginAttempt(string provider, string outcome) =>
+        LoginAttempts.Add(
+            1,
+            new KeyValuePair<string, object?>("provider", provider),
+            new KeyValuePair<string, object?>("outcome", outcome));
 
     /// <summary>Bounds the protocol-major label to <c>1</c>–<c>8</c> (the majors a v1 server can see) or <c>other</c>, so the tag stays low-cardinality.</summary>
     private static string ProtocolMajorBucket(int? protocolMajor) => protocolMajor switch

@@ -414,6 +414,18 @@ public static class IsolationRouteCases
             new(route, "org A's revoked ingest token is refused, whoever presents it", runner => runner.RevokedExchangeAsync(route, w)),
         ]),
 
+        // ---- Federated login (LoginEndpoints.cs:22-34, 02.3.1-T1.1): pre-tenant, no tenant data, no database -----
+        Case("GET", "/v1/auth/oidc/{provider}/start", (route, w) =>
+        [
+            new(route, "start stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantLoginAsync(
+                route, "start stays pre-tenant: org B's member headers cannot select a tenant", w, "/v1/auth/oidc/google/start")),
+        ]),
+        Case("GET", "/v1/auth/oidc/{provider}/callback", (route, w) =>
+        [
+            new(route, "callback stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantLoginAsync(
+                route, "callback stays pre-tenant: org B's member headers cannot select a tenant", w, "/v1/auth/oidc/google/callback?code=probe&state=probe")),
+        ]),
+
         // ---- Catalog (CatalogEndpoints.cs:39-83) ---------------------------------------------------------------
         ProjectCase("GET", "/v1/projects/{p}/cases", p => new(HttpMethod.Get, $"/v1/projects/{p}/cases"), list: true),
         ObjectCase("GET", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}"), ownControl: true),
@@ -1787,6 +1799,39 @@ public sealed class RouteProbeRunner
             violations.Add(Describe(route, name, IsolationRouteCases.OrgBAdmin(world), $"member headers changed the body: anonymous {answers[0]}, org-B member {answers[1]}"));
         }
 
+        return violations;
+    }
+
+    /// <summary>
+    /// A pre-tenant federated-login route (02.3.1-T1.1: <c>GET /v1/auth/oidc/{provider}/start|callback</c>): the
+    /// answer is never a server error, carries no org-A id, and org B's member headers change nothing — a route that
+    /// resolves no tenant cannot be pointed at one, and neither route touches the database.
+    /// </summary>
+    /// <param name="route">The served login route.</param>
+    /// <param name="name">What the probe proves.</param>
+    /// <param name="world">The isolation world (org B's <c>tenant_admin</c> supplies the member headers).</param>
+    /// <param name="url">The request URL (a registered provider route value, with the query a refused callback carries).</param>
+    public async Task<IReadOnlyList<string>> PreTenantLoginAsync(ApiRoute route, string name, IsolationWorld world, string url)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        var request = new ProbeRequest(HttpMethod.Get, url);
+        var anonymous = await SendAsync(ProbeCaller.Anonymous, request).ConfigureAwait(false);
+        var named = await SendAsync(IsolationRouteCases.OrgBAdmin(world), request).ConfigureAwait(false);
+        var violations = new List<string>();
+
+        if (anonymous.Status >= 500 || named.Status >= 500)
+        {
+            violations.Add(Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {anonymous} anonymously / {named} naming org B, expected no server error: {Brief(anonymous)}"));
+        }
+        else if (anonymous.Status != named.Status
+            || !string.Equals(anonymous.Code, named.Code, StringComparison.Ordinal)
+            || !string.Equals(Shape(anonymous), Shape(named), StringComparison.Ordinal))
+        {
+            violations.Add(Describe(route, name, ProbeCaller.Anonymous, $"org-B member headers changed a pre-tenant answer: anonymous {anonymous}, naming org B {named}"));
+        }
+
+        violations.AddRange(ForeignIdsIn(named.Text).Select(id => Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {named} carrying org-A id {id}")));
         return violations;
     }
 

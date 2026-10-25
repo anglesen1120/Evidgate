@@ -168,6 +168,10 @@ public static partial class ApiHost
         // resolves its own tenant (no TenantResolutionFilter: there is no caller yet).
         app.MapCiAdminEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         app.MapCiTokenEndpoints().AddEndpointFilter<ResultEndpointFilter>();
+        // 02.3.1-T1: the federated login start/callback routes. Pre-tenant as well (the browser holds no
+        // session yet), and the callback resolves nothing before the provider has verified the identity, so
+        // only the envelope filter applies.
+        app.MapLoginEndpoints().AddEndpointFilter<ResultEndpointFilter>();
         app.MapOpenApi();
 
         return app;
