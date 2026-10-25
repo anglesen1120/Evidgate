@@ -35,6 +35,15 @@ const EXPECTED = [
   // keeps holding, and they are pre-tenant with no permission (02.3.1-T1.1).
   ['/auth/oidc/{provider}/start', 'get', 'none', 'v1'],
   ['/auth/oidc/{provider}/callback', 'get', 'none', 'v1'],
+  // 02.3.1-T2's invite staging and explicit second-provider link (02 §4.2, 00 §5.4.8): the same
+  // pre-tenant browser surface, listed for the same reason — these carry no catalogue permission a
+  // caller could be denied for (the linking routes act only on the caller's own session), which is
+  // also why the viewer and ci_producer deny matrices derive them as unpermissioned.
+  ['/auth/invite-token', 'post', 'none', 'v1'],
+  ['/auth/link/{provider}', 'post', 'none', 'v1'],
+  ['/auth/link/pending', 'get', 'none', 'v1'],
+  ['/auth/link/pending', 'delete', 'none', 'v1'],
+  ['/auth/link/confirm', 'post', 'none', 'v1'],
   ['/projects/{p}/manifests', 'post', 'run:create', 'v1'],
   ['/projects/{p}/runs', 'post', 'run:create', 'v1'],
   ['/runs/{r}', 'get', 'run:read', 'v1'],
@@ -212,7 +221,9 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // pull-request = idempotent by (branch, commit) (00 §9.3); heartbeat =
 // extends only the current epoch (00 §9.3); ci-bindings/ingest-tokens/rotate = the
 // response carries a one-time secret, and the replay store persists response bodies,
-// so they are never replayed (02.4.1, 02.4.2, 00 §5.7 S3).
+// so they are never replayed (02.4.1, 02.4.2, 00 §5.7 S3); the auth routes of 02.3.1-T2 =
+// the invite staging writes only a short-lived cookie (no resource), and the link surface is
+// driven by one staged-link cookie that one confirmation spends, so a replay cannot write twice.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ci-bindings',
@@ -223,6 +234,10 @@ const IDEM_EXEMPT = new Set([
   'post /drafts/{d}/pull-request',
   'post /jobs/{j}/heartbeat',
   'post /projects/{p}/policies',
+  'post /auth/invite-token',
+  'post /auth/link/{provider}',
+  'delete /auth/link/pending',
+  'post /auth/link/confirm',
 ]);
 for (const { path, method, op } of ops) {
   for (const prm of op.parameters ?? []) {

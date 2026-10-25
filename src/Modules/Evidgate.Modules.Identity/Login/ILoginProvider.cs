@@ -49,7 +49,20 @@ internal sealed record LoginCallbackRequest(string Code, string CodeVerifier, st
 /// <param name="Email">Email at the provider; only ever bound when <paramref name="EmailVerified"/> is true.</param>
 /// <param name="EmailVerified">Provider-asserted verification; a handler returns an identity only when it is true.</param>
 /// <param name="DisplayName">Optional display name.</param>
-internal sealed record VerifiedIdentity(string Provider, string Subject, string Email, bool EmailVerified, string? DisplayName);
+/// <param name="HostedDomain">
+/// The hosted domain the provider asserted for this identity, ASCII lower-cased and trimmed: Google's
+/// <c>hd</c> claim of the ID token, taken AFTER the token's signature, issuer, audience, lifetime and nonce
+/// were verified, and never from userinfo or a query value. Null when the provider asserted none, when the
+/// claim is not a string, or when it is longer than 253 characters (a DNS name's maximum). GitHub never
+/// asserts one, so it is always null for that provider (02.3.1-T2, Q3).
+/// </param>
+internal sealed record VerifiedIdentity(
+    string Provider,
+    string Subject,
+    string Email,
+    bool EmailVerified,
+    string? DisplayName,
+    string? HostedDomain = null);
 
 /// <summary>Why a provider completion failed. The callback maps these; none carries provider text.</summary>
 internal enum LoginFailure

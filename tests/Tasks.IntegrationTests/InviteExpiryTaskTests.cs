@@ -334,14 +334,26 @@ public sealed class InviteExpiryTaskTests
             ("prefix", Guid.NewGuid().ToString("N")[..12]),
             ("hash", new byte[32]));
 
-    private static Task<int> SeedActiveAsync(string owner, Guid orgId, Guid membershipId, string email) =>
-        TaskSql.ExecuteAsync(
+    private static async Task<int> SeedActiveAsync(string owner, Guid orgId, Guid membershipId, string email)
+    {
+        var userId = Guid.CreateVersion7();
+
+        // 0044's `membership_user_fk` (membership.user_id -> public."user") makes a bound
+        // membership name a real account, so the account is seeded before the membership.
+        await TaskSql.ExecuteAsync(
+            owner,
+            """insert into public."user" (id, email) values (@id, @email)""",
+            ("id", userId),
+            ("email", email));
+
+        return await TaskSql.ExecuteAsync(
             owner,
             "insert into public.membership (id, org_id, user_id, invited_email, status) values (@id, @org, @user, @email, 'active')",
             ("id", membershipId),
             ("org", orgId),
-            ("user", Guid.CreateVersion7()),
+            ("user", userId),
             ("email", email));
+    }
 
     private static Task<string?> StatusOfAsync(string owner, Guid membershipId) =>
         TaskSql.ScalarAsync<string>(

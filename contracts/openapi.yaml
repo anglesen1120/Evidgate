@@ -263,6 +263,405 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /auth/invite-token:
+    post:
+      operationId: stageInviteToken
+      tags: [identity]
+      summary: >-
+        Stage an invite token in a short-lived `__Host-` cookie for the next federated login
+        (02.3.1-T2)
+      description: >-
+        Pre-tenant browser route (00 §5.4.8), the companion of `start` for an invited member
+        (02.3.1-T2 Q1): the landing page received `evgi_<prefix>_<secret>` in its invite link and
+        posts it here once, in the request **body**, so the federated login that follows binds the
+        pending membership to the provider-verified address. No session, no bearer token and no
+        tenant exist yet, so `x-permission: none` / `x-auth: anonymous`, `security: []` and never
+        `X-XSRF-TOKEN`. The token is a bearer secret: it is validated for **shape only**
+        (`InviteTokenFormat.TryParse`) — whether it exists, has expired or belongs to another org is
+        the binder's business at login and is never answered here, because answering it would turn
+        the route into an oracle for invite prefixes — and it leaves the server only inside the
+        encrypted `__Host-evidgate_invite` cookie. The answer is a bodiless 204; the value is never
+        logged, counted, echoed, put in a `Location` or copied into a `returnUrl`, and the login
+        callback deletes the cookie on every outcome, so one staging buys one login attempt. A
+        malformed, absent or non-string `invite_token` is 422 `request_invalid` with
+        `details[].path` = `invite_token` (`body` for a body that is not JSON), and no cookie is
+        written. The body is bounded before it is parsed: a declared or streamed length over 4096
+        bytes is 413 `payload_too_large`, and an empty body or one whose media type is not
+        `application/json` is 422 `request_invalid` — the media type is a security boundary, because
+        a cross-site `enctype=text/plain` form post is the one encoding that can reach a response's
+        `Set-Cookie` without a CORS preflight and a browser cannot label a form post
+        `application/json`. Every response carries `Cache-Control: no-store`, and the route is
+        throttled per client address from the CI exchange limiter's budget
+        (`EVIDGATE__CI__EXCHANGEBURSTLIMIT`) under its own key prefix at one unit — the cost of a
+        `start` — so one client cannot fill every browser's cookie jar. No `Idempotency-Key` (see
+        `contracts/README.md`): nothing is created, and repeating the request stages the same token
+        again.
+      x-permission: none
+      x-auth: anonymous
+      x-version: v1
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteTokenRequest'
+      responses:
+        '204':
+          description: >-
+            The token is staged: no body, and the browser holds it only in the encrypted
+            `__Host-evidgate_invite` cookie that the next `start`/`callback` pair carries.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Set-Cookie:
+              description: >-
+                `__Host-evidgate_invite=<protected payload>; Path=/; Secure; HttpOnly;
+                SameSite=Lax; Max-Age=600`. The value is encrypted and integrity-protected with
+                ASP.NET Core Data Protection under its own purpose (the key ring of the
+                pending-login cookie), so a client can neither read the token nor alter a field; the
+                ten-minute lifetime is a constant of the contract, never a configuration key. Every
+                `__Host-` rule applies: `Secure`, `Path=/` and no `Domain`, plus `HttpOnly` and
+                `SameSite=Lax`, so no other origin can shadow the cookie and a cross-site request
+                does not carry it.
+              schema:
+                type: string
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/link/{provider}:
+    post:
+      operationId: startProviderLink
+      tags: [identity]
+      summary: >-
+        Start adding a second sign-in provider to the signed-in account (02.3.1-T2)
+      description: >-
+        Pre-tenant (00 §5.4.8): the only credential is the caller's own `__Host-evidgate_session`
+        cookie — `ISessionUserReader` turns it into a user and no route takes a user id, so one
+        account can never link or read another's staged identity. `x-permission: none` with
+        `x-auth: user_session`: the operation carries no catalogue permission (it acts only on the
+        caller's own session, never inside a tenant), which is why the viewer and `ci_producer` deny
+        matrices derive it as unpermissioned rather than as a permission a caller could be denied
+        for. Step one of three (Q4, AC6): the provider authorization URL is built through the same
+        helper as `GET /auth/oidc/{provider}/start`, with the calling account as the signed state's
+        link target, and the pending state cookie (`__Host-evidgate_login`, purpose `link`) is
+        written; the shared callback verifies the identity and stages it in `__Host-evidgate_link`,
+        `GET /auth/link/pending` shows what is waiting, and `POST /auth/link/confirm` writes it. That
+        order is what makes "an explicit confirm, never an automatic merge" true at the API and not
+        only in a comment. `return_url` is optional and allowlisted by `ReturnUrlPolicy` exactly like
+        the sign-in route's `returnUrl` (a refused value lands on `/` and is not an error); a body
+        over 4096 bytes is 413 and a body whose media type is not `application/json`, or one that is
+        not JSON, is 422. Every response carries `Cache-Control: no-store`, spends its own prefix of
+        the CI exchange limiter's per-client budget (`EVIDGATE__CI__EXCHANGEBURSTLIMIT`, one unit) so
+        a flood here cannot spend another route's window, and refuses a present `Origin` header that
+        is not this deployment's public origin (`EVIDGATE__LOGIN__PUBLICBASEURL`) with 403
+        `forbidden` — defence in depth on top of `SameSite=Lax`, because a same-site browser form post
+        still carries the session cookie. No token, code, subject, email or cookie value is echoed,
+        logged or counted: the answer is the provider's authorization URL, which is public.
+      x-permission: none
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderPath'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkStartRequest'
+      responses:
+        '200':
+          description: >-
+            The authorization URL to send the browser to next, and the pending state cookie that
+            binds this attempt (provider, PKCE verifier, nonce, the linking account and the
+            allowlisted return path) to the callback.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Set-Cookie:
+              description: >-
+                `__Host-evidgate_login=<protected payload>; Path=/; Secure; HttpOnly; SameSite=Lax;
+                Max-Age=<EVIDGATE__LOGIN__STATELIFETIMESECONDS>` (600 s default), the state cookie of
+                the login routes, here carrying purpose `link` and the account the identity is being
+                added to.
+              schema:
+                type: string
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkStartResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: >-
+            503 `unavailable` — the identity store or the session lookup is not usable: a registered
+            provider whose client credential is missing, a deployment with no
+            `EVIDGATE__LOGIN__PUBLICBASEURL` (one answer for both, so the route is no oracle for the
+            deployment's configuration), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a
+            database outage. The route sets `Retry-After` through `EVIDGATE__LOGIN__RETRYAFTERSECONDS`
+            when it reports the outage itself; a refusal raised by the session lookup (the
+            missing-pepper case) leaves the header to the envelope filter's default `60` (00 §9.2).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: >-
+                Seconds to wait, when the route reports the outage itself; absent on the
+                missing-pepper refusal.
+              schema:
+                type: integer
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /auth/link/pending:
+    get:
+      operationId: getPendingProviderLink
+      tags: [identity]
+      summary: >-
+        The second-provider link this browser has staged and not confirmed yet (02.3.1-T2)
+      description: >-
+        Pre-tenant, session-cookie only, and never another account's (`x-permission: none` /
+        `x-auth: user_session`, like `POST /auth/link/{provider}`). Reads the caller's own
+        `__Host-evidgate_link` cookie and answers the identity the callback verified: the provider,
+        the address that provider verified, its profile name and when the staged link stops being
+        confirmable (ten minutes after the callback staged it). A cookie that is missing, expired,
+        unreadable or belongs to another user is not a leak and not an error the caller can repair
+        by retrying: it is deleted on the way out and the answer is 404 `not_found`, exactly as for a
+        browser that never staged anything. Every response carries `Cache-Control: no-store` (the
+        body is personal data), spends the pending key prefix of the CI exchange limiter's per-client
+        budget, and refuses a foreign `Origin` with 403 `forbidden`. Nothing from the cookie's
+        plaintext — no subject, no token — is echoed or logged.
+      x-permission: none
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The identity this browser has staged, and when it stops being confirmable.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              description: >-
+                Present only when a presented `__Host-evidgate_link` value was unusable (expired,
+                forged or another user's): the deletion of that cookie. A usable staged link is left
+                in place.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkPendingResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: >-
+            503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database
+            outage in the session lookup. The answer is the 00 §9.2 envelope and never a 200 with an
+            empty body; the route sets no `Retry-After`, so the envelope filter's default `60`
+            applies.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    delete:
+      operationId: discardPendingProviderLink
+      tags: [identity]
+      summary: Discard the staged second-provider link of this browser (02.3.1-T2)
+      description: >-
+        Pre-tenant, session-cookie only (`x-permission: none` / `x-auth: user_session`): a session is
+        required, so a cross-site caller that somehow sent no cookie cannot clear another browser's
+        staging. Deletes `__Host-evidgate_link` and answers 204 — with or without a staged link, so
+        the call is idempotent (`Idempotency-Key` is not required; see `contracts/README.md`) and a
+        client needs no read first. Every response carries `Cache-Control: no-store`, spends the
+        pending key prefix of the CI exchange limiter's per-client budget, and refuses a foreign
+        `Origin` with 403 `forbidden`.
+      x-permission: none
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: The staged link is gone; nothing else changed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Set-Cookie:
+              description: >-
+                The deletion of `__Host-evidgate_link` when the request presented one (nothing is
+                written when it did not).
+              schema:
+                type: string
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: >-
+            503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database
+            outage in the session lookup; the route sets no `Retry-After`, so the envelope filter's
+            default `60` applies (00 §9.2).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /auth/link/confirm:
+    post:
+      operationId: confirmProviderLink
+      tags: [identity]
+      summary: >-
+        Confirm the staged second-provider link and attach the identity to the signed-in account
+        (02.3.1-T2)
+      description: >-
+        Pre-tenant, session-cookie only (`x-permission: none` / `x-auth: user_session`), and the one
+        route of the linking surface that writes. It attaches the staged identity — the
+        `(provider, subject)` the callback verified and stored in `__Host-evidgate_link` — to the
+        account the session names, then extends the audit chain of every **active** organization of
+        that account: `auth.link` in each, and `auth.link_move` with the previous account when the
+        identity was moved. Order is the story's: the identity row first (one call, the database's own
+        decision), then the audit rows. A successful outcome (`linked`, `already_linked`, `moved`) is
+        200; anything else deletes the staging, because one staging buys one confirmation. 409
+        `binding_conflict` means that `(provider, subject)` belongs to another account which still
+        holds a membership or a live session, so it is never taken from it (AC6: no automatic merge,
+        ever — the other person links their own account). 403 `account_disabled` is reachable only
+        where the database reports the status itself, i.e. the account was disabled between the
+        session check and this call; the session lookup cannot tell a disabled account from an absent
+        session and answers 401 `unauthenticated` there. A 503 from the audit leaves the staging in
+        place, so the retry converges on `already_linked` and re-audits. Every response carries
+        `Cache-Control: no-store`, costs two units of the confirm key prefix in the CI exchange
+        limiter (it writes a row and a chain), and refuses a foreign `Origin` with 403 `forbidden`.
+      x-permission: none
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: >-
+            The identity is attached: `outcome` is `linked` (a new identity row), `already_linked`
+            (this account already held it — the retry after an audit failure) or `moved` (it was
+            taken from an account that is no longer in use).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              description: The deletion of the `__Host-evidgate_link` cookie this confirmation spent.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkConfirmResponse'
+        '401':
+          description: >-
+            401 `unauthenticated` — no `__Host-evidgate_session` cookie, or one that is unknown,
+            expired, revoked or belongs to an account disabled after it was minted; or 401
+            `token_invalid` — this browser has no usable staged link (missing, expired, forged or
+            another user's `__Host-evidgate_link`), nothing was written and the link has to be
+            started again. Both are `retryable: false`.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: >-
+            403 `forbidden` — the request named an `Origin` other than this deployment's public
+            origin; or 403 `account_disabled` — the account the identity would attach to is
+            `disabled` (02.3.1 §6), detected by the store itself. Both are `retryable: false`.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: >-
+            503 `unavailable`, retryable — a database fault, an audit chain that could not be
+            extended (the staging is kept, so the retry converges), no session pepper
+            (`EVIDGATE__SESSION__PEPPER`) or a stored contract this build does not know. The route
+            sets `Retry-After` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) on the answers it raises itself
+            (the unknown stored contract, the audit failure); the session lookup and the store
+            command leave the header to the envelope filter's default `60` (00 §9.2).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /projects/{p}/manifests:
     post:
       operationId: createManifest
@@ -7826,6 +8225,99 @@ components:
       properties:
         version: { type: integer, minimum: 1 }
         checklist_item_id: { type: string, format: uuid }
+    InviteTokenRequest:
+      type: object
+      description: >-
+        Body of `POST /v1/auth/invite-token` (02.3.1-T2 Q1): the token the invite link carried,
+        presented once and staged in the `__Host-evidgate_invite` cookie. The member is treated as
+        required — an absent or non-string value is 422 `request_invalid` with
+        `details[].path` = `invite_token` — so a client always sends it. A member this schema does
+        not declare is ignored, not refused: the route binds with a snake_case
+        `JsonSerializerOptions` and no strict-member check, exactly like `CiTokenRequest`.
+      required: [invite_token]
+      properties:
+        invite_token:
+          type: string
+          maxLength: 80
+          pattern: '^evgi_[A-Za-z0-9]{12}_[A-Za-z0-9_-]{43}$'
+          description: >-
+            `evgi_<12-char prefix>_<43-char base64url secret>`, exactly as minted by `POST
+            /v1/orgs/{o}/memberships` or its `resend` route (`InviteTokenFormat`). Only the shape is
+            checked here: whether the token exists, has expired or belongs to another org is decided
+            by the binder at login, and is never answered by this route.
+    LinkStartRequest:
+      type: object
+      description: >-
+        Body of `POST /v1/auth/link/{provider}` (02.3.1-T2 Q4), optional: an empty or absent body
+        lands on the app root after the link. A member this schema does not declare is ignored, not
+        refused: the route binds with a snake_case `JsonSerializerOptions` and no strict-member check,
+        exactly like `CiTokenRequest`.
+      properties:
+        return_url:
+          type: [string, 'null']
+          maxLength: 512
+          description: >-
+            Where the app should land after the link, as a same-origin path, allowlisted by
+            `ReturnUrlPolicy` exactly like `GET /v1/auth/oidc/{provider}/start`'s `returnUrl`: one
+            leading `/`, no backslash or control character, at most 512 characters, re-checked
+            through up to four percent-decoding passes. Any other value is replaced by `/` and is not
+            an error.
+    LinkStartResponse:
+      type: object
+      description: >-
+        The 200 body of `POST /v1/auth/link/{provider}`: the provider's authorization URL, built by
+        the same helper as the sign-in route (state, nonce and PKCE S256 challenge included).
+      required: [authorization_url]
+      properties:
+        authorization_url:
+          type: string
+          format: uri
+          description: >-
+            Absolute `https` authorization URL of the provider the browser is sent to next. It is
+            public by construction: it carries no token, subject or email.
+    LinkPendingResponse:
+      type: object
+      description: >-
+        The 200 body of `GET /v1/auth/link/pending` (02.3.1-T2 Q4): the identity this browser staged
+        and has not confirmed — the caller's own, taken from `__Host-evidgate_link`.
+      required: [provider, email, expires_at]
+      properties:
+        provider:
+          type: string
+          enum: [google, github]
+          description: The provider that verified the identity.
+        email:
+          type: string
+          format: email
+          description: >-
+            The address that provider verified and returned for this identity. Personal data, which
+            is why every response of the route carries `Cache-Control: no-store`.
+        display_name:
+          type: [string, 'null']
+          description: The provider's profile name, or null when it returned none.
+        expires_at:
+          type: string
+          format: date-time
+          description: >-
+            When the staged link stops being confirmable: ten minutes after the callback staged it
+            (a constant of the contract, not a configuration key).
+    LinkConfirmResponse:
+      type: object
+      description: >-
+        The 200 body of `POST /v1/auth/link/confirm` (02.3.1-T2 Q4): the provider the identity was
+        attached by, and what happened to it.
+      required: [provider, outcome]
+      properties:
+        provider:
+          type: string
+          enum: [google, github]
+        outcome:
+          type: string
+          enum: [linked, already_linked, moved]
+          description: >-
+            `linked` — a new identity row; `already_linked` — this account already held it (the
+            answer a retry after a failed audit converges on); `moved` — it was taken from an
+            account that is no longer in use, and `auth.link_move` records where from.
 security:
   - sessionCookie: []
   - bearerToken: []

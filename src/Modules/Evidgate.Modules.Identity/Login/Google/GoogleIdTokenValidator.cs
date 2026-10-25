@@ -38,6 +38,13 @@ internal sealed class GoogleIdTokenValidator(IGoogleJwksProvider keys, IOptions<
     /// <summary>Largest display name copied from the provider; a longer one is dropped, never truncated into a different name.</summary>
     internal const int MaxDisplayNameLength = 256;
 
+    /// <summary>
+    /// Largest hosted domain (<c>hd</c>) accepted: a DNS name is at most 253 characters. A longer claim is
+    /// dropped (never truncated: half a domain is a different domain) and leaves the identity with no hosted
+    /// domain, which the domain gate treats as "none asserted".
+    /// </summary>
+    internal const int MaxHostedDomainLength = 253;
+
     private static readonly JsonWebTokenHandler Handler = new() { MapInboundClaims = false };
 
     private readonly GoogleLoginOptions _options = options.Value;
@@ -173,7 +180,45 @@ internal sealed class GoogleIdTokenValidator(IGoogleJwksProvider keys, IOptions<
 
         var displayName = Text(jwt, "name", MaxDisplayNameLength, out var name) ? name : null;
 
-        return new VerifiedIdentity(GoogleLoginMetrics.Google, subject, email, EmailVerified: true, displayName);
+        // 02.3.1-T2 (Q3): `hd` is read only here, from a token whose signature, issuer, audience, lifetime and
+        // nonce are already verified, never from a userinfo response or a query value.
+        return new VerifiedIdentity(
+            GoogleLoginMetrics.Google,
+            subject,
+            email,
+            EmailVerified: true,
+            displayName,
+            HostedDomain(jwt));
+    }
+
+    /// <summary>
+    /// Google's <c>hd</c> claim as the identity's hosted domain: trimmed and ASCII lower-cased, or null when
+    /// the claim is absent, empty, not a string, or longer than <see cref="MaxHostedDomainLength"/>. Only the
+    /// string form is a domain; a number or an object is never coerced into one.
+    /// </summary>
+    /// <param name="jwt">The verified ID token.</param>
+    private static string? HostedDomain(JsonWebToken jwt)
+    {
+        if (!jwt.TryGetPayloadValue<object>("hd", out var value))
+        {
+            return null;
+        }
+
+        var text = value switch
+        {
+            string found => found,
+            JsonElement element when element.ValueKind == JsonValueKind.String => element.GetString(),
+            _ => null,
+        };
+
+        if (text is null)
+        {
+            return null;
+        }
+
+        var normalised = text.Trim().ToLowerInvariant();
+
+        return normalised.Length is 0 or > MaxHostedDomainLength ? null : normalised;
     }
 
     /// <summary>

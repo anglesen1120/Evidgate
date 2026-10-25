@@ -20,6 +20,14 @@ var IDEMPOTENCY_EXEMPT = {
     'naturally idempotent — the server extends only the current epoch (00 §9.3)',
   'post /projects/{p}/policies':
     'the RFC 8785 content hash is the idempotency key: an identical body returns the stored revision (07.1.1 §5)',
+  'post /auth/invite-token':
+    'no resource is created: the route validates the presented token and stages it in a short-lived __Host- cookie, so a repeat writes the same cookie (02.3.1-T2 Q1)',
+  'post /auth/link/{provider}':
+    'no resource is created: the answer is a state cookie and the provider authorization URL, and a repeat replaces the browser own pending state (02.3.1-T2 Q4)',
+  'delete /auth/link/pending':
+    'DELETE is idempotent by contract: the answer is 204 whether or not a staged link existed (02.3.1-T2 Q4)',
+  'post /auth/link/confirm':
+    'one staged-link cookie buys one confirmation and is deleted on every terminal outcome, so a replay cannot write a second identity; the store converges on already_linked (02.3.1-T2 Q4, AC6)',
 };
 
 module.exports = function evgIdempotency(targetVal, opts, ctx) {

@@ -9,6 +9,7 @@ using Evidgate.Modules.Identity.Login;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Identity.Endpoints;
@@ -42,6 +43,23 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// <c>rate_limited</c> + <c>Retry-After</c> envelope: an anonymous flood is what fills the one-time
 /// <c>state</c> set and drives outbound provider calls, so a single client cannot spend the platform's
 /// login capacity for everyone else.
+/// </para>
+/// <para>
+/// <b>Invite staging (02.3.1-T2, Q1).</b> The same group carries <c>POST /v1/auth/invite-token</c>
+/// (<see cref="InviteTokenEndpoints"/>), which stages a validated invite token in the signed-in-browser's
+/// <see cref="InviteTokenCookie"/>. The callback deletes that cookie on every outcome — next to the state
+/// cookie, before any other work — reads the token once, and hands it to the completion as
+/// <see cref="LoginCompletionRequest.InviteToken"/>. The value never reaches a URL, a <c>Location</c>, a log
+/// line, a metric, an error body or the session row.
+/// </para>
+/// <para>
+/// <b>Explicit linking (02.3.1-T2, Q4).</b> A state cookie whose purpose is
+/// <see cref="LoginStatePayload.PurposeLink"/> names the account a second provider is being added to
+/// (<see cref="LoginStatePayload.LinkUserId"/>) and is completed ONLY by <see cref="ILinkCompletion"/>: the
+/// callback never falls back to <see cref="ILoginCompletion"/> for it, and answers 503 <c>unavailable</c> when
+/// no link seam is composed. Both start routes build the authorization URL through the one
+/// <see cref="BeginAuthorization"/> helper, so a link attempt and a sign-in cannot drift apart in cookie,
+/// PKCE or failure handling.
 /// </para>
 /// </remarks>
 public static class LoginEndpoints
@@ -94,13 +112,16 @@ public static class LoginEndpoints
     /// </summary>
     private const int CallbackCost = 2;
 
-    /// <summary>Maps both routes and returns the group (only the envelope filter applies: there is no tenant yet).</summary>
+    /// <summary>Maps the login routes and returns the group (only the envelope filter applies: there is no tenant yet).</summary>
     /// <param name="routes">The route builder.</param>
     public static RouteGroupBuilder MapLoginEndpoints(this IEndpointRouteBuilder routes)
     {
         ArgumentNullException.ThrowIfNull(routes);
 
-        var group = routes.MapGroup("/v1/auth/oidc").WithTags("identity");
+        // One group for the whole /v1/auth surface: the invite staging route of 02.3.1-T2 must carry exactly
+        // the same pre-tenant composition (envelope filter only, no tenant filter) as the two protocol routes,
+        // and a sibling group would be one more place for the two to drift apart.
+        var group = routes.MapGroup("/v1/auth").WithTags("identity");
 
         // ASP.NET derives a response for the default status (200) from the delegate's return type whenever
         // the declared status is not 200 — and that type is the C8 `Result` wrapper, which is never the wire
@@ -109,15 +130,21 @@ public static class LoginEndpoints
         // (`Contract.Tests.ServedDocumentTests` diffs the served schema names against
         // `contracts/openapi.yaml`; the same shape as `CiAdminEndpoints`/`MembershipEndpoints`). The 302
         // stays the documented answer: the browser flow has no 200 body.
-        group.MapGet("/{provider}/start", Start)
+        group.MapGet("/oidc/{provider}/start", Start)
             .Produces(StatusCodes.Status302Found)
             .Produces(StatusCodes.Status200OK)
             .WithSummary("Start a federated login: set the state/nonce/PKCE cookie and redirect to the provider (02.3.1)");
 
-        group.MapGet("/{provider}/callback", CallbackAsync)
+        group.MapGet("/oidc/{provider}/callback", CallbackAsync)
             .Produces(StatusCodes.Status302Found)
             .Produces(StatusCodes.Status200OK)
             .WithSummary("Provider callback: verify the one-time state, exchange the code with PKCE and complete the login (02.3.1)");
+
+        InviteTokenEndpoints.Map(group);
+
+        // 02.3.1-T2.2 (Q4): the explicit second-provider link. The same group, so the four linking routes carry
+        // exactly the pre-tenant composition of the protocol routes (envelope filter only, no tenant filter).
+        LinkEndpoints.Map(group);
 
         return group;
     }
@@ -161,44 +188,104 @@ public static class LoginEndpoints
             return Result.Failure(LoginErrors.UnknownProvider);
         }
 
-        var callbackUri = login.CallbackUri(selected.Name);
-        if (!selected.IsConfigured || callbackUri is null)
+        var returnUrl = ReturnUrlPolicy.Resolve(context.Request.Query["returnUrl"]);
+        var began = BeginAuthorization(context, selected, cookie, options, clock, returnUrl, linkUserId: null);
+        if (!began.IsSuccess)
         {
-            return LoginErrors.Unavailable(context, selected.Name, login);
+            return Result.Failure(began.Error!);
+        }
+
+        EvidgateTelemetry.RecordLoginAttempt(selected.Name, OutcomeStarted);
+
+        return Result.Success<IResult>(Results.Redirect(began.Value.AbsoluteUri), StatusCodes.Status302Found);
+    }
+
+    /// <summary>
+    /// Builds a provider's authorization URL and writes the pending-attempt cookie, for a sign-in and for an
+    /// explicit second-provider link alike (02.3.1-T2, Q4). One helper, so the two start routes cannot drift
+    /// apart in PKCE, cookie or failure handling.
+    /// </summary>
+    /// <param name="context">The request the cookie is written on.</param>
+    /// <param name="provider">A registered provider; the caller has already resolved the route value.</param>
+    /// <param name="cookie">The pending-login cookie store.</param>
+    /// <param name="options">The bound login options (public base URL, retry-after, lifetimes).</param>
+    /// <param name="clock">The clock the attempt is stamped with.</param>
+    /// <param name="returnUrl">The already-allowlisted app path to land on (<see cref="ReturnUrlPolicy"/>).</param>
+    /// <param name="linkUserId">The account a link is being started for, or null for a sign-in. It sets the
+    /// cookie's purpose to <see cref="LoginStatePayload.PurposeLink"/> and is the ONLY thing that decides what
+    /// the callback is allowed to complete the attempt with.</param>
+    /// <returns>
+    /// Success with the absolute authorization URL the route redirects to, or the 503 <c>unavailable</c> the
+    /// route answers when the provider or the deployment's public base URL is unusable. No cookie is written
+    /// on a failure.
+    /// </returns>
+    internal static Result<Uri> BeginAuthorization(
+        HttpContext context,
+        ILoginProvider provider,
+        LoginStateCookie cookie,
+        IOptions<LoginOptions> options,
+        TimeProvider clock,
+        string returnUrl,
+        Guid? linkUserId)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(provider);
+        ArgumentNullException.ThrowIfNull(cookie);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(returnUrl);
+
+        var login = options.Value;
+        var callbackUri = login.CallbackUri(provider.Name);
+        if (!provider.IsConfigured || callbackUri is null)
+        {
+            return Result.Failure<Uri>(LoginErrors.Unavailable(context, provider.Name, login).Error!);
+        }
+
+        // A link names an account, a sign-in names none: anything else is a caller bug, refused before the
+        // cookie exists rather than written as a state the callback would have to guess about.
+        if (linkUserId == Guid.Empty)
+        {
+            throw new ArgumentException("a link names an account, never the empty id", nameof(linkUserId));
         }
 
         var state = NewSecret();
         var nonce = NewSecret();
         var verifier = NewSecret();
-        var returnUrl = ReturnUrlPolicy.Resolve(context.Request.Query["returnUrl"]);
         var issuedAt = clock.GetUtcNow();
 
         Uri authorization;
         try
         {
-            authorization = selected.BuildAuthorizationUrl(
+            authorization = provider.BuildAuthorizationUrl(
                 new LoginAuthorizationRequest(state, nonce, Challenge(verifier), callbackUri));
         }
         catch (ArgumentException)
         {
             // A provider whose own configuration cannot build a URL is unusable, not a bad request. The
             // cookie is written only after this point, so the failed attempt leaves nothing in the browser.
-            return LoginErrors.Unavailable(context, selected.Name, login);
+            return Result.Failure<Uri>(LoginErrors.Unavailable(context, provider.Name, login).Error!);
         }
 
         cookie.Write(
             context,
             new LoginStatePayload(
-                LoginStateCookie.PayloadVersion, selected.Name, state, nonce, verifier, returnUrl, issuedAt));
+                LoginStateCookie.PayloadVersion,
+                provider.Name,
+                state,
+                nonce,
+                verifier,
+                returnUrl,
+                issuedAt,
+                linkUserId is null ? LoginStatePayload.PurposeLogin : LoginStatePayload.PurposeLink,
+                linkUserId));
 
-        EvidgateTelemetry.RecordLoginAttempt(selected.Name, OutcomeStarted);
-
-        return Result.Success<IResult>(Results.Redirect(authorization.AbsoluteUri), StatusCodes.Status302Found);
+        return Result.Success(authorization);
     }
 
     /// <summary>
-    /// <c>callback</c>: one use of one pending login. The cookie is deleted on every outcome - the 429
-    /// included - and a spent window is answered right after that deletion and before the cookie is
+    /// <c>callback</c>: one use of one pending login. Both cookies are deleted on every outcome - the 429
+    /// included - and a spent window is answered right after those deletions and before either cookie is
     /// unprotected, the <c>state</c> is compared in constant time and recorded as consumed before the
     /// provider is called, and the provider's typed failure becomes 401 or 503 without any provider text.
     /// </summary>
@@ -207,6 +294,7 @@ public static class LoginEndpoints
         string provider,
         IEnumerable<ILoginProvider> providers,
         LoginStateCookie cookie,
+        InviteTokenCookie inviteCookie,
         LoginReplayCache replay,
         ILoginCompletion completion,
         ExchangeRateLimiter limiter,
@@ -215,6 +303,7 @@ public static class LoginEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(cookie);
+        ArgumentNullException.ThrowIfNull(inviteCookie);
         ArgumentNullException.ThrowIfNull(replay);
         ArgumentNullException.ThrowIfNull(completion);
         ArgumentNullException.ThrowIfNull(limiter);
@@ -222,9 +311,13 @@ public static class LoginEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        // Read the pending login and delete the cookie next, whatever happens after: one attempt, one use.
+        // Read the pending login and delete BOTH cookies next, whatever happens after: one attempt, one use.
+        // The staged invite token is a bearer secret (02.3.1-T2 Q1), so it leaves the browser on the first
+        // callback that sees it, whether that callback succeeds, is refused or never reads it.
         var presented = context.Request.Cookies[LoginStateCookie.Name];
         LoginStateCookie.Delete(context);
+        var stagedInvite = context.Request.Cookies[InviteTokenCookie.Name];
+        InviteTokenCookie.Delete(context);
 
         // Then, still ahead of every expensive step: this is the route an anonymous flood uses to fill the
         // replay set and to drive outbound token exchanges, so it spends the client's window before the
@@ -314,16 +407,22 @@ public static class LoginEndpoints
             return LoginErrors.Invalid(selected.Name);
         }
 
-        var completed = await completion
-            .CompleteAsync(
-                new LoginCompletionRequest(
-                    identity,
-                    pending.ReturnUrl,
-                    context.Connection.RemoteIpAddress?.ToString(),
-                    UserAgent(context),
-                    context),
-                cancellationToken)
-            .ConfigureAwait(false);
+        var request = new LoginCompletionRequest(
+            identity,
+            pending.ReturnUrl,
+            context.Connection.RemoteIpAddress?.ToString(),
+            UserAgent(context),
+            context,
+            inviteCookie.Read(stagedInvite),
+            pending.LinkUserId);
+
+        // The purpose the SIGNED state cookie carries decides which seam may complete this attempt, and only
+        // that seam: a link is never completed by the login completion (it would bind a provider to an account
+        // without the explicit confirm of AC6), and a sign-in is never completed by the link one. Unprotect
+        // already refused every purpose but these two, so "not link" is "login" here.
+        var completed = string.Equals(pending.Purpose, LoginStatePayload.PurposeLink, StringComparison.Ordinal)
+            ? await CompleteLinkAsync(context, request, selected.Name, login, cancellationToken).ConfigureAwait(false)
+            : await completion.CompleteAsync(request, cancellationToken).ConfigureAwait(false);
 
         if (!completed.IsSuccess)
         {
@@ -342,6 +441,35 @@ public static class LoginEndpoints
         var target = ReturnUrlPolicy.IsAppPath(completed.Value) ? completed.Value : ReturnUrlPolicy.Root;
 
         return Result.Success<IResult>(Results.Redirect(target), StatusCodes.Status302Found);
+    }
+
+    /// <summary>
+    /// Completes an explicit second-provider link through <see cref="ILinkCompletion"/> (02.3.1-T2, Q4) and
+    /// answers the routes' existing 503 when no link seam is composed.
+    /// </summary>
+    /// <param name="context">The request, whose container holds the seam.</param>
+    /// <param name="request">The verified identity and the account the link was started for.</param>
+    /// <param name="provider">The registered provider name, for the outcome count (never a route value).</param>
+    /// <param name="login">The bound login options (<c>Retry-After</c> of the 503).</param>
+    /// <param name="cancellationToken">Request abort.</param>
+    private static ValueTask<Result<string>> CompleteLinkAsync(
+        HttpContext context,
+        LoginCompletionRequest request,
+        string provider,
+        LoginOptions login,
+        CancellationToken cancellationToken)
+    {
+        // Resolved here, not declared as an endpoint parameter: only this branch ever needs the seam, and a
+        // host that composes none must still serve the sign-in routes. An absent seam fails closed with the
+        // 503 these routes already answer for a composition gap — never by falling back to the login
+        // completion, which would bind a second provider without the confirm AC6 requires.
+        if (context.RequestServices.GetService<ILinkCompletion>() is not { } link)
+        {
+            return ValueTask.FromResult(
+                Result.Failure<string>(LoginErrors.Unavailable(context, provider, login).Error!));
+        }
+
+        return link.CompleteAsync(request, cancellationToken);
     }
 
     /// <summary>

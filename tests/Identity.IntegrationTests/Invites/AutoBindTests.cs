@@ -34,7 +34,7 @@ public sealed class AutoBindTests : BindTestBase
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
-                Guid.CreateVersion7(),
+                await SeedUserAsync(),
                 "google",
                 invite.Email,
                 EmailVerified: true,
@@ -59,7 +59,7 @@ public sealed class AutoBindTests : BindTestBase
         var notOptedIn = await SeedOrgAsync(autobindVerifiedDomain: false);
         var invite = await SeedInviteAsync(optedIn, "invitee@example.com");
         var otherOrgInvite = await SeedInviteAsync(notOptedIn, "invitee@example.com");
-        var userId = Guid.CreateVersion7();
+        var userId = await SeedUserAsync();
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
@@ -94,7 +94,7 @@ public sealed class AutoBindTests : BindTestBase
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
         var invite = await SeedInviteAsync(org, "invitee@example.com");
         var binder = CreateBinder();
-        var userId = Guid.CreateVersion7();
+        var userId = await SeedUserAsync();
 
         var wrongDomain = await binder.BindAsync(
             new BindPendingMembershipsRequest(userId, "google", invite.Email, EmailVerified: true, InviteToken: null, HostedDomain: "other.example.com"),
@@ -137,13 +137,13 @@ public sealed class AutoBindTests : BindTestBase
         var binder = CreateBinder();
 
         var anotherAddress = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "google", "colleague@example.com", EmailVerified: true, InviteToken: null, HostedDomain: "example.com"),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "google", "colleague@example.com", EmailVerified: true, InviteToken: null, HostedDomain: "example.com"),
             Token);
 
         anotherAddress.Value.Bound.ShouldBeEmpty();
 
         var tokenlessResult = await binder.BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "google", "tokenless@example.com", EmailVerified: true, InviteToken: null, HostedDomain: "example.com"),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "google", "tokenless@example.com", EmailVerified: true, InviteToken: null, HostedDomain: "example.com"),
             Token);
 
         tokenlessResult.Value.Bound.ShouldBeEmpty("an invite without a minted expiry is not a candidate");

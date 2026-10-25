@@ -78,7 +78,15 @@ Every operation declares:
   `github_webhook_signature`), and the pre-tenant browser routes
   `GET /v1/auth/oidc/{provider}/start` and `/callback` (00 §5.4.8, 02 §4.2),
   which take no credential at all and set `x-auth: anonymous` with
-  `security: []`. The literal
+  `security: []`. 02.3.1-T2 extends the same pre-tenant browser surface with
+  `POST /v1/auth/invite-token` (invite staging, `x-auth: anonymous`,
+  `security: []`) and the explicit second-provider link
+  (`POST /v1/auth/link/{provider}`, `GET`/`DELETE /v1/auth/link/pending`,
+  `POST /v1/auth/link/confirm`): those four act only on the caller's own
+  `__Host-evidgate_session` cookie, hold no catalogue permission and reach no
+  tenant, so they are `none` with `x-auth: user_session` and
+  `security: - sessionCookie: []` — which is also why the viewer and
+  `ci_producer` deny matrices derive them as unpermissioned. The literal
   `authenticated` is reserved for `POST /v1/orgs` (02.1.1 §5): any signed-in
   user may create an org, because no tenant permission can exist before the
   tenant does; it sets `x-auth: user_session`. The server side is the
@@ -90,8 +98,14 @@ Shared `components/parameters` carry the 00 §9.1 conventions: `cursor` and
 `If-Match` and `X-XSRF-TOKEN`. Mutations must reference `Idempotency-Key`
 unless listed in the exemption list (below); every cookie-authenticated
 mutation references `X-XSRF-TOKEN`, while bearer-only routes (e.g. the V2
-agent job routes) must not (T38). All error responses reference
-`components/schemas/ErrorEnvelope`; 429/503 carry `Retry-After`.
+agent job routes) must not (T38). The server-side validation filter for that header is owned by
+02.3.2-T1.2 and is not merged yet, so today the header is a documented requirement of every
+cookie-authenticated mutation (the `POST`/`DELETE /v1/auth/link/*` routes included; invite staging
+is exempt because it _sets_ a cookie rather than authenticating with one), not an enforced one. All
+error responses reference
+`components/schemas/ErrorEnvelope`; a 429 and a 503 always carry `Retry-After` — the route's own
+value where it has one (`EVIDGATE__LOGIN__RETRYAFTERSECONDS` on the pre-tenant auth routes),
+otherwise the envelope filter's default `60` (00 §9.2).
 
 `Idempotency-Key` exemptions (00-grounded, enforced by the spectral
 `evg-mutation-idempotency` rule — keep this list, the function's
@@ -117,6 +131,19 @@ agent job routes) must not (T38). All error responses reference
 - `POST /v1/projects/{p}/policies` — the RFC 8785 content hash is the
   idempotency key: an identical body returns the stored revision (`200`), a
   different body is a new revision, never a conflict (07.1.1 §5).
+- `POST /v1/auth/invite-token`, `POST /v1/auth/link/{provider}` — no resource
+  is created: the first validates the presented token and stages it in the
+  short-lived `__Host-evidgate_invite` cookie, the second answers a state cookie
+  and the provider's authorization URL (02.3.1-T2). A repeat rewrites the
+  browser's own cookie and nothing else, so there is no body to replay and no
+  key that could change the answer.
+- `DELETE /v1/auth/link/pending` — `DELETE` of the browser's own staging is
+  idempotent by contract: `204` whether or not a staged link existed
+  (02.3.1-T2 Q4).
+- `POST /v1/auth/link/confirm` — one `__Host-evidgate_link` staging buys one
+  confirmation and is deleted on every terminal outcome, so a replay cannot
+  write a second identity; the store itself converges on `already_linked`
+  (02.3.1-T2 Q4, AC6).
 
 ## Validation corpus (`fixtures/contracts/`, 01.3.2-T2)
 

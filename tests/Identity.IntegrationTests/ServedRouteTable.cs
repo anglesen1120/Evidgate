@@ -552,6 +552,14 @@ internal sealed record RouteRequestContext(
 /// </summary>
 internal static class RouteRequests
 {
+    /// <summary>
+    /// A token with the contract's shape (<c>evgi_&lt;12-char prefix&gt;_&lt;43-char secret&gt;</c>,
+    /// <c>InviteTokenFormat</c>) but no matching row: the invite staging route of 02.3.1-T2 validates the
+    /// shape only, so this request is the one it accepts.
+    /// </summary>
+    private const string InviteTokenProbe =
+        "evgi_probe1234567_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
     /// <summary>Every classified route and how to build its request.</summary>
     internal static Dictionary<(string Method, string Template), Func<RouteRequestContext, RouteRequest>> All { get; } =
         Build();
@@ -650,6 +658,17 @@ internal static class RouteRequests
         Add("GET", "/v1/auth/oidc/{provider}/start", _ => new(HttpMethod.Get, "/v1/auth/oidc/google/start"));
         Add("GET", "/v1/auth/oidc/{provider}/callback", _ =>
             new(HttpMethod.Get, "/v1/auth/oidc/google/callback?code=probe&state=probe"));
+
+        // ---- Invite staging + explicit linking (02.3.1-T2: pre-tenant, x-permission 'none') -------------------
+        // 'none' keeps all five out of the viewer and ci_producer matrices, so the builders only have to be
+        // shape-valid: a token with the contract's shape, a registered provider route value for {provider}, and
+        // the bodiless answers of the staged-link cookie (none of these hosts mints a session).
+        Add("POST", "/v1/auth/invite-token", _ => new(HttpMethod.Post, "/v1/auth/invite-token",
+            new JsonObject { ["invite_token"] = InviteTokenProbe }));
+        Add("POST", "/v1/auth/link/{provider}", _ => new(HttpMethod.Post, "/v1/auth/link/google"));
+        Add("GET", "/v1/auth/link/pending", _ => new(HttpMethod.Get, "/v1/auth/link/pending"));
+        Add("DELETE", "/v1/auth/link/pending", _ => new(HttpMethod.Delete, "/v1/auth/link/pending"));
+        Add("POST", "/v1/auth/link/confirm", _ => new(HttpMethod.Post, "/v1/auth/link/confirm"));
 
         // ---- Catalog -----------------------------------------------------------------------------------------
         Add("GET", "/v1/projects/{p}/cases", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/cases"));

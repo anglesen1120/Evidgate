@@ -1377,6 +1377,69 @@ export type MoveManualCaseResponse = {
 };
 
 /**
+ * Body of `POST /v1/auth/invite-token` (02.3.1-T2 Q1): the token the invite link carried, presented once and staged in the `__Host-evidgate_invite` cookie. The member is treated as required — an absent or non-string value is 422 `request_invalid` with `details[].path` = `invite_token` — so a client always sends it.
+ */
+export type InviteTokenRequest = {
+    /**
+     * `evgi_<12-char prefix>_<43-char base64url secret>`, exactly as minted by `POST /v1/orgs/{o}/memberships` or its `resend` route (`InviteTokenFormat`). Only the shape is checked here: whether the token exists, has expired or belongs to another org is decided by the binder at login, and is never answered by this route.
+     */
+    invite_token: string;
+};
+
+/**
+ * Body of `POST /v1/auth/link/{provider}` (02.3.1-T2 Q4), optional: an empty or absent body lands on the app root after the link.
+ */
+export type LinkStartRequest = {
+    /**
+     * Where the app should land after the link, as a same-origin path, allowlisted by `ReturnUrlPolicy` exactly like `GET /v1/auth/oidc/{provider}/start`'s `returnUrl`: one leading `/`, no backslash or control character, at most 512 characters, re-checked through up to four percent-decoding passes. Any other value is replaced by `/` and is not an error.
+     */
+    return_url?: string | null;
+};
+
+/**
+ * The 200 body of `POST /v1/auth/link/{provider}`: the provider's authorization URL, built by the same helper as the sign-in route (state, nonce and PKCE S256 challenge included).
+ */
+export type LinkStartResponse = {
+    /**
+     * Absolute `https` authorization URL of the provider the browser is sent to next. It is public by construction: it carries no token, subject or email.
+     */
+    authorization_url: string;
+};
+
+/**
+ * The 200 body of `GET /v1/auth/link/pending` (02.3.1-T2 Q4): the identity this browser staged and has not confirmed — the caller's own, taken from `__Host-evidgate_link`.
+ */
+export type LinkPendingResponse = {
+    /**
+     * The provider that verified the identity.
+     */
+    provider: 'google' | 'github';
+    /**
+     * The address that provider verified and returned for this identity. Personal data, which is why every response of the route carries `Cache-Control: no-store`.
+     */
+    email: string;
+    /**
+     * The provider's profile name, or null when it returned none.
+     */
+    display_name?: string | null;
+    /**
+     * When the staged link stops being confirmable: ten minutes after the callback staged it (a constant of the contract, not a configuration key).
+     */
+    expires_at: string;
+};
+
+/**
+ * The 200 body of `POST /v1/auth/link/confirm` (02.3.1-T2 Q4): the provider the identity was attached by, and what happened to it.
+ */
+export type LinkConfirmResponse = {
+    provider: 'google' | 'github';
+    /**
+     * `linked` — a new identity row; `already_linked` — this account already held it (the answer a retry after a failed audit converges on); `moved` — it was taken from an account that is no longer in use, and `auth.link_move` records where from.
+     */
+    outcome: 'linked' | 'already_linked' | 'moved';
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -1967,6 +2030,230 @@ export type CompleteFederatedLoginErrors = {
 };
 
 export type CompleteFederatedLoginError = CompleteFederatedLoginErrors[keyof CompleteFederatedLoginErrors];
+
+export type StageInviteTokenData = {
+    body: InviteTokenRequest;
+    path?: never;
+    query?: never;
+    url: '/auth/invite-token';
+};
+
+export type StageInviteTokenErrors = {
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+};
+
+export type StageInviteTokenError = StageInviteTokenErrors[keyof StageInviteTokenErrors];
+
+export type StageInviteTokenResponses = {
+    /**
+     * The token is staged: no body, and the browser holds it only in the encrypted `__Host-evidgate_invite` cookie that the next `start`/`callback` pair carries.
+     */
+    204: void;
+};
+
+export type StageInviteTokenResponse = StageInviteTokenResponses[keyof StageInviteTokenResponses];
+
+export type StartProviderLinkData = {
+    body?: LinkStartRequest;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        /**
+         * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers. A route value no provider is registered under answers 404 `not_found`; a registered provider without a client credential answers 503 `unavailable`, never 404.
+         */
+        provider: 'google' | 'github';
+    };
+    query?: never;
+    url: '/auth/link/{provider}';
+};
+
+export type StartProviderLinkErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 `unavailable` — the identity store or the session lookup is not usable: a registered provider whose client credential is missing, a deployment with no `EVIDGATE__LOGIN__PUBLICBASEURL` (one answer for both, so the route is no oracle for the deployment's configuration), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage. `Retry-After` is supplied through `EVIDGATE__LOGIN__RETRYAFTERSECONDS` when the route reports the outage itself; a refusal raised by the session lookup (the missing-pepper case) carries the code without the header.
+     */
+    503: ErrorEnvelope;
+};
+
+export type StartProviderLinkError = StartProviderLinkErrors[keyof StartProviderLinkErrors];
+
+export type StartProviderLinkResponses = {
+    /**
+     * The authorization URL to send the browser to next, and the pending state cookie that binds this attempt (provider, PKCE verifier, nonce, the linking account and the allowlisted return path) to the callback.
+     */
+    200: LinkStartResponse;
+};
+
+export type StartProviderLinkResponse = StartProviderLinkResponses[keyof StartProviderLinkResponses];
+
+export type DiscardPendingProviderLinkData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/auth/link/pending';
+};
+
+export type DiscardPendingProviderLinkErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup.
+     */
+    503: ErrorEnvelope;
+};
+
+export type DiscardPendingProviderLinkError = DiscardPendingProviderLinkErrors[keyof DiscardPendingProviderLinkErrors];
+
+export type DiscardPendingProviderLinkResponses = {
+    /**
+     * The staged link is gone; nothing else changed.
+     */
+    204: void;
+};
+
+export type DiscardPendingProviderLinkResponse = DiscardPendingProviderLinkResponses[keyof DiscardPendingProviderLinkResponses];
+
+export type GetPendingProviderLinkData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/link/pending';
+};
+
+export type GetPendingProviderLinkErrors = {
+    /**
+     * 401 unauthenticated (00 §9.2)
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 `unavailable` — no session pepper (`EVIDGATE__SESSION__PEPPER`) or a database outage in the session lookup. The answer is the 00 §9.2 envelope and never a 200 with an empty body.
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetPendingProviderLinkError = GetPendingProviderLinkErrors[keyof GetPendingProviderLinkErrors];
+
+export type GetPendingProviderLinkResponses = {
+    /**
+     * The identity this browser has staged, and when it stops being confirmable.
+     */
+    200: LinkPendingResponse;
+};
+
+export type GetPendingProviderLinkResponse = GetPendingProviderLinkResponses[keyof GetPendingProviderLinkResponses];
+
+export type ConfirmProviderLinkData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/auth/link/confirm';
+};
+
+export type ConfirmProviderLinkErrors = {
+    /**
+     * 401 `unauthenticated` — no `__Host-evidgate_session` cookie, or one that is unknown, expired, revoked or belongs to an account disabled after it was minted; or 401 `token_invalid` — this browser has no usable staged link (missing, expired, forged or another user's `__Host-evidgate_link`), nothing was written and the link has to be started again. Both are `retryable: false`.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 `forbidden` — the request named an `Origin` other than this deployment's public origin; or 403 `account_disabled` — the account the identity would attach to is `disabled` (02.3.1 §6), detected by the store itself. Both are `retryable: false`.
+     */
+    403: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 `unavailable`, retryable — a database fault, an audit chain that could not be extended (the staging is kept, so the retry converges), no session pepper (`EVIDGATE__SESSION__PEPPER`) or a stored contract this build does not know. This route sets `Retry-After` (`EVIDGATE__LOGIN__RETRYAFTERSECONDS`) on every one of those answers.
+     */
+    503: ErrorEnvelope;
+};
+
+export type ConfirmProviderLinkError = ConfirmProviderLinkErrors[keyof ConfirmProviderLinkErrors];
+
+export type ConfirmProviderLinkResponses = {
+    /**
+     * The identity is attached: `outcome` is `linked` (a new identity row), `already_linked` (this account already held it — the retry after an audit failure) or `moved` (it was taken from an account that is no longer in use).
+     */
+    200: LinkConfirmResponse;
+};
+
+export type ConfirmProviderLinkResponse = ConfirmProviderLinkResponses[keyof ConfirmProviderLinkResponses];
 
 export type CreateManifestData = {
     body: ManifestV1;

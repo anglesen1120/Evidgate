@@ -129,9 +129,14 @@ public sealed class InviteQaTests : BindTestBase
 
         var attempts = Enumerable.Range(0, 4)
             .Select(_ => Task.Run(
-                () => binder.BindAsync(
-                    new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
-                    Token).AsTask(),
+                async () =>
+                {
+                    var userId = await SeedUserAsync();
+
+                    return await binder.BindAsync(
+                        new BindPendingMembershipsRequest(userId, "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
+                        Token);
+                },
                 Token))
             .ToArray();
 
@@ -158,7 +163,7 @@ public sealed class InviteQaTests : BindTestBase
         var invite = await SeedInviteAsync(org, "invitee@example.com");
 
         var result = await CreateBinder().BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", invite.Email, EmailVerified: true, invite.Token, HostedDomain: null),
             Token);
 
         result.IsSuccess.ShouldBeTrue();
@@ -177,7 +182,7 @@ public sealed class InviteQaTests : BindTestBase
         var invite = await SeedInviteAsync(org, "invitee@example.com", status: MembershipStatus.Revoked);
 
         var result = await CreateBinder().BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "google", invite.Email, EmailVerified: true, null, HostedDomain: "example.com"),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "google", invite.Email, EmailVerified: true, null, HostedDomain: "example.com"),
             Token);
 
         result.IsSuccess.ShouldBeTrue();
@@ -196,7 +201,7 @@ public sealed class InviteQaTests : BindTestBase
         var invite = await SeedInviteAsync(org, "invitee@example.com");
 
         var result = await CreateBinder().BindAsync(
-            new BindPendingMembershipsRequest(Guid.CreateVersion7(), "github", "  Invitee@Example.com ", EmailVerified: true, invite.Token, HostedDomain: null),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "github", "  Invitee@Example.com ", EmailVerified: true, invite.Token, HostedDomain: null),
             Token);
 
         result.IsSuccess.ShouldBeTrue();

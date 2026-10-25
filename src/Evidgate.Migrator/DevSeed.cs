@@ -51,6 +51,13 @@ public static class DevSeed
         values (@project, @org, 'Dev Project', 'dev-project')
         on conflict (id) do nothing;
 
+        -- The account behind the dev membership: 0044's `membership_user_fk`
+        -- (membership.user_id -> public."user") makes the membership's user_id name a real
+        -- row, so the seed writes the account first, exactly as the login upsert does.
+        insert into public."user" (id, email)
+        values (@user, 'dev@evidgate.local')
+        on conflict (id) do nothing;
+
         insert into public.membership (id, org_id, user_id, invited_email, status)
         values (@membership, @org, @user, 'dev@evidgate.local', 'active')
         on conflict (id) do nothing;
