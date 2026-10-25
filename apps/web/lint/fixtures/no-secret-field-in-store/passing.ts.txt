@@ -1,0 +1,43 @@
+// 09.7.1-T1 fixture (plan 09.7.1 §8 S3, T1.1, AC3): the same positions as failing.ts.txt, named
+// the way the Settings screens actually name them — metadata only, so the rule reports nothing.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains: the app lint block types every `.ts`
+// under apps/web against apps/web/tsconfig.json, which includes only `src/**/*.ts`.
+//
+// No `@ngrx/signals` import for the reason failing.ts.txt gives: the callee name is what the
+// rule matches, and the workspace has no such dependency.
+import { signal } from '@angular/core';
+
+export interface SecretsState {
+  tokenPrefix: string;
+  secretRef: string;
+  secretName: string;
+  tokenCount: number;
+  hasSecret: boolean;
+  tokenExpiresAt: string;
+  rotationState: string;
+  last4: string;
+}
+
+export const SecretsStore = signalStore(
+  withState({
+    token_prefix: '',
+    secret_reference: '',
+    ingestTokens: [] as string[],
+    ciBindings: [] as string[],
+    lastRotatedAt: null as string | null,
+  }),
+);
+
+export class IntegrationsStore extends SecretsStore {
+  readonly tokenPrefix = signal('');
+  readonly lastRotatedAt = signal<string | null>(null);
+
+  get rotationStateLabel(): string {
+    return '';
+  }
+}
+
+// A top-level signal is not store state, and the rule deliberately leaves it alone: reporting
+// every `signal(...)` would make the rule unusable.
+export const token = signal('');

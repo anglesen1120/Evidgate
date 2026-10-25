@@ -164,6 +164,30 @@ npm run e2e -w apps/web    # builds first, then runs Playwright incl. e2e/csp.sp
 npm run test -w apps/web   # unit tests incl. scripts/csp.test.mjs
 ```
 
+## Lint blind spots (09.7.1-T1)
+
+`evidgate/no-secret-field-in-store` (`lint/rules/no-secret-field-in-store.cjs`) fails a
+Settings-feature file that names a secret-shaped field in a store: an object-literal key of a
+`withState`/`patchState`/`signalStore` state literal, a member of an `interface`/`type` named
+`…State`/`…Store` or of `withState<{…}>`, a field, accessor or getter of a `…Store` class, or a
+member read in a constant inline `template:` string such as `{{ store.token() }}`
+(plan 09.7.1 §8 S3, AC3). The header of the rule file is the name table it matches (`token`,
+`secret`, `signing_secret`, `private_key`, `apiKey`, …) and the metadata names it must let
+through (`token_prefix`, `tokenPrefix`, `secretRef`, `rotationState`, `last4`, …). Its blind
+spots are deliberate — lint is defence in depth, not the only defence:
+
+- a `templateUrl` `.html` file is not scanned by this rule — only a constant inline `template:`
+  string is read, and the Angular template rules that run over `.html` do not look for a
+  secret-shaped member read;
+- a member read assembled at run time (`row[key]`, `store[this.field]`) has no name in the source
+  to match, and a name whose secret word is not in the leading position (`passwordHash`,
+  `hasSecret`) is not reported: the rule stays narrow enough that nobody switches it off;
+- a top-level `const token = signal('')` is not store state and is not reported. The rule's two
+  exemptions — a `*.spec.ts` file and the one-time reveal component (`reveal/` or `*reveal*`) —
+  are its own allow-list, reviewed with the rule.
+
+The bypass rule's own blind spots are listed in the CSP section above.
+
 ## Data access (09.1.1-T3)
 
 One SDK client, one gateway, no wire types. `src/app/core/http/api-client.ts` builds the single

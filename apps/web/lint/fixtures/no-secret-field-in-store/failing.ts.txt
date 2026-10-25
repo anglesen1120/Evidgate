@@ -1,0 +1,23 @@
+// 09.7.1-T1 fixture (plan 09.7.1 §8 S3, T1.1, AC3): one finding per position group
+// `evidgate/no-secret-field-in-store` reports — a state interface, a withState state literal and
+// a `/Store$/` class field — in a file the Settings block covers.
+//
+// It is a `.ts.txt` file on purpose: eslint.config.js's `apps/web/**/*.ts` block types every
+// `.ts` under apps/web against apps/web/tsconfig.json, which includes only `src/**/*.ts`, so a
+// deliberate violation with a `.ts` name would fail the lint job instead of the spec.
+//
+// `withState`/`signalStore` are matched by callee name and the rule resolves no imports, so no
+// `@ngrx/signals` import is written here: the workspace deliberately has no such dependency
+// (core/session/session.store.ts is shaped like a signalStore without the package).
+import { signal } from '@angular/core';
+
+export interface SecretsState {
+  password: string;
+  tokenPrefix: string;
+}
+
+export const SecretsStore = signalStore(withState({ secret: '' }));
+
+export class RotatingStore extends SecretsStore {
+  readonly token = signal('');
+}
