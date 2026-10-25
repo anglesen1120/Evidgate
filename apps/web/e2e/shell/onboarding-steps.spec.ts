@@ -24,6 +24,9 @@ import {
 const SEEDS: readonly OnboardingSeed[] = [
   'onboarding-empty',
   'onboarding-project',
+  // 09.2.1-T2: step 2 is satisfied by an ingest token alone, the second connect path. Its rows and
+  // one-time value are `onboarding-connect-ci.spec.ts`'s subject; here it proves the derivation.
+  'onboarding-token',
   'onboarding-connected',
   'onboarding-run-complete',
   'onboarding-evidence',

@@ -1,7 +1,8 @@
-// 09.2.1-T1.2 (plan 09.2.1 §6 "Wizard step derivation", §10 T1.2; T63; decisions (b) and (d)):
-// the wizard's resumable position, derived from what the server holds and never from a local
-// flag. One `load` answers the project the wizard resumes on plus the five done-conditions of
-// `step-derivation.ts`.
+// 09.2.1-T1.2/T2 (plan 09.2.1 §6 "Wizard step derivation", §10 T1.2/T2; T63; decisions (b) and
+// (d); AC2, AC7): the wizard's resumable position, derived from what the server holds and never
+// from a local flag. One `load` answers the project the wizard resumes on, the step 2 metadata the
+// panel renders (the CI bindings and ingest tokens the project already has, in server order) plus
+// the five done-conditions of `step-derivation.ts`.
 //
 // Cost and ordering:
 //   - the project resolves first, because every later read is project-scoped; a route that names
@@ -11,6 +12,11 @@
 //     costs one round trip after the project instead of three;
 //   - `getRun` follows `listRuns`, because its run id is what the list answered (step 4 reads
 //     `current_evidence_revision_id`, which the list row does not carry).
+//
+// Step 2's two lists are read with `limit: 10`: step 2's panel shows the rows it created or
+// resumed with (T2.2: metadata only — neither list carries a secret), while the done-condition
+// stays presence — `done[2]` is "either list is not empty", exactly as T1 shipped it — so a token
+// without a binding (or a binding without a token) completes step 2 either way (AC2).
 //
 // Scope: every SDK call is made with the id the route supplied (`orgId`, `projectId`), and the
 // project row the server answered with must carry that same `org_id`. A row of another org — a
@@ -24,7 +30,13 @@
 // seen; that is recorded as an open item rather than guessed `true`.
 
 import { inject, Injectable } from '@angular/core';
-import type { ProjectDto, RunStateDto, RunSummary } from '@evidgate/sdk';
+import type {
+  CiBindingView,
+  IngestTokenView,
+  ProjectDto,
+  RunStateDto,
+  RunSummary,
+} from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
@@ -54,12 +66,14 @@ export interface OnboardingProgress {
   /** The oldest run of the project with its current evidence revision, if any. */
   readonly sampleRun: RunStateDto | null;
   /**
-   * How many CI bindings / ingest tokens the answer carried. Both reads ask for one row, so each
-   * is `0` or `1`: the wizard needs presence (step 2's done-condition), not a total, and a wizard
-   * resume must not page a tenant's whole token history.
+   * The project's CI bindings and ingest tokens, in the order the server answered them. Step 2's
+   * panel renders these rows as metadata (a binding's `status`, a token's `prefix` and `status`);
+   * neither list carries a secret, so resuming a project that has one of them shows what exists
+   * without re-issuing anything (AC2, AC7). The reads ask for `limit: 10` — the page a panel
+   * shows — because the rows are rendered, not merely counted.
    */
-  readonly bindingCount: number;
-  readonly tokenCount: number;
+  readonly bindings: readonly CiBindingView[];
+  readonly tokens: readonly IngestTokenView[];
   readonly currentStep: WizardStep;
 }
 
@@ -87,8 +101,8 @@ export class OnboardingProgressService {
         done: NO_STEPS_DONE,
         activationReadable: false,
         sampleRun: null,
-        bindingCount: 0,
-        tokenCount: 0,
+        bindings: [],
+        tokens: [],
         currentStep: 1,
       };
     }
@@ -96,8 +110,8 @@ export class OnboardingProgressService {
     // Issued together: the array is built before `Promise.all` subscribes, so all three requests
     // are in flight while the first one is still pending.
     const [bindings, tokens, runs] = await Promise.all([
-      this.data.listCiBindings(project.id, { limit: 1 }),
-      this.data.listIngestTokens(project.id, { limit: 1 }),
+      this.data.listCiBindings(project.id, { limit: 10 }),
+      this.data.listIngestTokens(project.id, { limit: 10 }),
       this.data.listRuns(project.id, { limit: 1 }),
     ]);
     const oldest = pickOldestRun(runs.items);
@@ -117,8 +131,8 @@ export class OnboardingProgressService {
       done,
       activationReadable: false,
       sampleRun,
-      bindingCount: bindings.items.length,
-      tokenCount: tokens.items.length,
+      bindings: bindings.items,
+      tokens: tokens.items,
       currentStep: deriveCurrentStep(done),
     };
   }

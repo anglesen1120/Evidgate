@@ -3,6 +3,7 @@ import {
   Component,
   afterRenderEffect,
   inject,
+  signal,
   viewChild,
 } from '@angular/core';
 import type { ElementRef } from '@angular/core';
@@ -19,6 +20,7 @@ import {
 import type { StepNumber } from '../data/step-derivation';
 import { OnboardingStore } from '../onboarding.store';
 import { CreateProjectPage } from '../steps/create-project.page';
+import { ConnectCiPage } from '../steps/connect-ci.page';
 import { EvidencePanelComponent } from './evidence-panel.component';
 import { StepPendingComponent } from './step-pending.component';
 
@@ -26,6 +28,7 @@ import { StepPendingComponent } from './step-pending.component';
   selector: 'app-onboarding-shell',
   imports: [
     CreateProjectPage,
+    ConnectCiPage,
     EvidencePanelComponent,
     StepPendingComponent,
     ErrorPatternComponent,
@@ -41,8 +44,8 @@ export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
   private readonly route = inject(ActivatedRoute);
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
-  protected orgId = '';
-  private projectId: string | null = null;
+  protected readonly orgId = signal('');
+  private readonly projectId = signal<string | null>(null);
   /**
    * The last `focusToken` this instance has honoured. Which baseline it starts from depends on
    * the branch the first route answer takes: an activation that takes the create marker keeps the
@@ -88,8 +91,8 @@ export class OnboardingShellComponent {
         takeUntilDestroyed(),
       )
       .subscribe(({ orgId, projectId }) => {
-        this.orgId = orgId;
-        this.projectId = projectId;
+        this.orgId.set(orgId);
+        this.projectId.set(projectId);
         // The one activation the create's own load published may render it instead of reading it
         // again — that is the single fan-out after a creation (S71 F1). Every other activation
         // reads: this store is a route-level singleton, so its ready state can be a derivation of
@@ -121,6 +124,6 @@ export class OnboardingShellComponent {
   }
 
   protected reload(): void {
-    void this.store.load(this.orgId, this.projectId);
+    void this.store.load(this.orgId(), this.projectId());
   }
 }

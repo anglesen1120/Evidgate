@@ -14,6 +14,13 @@
 // `/projects/{p}/runs` match one non-empty path segment per `{name}`, so `/projects/p-1/runs`
 // resolves and `/projects/p-1/runs/r-1` does not.
 //
+// A `POST` row answers its corpus document whatever request body arrives (09.2.1-T2): the corpus
+// is a *response* corpus, so a create's answer never depends on what was sent and, being fixed,
+// cannot change a later list read — the wizard's "created" and "resumed" states are separate
+// documents (see `fixture-catalog.ts`). The three secret-bearing creates (`createCiBinding`,
+// `createIngestToken`, `rotateIngestToken`) take no `Idempotency-Key` in `contracts/openapi.yaml`,
+// so the backend ignores the header the app's interceptor still adds.
+//
 // Dev-only, like the rest of `core/dev-fixtures`: see the module comment of `fixture-toggles.ts`.
 
 import { API_BASE_PATH } from '../http/api-origin';
@@ -42,8 +49,11 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'createProject', method: 'POST', path: '/orgs/{o}/projects' },
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
   { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
+  { operationId: 'createCiBinding', method: 'POST', path: '/projects/{p}/ci-bindings' },
   { operationId: 'listCiBindings', method: 'GET', path: '/projects/{p}/ci-bindings' },
+  { operationId: 'createIngestToken', method: 'POST', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'listIngestTokens', method: 'GET', path: '/projects/{p}/ingest-tokens' },
+  { operationId: 'rotateIngestToken', method: 'POST', path: '/ingest-tokens/{t}/rotate' },
   { operationId: 'listRuns', method: 'GET', path: '/projects/{p}/runs' },
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },

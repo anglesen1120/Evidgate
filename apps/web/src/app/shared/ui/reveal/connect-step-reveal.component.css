@@ -1,0 +1,76 @@
+/* Reuse the state-sheet action recipe; no primary action competes with the wizard's Next. */
+:host {
+  display: block;
+  min-inline-size: var(--eg-space-0);
+}
+
+.reveal {
+  display: grid;
+  gap: var(--eg-space-4);
+  min-inline-size: var(--eg-space-0);
+  padding: var(--eg-space-5);
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-surface);
+  color: var(--eg-text);
+  font-family: var(--eg-font-body);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+  overflow-wrap: anywhere;
+}
+
+h3,
+p {
+  margin: var(--eg-space-0);
+}
+
+h3 {
+  font-family: var(--eg-font-display);
+  font-size: var(--eg-text-lg);
+  line-height: var(--eg-leading-lg);
+  font-weight: var(--eg-weight-semibold);
+}
+
+.reveal__warning {
+  padding: var(--eg-space-3) var(--eg-space-4);
+  border-radius: var(--eg-radius-sm);
+  background: var(--eg-warning-bg);
+  color: var(--eg-warning-fg);
+}
+
+input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: var(--eg-space-0);
+  min-block-size: var(--eg-control-lg);
+  padding: var(--eg-space-3) var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-sm);
+  background: var(--eg-surface);
+  color: var(--eg-text);
+  font-family: var(--eg-font-mono);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+}
+
+input:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+
+.reveal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-3);
+}
+
+[role='status'] {
+  min-block-size: var(--eg-leading-sm);
+  color: var(--eg-text-muted);
+}
+
+@media (pointer: coarse) {
+  input {
+    min-block-size: var(--eg-control-touch);
+  }
+}

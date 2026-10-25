@@ -1,0 +1,279 @@
+<section class="connect" data-testid="connect-ci-page" [attr.aria-busy]="busy()">
+  <p>{{ intro }}</p>
+  @if (slot.current(); as entry) {
+    <div data-testid="connect-reveal">
+      <app-connect-step-reveal
+        [heading]="entry.source === 'binding-challenge' ? bindingRevealHeading : tokenRevealHeading"
+        [value]="entry.value"
+        [warning]="revealWarning"
+        [copyLabel]="copyLabel"
+        [copiedLabel]="copiedLabel"
+        [dismissLabel]="dismissLabel"
+        (dismissed)="slot.clear()"
+      />
+    </div>
+  }
+  @if (overlapEndsAt(); as overlap) {
+    <p class="notice">
+      {{ overlapLabel }}
+      <time [attr.datetime]="overlap">{{ overlap | date: 'medium' : '+0000' }}</time>
+    </p>
+  }
+  @if (failure(); as error) {
+    <section data-testid="connect-ci-error" role="alert">
+      <app-request-state [status]="'error'" [error]="error" [retryEligible]="false" />
+      <p class="validation">{{ error.message }}</p>
+      @for (detail of error.details; track $index) {
+        <p class="validation">{{ detail.path }} {{ detail.reason }}</p>
+      }
+    </section>
+  }
+  @if (store.refreshFailure()) {
+    <section class="notice" data-testid="connect-ci-refresh-failed" role="status">
+      <p>{{ refreshFailedLabel }}</p>
+      <button
+        class="state-panel__action"
+        type="button"
+        [disabled]="busy() || refreshing()"
+        (click)="refresh()"
+      >
+        {{ refreshLabel }}
+      </button>
+    </section>
+  }
+  <p class="busy-status" role="status">
+    @if (busy()) {
+      {{ busyLabel }}
+    }
+  </p>
+  <div class="panels">
+    <section class="panel" data-testid="connect-oidc-panel" aria-labelledby="connect-oidc-heading">
+      <h3 id="connect-oidc-heading">{{ oidcTitle }}</h3>
+      <p>{{ oidcHint }}</p>
+      <p>{{ workflowHint }}</p>
+      <form (ngSubmit)="createBinding()">
+        <div class="field">
+          <label for="connect-oidc-repo-id">{{ repoIdLabel }}</label>
+          <input
+            id="connect-oidc-repo-id"
+            data-testid="connect-oidc-repo-id"
+            name="repositoryId"
+            type="text"
+            [attr.inputmode]="'numeric'"
+            autocomplete="off"
+            [(ngModel)]="repositoryId"
+            [disabled]="busy() || !bindingPermitted()"
+            [attr.aria-invalid]="oidcSubmitted() && repoIdInvalid() ? 'true' : null"
+            [attr.aria-describedby]="'connect-repo-id-error'"
+          />
+          <p id="connect-repo-id-error" class="validation" [attr.aria-live]="'polite'">
+            @if (oidcSubmitted() && repoIdInvalid()) {
+              {{ repoIdError }}
+            }
+          </p>
+        </div>
+        <div class="field">
+          <label for="connect-oidc-repo-name">{{ repoNameLabel }}</label>
+          <input
+            id="connect-oidc-repo-name"
+            data-testid="connect-oidc-repo-name"
+            name="repositoryName"
+            type="text"
+            autocomplete="off"
+            [attr.autocapitalize]="'none'"
+            spellcheck="false"
+            [(ngModel)]="repositoryName"
+            [disabled]="busy() || !bindingPermitted()"
+            [attr.aria-invalid]="oidcSubmitted() && repoNameInvalid() ? 'true' : null"
+            [attr.aria-describedby]="'connect-repo-name-error'"
+          />
+          <p id="connect-repo-name-error" class="validation" [attr.aria-live]="'polite'">
+            @if (oidcSubmitted() && repoNameInvalid()) {
+              {{ repoNameError }}
+            }
+          </p>
+        </div>
+        <div class="field">
+          <label for="connect-oidc-refs">{{ refsLabel }}</label>
+          <textarea
+            id="connect-oidc-refs"
+            data-testid="connect-oidc-refs"
+            name="refs"
+            [rows]="3"
+            [attr.autocapitalize]="'none'"
+            spellcheck="false"
+            [(ngModel)]="refs"
+            [disabled]="busy() || !bindingPermitted()"
+            [attr.aria-invalid]="oidcSubmitted() && refsInvalid() ? 'true' : null"
+            [attr.aria-describedby]="'connect-refs-hint connect-refs-error'"
+          ></textarea>
+          <p id="connect-refs-hint">{{ refsHint }}</p>
+          <p id="connect-refs-error" class="validation" [attr.aria-live]="'polite'">
+            @if (oidcSubmitted() && refsInvalid()) {
+              {{ refsError }}
+            }
+          </p>
+        </div>
+        <div class="field">
+          <label for="connect-oidc-workflows">{{ workflowsLabel }}</label>
+          <textarea
+            id="connect-oidc-workflows"
+            data-testid="connect-oidc-workflows"
+            name="workflows"
+            [rows]="3"
+            [attr.autocapitalize]="'none'"
+            spellcheck="false"
+            [(ngModel)]="workflows"
+            [disabled]="busy() || !bindingPermitted()"
+            [attr.aria-invalid]="oidcSubmitted() && workflowsInvalid() ? 'true' : null"
+            [attr.aria-describedby]="'connect-workflows-hint connect-workflows-error'"
+          ></textarea>
+          <p id="connect-workflows-hint">{{ workflowsHint }}</p>
+          <p id="connect-workflows-error" class="validation" [attr.aria-live]="'polite'">
+            @if (oidcSubmitted() && workflowsInvalid()) {
+              {{ workflowsError }}
+            }
+          </p>
+        </div>
+        @if (!bindingPermitted()) {
+          <p id="connect-binding-permission">{{ bindingPermission }}</p>
+        }
+        <button
+          class="state-panel__action"
+          data-testid="connect-oidc-submit"
+          type="submit"
+          [disabled]="busy() || !bindingPermitted()"
+          [attr.aria-describedby]="!bindingPermitted() ? 'connect-binding-permission' : null"
+        >
+          {{ bindingSubmit }}
+        </button>
+      </form>
+      <h4>{{ bindingsLabel }}</h4>
+      <ul class="metadata">
+        @for (binding of store.bindings(); track binding.id) {
+          <li data-testid="connect-binding-row" [attr.data-status]="binding.status">
+            <strong>{{ binding.repository_full_name }}</strong>
+            <app-status-pill
+              [tone]="'neutral'"
+              [dimension]="statusLabel"
+              [label]="statusText(binding.status)"
+            />
+            <dl>
+              <div>
+                <dt>{{ createdLabel }}</dt>
+                <dd>
+                  <time [attr.datetime]="binding.created_at">{{
+                    binding.created_at | date: 'medium' : '+0000'
+                  }}</time>
+                </dd>
+              </div>
+            </dl>
+          </li>
+        } @empty {
+          <li>{{ emptyBindings }}</li>
+        }
+      </ul>
+    </section>
+    <section
+      class="panel"
+      data-testid="connect-token-panel"
+      aria-labelledby="connect-token-heading"
+    >
+      <h3 id="connect-token-heading">{{ tokenTitle }}</h3>
+      <p>{{ tokenHint }}</p>
+      <form (ngSubmit)="createToken()">
+        <div class="field">
+          <label for="connect-token-name">{{ tokenNameLabel }}</label>
+          <input
+            id="connect-token-name"
+            data-testid="connect-token-name"
+            name="tokenName"
+            type="text"
+            autocomplete="off"
+            [maxLength]="128"
+            [(ngModel)]="tokenName"
+            [disabled]="busy() || !tokenPermitted()"
+            [attr.aria-invalid]="tokenSubmitted() && tokenNameInvalid() ? 'true' : null"
+            [attr.aria-describedby]="'connect-token-name-error'"
+          />
+          <p id="connect-token-name-error" class="validation" [attr.aria-live]="'polite'">
+            @if (tokenSubmitted() && tokenNameInvalid()) {
+              {{ tokenNameError }}
+            }
+          </p>
+        </div>
+        @if (!tokenPermitted()) {
+          <p id="connect-token-permission">{{ tokenPermission }}</p>
+        }
+        <button
+          class="state-panel__action"
+          data-testid="connect-token-submit"
+          type="submit"
+          [disabled]="busy() || !tokenPermitted()"
+          [attr.aria-describedby]="!tokenPermitted() ? 'connect-token-permission' : null"
+        >
+          {{ tokenSubmit }}
+        </button>
+      </form>
+      <h4>{{ tokensLabel }}</h4>
+      <ul class="metadata">
+        @for (token of store.tokens(); track token.id) {
+          <li data-testid="connect-token-row" [attr.data-status]="token.status">
+            <strong>{{ token.name }}</strong>
+            <app-status-pill
+              [tone]="'neutral'"
+              [dimension]="statusLabel"
+              [label]="statusText(token.status)"
+            />
+            <dl>
+              <div>
+                <dt>{{ prefixLabel }}</dt>
+                <dd>
+                  <code>{{ token.prefix }}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ scopesLabel }}</dt>
+                <dd>{{ token.scopes.join(', ') || noneLabel }}</dd>
+              </div>
+              <div>
+                <dt>{{ expiresLabel }}</dt>
+                <dd>
+                  @if (token.expires_at; as expiry) {
+                    <time [attr.datetime]="expiry">{{ expiry | date: 'medium' : '+0000' }}</time>
+                  } @else {
+                    {{ noneLabel }}
+                  }
+                </dd>
+              </div>
+              <div>
+                <dt>{{ usedLabel }}</dt>
+                <dd>
+                  @if (token.last_used_at; as used) {
+                    <time [attr.datetime]="used">{{ used | date: 'medium' : '+0000' }}</time>
+                  } @else {
+                    {{ noneLabel }}
+                  }
+                </dd>
+              </div>
+            </dl>
+            @if (token.status === 'active') {
+              <button
+                class="state-panel__action"
+                type="button"
+                data-testid="connect-token-rotate"
+                [disabled]="busy() || !tokenPermitted()"
+                [attr.aria-describedby]="!tokenPermitted() ? 'connect-token-permission' : null"
+                (click)="rotate(token)"
+              >
+                {{ rotateLabel }}
+              </button>
+            }
+          </li>
+        } @empty {
+          <li>{{ emptyTokens }}</li>
+        }
+      </ul>
+    </section>
+  </div>
+</section>

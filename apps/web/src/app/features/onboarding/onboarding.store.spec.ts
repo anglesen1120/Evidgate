@@ -1,9 +1,9 @@
-// 09.2.1-T1.1 (plan 09.2.1 §9 "onboarding.store.spec.ts: seeded project+binding+no-run → resumes at
-// step 3 (AC1)" and "Token resume within validity window skips re-issuance (AC7)", §10 T1.1;
-// decisions (d) and (f)): the wizard store over the real derivation, with only the data layer and
-// the session store doubled.
+// 09.2.1-T1.1/T2 (plan 09.2.1 §9 "onboarding.store.spec.ts: seeded project+binding+no-run → resumes
+// at step 3 (AC1)" and "Token resume within validity window skips re-issuance (AC7)", §10 T1.1/T2;
+// decisions (d) and (f); AC2): the wizard store over the real derivation, with only the data layer
+// and the session store doubled.
 //
-// The cases are the decisions the shell depends on:
+// The cases are the decisions the shell and step 2 depend on:
 //   - a reload resumes on the first incomplete step, derived from server state (AC1);
 //   - `canGoNext` follows the *viewed* step's done-condition, and `selectStep` cannot open a step
 //     the server has not reached (T1.3's disabled `onboarding-next`);
@@ -11,13 +11,18 @@
 //   - a superseded load never publishes, whichever load answers first;
 //   - the store is a route-level singleton, so a `ready` state may belong to an earlier visit:
 //     the only thing reusable across activations is the one-shot create marker `consumeCreated`
-//     takes, which spares the activation a create causes a second read and nothing else (F1/N1);
+//     takes, which spares the activation a create causes a second read and nothing else (F1/N1),
+//     and `clearCreated` drops it when the URL change it was set for never happened (N2);
 //   - `focusToken` counts only the step moves a user caused, so a load or a Retry never moves
 //     focus (S71 F2);
+//   - `refresh` re-derives in place (AC2): the page — and the one-time secret it reveals — stays
+//     mounted, so `status`, `viewStep` and `focusToken` never change, `done[2]` flips only when the
+//     server says so, and a failure lands in `refreshFailure` without throwing or dropping the
+//     derivation the page is rendering;
 //   - `projectCreated` adopts the project into the session cache and resumes on step 2, and never
 //     throws when the follow-up read fails — the create already succeeded;
 //   - AC7: resuming a project that already has an ingest token reaches step 3 without issuing
-//     anything (the wizard has no token-creation path at all).
+//     anything, and exposes that token's metadata for the panel to render.
 
 import { TestBed } from '@angular/core/testing';
 import type {
@@ -40,7 +45,7 @@ import {
   OnboardingProgressService,
   type OnboardingProgress,
 } from './data/onboarding-progress.service';
-import { OnboardingStore } from './onboarding.store';
+import { OnboardingStore, type OnboardingFailure } from './onboarding.store';
 
 type ProjectListQuery = NonNullable<ListProjectsData['query']>;
 
@@ -238,7 +243,7 @@ class FakeSessionStore {
   }
 }
 
-describe('OnboardingStore (09.2.1-T1.1)', () => {
+describe('OnboardingStore (09.2.1-T1.1/T2)', () => {
   let data: FakeOnboardingDataService;
   let session: FakeSessionStore;
   let store: InstanceType<typeof OnboardingStore>;
@@ -515,9 +520,145 @@ describe('OnboardingStore (09.2.1-T1.1)', () => {
 
     expect(store.currentStep()).toBe(3);
     expect(store.done()[2]).toBe(true);
-    // AC7: a resume is read-only — no create call exists on the store at all.
+    // AC7: a resume is read-only — no create call exists on the store at all, and the token is
+    // shown from its metadata (prefix and status), never from a secret the store could hold.
     expect(data.mutations).toEqual([]);
     expect('createIngestToken' in store).toBe(false);
+    expect(store.tokens()).toEqual([TOKEN]);
+    expect(store.bindings()).toEqual([]);
+  });
+
+  it('exposes no step 2 row before a derivation answers', () => {
+    // The shared empty answer: the panel renders its own empty state, not an undefined list.
+    expect(store.bindings()).toEqual([]);
+    expect(store.tokens()).toEqual([]);
+    expect(store.refreshFailure()).toBeNull();
+  });
+
+  it('refresh publishes the new derivation without moving the page (AC2)', async () => {
+    // Step 2 of a project with neither list: Next is disabled.
+    data.projects = [PROJECT];
+    await store.load('o-1', 'p-1');
+    expect(store.currentStep()).toBe(2);
+    expect(store.viewStep()).toBe(2);
+    expect(store.canGoNext()).toBe(false);
+    expect(store.focusToken()).toBe(0);
+
+    // The page just created a binding, so it asks the store to re-derive. Only the derivation
+    // changes: the page (with the one-time challenge it is revealing) stays mounted, so status,
+    // view and focus stay exactly as they were (AC2).
+    data.bindings = bindingPage([BINDING]);
+    await store.refresh('o-1', 'p-1');
+
+    expect(store.status()).toBe('ready');
+    expect(store.failure()).toBeNull();
+    expect(store.refreshFailure()).toBeNull();
+    expect(store.viewStep()).toBe(2);
+    expect(store.focusToken()).toBe(0);
+    expect(store.done()[2]).toBe(true);
+    expect(store.bindings()).toEqual([BINDING]);
+    expect(store.canGoNext()).toBe(true);
+    // Still only reads: a refresh derives, it never creates.
+    expect(data.mutations).toEqual([]);
+  });
+
+  it('refresh never publishes the loading state while it is in flight (AC2)', async () => {
+    data.projects = [PROJECT];
+    await store.load('o-1', 'p-1');
+    expect(store.status()).toBe('ready');
+
+    data.deferProjectReads = true;
+    const refreshing = store.refresh('o-1', 'p-1');
+    await Promise.resolve();
+    expect(data.pendingProjects.length).toBe(1);
+    // A page that flashed `loading` here would unmount step 2 — and the secret it reveals.
+    expect(store.status()).toBe('ready');
+    expect(store.viewStep()).toBe(2);
+
+    data.bindings = bindingPage([BINDING]);
+    data.settleProject(0, PROJECT);
+    await expect(refreshing).resolves.toBeUndefined();
+
+    expect(store.status()).toBe('ready');
+    expect(store.progress()?.bindings).toEqual([BINDING]);
+  });
+
+  it('refresh failures keep the derivation and map to the fixed patterns', async () => {
+    data.projects = [PROJECT];
+    await store.load('o-1', 'p-1');
+    const published = store.progress();
+    expect(published?.currentStep).toBe(2);
+
+    const cases: Array<{ failure: Error; expected: OnboardingFailure }> = [
+      { failure: apiError('forbidden', 403), expected: 'forbidden' },
+      { failure: apiError('not_found', 404), expected: 'not-found' },
+      { failure: apiError('unavailable', 503), expected: 'unavailable' },
+      { failure: new Error('the refresh read broke'), expected: 'unavailable' },
+    ];
+    for (const { failure, expected } of cases) {
+      data.bindingFailure = failure;
+      // Never throws: the page keeps rendering what it had, plus the refresh notice.
+      await expect(store.refresh('o-1', 'p-1')).resolves.toBeUndefined();
+      expect(store.refreshFailure()).toBe(expected);
+      expect(store.status()).toBe('ready');
+      expect(store.failure()).toBeNull();
+      expect(store.progress()).toBe(published);
+      expect(store.viewStep()).toBe(2);
+    }
+  });
+
+  it('drops a refresh that a newer load superseded', async () => {
+    data.projects = [PROJECT];
+    await store.load('o-1', 'p-1');
+    expect(store.currentStep()).toBe(2);
+
+    // A refresh and a load overlap: the load is the newer read, so its answer wins.
+    data.deferProjectReads = true;
+    const refreshing = store.refresh('o-1', 'p-1');
+    const newest = store.load('o-1', 'p-1');
+    await Promise.resolve();
+    expect(data.pendingProjects.length).toBe(2);
+
+    data.bindings = bindingPage([BINDING]);
+    data.settleProject(1, PROJECT);
+    await newest;
+    expect(store.currentStep()).toBe(3);
+
+    // The stale refresh then answers with the state from before the binding existed: dropped,
+    // because it describes a project nobody is looking at any more.
+    data.bindings = bindingPage([]);
+    data.settleProject(0, PROJECT);
+    await refreshing;
+
+    expect(store.currentStep()).toBe(3);
+    expect(store.bindings()).toEqual([BINDING]);
+    expect(store.refreshFailure()).toBeNull();
+  });
+
+  it('load clears a refresh failure it supersedes', async () => {
+    data.projects = [PROJECT];
+    await store.load('o-1', 'p-1');
+    data.bindingFailure = apiError('unavailable', 503);
+    await store.refresh('o-1', 'p-1');
+    expect(store.refreshFailure()).toBe('unavailable');
+
+    data.bindingFailure = null;
+    await store.load('o-1', 'p-1');
+
+    expect(store.refreshFailure()).toBeNull();
+    expect(store.status()).toBe('ready');
+  });
+
+  it('clearCreated drops the marker of a create whose URL change did not happen (N2)', async () => {
+    data.projects = [PROJECT];
+    await store.projectCreated(PROJECT);
+
+    store.clearCreated();
+    expect(store.consumeCreated(PROJECT.org_id, PROJECT.id)).toBe(false);
+
+    // A later create arms it again: the marker belongs to the newest create only.
+    await store.projectCreated(PROJECT);
+    expect(store.consumeCreated(PROJECT.org_id, PROJECT.id)).toBe(true);
   });
 });
 
@@ -527,8 +668,8 @@ describe('OnboardingStore on the terminal screen (09.2.1-T1.1)', () => {
     done: { 1: true, 2: true, 3: true, 4: true, 5: true },
     activationReadable: false,
     sampleRun: null,
-    bindingCount: 1,
-    tokenCount: 0,
+    bindings: [BINDING],
+    tokens: [],
     currentStep: 'enabled',
   };
 

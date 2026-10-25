@@ -283,6 +283,9 @@ export class CreateProjectPage {
     // unless the user navigated elsewhere while that read was in flight.
     if (this.router.url === originUrl) {
       await this.router.navigate(['/orgs', orgId, 'onboarding', project.id]);
+    } else {
+      // Navigation elsewhere must not leave a create-only skip marker for a later visit (N2).
+      this.store.clearCreated();
     }
   }
 }

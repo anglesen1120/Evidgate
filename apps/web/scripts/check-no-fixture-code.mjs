@@ -106,8 +106,19 @@ const MIN_FIXTURE_STRING_LENGTH = 12;
  * cover the fixture *data* (`body` values such as names and descriptions, which production code
  * never carries), so a leaked response body is caught without the noise the vocabulary would add
  * on every build.
+ *
+ * `provider` and `status` join them with 09.2.1-T2: the step-2 page names the CI provider
+ * (`github_actions`) in its create request and renders the binding/token status words
+ * (`pending_verification`, ...), and both are closed enums of `contracts/openapi.yaml`, not data.
  */
-const PROTOCOL_MEMBERS = new Set(['headers', 'operation_id', 'variant', 'code']);
+const PROTOCOL_MEMBERS = new Set([
+  'headers',
+  'operation_id',
+  'variant',
+  'code',
+  'provider',
+  'status',
+]);
 
 /**
  * `resource`/`action` are the halves of a permission `code` (`contracts/permissions.json`): a
