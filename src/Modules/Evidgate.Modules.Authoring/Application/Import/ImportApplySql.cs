@@ -93,7 +93,7 @@ internal static class ImportApplySql
                for update
             """,
         AuthoringEntityKind.ChecklistItem => """
-            select i.id, i.version, i.deleted_at
+            select i.id, i.version, i.deleted_at, i.state
               from public.checklist_item i
              where i.org_id = @org_id and i.project_id = @project_id and i.id = any(@ids)
              order by i.id
@@ -141,8 +141,6 @@ internal static class ImportApplySql
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "unknown authoring entity kind"),
     };
 
-    /// <summary>The updates of one kind, one statement for all of them.</summary>
-    /// <param name="kind">The entity kind.</param>
     /// <summary>
     /// The update statement of an entity kind. A feature node has none: its title, kind and parent are exactly its
     /// identity, and a file that names another position is route 4's reorder — so a matched node is always
@@ -200,6 +198,9 @@ internal static class ImportApplySql
 
         /// <summary>The soft-delete stamp, or null for a live row.</summary>
         public DateTimeOffset? DeletedAt { get; set; }
+
+        /// <summary>The stored state, for the kinds whose table has one (items and cases); null for a node.</summary>
+        public string? State { get; set; }
     }
 
     /// <summary>The re-read of one sibling group under the advisory locks (finding F).</summary>

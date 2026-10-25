@@ -5955,7 +5955,7 @@ paths:
       summary: Import a feature tree from a CSV, XLSX or JSON file as one batch (13.1.1-T5)
       description: >-
         13.1.1 §5 route 25 (`authoring:write`). The request body is the file itself and the
-        required `format` query names it: `text/csv` (UTF-8, RFC 4180, the header being the
+        required `format` query names it: `text/csv` (also accepted as `text/csv; charset=utf-8`; UTF-8, RFC 4180, the header being the
         thirteen columns `kind,key,parent_key,item_key,node_kind,title,description,precondition,
         steps,priority,state,code,position`), `application/json` (the document of
         `contracts/schemas/authoring-import.v1.json`) or the XLSX media type (SpreadsheetML, read

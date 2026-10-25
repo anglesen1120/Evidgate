@@ -280,7 +280,7 @@ internal static class ImportSchema
     }
 
     /// <summary>
-    /// The contract's two anchored members, applied again with an exact end of input.
+    /// The contract's anchored members, applied again with an exact end of input.
     /// </summary>
     /// <remarks>
     /// The schema's <c>pattern</c> is ECMA-262, where <c>$</c> is the end of the input, and Ajv compiles it that way for
@@ -289,11 +289,25 @@ internal static class ImportSchema
     /// refuse it, and a key is compared literally with the file's other keys while a code is compared with the
     /// database's own CHECK. Applying <c>\z</c> here is the exact end under both readings and leaves the contract alone.
     /// </remarks>
-    private static readonly (string Member, string Pointer, Regex Pattern)[] Anchored =
+    /// <remarks>
+    /// The three key members share <c>$defs.key</c> and the code has its own pattern, so this table is the contract's
+    /// text with the terminator made exact. <c>AuthoringImportFormatUnitTests.AnchoredPatterns_MatchTheContract</c>
+    /// pins each entry against <c>contracts/schemas/authoring-import.v1.json</c>, so a contract edit fails a test here
+    /// instead of silently desynchronising the rule.
+    /// </remarks>
+    internal static readonly (string Member, string Pointer, Regex Pattern)[] Anchored =
     [
         (
             "key",
             "/key",
+            new Regex(@"^[A-Za-z0-9][A-Za-z0-9_.:-]*\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1))),
+        (
+            "parent_key",
+            "/parent_key",
+            new Regex(@"^[A-Za-z0-9][A-Za-z0-9_.:-]*\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1))),
+        (
+            "item_key",
+            "/item_key",
             new Regex(@"^[A-Za-z0-9][A-Za-z0-9_.:-]*\z", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1))),
         (
             "code",
@@ -305,8 +319,8 @@ internal static class ImportSchema
     ];
 
     /// <summary>
-    /// Refuses a <c>key</c> or <c>code</c> that ends in a line feed, which the schema's <c>$</c> tolerates under the
-    /// registry's engine.
+    /// Refuses a <c>key</c>, <c>parent_key</c>, <c>item_key</c> or <c>code</c> that ends in a line feed, which the
+    /// schema's <c>$</c> tolerates under the registry's engine.
     /// </summary>
     /// <param name="document">The document the schema accepted.</param>
     /// <returns>One <c>value_invalid</c> per anchored member that is not matched exactly.</returns>

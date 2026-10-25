@@ -408,11 +408,21 @@ internal sealed class AuthoringImporter(
             createdIds,
             createdNodes.Select(node => node.ParentId),
             createdItems.Select(item => (Guid?)item.FeatureNodeId));
+        // Every parent item this file's cases hang under, created cases and update/restore cases alike: a case may only be
+        // written under a live, non-retired item, so the lock set has to carry the parent itself and not just the item row
+        // the file edits (N1/N3).
+        var caseParents = createdCases
+            .Select(item => (Guid?)item.ChecklistItemId)
+            .Concat(rows
+                .Where(row => row.Row.Kind == ImportRowKind.Case
+                    && row.Outcome is ImportOutcome.Update or ImportOutcome.Restore)
+                .Select(row => (Guid?)((ManualTestCaseSnapshot)row.Content!).ChecklistItemId));
+
         var itemIds = LockSet(
             rows,
             ImportRowKind.Item,
             createdIds,
-            createdCases.Select(item => (Guid?)item.ChecklistItemId),
+            caseParents,
             []);
         var caseIds = LockSet(rows, ImportRowKind.Case, createdIds, [], []);
 
@@ -586,6 +596,19 @@ internal sealed class AuthoringImporter(
                 return AuthoringErrors.Fail<bool>(AuthoringErrors.Unavailable());
             }
 
+            if (rowKind == ImportRowKind.Item
+                && locked.Any(row => string.Equals(
+                    row.State,
+                    ChecklistItemStateMachine.Retired,
+                    StringComparison.Ordinal)))
+            {
+                // The writer's rule — "a retired checklist item takes no new content; restore it first"
+                // (AuthoringVersionWriter.CheckCaseParentAsync) — re-checked under the lock: the plan saw a live item, and a
+                // concurrent retire would otherwise let this file create, restore or update a case under a terminal item.
+                // An unchanged row is never in a lock set, so a round trip of a retired item still imports (N1/N3).
+                return AuthoringErrors.Fail<bool>(AuthoringErrors.Unavailable());
+            }
+
             foreach (var row in rows.Where(row => row.Row.Kind == rowKind
                 && row.Outcome is ImportOutcome.Update or ImportOutcome.Restore))
             {
@@ -650,12 +673,24 @@ internal sealed class AuthoringImporter(
             row => (Kind: row.Kind, row.ParentId),
             row => (row.LiveCount, row.Maximum));
 
-        return groups.All(group => state.TryGetValue(
+        return ExpectationsHold(groups, state);
+    }
+
+    /// <summary>
+    /// The comparison itself, kept pure so its three refusal directions — a live count that moved, a highest position that
+    /// moved, a group that vanished entirely — are provable without standing up a concurrent writer (N2's stale-group
+    /// branch).
+    /// </summary>
+    /// <param name="groups">What the plan read, per sibling group it adds to.</param>
+    /// <param name="observed">What the live rows hold now, keyed by the table name and the group's parent id.</param>
+    internal static bool ExpectationsHold(
+        IReadOnlyList<ImportGroupExpectation> groups,
+        IReadOnlyDictionary<(string Kind, Guid ParentId), (int LiveCount, int Maximum)> observed) =>
+        groups.All(group => observed.TryGetValue(
                 (Kind: group.Kind == ImportRowKind.Node ? "feature_node" : "checklist_item", group.ParentId),
                 out var seen)
             && seen.LiveCount == group.LiveCount
             && seen.Maximum == group.Maximum);
-    }
 
     /// <summary>One set-based insert; returns the refusal when the row count does not match the plan.</summary>
     /// <param name="orgId">The tenant.</param>

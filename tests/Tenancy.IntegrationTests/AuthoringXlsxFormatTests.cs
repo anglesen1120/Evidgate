@@ -464,6 +464,44 @@ public sealed class AuthoringXlsxFormatTests
     }
 
     [Fact]
+    public void Xlsx_OneOversizedTextNode_Capped()
+    {
+        // A cell's value can arrive as one text node of any size, so the reader bounds the append itself rather than
+        // trusting the node count: a 4 MiB node becomes at most the cell budget plus one character, the row is refused
+        // at the column, and the walk never materialises the rest of the part's text (AC16).
+        var sheet = new StringBuilder();
+        sheet.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
+        sheet.Append(Element("worksheet"));
+        sheet.Append("<sheetData>");
+
+        sheet.Append("<row r=\"1\">");
+        for (var column = 0; column < XlsxFormat.ColumnCount; column++)
+        {
+            sheet.Append(InlineCell(column, 1, XlsxFormat.ColumnNames[column]));
+        }
+
+        sheet.Append("</row>");
+
+        sheet.Append(Element("row", 2));
+        sheet.Append(InlineCell(0, 2, "node"));
+        sheet.Append(InlineCell(1, 2, "n1"));
+        sheet.Append(InlineCell(4, 2, "module"));
+        sheet.Append(InlineCell(5, 2, "Checkout"));
+        sheet.Append("<c r=\"G2\" t=\"inlineStr\"><is><t>");
+        sheet.Append(new string('x', 4 * 1024 * 1024));
+        sheet.Append("</t></is></c>");
+        sheet.Append("</row>");
+
+        sheet.Append("</sheetData></worksheet>");
+
+        var parse = XlsxFormat.Read(BuildWorkbook(sheet.ToString()), Parsing, TestContext.Current.CancellationToken);
+
+        parse.TooLarge.ShouldBeFalse();
+        parse.Rows.ShouldBeEmpty();
+        parse.Issues.ShouldBe([new ImportIssue(1, "/description", "value_invalid")]);
+    }
+
+    [Fact]
     public void Xlsx_BlankRowFlood_Refused()
     {
         // A worksheet of empty rows is about twelve bytes per row, so a 32 MiB part holds millions of them before the

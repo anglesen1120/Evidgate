@@ -409,6 +409,11 @@ internal sealed class ImportPlanner(ITenantDb db)
                 continue;
             }
 
+            // A new row takes the file's state as written (an empty cell already became the kind's default in the
+            // validator), the deliberate decision N1 of the T5 security delta: an export writes every row's real state, so
+            // a project whose item is retired must come back retired, or the export could not be re-imported. The writer
+            // takes the same state on create (`ImportApplySql.InsertEntities`), and a *stored* row is the one whose state
+            // may only move through §6 (`MatchedState` below).
             var id = Guid.CreateVersion7();
             var content = new ChecklistItemSnapshot(nodeId, row.Title, row.Description, row.Priority, row.State, position);
             planned[slot] = new ImportPlannedRow(row, ImportOutcome.Create, id, content, null, null, 0);
@@ -478,6 +483,7 @@ internal sealed class ImportPlanner(ITenantDb db)
                 // A fresh number comes from the file's one allocation block, filled in by the importer before any write;
                 // the empty code is a sentinel that the case CHECK would refuse, so a fill that ever failed loudly fails
                 // here instead of storing a number nobody allocated.
+                // Created with the file's state, for the round-trip reason recorded above the item insert (decision N1).
                 var content = new ManualTestCaseSnapshot(
                     itemId,
                     string.Empty,
@@ -728,7 +734,7 @@ internal sealed class ImportPlanner(ITenantDb db)
     /// <param name="stored">The state the entity is stored in.</param>
     /// <param name="decide">The entity's own <c>Decide</c>, with the reason bound to null.</param>
     /// <param name="issues">The refusals.</param>
-    private static string? MatchedState(
+    internal static string? MatchedState(
         ImportValidatedRow row,
         string stored,
         Func<string, string, AuthoringTransition> decide,

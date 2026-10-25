@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Evidgate.Modules.Authoring.Application.Import;
 using Evidgate.Modules.Authoring.Application.Import.Formats;
 using Shouldly;
@@ -367,6 +369,89 @@ public sealed class AuthoringImportFormatUnitTests
 
         CsvFormat.Read(Utf8($"{Header}\r\n{fourteen}\r\n")).Issues
             .ShouldBe([new ImportIssue(1, "/row", "value_invalid")]);
+    }
+
+    [Fact]
+    public void KeyMembers_TrailingLineFeed_Refused()
+    {
+        // The same exact-end rule the key and code carry applies to the two members that name another row of the same
+        // file: a parent_key or item_key with a trailing line feed would name no row the file declares, so it is refused
+        // at its own column rather than as an unknown parent later on.
+        JsonFormat
+            .Read(Utf8(
+                """{"format":"authoring-import","version":1,"rows":[{"kind":"node","key":"n2","parent_key":"n1\n","node_kind":"feature","title":"Card payment"}]}"""))
+            .Issues.ShouldBe([new ImportIssue(1, "/parent_key", "value_invalid")]);
+
+        JsonFormat
+            .Read(Utf8(
+                """{"format":"authoring-import","version":1,"rows":[{"kind":"case","key":"c1","item_key":"i1\n","title":"T","priority":"high","steps":{"steps":[{"no":1,"action":"Pay","expected":"Refused"}]}}]}"""))
+            .Issues.ShouldBe([new ImportIssue(1, "/item_key", "value_invalid")]);
+
+        // The CSV carrier builds the same document, so the same cells answer the same way.
+        var csvRows = string.Join(
+            ',',
+            "node",
+            "n2",
+            "\"n1\n\"",
+            string.Empty,
+            "feature",
+            "Card payment",
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            "0");
+
+        CsvFormat.Read(Utf8($"{Header}\r\n{csvRows}\r\n")).Issues
+            .ShouldBe([new ImportIssue(1, "/parent_key", "value_invalid")]);
+    }
+
+    [Fact]
+    public void AnchoredPatterns_MatchTheContract()
+    {
+        // ImportSchema applies the contract's key and code patterns with an exact end (\z) because the registry's
+        // engine lets `$` match before a final line feed. The C# copies are therefore the contract's own text with one
+        // terminator changed, and this pins them: a future contract edit fails here instead of silently leaving the
+        // exact-end rule behind.
+        var document = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(RlsExceptionFile.RepositoryRoot, "contracts", "schemas", "authoring-import.v1.json")));
+
+        var keyPattern = document.RootElement.GetProperty("$defs").GetProperty("key").GetProperty("pattern").GetString();
+        var codePattern = document.RootElement
+            .GetProperty("$defs")
+            .GetProperty("case")
+            .GetProperty("properties")
+            .GetProperty("code")
+            .GetProperty("pattern")
+            .GetString();
+
+        keyPattern.ShouldNotBeNull();
+        codePattern.ShouldNotBeNull();
+
+        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["key"] = keyPattern,
+            ["parent_key"] = keyPattern,
+            ["item_key"] = keyPattern,
+            ["code"] = codePattern,
+        };
+
+        ImportSchema.Anchored.Select(entry => entry.Member).ShouldBe(["key", "parent_key", "item_key", "code"]);
+
+        foreach (var (member, pointer, pattern) in ImportSchema.Anchored)
+        {
+            pointer.ShouldBe("/" + member);
+            pattern.ToString().ShouldBe(
+                expected[member].TrimEnd('$') + @"\z",
+                $"{member} is the contract's pattern with an exact end, so the two cannot drift apart");
+        }
+
+        // And the two rules agree on what they refuse: the contract's pattern accepts the line feed the exact end
+        // rejects, which is the whole reason this copy exists.
+        Regex.IsMatch("n1\n", keyPattern!).ShouldBeTrue();
+        ImportSchema.Anchored[0].Pattern.IsMatch("n1\n").ShouldBeFalse();
     }
 
     // ------------------------------------------------------------------ neutralisation (AC16)

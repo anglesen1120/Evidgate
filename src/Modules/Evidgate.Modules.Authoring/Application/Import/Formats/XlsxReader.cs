@@ -971,9 +971,9 @@ internal static class XlsxReader
     /// <summary>Reads the text of an element that carries text only (a <c>v</c> or a <c>t</c>).</summary>
     /// <param name="reader">The reader, positioned on the element.</param>
     /// <param name="maxChars">
-    /// The most characters to collect: text past it is skipped rather than appended, so one element of a 32 MiB part
-    /// cannot become a 32 M-character string. The answer may exceed it by one text node, which is what the caller
-    /// compares against the cell cap.
+    /// The most characters to collect: text past it is skipped rather than appended, and a single text node is appended
+    /// only up to the budget, so one element of a 32 MiB part cannot become a 32 M-character string. The answer is at
+    /// most one character past the budget, which is what the caller compares against the cell cap.
     /// </param>
     /// <returns>The element's text, whitespace included.</returns>
     private static string ReadElementText(XmlReader reader, int maxChars)
@@ -1009,11 +1009,17 @@ internal static class XlsxReader
                 case XmlNodeType.CDATA:
                 case XmlNodeType.SignificantWhitespace:
                 case XmlNodeType.Whitespace:
-                    text ??= new StringBuilder(Math.Min(maxChars, 256));
+                    // One text node can be the whole part, so the node is appended up to the budget rather than whole:
+                    // the answer stays bounded by the budget it was given, whatever the file's node sizes are.
+                    var room = (maxChars + 1) - (text?.Length ?? 0);
 
-                    if (text.Length <= maxChars)
+                    if (room > 0)
                     {
-                        text.Append(reader.Value);
+                        text ??= new StringBuilder(Math.Min(room, 256));
+
+                        var node = reader.Value;
+
+                        text.Append(node.AsSpan(0, Math.Min(node.Length, room)));
                     }
 
                     break;
@@ -1079,10 +1085,12 @@ internal static class XlsxReader
 
             if (string.Equals(reader.LocalName, "t", StringComparison.Ordinal))
             {
-                text ??= new StringBuilder(Math.Min(maxChars, 256));
+                var room = (maxChars + 1) - (text?.Length ?? 0);
 
-                if (text.Length <= maxChars)
+                if (room > 0)
                 {
+                    text ??= new StringBuilder(Math.Min(room, 256));
+
                     text.Append(ReadElementText(reader, maxChars - text.Length));
                 }
             }

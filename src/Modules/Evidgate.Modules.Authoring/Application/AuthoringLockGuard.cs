@@ -29,6 +29,14 @@ namespace Evidgate.Modules.Authoring.Application;
 /// would join the writer's own rank-then-id order and could form a cycle with a batch that locks a child before its
 /// parent. An advisory lock is never taken by the batch path, so no such cycle can include it.
 /// </para>
+/// <para>
+/// <b>The order a multi-part write takes them in.</b> The import (13.1.1-T5) is the one caller that takes both kinds: it
+/// first takes the sibling-group advisory locks of every group it adds to, in ordinal key order and in one statement,
+/// and only then the row locks of the entities it updates or restores — <c>feature_node</c> → <c>checklist_item</c> →
+/// <c>manual_test_case</c>, ascending id within each rank. Every other writer takes at most one of the two, so no two
+/// transactions can hold them in opposite orders; and if the database ever does detect a cycle it raises
+/// <c>40P01</c>, which this guard's <see cref="IsContention"/> treats as the retryable <c>503</c> rather than a failure.
+/// </para>
 /// </remarks>
 internal static class AuthoringLockGuard
 {
