@@ -173,7 +173,7 @@ export class AuditPage {
    * number is grouped through the active locale, so `vi` prints `10.000`, not `10,000`.
    */
   protected browseCappedText(rows: number): string {
-    return $localize`:@@settings.audit.browse-capped:Showing the newest ${formatNumber(rows, this.locale)}:rows: rows. Narrow the filters or export CSV to review older activity.`;
+    return $localize`:@@settings.audit.browse-capped:Showing the newest ${formatNumber(rows, this.locale)}:rows: rows. Narrow the filters to review older activity.`;
   }
   private resetWindow(): void {
     this.offset.set(0);

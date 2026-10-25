@@ -2152,7 +2152,7 @@
       <trans-unit id="settings.audit.loading-more" datatype="html"><source>Loading more activity…</source><target>Đang tải thêm hoạt động…</target></trans-unit>
       <trans-unit id="settings.audit.paging-retry" datatype="html"><source>Retry loading more</source><target>Thử tải thêm lần nữa</target></trans-unit>
       <trans-unit id="settings.audit.paging-failed" datatype="html"><source>The next audit page could not be loaded. The rows already shown are unchanged.</source><target>Không thể tải trang kiểm toán tiếp theo. Các dòng đã hiển thị được giữ nguyên.</target></trans-unit>
-      <trans-unit id="settings.audit.browse-capped" datatype="html"><source>Showing the newest <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> rows. Narrow the filters or export CSV to review older activity.</source><target>Đang hiển thị <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> dòng mới nhất. Thu hẹp bộ lọc hoặc xuất CSV để xem hoạt động cũ hơn.</target></trans-unit>
+      <trans-unit id="settings.audit.browse-capped" datatype="html"><source>Showing the newest <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> rows. Narrow the filters to review older activity.</source><target>Đang hiển thị <x id="rows" equiv-text="formatNumber(rows, this.locale)"/> dòng mới nhất. Thu hẹp bộ lọc để xem hoạt động cũ hơn.</target></trans-unit>
     </body>
   </file>
 </xliff>

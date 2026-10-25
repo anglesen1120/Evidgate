@@ -281,7 +281,7 @@ describe('AuditPage (09.7.1-T6)', () => {
     // At the bound the control is gone and the hint says what to do next.
     expect(root.querySelector('[data-audit-load-more]')).toBeNull();
     expect(root.querySelector('[data-audit-browse-capped]')?.textContent).toContain(
-      'Showing the newest 4,000 rows. Narrow the filters or export CSV to review older activity.',
+      'Showing the newest 4,000 rows. Narrow the filters to review older activity.',
     );
     expect(root.querySelector('[data-audit-paging-error]')).toBeNull();
   });
