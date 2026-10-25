@@ -237,6 +237,67 @@ describe('no-fixture-code gate', () => {
     expect(leaked.stderr).toContain(action);
   });
 
+  it('skips_only_the_enumerated_words_of_the_provider_and_status_members', async () => {
+    const ws = await workspace();
+    // 09.2.1-T7: `provider`/`status` are no longer skipped as whole members. `github_actions`
+    // (14 characters) and `pending_verification` (20) are the words the contract enumerates and
+    // the step-2 page renders, so a bundle carrying them must still pass. The document carries no
+    // other string of needle length, so the reported count proves the exemption did the work:
+    // without the allowlist these two words are needles and the bundle holds both.
+    const enumerated = { provider: 'github_actions', status: 'pending_verification' };
+    await ws.fixture('ci-bindings-list', {
+      operation_id: 'listCiBindings',
+      variant: 'default',
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      latency_ms: 0,
+      body: {
+        items: [{ id: 'cib-1', provider: enumerated.provider, status: enumerated.status }],
+      },
+    });
+    await ws.output(
+      'main-ABC123.js',
+      `const words=[${JSON.stringify(enumerated.provider)},${JSON.stringify(enumerated.status)}];`,
+    );
+
+    const clean = ws.run();
+    expect(clean.status).toBe(0);
+    expect(clean.stdout).toContain('0 fixture string(s)');
+
+    // Any other word under `status` is fixture data and stays a needle: the exemption is the
+    // enumerated value, not the member name.
+    const unexpected = 'awaiting-manual-review';
+    await ws.fixture('ci-bindings-list', {
+      operation_id: 'listCiBindings',
+      variant: 'default',
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      latency_ms: 0,
+      body: { items: [{ id: 'cib-1', status: unexpected }] },
+    });
+    await ws.output('main-ABC123.js', `const s=${JSON.stringify(unexpected)};`);
+
+    const leaked = ws.run();
+    expect(leaked.status).toBe(1);
+    expect(leaked.stderr).toContain(unexpected);
+
+    // The exemption is also scoped to those two member names: an enumerated word carried by any
+    // other member (`name` here) is ordinary data, so it stays a needle.
+    await ws.fixture('ci-bindings-list', {
+      operation_id: 'listCiBindings',
+      variant: 'default',
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      latency_ms: 0,
+      body: { items: [{ id: 'cib-1', name: enumerated.status }] },
+    });
+    await ws.output('main-ABC123.js', `const s=${JSON.stringify(enumerated.status)};`);
+
+    const renamed = ws.run();
+    expect(renamed.status).toBe(1);
+    expect(renamed.stderr).toContain(enumerated.status);
+  });
+
   for (const marker of MARKERS) {
     const slug = marker.toLowerCase().replace(/[^a-z0-9]+/g, '_');
     it(`fails_on_the_fixture_backend_marker_${slug}`, async () => {

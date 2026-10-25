@@ -21,7 +21,11 @@
 //    `content-type`/`application/json` in the HTTP client, the operation ids in the SDK,
 //    `precondition_failed`-style codes in `api-error.ts`, the permission literals of the navigation
 //    registry — so scanning them would fail every build without telling anything about the
-//    fixtures.
+//    fixtures. The `provider` and `status` members are not skipped as slots: only the words the
+//    contract enumerates for them (`github_actions`, `pending_verification`, `active`, `disabled`,
+//    `rotated`, `expired`, `revoked`, which the step-2 page renders) are exempt, and the exemption
+//    matches per value — a fixture that grows any other status or provider word keeps it as a
+//    needle, so it cannot hide a new fixture string behind a common member name.
 //
 // The check fails closed: a missing/empty dist directory, or a corpus with no `input.json`, is a
 // failure, not a pass — otherwise a broken build or a moved corpus would make the gate vacuous.
@@ -106,18 +110,23 @@ const MIN_FIXTURE_STRING_LENGTH = 12;
  * cover the fixture *data* (`body` values such as names and descriptions, which production code
  * never carries), so a leaked response body is caught without the noise the vocabulary would add
  * on every build.
- *
- * `provider` and `status` join them with 09.2.1-T2: the step-2 page names the CI provider
- * (`github_actions`) in its create request and renders the binding/token status words
- * (`pending_verification`, ...), and both are closed enums of `contracts/openapi.yaml`, not data.
  */
-const PROTOCOL_MEMBERS = new Set([
-  'headers',
-  'operation_id',
-  'variant',
-  'code',
-  'provider',
-  'status',
+const PROTOCOL_MEMBERS = new Set(['headers', 'operation_id', 'variant', 'code']);
+
+/**
+ * The closed enums of `contracts/openapi.yaml` that a corpus document carries under an ordinary
+ * data member, as `member -> the words the contract enumerates for it`. With 09.2.1-T2 the
+ * step-2 page names the CI provider (`github_actions`) in its create request and renders the
+ * binding/token status words, so those strings live in production code as well; skipping the
+ * members outright would also exempt every *other* word a fixture ever puts there, so the
+ * exemption is per value: `ENUM_MEMBERS.get(member).has(value)` (09.2.1-T7).
+ */
+const ENUM_MEMBERS = new Map([
+  ['provider', new Set(['github_actions'])],
+  [
+    'status',
+    new Set(['pending_verification', 'active', 'disabled', 'rotated', 'expired', 'revoked']),
+  ],
 ]);
 
 /**
@@ -182,9 +191,24 @@ function listFixtureInputs(dir, prefix = '') {
 }
 
 /**
+ * Whether `child`, the value of `key` in a corpus document, is contract vocabulary rather than
+ * fixture data. A `PROTOCOL_MEMBERS` slot always is. A member of `ENUM_MEMBERS` is vocabulary only
+ * when its value is a string the contract enumerates for that member: any other value — a number,
+ * or a word the fixture invented — is ordinary data and stays a needle (09.2.1-T7).
+ */
+function isProtocolValue(key, child) {
+  if (PROTOCOL_MEMBERS.has(key)) {
+    return true;
+  }
+  const enumerated = ENUM_MEMBERS.get(key);
+  return enumerated !== undefined && typeof child === 'string' && enumerated.has(child);
+}
+
+/**
  * Adds every string leaf of `value` that is long enough to be a leak signal to `strings`
- * (value -> fixture name). A `PROTOCOL_MEMBERS` slot is skipped together with its whole subtree:
- * its values are shared with production code, not fixture data.
+ * (value -> fixture name). A protocol slot is skipped together with its whole subtree, and an
+ * enum member is skipped only for its enumerated words: their values are shared with production
+ * code, not fixture data.
  */
 function collectFixtureStrings(value, name, strings) {
   if (typeof value === 'string') {
@@ -202,7 +226,7 @@ function collectFixtureStrings(value, name, strings) {
   if (value !== null && typeof value === 'object') {
     const permissionRow = isPermissionRow(value);
     for (const [key, child] of Object.entries(value)) {
-      if (PROTOCOL_MEMBERS.has(key) || (permissionRow && PERMISSION_HALVES.includes(key))) {
+      if (isProtocolValue(key, child) || (permissionRow && PERMISSION_HALVES.includes(key))) {
         continue;
       }
       collectFixtureStrings(child, name, strings);

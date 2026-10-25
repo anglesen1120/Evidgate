@@ -47,6 +47,8 @@ export type OnboardingSeed =
   | 'onboarding-empty'
   | 'onboarding-project'
   | 'onboarding-token'
+  | 'onboarding-token-used'
+  | 'onboarding-unusable'
   | 'onboarding-connected'
   | 'onboarding-run-complete'
   | 'onboarding-evidence';
@@ -71,6 +73,8 @@ export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
   'onboarding-empty': 1,
   'onboarding-project': 2,
   'onboarding-token': 3,
+  'onboarding-token-used': 3,
+  'onboarding-unusable': 3,
   'onboarding-connected': 3,
   'onboarding-run-complete': 4,
   'onboarding-evidence': 5,
@@ -110,6 +114,22 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.getProject=onboarding-project',
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-token',
+    'fixture.variant.listRuns=onboarding-project',
+  ],
+  // 09.2.1-T7: the same position with the token page holding the credential metadata the health
+  // panel derives from — an `active` token that was used (its `last_used_at` recorded) and, for the
+  // other seed, a `revoked` one and an `expired` one. Both stay on step 3, because step 2's
+  // done-condition is presence and health is not part of the derivation.
+  'onboarding-token-used': [
+    'fixture.variant.getProject=onboarding-project',
+    'fixture.variant.listCiBindings=onboarding-project',
+    'fixture.variant.listIngestTokens=onboarding-token-used',
+    'fixture.variant.listRuns=onboarding-project',
+  ],
+  'onboarding-unusable': [
+    'fixture.variant.getProject=onboarding-project',
+    'fixture.variant.listCiBindings=onboarding-project',
+    'fixture.variant.listIngestTokens=onboarding-unusable',
     'fixture.variant.listRuns=onboarding-project',
   ],
   'onboarding-connected': [
@@ -235,6 +255,34 @@ export function refusalUrl(
 /** The org's onboarding root whose project list refuses (the shell answers this one). */
 export function orgRefusalUrl(locale: ShellLocale, failure: OnboardingFailure): string {
   return withVariant(onboardingPath(locale), orgRefusalQuery(failure));
+}
+
+/**
+ * 09.2.1-T7: a refusal answered by one of step 2's two credential lists rather than by the project
+ * read. `listIngestTokens` is the read whose answer carries the token metadata the health panel
+ * derives from, so its 403/404 is the case that proves a refused credential read rejects the
+ * resume instead of publishing a step with an empty panel.
+ */
+export type CredentialListFailure = 'onboarding-forbidden' | 'onboarding-project-not-found';
+
+/**
+ * The wizard address whose ingest-token list refuses. The project reads stay on the
+ * `onboarding-project` seed, so the only difference to a working step 2 is the one refused list:
+ * a shell that renders a step here swallowed a failure it was contracted to report (00 §9.2).
+ */
+export function credentialListRefusalUrl(
+  locale: ShellLocale,
+  failure: CredentialListFailure,
+  projectId: string,
+): string {
+  const query = [
+    WIZARD_GRANTS,
+    'fixture.variant.getProject=onboarding-project',
+    'fixture.variant.listCiBindings=onboarding-project',
+    `fixture.variant.listIngestTokens=${failure}`,
+    'fixture.variant.listRuns=onboarding-project',
+  ].join('&');
+  return withVariant(onboardingPath(locale, projectId), `?${query}`);
 }
 
 /**
@@ -374,6 +422,19 @@ export const FIXTURE_ROTATED_TOKEN_SECRET = 'egt_FIXTURE_ONLY_not_a_real_rotated
 
 /** `fixtures/web-api/ci-binding-create/input.json` → `body.binding_challenge`. */
 export const FIXTURE_BINDING_CHALLENGE = 'evg_fixture_only_binding_challenge_not_a_real_value';
+
+// 09.2.1-T7. Step 2's connection-health panel and its CLI quickstart read the same two metadata
+// rows the panel already renders, so the facts the health suite asserts are the corpus's own:
+// `fixtures/web-api/ingest-tokens-list-onboarding-token-used/input.json` → `body.items[0]`.
+
+/** That fixture's token name. The quickstart comment quotes it and the credential row titles it. */
+export const TOKEN_USED_NAME = 'Release CI';
+/** That fixture's prefix. The quickstart names it; it is also the rotate button's label text. */
+export const TOKEN_USED_PREFIX = 'egt_fixture';
+/** That fixture's `last_used_at`, rendered in the panel's `<time [attr.datetime]>`. */
+export const TOKEN_USED_LAST_USED_AT = '2026-10-24T09:12:34Z';
+/** The project slug of `project-detail-onboarding-project`: the quickstart's `EVIDGATE_PROJECT`. */
+export const ONBOARDING_PROJECT_SLUG = 'storefront-web';
 
 /** The step-2 page (`app-onboarding-connect-ci`), rendered for `viewStep === 2` with a project. */
 export function connectCiPage(page: Page) {
