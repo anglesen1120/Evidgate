@@ -12,6 +12,7 @@ using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
 using Evidgate.Modules.Policy;
 using Evidgate.Modules.Tenancy;
+using Evidgate.Modules.Usage;
 using Evidgate.Worker.Health;
 using Evidgate.Worker.Options;
 using Evidgate.Worker.Slice;
@@ -83,6 +84,8 @@ public static class WorkerHost
         builder.Services.AddIdentityModule(builder.Configuration);
         // 02.1.1-T2: the registry module, so every handler the Api composes resolves here too.
         builder.Services.AddTenancyModule();
+        // 12.3.1-T1.3: the usage module, so the ledger write path resolves in the Worker as well.
+        builder.Services.AddUsageModule();
 
         // 01.5.1-T1.2/T1.4: the durable task queue — claim loops per queue and the
         // cron schedule runner. Both are registered in every worker; the unique fire

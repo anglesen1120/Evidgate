@@ -537,6 +537,22 @@ public sealed class TenantGucTests
             ("entity_id", manualTestCaseId),
             ("batch_id", Guid.CreateVersion7()),
             ("hash", "sha256:" + new string('f', 64)));
+        await scope.ExecuteAsync(
+            """
+            insert into public.usage_ledger_entry (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at)
+            values (@id, @org_id, @project_id, 'results', 1, 'count', '2026-10', 'probe:guc', now())
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.usage_rollup (id, org_id, project_id, period, metric, total_quantity, row_count, computed_at)
+            values (@id, @org_id, @project_id, '2026-10', 'results', 1, 1, now())
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
 
         await scope.CommitAsync();
     }

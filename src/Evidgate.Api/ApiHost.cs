@@ -28,6 +28,7 @@ using Evidgate.Modules.Orchestrator.Endpoints;
 using Evidgate.Modules.Policy.Endpoints;
 using Evidgate.Modules.Tenancy;
 using Evidgate.Modules.Tenancy.Endpoints;
+using Evidgate.Modules.Usage;
 using Mediator;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -117,6 +118,9 @@ public static partial class ApiHost
         // 02.1.1-T2/T3: the org/project registry — write model, validators and the
         // ITenantLimits read surface plan 12 consumes.
         builder.Services.AddTenancyModule();
+        // 12.3.1-T1.3: the usage module — the ledger write path (12.3.1-T1.4) and the IUsageLedger
+        // surface the metering callers resolve; the operator route arrives with 12.3.1-T2.4.
+        builder.Services.AddUsageModule();
 
         // 00 §5.5 edge: snake_case JSON through the source-generated context;
         // reflection stays enabled as a fallback for framework types.

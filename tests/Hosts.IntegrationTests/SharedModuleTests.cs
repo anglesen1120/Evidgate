@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Policy.Application.Queries;
+using Evidgate.Modules.Usage.Contracts;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -80,5 +81,46 @@ public sealed class SharedModuleTests
 
         Assert.NotNull(apiRegistry);
         Assert.Equal(apiRegistry.GetType().AssemblyQualifiedName, workerRegistry.GetType().AssemblyQualifiedName);
+    }
+
+    /// <summary>
+    /// 12.3.1-T1.3: the Usage module's ledger write path is composed by both entry points through the
+    /// one <c>AddUsageModule</c> seam, so the emitters that run in the Worker (06.5.2) and in the Api
+    /// (04.8.1) resolve the same <see cref="IUsageLedger"/> implementation.
+    /// </summary>
+    [Fact]
+    public async Task Same_Usage_Ledger_In_Api_And_Worker()
+    {
+        await using var factory = new EvidgateApiFactory(DeadConnectionString);
+        using var client = factory.CreateClient();
+
+        var apiLedger = factory.Services.GetRequiredService<IUsageLedger>();
+
+        using var worker = await WorkerHostFactory.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
+        var workerLedger = worker.Services.GetRequiredService<IUsageLedger>();
+
+        Assert.NotNull(apiLedger);
+        Assert.Equal(apiLedger.GetType().AssemblyQualifiedName, workerLedger.GetType().AssemblyQualifiedName);
+    }
+
+    /// <summary>
+    /// 12.3.1-T1.3/T4 (review F-F): an unregistered <see cref="IQuotaGate"/> is a wiring error that fails at
+    /// resolution, never "no limit row". The gate's implementation is 12.3.1-T4's, so today both hosts must throw for
+    /// the missing service — the fail-closed behaviour <see cref="IQuotaGate"/> documents, and the reason
+    /// <c>Ok</c> may only ever come from a gate that ran.
+    /// </summary>
+    [Fact]
+    public async Task Usage_Quota_Gate_Unregistered_FailsClosed()
+    {
+        await using var factory = new EvidgateApiFactory(DeadConnectionString);
+        using var client = factory.CreateClient();
+
+        Assert.Null(factory.Services.GetService<IQuotaGate>());
+        _ = Assert.Throws<InvalidOperationException>(() => factory.Services.GetRequiredService<IQuotaGate>());
+
+        using var worker = await WorkerHostFactory.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Null(worker.Services.GetService<IQuotaGate>());
+        _ = Assert.Throws<InvalidOperationException>(() => worker.Services.GetRequiredService<IQuotaGate>());
     }
 }
