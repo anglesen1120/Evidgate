@@ -21,6 +21,7 @@ import type { Client } from '@evidgate/sdk';
 import { ApiRequestError } from './api-error';
 import { API_CLIENT } from './api-client';
 import { mapApiError, mapNetworkError, mapTimeoutError } from './error-mapper';
+import { UnauthenticatedRelay } from './unauthenticated-relay';
 
 /**
  * The SDK's resolve-not-throw result (`RequestResult<…, false>`): a 2xx carries `data`, a refusal
@@ -86,6 +87,14 @@ function asThrown(value: unknown): Error {
 export class ApiGateway {
   /** The configured SDK client; operations receive it as `{ client: gateway.client }`. */
   readonly client: Client = inject(API_CLIENT);
+
+  /**
+   * The session hook (09.1.1-T5.2): a `401` from ANY operation is reported here before the
+   * `ApiRequestError` reaches the caller, so one registration in `SessionStore` covers every data
+   * service. The relay holds no handler until the store registers one, which keeps the gateway
+   * independent of the state layer.
+   */
+  private readonly unauthenticated = inject(UnauthenticatedRelay);
 
   /**
    * Runs one SDK operation and resolves its 2xx body.
@@ -185,9 +194,16 @@ export class ApiGateway {
 
     const isSuccess = result.error === undefined && response.status >= 200 && response.status < 300;
     if (!isSuccess) {
-      throw new ApiRequestError(
+      const refusal = new ApiRequestError(
         mapApiError({ status: response.status, body: result.error, headers: response.headers }),
       );
+      // 09.1.1-T5.2: a refusal that says the session is gone is reported before it is thrown, so the
+      // store can offer a sign-in that returns to this route. Reported for every operation, because
+      // any read can be the first one to notice an expired session.
+      if (refusal.error.kind === 'unauthenticated') {
+        this.unauthenticated.notify(null);
+      }
+      throw refusal;
     }
 
     // The SDK's `data` is present on a 2xx; a no-content operation carries the SDK's empty JSON
