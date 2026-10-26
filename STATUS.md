@@ -366,7 +366,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 11.1.1-T3 | M | ASVS level decision + chapter mapping | no | no | no | n/a | yes |
 | 11.1.1-T4 | S | Security-event monitoring baseline | no | no | no | n/a | yes |
 | 11.2.1-T3 | M | Ingest-token security design review | no | no | no | n/a | yes |
-| 11.5.1-T1 | M | Audit event taxonomy + immutability approach: T1.1 taxonomy (`docs/security/audit-taxonomy.md`) and the T1.2 enforcement review are delivered by S105 (PR #TBD); the review's gaps are the three S105 audit rows in §6. T1.2 substance shipped by 02.7.1. | no | no | no | n/a | no (delivered, PR #TBD open; moves to Done at close-out) |
+| 11.5.1-T1 | M | Audit event taxonomy + immutability approach: T1.1 taxonomy (`docs/security/audit-taxonomy.md`) and the T1.2 enforcement review are delivered by S105 (PR #219); the review's gaps are the three S105 audit rows in §6. T1.2 substance shipped by 02.7.1. | no | no | no | n/a | no (delivered, PR #219 open; moves to Done at close-out) |
 | 12.2.1-T2 | M | Baseline measurement kit | no | no | no | n/a | yes for T2.1 kit; T2.2 needs signed pilots |
 | 11.8.1-T1 | L | DPA template + counsel review | no | no | no | T1.1-T1.2 ; T1.3-T1.4 | no — counsel engagement is external and the AC needs `approved` + counsel name in `manifest.yaml` |
 | 11.8.1-T2 | M | Privacy notice + counsel review | no | no | no | n/a | no — counsel review/approval is external |
