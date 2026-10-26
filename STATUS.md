@@ -1,19 +1,22 @@
 # Evidgate — delivery status
 
-Updated 2026-10-26. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
+Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
 
 ## 1. Snapshot
 
 ### Resume here
-- Develop: `74c3fa4` (PR #195); 187 first-parent PR merges into develop.
-- Open PRs (GitHub query 2026-10-26): #196 S93 status sync (this PR); #193 NuGet updates; #192 npm updates; #113 TypeScript 7; #112 npm updates; #111 Actions updates.
-- Highest migration: `0047_usage_rollup.sql`; next free number is `0048`.
-- Fully landed on develop: 166/655 tasks; 173.25/702.75 raw person-days; remaining 489 tasks / 529.5 d. Strict merged-PR-only figure: 140 tasks / 148.75 d (the other 26 tasks / 24.5 d are Stage A direct commits on develop). Method: task ranges in merged rows expanded against plan_graph ids; a parent counts only when all its sub-rows landed.
-- By phase (done tasks / raw d): G1 123 / 136.25; G2 37 / 31; G3 0 / 0; G4 6 / 6.
-- Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in the S93 pass on 74c3fa4: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` exits 1 with 10 errors, all missing feature plans for 13.3.1, 13.4.1, 13.5.1, 13.5.2, 13.6.1, 13.7.1, 13.7.2, 13.8.1, 13.8.2, 13.9.1 (reported by the S93 coordinator check on develop 74c3fa4, not re-run in this docs-only pass; §6 row).
+- Develop: `b0be589` (PR #204, S94 close-out, merged 2026-10-27); 195 first-parent PR merges into develop. Migration lane free (S94 12.3.1-T1 merged in #198/#204); highest migration `0047_usage_rollup.sql`, next free `0048`.
+- Open PRs: #S100-PR (this STATUS/plan sync) plus dependabot PRs (not lanes).
+- Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
+- Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T1/T2 backend; S97 03.2.1-T5 backend tests-only — its landing is credited in §2 by S100, so the S97 close-out must not credit T5 again; S100 this docs lane.
+- Fully landed on develop: 167/655 tasks; 173.75/702.75 raw person-days; remaining 488 tasks / 529.0 d. Strict merged-PR-only figure: 140 tasks / 148.75 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- By phase (done tasks / raw d): G1 124 / 136.75; G2 37 / 31; G3 0 / 0; G4 6 / 6.
+- Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in this S100 docs pass on `b0be589`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1 with the same 10 missing 13.x feature plans (queue F37, §6 row), unchanged.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
-- Next step: §5, dependency-ready work grouped by G1–G4; apply the phase hard stops and recorded owner/operational blockers.
+- Next picks, web-only lane: 09.1.1-T5 (held prompt S98, T3), then 09.1.1-T9 T9.2 (held prompt S99, T2).
+- Next picks, backend lane: refill order in `.omp/coordinator/prompts/held/README.md`; when a backend slot frees, 08.5.1-T1 (XL, split, migration lane) unless §5 ranks another G1 task higher, and 04.1.2-T1 only after S91 releases.
+- Next step: §5, 93 dependency-ready tasks / 104.0 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
 
 ## 2. Done
 
@@ -21,13 +24,13 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 166 | 173.25 |
+| Fully landed on develop | 167 | 173.75 |
 | Via merged PRs | 140 | 148.75 |
-| Direct commits on develop, no PR | 26 | 24.5 |
-| Remaining | 489 | 529.5 |
+| Direct commits on develop, no PR | 27 | 25.0 |
+| Remaining | 488 | 529.0 |
 | Plan total | 655 | 702.75 |
 
-Five partial parents are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence (163); the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
+Five partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 09.1.1-T9) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
 
 ### Done by area
 
@@ -35,7 +38,7 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 |---|---|---|---|---|---|---|---|
 | 01 | 45 | 2 | 10 | 21 | 11 | 1 | 51.5 |
 | 02 | 28 | 0 | 7 | 18 | 3 | 0 | 27.5 |
-| 03 | 7 | 0 | 2 | 4 | 1 | 0 | 7 |
+| 03 | 8 | 0 | 3 | 4 | 1 | 0 | 7.5 |
 | 04 | 22 | 0 | 7 | 12 | 3 | 0 | 21.5 |
 | 05 | 16 | 0 | 4 | 8 | 4 | 0 | 18 |
 | 06 | 11 | 0 | 3 | 8 | 0 | 0 | 9.5 |
@@ -46,17 +49,17 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 11 | 5 | 1 | 2 | 1 | 1 | 0 | 4.25 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 166 | 3 | 43 | 90 | 29 | 1 | 173.25 |
+| TOTAL | 167 | 3 | 44 | 90 | 29 | 1 | 173.75 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 123 | 3 | 25 | 68 | 26 | 1 | 136.25 |
+| G1 | 124 | 3 | 26 | 68 | 26 | 1 | 136.75 |
 | G2 | 37 | 0 | 16 | 19 | 2 | 0 | 31 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 166 | 3 | 43 | 90 | 29 | 1 | 173.25 |
+| TOTAL | 167 | 3 | 44 | 90 | 29 | 1 | 173.75 |
 
 ### Landed task groups
 
@@ -82,6 +85,7 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 02.7.1 | 02.7.1-T1–T3 | direct commit on develop 7c73b84, no PR | Audit chain, audited mutation pipeline, list/export and chain-verification task (0015). |
 | 02.4.1, 02.4.2, 01.8.1 | 02.4.1-T1–T4, 02.4.2-T1/2, 01.8.1-T3 partial (landed T3.1; remainder T3.2) | direct commit on develop a0c3a08, no PR | GitHub OIDC/ingest-token exchange and administration, producer credentials, replay purge and seed-dev (0016–0019). Full local-stack quickstart remains uncertified. |
 | 03.1.1, 03.1.3, 03.2.1 | 03.1.1-T1/2, 03.1.3-T1, 03.2.1-T1–T4 | direct commit on develop 0a01875, 2111dfa, 375bf8b, no PR | Case identity, immutable revisions, suites, variants, dependencies, discovery/registration, case/suite routes, diff/dry-run and shared catalog contracts (0020–0022). |
+| 03.2.1 | 03.2.1-T5 | direct commit on develop 6a0a102 (with 0a01875), no PR; landed with the 03.2.1 story, credited S100 | Suite revision diff/preview API (member/variant/edge/strategy delta) and `ETag`/`If-None-Match` 304 on the suite head; evidence `src/Modules/Evidgate.Modules.Catalog/Endpoints/CatalogEndpoints.cs:83`, `Application/Queries/SuiteQueries.cs:129,194`, tests `tests/Tenancy.IntegrationTests/CatalogSuiteTests.cs:96` (`Suite_CanBeCreatedListedAndRead_WithAnETagAnd304`) and `:595` (`Diff_ReportsMembersEdgesAndStrategyChanges`); S97 adds `SuiteDiffTests` on top (not a separate credit). |
 | 05.1.1, 05.1.2 | 05.1.1-T2–T4, 05.1.2-T1/2 | direct commit on develop 312f55f, no PR | Manifest upload/deduplication and immutable environment revisions (0023–0024). |
 | 04.3.1 | 04.3.1-T1 | merged (#13, 02238c1) | Playwright reporter callbacks, event-envelope spool and capability declaration; execution-key/capture-control limitations remain in §6. |
 | 04.2.1 | 04.2.1-T2 | merged (#15, 9a856ab) | CLI configuration, dev token, secret redaction, command/exit-code registry and redirect-refusing SDK client. |
@@ -309,118 +313,150 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **91 tasks / 102 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 91 / 102 d is the figure used here.
+Dependency-ready: **93 tasks / 104.0 d** (G1 43 / 45.5, G2 35 / 36.5, G3 5 / 8, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane: the **backend lane** touches `src/`, `tests/`, `migrations/`, `contracts/`, `infra/` or the gate scripts and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0048`); the **web-only lane** touches only `apps/web/**`, `fixtures/web-api/**`, `docs/` and `plans/`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
 
-### G1: 44 tasks / 46 d
+Stricter variant that also requires every dependency task's whole story to be merged: **48 tasks / 51.5 d** (G1 19 / 20.5, G2 21 / 21, G3 0 / 0, G4 8 / 10), recomputed on `b0be589` from the plan graph plus the landed set. It supersedes the S93 print of 28 / 31.25 d, which no longer recomputes from the landed set under that definition.
 
-| Task | Size | Note |
-|---|---|---|
-| 01.1.1-T4 | XS | .NET 12 LTS / TypeScript 7 upgrade trigger |
-| 01.7.1-T3 | S | Partial: resume T3.1 branch protection (owner-blocked) |
-| 01.8.1-T3 | M | Partial: T3.2 quickstart completion is not yet certified |
-| 02.3.1-T3 | S | `GET /v1/me` profile + `PATCH /v1/me {preferred_locale}` |
-| 02.3.2-T2 | S | Logout, session list/revoke, revoke-all |
-| 03.1.4-T1 | S | Decision + contract: optional `requirement_ref` |
-| 03.1.4-T2 | S | `platform`, `level`, `purpose` on suite/template |
-| 03.2.1-T5 | S | Suite revision diff/preview API + `ETag` on suite head |
-| 03.4.1-T1 | L | GitHub App registration + installation binding + `git_repo_binding`; typed `HttpClient` + RS256 app JWT |
-| 04.1.2-T1 | S | Per-project rate limit/quota with `Retry-After`; counters and spans |
-| 04.4.1-T1 | L | Per-producer mapping registry + pytest mapping |
-| 04.8.1-T1 | M | Emit `results` usage rows through `IUsageLedger.RecordAsync` in the accepted-batch transaction; unblocked by 12.3.1-T1 (04.1.1-T2 merged) |
-| 06.2.2-T1 | M | Adapter capability + per-project options (disable kinds, allowlisted redaction rules) with 04 |
-| 06.2.3-T1 | M | Async secret-scan `task` handler (outbox row written by `complete`): scan the object, set `scan_state`, write `masking_event`, enforce `reject_on_secret` |
-| 06.4.1-T1 | S | `retention_policy` table, validation floor, defaults, `GET/PUT` |
-| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1 |
-| 08.6.3-T1 | M | Switch model (`enabled / shadow / disabled` settable, `unavailable` derived, T33), resolution order, immediate effect on in-flight work — ships before any apply capability (T29) |
-| 09.1.1-T5 | M | OIDC login/logout + cookie session |
-| 09.1.1-T9 | S | Partial: resume T9.2 emission, opt-out and browser proof |
-| 10.1.1-T3 | L | Environment bootstrap automation |
-| 10.1.1-T4 | M | Isolated artifact-viewer origin |
-| 10.1.2-T1 | M | Secret inventory and CI check |
-| 10.1.2-T2 | XS | Repository secret scanning and push protection |
-| 10.11.1-T3 | S | WAF/edge decision record |
-| 10.2.1-T1 | L | Partial: resume T1.4 web hosting/CDN |
-| 10.3.1-T1 | L | OpenTelemetry instrumentation in Api and Worker |
-| 10.7.1-T4 | M | Key rotation runbook |
-| 10.8.1-T2 | L | Hands-on spike on two candidates |
-| 11.1.1-T3 | M | ASVS level decision + chapter mapping |
-| 11.1.1-T4 | S | Security-event monitoring baseline |
-| 11.2.1-T2 | M | Fork-PR credential-reachability test |
-| 11.2.1-T3 | M | Ingest-token security design review |
-| 11.5.1-T1 | M | Audit event taxonomy + immutability approach |
-| 11.6.1-T3 | S | Attach SBOM and provenance to each release |
-| 11.8.1-T1 | L | DPA template + counsel review |
-| 11.8.1-T2 | M | Privacy notice + counsel review |
-| 12.2.1-T2 | M | Baseline measurement kit |
-| 12.2.1-T3 | M | Pilot onboarding run + friction log |
-| 12.6.1-T1 | M | Trademark search classes 9/42 |
-| 13.1.1-T4 | S | `manual_case_link` to `test_case`; uncovered-case view |
-| 13.1.2-T1 | M | `authoring_change` model; apply-as-one-version with `If-Match` and idempotency key |
-| 13.2.1-T1 | M | `project_ai_settings` + `ai_settings_template` (vi + en seeds), API, limits |
-| 13.3.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
-| 13.4.1-T1 | L | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
+### G1: 43 tasks / 45.5 d (backend 28 / 30 d, web-only 2 / 1.5 d, docs-only 13 / 14 d)
 
-### G2: 33 tasks / 35 d
+#### G1 backend lane
 
-| Task | Size | Note |
-|---|---|---|
-| 01.10.1-T1 | M | Emit own CI results in ingest format |
-| 02.10.1-T1 | S | Provider choice and sender setup |
-| 02.4.3-T2 | M | `github_installation`, install callback, token minting |
-| 02.4.4-T1 | M | `api_token` table, create/list/revoke API |
-| 02.8.1-T1 | M | `support_grant` model and request/approve/revoke flow |
-| 03.3.1-T1 | M | `fixture_revision` schema + suite reference + seed versioning + cleanup policy fields |
-| 03.7.1-T3 | S | Evaluate Playwright planner/generator agents |
-| 04.1.2-T2 | S | Stale/foreign-epoch handling |
-| 04.1.2-T3 | M | OpenAPI + integration tests for both stories |
-| 04.1.3-T1 | S | Manifest and report caps, page shape |
-| 04.4.1-T4 | S | Raw report persistence + `raw_report`/`report_parser` rows |
-| 04.6.1-T1 | L | Fixture layout `fixtures/<producer>/<case>/` + diff harness (expected events vs produced) |
-| 05.2.1-T3 | M | Server-side `execution_key` + uniqueness |
-| 05.2.2-T3 | M | Fork-PR behaviour: labelled, advisory-only, never bound or gating |
-| 05.3.2-T5 | M | `evidence_revision` table, owned by 05 |
-| 05.4.1-T1 | S | Cancel request row + `POST /v1/runs/{r}/cancel` + permission `run:cancel` |
-| 05.5.2-T1 | S | Decision + 00 §9.4 CR |
-| 05.6.1-T1 | M | `release`/`release_component`/`release_run` tables + create API |
-| 05.7.1-T1 | L | JobSpec schema + immutability + `job_spec_hash` |
-| 06.1.3-T1 | S | Guards, transition tests, `rejected`/`ready` immutability |
-| 06.2.1-T1 | M | Kind → default sensitivity map + project override; enforce on read/list/download-url |
-| 06.3.6-T1 | L | Parse runner as a limited child process |
-| 09.2.1-T5 | M | Enable step |
-| 09.3.1-T1 | M | Run list with state/completeness/decision filters and rerun-scope labels |
-| 09.3.1-T2 | L | Run detail: manifest summary, release components + digests, environment, pinned `manifest_hash`/suite/policy revision |
-| 09.3.1-T3 | L | Evidence panel: completeness verdict, `missing[]` reasons with deep links, immutable evidence-revision selector |
-| 09.3.1-T4 | M | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible |
-| 09.3.1-T6 | M | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events |
-| 10.7.1-T1 | M | Dead-letter runbook |
-| 12.3.1-T3 | M | Versioned price table + loader (price stays `[OPEN] O5`; fixtures only); unblocked by 12.3.1-T1 |
-| 12.3.1-T5 | M | Roll-up job + reconciliation query; unblocked by 12.3.1-T1 |
-| 13.5.2-T1 | L | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
-| 13.7.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
+| Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
+|---|---|---|---|---|---|---|---|
+| 01.1.1-T4 | XS | .NET 12 LTS / TypeScript 7 upgrade trigger | no | no | no | n/a | no — V3 gate: .NET 12 not GA and `@angular/build` / `typescript-eslint` peer ranges still exclude TS 7 |
+| 01.7.1-T3 | S (rem T3.1) | Partial: T3.2 shipped (CODEOWNERS `f34d01b`, PR template `6a679d8`, CONTRIBUTING `4cd9789`); T3.1 branch-protection apply is owner-blocked (403 on the free private plan). | no | no | no | n/a | no — owner-blocked: branch-protection writes return 403 on the free private repo (STATUS §6 row "Branch-protection API") |
+| 01.8.1-T3 | M (rem T3.2) | Partial: T3.1 seed-dev shipped (`db209e4`, `SeedDevTests`); T3.2 still needs a clean-checkout `up.sh` run and a second-developer review of `docs/dev-setup.md`. | no | no | no | n/a | yes — files exist; rem = clean-checkout `scripts/dev/up.sh` run (AC1/AC4) + second-dev review of `docs/dev-setup.md` |
+| 10.1.1-T3 | L | Environment bootstrap automation | no | no | no | T3.1-T3.2 ; T3.3-T3.4 | yes for the scripts; AC5 needs a live instance |
+| 10.1.1-T4 | M | Isolated artifact-viewer origin | no | no | no | n/a | no — needs a distinct registrable domain + DNS record + TLS certificate (registrar/DNS action) |
+| 10.1.2-T1 | M | Secret inventory and CI check | no | no | no | n/a | yes |
+| 10.1.2-T2 | XS | Repository secret scanning and push protection | no | no | no | n/a | yes (needs repo-admin token; ⚠️ plan feature availability) |
+| 10.8.1-T2 | L | Hands-on spike on two candidates | no | no | no | T2.1-T2.2 (candidate A) ; T2.3-T2.4 (candidate B) | no — needs two managed-provider accounts/credentials to provision and measure |
+| 11.2.1-T2 | M | Fork-PR credential-reachability test | no | no | no | n/a | yes |
+| 11.6.1-T3 | S | Attach SBOM and provenance to each release | no | no | no | n/a | yes (needs a fixture release tag) |
+| 02.3.1-T3 | S | `GET /v1/me` profile + `PATCH /v1/me {preferred_locale}` | yes | yes (0048+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | n/a | yes |
+| 02.3.2-T2 | S | Logout, session list/revoke, revoke-all | yes | no | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | n/a | yes |
+| 03.1.4-T1 | S | Decision + contract: optional `requirement_ref`. Partial: decision half landed as D-A6 (`DECISIONS.md:164`, `a4c546c`); the contract half is open — `requirement_ref` and the sidecar `requirement` key appear nowhere under `contracts/`. | yes | yes (0048+) | no | n/a | yes |
+| 03.1.4-T2 | S | `platform`, `level`, `purpose` on suite/template | yes | yes (0048+) | S97: Catalog suite create/list endpoint code + tests; `contracts/openapi.yaml`, generated SDK | n/a | yes |
+| 03.4.1-T1 | L | GitHub App registration + installation binding + `git_repo_binding`; typed `HttpClient` + RS256 app JWT | yes | yes (0048+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | T1.1-T1.2 ; T1.3-T1.4 | yes (App registration itself needs GitHub org/admin credentials) |
+| 04.1.2-T1 | S | Per-project rate limit/quota with `Retry-After`; counters and spans (after S91) | yes | no | S91: `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` (`ingest_*` counters on the batch span) | n/a | yes |
+| 04.4.1-T1 | L | Per-producer mapping registry + pytest mapping | yes | yes (0048+) | no | T1.1-T1.2 ; T1.3-T1.4 | yes |
+| 04.8.1-T1 | M | Emit `results` usage rows through `IUsageLedger.RecordAsync` in the accepted-batch transaction; unblocked by 12.3.1-T1 (04.1.1-T2 merged). Partial: T1.1 ships the `usage.batch_accepted` outbox row (`IngestEventBatch.cs:590`, `IngestEventBatchTests.cs:186`); T1.2–T1.4 consumer and ledger write remain. | yes | yes (0048+) | no | n/a | yes |
+| 06.2.2-T1 | M | Adapter capability + per-project options (disable kinds, allowlisted redaction rules) with 04 | yes | yes (0048+) | no | n/a | yes |
+| 06.2.3-T1 | M | Async secret-scan `task` handler (outbox row written by `complete`): scan the object, set `scan_state`, write `masking_event`, enforce `reject_on_secret` | yes | yes (0048+) | no | n/a | yes |
+| 06.4.1-T1 | S | `retention_policy` table, validation floor, defaults, `GET/PUT` | yes | yes (0048+) | no | n/a | yes (RetentionLimits floor values still `[OPEN] owner`) |
+| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1 | yes | yes (0048+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
+| 08.6.3-T1 | M | Switch model (`enabled / shadow / disabled` settable, `unavailable` derived, T33), resolution order, immediate effect on in-flight work — ships before any apply capability (T29) | yes | yes (0048+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | n/a | yes |
+| 10.2.1-T1 | L (rem T1.4) | Partial: T1.1–T1.3 images/SBOM shipped; T1.4 web bundle hosting and edge CSP/CORS deploy remain. | no | no | S91: `infra/config-matrix.json` (telemetry endpoint/connect-src keys) | n/a — rem is T1.4 alone (S) | yes for edge config/checks; live publish needs a hosting target (vendor still undecided, 10.8.1) |
+| 10.3.1-T1 | L | OpenTelemetry instrumentation in Api and Worker. Partial: only the 01.1.2 foundation is on develop (`ObservabilityExtensions.cs:30`); T1.1–T1.4 enrichment, sampling and the log pipeline are the S91 lane in flight. | yes | no | S91 (in flight) | T1.1-T1.2 ; T1.3-T1.4 | no — in flight (S91) |
+| 13.1.1-T4 | S | `manual_case_link` to `test_case`; uncovered-case view | yes | yes (0048+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | n/a | yes |
+| 13.1.2-T1 | M | `authoring_change` model; apply-as-one-version with `If-Match` and idempotency key | yes | yes (0048+) | S97: `contracts/openapi.yaml`, generated SDK, permissions, isolation route cases | n/a | yes |
+| 13.2.1-T1 | M | `project_ai_settings` + `ai_settings_template` (vi + en seeds), API, limits | yes | yes (0048+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | n/a | yes |
 
-### G3: 5 tasks / 8 d
+#### G1 web-only lane
 
-| Task | Size | Note |
-|---|---|---|
-| 04.9.1-T1 | L | `evidgate replay` CLI command |
-| 04.9.2-T1 | M | Publish pipeline for `@evidgate/*`, changelog, signed tag, N-1 window |
-| 04.9.2-T2 | M | Docs site skeleton |
-| 09.8.1-T1 | L | WCAG 2.2 AA pass on core flows (keyboard, focus, contrast, target size, error identification) with fixes |
-| 09.8.1-T3 | L | Playwright E2E suite for core flows, wired into CI and dogfooded into Evidgate |
+| Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
+|---|---|---|---|---|---|---|---|
+| 09.1.1-T5 | M | OIDC login/logout + cookie session | no | no | no | n/a | yes (held prompt S98, T3 lane) |
+| 09.1.1-T9 | S (rem T9.2) | Partial: T9.1 spans/scrubbing shipped (#153, `apps/web/src/app/core/telemetry/`); T9.2 emission config, opt-out and the browser vitals proof remain. | no | no | no | n/a | yes (held prompt S99, T2) |
+| 10.7.1-T4 | M | Key rotation runbook | no | no | no | n/a | yes for T4.1 runbook; T4.2 staging drill needs a staging environment |
+| 11.1.1-T3 | M | ASVS level decision + chapter mapping | no | no | no | n/a | yes |
+| 11.1.1-T4 | S | Security-event monitoring baseline | no | no | no | n/a | yes |
+| 11.2.1-T3 | M | Ingest-token security design review | no | no | no | n/a | yes |
+| 11.5.1-T1 | M | Audit event taxonomy + immutability approach. Partial: T1.2 substance shipped by 02.7.1 (`AuditChainVerifier.cs:30`, `AuditTrailTests.cs:147`); `docs/security/audit-taxonomy.md` (T1.1) remains. | no | no | no | n/a | yes — partial remainder: T1.1 taxonomy doc + the 02.7.1 enforcement review |
+| 11.8.1-T1 | L | DPA template + counsel review | no | no | no | T1.1-T1.2 ; T1.3-T1.4 | no — counsel engagement is external and the AC needs `approved` + counsel name in `manifest.yaml` |
+| 11.8.1-T2 | M | Privacy notice + counsel review | no | no | no | n/a | no — counsel review/approval is external |
+| 12.2.1-T2 | M | Baseline measurement kit | no | no | no | n/a | yes for T2.1 kit; T2.2 needs signed pilots |
+| 12.2.1-T3 | M | Pilot onboarding run + friction log | no | no | no | n/a | no — needs signed pilot orgs and the 09.2.1 wizard |
+| 12.6.1-T1 | M | Trademark search classes 9/42 | no | no | no | n/a | no — counsel + NOIP register search are external/legal |
+| 13.3.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | n/a | no — `[OPEN]` no feature plan: `scripts/check_features.py` reports "expected 1 feature file, found 0" (STATUS §6 row) |
+| 13.4.1-T1 | L | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | plan first, then split by its sub-tasks; declared L = wireframes/all states + CR-D-2 deltas | no — `[OPEN]` no feature plan (STATUS §6 row); size L is `plans/13-product-phases.md:175` |
+| 10.11.1-T3 | S | WAF/edge decision record | no | no | no (plans Notes row only at close-out) | n/a | yes |
 
-### G4: 9 tasks / 13 d
+### G2: 35 tasks / 36.5 d (backend 24 / 25 d, web-only 6 / 8 d, docs-only 5 / 3.5 d)
 
-| Task | Size | Note |
-|---|---|---|
-| 02.3.3-T1 | XL | SAML 2.0 SSO (metadata, SP-initiated login, assertion mapping, JIT membership policy) |
-| 03.5.1-T1 | M | `template` registry + web template |
-| 04.5.1-T1 | L | Appium adapter skeleton + capability document (`engine.family`, driver, platform, `supports.cancel`) |
-| 05.7.3-T1 | M | Capability matching + pool model |
-| 07.8.1-T1 | M | `deploy_target` and CRUD |
-| 09.6.1-T6 | M | Suite composition: case revisions × variants, shard strategy, DAG/coverage gap warnings |
-| 11.7.1-T2 | M | SAST/DAST baseline |
-| 12.1.1-T1 | L | Waived by O1; do not schedule interviews |
-| 12.1.1-T2 | M | Waived by O1; do not schedule interviews |
+#### G2 backend lane
+
+| Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
+|---|---|---|---|---|---|---|---|
+| 01.10.1-T1 | M | Emit own CI results in ingest format | no | no | no | n/a | yes |
+| 03.7.1-T3 | S | Evaluate Playwright planner/generator agents | no | no | no | n/a | yes |
+| 04.6.1-T1 | L | Fixture layout `fixtures/<producer>/<case>/` + diff harness (expected events vs produced) | no | no | no | T1.1+T1.2 \| T1.3+T1.4 | yes |
+| 02.4.3-T2 | M | `github_installation`, install callback, token minting | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json`; S91: additive endpoint registration | n/a | yes |
+| 02.4.4-T1 | M | `api_token` table, create/list/revoke API | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
+| 02.8.1-T1 | M | `support_grant` model and request/approve/revoke flow | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
+| 03.3.1-T1 | M | `fixture_revision` schema + suite reference + seed versioning + cleanup policy fields | yes | yes (0048+) | no — same Catalog module as S97, new types only | n/a | yes |
+| 03.6.1-T1 | M | Suite draft tables + `ETag`/`If-Match` on the draft routes | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
+| 04.1.2-T2 | S | Stale/foreign-epoch handling | yes | no | no | n/a | yes |
+| 04.1.2-T3 | M | OpenAPI + integration tests for both stories. Partial: events operation documented (`contracts/openapi.yaml:1009,6848,7182`) and the 04.1.1+04.1.2 suite is on develop; the run-create 409 `producer_slots_conflict` still needs documenting. | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes — remainder only |
+| 04.1.3-T1 | S | Manifest and report caps, page shape | yes | no | S91: `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` (`ingest_cap_exceeded_total{cap}` counter) and `infra/config-matrix.json` (new cap rows); S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
+| 04.4.1-T4 | S | Raw report persistence + `raw_report`/`report_parser` rows | yes | yes (0048+) | no | n/a | yes |
+| 05.2.1-T3 | M | Server-side `execution_key` + uniqueness. Partial: key layout, unique index and the 422 conflict ship (`ExecutionKey.cs:20`, `0031:174`); the golden vectors and the reporter real key (all-zero `PLACEHOLDER_EXECUTION_KEY`) remain. | yes | yes (0048+) | no — `packages/adapter-playwright/src/identity.ts` is CLI-side, no lane owns it | n/a | yes — remainder only |
+| 05.2.2-T3 | M | Fork-PR behaviour: labelled, advisory-only, never bound or gating | yes | no | S91: `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` (T3.4 adds a counter name to that file) | n/a | yes |
+| 05.3.2-T5 | M | `evidence_revision` table, owned by 05 | yes | yes (0048+) | no | n/a | yes |
+| 05.4.1-T1 | S | Cancel request row + `POST /v1/runs/{r}/cancel` + permission `run:cancel` | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`run:cancel`) | n/a | yes |
+| 05.6.1-T1 | M | `release`/`release_component`/`release_run` tables + create API | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
+| 05.7.1-T1 | L | JobSpec schema + immutability + `job_spec_hash` | yes | yes (0048+) | S97: `contracts/openapi.yaml` (`jobspec_invalid`), `packages/sdk`; `contracts/jobspec.schema.json` is a new file | T1.1+T1.2 \| T1.3+T1.4 | yes |
+| 06.1.3-T1 | S | Guards, transition tests, `rejected`/`ready` immutability | yes | yes (0048+) | no | n/a | yes |
+| 06.2.1-T1 | M | Kind → default sensitivity map + project override; enforce on read/list/download-url. Partial: kind defaults and override precedence ship in 06.1.2-T3 (`ArtifactKindDefaults.cs:28`); the per-project `PUT` override route and read/list enforcement remain. | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes — remainder only |
+| 06.3.6-T1 | L | Parse runner as a limited child process | yes | no | S91: additive Api/Worker registration for the `parse` task handler | T1.1+T1.2 \| T1.3+T1.4 | yes |
+| 12.3.1-T3 | M | Versioned price table + loader (price stays `[OPEN] O5`; fixtures only); unblocked by 12.3.1-T1 | yes | no | no | n/a | yes |
+| 12.3.1-T5 | M | Roll-up job + reconciliation query; unblocked by 12.3.1-T1 | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`billing:read`) | n/a | yes |
+| 13.5.2-T1 | L | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | yes | no | unknown (no feature plan; likely `packages/cli`, no lane owns it) | no plan; proposed slices: command+config \| reporter+ingest wiring | no |
+
+#### G2 web-only lane
+
+| Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
+|---|---|---|---|---|---|---|---|
+| 05.5.2-T1 | S | Decision + 00 §9.4 CR | no | no | no | n/a | yes |
+| 09.3.1-T2 | L | Run detail: manifest summary, release components + digests, environment, pinned `manifest_hash`/suite/policy revision | no | no | no | T2.1+T2.2 \| T2.3+T2.4 | yes |
+| 09.3.1-T3 | L | Evidence panel: completeness verdict, `missing[]` reasons with deep links, immutable evidence-revision selector | no | no | no | T3.1+T3.2 \| T3.3+T3.4 | yes |
+| 09.3.1-T4 | M | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible | no | no | no | n/a | yes |
+| 13.7.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | n/a | no |
+| 02.10.1-T1 | S | Provider choice and sender setup | no | no | S91: `infra/config-matrix.json` + `.env.dev.template` (new email keys, additive row) | n/a | no |
+| 06.4.6-T1 | S | ADR for retention partitioning (options A–E, dedupe key, retention windows); CR proposals stay `[OPEN]` | no | no | no (docs/adr; S100 owns only STATUS/AGENTS/plans) | n/a | yes |
+| 09.2.1-T5 | M | Enable step | no | no | no (adds a `fixtures/web-api` route for `policy-activation`) | n/a | yes |
+| 09.3.1-T1 | M | Run list with state/completeness/decision filters and rerun-scope labels | no | no | no (consumes the generated SDK; regenerate only if a field is missing → append-list with S97) | n/a | yes |
+| 09.3.1-T6 | M | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events | no | no | no — consumes the 03.2.1 suite-composition/slot API that S97 is building (dependency, not a shared file) | n/a | yes |
+| 10.7.1-T1 | M | Dead-letter runbook | no | no | no (docs/runbooks) | n/a | no |
+
+### G3: 5 tasks / 8 d (backend 3 / 4 d, web-only 2 / 4 d, docs-only 0 / 0 d)
+
+#### G3 backend lane
+
+| Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
+|---|---|---|---|---|---|---|---|
+| 04.9.1-T1 | L | `evidgate replay` CLI command | no | no | no (`packages/cli`) | T1.1+T1.2 \| T1.3+T1.4 | yes |
+| 04.9.2-T1 | M | Publish pipeline for `@evidgate/*`, changelog, signed tag, N-1 window | no | no | no (`.github/workflows/release.yml`, `scripts/`) | n/a | no |
+| 04.9.2-T2 | M | Docs site skeleton | no | no | no (`scripts/verify.sh`, `ci.yml`, `docs/`) | n/a | yes |
+
+#### G3 web-only lane
+
+| Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
+|---|---|---|---|---|---|---|---|
+| 09.8.1-T1 | L | WCAG 2.2 AA pass on core flows (keyboard, focus, contrast, target size, error identification) with fixes | no | no | no (`apps/web` `shared/ui` tokens; S97 adds no web surface) | T1.1+T1.2 \| T1.3+T1.4 | yes |
+| 09.8.1-T3 | L | Playwright E2E suite for core flows, wired into CI and dogfooded into Evidgate | yes | no | no | T3.1+T3.2 \| T3.3+T3.4 | yes |
+
+### G4: 10 tasks / 14 d (backend 7 / 10 d, web-only 1 / 1 d, docs-only 2 / 3 d)
+
+#### G4 backend lane
+
+| Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
+|---|---|---|---|---|---|---|---|
+| 02.3.3-T1 | XL | SAML 2.0 SSO (metadata, SP-initiated login, assertion mapping, JIT membership policy) | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`sso:read`/`sso:write`) | T1.1+T1.2 \| T1.3+T1.4 \| T1.5+T1.6 | yes |
+| 03.5.1-T1 | M | `template` registry + web template | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
+| 04.5.1-T1 | L | Appium adapter skeleton + capability document (`engine.family`, driver, platform, `supports.cancel`) | no | no | no (new `packages/adapter-appium`) | T1.1+T1.2 \| T1.3+T1.4 | no |
+| 04.5.1-T2 | M | Appium result mapping in `packages/adapter-appium`; throwaway if `adapter-mobile` wins the 13.7.1 memo | no | no | no (new `packages/adapter-appium` mapping) | n/a | no |
+| 05.7.3-T1 | M | Capability matching + pool model | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`agent_pool:*`) | n/a | yes |
+| 07.8.1-T1 | M | `deploy_target` and CRUD | yes | yes (0048+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
+| 11.7.1-T2 | M | SAST/DAST baseline | yes | no | no (`.github/workflows` CodeQL, `Directory.Build.props` analyzers) | n/a | partial (SAST half buildable; DAST needs staging) |
+
+#### G4 web-only lane
+
+| Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
+|---|---|---|---|---|---|---|---|
+| 09.6.1-T6 | M | Suite composition: case revisions × variants, shard strategy, DAG/coverage gap warnings | no | no | no | n/a | yes |
+| 12.1.1-T1 | L | Waived by O1; do not schedule interviews | no | no | no (`docs/discovery`, `interviews/`) | T1.1+T1.2 \| T1.3+T1.4 | no |
+| 12.1.1-T2 | M | Waived by O1; do not schedule interviews | no | no | no (`docs/discovery`, `fixtures/discovery/`, `scripts/check-discovery.py`) | T2.1+T2.2 | no |
 
 **Waived:** 12.1.1-T1/T2 customer interviews (O1, 2026-10-02); pilot profile in `docs/decisions/O1-pilot-profile.md`, real reports from the owner’s own pipeline.
 
@@ -674,4 +710,5 @@ Dependency-ready: **91 tasks / 102 raw person-days**, using the exact expanded t
 | Event ingest insert-order deadlock risk (04.1.1-T2 delivery, S96, #201) | Concurrent batches in one run whose `event_id`s overlap in opposite order can hit SQLSTATE 40P01 because the event insert runs in request order (pre-existing T1 code; unreproduced; the transaction rolls back and nothing is double counted). Fix idea: order the rows by `event_id` before the insert. | receiver: queue row F39 (STATUS §6 ingest-evidence hand-overs, 04/06 hand-over pass); hand-over Notes: `plans/features/04-ingestion-adapters/04.1.1-atomic-batch-ingest-with-per-event.md:405` |
 | All-duplicate resend still writes an `accepted=0` `event_batch` row (04.1.1-T2 delivery, S96, #201) | An all-duplicate resend inserts an `event_batch` row with `accepted = 0` and no outbox row; nothing caps the number of batch rows, so 04.1.2-T1 must decide whether such a batch counts toward the per-project quota. | receiver: 04.1.2-T1; hand-over Notes: `plans/features/04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md:191` |
 | Merge debt (#201) | Merged delivery under coordinator-review 6c after one send-back (jev r1: acceptance 0.83, reviews 0.88, clean 0.93, handed_over 0.64; r2: 0.79, 0.86, 0.91, 0.79); tests and docs only, no production change; a fresh batch runs 0 conflict read-backs (deviation recorded in the 04.1.1 plan Notes). Review debt is recorded in the receiving register, not an unmerged task. | `.omp/coordinator/merge-debt.md` (D-S96-M1); hand-over rows: the two 04.1.1-T2 rows directly above |
-| Merge debt (#198) | Merged delivery under coordinator-review 6c after one send-back (jev r1: acceptance 0.63, reviews 0.58, clean 0.41, handed_over 0.60; the send-back fixes were report-only: one orchestrator triage `judge_batch`, per-AC test lines, full-sha range table, smoke run, exact count change). 12.3.1-T2.4 (plan row :144) must reconcile its 422 code `validation_failed` with D-S94-Q2 `request_invalid`. Review debt is recorded in the receiving register, not an unmerged task. | `.omp/coordinator/merge-debt.md` (D-S94-M1); hand-over: the 12.3.1 row at STATUS.md:173 and the T2.4 Notes line in `plans/features/12-pilot-commercial/12.3.1-every-billed-unit-is-a-row.md:146` |
+| Merge debt (#198) | Merged delivery under coordinator-review 6c after one send-back (jev r1: acceptance 0.63, reviews 0.58, clean 0.41, handed_over 0.60; the send-back fixes were report-only: one orchestrator triage `judge_batch`, per-AC test lines, full-sha range table, smoke run, exact count change). 12.3.1-T2.4 (plan row :144) must reconcile its 422 code `validation_failed` with D-S94-Q2 `request_invalid`. Review debt is recorded in the receiving register, not an unmerged task. | `.omp/coordinator/merge-debt.md` (D-S94-M1); hand-over: the 12.3.1 row at STATUS.md:177 and the T2.4 Notes line in `plans/features/12-pilot-commercial/12.3.1-every-billed-unit-is-a-row.md:146` |
+| Usage-summary route path disagreement between plans (found S100) | `plans/00-overview.md:388` and `plans/features/09-web-ui/09.7.1-*.md:194` specify `GET /v1/orgs/{o}/usage/summary` (what `contracts/openapi.yaml:4011` implements, added by 01.3.1), while `plans/features/12-pilot-commercial/12.3.1-*.md:39,66,175` specify `GET /v1/projects/{p}/usage-summary`; `plans/12-pilot-commercial.md:317` (12-CR-2) proposes `GET /v1/usage/summary`. One shape must be decided before 12.3.1-T6 or the 09.7.1 usage tab is built | contract owner (00 §9) decision before 12.3.1-T6 / 09.7.1 usage tab; owner: coordinator: queue row Fn proposed in the S100 PR body |
