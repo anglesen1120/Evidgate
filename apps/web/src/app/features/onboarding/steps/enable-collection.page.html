@@ -92,7 +92,9 @@
         aria-labelledby="enable-enabled-heading"
         data-testid="enable-collection-enabled"
       >
-        <h3 id="enable-enabled-heading" tabindex="-1" #enabledHeadingTarget>{{ enabledHeading }}</h3>
+        <h3 id="enable-enabled-heading" tabindex="-1" #enabledHeadingTarget>
+          {{ enabledHeading }}
+        </h3>
         <p>{{ activation.changed ? changedCopy : unchangedCopy }}</p>
         <p class="advisory">{{ notGatingCopy }}</p>
         <dl class="metadata">
