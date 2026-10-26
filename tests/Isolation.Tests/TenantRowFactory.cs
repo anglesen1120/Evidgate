@@ -363,6 +363,16 @@ internal sealed class TenantRowFactory
                 + $"/{values[TenantFkScan.TenantKeyColumn]}";
         }
 
+        // usage_ledger_entry's adjustment CHECK (0046) demands a reason exactly when adjustment_of is
+        // set. The corrupt row of the composite-FK suite fills adjustment_of from the other org's row,
+        // so the reason has to travel with it — otherwise the CHECK (23514) would answer before the
+        // foreign key (23503) this suite asserts.
+        if (string.Equals(table, "public.usage_ledger_entry", StringComparison.Ordinal)
+            && values.ContainsKey("adjustment_of"))
+        {
+            values["reason"] = "generated adjustment";
+        }
+
         return values;
     }
 
@@ -449,6 +459,13 @@ internal sealed class TenantRowFactory
             ("public.project", "case_prefix") =>
                 "P" + Interlocked.Increment(ref _casePrefix).ToString("D4", CultureInfo.InvariantCulture),
             ("public.producer_slot", "producer_id") => "shard-1",
+            // The usage ledger and roll-up (0046/0047) close their vocabulary in CHECKs the generic
+            // text rule cannot satisfy: `metric` is the plan §4 list and `period` is its `YYYY-MM`
+            // shape. `billing_key` stays generic on purpose — the generic candidate is 13 characters
+            // and unique per generated row, which is what `unique (org_id, billing_key)` needs so the
+            // corrupt row never trips the dedupe key before the composite FK under test.
+            ("public.usage_ledger_entry" or "public.usage_rollup", "metric") => "results",
+            ("public.usage_ledger_entry" or "public.usage_rollup", "period") => "2026-10",
             // planned_execution's execution_key is the 00 §7 sha256 hex and its unique key is
             // (org_id, run_id, execution_key), so a constant would collide with the valid row the
             // corrupt attempt inserts just before it: a fresh 64-hex value per generated row.
