@@ -430,9 +430,11 @@ initializer that starts the facade.
   10.2.1-T1.4 (edge) and 10.3.1-T2 (collector) [OPEN].
 
 - **Sampling.** `ParentBasedSampler` with a root `TraceIdRatioBasedSampler(sampleRatio)`: every
-  route change opens a **new root trace**, so the ratio is applied per navigation, and each
-  `api.request`/`client.error` span follows its route trace's decision (a child of an unsampled
-  parent is dropped). The decision travels in the `traceparent` flag byte (`01` sampled, `00` not).
+  route change opens a **new root trace**, so the ratio is applied per navigation, and the
+  `api.request`, `client.error` and `client.event` spans each follow their route trace's decision
+  (a child of an unsampled parent is dropped) — the audit-cap `client.event` included, so at
+  `sampleRatio < 1` that event can be dropped. The decision travels in the `traceparent` flag byte
+  (`01` sampled, `00` not).
 - **What is exported** — five fixed span names and one named event, never a URL in a span name, no metrics SDK:
 
   | Span           | Started by                                                                                                                                                                                                | Attributes (allowlisted keys only)                                                                                                                                                 |
@@ -448,9 +450,11 @@ initializer that starts the facade.
   only event name the exporter admits is `audit.export_capped` (the audit CSV export hit its
   10,000-row cap, 09.1.1-T9.2). It is raised by `AuditStore`
   (`src/app/features/settings/audit/audit.store.ts`) through `TelemetryService.reportEvent`, once
-  per capped export. The event itself has **no attribute**: the name is the whole
-  payload, so no row count, org id or filter value leaves the page. Any other event name is
-  content and is dropped.
+  per capped export. `reportEvent` is a **no-op until the lazy telemetry chunk has resolved** — it
+  records into the runtime the chunk installs, so a cap hit before that (or when the visit opted
+  out, or after a failed load) leaves no span rather than a buffered one. The event itself has
+  **no attribute**: the name is the whole payload, so no row count, org id or filter value leaves
+  the page. Any other event name is content and is dropped.
 
   The closed key set is `attribute-allowlist.ts` (`ALLOWED_ATTRIBUTE_KEYS` /
   `ALLOWED_RESOURCE_KEYS`); anything outside it is dropped at export, not merely unset. Fields

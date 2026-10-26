@@ -118,7 +118,9 @@ export interface PrivacySignals {
  * True when the visitor asked not to be tracked: Do-Not-Track `"1"` (or the legacy `"yes"` /
  * `msDoNotTrack` spelling) or Global Privacy Control `true`. Either signal is enough, and the
  * answer is read once at start: an opted-out visit loads no telemetry chunk, creates no span,
- * adds no `traceparent` and makes no network call. Nothing is persisted (plan 09.1.1 §8).
+ * adds no telemetry-generated `traceparent` (the request-id interceptor's own `traceparent` pair,
+ * 09.1.1-T3, is unaffected) and makes no telemetry network call. Nothing is persisted
+ * (plan 09.1.1 §8).
  */
 export function isTelemetryOptedOut(signals: PrivacySignals | null): boolean {
   if (signals === null) {

@@ -180,7 +180,11 @@ export class TelemetryService {
 
   /** Records a client error; a no-op until the chunk has loaded. */
   reportError(report: ErrorReport): void {
-    this.runtimeValue?.reportError(report);
+    try {
+      this.runtimeValue?.reportError(report);
+    } catch {
+      // telemetry loss stays silent
+    }
   }
 
   /**
@@ -188,7 +192,11 @@ export class TelemetryService {
    * and after a failed load. Never throws: telemetry loss must not break the caller.
    */
   reportEvent(name: TelemetryEventName): void {
-    this.runtimeValue?.reportEvent(name);
+    try {
+      this.runtimeValue?.reportEvent(name);
+    } catch {
+      // telemetry loss stays silent
+    }
   }
 
   private async load(): Promise<void> {

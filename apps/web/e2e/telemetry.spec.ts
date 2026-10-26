@@ -256,7 +256,10 @@ async function instrument(page: Page, origin: string, injectMeta: boolean): Prom
         const tags =
           `<meta name="evidgate-otlp-endpoint" content="${ENDPOINT}">` +
           `<meta name="evidgate-service-version" content="${SERVICE_VERSION}">`;
-        expect(html).toMatch(/<head(?:\s[^>]*)?>/i);
+        if (!/<head(?:\s[^>]*)?>/i.test(html)) {
+          await route.fulfill({ status: 500, body: 'telemetry spec: no <head> in document' });
+          return;
+        }
         const body = html.replace(/<head(\s[^>]*)?>/i, (head) => `${head}${tags}`);
         await route.fulfill({
           response,
@@ -532,10 +535,21 @@ test.describe('telemetry opt-out', () => {
         // same-origin `/v1` request (request-id.interceptor.ts; README "traceparent"), and
         // telemetry never sees that request. What must not exist is a telemetry trace on the wire,
         // which the chunk proof below settles: the page never loaded the chunk at all.
-        for (const traceparent of seen.apiTraceparents) {
-          if (traceparent !== undefined) {
-            expect(traceparent).toMatch(TRACEPARENT);
-          }
+        // The probe is not optional: an opting-out shell still runs the session probe
+        // (`/v1/orgs`, `/v1/permissions`), and that observation is asynchronous (it starts from a
+        // guard), so it is awaited rather than assumed. Without it the shape check below would
+        // pass vacuously.
+        await expect
+          .poll(() => seen.apiTraceparents.filter((value) => value !== undefined).length, {
+            timeout: 30_000,
+            message: 'the opting-out page must still send a /v1 request with a traceparent',
+          })
+          .toBeGreaterThan(0);
+        const traceparents = seen.apiTraceparents.filter(
+          (value): value is string => value !== undefined,
+        );
+        for (const traceparent of traceparents) {
+          expect(traceparent).toMatch(TRACEPARENT);
         }
         // Every script this page loaded is also loaded by the control, and the control loads
         // strictly more — the telemetry chunk. The lazy chunk is fetched only after `start()`,

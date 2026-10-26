@@ -638,6 +638,26 @@ describe('TelemetryService', () => {
     expect(harness.stub?.calls).toContain('reportError:angular');
   });
 
+  it('does not throw when the loaded runtime fails to report an event or error', async () => {
+    const harness = createHarness({ loader: 'stub' });
+    harness.service.start();
+    await settle();
+
+    const stub = harness.stub!;
+    expect(harness.service.runtime).toBe(stub);
+    const reportEvent = vi.spyOn(stub, 'reportEvent').mockImplementation(() => {
+      throw new Error('event failure');
+    });
+    const reportError = vi.spyOn(stub, 'reportError').mockImplementation(() => {
+      throw new Error('error failure');
+    });
+
+    expect(() => harness.service.reportEvent(AUDIT_EXPORT_CAPPED_EVENT)).not.toThrow();
+    expect(() => harness.service.reportError({ source: 'angular', type: 'Error' })).not.toThrow();
+    expect(reportEvent).toHaveBeenCalledWith(AUDIT_EXPORT_CAPPED_EVENT);
+    expect(reportError).toHaveBeenCalledWith({ source: 'angular', type: 'Error' });
+  });
+
   it('flushes the vitals of the route being left before it opens the next one', async () => {
     const harness = createHarness({ loader: 'stub' });
     harness.service.start();
