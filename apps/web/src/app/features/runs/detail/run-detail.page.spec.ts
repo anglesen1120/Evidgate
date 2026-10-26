@@ -46,12 +46,23 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('[data-run-environment]')?.textContent).toContain(
       'Status unavailable',
     );
-    expect(root.querySelector('[data-run-policy]')?.textContent).toContain('Status unavailable');
+    expect(root.querySelector('app-run-header [data-run-policy]')).toBeNull();
+    expect(root.querySelector('[data-run-environment]')?.previousElementSibling?.textContent).toBe(
+      'Environment',
+    );
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
       'Evidence status unavailable',
     );
     expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
+  });
+  it.each([
+    [true, 'Yes'],
+    [false, 'No'],
+  ] as const)('localizes the fork flag %s as %s', async (isFork, label) => {
+    get.mockResolvedValue({ ...run, ref: { ...run.ref, is_fork: isFork } });
+    const { root } = await open();
+    expect(root.querySelector('[data-run-fork]')?.textContent?.trim()).toBe(label);
   });
   it('escapes U+202E and isolates body-only unverified refs', async () => {
     get.mockResolvedValue(refRun);

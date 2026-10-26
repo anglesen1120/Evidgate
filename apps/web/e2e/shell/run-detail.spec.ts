@@ -43,8 +43,10 @@ for (const locale of LOCALES) {
     await expect(page.locator('[data-run-evidence-revision]')).toHaveText(
       RUN.current_evidence_revision_id,
     );
-    await expect(page.locator('[data-run-environment] app-status-pill')).toHaveCount(0);
-    await expect(page.locator('app-status-pill[data-run-environment]')).toBeVisible();
+    await expect(page.locator('[data-run-environment] app-status-pill')).toBeVisible();
+    await expect(page.locator('[data-run-environment]')).toHaveJSProperty('tagName', 'DD');
+    await expect(page.locator('app-run-header [data-run-policy]')).toHaveCount(0);
+    await expect(page.locator('[data-run-fork]')).toHaveText(locale === 'vi' ? 'Không' : 'No');
     await expect(page.locator('app-manifest-panel app-status-pill')).toHaveCount(5);
     await expect(page.locator('app-run-detail-page h1')).toHaveCount(1);
     await expect(

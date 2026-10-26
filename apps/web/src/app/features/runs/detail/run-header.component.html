@@ -85,9 +85,9 @@
     </div>
     <div>
       <dt>{{ copy.fork }}</dt>
-      <dd>
+      <dd data-run-fork>
         @if (run().ref.is_fork !== null) {
-          {{ run().ref.is_fork }}
+          {{ run().ref.is_fork ? copy.yes : copy.no }}
         } @else {
           <app-status-pill [tone]="'neutral'" label="" />
         }
@@ -107,12 +107,11 @@
   <app-evidence-badge />
 </div>
 <section class="metadata-panel" aria-labelledby="run-environment-title">
-  <h2 id="run-environment-title">{{ copy.environment }}</h2>
-  <app-status-pill [tone]="'neutral'" label="" data-run-environment />
+  <h2 id="run-environment-title">{{ copy.context }}</h2>
   <dl>
     <div>
-      <dt>{{ copy.policy }}</dt>
-      <dd data-run-policy><app-status-pill [tone]="'neutral'" label="" /></dd>
+      <dt>{{ copy.environment }}</dt>
+      <dd data-run-environment><app-status-pill [tone]="'neutral'" label="" /></dd>
     </div>
   </dl>
 </section>

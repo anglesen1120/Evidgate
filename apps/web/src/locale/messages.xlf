@@ -2623,9 +2623,12 @@
       <trans-unit id="runs.detail.base" datatype="html"><source>Base commit</source></trans-unit>
       <trans-unit id="runs.detail.trigger" datatype="html"><source>Trigger event</source></trans-unit>
       <trans-unit id="runs.detail.fork" datatype="html"><source>Fork</source></trans-unit>
+      <trans-unit id="runs.detail.yes" datatype="html"><source>Yes</source></trans-unit>
+      <trans-unit id="runs.detail.no" datatype="html"><source>No</source></trans-unit>
       <trans-unit id="runs.detail.unverified" datatype="html"><source>Unverified ref</source></trans-unit>
       <trans-unit id="runs.detail.evidence" datatype="html"><source>Evidence revision</source></trans-unit>
       <trans-unit id="runs.detail.none" datatype="html"><source>None recorded</source></trans-unit>
+      <trans-unit id="runs.detail.context" datatype="html"><source>Execution context</source></trans-unit>
       <trans-unit id="runs.detail.environment" datatype="html"><source>Environment</source></trans-unit>
       <trans-unit id="runs.detail.policy" datatype="html"><source>Policy revision</source></trans-unit>
       <trans-unit id="runs.detail.manifest" datatype="html"><source>Manifest summary</source></trans-unit>

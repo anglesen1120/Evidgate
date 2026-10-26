@@ -2618,9 +2618,12 @@
       <trans-unit id="runs.detail.base" datatype="html"><source>Base commit</source><target>Commit gốc</target></trans-unit>
       <trans-unit id="runs.detail.trigger" datatype="html"><source>Trigger event</source><target>Sự kiện kích hoạt</target></trans-unit>
       <trans-unit id="runs.detail.fork" datatype="html"><source>Fork</source><target>Bản phân nhánh</target></trans-unit>
+      <trans-unit id="runs.detail.yes" datatype="html"><source>Yes</source><target>Có</target></trans-unit>
+      <trans-unit id="runs.detail.no" datatype="html"><source>No</source><target>Không</target></trans-unit>
       <trans-unit id="runs.detail.unverified" datatype="html"><source>Unverified ref</source><target>Tham chiếu chưa xác minh</target></trans-unit>
       <trans-unit id="runs.detail.evidence" datatype="html"><source>Evidence revision</source><target>Phiên bản bằng chứng</target></trans-unit>
       <trans-unit id="runs.detail.none" datatype="html"><source>None recorded</source><target>Chưa ghi nhận</target></trans-unit>
+      <trans-unit id="runs.detail.context" datatype="html"><source>Execution context</source><target>Ngữ cảnh thực thi</target></trans-unit>
       <trans-unit id="runs.detail.environment" datatype="html"><source>Environment</source><target>Môi trường</target></trans-unit>
       <trans-unit id="runs.detail.policy" datatype="html"><source>Policy revision</source><target>Phiên bản chính sách</target></trans-unit>
       <trans-unit id="runs.detail.manifest" datatype="html"><source>Manifest summary</source><target>Tóm tắt bản kê</target></trans-unit>

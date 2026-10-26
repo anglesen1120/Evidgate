@@ -82,6 +82,18 @@ describe('ManifestPanelComponent', () => {
     expect(writeText).toHaveBeenCalledWith(manifest.manifestHash);
     expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied');
   });
+  it('escapes format characters in the displayed hash but copies the exact raw hash', async () => {
+    const hash = 'sha256:abc\u202edef';
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const { root, fixture } = await render({ ...manifest, manifestHash: hash });
+    const displayed = root.querySelector('[data-manifest-hash] bdi');
+    expect(displayed?.textContent).toBe('sha256:abc⟨U+202E⟩def');
+    expect(displayed?.textContent).not.toContain('\u202e');
+    root.querySelector('button')!.click();
+    await fixture.whenStable();
+    expect(writeText).toHaveBeenCalledWith(hash);
+  });
   it('offers manual copying when clipboard access fails and clears feedback for a new summary', async () => {
     vi.stubGlobal('navigator', {
       clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },

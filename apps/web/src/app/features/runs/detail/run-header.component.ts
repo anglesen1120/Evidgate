@@ -27,10 +27,12 @@ export class RunHeaderComponent {
     base: $localize`:@@runs.detail.base:Base commit`,
     trigger: $localize`:@@runs.detail.trigger:Trigger event`,
     fork: $localize`:@@runs.detail.fork:Fork`,
+    yes: $localize`:@@runs.detail.yes:Yes`,
+    no: $localize`:@@runs.detail.no:No`,
     unverified: $localize`:@@runs.detail.unverified:Unverified ref`,
     evidence: $localize`:@@runs.detail.evidence:Evidence revision`,
     none: $localize`:@@runs.detail.none:None recorded`,
+    context: $localize`:@@runs.detail.context:Execution context`,
     environment: $localize`:@@runs.detail.environment:Environment`,
-    policy: $localize`:@@runs.detail.policy:Policy revision`,
   };
 }
