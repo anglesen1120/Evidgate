@@ -308,7 +308,7 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **88 tasks / 98 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 89 / 99 d is the figure used here.
+Dependency-ready: **88 tasks / 98 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 88 / 98 d is the figure used here.
 
 ### G1: 43 tasks / 44 d
 
