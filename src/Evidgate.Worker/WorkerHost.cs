@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Observability.Correlation;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Evidgate.BuildingBlocks.Persistence.Options;
@@ -56,7 +57,7 @@ public static class WorkerHost
         // 10.1.1-T2: the single secret seam. Idempotent (TryAdd*), so the
         // composition extensions that also register it change nothing here.
         builder.Services.AddEvidgateSecrets(builder.Configuration);
-        builder.AddEvidgateTelemetry("evidgate-worker");
+        builder.AddEvidgateTelemetry("evidgate-worker").AddEvidgateCorrelation();
 
         builder.Services
             .AddOptions<WorkerOptions>()

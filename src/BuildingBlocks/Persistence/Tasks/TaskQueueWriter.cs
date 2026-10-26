@@ -176,7 +176,10 @@ public sealed class TaskQueueWriter : ITaskQueueWriter
         org_id = task.OrgId,
         queue = task.Queue,
         task_type = task.TaskType,
-        payload = task.PayloadJson,
+        // The producer's W3C context and correlation ids travel inside the payload: the
+        // outbox and task tables have no headers column (10.3.1-T1.2, AC1), so a direct
+        // or scheduled enqueue stamps exactly like the dispatcher's path does.
+        payload = TaskCorrelation.Stamp(task.PayloadJson),
         idempotency_key = task.IdempotencyKey,
         schedule_name = task.ScheduleName,
         fire_at = task.FireAt,
@@ -223,7 +226,7 @@ public sealed class TaskQueueWriter : ITaskQueueWriter
         // Matches `task_payload_size_check` (pg_column_size <= 64 KiB): a task is a
         // pointer to work, not the work itself — a byte count is a cheap upper bound
         // on the storage cost the database constraint measures precisely.
-        if (Encoding.UTF8.GetByteCount(task.PayloadJson) > MaxPayloadBytes)
+        if (Encoding.UTF8.GetByteCount(TaskCorrelation.Stamp(task.PayloadJson)) > MaxPayloadBytes)
         {
             throw new ArgumentException(
                 $"the task payload is longer than {MaxPayloadBytes} bytes (0008 `task_payload_size_check`)",

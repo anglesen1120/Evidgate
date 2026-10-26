@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using Evidgate.BuildingBlocks.Observability.Correlation;
 
 namespace Evidgate.BuildingBlocks.Observability;
 
@@ -170,9 +171,13 @@ public static class EvidgateTelemetry
     /// </summary>
     public static Activity? StartModuleActivity(string module, string operation)
     {
+        // The ambient activity is read before the new span starts: a child inherits the
+        // parent's baggage but none of its tags (10.3.1-T1.2, AC1).
+        var parent = Activity.Current;
         var activity = Source.StartActivity(operation, ActivityKind.Internal);
         activity?.SetTag(ModuleTag, module);
         activity?.SetTag(OperationTag, operation);
+        EvidgateCorrelationExtensions.ApplyAmbient(activity, parent);
 
         ModuleOperations.Add(1, new KeyValuePair<string, object?>(ModuleTag, module));
 
@@ -187,8 +192,10 @@ public static class EvidgateTelemetry
     /// </summary>
     public static Activity? StartPipelineActivity(string message)
     {
+        var parent = Activity.Current;
         var activity = Source.StartActivity(message, ActivityKind.Internal);
         activity?.SetTag(PipelineMessageTag, message);
+        EvidgateCorrelationExtensions.ApplyAmbient(activity, parent);
 
         return activity;
     }

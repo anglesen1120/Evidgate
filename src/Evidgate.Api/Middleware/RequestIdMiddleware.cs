@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Evidgate.BuildingBlocks.Observability.Correlation;
 
 namespace Evidgate.Api.Middleware;
 
@@ -22,9 +23,6 @@ public sealed class RequestIdMiddleware
     /// <summary>Request header name of the request id (00 §9.1).</summary>
     public const string HeaderName = "X-Request-Id";
 
-    /// <summary>Cap on a client-supplied id — never echo unbounded values back.</summary>
-    private const int MaxLength = 128;
-
     private readonly RequestDelegate _next;
 
     /// <summary>Creates the middleware.</summary>
@@ -35,11 +33,15 @@ public sealed class RequestIdMiddleware
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var requestId = context.Request.Headers[HeaderName].FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > MaxLength)
-        {
-            requestId = Activity.Current?.Id ?? context.TraceIdentifier;
-        }
+        var inbound = context.Request.Headers[HeaderName].FirstOrDefault();
+        // 10.3.1-T1.2: an inbound id is honoured only when it is a bounded printable
+        // token (`CorrelationNames.IsSafeRequestId`). It is echoed in a response header,
+        // written to a span tag, exported as a log attribute and stored on the audit
+        // row, so an over-long value or one carrying CR/LF would forge a header or a log
+        // line. Anything else is replaced by a minted id, never echoed raw.
+        var requestId = CorrelationNames.IsSafeRequestId(inbound)
+            ? inbound
+            : Activity.Current?.Id ?? context.TraceIdentifier;
 
         context.TraceIdentifier = requestId;
         context.Items[ItemsKey] = requestId;
@@ -47,8 +49,15 @@ public sealed class RequestIdMiddleware
         Activity.Current?.SetTag("evidgate.request_id", requestId);
         // 02.7.1: audit rows carry the request id; baggage flows to the pipeline with the async context.
         Activity.Current?.AddBaggage(Evidgate.BuildingBlocks.Persistence.Audit.AuditTrail.RequestIdBaggage, requestId);
+        // 10.3.1-T1.2: the same four correlation ids on the span, plus the run id when
+        // the route names one (routing has already resolved the endpoint's parameters).
+        RequestCorrelation.TagRequest(context, requestId);
 
         await _next(context);
+
+        // The route may only be resolved by now on a host that maps endpoints late, so
+        // the run id is tagged again; the call is idempotent and cannot throw.
+        RequestCorrelation.TagRequest(context, requestId);
     }
 }
 

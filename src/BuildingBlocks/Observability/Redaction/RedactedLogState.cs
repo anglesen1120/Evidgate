@@ -9,6 +9,11 @@ namespace Evidgate.BuildingBlocks.Observability.Redaction;
 /// replaced inside the rendered message — otherwise <c>LogInformation("auth {Authorization}", …)</c>
 /// would still print the token (the formatted text embeds values, AC4).
 /// </summary>
+/// <remarks>
+/// A scope state is often a <see cref="Dictionary{TKey,TValue}"/> rather than the logger's own
+/// key/value list, so any pair sequence is materialized once: the OpenTelemetry scope enumerator
+/// then reads redacted pairs, not the dictionary's type name (10.3.1-T1.4).
+/// </remarks>
 internal sealed class RedactedLogState<TState> : IReadOnlyList<KeyValuePair<string, object?>>
 {
     private const string OriginalFormatKey = "{OriginalFormat}";
@@ -24,14 +29,19 @@ internal sealed class RedactedLogState<TState> : IReadOnlyList<KeyValuePair<stri
         Exception? exception)
     {
         _redactor = redactor;
-        _pairs = state as IReadOnlyList<KeyValuePair<string, object?>>;
+        _pairs = state switch
+        {
+            IReadOnlyList<KeyValuePair<string, object?>> list => list,
+            IEnumerable<KeyValuePair<string, object?>> pairs => pairs.ToList(),
+            _ => null,
+        };
 
         var formatted = redactor.RedactText(formatter(state, exception));
         if (_pairs is not null)
         {
             foreach (var pair in _pairs)
             {
-                var raw = pair.Value as string;
+                var raw = SecretRedactor.TextOf(pair.Value);
                 if (!string.IsNullOrEmpty(raw) && pair.Key != OriginalFormatKey && SecretRedactor.IsWholeValueSecret(pair.Key))
                 {
                     formatted = formatted.Replace(raw, SecretRedactor.Mask, StringComparison.Ordinal);

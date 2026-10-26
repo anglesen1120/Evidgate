@@ -1,4 +1,5 @@
 using System.Text;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 
 namespace Evidgate.BuildingBlocks.Persistence.Outbox;
@@ -86,6 +87,14 @@ public sealed class OutboxWriter : IOutboxWriter
                 nameof(payloadJson));
         }
 
+        // 10.3.1-T1.2 (AC1): the producing activity's W3C context and the correlation
+        // ids travel inside the payload, because neither `outbox` nor `task` has a
+        // headers column and this task adds no migration. Stamping stays inside the
+        // column's size contract: a payload that would cross the cap with the carrier
+        // is stored without it — losing a trace link never fails a producer.
+        var stamped = TaskCorrelation.Stamp(payloadJson);
+        var stored = Encoding.UTF8.GetByteCount(stamped) > MaxPayloadBytes ? payloadJson : stamped;
+
         // The scope is required before the statement runs, so the failure is
         // TenantScopeMissingException rather than a write on some other connection.
         var scope = _scopes.Require();
@@ -100,7 +109,7 @@ public sealed class OutboxWriter : IOutboxWriter
                 AggregateType = aggregateType,
                 AggregateId = aggregateId,
                 TaskType = taskType,
-                Payload = payloadJson,
+                Payload = stored,
                 IdempotencyKey = idempotencyKey,
             },
             cancellationToken).ConfigureAwait(false);

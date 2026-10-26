@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shouldly;
 
@@ -96,7 +97,8 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         int slots = 1,
         string? boundJti = null,
         int? planCount = null,
-        IReadOnlyList<(int Parent, int Child)>? edges = null)
+        IReadOnlyList<(int Parent, int Child)>? edges = null,
+        Action<IServiceCollection>? services = null)
     {
         var database = await fixture.CreateDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
@@ -112,7 +114,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         }
 
         var host = TenancyApiFactory.WithPrincipal(
-            fixture.AppConnectionString(database), org, project, principal);
+            fixture.AppConnectionString(database), org, project, principal, services: services);
 
         var plan = await PlannedExecutionSeeder.SeedPlanAsync(fixture, database, org, planCount ?? planned, edges: edges);
         await SeedSlotsAsync(fixture, database, org, plan.RunId, slots, boundJti);
