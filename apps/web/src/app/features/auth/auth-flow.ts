@@ -23,7 +23,15 @@
 // `window` directly.
 
 import { DOCUMENT, Location } from '@angular/common';
-import { computed, inject, Injectable, InjectionToken, signal, type Signal } from '@angular/core';
+import {
+  computed,
+  DestroyRef,
+  inject,
+  Injectable,
+  InjectionToken,
+  signal,
+  type Signal,
+} from '@angular/core';
 import { ActivatedRoute, Router, type CanActivateFn } from '@angular/router';
 
 import { SessionStore } from '../../core/session/session.store';
@@ -88,15 +96,26 @@ function parseReason(raw: string | null): LoginReason {
  * guard redirect, so the query is that redirect's, and a later internal navigation that keeps the
  * page mounted must not silently change what `start()` will return to.
  */
-@Injectable({ providedIn: 'root' })
+@Injectable()
 export class AuthFlow {
   private readonly route = inject(ActivatedRoute);
   private readonly location = inject(Location);
-  private readonly router = inject(Router);
+  private readonly document = inject(DOCUMENT);
   private readonly session = inject(SessionStore);
   private readonly navigate = inject(LOCATION_NAVIGATE);
   private readonly query = this.route.snapshot.queryParamMap;
   private readonly redirectingState = signal(false);
+
+  constructor() {
+    const view = this.document.defaultView;
+    const onPageShow = (event: PageTransitionEvent): void => {
+      if (event.persisted) {
+        this.redirectingState.set(false);
+      }
+    };
+    view?.addEventListener('pageshow', onPageShow);
+    inject(DestroyRef).onDestroy(() => view?.removeEventListener('pageshow', onPageShow));
+  }
 
   /** The validated target of a completed sign-in; `/` when the parameter is missing or refused. */
   readonly returnUrl: Signal<string> = signal(validateReturnUrl(this.query.get('returnUrl')));

@@ -22,6 +22,8 @@ const ACCEPTED: readonly string[] = [
   '/runs#top',
   // A colon inside a path segment is legal; it is not a scheme (the value starts with `/`).
   '/orgs/o-1/a:b',
+  // A matrix parameter on a product path is harmless: only the sign-in routes loop.
+  '/orgs/o-1;v=2/projects/p-1',
   // A percent-encoded character that stays inside one segment, in its raw spelling.
   '/runs/a%20b',
   '/orgs/o-1/projects/p-1?tab=evidence%20list',
@@ -65,6 +67,12 @@ const REFUSED: readonly string[] = [
   '/ok\u007fx',
   '/ok%0Ax',
   '/ok%00x',
+  // The C1 block and the JavaScript line separators are control characters too.
+  '/ok\u0085x',
+  '/ok\u009f x',
+  '/ok\u2028x',
+  '/ok\u2029x',
+  '/ok%C2%85x',
   // Malformed percent-encoding is refused rather than passed through half-decoded.
   '/%zz',
   '/ok%',
@@ -77,6 +85,10 @@ const REFUSED: readonly string[] = [
   '/login?returnUrl=%2Forgs%2Fo-1',
   '/login#top',
   '/%6Cogin',
+  // Matrix parameters are stripped before matching, so these are still the sign-in routes.
+  '/login;x=1',
+  '/auth/callback;ticket=1',
+  '/auth/callback;x=1/;y=2',
   '/auth/callback',
   '/auth/callback?returnUrl=%2Forgs%2Fo-1',
   '/auth/callback/',

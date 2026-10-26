@@ -242,17 +242,6 @@ const SessionStoreDefinition = signalStore(
     }
 
     /**
-     * A `401` that arrived after the session was established (T5.2): the session expired while the
-     * caller was reading something.
-     *
-     * Exactly one redirect per expiry: a session that is not `authenticated` any more — already
-     * flipped, latched signed out, or still being bootstrapped (that read answers the state itself)
-     * is a no-op, so a burst of parallel 401s (a page reading three lists) produces one navigation.
-     *
-     * `attemptedUrl` is the route the failed read was serving: the store's own scope read names it,
-     * and any other data service's `401` falls back to the current router URL.
-     */
-    /**
      * The URL the caller is trying to reach RIGHT NOW, if a navigation is in flight.
      *
      * A guard that resolves a scope only knows the segments matched so far — an org-level read that
@@ -271,6 +260,17 @@ const SessionStoreDefinition = signalStore(
       return serialized === '' ? null : serialized;
     }
 
+    /**
+     * A `401` that arrived after the session was established (T5.2): the session expired while the
+     * caller was reading something.
+     *
+     * Exactly one redirect per expiry: a session that is not `authenticated` any more — already
+     * flipped, latched signed out, or still being bootstrapped (that read answers the state itself)
+     * is a no-op, so a burst of parallel 401s (a page reading three lists) produces one navigation.
+     *
+     * `attemptedUrl` is the route the failed read was serving: the store's own scope read names it,
+     * and any other data service's `401` falls back to the current router URL.
+     */
     function handleUnauthenticated(attemptedUrl: string | null): void {
       if (store.signedOut() || store.sessionState() !== 'authenticated') {
         return;

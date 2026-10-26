@@ -49,8 +49,11 @@ export const HOME_PATH = '/';
 /** Paths that would put the caller back into the sign-in flow; the callback included (a loop). */
 const LOOPING_PATHS: readonly string[] = ['/login', '/auth/callback'];
 
-/** C0 controls (includes CR, LF, TAB, NUL) and DEL; a URL carrying one is never navigated to. */
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+/**
+ * C0 controls (includes CR, LF, TAB, NUL), DEL, the C1 block (U+0080-U+009F, where U+0085 is a line
+ * break) and the two JavaScript line separators: a value carrying one is never navigated to.
+ */
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 
 /** One backslash is enough to become an authority in a browser that normalises it to `/`. */
 const BACKSLASH = /\\/;
@@ -73,6 +76,23 @@ function decodeOnce(value: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The path with every segment's matrix parameters (`;a=b`) removed — Angular strips them before it
+ * matches a route, so `/login;x=1` activates the sign-in page exactly like `/login`, and comparing
+ * the raw text would miss that spelling of the loop.
+ */
+function withoutMatrixParams(path: string): string {
+  return path
+    .split('/')
+    .map((segment) => segment.split(';')[0] ?? '')
+    .join('/');
+}
+
+/** `true` when this spelling (matrix parameters included) names a sign-in route. */
+function isSignInPath(value: string): boolean {
+  return LOOPING_PATHS.includes(pathOf(withoutMatrixParams(value)));
 }
 
 /** The path part of a value (no query, no fragment), with trailing slashes dropped. */
@@ -123,12 +143,9 @@ export function validateReturnUrl(raw: string | null | undefined): string {
     return HOME_PATH;
   }
 
-  // A sign-in page as the post-sign-in target is a loop, in any encoding and with any query.
-  const path = pathOf(candidate);
-  if (LOOPING_PATHS.includes(path)) {
-    return HOME_PATH;
-  }
-  if (LOOPING_PATHS.includes(pathOf(raw))) {
+  // A sign-in page as the post-sign-in target is a loop, in any encoding, with any query, and with
+  // or without matrix parameters (`/login;a=b` is the same route to Angular).
+  if (isSignInPath(candidate) || isSignInPath(raw)) {
     return HOME_PATH;
   }
   return raw;

@@ -64,8 +64,7 @@ async function stubProviderIdp(page: Page): Promise<StartCall[]> {
       status: 302,
       // `returnUrl` is percent-encoded, so appended parameters cannot be swallowed by it.
       headers: {
-        location:
-          returnUrl === null ? '/' : `${returnUrl}&${GRANT_SEED}`,
+        location: returnUrl === null ? '/' : `${returnUrl}&${GRANT_SEED}`,
       },
     });
   });
@@ -169,7 +168,6 @@ test.describe('sign-in (AC5, T5.1)', () => {
   test('a signed-out tab is told it signed out on this tab, and stays where it is', async ({
     page,
   }) => {
-
     // The visit is anonymous, so `/login` stays on screen: an authenticated tab is redirected away
     // by its own guard, which is the behaviour test 1 relies on.
     await page.goto(
@@ -187,9 +185,12 @@ test.describe('sign-in (AC5, T5.1)', () => {
     // in-process fixture backend, so they are not observable as network requests — the store-level
     // "no request after a sign-out" claim is proven in `session.store.spec.ts`, and this case proves
     // the page it lands on is stable.)
-    const settled = page.url();
-    await page.waitForTimeout(250);
-    expect(page.url()).toBe(settled);
+    // Condition-based, no fixed sleep: the banner is up, both controls are idle and the URL has not
+    // moved under them. A self-redirect would change the path and fail these locator asserts.
+    await expect(page.locator('.login-notice')).toBeVisible();
+    await expect(page.locator('#login-heading')).toBeVisible();
+    await expect(page).toHaveURL(/\/en\/login\?/);
+    expect(new URL(page.url()).pathname).toBe('/en/login');
     expect(await webStorageEntries(page)).toEqual({ local: [], session: [] });
   });
 

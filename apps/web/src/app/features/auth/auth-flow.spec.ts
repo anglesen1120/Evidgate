@@ -11,7 +11,7 @@
 //   - the flow leaves no auth material in `localStorage` or `sessionStorage` (AC5's second half: the
 //     cookie is the credential, and it is `HttpOnly`).
 
-import { signal } from '@angular/core';
+import { Injector, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import {
   ActivatedRoute,
@@ -78,6 +78,8 @@ function setUp(query: Readonly<Record<string, string>> = {}): Harness {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
+      // The login route provides the flow per activation; a spec mirrors that.
+      AuthFlow,
       { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: queryParamMap(query) } } },
       { provide: SessionStore, useValue: session },
       { provide: LOCATION_NAVIGATE, useValue: (url: string): void => void navigations.push(url) },
@@ -172,6 +174,58 @@ describe('AuthFlow (09.1.1-T5.1)', () => {
     session.signedOut.set(true);
 
     expect(flow.reason()).toBe('signed-out');
+  });
+
+  it('gives every activation of the login route its own query, and its own notices', () => {
+    const injectorOf = (id: string, query: Readonly<Record<string, string>>): Injector => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [provideRouter([]), { provide: SessionStore, useValue: new FakeSessionStore() }],
+      });
+      return Injector.create({
+        providers: [
+          AuthFlow,
+          {
+            provide: ActivatedRoute,
+            useValue: { snapshot: { queryParamMap: queryParamMap(query) } },
+          },
+        ],
+        parent: TestBed.inject(Injector),
+        // The activation's identity is what a route-level provider swaps; naming it keeps the
+        // expectation readable in a failure message.
+        name: id,
+      });
+    };
+
+    const afterExpiry = injectorOf('login#1', {
+      reason: 'expired',
+      returnUrl: '/orgs/o-1/projects/p-1/overview',
+    }).get(AuthFlow);
+    const afterSignOut = injectorOf('login#2', { reason: 'signed-out' }).get(AuthFlow);
+
+    // The second visit does not inherit the first one's reason or target.
+    expect(afterExpiry.reason()).toBe('expired');
+    expect(afterSignOut.reason()).toBe('signed-out');
+    expect(afterExpiry.returnUrl()).toBe('/orgs/o-1/projects/p-1/overview');
+    expect(afterSignOut.returnUrl()).toBe('/');
+  });
+
+  it('stops redirecting when the browser restores the page from the back-forward cache', () => {
+    const { flow } = setUp({ returnUrl: '/runs' });
+    flow.start('google');
+    expect(flow.redirecting()).toBe(true);
+
+    // A plain `pageshow` (the ordinary load) says nothing about the attempt: the flow stays busy.
+    document.defaultView?.dispatchEvent(new Event('pageshow'));
+    expect(flow.redirecting()).toBe(true);
+
+    // `persisted` means the browser put this document back from its cache: the navigation that
+    // disabled the buttons never completed, so the controls must work again.
+    const restored = new Event('pageshow');
+    Object.defineProperty(restored, 'persisted', { value: true });
+    document.defaultView?.dispatchEvent(restored);
+
+    expect(flow.redirecting()).toBe(false);
   });
 
   it('leaves no auth material in web storage (AC5)', () => {
