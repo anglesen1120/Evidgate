@@ -145,7 +145,8 @@ internal sealed class SessionRequestAuthenticator(
             && !await SessionXsrfPolicy.ValidatesAsync(http, antiforgery, cancellationToken).ConfigureAwait(false))
         {
             // Counted HERE because this layer answers the refusal: the middleware returns on a refusal and counts
-            // nothing, so one request still produces one outcome (D9).
+            // nothing. The store already counted `active` for this request's authenticate statement, so a refused
+            // rotation shows up once as `active` and once as its refusal code (telemetry only, delta-review note).
             SessionTelemetry.AuthOutcome(ApiErrorCode.CsrfFailed);
 
             return Refuse(SessionErrors.CsrfFailed);
