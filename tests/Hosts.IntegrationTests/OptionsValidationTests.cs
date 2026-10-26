@@ -100,6 +100,27 @@ public sealed class OptionsValidationTests
         Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Invalid_Sample_Ratio_Fails_Startup_Cleanly()
+    {
+        var result = await RunUntilExitAsync(
+            HostLocator.AppHost("Evidgate.Api"),
+            new Dictionary<string, string>
+            {
+                ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{HostLocator.FreePort()}",
+                ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                ["EVIDGATE__TELEMETRY__SAMPLERATIO"] = "1.5",
+                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
+            });
+
+        var output = result.Stdout + result.Stderr;
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Configuration invalid:", output, StringComparison.Ordinal);
+        Assert.Contains("SAMPLERATIO", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Unhandled exception", output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
+    }
+
     private static async Task<ProcessRunner.Result> RunUntilExitAsync(
         string fileName,
         IReadOnlyDictionary<string, string> env)

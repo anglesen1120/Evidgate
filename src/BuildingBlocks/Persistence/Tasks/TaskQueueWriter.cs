@@ -97,6 +97,13 @@ public interface ITaskQueueWriter
 /// outbox row, the same module key or the same cron occurrence a silent no-op
 /// instead of a 23505 the caller would have to interpret.
 /// </summary>
+/// <remarks>
+/// The payload it binds is the producer's document with the correlation carrier
+/// (10.3.1-T1.2) when both fit the column's 64 KiB contract, and the producer's
+/// document alone when they do not: a trace link is best effort and never a producer
+/// failure, exactly as on the outbox path. The document is stamped once per enqueue —
+/// the same string is size-checked and inserted.
+/// </remarks>
 public sealed class TaskQueueWriter : ITaskQueueWriter
 {
     /// <summary>Retry cap a task gets when its producer does not choose one (01.5.1 §6).</summary>
@@ -129,7 +136,7 @@ public sealed class TaskQueueWriter : ITaskQueueWriter
 
         return await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition(
             InsertSql,
-            Parameters(task),
+            Parameters(task, StoredPayload(task)),
             transaction,
             cancellationToken: cancellationToken)).ConfigureAwait(false);
     }
@@ -139,12 +146,14 @@ public sealed class TaskQueueWriter : ITaskQueueWriter
     {
         Validate(task);
 
+        var parameters = Parameters(task, StoredPayload(task));
+
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         var id = await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition(
             InsertSql,
-            Parameters(task),
+            parameters,
             transaction,
             cancellationToken: cancellationToken)).ConfigureAwait(false);
 
@@ -170,19 +179,54 @@ public sealed class TaskQueueWriter : ITaskQueueWriter
         returning id as "Id"
         """;
 
-    private static object Parameters(TaskEnqueue task) => new
+    private static object Parameters(TaskEnqueue task, string payload) => new
     {
         id = Guid.CreateVersion7(),
         org_id = task.OrgId,
         queue = task.Queue,
         task_type = task.TaskType,
-        payload = task.PayloadJson,
+        // The producer's W3C context and correlation ids travel inside the payload: the
+        // outbox and task tables have no headers column (10.3.1-T1.2, AC1), so a direct
+        // or scheduled enqueue stamps exactly like the dispatcher's path does. The
+        // stamped document is produced once per enqueue, by StoredPayload, and bound
+        // here as it is: the size check and the insert see the same string.
+        payload,
         idempotency_key = task.IdempotencyKey,
         schedule_name = task.ScheduleName,
         fire_at = task.FireAt,
         max_attempts = task.MaxAttempts,
         available_at = task.AvailableAt,
     };
+
+    /// <summary>
+    /// The payload the row stores: the stamped document when the carrier fits the column's
+    /// contract, otherwise the producer's own document. Losing a trace link must never
+    /// fail a producer, which is the fallback <see cref="Outbox.OutboxWriter"/> applies
+    /// too; a document that is already too large on its own is still a producer bug and
+    /// fails here, named, instead of as a bare 23514.
+    /// </summary>
+    /// <param name="task">The work being enqueued.</param>
+    /// <returns>The JSON to bind to <c>payload</c>.</returns>
+    private static string StoredPayload(TaskEnqueue task)
+    {
+        var stamped = TaskCorrelation.Stamp(task.PayloadJson);
+        if (Encoding.UTF8.GetByteCount(stamped) <= MaxPayloadBytes)
+        {
+            return stamped;
+        }
+
+        // Matches `task_payload_size_check` (pg_column_size <= 64 KiB): a task is a
+        // pointer to work, not the work itself — a byte count is a cheap upper bound
+        // on the storage cost the database constraint measures precisely.
+        if (Encoding.UTF8.GetByteCount(task.PayloadJson) > MaxPayloadBytes)
+        {
+            throw new ArgumentException(
+                $"the task payload is longer than {MaxPayloadBytes} bytes (0008 `task_payload_size_check`)",
+                nameof(task));
+        }
+
+        return task.PayloadJson;
+    }
 
     private static void Validate(TaskEnqueue task)
     {
@@ -220,15 +264,9 @@ public sealed class TaskQueueWriter : ITaskQueueWriter
                 nameof(task));
         }
 
-        // Matches `task_payload_size_check` (pg_column_size <= 64 KiB): a task is a
-        // pointer to work, not the work itself — a byte count is a cheap upper bound
-        // on the storage cost the database constraint measures precisely.
-        if (Encoding.UTF8.GetByteCount(task.PayloadJson) > MaxPayloadBytes)
-        {
-            throw new ArgumentException(
-                $"the task payload is longer than {MaxPayloadBytes} bytes (0008 `task_payload_size_check`)",
-                nameof(task));
-        }
+        // The payload's size contract is enforced by StoredPayload, on the one string the
+        // insert actually binds (carrier included, with the unstamped fallback), so the
+        // document is stamped exactly once per enqueue.
 
         // 0008's `task_fire_pair_check`: a fire key is the pair, and a half-set pair
         // would insert a row no schedule runner could ever match again.
