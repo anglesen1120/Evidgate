@@ -9,8 +9,9 @@
 // fixture covers" visible instead of returning a plausible empty page.
 //
 // Resolution is method + path only, against the same-origin `/v1` path the app calls (ADR-0008
-// rule 1): the origin is irrelevant to a fixture, and query parameters never select a fixture — a
-// `cursor`, a `limit` or a filter changes nothing in the body the corpus holds. Templates such as
+// rule 1): the origin is irrelevant to a fixture, and a query parameter never selects a fixture by
+// itself — a `limit` or a filter changes nothing in the body the corpus holds, and a `cursor` only
+// answers the page a catalog row explicitly declares for it (note (4) below). Templates such as
 // `/projects/{p}/runs` match one non-empty path segment per `{name}`, so `/projects/p-1/runs`
 // resolves and `/projects/p-1/runs/r-1` does not.
 //
@@ -51,15 +52,35 @@
 // append (`POST …/projects/{p}/policies`), the one-revision read (`GET /policies/{id}`) and the
 // revision list (`GET /policies/{id}/revisions`). The two `/policies` templates have three and
 // four segments, so neither matches the other, and neither can collide with the project-scoped
-// rows (`…/policies` is the append's literal last segment). The `{id}` of both reads is matched
-// against the template only, never against the document that answers — so `getPolicyRevision`
-// answers the revision its variant describes whatever id a request names, and the head, the two
-// retired revisions and the published one are four variants a review selects
-// (`?fixture.variant.getPolicyRevision=previous`, `=first`, `=created`). The corpus pages carry
-// the `ETag` the contract declares (the head revision id, quoted, exactly as
-// `PolicyEndpoints.cs` sets it), so the tab's `If-Match` source comes from a real header; the
-// append answers the `201` with the same header on the revision it created, and the `200`
-// (identical body already stored) with the head's.
+// rows (`…/policies` is the append's literal last segment). The corpus pages carry the `ETag` the
+// contract declares (the head revision id, quoted, exactly as `PolicyEndpoints.cs` sets it), so
+// the tab's `If-Match` source comes from a real header; the append answers the `201` with the
+// same header on the revision it created, and the `200` (identical body already stored) with the
+// head's.
+//
+// 09.7.1-F15 note (3) makes `getPolicyRevision` the one ID-KEYED row (`idKeyParameter: 'id'`): the
+// corpus holds one document per revision, each carrying its own `body.id`, so a read for a
+// revision the corpus has answers THAT document and the browser's revision-vs-revision diff (and
+// the 412 dialog's server column) can hold two different bodies. The variant selection stays as
+// it was and is the FALLBACK for an id no document carries — a revision another writer published
+// (`…a005`), say — so `?fixture.variant.getPolicyRevision=previous`/`=first`/`=created` still
+// opens the retired, the first and the published revision on their own. The order is: matching
+// `body.id` first, then the variant, never the other way round, because the variant is a review's
+// explicit selection of a document while the path id is what the app asked for; an id no
+// document holds changes nothing. Every other row stays id-agnostic: `{p}`, `{m}`, `{r}` and `{t}`
+// are matched against the template only.
+//
+// 09.7.1-F15 note (4) is the same selection one dimension over, on the QUERY string: `listCiBindings`
+// declares `cursorQueryParameter: 'cursor'`, and a request that carries a cursor some catalog row
+// declares for the page it holds is answered by THAT row. It closes residual (1) of the S86
+// low-notes row in `STATUS.md` ("the ci-binding list has no Playwright load-more case because
+// `ci-bindings-list-settings` ends with `next_cursor: null`; a cursor-page fixture seam is needed").
+// The rule above — "query parameters never select a fixture" — held because no corpus row declared
+// one; a cursor page is the one case where the query string *is* the identity of the answer, so the
+// corpus spells it out per page instead of the backend guessing. The order stays the id-keyed rule's:
+// a matching cursor wins over the variant, and a cursor no document declares (a stale one, or the
+// first request, which carries none) falls back to the variant exactly as before. Only one row
+// declares it; a second one needs its own pin in `fixture-contract.spec.ts`.
 
 import { API_BASE_PATH } from '../http/api-origin';
 
@@ -72,6 +93,21 @@ export interface FixtureRoute {
   readonly method: FixtureHttpMethod;
   /** Path template relative to the API base path, `{name}` marking a path parameter. */
   readonly path: string;
+  /**
+   * The `{name}` path parameter whose request value selects the answer among this operation's
+   * catalog documents by their own `body.id`, BEFORE the variant is consulted (09.7.1-F15 note
+   * 3). Absent on every id-agnostic row, where the variant alone selects the document.
+   */
+  readonly idKeyParameter?: string;
+  /**
+   * The *query* parameter whose request value selects the answer among this operation's catalog
+   * documents — the same selection as `idKeyParameter`, one dimension over (09.7.1-F15 note 4).
+   * The value is compared against the `cursor` a catalog row declares for the page it holds, so a
+   * cursor-paged list shows a second page only for the cursor the previous page actually named.
+   * Absent on every route whose document does not depend on a query parameter — which is all of
+   * them but `listCiBindings`; the module comment holds the rule.
+   */
+  readonly cursorQueryParameter?: string;
 }
 
 /**
@@ -88,7 +124,12 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
   { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
   { operationId: 'createCiBinding', method: 'POST', path: '/projects/{p}/ci-bindings' },
-  { operationId: 'listCiBindings', method: 'GET', path: '/projects/{p}/ci-bindings' },
+  {
+    operationId: 'listCiBindings',
+    method: 'GET',
+    path: '/projects/{p}/ci-bindings',
+    cursorQueryParameter: 'cursor',
+  },
   { operationId: 'createIngestToken', method: 'POST', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'listIngestTokens', method: 'GET', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'rotateIngestToken', method: 'POST', path: '/ingest-tokens/{t}/rotate' },
@@ -117,7 +158,7 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
   { operationId: 'createPolicyRevision', method: 'POST', path: '/projects/{p}/policies' },
-  { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}' },
+  { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}', idKeyParameter: 'id' },
   { operationId: 'listPolicyRevisions', method: 'GET', path: '/policies/{id}/revisions' },
 ];
 
@@ -174,6 +215,27 @@ function pathMatches(template: string, requestSegments: readonly string[]): bool
 }
 
 /**
+ * The request value of path parameter `name` — the decoded segment at the index `{name}` holds in
+ * `template` — or `undefined` when the template has no such parameter or the path does not match
+ * the template's segment count. Used only for a route that declares an `idKeyParameter`
+ * (09.7.1-F15 note 3), which selects the answer by the document's own `body.id`.
+ */
+export function pathParameter(
+  template: string,
+  relativePath: string,
+  name: string,
+): string | undefined {
+  const templateSegments = template.split('/').filter((segment) => segment.length > 0);
+  const requestSegments = relativePath.split('/').filter((segment) => segment.length > 0);
+  if (templateSegments.length !== requestSegments.length) {
+    return undefined;
+  }
+  const index = templateSegments.indexOf(`{${name}}`);
+  const segment = index === -1 ? undefined : requestSegments[index];
+  return segment === undefined ? undefined : decodeSegment(segment);
+}
+
+/**
  * The route for one request, or `undefined` when no fixture covers it (the backend's
  * `501 fixture_not_found`). `method` is compared case-insensitively, the way `HttpRequest.method`
  * arrives after the SDK adapter upper-cases it.
@@ -187,4 +249,24 @@ export function matchFixtureRoute(method: string, relativePath: string): Fixture
   return FIXTURE_ROUTES.find(
     (route) => route.method === normalisedMethod && pathMatches(route.path, requestSegments),
   );
+}
+
+/**
+ * The request value of query parameter `name` in `url`, or `null` when the URL carries none — the
+ * query-side counterpart of {@link pathParameter}, read for a route that declares a
+ * `cursorQueryParameter` (09.7.1-F15 note 4).
+ *
+ * It reads the URL, not `HttpRequest.params`: the SDK's fetch adapter hands `HttpClient` a URL that
+ * already holds the query string (`core/http/http-client-fetch.ts`), so `params` is empty even
+ * though the request carries a cursor. Reading both would mean two sources for one fact; the URL is
+ * the one the request is actually made with, and `urlWithParams` is exactly that URL.
+ */
+export function queryParameter(url: string, name: string): string | null {
+  const queryStart = url.indexOf('?');
+  if (queryStart < 0) {
+    return null;
+  }
+  const hashStart = url.indexOf('#', queryStart);
+  const search = hashStart < 0 ? url.slice(queryStart + 1) : url.slice(queryStart + 1, hashStart);
+  return new URLSearchParams(search).get(name);
 }

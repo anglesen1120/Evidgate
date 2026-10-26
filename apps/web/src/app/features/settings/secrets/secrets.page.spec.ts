@@ -7,6 +7,9 @@ import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import { SecretsPage } from './secrets.page';
 import { SecretsStore, type RotationResult, type RotationState } from './secrets.store';
+import type { CiBindingView } from '@evidgate/sdk';
+import type { CiBindingsPhase } from './secrets.store';
+import bindingData from '../../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 const failure: ApiError = {
@@ -27,6 +30,13 @@ class FakeSecretsStore {
   readonly projectId = signal<string | null>(null);
   readonly rotateState = signal<RotationState>({ phase: 'idle', tokenId: null, error: null });
   readonly rotating = signal(false);
+  readonly ciBindings = signal<readonly CiBindingView[]>(bindingData.body.items as CiBindingView[]);
+  readonly ciBindingsPhase = signal<CiBindingsPhase>('ready');
+  readonly ciBindingsError = signal<ApiError | null>(null);
+  readonly hasMoreCiBindings = signal(false);
+  readonly loadCiBindings = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
+  readonly loadMoreCiBindings = vi.fn(() => Promise.resolve());
+  readonly resetCiBindings = vi.fn();
   readonly load = vi.fn((id: string) => {
     this.projectId.set(id);
     return Promise.resolve();
@@ -56,6 +66,7 @@ describe('SecretsPage (09.7.1-T3)', () => {
     { id: 'p2', name: 'API' },
   ]);
   const canWrite = signal(true);
+  const canReadBindings = signal(false);
   beforeEach(() => {
     store = new FakeSecretsStore();
     projects.set([
@@ -63,6 +74,7 @@ describe('SecretsPage (09.7.1-T3)', () => {
       { id: 'p2', name: 'API' },
     ]);
     canWrite.set(true);
+    canReadBindings.set(false);
     Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
       configurable: true,
       value: function (this: HTMLDialogElement) {
@@ -81,7 +93,9 @@ describe('SecretsPage (09.7.1-T3)', () => {
           provide: SessionStore,
           useValue: {
             projects,
-            has: (code: string) => code === 'ingest_token:write' && canWrite(),
+            has: (code: string) =>
+              (code === 'ingest_token:write' && canWrite()) ||
+              (code === 'project:read' && canReadBindings()),
           },
         },
       ],
@@ -460,5 +474,96 @@ describe('SecretsPage (09.7.1-T3)', () => {
     await fixture.whenStable();
     expect(store.loadMore).toHaveBeenCalledTimes(1);
     expect(root.querySelectorAll('[data-secret-reference]')).toHaveLength(1);
+  });
+  it('omits CI bindings entirely and never reads them without project:read', async () => {
+    const { root } = await render();
+    expect(root.querySelector('app-ci-binding-list')).toBeNull();
+    expect(store.loadCiBindings).not.toHaveBeenCalled();
+  });
+  it('reads and renders CI metadata with project:read independently of token write', async () => {
+    canReadBindings.set(true);
+    canWrite.set(false);
+    const { root } = await render();
+    expect(store.loadCiBindings).toHaveBeenCalledExactlyOnceWith('p1');
+    expect(root.querySelectorAll('[data-ci-binding]')).toHaveLength(bindingData.body.items.length);
+    expect(root.querySelector('[data-rotate]')).toBeNull();
+  });
+  it('reloads CI bindings on project selection and refuses an unlisted injected id', async () => {
+    canReadBindings.set(true);
+    const { root, fixture } = await render();
+    const select = root.querySelector<HTMLSelectElement>('select');
+    if (!select) throw new Error('Expected project select');
+    select.value = 'p2';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(store.loadCiBindings).toHaveBeenNthCalledWith(2, 'p2');
+    const option = document.createElement('option');
+    option.value = 'foreign';
+    select.append(option);
+    select.value = 'foreign';
+    select.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(store.loadCiBindings).toHaveBeenCalledTimes(2);
+  });
+  it('reads CI bindings once per project scope, ignoring a re-emitted project list', async () => {
+    canReadBindings.set(true);
+    const { fixture } = await render();
+    expect(store.loadCiBindings).toHaveBeenCalledExactlyOnceWith('p1');
+    const loads = store.loadCiBindings.mock.calls.length;
+    const resets = store.resetCiBindings.mock.calls.length;
+    // The session re-emits its project list on unrelated changes: same ids, new array identity.
+    projects.set(projects().map((project) => ({ ...project })));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    projects.set([...projects()]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    // Same scope: no second read, so already loaded cursor pages survive.
+    expect(store.loadCiBindings.mock.calls.length).toBe(loads);
+    expect(store.resetCiBindings.mock.calls.length).toBe(resets);
+    // A permission change is still a scope change: it resets, then reads again.
+    canReadBindings.set(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(store.resetCiBindings.mock.calls.length).toBe(resets + 1);
+    canReadBindings.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(store.loadCiBindings.mock.calls.length).toBe(loads + 1);
+    expect(store.loadCiBindings).toHaveBeenLastCalledWith('p1');
+  });
+  it('removes the CI section and resets its state when project:read is revoked', async () => {
+    canReadBindings.set(true);
+    const { root, fixture } = await render();
+    canReadBindings.set(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(root.querySelector('app-ci-binding-list')).toBeNull();
+    expect(store.loadCiBindings).toHaveBeenCalledTimes(1);
+    expect(store.resetCiBindings).toHaveBeenCalled();
+  });
+  it('renders a server-forbidden CI section without retry despite project:read', async () => {
+    canReadBindings.set(true);
+    store.ciBindingsPhase.set('forbidden');
+    store.ciBindingsError.set({ ...failure, kind: 'forbidden', status: 403 });
+    const { root } = await render();
+    expect(root.querySelector('[data-ci-forbidden]')).not.toBeNull();
+    expect(root.querySelector('[data-ci-retry]')).toBeNull();
+    expect(root.querySelector('[data-ci-binding]')).toBeNull();
+  });
+  it('loads one further CI page and recovers a rejected cursor read through Retry', async () => {
+    canReadBindings.set(true);
+    store.hasMoreCiBindings.set(true);
+    store.loadMoreCiBindings.mockRejectedValueOnce(new Error('cursor could not be read'));
+    const { root, fixture } = await render();
+    root.querySelector<HTMLButtonElement>('[data-ci-load-more]')?.click();
+    await fixture.whenStable();
+    expect(store.loadMoreCiBindings).toHaveBeenCalledTimes(1);
+    expect(root.querySelector('[data-ci-retry]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-ci-retry]')?.click();
+    await fixture.whenStable();
+    expect(store.loadCiBindings).toHaveBeenLastCalledWith('p1');
+    expect(store.loadCiBindings).toHaveBeenCalledTimes(2);
   });
 });

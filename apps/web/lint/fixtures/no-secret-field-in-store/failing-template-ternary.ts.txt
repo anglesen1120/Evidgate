@@ -1,0 +1,21 @@
+// 09.7.1-T3 fixture (queue F16, QA defect R1, plan 09.7.1 §8 S3, AC3): a ternary BRANCH is a READ.
+// The rule used to treat any identifier in front of a `:` as an object key, so a secret-shaped name
+// in the true branch of a ternary slipped through. Each component below plants exactly one
+// violation, and the `:` behind the name ends the branch — it does not declare a key.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-secret-ternary',
+  template: "<p>{{ ok ? token : '' }}</p>",
+})
+export class SecretTernaryPanel {}
+
+// The same shape in a property binding, with a plain `b` behind the `:` so nothing else in the
+// value can be the reported name.
+@Component({
+  selector: 'app-secret-ternary-binding',
+  template: '<input [title]="a ? secret : b" />',
+})
+export class SecretTernaryBindingPanel {}

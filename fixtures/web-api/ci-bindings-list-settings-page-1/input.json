@@ -1,0 +1,60 @@
+{
+  "operation_id": "listCiBindings",
+  "variant": "settings-page-1",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000c8"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-000000000061",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "provider": "github_actions",
+        "repository_id": 5099001,
+        "repository_full_name": "acme/storefront-admin",
+        "allowed_ref_patterns": ["refs/heads/main", "refs/tags/v*"],
+        "allowed_workflow_refs": [
+          "acme/storefront-admin/.github/workflows/evidgate.yml@refs/heads/main"
+        ],
+        "status": "active",
+        "activated_at": "2026-10-20T09:20:00Z",
+        "created_at": "2026-10-20T09:15:00Z",
+        "version": 2
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000062",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "provider": "github_actions",
+        "repository_id": 5099002,
+        "repository_full_name": "acme/storefront-analytics",
+        "allowed_ref_patterns": ["refs/heads/main"],
+        "allowed_workflow_refs": [
+          "acme/storefront-analytics/.github/workflows/evidgate.yml@refs/heads/main"
+        ],
+        "status": "pending_verification",
+        "activated_at": null,
+        "created_at": "2026-10-19T14:05:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000063",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "provider": "github_actions",
+        "repository_id": 5099003,
+        "repository_full_name": "acme/storefront-billing",
+        "allowed_ref_patterns": ["refs/heads/main", "refs/heads/release/*"],
+        "allowed_workflow_refs": [
+          "acme/storefront-billing/.github/workflows/evidgate.yml@refs/heads/main",
+          "acme/storefront-billing/.github/workflows/release.yml@refs/heads/release/*"
+        ],
+        "status": "disabled",
+        "activated_at": "2026-10-18T06:25:00Z",
+        "created_at": "2026-10-18T06:20:00Z",
+        "version": 4
+      }
+    ],
+    "next_cursor": "08df2cdfd69f6800-018f0000-0000-7000-8000-000000000063"
+  }
+}

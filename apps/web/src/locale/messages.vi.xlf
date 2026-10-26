@@ -2449,6 +2449,29 @@
       <trans-unit id="settings.policy.conflict-not-set" datatype="html"><source>(not set)</source><target>(chưa đặt)</target></trans-unit>
       <trans-unit id="settings.policy.load-failed" datatype="html"><source>The policy revisions could not be loaded.</source><target>Không tải được các phiên bản chính sách.</target></trans-unit>
       <trans-unit id="settings.policy.load-retry" datatype="html"><source>Retry</source><target>Thử lại</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.title" datatype="html"><source>CI bindings</source><target>Liên kết CI</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.description" datatype="html"><source>Repository bindings and allowed CI references. Metadata only; bindings are managed during onboarding.</source><target>Liên kết kho mã và tham chiếu CI được phép. Chỉ hiển thị siêu dữ liệu; liên kết được quản lý trong quá trình thiết lập ban đầu.</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.provider" datatype="html"><source>Provider</source><target>Nhà cung cấp</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.status" datatype="html"><source>Verification state</source><target>Trạng thái xác minh</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.pending" datatype="html"><source>Pending verification</source><target>Chờ xác minh</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.disabled" datatype="html"><source>Disabled</source><target>Đã vô hiệu hóa</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.pending-hint" datatype="html"><source>Waiting for the first CI exchange.</source><target>Đang chờ lần trao đổi CI đầu tiên.</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.refs" datatype="html"><source>Allowed ref patterns</source><target>Mẫu tham chiếu được phép</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.workflows" datatype="html"><source>Allowed workflow references</source><target>Tham chiếu quy trình được phép</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.activated" datatype="html"><source>Activated · UTC</source><target>Kích hoạt · UTC</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.created" datatype="html"><source>Created · UTC</source><target>Tạo · UTC</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.not-activated" datatype="html"><source>Not activated</source><target>Chưa kích hoạt</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.none" datatype="html"><source>None configured</source><target>Chưa cấu hình</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.show-all" datatype="html"><source>Show all</source><target>Hiện tất cả</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.show-fewer" datatype="html"><source>Show fewer</source><target>Thu gọn</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.loading" datatype="html"><source>Loading CI bindings…</source><target>Đang tải liên kết CI…</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.empty" datatype="html"><source>No CI bindings for this project. Bindings are created during onboarding.</source><target>Dự án này chưa có liên kết CI. Liên kết được tạo trong quá trình thiết lập ban đầu.</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.forbidden" datatype="html"><source>You are not permitted to view CI bindings for this project.</source><target>Bạn không có quyền xem liên kết CI của dự án này.</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.unavailable" datatype="html"><source>CI bindings are unavailable. Check your connection and try again.</source><target>Không tải được liên kết CI. Hãy kiểm tra kết nối và thử lại.</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.retry" datatype="html"><source>Retry CI bindings</source><target>Thử tải lại liên kết CI</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.more" datatype="html"><source>Load more CI bindings</source><target>Tải thêm liên kết CI</target></trans-unit>
+      <trans-unit id="settings.secrets.ci.loading-more" datatype="html"><source>Loading more CI bindings…</source><target>Đang tải thêm liên kết CI…</target></trans-unit>
     </body>
   </file>
 </xliff>

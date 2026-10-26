@@ -26,6 +26,11 @@ import ciBindingsList from '../../../../../../fixtures/web-api/ci-bindings-list/
 import ciBindingsListOnboardingConnected from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-connected/input.json';
 import ciBindingsListOnboardingProject from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-project/input.json';
 import ciBindingsListOnboardingRun from '../../../../../../fixtures/web-api/ci-bindings-list-onboarding-run/input.json';
+import ciBindingsListSettings from '../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
+import ciBindingsListSettingsEmpty from '../../../../../../fixtures/web-api/ci-bindings-list-settings-empty/input.json';
+import ciBindingsListSettingsForbidden from '../../../../../../fixtures/web-api/ci-bindings-list-settings-forbidden/input.json';
+import ciBindingsListSettingsPage1 from '../../../../../../fixtures/web-api/ci-bindings-list-settings-page-1/input.json';
+import ciBindingsListSettingsPage2 from '../../../../../../fixtures/web-api/ci-bindings-list-settings-page-2/input.json';
 import ingestTokenCreate from '../../../../../../fixtures/web-api/ingest-token-create/input.json';
 import ingestTokenRotate from '../../../../../../fixtures/web-api/ingest-token-rotate/input.json';
 import ingestTokenRotateConflict from '../../../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
@@ -136,6 +141,23 @@ export interface FixtureDocument {
   body?: unknown;
 }
 /* eslint-enable evidgate/no-hand-written-wire-dto */
+
+/**
+ * One catalog row: the corpus directory name, the document it holds, and — for a route that
+ * declares a `cursorQueryParameter` (`fixture-routes.ts`, 09.7.1-F15 note 4) — the request cursor
+ * that document answers.
+ *
+ * `cursor` is a catalog fact, not a corpus field: `input.json` is the 01.6.1-T3 file format shared
+ * with the .NET loader and holds a *response*, while which request a page answers is the dev
+ * backend's business. A row without one answers a request that carries no cursor, which is why the
+ * first page of a paged list needs nothing but its variant.
+ */
+export interface FixtureCatalogRow {
+  readonly name: string;
+  readonly document: FixtureDocument;
+  /** The `cursor` query value this page answers; absent on the first page and every unpaged row. */
+  readonly cursor?: string;
+}
 
 /**
  * Every document the dev backend can answer, by fixture directory name. Alphabetical by name so a
@@ -363,16 +385,18 @@ export interface FixtureDocument {
  * and changed rows (`flaky_budget`, `collection_timeout_minutes`, and a nested change inside
  * `gating_refs`), and a diff of 3 against 4 adds `checkout/pay/apple-pay`. Every `hash` is the
  * `sha256:` digest of the RFC 8785 canonical body — this corpus has no body whose hash a reader
- * cannot recompute — and every body is far below the 64 KiB transport cap. A body is reachable from
- * a browser page load only through a variant, never by asking for another revision id, so the
- * revision-vs-revision diff is a `revision-diff.component.spec.ts` state (its store double answers
- * two different bodies) rather than a fixtures-build one: `getPolicyRevision` answers whatever its
- * selected variant holds for every id.
+ * cannot recompute — and every body is far below the 64 KiB transport cap. The FOUR bodies carry
+ * four distinct `id`s (their own revision ids), so `getPolicyRevision` is the one ID-KEYED route
+ * (09.7.1-F15 note 3, `FIXTURE_ROUTES`): a read for `…a002` answers the revision-2 document and a
+ * read for `…a003` the head, which is what lets the browser's revision-vs-revision diff and the
+ * 412 dialog's server column hold two different bodies. The four variants remain for a review
+ * that wants one document without naming an id in the path.
  *
- * Because the fixture backend answers one variant per operation (a path parameter never selects a
- * document), the four bodies are four variants of `getPolicyRevision`: `ok` is the head, and
+ * Because the fixture backend still selects by variant for every id-agnostic route, the same four
+ * bodies are also four variants of `getPolicyRevision`: `ok` is the head, and
  * `?fixture.variant.getPolicyRevision=previous` (revision 2), `=first` (revision 1) and `=created`
- * (revision 4) are the other three, so a review opens any single revision it needs. The list pages
+ * (revision 4) are the other three, so a review opens any single revision it needs, and they are
+ * the answer for an id no document holds (`…a005`, the head another writer published). The list pages
  * are `policy-revisions-list` (`ok`, revisions 1..3, `ETag` the head `…a003`),
  * `policy-revisions-list-after-publish` (`?fixture.variant.listPolicyRevisions=after-publish`, the
  * same page with revision 4 on it and the head moved to `…a004`: the head is the highest
@@ -404,11 +428,45 @@ export interface FixtureDocument {
  * `contracts/permissions.json`, rows copied verbatim and ordered by `code`, so the pair differs in
  * `policy:write` — the one code that decides whether `[data-policy-publish-open]` exists at all —
  * and both hold `policy:read`, which is what keeps the tab itself reachable.
+ *
+ * 09.7.1-F15 adds the Secrets tab's CI-binding section: `listCiBindings` is list-only and read-only
+ * (the contract declares no `GET /ci-bindings/{b}`, and the only writes are `PATCH`/`DELETE`), so
+ * the three documents below are the three states that section renders.
+ * `ci-bindings-list-settings` (`?fixture.variant.listCiBindings=settings`) is that page: five
+ * `CiBindingView` rows on the `Storefront web` project (`…0011`, as `ingest-tokens-list-settings`),
+ * covering the three verification states — three `active` bindings (one with three ref patterns and
+ * two workflow refs, one with a single pattern, so the multi-line and single-line layouts both have
+ * a row, and one that is the overflow case), a `pending_verification` binding with
+ * `activated_at: null` (the OIDC handshake has not finished yet) and a `disabled` one. The overflow
+ * row carries a 57-character repository full name and allowlists of eight ref patterns and four
+ * workflow refs, so a cell that does not wrap has something to truncate. Every
+ * `allowed_workflow_refs` entry uses the form the server accepts —
+ * `owner/repo/.github/workflows/<file>@refs/…`, `Ci/RefGlob.cs:77` — not the
+ * `refs/heads/main:<path>` spelling the 09.2.1-T1 rows above still carry. No document here has a
+ * `binding_challenge` member: the challenge exists only in `ci-binding-create`'s answer, and the
+ * corpus-wide one-time-secret pin in `fixture-contract.spec.ts` holds that for every list read.
+ * `ci-bindings-list-settings-empty` (`=settings-empty`) is the unbound project's page (`items: []`,
+ * `next_cursor: null`), the state the section's empty pattern answers, and
+ * `ci-bindings-list-settings-forbidden` (`=settings-forbidden`) is the 403 of that same read, which
+ * the store renders as its own `forbidden` phase. The three `X-Request-Id` values (`…c5`–`…c7`) are
+ * distinct from the older `ci-bindings-list*` rows, so a page that echoes one can only echo the
+ * answer it actually received. `ci-bindings-list` and every `onboarding-*` row stay byte-identical.
+ *
+ * 09.7.1-F15 note (4) adds the two pages of that same section's cursor walk, because every document
+ * above ends with `next_cursor: null` and a list that never names another page cannot exercise the
+ * section's Load more in a browser at all:
+ * `ci-bindings-list-settings-page-1` (`=settings-page-1`) is the first page — three bindings, one per
+ * verification state, and a `next_cursor` in the `<utc ticks in hex>-<uuid>` form `KeysetCursor`
+ * issues (`runs-list` spells it the same way) — and `ci-bindings-list-settings-page-2`
+ * (`=settings-page-2`) is the second, two further bindings with `next_cursor: null`, the terminal
+ * page. The page-2 row is the one catalog row carrying a `cursor`, and its value is exactly the
+ * `next_cursor` page 1 names, so the backend answers the cursor the screen actually got — not a
+ * cursor a test made up. Both pages sit on the `Storefront web` project, their five `id`s are
+ * disjoint (the store de-duplicates by `id`, so a repeated one would be silently dropped and the
+ * second page would look empty), and the two `X-Request-Id` values (`…c8`, `…c9`) are distinct from
+ * the three above.
  */
-export const FIXTURE_CATALOG: readonly {
-  readonly name: string;
-  readonly document: FixtureDocument;
-}[] = [
+export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'ci-binding-create', document: ciBindingCreate },
   { name: 'ci-binding-create-conflict', document: ciBindingCreateConflict },
   { name: 'audit-list', document: auditList },
@@ -418,6 +476,15 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'ci-bindings-list-onboarding-connected', document: ciBindingsListOnboardingConnected },
   { name: 'ci-bindings-list-onboarding-project', document: ciBindingsListOnboardingProject },
   { name: 'ci-bindings-list-onboarding-run', document: ciBindingsListOnboardingRun },
+  { name: 'ci-bindings-list-settings', document: ciBindingsListSettings },
+  { name: 'ci-bindings-list-settings-empty', document: ciBindingsListSettingsEmpty },
+  { name: 'ci-bindings-list-settings-forbidden', document: ciBindingsListSettingsForbidden },
+  { name: 'ci-bindings-list-settings-page-1', document: ciBindingsListSettingsPage1 },
+  {
+    name: 'ci-bindings-list-settings-page-2',
+    document: ciBindingsListSettingsPage2,
+    cursor: '08df2cdfd69f6800-018f0000-0000-7000-8000-000000000063',
+  },
   { name: 'ingest-token-create', document: ingestTokenCreate },
   { name: 'ingest-token-rotate', document: ingestTokenRotate },
   { name: 'ingest-token-rotate-conflict', document: ingestTokenRotateConflict },
@@ -549,7 +616,7 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'runs-list-onboarding-run', document: runsListOnboardingRun },
 ];
 
-/** One catalog entry: the corpus directory name and the document it holds. */
+/** One catalog entry: the corpus directory name, the document it holds and the cursor it answers. */
 export type FixtureEntry = (typeof FIXTURE_CATALOG)[number];
 
 /**
@@ -561,5 +628,47 @@ export type FixtureEntry = (typeof FIXTURE_CATALOG)[number];
 export function findFixtureEntry(operationId: string, variant: string): FixtureEntry | undefined {
   return FIXTURE_CATALOG.find(
     (entry) => entry.document.operation_id === operationId && entry.document.variant === variant,
+  );
+}
+
+/**
+ * The `id` a document answers for: its own `body.id`, or `undefined` when the body is absent or
+ * carries no string `id`. Nothing is inferred — an operation whose body names its resource another
+ * way simply never matches by id, and its route must not declare an `idKeyParameter`.
+ */
+function documentId(document: FixtureDocument): string | undefined {
+  const body = document.body;
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return undefined;
+  }
+  const id = (body as Record<string, unknown>)['id'];
+  return typeof id === 'string' ? id : undefined;
+}
+
+/**
+ * The entry of `operationId` whose own `body.id` equals `id` — the id-keyed selection
+ * `fixture-backend.ts` makes for a route that declares an `idKeyParameter`, ahead of the variant
+ * (09.7.1-F15 note 3). `undefined` means no document of that operation answers this id, and the
+ * caller then falls back to the variant it would have used anyway.
+ */
+export function findFixtureEntryById(operationId: string, id: string): FixtureEntry | undefined {
+  return FIXTURE_CATALOG.find(
+    (entry) => entry.document.operation_id === operationId && documentId(entry.document) === id,
+  );
+}
+
+/**
+ * The entry of `operationId` whose catalog row declares `cursor` — the cursor-keyed selection
+ * `fixture-backend.ts` makes for a route that declares a `cursorQueryParameter`, ahead of the variant
+ * (09.7.1-F15 note 4). `undefined` means no page of that operation answers this cursor — the first
+ * request of a list carries none at all — and the caller then falls back to the variant it would
+ * have used anyway.
+ */
+export function findFixtureEntryByCursor(
+  operationId: string,
+  cursor: string,
+): FixtureEntry | undefined {
+  return FIXTURE_CATALOG.find(
+    (entry) => entry.document.operation_id === operationId && entry.cursor === cursor,
   );
 }

@@ -1,0 +1,38 @@
+// 09.7.1-T3 fixture (queue F16, plan 09.7.1 §8 S3, AC3): a one-time value is a RETURN value and
+// never state, so a state position TYPED with a secret-carrying result type is a finding — the
+// state member, the store field, the accessor, the constructor parameter property, and the type
+// argument of `signal`/`computed`/`withState`. Each position below plants one violation.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains; `withState` needs no import for the
+// reason failing.ts.txt gives.
+import { computed, signal } from '@angular/core';
+
+// A state declaration: its members are what a Settings template reads.
+export interface SecretsResultState {
+  readonly lastIssued: IssuedInvite | null;
+}
+
+// The same position under the other state-declaration suffix.
+export interface InviteIssuedStore {
+  readonly lastIssued: InviteIssuedView | null;
+}
+
+export class SecretsStore {
+  // The signal generic holds the value in state as soon as it is assigned.
+  readonly issued = signal<IssuedInvite | null>(null);
+  // A plain annotated field is state exactly like a signal: this is the `FIELD_KINDS` position.
+  readonly last: RotationResult | null = null;
+  // An accessor field holds it the same way.
+  accessor lastRotation: RotationResult | null = null;
+  // A computed result is still a signal the template can bind.
+  readonly created = computed<IngestTokenCreatedResponse | null>(() => null);
+
+  // A constructor parameter property is a field of the instance.
+  constructor(private readonly lastBinding: CiBindingCreatedResponse | null) {}
+}
+
+// The type-argument literal of a state call is the state, and one of its members is typed with a
+// one-time result too.
+export const feature = withState<{ lastBinding: CiBindingCreatedResponse | null }>({
+  lastBinding: null,
+});

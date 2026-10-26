@@ -1,0 +1,3 @@
+<!-- A planted violation: the binding VALUE reads the field that holds the value. -->
+<label for="secret-value">Rotate the key. Token is shown once.</label>
+<input id="secret-value" [value]="signingSecret" />

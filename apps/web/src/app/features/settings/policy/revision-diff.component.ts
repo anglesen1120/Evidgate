@@ -9,7 +9,7 @@ import {
   untracked,
 } from '@angular/core';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
-import { diffPolicyBodies, type PolicyDiff } from './policy-diff';
+import { clipDiffText, diffPolicyBodies, type PolicyDiff } from './policy-diff';
 import { PolicyStore } from './policy.store';
 
 @Component({
@@ -82,7 +82,7 @@ import { PolicyStore } from './policy.store';
                 <li data-diff-row [attr.data-diff-kind]="row.kind" [attr.data-diff-path]="row.path">
                   <div class="revision-heading">
                     <strong>{{ kindLabel(row.kind) }}</strong
-                    ><code>{{ row.path }}</code>
+                    ><code>{{ pathLabel(row.path) }}</code>
                   </div>
                   <dl class="comparison-values">
                     <div>
@@ -170,6 +170,15 @@ export class RevisionDiffComponent {
   }
   protected kindLabel(kind: 'added' | 'removed' | 'changed'): string {
     return this.copy[kind];
+  }
+  /**
+   * A row's JSON pointer as the list shows it: clipped to the same budget its two values are (D3).
+   * A pointer can carry a whole key from the body, so an unclipped one would print a body fragment
+   * as a heading. The raw pointer stays on the row's `data-diff-path` attribute, where a test reads
+   * it without going through the rendering budget.
+   */
+  protected pathLabel(path: string): string {
+    return clipDiffText(path);
   }
   protected selectBase(event: Event): void {
     const select = event.target;

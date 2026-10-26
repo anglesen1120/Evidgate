@@ -22,7 +22,7 @@ import {
   type ConflictField,
 } from '../../../shared/ui/conflict/conflict-details';
 import { wrapDialogFocus } from '../members/dialog-focus-wrap';
-import { diffPolicyBodies } from './policy-diff';
+import { clipDiffText, diffPolicyBodies } from './policy-diff';
 import { POLICY_BODY_MAX_BYTES, policyBodyBytes } from './policy-body-size';
 import { PolicyStore } from './policy.store';
 
@@ -326,10 +326,12 @@ export class PublishDialogComponent {
           // `id` must be unique: a primitive-set comparison reports every added or removed element
           // at the ARRAY's own pointer, so several rows can share one path. The shared dialog
           // tracks fields by `id` and rejects duplicated keys, so the index disambiguates while
-          // the label stays the JSON pointer the user can find in the body.
+          // the label stays the JSON pointer the user can find in the body. The label is clipped
+          // to the same budget its two values are (D3): a pointer can carry a whole key, so an
+          // unclipped one would render a body fragment as a heading.
           fields = differences.slice(0, MAX_CONFLICT_FIELDS).map((row, index) => ({
             id: `${index}:${row.path}`,
-            label: row.path,
+            label: clipDiffText(row.path),
             local: row.after ?? this.copy.notSet,
             server: row.before ?? this.copy.notSet,
           }));

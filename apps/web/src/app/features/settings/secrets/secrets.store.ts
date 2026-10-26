@@ -39,9 +39,44 @@
 //    (`409 invalid_transition`/`token_revoked`) starts the same background read for the same
 //    reason: the Rotate button must not stay on a row that can never rotate again — and so does a
 //    success answer with no usable secret, because the token did rotate either way.
+//
+// 8. CI-binding metadata is a SECOND, independent track (09.7.1-F15; plan §4
+//    `.../settings/secrets/` row, §2 AC3; COORDINATOR DECISIONS S86 P1–P5). The Secrets tab shows
+//    which repositories a project's CI is bound to, as metadata only: `CiBindingView` carries the
+//    repository, the allowlists, the verification `status` and the timestamps, and the challenge
+//    is only ever in the create answer, so no field or signal here can hold one. The track is
+//    READ-ONLY — the contract has no `GET /ci-bindings/{b}` and the only writes are `PATCH`/`DELETE`,
+//    so this store offers no create, update or disable method — and it is LIST-ONLY: one page per
+//    read, bounded by the same {@link MAX_CURSOR_PAGES}, with `loadMoreCiBindings()` following
+//    `next_cursor` and stopping (no request, `hasMoreCiBindings()` false) when the page names none.
+//    Two servers' answers never duplicate a row on screen: a page is appended by `id`, so a row the
+//    list already holds is dropped rather than rendered twice.
+//
+//    Its public surface, which the page codes against:
+//
+//      `ciBindings`            the rows, in server order, as many cursor pages as were followed
+//      `ciBindingsPhase`       `idle` | `loading` | `ready` | `empty` | `forbidden` |
+//                              `unavailable` | `error` (see {@link CiBindingsPhase})
+//      `ciBindingsError`       the server's typed `ApiError`; `null` when the read never failed and
+//                              when the rejection was not the server's answer at all
+//      `ciBindingsProjectId`   the project the loaded rows belong to; `null` before the first read
+//      `hasMoreCiBindings`     true while the server named another page
+//      `loadCiBindings(p)`     reads the first page and becomes `ready`/`empty`; a project switch
+//                              clears the rows BEFORE the read, so another project's bindings are
+//                              never on screen under this project's heading
+//      `loadMoreCiBindings()`  follows `next_cursor` once and appends, de-duplicated by `id`
+//      `resetCiBindings()`     drops the track (rows, phase, error, cursor, project)
+//
+//    Nothing is read on construction (S86 P3): the page calls `loadCiBindings(projectId)` behind
+//    its own `project:read` gate, so a caller that may not read this project never causes a
+//    request, and a server 403 still renders `forbidden` for a session the client-side gate let
+//    through. A token `load()` that switches the project drops this track too — the project is the
+//    scope of the whole tab (rule 3) — unless the rows already belong to the project being loaded;
+//    the reverse is not true, because the token read owns the scope and this track only follows it.
+//    The track is dropped when the page (and therefore this per-page instance) is destroyed.
 
 import { computed, inject, Injectable, signal } from '@angular/core';
-import type { IngestTokenCreatedResponse, IngestTokenView } from '@evidgate/sdk';
+import type { CiBindingView, IngestTokenCreatedResponse, IngestTokenView } from '@evidgate/sdk';
 
 import { MAX_CURSOR_PAGES } from '../../../core/data/identity-data.service';
 import { SecretsDataService } from '../../../core/data/secrets-data.service';
@@ -49,6 +84,30 @@ import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 
 /** The tab's read state: `idle` before the first read, which the page renders as loading. */
 export type SecretsPhase = 'idle' | 'loading' | 'ready' | 'error';
+
+/**
+ * The CI-binding list's read state (09.7.1-F15), one phase per state the page renders:
+ *
+ * - `idle` — nothing asked yet; nothing is read on construction, so this is where the track starts
+ *   and where {@link SecretsStore.resetCiBindings} returns it;
+ * - `loading` — a read is out. A reload of rows already on screen keeps them, so the page can show
+ *   the list while the refresh travels;
+ * - `ready` — the server answered with at least one row (or a follow-up page was appended);
+ * - `empty` — the server answered with no row at all: a project whose CI is not bound yet, which is
+ *   a state of its own and not an error and not "loading forever";
+ * - `forbidden` — the server refused the read with the `forbidden` kind: the caller may not see
+ *   this project's bindings (403). A `csrf_failed` 403 is NOT this phase — the session may retry
+ *   it — so it lands in `error` with its own failure. The page gates the section on `project:read`
+ *   as a convenience; the server's answer is the authority, so its refusal is a state here rather
+ *   than something the store pre-empts;
+ * - `unavailable` — the rejection was NOT the server's answer (an adapter cancellation, a bug, a
+ *   transport failure that never reached the mapper). The store refuses to invent copy, so
+ *   {@link SecretsStore.ciBindingsError} stays `null` and the page renders its generic pattern;
+ * - `error` — any other typed server failure (429, 503, 409, 422, 5xx), carried verbatim in
+ *   `ciBindingsError` so the page can show the server's own message, code and retry delay.
+ */
+export type CiBindingsPhase =
+  'idle' | 'loading' | 'ready' | 'empty' | 'forbidden' | 'unavailable' | 'error';
 
 /**
  * The rotate action's state: `submitting` while the request is out, `done` once the server
@@ -78,6 +137,9 @@ export interface RotationResult {
 
 /** The frozen empty values, so an empty store and a cleared scope share one array identity. */
 const NO_ROWS: readonly IngestTokenView[] = [];
+
+/** The same frozen empty list for the CI-binding track (09.7.1-F15). */
+const NO_CI_BINDINGS: readonly CiBindingView[] = [];
 
 const IDLE_ROTATION: RotationState = { phase: 'idle', tokenId: null, error: null };
 
@@ -142,9 +204,57 @@ const UNUSABLE_ANSWER_FAILURE: ApiError = {
  */
 const STALE_ROW_CODES: readonly string[] = ['invalid_transition', 'token_revoked'];
 
-/** One read, settled so a rejection is inspected instead of thrown. */
+/**
+ * One read, settled so a rejection is inspected instead of thrown.
+ */
 type SettledRead<T> =
   { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: unknown };
+
+/**
+ * The page appended to the rows already on screen, de-duplicated by `id` (09.7.1-F15, S86 P4).
+ *
+ * A keyset cursor over `(created_at, id)` is stable, but a row can still arrive twice: a write
+ * between two reads shifts the window, and the contract does not forbid a server repeating an
+ * entry. Rendering it twice would give one binding two DOM rows, two keys and two versions of the
+ * truth, so the second copy is dropped. The incoming page is de-duplicated against itself too.
+ *
+ * The existing array is returned unchanged when nothing new arrived, so a page that added no row
+ * does not notify every consumer of the signal for nothing.
+ */
+function appendCiBindingRows(
+  existing: readonly CiBindingView[],
+  incoming: readonly CiBindingView[],
+): readonly CiBindingView[] {
+  const seen = new Set(existing.map((row) => row.id));
+  const appended: CiBindingView[] = [];
+  for (const row of incoming) {
+    if (seen.has(row.id)) {
+      continue;
+    }
+    seen.add(row.id);
+    appended.push(row);
+  }
+  return appended.length === 0 ? existing : [...existing, ...appended];
+}
+
+/**
+ * The phase a failed CI-binding read settles into (09.7.1-F15). The mapping is by the typed
+ * failure's KIND, never by its message:
+ *
+ * - no typed failure at all — the rejection was not the server's answer — is `unavailable`: the
+ *   store has nothing to report and refuses to invent copy;
+ * - `forbidden` (403) is its own phase, because a section the caller may not read is a page state,
+ *   not an error message;
+ * - everything else the server answered (429 `rate_limited`, 503 `unavailable`, a 409/422/5xx) is
+ *   `error`, carrying the server's own `ApiError` so the page can show its message and, where the
+ *   contract declares one, its `Retry-After`.
+ */
+function ciBindingsFailurePhase(failure: ApiError | null): CiBindingsPhase {
+  if (failure === null) {
+    return 'unavailable';
+  }
+  return failure.kind === 'forbidden' ? 'forbidden' : 'error';
+}
 
 async function settledRead<T>(read: () => Promise<T>): Promise<SettledRead<T>> {
   try {
@@ -189,6 +299,24 @@ export class SecretsStore {
    */
   private readonly rotateInFlightSignal = signal(false);
 
+  /**
+   * The CI-binding track's own state (09.7.1-F15, header rule 8). It is deliberately a SECOND set of
+   * signals rather than a field on the token rows: the two reads are independent routes with
+   * independent cursors and independent failure states, so a refused binding read must not turn the
+   * token list — the tab's other half — into an error, and vice versa.
+   */
+  private readonly ciBindingsRowsSignal = signal<readonly CiBindingView[]>(NO_CI_BINDINGS);
+  private readonly ciBindingsPhaseSignal = signal<CiBindingsPhase>('idle');
+  private readonly ciBindingsErrorSignal = signal<ApiError | null>(null);
+  private readonly ciBindingsNextCursorSignal = signal<string | null>(null);
+  private readonly ciBindingsProjectSignal = signal<string | null>(null);
+  /** The binding cursors already followed, the same contract-violation guard as the token list. */
+  private readonly followedCiBindingCursors = new Set<string>();
+  /** Pages read for the current binding list, the first page included; page-capped as well. */
+  private ciBindingsPagesRead = 1;
+  /** Bumped by every binding read AND by {@link resetCiBindings}; older reads never write. */
+  private ciBindingsGeneration = 0;
+
   /** The project's ingest tokens, in server order, as many cursor pages as have been followed. */
   readonly rows = this.rowsSignal.asReadonly();
   /** The read state the page renders: loading, the list, or the tab's error state. */
@@ -211,6 +339,23 @@ export class SecretsStore {
   readonly rotating = this.rotateInFlightSignal.asReadonly();
 
   /**
+   * The project's CI bindings, in server order, as many cursor pages as have been followed
+   * (09.7.1-F15). Metadata only: `CiBindingView` never carries the challenge or its hash.
+   */
+  readonly ciBindings = this.ciBindingsRowsSignal.asReadonly();
+  /** The binding list's read state: see {@link CiBindingsPhase} for each phase. */
+  readonly ciBindingsPhase = this.ciBindingsPhaseSignal.asReadonly();
+  /**
+   * The server's typed failure for the binding read; `null` when it never failed, and when the
+   * rejection was not the server's answer at all (then the phase is `unavailable`).
+   */
+  readonly ciBindingsError = this.ciBindingsErrorSignal.asReadonly();
+  /** The project the loaded bindings belong to; `null` before the first read and after a reset. */
+  readonly ciBindingsProjectId = this.ciBindingsProjectSignal.asReadonly();
+  /** True while the server named another binding page, so the page's next control can be offered. */
+  readonly hasMoreCiBindings = computed(() => this.ciBindingsNextCursorSignal() !== null);
+
+  /**
    * Reads the named project's first token page and becomes `ready`.
    *
    * Switching the project clears the rows before the read starts: the previous project's tokens
@@ -220,6 +365,12 @@ export class SecretsStore {
    *
    * The rotate state is also cleared, because a rotation belongs to the view that started it.
    *
+   * A scope switch drops the CI-binding track as well, but ONLY when that track belongs to another
+   * project: the project is the scope of the whole tab (rule 3), so p-1's bindings must not survive
+   * under p-2's heading even if the page has not re-read them yet. The guard matters in the other
+   * order — a page that reads the bindings of `p-2` FIRST and then calls `load('p-2')` keeps the
+   * rows it has just loaded, because they already belong to the project being loaded.
+   *
    * Never rejects: the page calls `void store.load(...)` from an effect, so a rejection would be an
    * unhandled promise rejection. A cancellation or a bug leaves the typed error `null`, and the tab
    * renders the generic error pattern rather than a message the server never sent.
@@ -228,6 +379,10 @@ export class SecretsStore {
     if (this.projectIdSignal() !== projectId) {
       this.rowsSignal.set(NO_ROWS);
       this.nextCursorSignal.set(null);
+      const bindingProjectId = this.ciBindingsProjectSignal();
+      if (bindingProjectId !== null && bindingProjectId !== projectId) {
+        this.resetCiBindings();
+      }
     }
     this.resetRotation();
     await this.read(projectId);
@@ -428,6 +583,114 @@ export class SecretsStore {
   }
 
   /**
+   * Reads the named project's first CI-binding page (09.7.1-F15) and becomes `ready`, or `empty`
+   * when the server answered with no row at all.
+   *
+   * Switching the project clears the rows BEFORE the read starts: another project's bindings must
+   * never be rendered under this project's heading, not even for the duration of the round trip. A
+   * reload of the SAME project keeps them, so a page effect that re-runs does not blank the list.
+   *
+   * Nothing reads on construction: this is the only entry point that starts a request, and the
+   * page calls it behind its own `project:read` gate. The server stays the authority — a session
+   * the gate let through but the server refuses still lands in the `forbidden` phase.
+   *
+   * Never rejects, for the same reason {@link load} does not: the page calls it from an effect, so
+   * a rejection would be an unhandled one. A cancellation or a bug leaves the typed error `null`
+   * and the phase `unavailable` rather than inventing copy the server never sent.
+   */
+  async loadCiBindings(projectId: string): Promise<void> {
+    if (this.ciBindingsProjectSignal() !== projectId) {
+      this.ciBindingsRowsSignal.set(NO_CI_BINDINGS);
+      this.ciBindingsNextCursorSignal.set(null);
+    }
+    await this.readCiBindings(projectId);
+  }
+
+  /**
+   * Follows the CI-binding `next_cursor` once and appends the page (09.7.1-F15), so the screen
+   * keeps the rows it already shows while the next one is on its way (00 §9.1 keyset cursor; never
+   * "load all").
+   *
+   * Three refusals, the same three as the token list's follow-up:
+   *
+   * - no project or no further page — including a page that named `null`, omitted `next_cursor` or
+   *   named an empty string — is not an error and sends NO request: the list is complete, and
+   *   `hasMoreCiBindings()` already reads false;
+   * - a cursor already followed, or a {@link MAX_CURSOR_PAGES}-th page that still names another
+   *   one, is a contract violation thrown as a plain `Error`: a broken cursor costs visibility of
+   *   the bug, not a hung tab;
+   * - a typed server refusal is NOT a bug: it becomes `ciBindingsError` (with the `forbidden` or
+   *   `error` phase when nothing is on screen) and the rows already read stay put.
+   *
+   * A row the list already holds is dropped rather than appended twice (see
+   * {@link appendCiBindingRows}), so the page can never show one binding under two keys.
+   */
+  async loadMoreCiBindings(): Promise<void> {
+    const projectId = this.ciBindingsProjectSignal();
+    const cursor = this.ciBindingsNextCursorSignal();
+    if (projectId === null || cursor === null) {
+      return;
+    }
+    if (this.followedCiBindingCursors.has(cursor)) {
+      throw new Error(`the ci-binding list repeated cursor "${cursor}"`);
+    }
+    if (this.ciBindingsPagesRead >= MAX_CURSOR_PAGES) {
+      throw new Error(`the ci-binding list did not finish within ${MAX_CURSOR_PAGES} pages`);
+    }
+
+    const generation = this.ciBindingsGeneration;
+    const read = await settledRead(() => this.data.listCiBindings(projectId, cursor));
+    // A newer read (another project, a reload, a reset) owns the state now: this page belongs to a
+    // list nobody renders any more — including its rows, which must not be appended to the new one.
+    if (generation !== this.ciBindingsGeneration) {
+      return;
+    }
+    if (!read.ok) {
+      // Only a typed refusal is the server's answer; a contract violation is re-thrown.
+      if (!isApiRequestError(read.error)) {
+        throw read.error;
+      }
+      const failure = read.error.error;
+      this.ciBindingsErrorSignal.set(failure);
+      if (this.ciBindingsRowsSignal().length === 0) {
+        this.ciBindingsPhaseSignal.set(ciBindingsFailurePhase(failure));
+      }
+      return;
+    }
+
+    this.followedCiBindingCursors.add(cursor);
+    this.ciBindingsPagesRead += 1;
+    const page = read.value;
+    this.ciBindingsRowsSignal.update((rows) => appendCiBindingRows(rows, page.items));
+    const nextCursor = page.next_cursor;
+    this.ciBindingsNextCursorSignal.set(
+      nextCursor === undefined || nextCursor === null || nextCursor.length === 0
+        ? null
+        : nextCursor,
+    );
+    this.ciBindingsPhaseSignal.set(this.ciBindingsRowsSignal().length === 0 ? 'empty' : 'ready');
+  }
+
+  /**
+   * Drops the whole CI-binding track: rows, phase, typed error, cursor and the project they
+   * belonged to, and abandons any read in flight (it settles into nothing, because a generation
+   * bump owns the state). The page calls it when it leaves the project or tears its own view down;
+   * the store instance itself dies with the page, so a destroyed page leaves nothing behind either.
+   *
+   * The token list and the rotate state are untouched: this is the binding track's reset only.
+   */
+  resetCiBindings(): void {
+    this.ciBindingsGeneration += 1;
+    this.ciBindingsRowsSignal.set(NO_CI_BINDINGS);
+    this.ciBindingsPhaseSignal.set('idle');
+    this.ciBindingsErrorSignal.set(null);
+    this.ciBindingsNextCursorSignal.set(null);
+    this.ciBindingsProjectSignal.set(null);
+    this.followedCiBindingCursors.clear();
+    this.ciBindingsPagesRead = 1;
+  }
+
+  /**
    * The one read every entry point shares (first load, project switch, rotation refresh). It owns
    * the generation, so whichever read was started last is the one that writes.
    */
@@ -463,5 +726,46 @@ export class SecretsStore {
     this.rowsSignal.set(first.value.items);
     this.nextCursorSignal.set(first.value.next_cursor);
     this.phaseSignal.set('ready');
+  }
+
+  /**
+   * The one CI-binding read every entry point shares (`loadCiBindings`, a project switch). It owns
+   * its own generation, so whichever binding read was started last is the one that writes, and a
+   * `resetCiBindings()` in between discards every read that was in flight when it ran.
+   */
+  private async readCiBindings(projectId: string): Promise<void> {
+    const generation = ++this.ciBindingsGeneration;
+    this.ciBindingsProjectSignal.set(projectId);
+    this.ciBindingsPhaseSignal.set('loading');
+    this.ciBindingsErrorSignal.set(null);
+    this.followedCiBindingCursors.clear();
+    this.ciBindingsNextCursorSignal.set(null);
+    this.ciBindingsPagesRead = 1;
+
+    const first = await settledRead(() => this.data.listCiBindings(projectId));
+    // A newer read (or a reset) owns the state now.
+    if (generation !== this.ciBindingsGeneration) {
+      return;
+    }
+    if (!first.ok) {
+      const failure = isApiRequestError(first.error) ? first.error.error : null;
+      this.ciBindingsErrorSignal.set(failure);
+      // A refresh that failed keeps the rows already on screen — they are this project's; a first
+      // read of a scope that has none is the binding section's own state (see CiBindingsPhase).
+      this.ciBindingsPhaseSignal.set(
+        this.ciBindingsRowsSignal().length === 0 ? ciBindingsFailurePhase(failure) : 'ready',
+      );
+      return;
+    }
+
+    const rows = appendCiBindingRows(NO_CI_BINDINGS, first.value.items);
+    const nextCursor = first.value.next_cursor;
+    this.ciBindingsRowsSignal.set(rows);
+    this.ciBindingsNextCursorSignal.set(
+      nextCursor === undefined || nextCursor === null || nextCursor.length === 0
+        ? null
+        : nextCursor,
+    );
+    this.ciBindingsPhaseSignal.set(rows.length === 0 ? 'empty' : 'ready');
   }
 }

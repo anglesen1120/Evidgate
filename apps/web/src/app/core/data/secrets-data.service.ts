@@ -1,6 +1,9 @@
 // 09.7.1-T3 (plan 09.7.1 §2 AC3, §5 "secret references" row, §6 ingest-token rotation states,
-// §8 S3, §10 T3.1/T3.2): the two calls the Settings > Secrets tab makes — the project's
-// ingest-token metadata page and the rotation that mints a successor.
+// §8 S3, §10 T3.1/T3.2): the three calls the Settings > Secrets tab makes — the project's
+// ingest-token metadata page, the rotation that mints a successor, and (09.7.1-F15, plan §4
+// `.../settings/secrets/` row — `SecretsStore` holds `ingestTokens` and `ciBindings`, metadata
+// rows only — and §2 AC3) the project's CI-binding metadata page, which is the read-only
+// counterpart of the same tab: a binding is listed, never created, patched or disabled from here.
 //
 // It lives in `core/data` for the reason every data service does: `apps/web/lint` owns the HTTP
 // boundary there (`no-http-outside-core`), so a page, store or component calls this instead of
@@ -26,10 +29,13 @@
 
 import { inject, Injectable } from '@angular/core';
 import {
+  listCiBindings,
   listIngestTokens,
   rotateIngestToken,
+  type CiBindingListResponse,
   type IngestTokenCreatedResponse,
   type IngestTokenListResponse,
+  type ListCiBindingsData,
   type ListIngestTokensData,
 } from '@evidgate/sdk';
 
@@ -38,8 +44,14 @@ import { ApiGateway } from '../http/api-gateway';
 /** The query of `GET /v1/projects/{p}/ingest-tokens` without its optionality, so `{}` is legal. */
 type IngestTokenListQuery = NonNullable<ListIngestTokensData['query']>;
 
+/** The query of `GET /v1/projects/{p}/ci-bindings`, same shape: `{}` is a legal query. */
+type CiBindingListQuery = NonNullable<ListCiBindingsData['query']>;
+
 /** The contract's maximum page size for this route (00 §9.1: `limit` ≤ 200). */
 const INGEST_TOKEN_PAGE_LIMIT = 200;
+
+/** The same maximum for the CI-binding route: one page, never a dump (00 §9.1, W7). */
+const CI_BINDING_PAGE_LIMIT = 200;
 
 @Injectable({ providedIn: 'root' })
 export class SecretsDataService {
@@ -63,6 +75,28 @@ export class SecretsDataService {
     return this.gateway.call((client) =>
       listIngestTokens({ client, path: { p: projectId }, query }),
     );
+  }
+
+  /**
+   * One page of the project's CI-binding metadata (`GET /v1/projects/{p}/ci-bindings`,
+   * 09.7.1-F15; `project:read`, 00 §9.1 cursor page). A `CiBindingView` is metadata by contract:
+   * the repository, its allowlists, the verification `status` and the timestamps — the challenge
+   * (`binding_challenge`) exists only in the create answer and is never listed, which is why this
+   * read can show what a project's CI is bound to without being able to replay the secret.
+   *
+   * The view is list-only: the contract offers no `GET /ci-bindings/{b}`, and the only writes are
+   * `PATCH`/`DELETE`, so nothing on this route can create, update or disable a binding — the tab
+   * is a read-only view of what exists.
+   *
+   * The page is returned as served, so the caller keeps the rows it already renders while the next
+   * page is on its way and owns the cursor loop (00 §9.1, W7 "never load all").
+   */
+  listCiBindings(projectId: string, cursor?: string): Promise<CiBindingListResponse> {
+    const query: CiBindingListQuery = { limit: CI_BINDING_PAGE_LIMIT };
+    if (cursor !== undefined) {
+      query.cursor = cursor;
+    }
+    return this.gateway.call((client) => listCiBindings({ client, path: { p: projectId }, query }));
   }
 
   /**

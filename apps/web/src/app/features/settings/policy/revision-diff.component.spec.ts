@@ -2,6 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { PolicyRevisionDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
+import { MAX_DIFF_VALUE_CHARS } from './policy-diff';
 import { PolicyStore } from './policy.store';
 import { RevisionDiffComponent } from './revision-diff.component';
 
@@ -158,6 +159,27 @@ describe('RevisionDiffComponent', () => {
     expect(rows[0]?.textContent).toContain('case-0');
     expect(rows[1]?.textContent).toContain('case-1');
     expect(root.querySelector('[data-policy-diff-truncated]')?.textContent).toMatch(/\S/);
+  });
+  it('clips a rendered row label to the same budget as its values, keeping the raw pointer', async () => {
+    // D3: a JSON pointer carries the whole key of the field it points at, so a body with a long key
+    // gives a row label as long as a value. The label is cut exactly like the values are. The raw
+    // pointer stays on the row's `data-diff-path`, where nothing is truncated, and that is what the
+    // pointer assertions elsewhere in this spec read.
+    const longKey = 'k'.repeat(MAX_DIFF_VALUE_CHARS * 2);
+    store.loadBody.mockImplementation((id) =>
+      Promise.resolve(
+        id === 'a' ? { ...previous, body: { [longKey]: 1 } } : { ...head, body: { [longKey]: 2 } },
+      ),
+    );
+
+    const { root } = await render();
+
+    const row = root.querySelector('[data-diff-row]');
+    expect(row?.getAttribute('data-diff-path')).toBe(`/${longKey}`);
+    const label = row?.querySelector('.revision-heading code')?.textContent ?? '';
+    expect(label.length).toBeLessThanOrEqual(MAX_DIFF_VALUE_CHARS);
+    expect(label).toContain('…');
+    expect(label).not.toContain(longKey);
   });
   it('marks loading and ignores a response after destruction', async () => {
     let resolveBody: ((body: PolicyRevisionDto) => void) | undefined;

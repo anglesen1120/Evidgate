@@ -11,6 +11,12 @@
 //    `fixture_not_found`; a production bundle can only contain them if the dev backend (or a
 //    catalog/route import) reached the build. Two more markers, the `dev/ui-gallery` route path
 //    and the `app-ui-gallery` selector, catch the review-only `shared/ui` gallery the same way.
+//    The other two review-only route paths of that same seam — `dev/settings-secrets` and
+//    `dev/settings-policy`, which mount a phase-later product tab on its review address
+//    (09.7.1-T3/T4) — are markers too: they exist only in `dev-routes.fixtures.ts`, so either one
+//    in `dist/browser` means the `fileReplacements` seam regressed and a phase-G2/G4 screen
+//    shipped in a G1 build. Their page selectors are NOT markers: those pages are ordinary
+//    product code the production bundle carries.
 // 2. The fixture corpus data: every string value of >= `MIN_FIXTURE_STRING_LENGTH` characters in
 //    `fixtures/web-api/*/input.json`. A response body that survived into the bundle leaks the
 //    fixtures just as plainly as the backend code does. A value holding a non-ASCII character is
@@ -86,6 +92,12 @@ const MARKERS = [
   // selectors.
   'dev/ui-gallery',
   'app-ui-gallery',
+  // The two phase-later review addresses of the same seam (09.7.1-T3/T4, F20): `fixtures` and
+  // `development` mount the real Secrets (G2) and Policy (G4) pages under `/dev/...`; production
+  // has no such route at all. The paths, not the page selectors, are the markers — those pages are
+  // product code the production bundle carries.
+  'dev/settings-secrets',
+  'dev/settings-policy',
 ];
 
 /**

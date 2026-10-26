@@ -1,0 +1,21 @@
+// 09.7.1-T3 fixture (queue F16, QA defect O5, plan 09.7.1 §8 S3, AC3): the BRACKET-QUOTED member
+// read. `store['token']()` and `row["signing_secret"]` name the member in a string literal, which
+// the bare-read check used to mask before scanning — so the value the store holds was read in the
+// template and neither position reported it. A quoted string that is the direct subscript of a
+// member access is now unmasked; every other string stays masked (see passing-template-keys).
+// Each component below plants exactly one violation.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-secret-subscript',
+  template: "<p>{{ store['token']() }}</p>",
+})
+export class SecretSubscriptPanel {}
+
+@Component({
+  selector: 'app-secret-subscript-double',
+  template: '<p>{{ row["signing_secret"] }}</p>',
+})
+export class SecretSubscriptDoublePanel {}

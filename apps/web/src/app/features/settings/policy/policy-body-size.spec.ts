@@ -6,7 +6,10 @@
 // - 65 536 bytes are the cap and are accepted by the store, so the exported constant is the number
 //   the contract names;
 // - a multi-byte character counts as the bytes it occupies, because the cap is declared in bytes;
-// - text that is not JSON has no wire body at all, which is `null`, never a made-up size.
+// - text that is not JSON has no wire body at all, which is `null`, never a made-up size;
+// - a body whose compact form the engine refuses to write (a pathological, deeply nested paste) has
+//   no measurable wire body either, and the helper answers that instead of letting the throw escape
+//   (delta finding D2).
 
 import { POLICY_BODY_MAX_BYTES, policyBodyBytes } from './policy-body-size';
 
@@ -75,6 +78,32 @@ describe('policyBodyBytes (09.7.1-T4)', () => {
     ['truncated JSON', '{"a":'],
   ])('answers no size at all for %s', (_label, text) => {
     expect(policyBodyBytes(text)).toBeNull();
+  });
+
+  it('answers no size for a body whose compact form the engine refuses to write', () => {
+    // D2: `JSON.stringify` throws `RangeError` on a pathological body (nesting deep enough to
+    // exhaust the stack), and that throw used to escape this helper from OUTSIDE its guard. The
+    // body here is deeply nested as such a paste is and well under the 64 KiB text cap; the throw
+    // itself is forced, because the depth at which each engine gives up is not portable, and the
+    // answer must be the same "no wire body" a non-JSON text gets: nothing can be measured, so
+    // nothing may be sent.
+    let deep: unknown = 'leaf';
+    for (let level = 0; level < 8_000; level += 1) deep = { a: deep };
+    const text = JSON.stringify(deep);
+    expect(utf8Bytes(text)).toBeLessThan(POLICY_BODY_MAX_BYTES);
+    // Sanity check first: a deep body that the engine CAN write is measured as usual — the guard
+    // must not turn every nested paste into "unreadable". Its compact form is the text itself.
+    expect(policyBodyBytes(text)).toBe(utf8Bytes(text));
+
+    const stringify = vi.spyOn(JSON, 'stringify').mockImplementation(() => {
+      throw new RangeError('Maximum call stack size exceeded');
+    });
+    try {
+      expect(() => policyBodyBytes(text)).not.toThrow();
+      expect(policyBodyBytes(text)).toBeNull();
+    } finally {
+      stringify.mockRestore();
+    }
   });
 
   it('measures a JSON scalar or array too, so the store can refuse its shape separately', () => {

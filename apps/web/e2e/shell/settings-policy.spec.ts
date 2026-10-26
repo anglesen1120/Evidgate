@@ -20,13 +20,11 @@
 // conflict dialog, no `[data-policy-published]`, and no second dialog after the user returns to the
 // draft; the store's own spec (`policy.store.spec.ts`) pins the call count itself.
 //
-// The in-process backend answers ONE document per operation, never by path parameter, so both diff
-// bodies are the same document in real Chromium: the diff panel's no-differences state is what a
-// browser can assert, and the added/removed/changed rows are
-// `revision-diff.component.spec.ts`'s subject. The conflict dialog is the one place a browser CAN
-// show differing bodies, because the draft is edited before the attempt: the head read is answered
-// by the corpus document and every differing pointer in the 412 dialog carries that document's own
-// value on the server side. No source-text assertion, no mock UI.
+// The in-process backend answers by VARIANT except for `getPolicyRevision`, which is ID-KEYED
+// (09.7.1-F15 note 3): a read for a revision id the corpus holds answers that document, so the
+// revision-vs-revision diff is a real browser comparison of two corpus documents — the case below
+// proves it row by row — and the 412 dialog's server column comes from the head read. Every other
+// operation still answers one document per operation.
 //
 // The diff pickers carry their selection through each option's own `selected` state
 // (`revision-diff.component.ts`: the select exists, with only its placeholder, before the revisions
@@ -47,6 +45,8 @@ import preconditionFailed from '../../../../fixtures/web-api/policy-revision-cre
 import unchanged from '../../../../fixtures/web-api/policy-revision-create-unchanged/input.json';
 import unknownField from '../../../../fixtures/web-api/policy-revision-create-unknown-field/input.json';
 import head from '../../../../fixtures/web-api/policy-revision-head/input.json';
+import previous from '../../../../fixtures/web-api/policy-revision-previous/input.json';
+import publishedRevision from '../../../../fixtures/web-api/policy-revision-published/input.json';
 import afterPublish from '../../../../fixtures/web-api/policy-revisions-list-after-publish/input.json';
 import conflictHead from '../../../../fixtures/web-api/policy-revisions-list-conflict-head/input.json';
 import revisions from '../../../../fixtures/web-api/policy-revisions-list/input.json';
@@ -83,6 +83,13 @@ const CONFLICT = 'app-conflict-dialog dialog';
 const HEAD_ID = head.body.id;
 const HEAD_NO = String(head.body.revision_no);
 const SEED = JSON.stringify(head.body.body, null, 2);
+
+/**
+ * The body the publish dialog seeds once the post-publish list is served: its head is revision 4,
+ * the panel targets the head, and the id-keyed read answers the revision-4 document — so a review
+ * edits the current head, not the body the session opened with.
+ */
+const PUBLISHED_SEED = JSON.stringify(publishedRevision.body.body, null, 2);
 
 /**
  * A draft that differs from the head document in exactly two pointers: `flaky_budget` (changed)
@@ -179,8 +186,9 @@ async function ready(page: Page, rowCount: number): Promise<void> {
   await expect(page.locator('#policy-diff-base option')).toHaveCount(rowCount + 1);
   await expect(page.locator('#policy-diff-target option')).toHaveCount(rowCount + 1);
   await expect(page.locator(DIFF)).not.toHaveAttribute('aria-busy', 'true');
-  await expect(page.locator(DIFF_ROWS)).toHaveCount(0);
-  await expect(page.locator(`${DIFF} p`).first()).toHaveText(/\S/);
+  // The panel compares the two documents the id-keyed read answered, so either outcome is a
+  // settled panel: differing rows, or the "no field differences" state when the two bodies agree.
+  await expect(page.locator(`${DIFF} p, ${DIFF_ROWS}`).first()).toBeVisible();
 }
 
 async function visit(
@@ -196,11 +204,11 @@ async function visit(
 }
 
 /** Opens the real publish dialog and waits for its seeded body (the revision it will quote). */
-async function openPublish(page: Page): Promise<Locator> {
+async function openPublish(page: Page, seed: string = SEED): Promise<Locator> {
   await page.locator(OPEN_PUBLISH).click();
   const dialog = page.locator(DIALOG);
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator(BODY)).toHaveValue(SEED);
+  await expect(dialog.locator(BODY)).toHaveValue(seed);
   return dialog;
 }
 
@@ -247,9 +255,77 @@ for (const locale of LOCALES) {
         revision.id,
       );
     }
-    // Both bodies are the same document in this backend, so the panel settles on "no differences".
+    // The backend answers `getPolicyRevision` by the id in the path (09.7.1-F15 note 3), so the two
+    // selections above are two DIFFERENT corpus documents: the panel lists their differences
+    // instead of the no-differences state. The rows themselves are the next case's subject.
     await expect(page.locator(DIFF)).toHaveCount(1);
-    await expect(page.locator(`${DIFF} p`).first()).toHaveText(/\S/);
+    await expect(page.locator(DIFF_ROWS)).not.toHaveCount(0);
+    await expect(page.locator(`${DIFF} [data-policy-diff-truncated]`)).toHaveCount(0);
+  });
+
+  // 09.7.1-F15 note (3) + AC4: the revision read is id-keyed, so ONE page yields a real
+  // revision-vs-revision comparison — the panel's rows between the previous revision and the head,
+  // and the 412 dialog's server/local pair — with no hand-built body pair anywhere.
+  test(`two revisions diff in the panel and in the 412 dialog (${locale})`, async ({ page }) => {
+    // The list names the base and the head; the corpus documents must BE those two revisions.
+    expect(PREVIOUS_ID).toBe(previous.body.id);
+    expect(HEAD_ID).toBe(head.body.id);
+    await visit(page, locale, [POLICY_WRITE, CREATE_412]);
+    await expect(page.locator('#policy-diff-base')).toHaveValue(PREVIOUS_ID);
+    await expect(page.locator('#policy-diff-target')).toHaveValue(HEAD_ID);
+    // Ten differing pointers between revision 2 and revision 3 of the corpus (one of them,
+    // `/required_suites`, twice: `legacy-cart` removed, `storefront-catalog` added).
+    const rows = page.locator(DIFF_ROWS);
+    await expect(rows).toHaveCount(10);
+    const budget = page.locator(`${DIFF_ROWS}[data-diff-path="/flaky_budget"]`);
+    await expect(budget).toHaveAttribute('data-diff-kind', 'changed');
+    await expect(budget.locator('pre').nth(0)).toHaveText(String(previous.body.body.flaky_budget));
+    await expect(budget.locator('pre').nth(1)).toHaveText(String(head.body.body.flaky_budget));
+    const freshness = page.locator(`${DIFF_ROWS}[data-diff-path="/freshness_minutes"]`);
+    await expect(freshness).toHaveAttribute('data-diff-kind', 'removed');
+    await expect(freshness.locator('pre').nth(0)).toHaveText(
+      String(previous.body.body.freshness_minutes),
+    );
+    const quarantine = page.locator(`${DIFF_ROWS}[data-diff-path="/quarantine_ids"]`);
+    await expect(quarantine).toHaveAttribute('data-diff-kind', 'added');
+    // The key is absent from the previous revision, so the whole ARRAY is the added value: set
+    // element rows appear only where both bodies carry the key.
+    await expect(quarantine.locator('pre').nth(1)).toHaveText(
+      JSON.stringify(head.body.body.quarantine_ids),
+    );
+    const removedSuite = page.locator(
+      `${DIFF_ROWS}[data-diff-path="/required_suites"][data-diff-kind="removed"]`,
+    );
+    await expect(removedSuite).toHaveCount(1);
+    await expect(removedSuite.locator('pre').nth(0)).toHaveText(
+      JSON.stringify(
+        previous.body.body.required_suites.filter(
+          (suite) => !head.body.body.required_suites.includes(suite),
+        )[0],
+      ),
+    );
+
+    // The same id-keyed read feeds the 412 dialog: the head the envelope names has no document of
+    // its own (another writer published it), so the variant answers that read, and the two edited
+    // pointers come back as a server/local pair carrying the CORPUS's values on the server side.
+    const dialog = await openPublish(page);
+    await dialog.locator(BODY).fill(CONFLICT_DRAFT);
+    await dialog.locator(SUBMIT).click();
+    const conflict = page.locator(CONFLICT);
+    await expect(conflict).toBeVisible();
+    await expect(conflict.locator('.revision code')).toHaveText(CURRENT_HEAD);
+    await expect(conflict.locator('.field')).toHaveCount(2);
+    const changed = conflict.locator('.field', { hasText: '/flaky_budget' });
+    await expect(changed.locator('.server-value')).toContainText(
+      String(head.body.body.flaky_budget),
+    );
+    await expect(changed.locator('.local-value')).toContainText('9');
+    const removed = conflict.locator('.field', { hasText: '/late_window_minutes' });
+    await expect(removed.locator('.server-value')).toContainText(
+      String(head.body.body.late_window_minutes),
+    );
+    await expect(page.locator(SERVER_ERROR)).toHaveCount(0);
+    await expect(page.locator(PUBLISHED)).toHaveCount(0);
   });
 
   // AC3 (S83 P2): a revision id that is not UUID-shaped is the "no revision selected" state, and
@@ -299,8 +375,16 @@ for (const locale of LOCALES) {
       HEAD_ID,
       afterPublish.body.items.length,
     );
-    const dialog = await openPublish(page);
-    await expect(dialog.locator(BODY)).toHaveValue(SEED);
+    const dialog = await openPublish(page, PUBLISHED_SEED);
+    // The post-publish list's head is revision 4, so the panel compares the head document the
+    // session opened (a003) against the revision-4 document — a real pair of two corpus documents.
+    // Its `flaky_budget` is the published revision's own value, not the head's.
+    const budgetRow = page.locator(`${DIFF_ROWS}[data-diff-path="/flaky_budget"]`);
+    await expect(budgetRow).toHaveCount(1);
+    await expect(budgetRow.locator('pre').nth(0)).toHaveText(String(head.body.body.flaky_budget));
+    await expect(budgetRow.locator('pre').nth(1)).toHaveText(
+      String(publishedRevision.body.body.flaky_budget),
+    );
     await dialog.locator(SUBMIT).click();
     const published = page.locator(PUBLISHED);
     await expect(published).toBeVisible();

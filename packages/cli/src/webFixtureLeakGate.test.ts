@@ -28,6 +28,9 @@ const MARKERS = [
   'fixture_not_found',
   'dev/ui-gallery',
   'app-ui-gallery',
+  // The phase-later review addresses of the same `fileReplacements` seam (09.7.1-T3/T4, F20).
+  'dev/settings-secrets',
+  'dev/settings-policy',
 ] as const;
 
 /** A corpus body string long enough to count as a leak signal, and absent from production code. */
@@ -312,6 +315,25 @@ describe('no-fixture-code gate', () => {
       expect(result.stderr).toContain('main-ABC123.js');
     });
   }
+
+  it('passes_the_product_settings_paths_and_fails_each_review_address', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+    // The product routes of both tabs ARE in a production bundle (their pages are product code);
+    // the marker is the `/dev/...` review address the `fileReplacements` seam adds, not the tab.
+    await ws.output(
+      'main-ABC123.js',
+      'const routes=["orgs/:orgId/settings/secrets","orgs/:orgId/settings/policy"];',
+    );
+    expect(ws.run().status).toBe(0);
+
+    for (const marker of ['dev/settings-secrets', 'dev/settings-policy'] as const) {
+      await ws.output('main-ABC123.js', `const review=["${marker}/orgs/:orgId"];`);
+      const leaked = ws.run();
+      expect(leaked.status).toBe(1);
+      expect(leaked.stderr).toContain(marker);
+    }
+  });
 
   it('fails_on_a_fixture_body_string', async () => {
     const ws = await workspace();

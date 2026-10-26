@@ -25,7 +25,7 @@ import {
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { IngestTokenCreatedResponse, IngestTokenView } from '@evidgate/sdk';
+import type { CiBindingView, IngestTokenCreatedResponse, IngestTokenView } from '@evidgate/sdk';
 
 import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
@@ -35,6 +35,7 @@ import { SecretsDataService } from './secrets-data.service';
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
 const TOKENS_URL = `${API_BASE_URL}/projects/p-1/ingest-tokens`;
 const ROTATE_URL = `${API_BASE_URL}/ingest-tokens/t-1/rotate`;
+const BINDINGS_URL = `${API_BASE_URL}/projects/p-1/ci-bindings`;
 
 /** The served media type: the adapter reads bodies as text and `flush` does not derive it. */
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
@@ -61,7 +62,9 @@ const ROTATED: IngestTokenCreatedResponse = {
   overlap_ends_at: '2026-10-26T06:10:00Z',
 };
 
-/** The 409 the route answers for a token that was already rotated (contracts/openapi.yaml). */
+/**
+ * The 409 the route answers for a token that was already rotated (contracts/openapi.yaml).
+ */
 const INVALID_TRANSITION = {
   error: {
     code: 'invalid_transition',
@@ -71,6 +74,24 @@ const INVALID_TRANSITION = {
     retryable: false,
     details: [],
   },
+};
+
+/**
+ * One row of the CI-binding metadata list (09.7.1-F15): the repository, its allowlists, the
+ * verification state and the timestamps — and no challenge, which only a create answer carries.
+ */
+const BINDING: CiBindingView = {
+  id: 'b-1',
+  project_id: 'p-1',
+  provider: 'github_actions',
+  repository_id: 5012345,
+  repository_full_name: 'acme/storefront-web',
+  allowed_ref_patterns: ['refs/heads/main', 'refs/tags/v*'],
+  allowed_workflow_refs: ['acme/storefront-web/.github/workflows/evidgate.yml@refs/heads/main'],
+  status: 'active',
+  activated_at: '2026-06-01T08:10:00Z',
+  created_at: '2026-06-01T08:00:00Z',
+  version: 1,
 };
 
 /**
@@ -220,6 +241,54 @@ describe('SecretsDataService (09.7.1-T3)', () => {
       expect(cause.error.status).toBe(409);
       expect(cause.error.code).toBe(INVALID_TRANSITION.error.code);
       expect(cause.error.message).toBe(INVALID_TRANSITION.error.message);
+    }
+  });
+
+  it('listCiBindings() reads one page of the project URL at the contract’s maximum page size', async () => {
+    const bindings = service.listCiBindings('p-1');
+    const request = await takeRequest(httpMock, BINDINGS_URL);
+    expect(request.request.method).toBe('GET');
+    // The read is list-only and bounded: one page, never a dump (00 §9.1, W7).
+    expect(request.request.urlWithParams).toContain('limit=200');
+    expect(request.request.urlWithParams).not.toContain('cursor=');
+    // A GET carries no body and no caller-owned key: the view is read, never written.
+    expect(request.request.body).toBeNull();
+    const page = { items: [BINDING], next_cursor: 'b-1' };
+    flushPage(request, page);
+    await expect(bindings).resolves.toEqual(page);
+  });
+
+  it('listCiBindings() passes the cursor it is given and keeps the same page size', async () => {
+    const bindings = service.listCiBindings('p-1', 'b-1');
+    const request = await takeRequest(httpMock, BINDINGS_URL);
+    expect(request.request.urlWithParams).toContain('cursor=b-1');
+    expect(request.request.urlWithParams).toContain('limit=200');
+    flushPage(request, { items: [], next_cursor: null });
+    await expect(bindings).resolves.toEqual({ items: [], next_cursor: null });
+  });
+
+  it('listCiBindings() surfaces a 403 as the typed forbidden error, never a page', async () => {
+    const bindings = service.listCiBindings('p-1');
+    const read = rejected(bindings);
+    flushPage(
+      await takeRequest(httpMock, BINDINGS_URL),
+      {
+        error: {
+          code: 'forbidden',
+          message: 'the principal is not allowed to perform this operation',
+          request_id: '5c9c4d0e-6a71-4b9e-9a51-2f6f1f0d3f11',
+          retryable: false,
+        },
+      },
+      403,
+    );
+
+    const cause = await read;
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('forbidden');
+      expect(cause.error.status).toBe(403);
+      expect(cause.error.code).toBe('forbidden');
     }
   });
 });

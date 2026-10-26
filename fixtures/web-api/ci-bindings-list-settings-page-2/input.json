@@ -1,0 +1,45 @@
+{
+  "operation_id": "listCiBindings",
+  "variant": "settings-page-2",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000c9"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-000000000064",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "provider": "github_actions",
+        "repository_id": 5099004,
+        "repository_full_name": "acme/storefront-api",
+        "allowed_ref_patterns": ["refs/heads/main"],
+        "allowed_workflow_refs": [
+          "acme/storefront-api/.github/workflows/evidgate.yml@refs/heads/main"
+        ],
+        "status": "active",
+        "activated_at": "2026-10-15T11:10:00Z",
+        "created_at": "2026-10-15T11:00:00Z",
+        "version": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-000000000065",
+        "project_id": "018f0000-0000-7000-8000-000000000011",
+        "provider": "github_actions",
+        "repository_id": 5099005,
+        "repository_full_name": "acme/storefront-web",
+        "allowed_ref_patterns": ["refs/heads/main", "refs/heads/release/*", "refs/tags/v*"],
+        "allowed_workflow_refs": [
+          "acme/storefront-web/.github/workflows/evidgate.yml@refs/heads/main",
+          "acme/storefront-web/.github/workflows/evidgate.yml@refs/tags/v*"
+        ],
+        "status": "active",
+        "activated_at": "2026-10-12T08:45:00Z",
+        "created_at": "2026-10-12T08:40:00Z",
+        "version": 3
+      }
+    ],
+    "next_cursor": null
+  }
+}

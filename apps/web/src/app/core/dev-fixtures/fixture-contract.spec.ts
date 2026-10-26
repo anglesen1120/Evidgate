@@ -119,6 +119,12 @@ const SECRET_MINTING_OPERATIONS: readonly string[] = [
 const ONBOARDING_TOKEN_FIXTURE = 'ingest-tokens-list-onboarding-token';
 
 /**
+ * 09.7.1-F15: the `Storefront web` project the Settings area's pages are authored on — the first
+ * row of `projects-list`, `PROJECT_STOREFRONT` in `apps/web/e2e/shell/support.ts`.
+ */
+const STOREFRONT_PROJECT_ID = '018f0000-0000-7000-8000-000000000011';
+
+/**
  * How many `$ref` hops a response or header object may take before the check calls it
  * unresolved — the same bound `packages/cli`'s response validator uses.
  */
@@ -171,7 +177,30 @@ interface FixtureRouteShape {
   readonly operationId: string;
   readonly method: string;
   readonly path: string;
+  /** 09.7.1-F15 note 3: the `{name}` parameter the answer is keyed by, where a route declares one. */
+  readonly idKeyParameter?: string;
+  /** 09.7.1-F15 note 4: the query parameter whose value selects the page, where a route declares one. */
+  readonly cursorQueryParameter?: string;
 }
+
+/**
+ * The `CiBindingView` members the two paged CI-binding fixtures are asserted through
+ * (09.7.1-F15 note 4): the id the store de-duplicates by, the project the page belongs to, the
+ * verification state, and the creation instant the keyset cursor is derived from.
+ *
+ * The `evidgate/no-hand-written-wire-dto` exemption is `FixtureDocumentShape`'s above: these are
+ * `input.json` members, read to prove the two corpus pages continue one walk, not a body the app
+ * reads. The row type belongs to `@evidgate/sdk`; nothing here is imported by production code.
+ */
+/* eslint-disable evidgate/no-hand-written-wire-dto -- the corpus members of a fixture page (see above). */
+interface CiBindingRowShape {
+  readonly id: string;
+  readonly project_id: string;
+  readonly status: string;
+  readonly activated_at?: string | null;
+  readonly created_at: string;
+}
+/* eslint-enable evidgate/no-hand-written-wire-dto */
 
 /**
  * The repository root. `ng test` runs with `apps/web` as its working directory (the same fact
@@ -635,6 +664,20 @@ function corpusDocument(name: string): FixtureDocumentShape {
 }
 
 /**
+ * The .NET `DateTime` ticks of an RFC 3339 UTC instant, written the way the server's `KeysetCursor`
+ * writes a cursor (16 lower-case hex digits, zero-padded), so the corpus page can be proven to name
+ * a cursor the server could actually have issued rather than a random opaque string.
+ */
+function keysetTicks(instant: string): string {
+  const unixMs = Date.parse(instant);
+  if (Number.isNaN(unixMs)) {
+    throw new Error(`'${instant}' is not an RFC 3339 instant a cursor can be derived from`);
+  }
+  const ticks = (BigInt(unixMs) / 1_000n) * 10_000_000n + 621_355_968_000_000_000n;
+  return ticks.toString(16).padStart(16, '0');
+}
+
+/**
  * The `runs-list` fixture document — the subject of every negative control. `readDocument`
  * re-parses `input.json` on every call, so a document handed out here is never shared.
  */
@@ -834,6 +877,167 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
         `fixtures/web-api/${fixture.name} answers '${document.operation_id}', which FIXTURE_ROUTES does not route`,
       ).toBe(true);
     }
+  });
+
+  it('pins the id-keyed revision read to distinct corpus ids (09.7.1-F15)', () => {
+    // 09.7.1-F15 note (3): `getPolicyRevision` answers the document whose own `body.id` equals the
+    // request's `{id}`. That is only sound when (a) the row names a parameter its template actually
+    // carries, (b) every 2xx document of the operation carries a string `id`, (c) no two documents
+    // share one, so the selection is unambiguous, and (d) the revision ids a corpus page offers are
+    // exactly the documents a read can address — otherwise a page load would ask for an id no
+    // document answers and silently get the variant.
+    const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.idKeyParameter !== undefined);
+    expect(
+      keyed.map((route) => route.operationId),
+      'only getPolicyRevision is id-keyed; a second id-keyed row needs its own pin here',
+    ).toEqual(['getPolicyRevision']);
+
+    const page = corpusDocument('policy-revisions-list-after-publish');
+    const pageItems = (page.body as { items?: readonly { id?: unknown }[] } | undefined)?.items;
+    if (pageItems === undefined) {
+      throw new Error('the post-publish revision page carries no items array');
+    }
+    const pageIds = pageItems.map((item) => item.id);
+
+    for (const route of keyed) {
+      const parameter = route.idKeyParameter;
+      if (parameter === undefined) {
+        throw new Error(`'${route.operationId}' holds an empty idKeyParameter`);
+      }
+      expect(
+        route.path,
+        `'${route.operationId}' declares idKeyParameter '${parameter}' but its template carries no {${parameter}}`,
+      ).toContain(`{${parameter}}`);
+
+      const ids = CORPUS.map(readDocument)
+        .filter((document) => document.operation_id === route.operationId && document.status < 400)
+        .map((document) => {
+          const body = document.body;
+          const id = isRecord(body) ? body['id'] : undefined;
+          expect(
+            typeof id,
+            `a '${route.operationId}' 2xx document carries no string body.id, so a request for its id cannot find it`,
+          ).toBe('string');
+          return id as string;
+        });
+
+      expect(
+        ids.length,
+        `'${route.operationId}' has ${ids.length} addressable document(s); two are needed for a revision comparison`,
+      ).toBeGreaterThan(1);
+      expect(
+        new Set(ids).size,
+        `'${route.operationId}' answers ${ids.length} documents with only ${new Set(ids).size} distinct body.id values: the id-keyed read would be ambiguous`,
+      ).toBe(ids.length);
+      expect(
+        [...ids].sort(),
+        `the ids '${route.operationId}' can answer differ from the revision ids the corpus page offers, so a page load would fall back to the variant`,
+      ).toEqual(pageIds.map(String).sort());
+    }
+  });
+
+  it('pins the cursor-keyed CI-binding walk to the two corpus pages (09.7.1-F15)', () => {
+    // 09.7.1-F15 note (4): `listCiBindings` answers the catalog row whose `cursor` equals the
+    // request's cursor, so the Secrets tab's Load more reaches its terminal page in a browser
+    // instead of every fixture ending at `next_cursor: null`. That is only sound when (a) exactly
+    // one row is cursor-keyed and it names the query parameter the contract's list read takes, (b)
+    // exactly one catalog row declares a cursor, (c) the page it answers continues the page that
+    // named it — same project, disjoint ids, a cursor the server could have issued — and (d) it ends
+    // the walk, because a second cursor with no document behind it would leave the control on screen.
+    const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.cursorQueryParameter !== undefined);
+    expect(
+      keyed.map((route) => route.operationId),
+      'only listCiBindings is cursor-keyed; a second cursor-keyed row needs its own pin here',
+    ).toEqual(['listCiBindings']);
+    for (const route of keyed) {
+      expect(
+        route.cursorQueryParameter,
+        `'${route.operationId}' declares an empty cursorQueryParameter`,
+      ).toBe('cursor');
+    }
+
+    const paged = FIXTURE_CATALOG.filter((entry) => entry.cursor !== undefined);
+    expect(
+      paged.map((entry) => entry.name),
+      'exactly one catalog row declares the request cursor it answers',
+    ).toEqual(['ci-bindings-list-settings-page-2']);
+    const secondPageRow = paged[0];
+    if (secondPageRow === undefined || secondPageRow.cursor === undefined) {
+      throw new Error(
+        'the second CI-binding page declares no cursor, so Load more cannot answer it',
+      );
+    }
+    const cursor = secondPageRow.cursor;
+
+    const first = corpusDocument('ci-bindings-list-settings-page-1');
+    const second = corpusDocument('ci-bindings-list-settings-page-2');
+    expect([first.operation_id, first.variant, first.status]).toEqual([
+      'listCiBindings',
+      'settings-page-1',
+      200,
+    ]);
+    expect([second.operation_id, second.variant, second.status]).toEqual([
+      'listCiBindings',
+      'settings-page-2',
+      200,
+    ]);
+
+    const firstBody = first.body as {
+      items: CiBindingRowShape[];
+      next_cursor: string | null;
+    };
+    const secondBody = second.body as {
+      items: CiBindingRowShape[];
+      next_cursor: string | null;
+    };
+    expect(firstBody.items.length, 'the first page holds no binding to click past').toBeGreaterThan(
+      0,
+    );
+    expect(secondBody.items.length, 'the second page holds no binding to append').toBeGreaterThan(
+      0,
+    );
+    expect(
+      firstBody.next_cursor,
+      'the first page must name exactly the cursor the backend answers, or Load more 501s',
+    ).toBe(cursor);
+    expect(secondBody.next_cursor, 'the last page must end the walk').toBeNull();
+
+    // A real keyset cursor over `(created_at, id)` of the row it follows — `<utc ticks>-<uuid>` —
+    // not an opaque string a test made up.
+    const lastOfFirstPage = firstBody.items[firstBody.items.length - 1];
+    if (lastOfFirstPage === undefined) {
+      throw new Error('the first CI-binding page is empty');
+    }
+    expect(cursor, 'the cursor must be the keyset position of the row it follows').toBe(
+      `${keysetTicks(lastOfFirstPage.created_at)}-${lastOfFirstPage.id}`,
+    );
+
+    const rows = [...firstBody.items, ...secondBody.items];
+    const ids = rows.map((item) => item.id);
+    expect(
+      new Set(ids).size,
+      'a binding id appears on both pages, so the store would drop the second copy silently',
+    ).toBe(ids.length);
+    expect(
+      [...new Set(rows.map((item) => item.project_id))],
+      'both pages must belong to the Storefront web project the tab read',
+    ).toEqual([STOREFRONT_PROJECT_ID]);
+    expect(
+      new Set(firstBody.items.map((item) => item.status)),
+      'the first page must still cover every verification state',
+    ).toEqual(new Set(['active', 'pending_verification', 'disabled']));
+    // An activation can never precede the binding's creation: the OIDC handshake that activates a
+    // pending binding happens after it exists. Same-second RFC 3339 UTC instants compare as strings.
+    for (const row of rows) {
+      if (row.activated_at === undefined || row.activated_at === null) {
+        continue;
+      }
+      expect(
+        row.activated_at >= row.created_at,
+        `${row.id} is activated at ${row.activated_at}, before it was created at ${row.created_at}`,
+      ).toBe(true);
+    }
+    expect(oneTimeSecretMembers(second.body)).toEqual([]);
   });
 
   it('pins at most one ok variant per operation and the 403 and 412 error fixtures (AC10)', () => {
@@ -1141,6 +1345,133 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       expect(item.prefix.startsWith('egt_')).toBe(true);
       expect(item.prefix.split('.')).toHaveLength(1);
     }
+  });
+
+  it('pins the Secrets tab’s CI-binding section states (09.7.1-F15)', () => {
+    // 1. The page the section opens with: five bindings on the `Storefront web` project, one per
+    //    state the section renders — the three `status` values plus the layout extremes (a single
+    //    ref pattern, and a repository whose name and allowlists overflow a cell).
+    const page = corpusDocument('ci-bindings-list-settings');
+    expect([page.operation_id, page.variant, page.status]).toEqual([
+      'listCiBindings',
+      'settings',
+      200,
+    ]);
+    const body = page.body as {
+      items: {
+        id: string;
+        project_id: string;
+        provider: string;
+        repository_id: number;
+        repository_full_name: string;
+        allowed_ref_patterns: string[];
+        allowed_workflow_refs: string[];
+        status: string;
+        activated_at?: string | null;
+        created_at: string;
+        version: number;
+      }[];
+      next_cursor: string | null;
+    };
+    expect(body.next_cursor).toBeNull();
+    expect(
+      body.items.length,
+      'the section must show every verification state in one read',
+    ).toBeGreaterThanOrEqual(5);
+
+    const projectIds = new Set(body.items.map((item) => item.project_id));
+    expect([...projectIds], 'every row belongs to the Storefront web project').toEqual([
+      STOREFRONT_PROJECT_ID,
+    ]);
+    expect(new Set(body.items.map((item) => item.status))).toEqual(
+      new Set(['active', 'pending_verification', 'disabled']),
+    );
+
+    // A pending binding is exactly one the OIDC handshake has not finished: it has no activation
+    // time. An activated one always has it, so the two are never the same row.
+    for (const item of body.items) {
+      if (item.status === 'pending_verification') {
+        expect(
+          item.activated_at,
+          `${item.id} is pending yet carries an activation time`,
+        ).toBeNull();
+      }
+    }
+    expect(
+      body.items.some((item) => item.status !== 'pending_verification' && item.activated_at),
+      'no activated binding carries its activation time',
+    ).toBe(true);
+
+    // Layout extremes: one binding allows a single ref and workflow, one overflows.
+    expect(
+      body.items.some(
+        (item) => item.allowed_ref_patterns.length === 1 && item.allowed_workflow_refs.length === 1,
+      ),
+      'no binding has the single-pattern shape the compact row renders',
+    ).toBe(true);
+    expect(
+      body.items.some(
+        (item) =>
+          item.repository_full_name.length > 40 &&
+          item.allowed_ref_patterns.length >= 6 &&
+          item.allowed_workflow_refs.length >= 3,
+      ),
+      'no binding has a long repository name with long allowlists, so the overflow cell has nothing to truncate',
+    ).toBe(true);
+
+    // 2. Every allowlist entry is in the form the server accepts — not merely a string the
+    //    contract's patternless `array of string` lets through (`Ci/RefGlob.cs:69,79`): a ref
+    //    pattern is `refs/heads/…` or `refs/tags/…`, and a workflow ref is
+    //    `owner/repo/.github/workflows/<file>@refs/…` for THAT row's repository.
+    for (const item of body.items) {
+      expect(item.provider).toBe('github_actions');
+      expect(Number.isInteger(item.repository_id) && item.repository_id > 0).toBe(true);
+      expect(item.version).toBeGreaterThan(0);
+      for (const pattern of item.allowed_ref_patterns) {
+        expect(pattern, `${item.id} allows a ref pattern the server refuses`).toMatch(
+          /^refs\/(heads|tags)\/[A-Za-z0-9._/*+@-]{1,200}$/,
+        );
+      }
+      for (const workflowRef of item.allowed_workflow_refs) {
+        expect(workflowRef, `${item.id} allows a workflow ref the server refuses`).toMatch(
+          /^[A-Za-z0-9._*-]{1,100}\/[A-Za-z0-9._*-]{1,100}\/\.github\/workflows\/[A-Za-z0-9._*-]{1,100}@refs\/(heads|tags)\/[A-Za-z0-9._/*+@-]{1,200}$/,
+        );
+        expect(
+          workflowRef.startsWith(`${item.repository_full_name}/.github/workflows/`),
+          `${item.id} allows a workflow of a repository it is not bound to`,
+        ).toBe(true);
+      }
+    }
+
+    // 3. Metadata only: a listed binding never carries the challenge or its hash — the same pin the
+    //    corpus-wide one-time-secret test applies, restated on the page the section renders.
+    expect(oneTimeSecretMembers(page.body)).toEqual([]);
+    for (const item of body.items) {
+      expect(Object.keys(item), `${item.id} carries a challenge member`).not.toContain(
+        'binding_challenge',
+      );
+    }
+
+    // 4. The two other states: the unbound project's empty page, and the 403 the section renders
+    //    as its own `forbidden` phase instead of an error message.
+    const empty = corpusDocument('ci-bindings-list-settings-empty');
+    expect([empty.operation_id, empty.variant, empty.status]).toEqual([
+      'listCiBindings',
+      'settings-empty',
+      200,
+    ]);
+    expect(empty.body).toEqual({ items: [], next_cursor: null });
+
+    const forbidden = corpusDocument('ci-bindings-list-settings-forbidden');
+    expect([forbidden.operation_id, forbidden.variant, forbidden.status]).toEqual([
+      'listCiBindings',
+      'settings-forbidden',
+      403,
+    ]);
+    const envelope = forbidden.body as { error: { code: string; retryable: boolean } };
+    expect(envelope.error.code).toBe('forbidden');
+    expect(envelope.error.retryable).toBe(false);
+    expect(oneTimeSecretMembers(forbidden.body)).toEqual([]);
   });
 
   it('fails on the runs-list page when a required run member is removed (AC10)', () => {

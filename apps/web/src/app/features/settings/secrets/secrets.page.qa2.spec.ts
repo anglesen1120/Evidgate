@@ -4,13 +4,18 @@
 // Real `RevealSlot`, so "cleared on dismiss" is the component's own behaviour.
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { IngestTokenView } from '@evidgate/sdk';
+import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import { SecretsPage } from './secrets.page';
-import { SecretsStore, type RotationResult, type RotationState } from './secrets.store';
+import {
+  SecretsStore,
+  type CiBindingsPhase,
+  type RotationResult,
+  type RotationState,
+} from './secrets.store';
 
 const base = fixtureData.body.items[0] as IngestTokenView;
 const failure: ApiError = {
@@ -31,6 +36,13 @@ class FakeSecretsStore {
   readonly projectId = signal<string | null>(null);
   readonly rotateState = signal<RotationState>({ phase: 'idle', tokenId: null, error: null });
   readonly rotating = signal(false);
+  readonly ciBindings = signal<readonly CiBindingView[]>([]);
+  readonly ciBindingsPhase = signal<CiBindingsPhase>('idle');
+  readonly ciBindingsError = signal<ApiError | null>(null);
+  readonly hasMoreCiBindings = signal(false);
+  readonly loadCiBindings = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
+  readonly loadMoreCiBindings = vi.fn(() => Promise.resolve());
+  readonly resetCiBindings = vi.fn();
   readonly load = vi.fn((id: string) => {
     this.projectId.set(id);
     return Promise.resolve();

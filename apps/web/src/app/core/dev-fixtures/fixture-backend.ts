@@ -16,6 +16,16 @@
 // route or no document is `501 fixture_not_found` with a 00 §9.2 envelope: a fixture backend that
 // invented an empty page for an uncovered operation would hide the gap.
 //
+// One operation is ID-KEYED (09.7.1-F15 note 3, the row's `idKeyParameter`): `getPolicyRevision`
+// answers the catalog document whose own `body.id` equals the revision id in the path, so a tab
+// that compares two revisions — or a 412 dialog that reads the head the server named — gets two
+// different bodies from one backend. One is CURSOR-KEYED (note 4, `cursorQueryParameter`):
+// `listCiBindings` answers the catalog row whose `cursor` equals the request's cursor, so the
+// Secrets tab's Load more gets a second page from the same backend and the control's terminal state
+// is reachable in a browser. An id no document carries, a cursor no page declares, and every
+// request-agnostic operation still answer by variant alone; `selectEntry` below holds that order and
+// nothing else changes.
+//
 // Shapes: a `>= 400` answer is raised as `HttpErrorResponse` and a `2xx` as `HttpResponse`, which is
 // what Angular's real backends produce; the adapter reads text (09.1.1-T8), so the body is the JSON
 // text for `responseType: 'text'` (a `Blob` for 'blob', the parsed value otherwise). Every answer
@@ -46,8 +56,19 @@ import {
 import { mergeMap, type Observable, of, throwError, timer } from 'rxjs';
 
 import { newUuid } from '../http/random-id';
-import { findFixtureEntry, type FixtureEntry } from './fixture-catalog';
-import { apiRelativePath, matchFixtureRoute } from './fixture-routes';
+import {
+  findFixtureEntry,
+  findFixtureEntryByCursor,
+  findFixtureEntryById,
+  type FixtureEntry,
+} from './fixture-catalog';
+import {
+  apiRelativePath,
+  matchFixtureRoute,
+  pathParameter,
+  queryParameter,
+  type FixtureRoute,
+} from './fixture-routes';
 import { FixtureToggles } from './fixture-toggles';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
@@ -157,9 +178,9 @@ export class FixtureHttpBackend implements HttpBackend {
     const route =
       relativePath === null ? undefined : matchFixtureRoute(request.method, relativePath);
     const entry =
-      route === undefined
+      route === undefined || relativePath === null
         ? undefined
-        : findFixtureEntry(route.operationId, this.toggles.variantFor(route.operationId));
+        : this.selectEntry(route, relativePath, request);
     if (entry === undefined) {
       return this.respond(
         request,
@@ -178,6 +199,46 @@ export class FixtureHttpBackend implements HttpBackend {
       fixtureHeaders(entry),
       Math.max(0, latency),
     );
+  }
+
+  /**
+   * The document answering `(route, relativePath, request)`, in the one order this backend has: a
+   * route that declares an `idKeyParameter` first looks for a catalog document of its operation
+   * whose own `body.id` equals the request's path value, a route that declares a
+   * `cursorQueryParameter` first looks for the catalog row whose `cursor` equals the request's query
+   * value (09.7.1-F15 notes 3 and 4), and everything else — an id or cursor no document answers, and
+   * every request-agnostic route — is answered by the variant selection exactly as before. The
+   * variant is never consulted first: the id/cursor is what the app asked for, the variant is a
+   * review's override of the request-agnostic case, and a corpus that grows a document for an id or
+   * a page must win over a toggle left in a bookmarked URL. No route declares both.
+   */
+  private selectEntry(
+    route: FixtureRoute,
+    relativePath: string,
+    request: HttpRequest<unknown>,
+  ): FixtureEntry | undefined {
+    const parameter = route.idKeyParameter;
+    const requestedId =
+      parameter === undefined ? undefined : pathParameter(route.path, relativePath, parameter);
+    if (requestedId !== undefined) {
+      const byId = findFixtureEntryById(route.operationId, requestedId);
+      if (byId !== undefined) {
+        return byId;
+      }
+    }
+    const cursorParameter = route.cursorQueryParameter;
+    if (cursorParameter !== undefined) {
+      const requestedCursor = queryParameter(request.urlWithParams, cursorParameter);
+      // An empty cursor is the first page (the app omits the parameter, and a `cursor=` would name
+      // no page); only a row that declares THIS value answers.
+      if (requestedCursor !== null && requestedCursor !== '') {
+        const byCursor = findFixtureEntryByCursor(route.operationId, requestedCursor);
+        if (byCursor !== undefined) {
+          return byCursor;
+        }
+      }
+    }
+    return findFixtureEntry(route.operationId, this.toggles.variantFor(route.operationId));
   }
 
   /**

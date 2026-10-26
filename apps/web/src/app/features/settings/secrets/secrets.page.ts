@@ -18,6 +18,7 @@ import { RequestStateComponent } from '../../../shared/ui/states/request-state.c
 import { SecretReferenceListComponent, SECRETS_COPY } from './secret-reference-list.component';
 import { RotateRevealDialogComponent } from './rotate-reveal-dialog.component';
 import { SecretsStore } from './secrets.store';
+import { CiBindingListComponent } from './ci-binding-list.component';
 
 @Component({
   selector: 'app-secrets-page',
@@ -26,6 +27,7 @@ import { SecretsStore } from './secrets.store';
     RetryAfterComponent,
     SecretReferenceListComponent,
     RotateRevealDialogComponent,
+    CiBindingListComponent,
   ],
   providers: [SecretsStore, RevealSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -144,6 +146,18 @@ import { SecretsStore } from './secrets.store';
         </nav>
       </section>
     </app-request-state>
+    @if (canReadBindings() && selectedProject()) {
+      <app-ci-binding-list
+        [rows]="store.ciBindings()"
+        [phase]="store.ciBindingsPhase()"
+        [error]="store.ciBindingsError()"
+        [hasMore]="store.hasMoreCiBindings()"
+        [loadingMore]="bindingsPaging()"
+        [pagingFailure]="bindingsPagingFailure()"
+        (retry)="reloadBindings()"
+        (loadMore)="moreBindings()"
+      />
+    }
     <app-rotate-reveal-dialog />
   `,
 })
@@ -155,6 +169,14 @@ export class SecretsPage {
   protected readonly copy = SECRETS_COPY;
   protected readonly selectedProject = signal<string | null>(null);
   protected readonly canWrite = computed(() => this.session.has('ingest_token:write'));
+  protected readonly canReadBindings = computed(() => this.session.has('project:read'));
+  /** Boolean view of the project list, so a re-emitted list cannot re-run the bindings read. */
+  private readonly selectedProjectListed = computed(() => {
+    const id = this.selectedProject();
+    return id !== null && this.session.projects().some((project) => project.id === id);
+  });
+  protected readonly bindingsPaging = signal(false);
+  protected readonly bindingsPagingFailure = signal(false);
   protected readonly offset = signal(0);
   protected readonly visibleRows = computed(() =>
     this.store.rows().slice(this.offset(), this.offset() + 200),
@@ -195,6 +217,19 @@ export class SecretsPage {
       untracked(() => {
         this.clearScope();
         if (valid) void this.store.load(valid);
+      });
+    });
+    effect(() => {
+      const id = this.selectedProject();
+      const permitted = this.canReadBindings();
+      // Only the derived boolean is tracked: the project list re-emits on unrelated session
+      // changes, and re-reading bindings for the same project would drop already loaded pages.
+      const listed = this.selectedProjectListed();
+      untracked(() => {
+        this.bindingsPaging.set(false);
+        this.bindingsPagingFailure.set(false);
+        if (id && listed && permitted) void this.store.loadCiBindings(id);
+        else this.store.resetCiBindings();
       });
     });
     effect((cleanup) => {
@@ -239,6 +274,36 @@ export class SecretsPage {
     ) {
       this.clearScope();
       void this.store.load(id);
+    }
+  }
+  protected reloadBindings(): void {
+    const id = this.selectedProject();
+    if (
+      !id ||
+      !this.canReadBindings() ||
+      this.bindingsPaging() ||
+      !this.session.projects().some((project) => project.id === id)
+    )
+      return;
+    this.bindingsPagingFailure.set(false);
+    void this.store.loadCiBindings(id);
+  }
+  protected async moreBindings(): Promise<void> {
+    if (
+      !this.canReadBindings() ||
+      this.bindingsPaging() ||
+      !this.store.hasMoreCiBindings() ||
+      this.store.ciBindingsError()?.kind === 'forbidden'
+    )
+      return;
+    const project = this.selectedProject();
+    this.bindingsPaging.set(true);
+    try {
+      await this.store.loadMoreCiBindings();
+    } catch {
+      if (project === this.selectedProject()) this.bindingsPagingFailure.set(true);
+    } finally {
+      if (project === this.selectedProject()) this.bindingsPaging.set(false);
     }
   }
   protected async rotate(target: {
