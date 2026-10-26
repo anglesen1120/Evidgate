@@ -90,7 +90,7 @@ The playbook for changing a table without breaking the running version is
   `revoke update, delete` for the app role, the SQL half of C6/AC3), and `0047` is 12.3.1-T1.2's
   `usage_rollup` — the per-`(org, project, period, metric)` aggregate whose coalesce-project unique
   index is the idempotent recompute's upsert target (AC6, NFR-12-1), created `with (fillfactor =
-  80)` and granted a column-scoped app-role UPDATE; the
+80)` and granted a column-scoped app-role UPDATE; the
   next
   free number is `0048`;
   a gap means two branches
@@ -207,7 +207,7 @@ is written by the tenant-scope primitive, never from request input.
   `BYPASSRLS`, is what DECISIONS F5 rejects.
 - `0046` bounds the two numeric-ish columns the emitters cannot police alone:
   `usage_ledger_entry_quantity_check` (`adjustment_of is not null or quantity >=
-  0`) makes a negative quantity legal only on an adjustment row, and
+0`) makes a negative quantity legal only on an adjustment row, and
   `usage_ledger_entry_unit_check` (`char_length(unit) between 1 and 32`) keeps
   `unit` a nonempty short label (PostgreSQL `char_length` counts characters, so
   a 32-character multibyte unit is inside the bound). Both are backstops for the
@@ -223,8 +223,8 @@ is written by the tenant-scope primitive, never from request input.
   again on every recompute instead of updated. The index is therefore
   `usage_rollup_scope_key` over
   `(org_id, coalesce(project_id, '00000000-0000-0000-0000-000000000000'), period,
-  metric)` and the recompute declares exactly that expression as its `on
-  conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
+metric)` and the recompute declares exactly that expression as its `on
+conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   are UUIDv7 (00 §7). `nulls not distinct` (0007/0039) would carry the same
   equality; the coalesce form is used so the arbiter names the null rule
   explicitly in the same expression the index is built on. `evidgate_app` may

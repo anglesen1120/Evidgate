@@ -314,7 +314,7 @@ public sealed class UsageRecordBatchTests
         // The project check is one read for the whole batch, not one per entry (review F-C), and it is what turns an
         // unknown project into a 422 instead of a 23503 that would abort the caller's transaction.
         world.Commands.Statements.Snapshot()
-            .Count(statement => statement.Contains("any(@project_ids)", StringComparison.Ordinal))
+            .Count(statement => statement.Contains("from public.project", StringComparison.Ordinal))
             .ShouldBe(1);
     }
 
