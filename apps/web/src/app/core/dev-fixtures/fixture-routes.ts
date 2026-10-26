@@ -166,6 +166,7 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     path: '/projects/{p}/runs',
     cursorQueryParameter: 'cursor',
   },
+  // 09.3.1-T2: detail states are selected explicitly by variant, not inferred from the run id.
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
   { operationId: 'createPolicyRevision', method: 'POST', path: '/projects/{p}/policies' },

@@ -99,6 +99,7 @@ const MARKERS = [
   'dev/settings-secrets',
   'dev/settings-policy',
   'dev/run-list',
+  'dev/run-detail',
 ];
 
 /**

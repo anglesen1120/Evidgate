@@ -1,0 +1,26 @@
+{
+  "operation_id": "getRun",
+  "variant": "detail-ref-format",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000da0"
+  },
+  "latency_ms": 0,
+  "body": {
+    "run_id": "018f0000-0000-7000-8000-000000000071",
+    "state": "complete",
+    "current_evidence_revision_id": "018f0000-0000-7000-8000-000000000da1",
+    "version": 7,
+    "purpose": "replay",
+    "ref": {
+      "kind": "branch",
+      "name": "detail/vi\u1ec7t\u202e<script>",
+      "pr_number": null,
+      "head_sha": "a123456789abcdef0123456789abcdef01234567",
+      "base_sha": null,
+      "trigger_event": "push",
+      "is_fork": false
+    },
+    "unverified_ref": true
+  }
+}
