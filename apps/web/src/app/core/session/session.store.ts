@@ -14,17 +14,37 @@
 //    confirm the id exists in another tenant (00 §9.2, D-S68-Q4).
 // 2. The permission set is a convenience (D-S68-Q1): it holds only server-provided codes and an
 //    empty set grants nothing. The API's own `403` stays the only real gate.
+//
+// 09.1.1-T5.2 adds the two session BOUNDARIES, because they are decisions about the same state:
+//
+// - `logout()` is client-side only (D-S98-Q1). There is no logout endpoint until 02.3.2-T2, so the
+//   store ends every piece of per-session work, sets the in-memory `signedOut` latch and leaves
+//   through `SessionEnder` (a no-op today). The `HttpOnly` cookie stays valid: a reload
+//   re-authenticates, which `SessionEnder` documents and the login page's copy respects.
+// - `handleUnauthenticated()` answers a `401` that arrives AFTER bootstrap — the session expired
+//   mid-navigation. It flips to `anonymous` exactly once and sends the caller to
+//   `/login?reason=expired&returnUrl=<the route they were reading>`, so the sign-in returns there.
+//   Every later `401` while already anonymous (or latched) is a no-op: one expiry produces one
+//   redirect, never a loop.
+//
+// Both boundaries bump the two revisions, so an answer that belongs to the ended session can never
+// write state, and run every registered `onSessionEnd` teardown (the onboarding step's health timer),
+// so no session-scoped work outlives the session.
 
 import { inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import type { OrganizationSummaryDto, ProjectDto } from '@evidgate/sdk';
 
+import { validateReturnUrl } from '../routing/return-url';
 import { IdentityDataService } from '../data/identity-data.service';
 import { isApiRequestError } from '../http/api-error';
+import { UnauthenticatedRelay } from '../http/unauthenticated-relay';
 import {
   CataloguePermissionsSource,
   EffectivePermissionsSource,
 } from './effective-permissions.source';
+import { SESSION_ENDER } from './session-ender';
 
 /** What the shell knows about the caller's session (00 §8.9). */
 export type SessionState =
@@ -65,6 +85,13 @@ const NO_PROJECTS: readonly ProjectDto[] = [];
 type SessionStoreState = {
   /** `unknown` until the first `bootstrap()` settles it. */
   readonly sessionState: SessionState;
+  /**
+   * The in-memory sign-out latch (09.1.1-T5.2): `true` from `logout()` (or an expiry redirect) until
+   * `reauth()`. While it is set, `bootstrap()` and `reload()` answer `anonymous` WITHOUT a request,
+   * so a late probe can never resurrect the session the caller just ended. It is deliberately not
+   * persisted: a reload re-authenticates from the still-valid `HttpOnly` cookie (`session-ender.ts`).
+   */
+  readonly signedOut: boolean;
   /** The codes the shell treats as granted; empty until the session is authenticated. */
   readonly permissions: ReadonlySet<string>;
   /** Every organization the server listed for this caller, in server order. */
@@ -79,12 +106,16 @@ type SessionStoreState = {
 
 const INITIAL_STATE: SessionStoreState = {
   sessionState: 'unknown',
+  signedOut: false,
   permissions: NO_PERMISSIONS,
   organizations: NO_ORGANIZATIONS,
   projects: NO_PROJECTS,
   currentOrg: null,
   currentProject: null,
 };
+
+/** Where the session boundaries send the browser: the app's sign-in page. */
+const LOGIN_PATH = '/login';
 
 /** One side of the concurrent session read: its value, or the failure it answered with. */
 type SettledRead<T> =
@@ -138,6 +169,13 @@ const SessionStoreDefinition = signalStore(
     const permissionsSource =
       inject(EffectivePermissionsSource, { optional: true }) ?? inject(CataloguePermissionsSource);
 
+    /** The sign-in page the two session boundaries leave through (a redirect, never a reload). */
+    const router = inject(Router);
+    /** The one seam that would end the server session; a no-op until 02.3.2-T2 (`session-ender.ts`). */
+    const sessionEnder = inject(SESSION_ENDER);
+    /** The hook `ApiGateway` reports a later `401` through (T5.2), registered below. */
+    const unauthenticatedRelay = inject(UnauthenticatedRelay);
+
     /**
      * The project list already read for the org it belongs to, published only for `org_id`s the
      * server attributed to that org. `resolveScope` answers from here when the route asks for the
@@ -154,6 +192,98 @@ const SessionStoreDefinition = signalStore(
     let sessionRevision = 0;
     /** Bumped by every `resolveScope` call and by `reload()`; guards the async part of a scope. */
     let scopeRevision = 0;
+
+    /**
+     * The route an in-flight scope read is resolving, so a `401` from that read can name it as the
+     * `returnUrl` of the expiry redirect. Cleared as soon as the read settles.
+     */
+    let pendingAttemptedPath: string | null = null;
+
+    /** What every session-scoped timer registers here; `logout()` and an expiry run all of them. */
+    const endCallbacks = new Set<() => void>();
+
+    /** The login redirect's query: `reason` and, for an expiry, the validated `returnUrl`. */
+    function navigateToLogin(queryParams: Record<string, string>): void {
+      // A cancelled navigation (a guard redirecting again) is not an error worth reporting.
+      void router.navigate([LOGIN_PATH], { queryParams }).catch(() => undefined);
+    }
+
+    /**
+     * Ends every piece of per-session work and publishes the anonymous, latched state.
+     *
+     * Both revisions move, so a read or a scope resolution that was already awaiting settles against
+     * a generation nobody waits for and writes nothing; the cached project lists go with it, so no
+     * list read under the old session can be published after the end. The end callbacks run LAST,
+     * after the state is gone: a callback that reads the store sees the ended session, not a half
+     * one. One callback throwing cannot keep the next one's timer alive.
+     */
+    function endSession(): void {
+      sessionRevision += 1;
+      scopeRevision += 1;
+      inFlight = null;
+      pendingAttemptedPath = null;
+      projectsByOrg.clear();
+      patchState(store, {
+        sessionState: 'anonymous',
+        signedOut: true,
+        permissions: NO_PERMISSIONS,
+        organizations: NO_ORGANIZATIONS,
+        projects: NO_PROJECTS,
+        currentOrg: null,
+        currentProject: null,
+      });
+      for (const callback of [...endCallbacks]) {
+        try {
+          callback();
+        } catch {
+          // A teardown is best effort: it must never stop another one from running.
+        }
+      }
+    }
+
+    /**
+     * The URL the caller is trying to reach RIGHT NOW, if a navigation is in flight.
+     *
+     * A guard that resolves a scope only knows the segments matched so far — an org-level read that
+     * answers `401` names `/orgs/<id>`, not the `/orgs/<id>/projects/<id>/<entry>` the caller asked
+     * for. The navigation the router is processing carries the whole attempted tree, so this is the
+     * one place the full target is available while a guard is running. It is `null` when no
+     * navigation is in progress (a read from a page that is already on screen), and then the
+     * caller's own path — or the current URL — describes the attempt.
+     */
+    function attemptedNavigationPath(): string | null {
+      const navigation = router.getCurrentNavigation();
+      if (navigation === null) {
+        return null;
+      }
+      const serialized = router.serializeUrl(navigation.extractedUrl);
+      return serialized === '' ? null : serialized;
+    }
+
+    /**
+     * A `401` that arrived after the session was established (T5.2): the session expired while the
+     * caller was reading something.
+     *
+     * Exactly one redirect per expiry: a session that is not `authenticated` any more — already
+     * flipped, latched signed out, or still being bootstrapped (that read answers the state itself)
+     * is a no-op, so a burst of parallel 401s (a page reading three lists) produces one navigation.
+     *
+     * `attemptedUrl` is the route the failed read was serving: the store's own scope read names it,
+     * and any other data service's `401` falls back to the current router URL.
+     */
+    function handleUnauthenticated(attemptedUrl: string | null): void {
+      if (store.signedOut() || store.sessionState() !== 'authenticated') {
+        return;
+      }
+      const target = validateReturnUrl(
+        attemptedNavigationPath() ?? attemptedUrl ?? pendingAttemptedPath ?? router.url,
+      );
+      endSession();
+      navigateToLogin({ reason: 'expired', returnUrl: target });
+    }
+
+    // The gateway reports every `401` it classifies as `unauthenticated`; one store, one handler.
+    unauthenticatedRelay.register((attemptedUrl) => handleUnauthenticated(attemptedUrl));
 
     /** Forgets everything a `reload()` must not keep. */
     function clearSession(): void {
@@ -186,7 +316,9 @@ const SessionStoreDefinition = signalStore(
         settledRead(() => identity.listMyOrganizations()),
         settledRead(() => permissionsSource.load()),
       ]);
-      if (revision !== sessionRevision) {
+      // A newer generation (a `reload()`, a logout, an expiry) owns the state by now; a latched
+      // sign-out must never be undone by a read that was already on the wire.
+      if (revision !== sessionRevision || store.signedOut()) {
         return;
       }
       if (!organizations.ok || !permissions.ok) {
@@ -217,6 +349,11 @@ const SessionStoreDefinition = signalStore(
      * accordingly).
      */
     function bootstrap(): Promise<void> {
+      // The caller ended this session on this tab: no request may re-open it (T5.2). `reauth()`
+      // clears the latch when a new sign-in begins.
+      if (store.signedOut()) {
+        return Promise.resolve();
+      }
       if (inFlight !== null) {
         return inFlight;
       }
@@ -243,6 +380,12 @@ const SessionStoreDefinition = signalStore(
      * read.
      */
     async function reload(): Promise<void> {
+      if (store.signedOut()) {
+        // Latched (T5.2): staying anonymous without a request is the answer, exactly as `bootstrap`.
+        patchState(store, { sessionState: 'anonymous' });
+        clearSession();
+        return;
+      }
       sessionRevision += 1;
       inFlight = null;
       patchState(store, { sessionState: 'unknown' });
@@ -271,6 +414,12 @@ const SessionStoreDefinition = signalStore(
      * A resolution that a newer one (or a `reload()`) overtook while it awaited answers
      * `superseded`, not `not-found`: the id was never shown to be unknown, and the guard that
      * receives it must cancel rather than render the 404 pattern.
+     *
+     * A `401` from the project-list read is the session expiring mid-navigation (T5.2) and is the
+     * one failure with an answer of its own: `handleUnauthenticated` — which the gateway's relay may
+     * already have run for this same refusal — flips the session to `anonymous` once and starts the
+     * `/login?reason=expired&returnUrl=…` redirect, so this call answers `superseded` and the guard
+     * chain cancels: the store owns that navigation now.
      */
     async function resolveScope(orgId: string, projectId: string | null): Promise<ScopeResolution> {
       await bootstrap();
@@ -318,14 +467,31 @@ const SessionStoreDefinition = signalStore(
       patchState(store, { currentOrg: org, currentProject: null, projects: NO_PROJECTS });
 
       let projects: readonly ProjectDto[];
+      // The route this read is serving, named for the expiry redirect if the session is gone (T5.2).
+      pendingAttemptedPath =
+        projectId === null
+          ? `/orgs/${encodeURIComponent(orgId)}`
+          : `/orgs/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}`;
       try {
         projects = await identity.listProjects(orgId);
       } catch (error) {
+        const attempted = pendingAttemptedPath;
+        pendingAttemptedPath = null;
+        if (isApiRequestError(error) && error.error.kind === 'unauthenticated') {
+          // The session expired mid-navigation: flip once and send the caller back here after
+          // signing in. `superseded` cancels the guard chain — the redirect this store started owns
+          // the navigation now, and matching the route would render a screen it cannot fill.
+          if (revision === scopeRevision) {
+            handleUnauthenticated(attempted);
+          }
+          return 'superseded';
+        }
         if (revision === scopeRevision) {
           clearScope();
         }
         return scopeFailure(error);
       }
+      pendingAttemptedPath = null;
       if (revision !== scopeRevision) {
         // A newer navigation owns the scope by now; this answer is about a request nobody waits
         // for.
@@ -358,6 +524,51 @@ const SessionStoreDefinition = signalStore(
     }
 
     /**
+     * Registers session-scoped work to stop when the session ends (T5.2): the onboarding step's
+     * health timer, and anything later that holds a timer, an interval or a subscription that must
+     * not outlive the caller's session. The returned function unregisters it (a destroyed component).
+     */
+    function onSessionEnd(callback: () => void): () => void {
+      endCallbacks.add(callback);
+      return () => {
+        endCallbacks.delete(callback);
+      };
+    }
+
+    /**
+     * Signs out on this tab (D-S98-Q1): every signal back to anonymous, every in-flight read ignored
+     * by its generation, every registered teardown run, then `/login?reason=signed-out`.
+     *
+     * The server is asked through `SessionEnder` and its answer never decides the local outcome: until
+     * 02.3.2-T2 the seam is a no-op, and a failing call must not keep the caller signed in. No request
+     * is made by the store itself, so a spec can assert that a sign-out issues none.
+     *
+     * Calling it twice is harmless: the second call leaves through the same redirect.
+     */
+    async function logout(): Promise<void> {
+      if (!store.signedOut()) {
+        endSession();
+      }
+      try {
+        await sessionEnder.end();
+      } catch {
+        // Best effort: the tab is signed out either way (`session-ender.ts`).
+      }
+      navigateToLogin({ reason: 'signed-out' });
+    }
+
+    /**
+     * Clears the sign-out latch when a new sign-in begins (the login page's `AuthFlow.start`). The
+     * state stays `anonymous` on purpose: the browser is about to leave for the provider, and a
+     * probe here would either re-open the old session or race the callback's own `reload()`.
+     */
+    function reauth(): void {
+      if (store.signedOut()) {
+        patchState(store, { signedOut: false });
+      }
+    }
+
+    /**
      * Adopts a project the caller just created, so the scope the wizard redirects to is already
      * known without a second read (09.2.1 T4 delta N2).
      *
@@ -385,7 +596,17 @@ const SessionStoreDefinition = signalStore(
       patchState(store, { projects: next });
     }
 
-    return { bootstrap, reload, resolveScope, has, adoptCreatedProject };
+    return {
+      bootstrap,
+      reload,
+      resolveScope,
+      has,
+      adoptCreatedProject,
+      logout,
+      reauth,
+      handleUnauthenticated,
+      onSessionEnd,
+    };
   }),
 );
 

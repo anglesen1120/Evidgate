@@ -2,6 +2,118 @@
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
   <file source-language="en" target-language="vi" datatype="plaintext" original="ng2.template">
     <body>
+      <trans-unit id="auth.callback.heading" datatype="html">
+        <source>Finishing sign-in</source>
+        <target>Đang hoàn tất đăng nhập</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/callback/callback.page.ts</context>
+          <context context-type="linenumber">47</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.callback.explanation" datatype="html">
+        <source>Checking your session, then taking you back.</source>
+        <target>Đang kiểm tra phiên của bạn, sau đó đưa bạn quay lại.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/callback/callback.page.ts</context>
+          <context context-type="linenumber">48</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.callback.loading" datatype="html">
+        <source>Checking your session…</source>
+        <target>Đang kiểm tra phiên của bạn…</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/callback/callback.page.ts</context>
+          <context context-type="linenumber">49</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.heading" datatype="html">
+        <source>Sign in to Evidgate</source>
+        <target>Đăng nhập vào Evidgate</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">68</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.explanation" datatype="html">
+        <source>Choose your provider to continue.</source>
+        <target>Chọn nhà cung cấp để tiếp tục.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">69</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.google" datatype="html">
+        <source>Continue with Google</source>
+        <target>Tiếp tục với Google</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">70</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.github" datatype="html">
+        <source>Continue with GitHub</source>
+        <target>Tiếp tục với GitHub</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">71</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.credential-note" datatype="html">
+        <source>Your provider account is your only sign-in credential. Evidgate does not ask for a separate email or password.</source>
+        <target>Bạn chỉ cần tài khoản của nhà cung cấp để đăng nhập. Evidgate không yêu cầu email hoặc mật khẩu riêng.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">72</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.redirecting" datatype="html">
+        <source>Opening your sign-in provider…</source>
+        <target>Đang mở nhà cung cấp đăng nhập…</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">73</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.expired" datatype="html">
+        <source>Your session expired. Sign in again to continue.</source>
+        <target>Phiên của bạn đã hết hạn. Đăng nhập lại để tiếp tục.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">74</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.signed-out" datatype="html">
+        <source>Signed out on this tab</source>
+        <target>Đã đăng xuất trên tab này</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">75</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.signed-out-detail" datatype="html">
+        <source>Your browser session may still be valid. Server sign-out is not available yet.</source>
+        <target>Phiên trình duyệt của bạn có thể vẫn còn hiệu lực. Tính năng đăng xuất phía máy chủ hiện chưa khả dụng.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">76</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.unavailable" datatype="html">
+        <source>Sign-in is temporarily unavailable. Choose a provider to try again.</source>
+        <target>Tạm thời không thể đăng nhập. Chọn nhà cung cấp để thử lại.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">77</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="auth.login.failed" datatype="html">
+        <source>Sign-in failed. Choose a provider to try again.</source>
+        <target>Đăng nhập không thành công. Chọn nhà cung cấp để thử lại.</target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/features/auth/login/login.page.ts</context>
+          <context context-type="linenumber">78</context>
+        </context-group>
+      </trans-unit>
       <trans-unit id="settings.members.title" datatype="html"><source>Members and roles</source><target>Thành viên và vai trò</target></trans-unit>
       <trans-unit id="settings.members.directory" datatype="html"><source>Members and invitations</source><target>Thành viên và lời mời</target></trans-unit>
       <trans-unit id="settings.members.description" datatype="html"><source>Manage organization membership. The server decides actual access.</source><target>Quản lý thành viên tổ chức. Máy chủ quyết định quyền truy cập thực tế.</target></trans-unit>
@@ -1723,22 +1835,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/pages/service-unavailable.page.ts</context>
           <context context-type="linenumber">27</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="shell.page.sign-in.heading" datatype="html">
-        <source>Sign in required</source>
-        <target>Cần đăng nhập</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/pages/sign-in-required.page.ts</context>
-          <context context-type="linenumber">38</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="shell.page.sign-in.explanation" datatype="html">
-        <source>Sign-in is not available in this workspace yet.</source>
-        <target>Chức năng đăng nhập chưa khả dụng trong không gian làm việc này.</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shell/pages/sign-in-required.page.ts</context>
-          <context context-type="linenumber">39</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shell.stub.eyebrow" datatype="html">

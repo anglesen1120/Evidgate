@@ -218,7 +218,15 @@ export class ConnectCiPage {
       this.scheduleHealthBoundary(this.store.tokens());
       onCleanup(() => this.clearHealthBoundaryTimer());
     });
-    this.destroyRef.onDestroy(() => this.clearHealthBoundaryTimer());
+    // 09.1.1-T5.2: the health boundary timer is session-scoped work. Signing out (or a session that
+    // expires) must stop it, even when this step's signals do not change again — the page can stay
+    // mounted under a router outlet while the session ends, and a timer that fires afterwards would
+    // repaint a credential panel for a session that no longer exists.
+    const endOfSession = this.session.onSessionEnd(() => this.clearHealthBoundaryTimer());
+    this.destroyRef.onDestroy(() => {
+      this.clearHealthBoundaryTimer();
+      endOfSession();
+    });
   }
 
   private clearHealthBoundaryTimer(): void {
