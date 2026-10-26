@@ -8,15 +8,15 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Develop: `408f9a8` (PR #212, S101 09.3.1-T1 web run list, merged 2026-10-27); 204 first-parent PR merges into develop. Migration lane free (S94 12.3.1-T1 merged in #198/#204); highest migration `0047_usage_rollup.sql`, next free `0048`.
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
-- Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (PR #213 open). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here.
-- Fully landed on develop: 170/655 tasks; 177.25/702.75 raw person-days; remaining 485 tasks / 525.5 d. Strict merged-PR-only figure: 143 tasks / 152.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- By phase (done tasks / raw d): G1 126 / 139.25; G2 38 / 32; G3 0 / 0; G4 6 / 6.
+- Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here.
+- Fully landed on develop: 171/655 tasks; 178.25/702.75 raw person-days; remaining 484 tasks / 524.5 d. Strict merged-PR-only figure: 144 tasks / 153.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- By phase (done tasks / raw d): G1 127 / 140.25; G2 38 / 32; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in this S100 docs pass on `b0be589`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1 with the same 10 missing 13.x feature plans (queue F37, §6 row), unchanged.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
-- Next picks, web-only lane: 09.1.1-T5 is delivered (PR #213) and 09.1.1-T9.2 is done (#209), so the web-only lane moves to G2 (§5).
+- Next picks, web-only lane: 09.1.1-T5 is merged (#213) and 09.1.1-T9.2 is done (#209), so the web-only lane moves to G2 (§5).
 - Next picks, backend lane: refill order in `.omp/coordinator/prompts/held/README.md`; when a backend slot frees, 08.5.1-T1 (XL, split, migration lane) unless §5 ranks another G1 task higher, and 04.1.2-T1 only after S91 releases.
-- Next step: §5, 91 dependency-ready tasks / 101.0 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
+- Next step: §5, 90 dependency-ready tasks / 100.0 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
 
 ## 2. Done
 
@@ -24,10 +24,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 170 | 177.25 |
-| Via merged PRs | 143 | 152.25 |
+| Fully landed on develop | 171 | 178.25 |
+| Via merged PRs | 144 | 153.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 485 | 525.5 |
+| Remaining | 484 | 524.5 |
 | Plan total | 655 | 702.75 |
 
 Four partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -44,22 +44,22 @@ Four partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6) 
 | 06 | 11 | 0 | 3 | 8 | 0 | 0 | 9.5 |
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
 | 08 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 09 | 19 | 0 | 6 | 10 | 3 | 0 | 19 |
+| 09 | 20 | 0 | 6 | 11 | 3 | 0 | 20 |
 | 10 | 4 | 0 | 1 | 2 | 1 | 0 | 4.5 |
 | 11 | 5 | 1 | 2 | 1 | 1 | 0 | 4.25 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 170 | 3 | 45 | 91 | 30 | 1 | 177.25 |
+| TOTAL | 171 | 3 | 45 | 92 | 30 | 1 | 178.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 126 | 3 | 27 | 68 | 27 | 1 | 139.25 |
+| G1 | 127 | 3 | 27 | 69 | 27 | 1 | 140.25 |
 | G2 | 38 | 0 | 16 | 20 | 2 | 0 | 32 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 170 | 3 | 45 | 91 | 30 | 1 | 177.25 |
+| TOTAL | 171 | 3 | 45 | 92 | 30 | 1 | 178.25 |
 
 ### Landed task groups
 
@@ -154,7 +154,7 @@ Four partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6) 
 | 09.1.1 | 09.1.1-T4 | merged (#151, 8991020) | Phase/permission/scope-aware shell, guards, switcher, theme and Chromium fixtures E2E; real client grants/login remain open. |
 | 09.1.1 | 09.1.1-T9.1 | merged (#153, 37f5b79) | Scrubbed lazy web telemetry, route/API/error/vital spans and configurable no-op exporter. |
 | 09.1.1 | 09.1.1-T9.2 (T9 complete with T9.1) | merged (#209, 8e33870) | Emission config and opt-out (`doNotTrack`/`msDoNotTrack`/`globalPrivacyControl`), optional `evidgate-service-version` meta, the committed Playwright vitals smoke in `e2e/telemetry.spec.ts` and the audit export cap event; collector origin and CORS stay with 10.3.1-T2/10.2.1-T1.4. |
-| 09.1.1 | 09.1.1-T5 (T5.1 + T5.2) | PR #213 open | `/login` (Google and GitHub buttons, no password field) and `/auth/callback` replace the placeholder; shared `validateReturnUrl` (`core/routing/return-url.ts`); `SessionStore` client-side logout with an in-memory signed-out latch behind the `SessionEnder` seam, single 401 re-auth keeping the validated `returnUrl`, teardown registry for the connect-ci health timer; login round-trip in `e2e/shell/auth.spec.ts` (fixture IdP via `page.route`). Logout is client-only until 02.3.2-T2 (§6). |
+| 09.1.1 | 09.1.1-T5 (T5.1 + T5.2) | merged (#213, 625e950) | `/login` (Google and GitHub buttons, no password field) and `/auth/callback` replace the placeholder; shared `validateReturnUrl` (`core/routing/return-url.ts`); `SessionStore` client-side logout with an in-memory signed-out latch behind the `SessionEnder` seam, single 401 re-auth keeping the validated `returnUrl`, teardown registry for the connect-ci health timer; login round-trip in `e2e/shell/auth.spec.ts` (fixture IdP via `page.route`). Logout is client-only until 02.3.2-T2 (§6). |
 | 09.7.1 | 09.7.1-T1 | merged (#156, 93b104b) | Settings shell, phase/permission-aware tabs, guards, responsive selector and secret-field lint. |
 | 02.3.1 | 02.3.1-T1 | merged (#160, 1116d24); merged (#164, ca2bf98) | Google OIDC/PKCE/state/JWKS and GitHub OAuth2 providers, user/session schema and real login completion (0041–0042); no 501 seam remains. |
 | 09.2.1 | 09.2.1-T1 | merged (#159, 15b5650) | Onboarding shell/progress/project creation, signalStore, fixture-backed resume and accessible stepper. |
@@ -317,11 +317,11 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **91 tasks / 101.0 d** (G1 42 / 43.5, G2 34 / 35.5, G3 5 / 8, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0048`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
+Dependency-ready: **90 tasks / 100.0 d** (G1 41 / 42.5, G2 34 / 35.5, G3 5 / 8, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0048`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
 
 Stricter variant that also requires every dependency task's whole story to be merged: **48 tasks / 51.5 d** (G1 19 / 20.5, G2 21 / 21, G3 0 / 0, G4 8 / 10), recomputed on `b0be589` from the plan graph plus the landed set. It supersedes the S93 print of 28 / 31.25 d, which no longer recomputes from the landed set under that definition.
 
-### G1: 42 tasks / 43.5 d (backend lane 28 / 28.5 d, web-only 1 / 1 d, docs-only 13 / 14 d)
+### G1: 41 tasks / 42.5 d (backend lane 28 / 28.5 d, web-only 0 / 0 d, docs-only 13 / 14 d)
 
 #### G1 backend lane
 
@@ -722,3 +722,4 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Run list accepted low review notes (S101, #212) | F3 the page discards the store's re-thrown non-API rejection and repeated-cursor errors (`apps/web/src/app/features/runs/list/run-list.page.ts` `void` calls), the same pattern as `AuditStore`: accepted, no action; F4 each followed page copies the `rows` array, O(n²) bounded at 50-row pages: accepted, no action; F5 the new `runs.list.*` units in `apps/web/src/locale/messages*.xlf` are hand-written without extractor context-groups: accepted, no action | accepted, no action (receiver: none; reason above); recorded in plan `plans/features/09-web-ui/09.3.1-run-detail-is-the-truth-surface.md:234` |
 | Merge debt (#212) | Merged delivery under coordinator-review 6c with the send-back waived (D-S101-M1, `docs/phase-review.md`): merge sha 408f9a8, reviewed code sha 03b75b6 (fix round 8f8c414, delta over 03b75b6..f5a6df1 closed A-E); web-only gate phase 1 rc 0 + e2e 45 passed + e2e:fixtures 338 passed on f5a6df1; later commits docs-only; CI not observed. Open hand-over rows: STATUS.md:721 (listRuns lacks state/decision/rerun filters and completeness, receiver queue row F43) and STATUS.md:722 (accepted low review notes, no action); plan 09.3.1 Notes line 234. Owner-review decision ids: D-S101-Q1, D-S101-Q2, D-S101-M1 (`docs/phase-review.md`). | coordinator (D-S101-M1, `docs/phase-review.md`) |
 | Logout is client-only until 02.3.2-T2 (09.1.1-T5, S98, #213, D-S98-Q1) | `SessionStore.logout()` clears every store, cancels in-flight work and keeps an in-memory signed-out latch, but the HttpOnly `__Host-evidgate_session` cookie stays valid server-side: a page reload re-authenticates from it until 02.3.2-T2 lands the logout route. The UI says "Signed out on this tab" and never claims the server session ended. The only server call is behind the `SessionEnder` seam (`apps/web/src/app/core/session/session-ender.ts`, default no-op). | receiver: 02.3.2-T2; hand-over Notes: `plans/features/02-identity-tenancy/02.3.2-sessions-and-revocation.md:156` |
+| Merge debt (#213) | Merged delivery under coordinator-review 6c with the send-back waived (D-S98-M1, `docs/phase-review.md`): merge sha 625e950, reviewed code sha fa2c275 (fix round 9c75586; delta fix e935d67 moved `AuthFlow` to `LoginPage` scope; both deltas closed, security approve); web-only gate phase 1 rc 0 + e2e 45 passed + e2e:fixtures 342 passed on e3d97bb; later commits docs-only; CI not observed. Open hand-over row: STATUS.md:724 (logout is client-only until 02.3.2-T2, receiver 02.3.2-T2, plan Notes `plans/features/02-identity-tenancy/02.3.2-sessions-and-revocation.md:156`); accepted low notes with no hand-over: callback spec uses fakes (F4), dot-segment same-origin `returnUrl` spellings. Owner-review decision ids: D-S98-Q1, D-S98-Q2, D-S98-Q3, D-S98-M1 (`docs/phase-review.md`). | coordinator (D-S98-M1, `docs/phase-review.md`) |
