@@ -9,5 +9,8 @@ export * from './redact.js';
 export * from './client.js';
 export * from './auth/devToken.js';
 export * from './auth/getToken.js';
+// 04.3.3-T2.2: the attachment upload facade the Playwright adapter consumes — the same
+// `uploadFile()` engine the `artifacts upload` command uses, behind a config-once surface.
+export * from './attachmentUpload.js';
 export * from './commands/index.js';
 export * from './main.js';

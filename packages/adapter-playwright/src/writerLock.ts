@@ -8,7 +8,9 @@
 // `spool.lock`: the CLI lock serialises CLI commands against each other, this one keeps
 // two live reporter processes sharing `(run_id, producer_id)` from interleaving lines, and
 // a shared name would make one side's holder look like the other's and block it wrongly.
-// The reporter package must not depend on `@evidgate/cli`, and the writer API is
+// The reporter keeps no runtime import of `@evidgate/cli` (04.3.3-T2: the package's only
+// runtime load of the CLI is the single lazy `import()` in `attach.ts`, and the dependency
+// is one-way — packages/cli never imports this adapter), and the writer API is
 // synchronous (`SpoolWriter.append/flush/close`), so this port uses `node:fs` sync calls
 // and a synchronous pause where the CLI awaits.
 //
