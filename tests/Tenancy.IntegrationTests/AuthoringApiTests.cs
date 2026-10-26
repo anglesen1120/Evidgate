@@ -176,10 +176,12 @@ public sealed class AuthoringApiTests
                         new { kind = "node", key = "n1", node_kind = "module", title = "Imported module" },
                     },
                 }),
+            // The export is read as JSON: the table's helper parses every body as a document, and the permission, the
+            // route and the projection are the same three formats' (CSV and XLSX differ only in the writer).
             new(
                 "export",
                 HttpMethod.Get,
-                $"{world.Export}?format=csv"),
+                $"{world.Export}?format=json"),
         };
 
         routes.Count.ShouldBe(24, "13.1.1 §5 numbers twenty-four routes once 13.1.1-T5 adds route 25");
