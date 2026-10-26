@@ -606,8 +606,9 @@ describe('QA probe: reporter wiring beyond the delivered specs', () => {
     const hung = file(root, 'trace-hung.zip');
     const good = file(root, 'shot-good.png');
     const uploader = fakeUploader({
-      uploads: (_input, index) =>
-        index === 0
+      // Keyed on the file, not on the call index: the guard's async checks may interleave.
+      uploads: (upload) =>
+        upload.file.includes('trace-hung')
           ? new Promise<AttachmentUploadResult>(() => undefined)
           : Promise.resolve({ artifactId: ARTIFACT_B, bytes: 8 }),
     });
@@ -830,10 +831,11 @@ describe('QA probe: reporter wiring beyond the delivered specs', () => {
     // A's upload settles only after C's answered, so the held batches cannot be in flight order.
     const settleGate = gate();
     const uploader = fakeUploader({
-      uploads: async (_input, index) => {
-        if (index === 0) await settleGate.opened;
+      uploads: async (upload) => {
+        const isFirst = upload.file.includes('trace-first');
+        if (isFirst) await settleGate.opened;
         else settleGate.open();
-        return { artifactId: index === 0 ? ARTIFACT_A : ARTIFACT_B, bytes: 8 };
+        return { artifactId: isFirst ? ARTIFACT_A : ARTIFACT_B, bytes: 8 };
       },
     });
     const { reporter } = reporterHarness(spool, root, () => uploader.uploader);
