@@ -8,8 +8,8 @@
 | [`02-catalog-ingest-runs-evidence.md`](02-catalog-ingest-runs-evidence.md) | 03, 04, 05, 06 | 58 | 16 |
 | [`03-policy-healing-web.md`](03-policy-healing-web.md) | 07, 08, 09 | 58 | 2 |
 | [`04-ops-security-commercial.md`](04-ops-security-commercial.md) | 10, 11, 12, O1 pilot profile (includes the **counsel brief**) | 51 | 3 |
-| [`05-product-phases-g1.md`](05-product-phases-g1.md) | 13.1.1, 13.1.2, 13.2.1 (CR-D-2 G1 authoring, S52, 2026-10-23) | 18 | 0 |
-| **Total** | | **245** | **28** |
+| [`05-product-phases-g1.md`](05-product-phases-g1.md) | 13.1.1, 13.1.2, 13.2.1 (CR-D-2 G1 authoring, S52, 2026-10-23), 13.2.2 (role profiles, S92, 2026-10-26) | 26 | 0 |
+| **Total** | | **253** | **28** |
 
 ## 1. How to use it
 
