@@ -1980,7 +1980,7 @@ export const restoreAuthoringVersion = <ThrowOnError extends boolean = false>(op
 export const importAuthoring = <ThrowOnError extends boolean = false>(options: Options<ImportAuthoringData, ThrowOnError>): RequestResult<ImportAuthoringResponses, ImportAuthoringErrors, ThrowOnError> => (options.client ?? client).post<ImportAuthoringResponses, ImportAuthoringErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/import',
@@ -1999,7 +1999,7 @@ export const importAuthoring = <ThrowOnError extends boolean = false>(options: O
 export const exportAuthoring = <ThrowOnError extends boolean = false>(options: Options<ExportAuthoringData, ThrowOnError>): RequestResult<ExportAuthoringResponses, ExportAuthoringErrors, ThrowOnError> => (options.client ?? client).get<ExportAuthoringResponses, ExportAuthoringErrors, ThrowOnError>({
     security: [{
             in: 'cookie',
-            name: '__Host-evidgate',
+            name: '__Host-evidgate_session',
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/projects/{p}/authoring/export',

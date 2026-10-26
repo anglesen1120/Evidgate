@@ -9379,11 +9379,11 @@ export type ImportAuthoringErrors = {
      */
     400: ErrorEnvelope;
     /**
-     * 401 unauthenticated (00 §9.2)
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
     /**
-     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
      */
     403: ErrorEnvelope;
     /**
@@ -9447,11 +9447,11 @@ export type ExportAuthoringData = {
 
 export type ExportAuthoringErrors = {
     /**
-     * 401 unauthenticated (00 §9.2)
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
     /**
-     * 403 forbidden — includes token-scope mismatch and `csrf_failed` (00 §9.1/§9.2)
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
      */
     403: ErrorEnvelope;
     /**
