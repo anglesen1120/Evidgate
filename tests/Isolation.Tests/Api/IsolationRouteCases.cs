@@ -177,6 +177,15 @@ public static class IsolationRouteCases
     private const string TokenInvalidCode = "token_invalid";
 
     /// <summary>
+    /// The 00 §9.2 <c>error.code</c> of a request that carries no live session
+    /// (<c>ApiErrorCode.Unauthenticated</c>, ErrorEnvelope.cs:56). The link routes of 02.3.1-T2 ask the
+    /// deployment's session authenticator (02.3.2-T1, LinkEndpoints.cs:542-569), which answers this 401 as soon as
+    /// the request presents no session cookie (SessionRequestAuthenticator.cs:87-91) — before a pepper, a tenant or
+    /// a row is read.
+    /// </summary>
+    private const string UnauthenticatedCode = "unauthenticated";
+
+    /// <summary>
     /// A token with the contract's shape (<c>evgi_&lt;12-char prefix&gt;_&lt;43-char secret&gt;</c>,
     /// <c>InviteTokenFormat</c>) and no matching row: the invite staging route of 02.3.1-T2 validates the shape
     /// only — whether the token exists is decided by the binder at login — so this is the body it accepts.
@@ -535,8 +544,9 @@ public static class IsolationRouteCases
         // Pre-tenant like the login routes: none of them resolves a tenant, so org B's member headers can change
         // nothing. The invite route accepts a body with the token's SHAPE and answers 204 plus the
         // `__Host-evidgate_invite` cookie (nothing is looked up: whether the token exists is the binder's business
-        // at login); the four link routes answer the typed 503 `unavailable` in this host, which provisions no
-        // session pepper, so the session lookup refuses before any tenant read.
+        // at login); the four link routes require a live session (02.3.2-T1), so this host's real session
+        // authenticator answers 401 `unauthenticated` to an anonymous caller and to org B's member headers alike,
+        // before any tenant, pepper or row is read (SessionRequestAuthenticator.cs:87-91).
         Case("POST", "/v1/auth/invite-token", (route, w) =>
         [
             new(route, "invite staging stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
@@ -557,8 +567,8 @@ public static class IsolationRouteCases
                 "link start stays pre-tenant: org B's member headers cannot select a tenant",
                 w,
                 new ProbeRequest(HttpMethod.Post, "/v1/auth/link/google"),
-                StatusCodes.Status503ServiceUnavailable,
-                UnavailableCode)),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
         ]),
         Case("GET", "/v1/auth/link/pending", (route, w) =>
         [
@@ -567,8 +577,8 @@ public static class IsolationRouteCases
                 "staged link read stays pre-tenant: org B's member headers cannot select a tenant",
                 w,
                 new ProbeRequest(HttpMethod.Get, "/v1/auth/link/pending"),
-                StatusCodes.Status503ServiceUnavailable,
-                UnavailableCode)),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
         ]),
         Case("DELETE", "/v1/auth/link/pending", (route, w) =>
         [
@@ -577,8 +587,8 @@ public static class IsolationRouteCases
                 "staged link discard stays pre-tenant: org B's member headers cannot select a tenant",
                 w,
                 new ProbeRequest(HttpMethod.Delete, "/v1/auth/link/pending"),
-                StatusCodes.Status503ServiceUnavailable,
-                UnavailableCode)),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
         ]),
         Case("POST", "/v1/auth/link/confirm", (route, w) =>
         [
@@ -587,8 +597,8 @@ public static class IsolationRouteCases
                 "link confirm stays pre-tenant: org B's member headers cannot select a tenant",
                 w,
                 new ProbeRequest(HttpMethod.Post, "/v1/auth/link/confirm"),
-                StatusCodes.Status503ServiceUnavailable,
-                UnavailableCode)),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
         ]),
 
         // ---- Catalog (CatalogEndpoints.cs:39-83) ---------------------------------------------------------------
@@ -2011,11 +2021,12 @@ public sealed class RouteProbeRunner
     /// </summary>
     /// <remarks>
     /// <paramref name="expectedCode"/> is null for the bodiless 204 of the invite staging route: there is no
-    /// envelope to compare, so the exact status plus the identical shape carry the case. The link routes answer
-    /// the typed 503 <c>unavailable</c> in this host: it provisions no session pepper
-    /// (<c>EVIDGATE__SESSION__PEPPER</c>), so <c>ISessionRequestAuthenticator</c> refuses before any tenant read — an
-    /// answer of the route, not a fault, which is why the case asserts it exactly and must be revisited if this
-    /// host ever mints sessions.
+    /// envelope to compare, so the exact status plus the identical shape carry the case. The link routes require a
+    /// live session (02.3.2-T1: they ask the deployment's session authenticator, LinkEndpoints.cs:542-569), so a
+    /// probe carrying no session cookie — anonymous or with org B's member headers — is refused 401
+    /// <c>unauthenticated</c> before any tenant, pepper or row is read (SessionRequestAuthenticator.cs:87-91). That
+    /// is the route's own answer, which is why the case asserts it exactly and must be revisited if these probes
+    /// ever present a cookie.
     /// </remarks>
     /// <param name="route">The served route.</param>
     /// <param name="name">What the probe proves.</param>
