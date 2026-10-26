@@ -342,6 +342,7 @@ public sealed class InviteLifecycleTests : CatalogueTestBase
             // Exactly the three documented members — a jsonb object normalises the order, so compare as a set.
             payload.EnumerateObject()
                 .Select(property => property.Name)
+                .Where(name => name != "_evidgate_correlation") // trace carrier (10.3.1-T1), no business data
                 .Order(StringComparer.Ordinal)
                 .ToArray()
                 .ShouldBe(PayloadMembers);

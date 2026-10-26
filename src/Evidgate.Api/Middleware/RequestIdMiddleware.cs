@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using Evidgate.BuildingBlocks.Observability.Correlation;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 
 namespace Evidgate.Api.Middleware;
 
@@ -22,9 +24,6 @@ public sealed class RequestIdMiddleware
     /// <summary>Request header name of the request id (00 §9.1).</summary>
     public const string HeaderName = "X-Request-Id";
 
-    /// <summary>Cap on a client-supplied id — never echo unbounded values back.</summary>
-    private const int MaxLength = 128;
-
     private readonly RequestDelegate _next;
 
     /// <summary>Creates the middleware.</summary>
@@ -35,11 +34,15 @@ public sealed class RequestIdMiddleware
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var requestId = context.Request.Headers[HeaderName].FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > MaxLength)
-        {
-            requestId = Activity.Current?.Id ?? context.TraceIdentifier;
-        }
+        var inbound = context.Request.Headers[HeaderName].FirstOrDefault();
+        // 10.3.1-T1.2: an inbound id is honoured only when it is a bounded printable
+        // token (`CorrelationNames.IsSafeRequestId`). It is echoed in a response header,
+        // written to a span tag, exported as a log attribute and stored on the audit
+        // row, so an over-long value or one carrying CR/LF would forge a header or a log
+        // line. Anything else is replaced by a minted id, never echoed raw.
+        var requestId = CorrelationNames.IsSafeRequestId(inbound)
+            ? inbound
+            : Activity.Current?.Id ?? context.TraceIdentifier;
 
         context.TraceIdentifier = requestId;
         context.Items[ItemsKey] = requestId;
@@ -47,8 +50,37 @@ public sealed class RequestIdMiddleware
         Activity.Current?.SetTag("evidgate.request_id", requestId);
         // 02.7.1: audit rows carry the request id; baggage flows to the pipeline with the async context.
         Activity.Current?.AddBaggage(Evidgate.BuildingBlocks.Persistence.Audit.AuditTrail.RequestIdBaggage, requestId);
+        // 10.3.1-T1.2 (F6): the propagator copies a client's `tracestate` header onto the
+        // request's activity, and the task carrier would persist it into every payload the
+        // request produces. `traceparent` stays honoured — a documented trade-off: a caller
+        // may choose the trace id it is part of, and the head sampler still decides the rest
+        // (group P documents the sampler; this task does not change it) — but the
+        // `tracestate` is bounded here, so an oversized or non-printable value never reaches
+        // a span, a log record or the outbox.
+        if (Activity.Current is { } activity)
+        {
+            if (!TaskCorrelation.IsSafeTraceState(activity.TraceStateString))
+            {
+                activity.TraceStateString = null;
+            }
+
+            // (F4) ASP.NET Core turns the client's `baggage` header into activity baggage
+            // as-is, and the log-record processor and the modules' span enrichment read it.
+            // The edge owns these two keys: a run id comes only from the routed `{r}` (below,
+            // re-added by TagRequest), so whatever a caller planted is dropped here instead
+            // of being exported as another tenant's run.
+            activity.SetBaggage(CorrelationNames.RunIdBaggage, null);
+        }
+
+        // 10.3.1-T1.2: the same four correlation ids on the span, plus the run id when
+        // the route names one (routing has already resolved the endpoint's parameters).
+        RequestCorrelation.TagRequest(context, requestId);
 
         await _next(context);
+
+        // The route may only be resolved by now on a host that maps endpoints late, so
+        // the run id is tagged again; the call is idempotent and cannot throw.
+        RequestCorrelation.TagRequest(context, requestId);
     }
 }
 

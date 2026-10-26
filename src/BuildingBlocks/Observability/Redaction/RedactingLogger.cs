@@ -5,14 +5,24 @@ namespace Evidgate.BuildingBlocks.Observability.Redaction;
 /// <summary>
 /// Logger decorator of 01.1.2-T1.2: it rewrites the state through
 /// <see cref="SecretRedactor"/> before any provider formats or exports it
-/// (00 §5.7 S3). Exceptions pass through unchanged — 00 §5.5 C8 says exception
-/// text is a bug signal, not a place to put secrets.
+/// (00 §5.7 S3).
 /// </summary>
+/// <remarks>
+/// Scopes and exceptions are redacted here too (10.3.1-T1.4): a scope value is state the
+/// providers may render, and an exception message is text a collector receives as an
+/// attribute, so both are masked at the same seam as the state. An exception with nothing
+/// to mask is passed through unchanged, identity and type included; a masked one is
+/// replaced by <see cref="RedactedException"/>, which keeps the original type name.
+/// </remarks>
 internal sealed class RedactingLogger(ILogger inner, SecretRedactor redactor) : ILogger
 {
     public IDisposable? BeginScope<TState>(TState state)
         where TState : notnull
-        => inner.BeginScope(state);
+        => inner.BeginScope(new RedactedLogState<TState>(
+            state,
+            redactor,
+            static (scope, _) => scope?.ToString() ?? string.Empty,
+            exception: null));
 
     public bool IsEnabled(LogLevel logLevel) => inner.IsEnabled(logLevel);
 
@@ -30,6 +40,6 @@ internal sealed class RedactingLogger(ILogger inner, SecretRedactor redactor) : 
 
         var redacted = new RedactedLogState<TState>(state, redactor, formatter, exception);
 
-        inner.Log(logLevel, eventId, redacted, exception, static (logged, _) => logged.ToString());
+        inner.Log(logLevel, eventId, redacted, redactor.RedactException(exception), static (logged, _) => logged.ToString());
     }
 }

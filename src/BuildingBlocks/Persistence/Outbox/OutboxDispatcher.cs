@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Dapper;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
@@ -39,6 +40,9 @@ public sealed record OutboxDispatchResult(int Claimed, int Enqueued)
 /// </remarks>
 public sealed partial class OutboxDispatcher : IDisposable
 {
+    /// <summary>Operation name of one dispatch batch's span (10.3.1-T1.1).</summary>
+    public const string DispatchOperationName = "outbox.dispatch";
+
     private readonly NpgsqlDataSource _dataSource;
     private readonly TasksOptions _options;
     private readonly ILogger<OutboxDispatcher> _logger;
@@ -147,6 +151,15 @@ public sealed partial class OutboxDispatcher : IDisposable
         {
             _dispatchLag.Record(lag);
         }
+
+        // 10.3.1-T1.1: one span per batch that moved rows, tagged with the batch's own
+        // counts (bounded numbers, never an id — the per-row trace link travels inside
+        // each payload instead, because one dispatcher serves rows of many producer
+        // traces). An idle poll gets no span at all: the poller runs every second, so a
+        // span per empty batch would bury the real traces.
+        using var activity = TaskCorrelation.Source.StartActivity(DispatchOperationName, ActivityKind.Internal);
+        activity?.SetTag("outbox.claimed", claimed.Length);
+        activity?.SetTag("outbox.enqueued", enqueued.Length);
 
         return new OutboxDispatchResult(claimed.Length, enqueued.Length);
     }

@@ -3,6 +3,7 @@ using Evidgate.Api.Json;
 using Evidgate.Api.Middleware;
 using Evidgate.Api.Tenancy;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Observability.Correlation;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Health;
 using Evidgate.BuildingBlocks.Persistence.Isolation;
@@ -72,6 +73,13 @@ public static partial class ApiHost
         builder.Services.AddEvidgateSecrets(builder.Configuration);
 
         var otel = builder.AddEvidgateTelemetry(ServiceName);
+        // 10.3.1-T1.2 (F6, documented trade-off): the server instrumentation adopts an
+        // inbound W3C `traceparent`, so a caller may choose the trace id its requests join
+        // and may ask for `sampled=1`; a client trace is worth keeping whole, and the head
+        // sampler (group P) still governs the roots this host starts itself. What stays
+        // client-controlled is bounded at the edge instead: `RequestIdMiddleware` drops an
+        // oversized or non-printable `tracestate` and a planted `evidgate.run_id` baggage,
+        // and `TaskCorrelation.Stamp` bounds the carrier it persists into every payload.
         otel.WithTracing(tracing =>
             tracing.AddAspNetCoreInstrumentation(options =>
                 // 00 §5.7 S3 / 02.3.1 §5: the browser reaches the login callback with `code` and `state`
@@ -81,6 +89,10 @@ public static partial class ApiHost
                 options.EnrichWithHttpRequest = (activity, request) =>
                     LoginTraceRedaction.Redact(activity, request.Path.Value)));
         otel.WithMetrics(metrics => metrics.AddPrometheusExporter());
+        // 10.3.1-T1.1/T1.2: Npgsql/HttpClient client spans and the log-record
+        // correlation processor on the pipeline above. The ASP.NET Core instrumentation
+        // stays here, where its login-route query redaction is configured.
+        otel.AddEvidgateCorrelation();
 
         builder.Services.AddHealthChecks()
             .AddCheck<ReadinessHealthCheck>(ReadinessHealthCheck.Name, tags: [ReadinessHealthCheck.Name]);
@@ -145,6 +157,15 @@ public static partial class ApiHost
     {
         var app = CreateBuilder(args).Build();
 
+        // 10.3.1-T1.2 (AC1): routing is pinned to the start of the pipeline so the edge
+        // knows a route's `{r}` value before it tags the request's span, whatever the
+        // framework would otherwise do with its implicit `UseRouting` for an endpoint
+        // app. `run_id` has to be on that span and in its baggage — the pipeline spans,
+        // the ingest handler and the outbox payload carrier all inherit it from there —
+        // and a middleware can only read the route value once the endpoint is matched.
+        // Nothing else moves: the envelope and status-code middleware still wrap every
+        // route the pipeline reaches.
+        app.UseRouting();
         app.UseMiddleware<RequestIdMiddleware>();
         app.UseMiddleware<EnvelopeExceptionMiddleware>();
 
