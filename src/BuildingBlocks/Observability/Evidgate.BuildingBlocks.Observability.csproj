@@ -8,5 +8,7 @@
     <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <!-- 10.3.1-T1.1: Npgsql and HttpClient client spans, wired by AddEvidgateCorrelation. -->
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
   </ItemGroup>
 </Project>

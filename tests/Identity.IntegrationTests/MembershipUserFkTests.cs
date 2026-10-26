@@ -196,7 +196,17 @@ public sealed class MembershipUserFkTests : SessionTestBase
         await connection.OpenAsync(Token);
         await using var command = connection.CreateCommand();
         command.CommandText = await MigrationSqlAsync();
-        await command.ExecuteNonQueryAsync(Token);
+        try
+        {
+            await command.ExecuteNonQueryAsync(Token);
+        }
+        finally
+        {
+            // The database is shared by the whole assembly: re-applying 0044 re-creates the read-only
+            // `session_user` lookup that 0045 dropped, which a later session-migration test would then
+            // see (order-dependent failure). Put 0045's state back.
+            await OwnerExecuteAsync("drop function if exists evidgate_resolve.session_user(bytea, integer)");
+        }
     }
 
     private static Task<string> MigrationSqlAsync() =>

@@ -249,6 +249,14 @@ public sealed partial class TaskConsumer
             return false;
         }
 
+        // 10.3.1-T1.2 (AC1): the payload's carrier makes this attempt a child of the
+        // activity that enqueued the work — the request that committed the outbox row
+        // — and the span/scope carry request_id, run_id and job_id to every handler
+        // log. A row with no carrier (seeded or replayed by SQL) simply starts a root.
+        var carrier = TaskCorrelation.Read(claim.Payload);
+        using var activity = TaskCorrelation.StartTaskActivity(claim, carrier);
+        using var logScope = TaskCorrelation.BeginTaskScope(_logger, claim, carrier);
+
         Exception? failure = null;
 
         try
@@ -299,6 +307,12 @@ public sealed partial class TaskConsumer
             await MarkDoneAsync(claim).ConfigureAwait(false);
             return true;
         }
+
+        // The attempt failed: the span ends in the error state with the same redacted
+        // text the row stores (00 §5.7 S3), so the trace and the dead-letter row say
+        // the same thing. Called before the transition, which may itself fail.
+        activity?.SetTag("error.type", failure.GetType().FullName);
+        activity?.SetStatus(ActivityStatusCode.Error, TaskErrorText.Redact(failure));
 
         await MarkFailedAsync(claim, failure).ConfigureAwait(false);
 
