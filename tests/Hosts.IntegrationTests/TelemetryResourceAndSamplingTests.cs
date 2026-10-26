@@ -25,8 +25,15 @@ namespace Hosts.IntegrationTests;
 /// .NET export processors skip a span whose recorded flag is off, so "the ratio dropped it" and
 /// "the error was kept" are proven on the exported surface, which is the only one an operator sees.
 /// </remarks>
+[Collection(Name)]
 public sealed class TelemetryResourceAndSamplingTests
 {
+    /// <summary>
+    /// Runs alone: the <c>Evidgate</c> activity source is process-global, so a ratio-1 host from a
+    /// parallel class would sample a ratio-0 test's span as recorded and fake a "kept" parent.
+    /// </summary>
+    public const string Name = "telemetry-global-activity-source";
+
     /// <summary>The deployment this suite boots: a named environment proves the attribute is not a constant.</summary>
     private const string EnvironmentName = "Staging";
 
@@ -312,3 +319,6 @@ public sealed class TelemetryResourceAndSamplingTests
         }
     }
 }
+
+[CollectionDefinition(TelemetryResourceAndSamplingTests.Name, DisableParallelization = true)]
+public sealed class TelemetryGlobalActivitySourceFixture;
