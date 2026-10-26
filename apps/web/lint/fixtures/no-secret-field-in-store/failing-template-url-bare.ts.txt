@@ -1,0 +1,13 @@
+// 09.7.1-T3 fixture (queue F16, plan 09.7.1 §8 S3, AC3): the BARE read that used to be invisible
+// in a `templateUrl` file — the interpolation reads a component field named like the value, with
+// no dot for the member check to see. Prose that merely mentions the word stays legal.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains; the template is `.html.txt` for the
+// reason failing-template-url.ts.txt gives.
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-secret-summary',
+  templateUrl: './failing-template-url-bare.html.txt',
+})
+export class SecretSummaryPanel {}

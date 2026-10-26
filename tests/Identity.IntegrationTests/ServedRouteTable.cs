@@ -833,6 +833,27 @@ internal static class RouteRequests
             new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/versions/{ctx.AuthoringVersionId}/restore",
                 IdempotencyKey: Key()));
 
+        // 13.1.1-T5: route 25, the import/export pair. The import probe is a dry run of a valid one-row JSON document —
+        // a body the readers refuse would answer 422 before the permission stage, so a denied probe could not observe
+        // the 403 it asserts — and a dry run writes nothing even for a granted caller.
+        Add("POST", "/v1/projects/{p}/authoring/import", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/import?format=json&dry_run=true",
+                new JsonObject
+                {
+                    ["format"] = "authoring-import",
+                    ["version"] = 1,
+                    ["rows"] = new JsonArray(new JsonObject
+                    {
+                        ["kind"] = "node",
+                        ["key"] = "n1",
+                        ["node_kind"] = "module",
+                        ["title"] = "probe module",
+                    }),
+                },
+                IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/export", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/export?format=csv"));
+
         // ---- Dev surface (absent from the spec; allowlisted in ServedRouteTable) ------------------------------
         Add("POST", "/v1/slice/run", ctx => new(HttpMethod.Post, "/v1/slice/run",
             new JsonObject { ["project_ref"] = ctx.ProjectId.ToString() }));

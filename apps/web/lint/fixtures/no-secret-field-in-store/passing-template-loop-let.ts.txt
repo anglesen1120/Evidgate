@@ -1,0 +1,24 @@
+// 09.7.1-T3 fixture (queue F16, QA defect R5, plan 09.7.1 §8 S3, AC3): a structural directive's
+// microsyntax DECLARES names. `*ngFor="let token of tokens"` declares a loop variable called
+// `token`; it reads nothing, so the rule used to report the declaration. The `let` and the
+// `index as name` alias of a `*` window are skipped now. A read of that variable in the BODY is a
+// different expression window and is still reported — the fix there is renaming the variable, not
+// a rule change (see the header's position 6). The rule reports nothing in this file.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-secret-loop-let',
+  template: `<p *ngFor="let token of tokens; trackBy: byId">{{ token.name }}</p>
+    <p *ngFor="let secret of secrets; index as token">{{ token.name }}</p>`,
+})
+export class SecretLoopLetPanel {}
+
+// The iterated expression of an `@for` is read even when its declaration is not, and the
+// declaration itself is never a read.
+@Component({
+  selector: 'app-secret-loop-header',
+  template: '@for (token of tokens(); track token.id) { <p>{{ token.last4 }}</p> }',
+})
+export class SecretLoopHeaderPanel {}

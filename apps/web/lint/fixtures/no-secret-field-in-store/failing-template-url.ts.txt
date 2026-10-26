@@ -1,0 +1,16 @@
+// 09.7.1-T3 fixture (queue F16, plan 09.7.1 §8 S3, AC3): the member read that used to be
+// invisible because it lives in a `templateUrl` file instead of an inline `template:` string.
+// `evidgate/no-secret-field-in-store` resolves the constant URL against this file's own
+// directory, reads the file and reports the member read ONCE, on the `templateUrl` property.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains, and the template it names is
+// `failing-template-url.html.txt` for the same reason: apps/web `.html` files are linted and
+// formatted by their own gates, so a tracked `.html` holding a planted violation would fail them
+// instead of this spec.
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-secret-references',
+  templateUrl: './failing-template-url.html.txt',
+})
+export class SecretReferencesPanel {}

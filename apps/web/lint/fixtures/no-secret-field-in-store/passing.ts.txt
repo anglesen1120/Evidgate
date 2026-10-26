@@ -55,12 +55,14 @@ export class IntegrationsStore extends SecretsStore {
   template: `<p>Rotate the key. Token is shown once.</p>
     <p>Copy it now. Secret values are hidden.</p>
     <p>Format, e.g. token — see the column.</p>
-    <p>{{ token }}</p>
+    <p>{{ tokenPrefix }}</p>
     <p>{{ summary?.tokenPrefix }}</p>`,
 })
 export class SecretsPanel {
   // A component field named like the value is only reported inside a `/Store$/` class; this one
   // is a panel, so the rule leaves it alone (its blind spot, documented in apps/web/README.md).
+  // A template that BINDS it would be reported as a bare read (queue F16) — this one binds the
+  // metadata property instead.
   readonly token = signal('');
 }
 

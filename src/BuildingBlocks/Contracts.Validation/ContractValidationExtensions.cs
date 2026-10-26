@@ -49,6 +49,14 @@ public static class ContractSchemaKeys
     /// jsonb value carried inside one, so it declares no <c>x-max-bytes</c>.
     /// </summary>
     public const string AuthoringSteps = "authoring-steps.v1";
+
+    /// <summary>
+    /// <c>contracts/schemas/authoring-import.v1.json</c> — the flat import/export row table of route 25
+    /// (13.1.1-T5): the JSON import body, and the document the CSV and XLSX readers build from their cells. Not a
+    /// request body for every format — CSV and XLSX arrive as their own bytes — so it declares no
+    /// <c>x-max-bytes</c>; the 5 MiB cap belongs to the route (plan 13.1.1 §8).
+    /// </summary>
+    public const string AuthoringImport = "authoring-import.v1";
 }
 
 /// <summary>

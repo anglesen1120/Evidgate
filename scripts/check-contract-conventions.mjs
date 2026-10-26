@@ -162,6 +162,10 @@ const EXPECTED = [
   ['/projects/{p}/authoring/checklist-items/{i}/restore', 'post', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/manual-cases/{m}/restore', 'post', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/versions/{v}/restore', 'post', 'authoring:write', 'v1'],
+  // 13.1.1-T5 (S84): route 25, the import/export pair. The import is the one authoring write whose body is a file
+  // (CSV/XLSX/JSON) and the export is a download, so both carry `x-version: v1` like the rest of 13.1.1 §5.
+  ['/projects/{p}/authoring/import', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/export', 'get', 'authoring:read', 'v1'],
 ];
 
 const byKey = new Map(ops.map((o) => [`${o.method} ${o.path}`, o]));

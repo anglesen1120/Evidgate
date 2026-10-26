@@ -3,6 +3,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { PolicyRevisionDto } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { MAX_DIFF_VALUE_CHARS } from './policy-diff';
 import { PolicyStore, type PublishResult } from './policy.store';
 import { PublishDialogComponent } from './publish-dialog.component';
 
@@ -481,6 +482,35 @@ describe('PublishDialogComponent', () => {
     edit(textarea, '{"flaky_budget":7}');
     await fixture.whenStable();
     expect(root.querySelector('[data-policy-error]')).toBeNull();
+  });
+  it('clips a conflict field label to the same budget as its values', async () => {
+    // D3: the label handed to the shared dialog is a JSON pointer, and a pointer carries a whole key
+    // of the body — so an unclipped one would print a body fragment as a heading, long after its two
+    // values were cut to the diff's budget.
+    const longKey = 'k'.repeat(MAX_DIFF_VALUE_CHARS * 2);
+    const headBody: PolicyRevisionDto = { ...revision, id: 'current-head', body: {} };
+    store.loadBody.mockResolvedValueOnce(revision).mockResolvedValueOnce(headBody);
+    store.publish.mockResolvedValue({
+      kind: 'conflict',
+      error: conflict,
+      currentRevisionId: 'current-head',
+    });
+    const { fixture, root, textarea, submit } = await render();
+    edit(textarea, JSON.stringify({ [longKey]: 1 }, null, 2));
+    submit.click();
+    const shared = await waitForConflict(fixture, root);
+
+    const heading = shared.querySelector('.field h3');
+    // Only the label's own text node: the heading also carries its "Not compared" marker.
+    const label = [...(heading?.childNodes ?? [])]
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .map((node) => node.textContent ?? '')
+      .join('')
+      .trim();
+    expect(`/${longKey}`.length).toBeGreaterThan(MAX_DIFF_VALUE_CHARS);
+    expect(label.length).toBeLessThanOrEqual(MAX_DIFF_VALUE_CHARS);
+    expect(label.endsWith('…')).toBe(true);
+    expect(label).not.toContain(longKey);
   });
   it('measures the compact body, so pretty-printing cannot push it over the cap', async () => {
     const { fixture, root, textarea, submit } = await render();

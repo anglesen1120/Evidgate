@@ -1,0 +1,42 @@
+// 09.7.1-T3 fixture (queue F16, plan 09.7.1 §8 S3, AC3): the `templateUrl` shapes the rule must
+// leave alone — a metadata-only file, a file that does not exist, a URL with a scheme (never
+// fetched), an absolute path (never read) and a URL that is not a constant string (never resolved).
+// The rule reports nothing in this file and never throws.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains; the template it names is `.html.txt`
+// for the reason failing-template-url.ts.txt gives.
+import { Component } from '@angular/core';
+
+// The file this component names exists and binds metadata only.
+@Component({
+  selector: 'app-secret-last-four',
+  templateUrl: './passing-template-url.html.txt',
+})
+export class SecretLastFourPanel {}
+
+// A missing file is skipped, not reported and not thrown: the component may be mid-edit.
+@Component({
+  selector: 'app-secret-missing',
+  templateUrl: './missing-template.html.txt',
+})
+export class SecretMissingPanel {}
+
+// A scheme is never followed, and an absolute path is never read.
+@Component({
+  selector: 'app-secret-remote',
+  templateUrl: 'https://templates.example.invalid/secrets.html',
+})
+export class SecretRemotePanel {}
+
+// Only a constant, relative URL is resolved.
+@Component({
+  selector: 'app-secret-computed',
+  templateUrl: this.templatePath,
+})
+export class SecretComputedPanel {}
+
+@Component({
+  selector: 'app-secret-literal',
+  templateUrl: `./${'passing-template-url'}.html.txt`,
+})
+export class SecretLiteralPanel {}

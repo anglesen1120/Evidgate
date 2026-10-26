@@ -1,0 +1,14 @@
+// 09.7.1-T3 fixture (queue F16, plan 09.7.1 §8 S3, AC3): the BARE property-binding value read in
+// a `templateUrl` file — the position the member-read check cannot see and the inline cases cover
+// only in a `.ts` template. The template holds this one read and nothing else, because one
+// property reports one name.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains; the template is `.html.txt` for the
+// reason failing-template-url.ts.txt gives.
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-secret-binding',
+  templateUrl: './failing-template-url-binding.html.txt',
+})
+export class SecretBindingPanel {}
