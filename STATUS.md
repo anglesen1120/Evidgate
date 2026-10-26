@@ -170,6 +170,7 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 13.x / all | status and consistency sync (docs only, no task built) | merged (#196, b6cace6) | STATUS.md rebuilt against merged work (163/655 tasks, 169.25/702.75 d), AGENTS.md, plan 00 §14/§15, plan 13 §4.4, features README and open-items made consistent; no task credit. |
 | 13.2.2 | 13.2.2-T1 | merged (#199, 0114df0) | GitHub review of per-role prompts: `docs/research/role-prompts-github-review.md` (46 repos, licence ledger, gap matrix, ideas not copied; copy nothing for the first seed set `[INFERENCE]`). Docs only; the Done-when test `MemoAndLicenceLedgerComplete` is not built (§6 row "Role-prompt memo check"). |
 | 04.1.1 | 04.1.1-T2 | merged (#201, 036c806) | `event_id` dedupe and `sequence_reused` mapping proven on real PostgreSQL; behaviour landed with T1, tests added (`IngestDedupeTests`). |
+| 03.2.1 | 03.2.1-T5 (T5.1 + T5.2) | landed with 0a01875/6a0a102 (no PR); tests added in the S97 PR (open, flipped to merged at close-out) | Suite revision diff, `GetSuiteQuery` ETag/`If-None-Match` 304 and `dry_run=true` preview were delivered with 03.2.1-T1–T4; `SuiteDiffTests` now proves determinism, cross-org/cross-suite `against` 404, ETag 304/200/stable/changes, and a dry-run that writes no row and needs the create permission. |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -321,7 +322,6 @@ Dependency-ready: **88 tasks / 98 raw person-days**, using the exact expanded ta
 | 02.3.2-T2 | S | Logout, session list/revoke, revoke-all |
 | 03.1.4-T1 | S | Decision + contract: optional `requirement_ref` |
 | 03.1.4-T2 | S | `platform`, `level`, `purpose` on suite/template |
-| 03.2.1-T5 | S | Suite revision diff/preview API + `ETag` on suite head |
 | 03.4.1-T1 | L | GitHub App registration + installation binding + `git_repo_binding`; typed `HttpClient` + RS256 app JWT |
 | 04.1.2-T1 | S | Per-project rate limit/quota with `Retry-After`; counters and spans |
 | 04.4.1-T1 | L | Per-producer mapping registry + pytest mapping |
