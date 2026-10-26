@@ -8,8 +8,8 @@ Updated 2026-10-26. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Develop: `74c3fa4` (PR #195); 187 first-parent PR merges into develop.
 - Open PRs (GitHub query 2026-10-26): #196 S93 status sync (this PR); #193 NuGet updates; #192 npm updates; #113 TypeScript 7; #112 npm updates; #111 Actions updates.
 - Highest migration: `0045_identity_session_hardening.sql`.
-- Fully landed on develop: 164/655 tasks; 170.25/702.75 raw person-days; remaining 491 tasks / 532.5 d. Strict merged-PR-only figure: 138 tasks / 145.75 d (the other 26 tasks / 24.5 d are Stage A direct commits on develop). Method: task ranges in merged rows expanded against plan_graph ids; a parent counts only when all its sub-rows landed.
-- By phase (done tasks / raw d): G1 121 / 133.25; G2 37 / 31; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop: 165/655 tasks; 171.25/702.75 raw person-days; remaining 490 tasks / 531.5 d. Strict merged-PR-only figure: 139 tasks / 146.75 d (the other 26 tasks / 24.5 d are Stage A direct commits on develop). Method: task ranges in merged rows expanded against plan_graph ids; a parent counts only when all its sub-rows landed.
+- By phase (done tasks / raw d): G1 122 / 134.25; G2 37 / 31; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in the S93 pass on 74c3fa4: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` exits 1 with 10 errors, all missing feature plans for 13.3.1, 13.4.1, 13.5.1, 13.5.2, 13.6.1, 13.7.1, 13.7.2, 13.8.1, 13.8.2, 13.9.1 (reported by the S93 coordinator check on develop 74c3fa4, not re-run in this docs-only pass; §6 row).
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -21,10 +21,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 164 | 170.25 |
-| Via merged PRs | 138 | 145.75 |
+| Fully landed on develop | 165 | 171.25 |
+| Via merged PRs | 139 | 146.75 |
 | Direct commits on develop, no PR | 26 | 24.5 |
-| Remaining | 491 | 532.5 |
+| Remaining | 490 | 531.5 |
 | Plan total | 655 | 702.75 |
 
 Five partial parents are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence (163); the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -36,7 +36,7 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 01 | 45 | 2 | 10 | 21 | 11 | 1 | 51.5 |
 | 02 | 28 | 0 | 7 | 18 | 3 | 0 | 27.5 |
 | 03 | 7 | 0 | 2 | 4 | 1 | 0 | 7 |
-| 04 | 21 | 0 | 7 | 11 | 3 | 0 | 20.5 |
+| 04 | 22 | 0 | 7 | 12 | 3 | 0 | 21.5 |
 | 05 | 16 | 0 | 4 | 8 | 4 | 0 | 18 |
 | 06 | 11 | 0 | 3 | 8 | 0 | 0 | 9.5 |
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
@@ -46,17 +46,17 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 11 | 5 | 1 | 2 | 1 | 1 | 0 | 4.25 |
 | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 164 | 3 | 43 | 89 | 28 | 1 | 170.25 |
+| TOTAL | 165 | 3 | 43 | 90 | 28 | 1 | 171.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 121 | 3 | 25 | 67 | 25 | 1 | 133.25 |
+| G1 | 122 | 3 | 25 | 68 | 25 | 1 | 134.25 |
 | G2 | 37 | 0 | 16 | 19 | 2 | 0 | 31 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 164 | 3 | 43 | 89 | 28 | 1 | 170.25 |
+| TOTAL | 165 | 3 | 43 | 90 | 28 | 1 | 171.25 |
 
 ### Landed task groups
 
@@ -169,7 +169,7 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 13.2.2 | plan change (docs only, no task built) | merged (#194, c866fdc) | Role-profile/prompt-library story and feature plan only; eight planned tasks are unbuilt. |
 | 13.x / all | status and consistency sync (docs only, no task built) | merged (#196, b6cace6) | STATUS.md rebuilt against merged work (163/655 tasks, 169.25/702.75 d), AGENTS.md, plan 00 §14/§15, plan 13 §4.4, features README and open-items made consistent; no task credit. |
 | 13.2.2 | 13.2.2-T1 | merged (#199, 0114df0) | GitHub review of per-role prompts: `docs/research/role-prompts-github-review.md` (46 repos, licence ledger, gap matrix, ideas not copied; copy nothing for the first seed set `[INFERENCE]`). Docs only; the Done-when test `MemoAndLicenceLedgerComplete` is not built (§6 row "Role-prompt memo check"). |
-| 04.1.1 | 04.1.1-T2 | in review (S96) | `event_id` dedupe and `sequence_reused` mapping proven on real PostgreSQL; behaviour landed with T1, tests added (`IngestDedupeTests`). |
+| 04.1.1 | 04.1.1-T2 | merged (#201, 036c806) | `event_id` dedupe and `sequence_reused` mapping proven on real PostgreSQL; behaviour landed with T1, tests added (`IngestDedupeTests`). |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -308,9 +308,9 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **89 tasks / 99 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 89 / 99 d is the figure used here.
+Dependency-ready: **88 tasks / 98 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 89 / 99 d is the figure used here.
 
-### G1: 44 tasks / 45 d
+### G1: 43 tasks / 44 d
 
 | Task | Size | Note |
 |---|---|---|
@@ -669,3 +669,4 @@ Dependency-ready: **89 tasks / 99 raw person-days**, using the exact expanded ta
 | Merge debt (#199) | Merged delivery; review/calibration debt for this PR is recorded in the receiving register, not an unmerged task. Merged under coordinator-review 6c after one send-back (jev round 1 acceptance 0.89, reviews_cover_final 0.69, clean_of_blockers 0.90, handed_over_not_dropped 0.73; round 2 0.95, 0.70, 0.93, 0.83). | receiver: `docs/phase-review.md` D-S95-M1, D-S95-Q1; hand-over Notes: `.omp/coordinator/merge-debt.md` |
 | Event ingest insert-order deadlock risk (04.1.1-T2 delivery, S96, #201) | Concurrent batches in one run whose `event_id`s overlap in opposite order can hit SQLSTATE 40P01 because the event insert runs in request order (pre-existing T1 code; unreproduced; the transaction rolls back and nothing is double counted). Fix idea: order the rows by `event_id` before the insert. | receiver: queue row F39 (STATUS §6 ingest-evidence hand-overs, 04/06 hand-over pass); hand-over Notes: `plans/features/04-ingestion-adapters/04.1.1-atomic-batch-ingest-with-per-event.md:405` |
 | All-duplicate resend still writes an `accepted=0` `event_batch` row (04.1.1-T2 delivery, S96, #201) | An all-duplicate resend inserts an `event_batch` row with `accepted = 0` and no outbox row; nothing caps the number of batch rows, so 04.1.2-T1 must decide whether such a batch counts toward the per-project quota. | receiver: 04.1.2-T1; hand-over Notes: `plans/features/04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md:191` |
+| Merge debt (#201) | Merged delivery under coordinator-review 6c after one send-back (jev r1: acceptance 0.83, reviews 0.88, clean 0.93, handed_over 0.64; r2: 0.79, 0.86, 0.91, 0.79); tests and docs only, no production change; a fresh batch runs 0 conflict read-backs (deviation recorded in the 04.1.1 plan Notes). Review debt is recorded in the receiving register, not an unmerged task. | `.omp/coordinator/merge-debt.md` (D-S96-M1); hand-over rows: the two 04.1.1-T2 rows directly above |
