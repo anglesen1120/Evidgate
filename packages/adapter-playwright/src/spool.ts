@@ -25,6 +25,14 @@
 // at rotation is remembered and retried at the next rotation/close instead of failing the
 // flush (F2).
 //
+// Notices (04.3.3-T2, plan 04.3.3 §10 "reporter spool leftovers" (c)/(e)): two advisory
+// conditions are queued ONCE per writer and handed out by `takeNotices()`, so a caller can
+// surface them before `close()` does — a `shards.json` write that failed at rotation (the
+// flush still succeeded, so nothing else would report it until `close`), and a record floor
+// read at open that is ahead of `last chunk sequence + 1` (a hand-edited or legacy file: the
+// resume is unchanged and still honours the floor, D-S56-Q9, the reporter only wants to know
+// it READ such a record). The queue never throws and never carries a path.
+//
 // Hardening: every spool open is `O_NOFOLLOW` and (outside Windows) `O_NONBLOCK`, and a
 // write target is `lstat`-refused unless it is a regular file, so a planted symlink, FIFO or
 // device can neither be followed nor block the writer (PS3, F5).
@@ -470,6 +478,19 @@ export interface SpoolWriterOptions {
   lock?: Omit<WriterLockOptions, 'now'>;
 }
 
+/** The advisory conditions {@link SpoolWriter.takeNotices} can report (04.3.3-T2). */
+export type SpoolNoticeCode = 'shards_write_failed' | 'shards_floor_ahead';
+
+/**
+ * One non-fatal spool condition, queued once per writer. `message` is safe to log or attach
+ * to an event: it names base names, numbers and errno codes only — never a full path, an
+ * error message body or any file content.
+ */
+export interface SpoolNotice {
+  code: SpoolNoticeCode;
+  message: string;
+}
+
 /**
  * Writers this process still holds a lock for. `close()` releases normally; an unclosed
  * writer (a Playwright process that exits without `onEnd`, or a test) is released by ONE
@@ -534,6 +555,9 @@ export class SpoolWriter {
   private nextSequence: number;
   /** The last `shards.json` write failure (F2: the record is advisory, the failure is kept). */
   private shardsFailure: Error | undefined;
+  /** Queued {@link SpoolNotice}s not yet taken; each code is queued at most once per writer. */
+  private notices: SpoolNotice[] = [];
+  private readonly noticedCodes = new Set<SpoolNoticeCode>();
   private chunkIndex: number;
   private chunkBytes = 0;
   private chunkLines = 0;
@@ -611,6 +635,18 @@ export class SpoolWriter {
       // this writer only buffered must not reach the record (a crash would then skip
       // sequences, which the CLI reader refuses as a hole in `spool_corrupt`).
       this.recordFloor = this.nextSequence;
+      // 04.3.3-T2 (hand-over (e)): a record ahead of `last chunk sequence + 1` is a floor the
+      // resume above honours (D-S56-Q9, unchanged), and no writer of ours mints such a file —
+      // so reading one means a hand-edited or legacy record. Say so once; the floor itself
+      // still wins.
+      if (record?.sequence_next !== undefined && record.sequence_next > this.durableNextSequence) {
+        const floor = String(record.sequence_next);
+        const highest = String(lastSequence);
+        this.pushNotice(
+          'shards_floor_ahead',
+          `shards.json floor ${floor} is ahead of the highest chunk sequence ${highest}`,
+        );
+      }
       this.openChunk(repairedChunk);
       // Restart detection (T84): any durable state means this producer ran before. The same
       // `producer_id` is kept (no suffix is ever minted); the restart is recorded so the
@@ -659,10 +695,32 @@ export class SpoolWriter {
    * record keeps going — the chunk scan is the resume authority — and the next rotation or
    * `close` retries; this seam says whether the last attempt failed, so a caller (or a test)
    * can tell a refused record from a written one. `close` still throws when its own retry
-   * fails, because that is the last chance to record the state.
+   * fails, because that is the last chance to record the state. Since 04.3.3-T2 the first
+   * such failure at rotation also surfaces as a `shards_write_failed` notice from
+   * {@link takeNotices}, so a caller need not poll this getter mid-run (a later successful
+   * write clears it, which would hide the failure from a caller that reads it late).
    */
   get lastShardsWriteFailure(): Error | undefined {
     return this.shardsFailure;
+  }
+
+  /**
+   * Returns the notices queued since the last call and clears them (04.3.3-T2). Each code is
+   * queued AT MOST ONCE per writer, and this method never throws — a notice is a best-effort
+   * report, so a caller may drain it at any point (boot, rotation, end of run) without
+   * affecting the spool.
+   */
+  takeNotices(): readonly SpoolNotice[] {
+    const notices = this.notices;
+    this.notices = [];
+    return notices;
+  }
+
+  /** Queues one notice per code; a repeat of an already-queued code is dropped (04.3.3-T2). */
+  private pushNotice(code: SpoolNoticeCode, message: string): void {
+    if (this.noticedCodes.has(code)) return;
+    this.noticedCodes.add(code);
+    this.notices.push({ code, message });
   }
 
   /** Assigns the next sequence, buffers the envelope, and flushes when the batch is full. */
@@ -905,14 +963,26 @@ export class SpoolWriter {
     // ENOSPC/EIO while writing it must never fail the flush that just made the batch
     // durable. The failure is remembered (`lastShardsWriteFailure`) and retried at the next
     // write point (the next rotation or close), which re-derives the value from live
-    // counters, so nothing has to be replayed. An identity refusal is a client bug and is
-    // still raised: `EvidgateShardRecordMismatchError` comes from the constructor's record
-    // READ, never from this write, and this catch never covers it.
+    // counters, so nothing has to be replayed; the FIRST such failure also queues a
+    // `shards_write_failed` notice (04.3.3-T2), because this path has no other reporter. An
+    // identity refusal is a client bug and is still raised:
+    // `EvidgateShardRecordMismatchError` comes from the constructor's record READ, never from
+    // this write, and this catch never covers it.
     try {
       this.writeShardsRecord();
     } catch (error) {
       if (error instanceof EvidgateShardRecordMismatchError) throw error;
-      this.shardsFailure = error instanceof Error ? error : new Error(String(error));
+      const failure = error instanceof Error ? error : new Error(String(error));
+      this.shardsFailure = failure;
+      // 04.3.3-T2 (hand-over (c)): the flush above already succeeded, so this failure has no
+      // other reporter until `close` — where it arrives as a thrown error, not as a reason.
+      // Queue it once (a second failed rotation adds nothing) and name the code only: the
+      // message travels to the caller, so it must never carry the record path. A `code` that
+      // is not a short bare token (or no code at all) falls back to the error class name.
+      const errno = (failure as NodeJS.ErrnoException).code;
+      const reason =
+        typeof errno === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(errno) ? errno : failure.name;
+      this.pushNotice('shards_write_failed', `shards.json write failed at rotation (${reason})`);
     }
   }
 

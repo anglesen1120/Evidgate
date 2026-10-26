@@ -90,9 +90,34 @@ describe('capability document', () => {
       protocol: { major: 1, minor: 0 },
       engine: { family: 'playwright', version: '1.63.0' },
       platforms: ['linux-x64'],
-      supports: { discovery: false, step_events: true, retry: true, cancel: false },
+      supports: {
+        discovery: false,
+        step_events: true,
+        retry: true,
+        cancel: false,
+        capture_control: false,
+      },
       mode: 'full',
     });
+  });
+
+  it('04.3.3-T2 / T97: supports.capture_control is declared false, never absent', () => {
+    // An ABSENT flag means the run-create configuration document must be honoured
+    // (capability.v1.json, contracts/adapter/README.md), which this reporter does not do;
+    // `false` is what makes the server label the run `capture_uncontrolled` (T97).
+    for (const mode of ['full', 'ingest_only'] as const) {
+      for (const stepEvents of [true, false]) {
+        const document = buildCapabilityDocument({
+          engineVersion: '1.63.0',
+          stepEvents,
+          mode,
+          platforms: ['linux-x64'],
+        });
+        expect(document.supports.capture_control).toBe(false);
+        expect(Object.hasOwn(document.supports, 'capture_control')).toBe(true);
+        expect(validateCapability(document), JSON.stringify(validateCapability.errors)).toBe(true);
+      }
+    }
   });
 
   it('AC3: the first envelope is the capability carrier at sequence 1', () => {

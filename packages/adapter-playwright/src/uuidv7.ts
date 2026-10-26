@@ -1,6 +1,8 @@
 // 04.3.1-T1.1: hand-written UUIDv7 (RFC 9562) for `event_id` (AC4). The repo has no
 // shared TypeScript helper — packages/cli uses node:crypto.randomUUID (a v4) — and the
-// reporter must not import @evidgate/cli at runtime, so the 20 lines live here. The
+// reporter is a standalone, dependency-light package (04.3.3-T2: the one runtime load of
+// @evidgate/cli is the single lazy `import()` in `attach.ts`, and the dependency stays
+// one-way — packages/cli never imports this adapter), so the 20 lines live here. The
 // 48-bit big-endian millisecond timestamp keeps ids roughly sortable; the remaining 74
 // bits are random.
 import { randomBytes } from 'node:crypto';

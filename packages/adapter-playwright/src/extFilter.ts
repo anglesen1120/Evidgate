@@ -23,6 +23,8 @@
 //   xfail      — true when expectedStatus is "failed" and the attempt passed or failed (AC6)
 //   error_summary — first line of the first error message, ANSI-stripped, ≤ 256 chars;
 //              never a stack line (04.3.2-T2.1)
+//   attachments — the attempt's attachment records (base name, kind, sensitive, outcome,
+//              code, artifact id) on a test.finished that carried attachments (04.3.3-T2.2)
 export const EXT_ALLOWED_KEYS = [
   'schema',
   'title',
@@ -42,6 +44,7 @@ export const EXT_ALLOWED_KEYS = [
   'skip_reason',
   'xfail',
   'error_summary',
+  'attachments',
 ] as const;
 
 export type ExtAllowedKey = (typeof EXT_ALLOWED_KEYS)[number];

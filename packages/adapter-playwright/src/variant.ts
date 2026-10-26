@@ -5,8 +5,10 @@
 //   src/BuildingBlocks/SharedKernel/Security/SecretShape.cs (KeyLooksSecret/ValueLooksSecret/Entropy)
 //   src/BuildingBlocks/Canonicalization/CanonicalHash.cs + JsonCanonicalizer.cs (RFC 8785 digest)
 //
-// The reporter must not import @evidgate/cli at runtime (the packages/adapter-playwright/src/uuidv7.ts
-// precedent), so the pinned `canonicalize` 5.1.0 package is used directly — exactly the library
+// The reporter keeps no runtime import of @evidgate/cli here (the packages/adapter-playwright/src/uuidv7.ts
+// precedent): 04.3.3-T2 puts the package's one runtime load of the CLI in a single lazy
+// `import()` in `attach.ts`, and the dependency stays one-way — packages/cli never imports this
+// adapter. So the pinned `canonicalize` 5.1.0 package is used directly — exactly the library
 // packages/cli/src/canonical.ts wraps — and the `sha256:<lowercase hex>` wrapper is taken over its
 // output. `fixtures/variant-hash/vectors.json` is the shared corpus the .NET suite
 // (tests/Tenancy.IntegrationTests/VariantGoldenVectorTests.cs) asserts with the same expectations.

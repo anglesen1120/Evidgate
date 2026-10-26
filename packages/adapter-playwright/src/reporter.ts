@@ -33,6 +33,21 @@
 // failure, instead of at construction. In a `merge-reports` replay the reporter emits
 // nothing: each event already reached the spool under its own shard's producer id and
 // sequence, and the replay exposes no per-event shard identity (AC3).
+//
+// 04.3.3-T2.2: attachments. When `result.attachments` is EMPTY the callback is the 04.3.1
+// path unchanged: one `test.finished`, its steps, one flush, all synchronous. When it is
+// not, `attach.ts` uploads them (AC5–AC7) and this file HOLDS the drafted batch until every
+// upload of that attempt settled, then appends `test.finished` (with `artifact_ids`) and its
+// steps in one go; batches are appended in test-end order, so sequences stay contiguous.
+// Warnings (`attachment_*`, `shards_*`) go through the capped `warn()` path. `onEnd`
+// therefore has two shapes: with nothing pending it is the synchronous callback of 04.3.1
+// (a buffered failure still THROWS synchronously); with uploads pending it returns a Promise
+// that drains them under `attachment_drain_deadline_ms` (default 120 s, NFR-04-1), appends
+// the held batches, emits one `attachment_drain_deadline` warning, then runs the same end
+// sequence, where a buffered failure surfaces as a rejection instead. A merge-replay or a
+// reporter without a writer never touches attachments at all.
+import { delimiter } from 'node:path';
+
 import type {
   FullConfig,
   FullResult,
@@ -43,7 +58,16 @@ import type {
   TestStep,
 } from '@playwright/test/reporter';
 
+import {
+  AttachmentPipeline,
+  type AttachmentRecord,
+  type AttachmentWarning,
+  type CliModule,
+} from './attach.js';
+import type { PlaywrightAttachment } from './attachMap.js';
+import { defaultAttachmentRoots } from './attachPaths.js';
 import { buildCapabilityDocument } from './capability.js';
+import { DEFAULT_DRAIN_DEADLINE_MS } from './drain.js';
 import {
   buildEnvelope,
   EXT_SCHEMA,
@@ -115,6 +139,22 @@ export interface EvidgateReporterOptions {
    * over the stale lock without killing a real process.
    */
   lock?: SpoolWriterOptions['lock'];
+  /**
+   * 04.3.3-T2.2: extra allow-listed attachment directories (AC6), appended after the
+   * Playwright output directories and `<rootDir>/test-results`. `EVIDGATE_ATTACHMENT_DIRS`
+   * (path-delimiter separated) adds to this list; both are read once in the constructor.
+   */
+  attachment_dirs?: string[];
+  /**
+   * 04.3.3-T2.2: the `onEnd` attachment drain deadline in milliseconds (NFR-04-1). Default
+   * {@link DEFAULT_DRAIN_DEADLINE_MS} (120 s); `onEnd` never blocks past it.
+   */
+  attachment_drain_deadline_ms?: number;
+  /**
+   * Test-only seam (04.3.3-T2.2): the ONE lazy `@evidgate/cli` load the attachment pipeline
+   * performs. Defaults to the real dynamic import; a spec injects a fake module surface.
+   */
+  importCli?: () => Promise<CliModule>;
 }
 
 interface EnvelopeDraft {
@@ -124,6 +164,19 @@ interface EnvelopeDraft {
   ext: ExtPayload;
   status?: string;
   duration_ms?: number;
+  /** 04.3.3-T2.2: the artifacts a `test.finished` references; absent unless non-empty. */
+  artifact_ids?: string[];
+}
+
+/** Everything `test.finished` + its steps need, held until the attempt's uploads settled. */
+interface AttemptDraft {
+  test: TestCase;
+  result: TestResult;
+  identity: Identity;
+  mapping: StatusMapping;
+  attemptNo: number;
+  artifactIds?: readonly string[];
+  records?: readonly AttachmentRecord[];
 }
 
 export class EvidgateReporter implements Reporter {
@@ -167,6 +220,21 @@ export class EvidgateReporter implements Reporter {
   private suppressedWarnings = 0;
   private bufferedError: Error | null = null;
   private secretKeysDroppedCount = 0;
+  /** Extra attachment roots: the option plus `EVIDGATE_ATTACHMENT_DIRS`, read once here. */
+  private readonly attachmentDirs: readonly string[];
+  private readonly attachmentDrainDeadlineMs: number;
+  private readonly importCli: (() => Promise<CliModule>) | undefined;
+  /**
+   * The attachment pipeline of this producer (04.3.3-T2.2), built at `onBegin` because the
+   * allow-list needs the resolved config. Undefined in a merge-replay or a refused `onBegin`,
+   * which is exactly when attachments must not be touched.
+   */
+  private pipeline: AttachmentPipeline | undefined;
+  /** Serialises the appends of held batches so they land in test-end order (contiguous). */
+  private attachChain: Promise<void> = Promise.resolve();
+  /** Attempts whose uploads are still running or whose batch has not been appended yet. */
+  private attachmentsQueued = 0;
+  private unavailableWarned = false;
 
   constructor(options: EvidgateReporterOptions = {}) {
     const spoolDir = options.spool_dir ?? process.env.EVIDGATE_SPOOL_DIR;
@@ -222,6 +290,23 @@ export class EvidgateReporter implements Reporter {
           }
         : undefined;
     this.allowUnmapped = process.env.EVIDGATE_ALLOW_UNMAPPED === '1';
+
+    // 04.3.3-T2.2: the extra attachment roots are read once here, with every other env value.
+    // The path delimiter is the platform's (`:` on POSIX), so a Windows CI job splits its own
+    // way; an empty segment is dropped rather than resolving to the root directory.
+    const envDirs = process.env.EVIDGATE_ATTACHMENT_DIRS;
+    this.attachmentDirs = [
+      ...(options.attachment_dirs ?? []),
+      ...(envDirs === undefined || envDirs.length === 0
+        ? []
+        : envDirs
+            .split(delimiter)
+            .map((dir) => dir.trim())
+            .filter((dir) => dir.length > 0)),
+    ];
+    this.attachmentDrainDeadlineMs =
+      options.attachment_drain_deadline_ms ?? DEFAULT_DRAIN_DEADLINE_MS;
+    this.importCli = options.importCli;
   }
 
   /** How many secret-looking `ext` keys were dropped (04 §6, S3). */
@@ -264,6 +349,22 @@ export class EvidgateReporter implements Reporter {
         producerId: producer.producer_id,
         ...(producer.shard === undefined ? {} : { shard: producer.shard }),
         ...(this.writerLock === undefined ? {} : { lock: this.writerLock }),
+      });
+
+      // 04.3.3-T2.2: the attachment pipeline (AC4–AC7). Its allow-list is the one the CLI's
+      // own upload guard receives (AC6): every Playwright `outputDir`, `<rootDir>/test-results`
+      // and the configured extra directories, resolved once here.
+      const rootDir = config?.rootDir ?? process.cwd();
+      this.pipeline = new AttachmentPipeline({
+        roots: defaultAttachmentRoots({
+          outputDirs: (config?.projects ?? []).map((project) => project.outputDir),
+          rootDir,
+          extraDirs: this.attachmentDirs,
+        }),
+        cwd: rootDir,
+        deadlineMs: this.attachmentDrainDeadlineMs,
+        env: process.env,
+        ...(this.importCli === undefined ? {} : { importCli: this.importCli }),
       });
 
       const testFiles = new Set<string>();
@@ -313,6 +414,9 @@ export class EvidgateReporter implements Reporter {
       // callback's envelopes instead of the whole suite (task §5/§6). 64 stays the
       // upper bound on how many envelopes a single flush carries.
       this.writer.flush();
+      // 04.3.3-T2: the writer's once-per-run notices (a `shards.json` floor ahead of the
+      // chunks, a record write failure at rotation) become `run.log` warnings.
+      this.emitSpoolNotices();
     });
   }
 
@@ -346,47 +450,150 @@ export class EvidgateReporter implements Reporter {
         annotations: [...(test.annotations ?? []), ...(result.annotations ?? [])],
         errors: result.errors,
       });
-      writer.append(
-        this.draft({
-          type: 'test.finished',
-          attempt_no: attemptNo,
-          execution_key: identity.execution_key,
-          status: mapping.raw,
-          ext: this.testExt(test, result, identity, mapping),
-          ...durationField(result.duration),
-        }),
-      );
-      if (mapping.unknown === true && !this.unknownStatusesWarned.has(mapping.raw)) {
-        // T2.2: a status this adapter does not know is reported as `error`, never guessed.
-        // CR-2: one warning per distinct raw status, so a future status shared by many
-        // tests cannot spend the capped warning budget that identity warnings need; every
-        // attempt still carries `ext.normalized: 'error'`. SEC-3: the raw status is made
-        // printable inside the message; the envelope `status` stays verbatim.
-        this.unknownStatusesWarned.add(mapping.raw);
-        const location = locationOf(test);
+      const attachments = result.attachments ?? [];
+      const attempt: AttemptDraft = { test, result, identity, mapping, attemptNo };
+
+      // 04.3.3-T2.2: a test without attachments keeps the 04.3.1 path byte-identically —
+      // same drafts, same flush, still entirely synchronous.
+      if (attachments.length === 0) {
+        this.appendAttempt(writer, attempt);
+        this.emitSpoolNotices();
+        return;
+      }
+
+      const pipeline = this.pipeline;
+      const producerId = this.producerId;
+      if (pipeline === undefined || producerId === undefined) {
+        // A merge-replay or a refused `onBegin` never reaches here; this is the defensive
+        // branch, and the batch is emitted exactly as before with one run-level warning.
+        this.warnUnavailable();
+        this.appendAttempt(writer, attempt);
+        this.emitSpoolNotices();
+        return;
+      }
+
+      if (identity.execution_key === PLACEHOLDER_EXECUTION_KEY) {
+        // T17: the server scopes an artifact to the planned `(execution_key, attempt_no)`,
+        // and the placeholder names no planned attempt — so nothing is uploaded (one warning
+        // per test) and the result is emitted at once, without `artifact_ids`.
         this.warn({
-          code: 'unknown_status',
-          message: `unknown Playwright status '${printable(mapping.raw)}' for ${location}; reported as error`,
-          path: location,
+          code: 'attachment_no_execution_key',
+          message:
+            `${String(attachments.length)} attachment(s) skipped: this attempt has no planned ` +
+            'execution key (the identity resolves to the placeholder)',
+          path: locationOf(test),
+          count: attachments.length,
         });
+        this.appendAttempt(writer, attempt);
+        this.emitSpoolNotices();
+        return;
       }
-      if (this.stepsEnabled) {
-        // PS6: walk the step tree lazily, appending per step, so the working set stays
-        // at the flush threshold instead of materialising a step array and a draft array.
-        for (const step of walkSteps(result.steps)) {
-          writer.append(
-            this.draft({
-              type: 'test.step',
-              attempt_no: attemptNo,
-              execution_key: identity.execution_key,
-              ext: this.stepExt(step, identity),
-              ...durationField(step.duration),
-            }),
-          );
-        }
+
+      this.holdAttempt(
+        writer,
+        attempt,
+        attachments,
+        hasSensitiveAnnotation(test, result),
+        producerId,
+      );
+    });
+  }
+
+  /**
+   * One `test.finished` (with `artifact_ids` and `ext.attachments` when the attempt uploaded),
+   * the status warning, every step, and one flush — the batch the 04.3.1 callback emitted, now
+   * shared by the synchronous and the held path so they can never drift.
+   */
+  private appendAttempt(writer: SpoolWriter, attempt: AttemptDraft): void {
+    const { test, result, identity, mapping, attemptNo } = attempt;
+    // Only completed uploads, deduplicated, in attachment order: the id list must never
+    // reference an artifact the server did not confirm (AC5).
+    const artifactIds = [...new Set(attempt.artifactIds ?? [])];
+    writer.append(
+      this.draft({
+        type: 'test.finished',
+        attempt_no: attemptNo,
+        execution_key: identity.execution_key,
+        status: mapping.raw,
+        ext: this.testExt(test, result, identity, mapping, attempt.records),
+        ...durationField(result.duration),
+        ...(artifactIds.length === 0 ? {} : { artifact_ids: artifactIds }),
+      }),
+    );
+    if (mapping.unknown === true && !this.unknownStatusesWarned.has(mapping.raw)) {
+      // T2.2: a status this adapter does not know is reported as `error`, never guessed.
+      // CR-2: one warning per distinct raw status, so a future status shared by many
+      // tests cannot spend the capped warning budget that identity warnings need; every
+      // attempt still carries `ext.normalized: 'error'`. SEC-3: the raw status is made
+      // printable inside the message; the envelope `status` stays verbatim.
+      this.unknownStatusesWarned.add(mapping.raw);
+      const location = locationOf(test);
+      this.warn({
+        code: 'unknown_status',
+        message: `unknown Playwright status '${printable(mapping.raw)}' for ${location}; reported as error`,
+        path: location,
+      });
+    }
+    if (this.stepsEnabled) {
+      // PS6: walk the step tree lazily, appending per step, so the working set stays
+      // at the flush threshold instead of materialising a step array and a draft array.
+      for (const step of walkSteps(result.steps)) {
+        writer.append(
+          this.draft({
+            type: 'test.step',
+            attempt_no: attemptNo,
+            execution_key: identity.execution_key,
+            ext: this.stepExt(step, identity),
+            ...durationField(step.duration),
+          }),
+        );
       }
-      // CR2: one durable batch per test.
-      writer.flush();
+    }
+    // CR2: one durable batch per test.
+    writer.flush();
+  }
+
+  /**
+   * Starts the attempt's uploads NOW (the drain keeps at most two in flight, across tests) and
+   * holds its drafts until they settled. Only the append is serialised, through
+   * {@link attachChain}, so a later test can never overtake an earlier one and every
+   * `sequence` stays assigned at append time, in test-end order.
+   */
+  private holdAttempt(
+    writer: SpoolWriter,
+    attempt: AttemptDraft,
+    attachments: readonly PlaywrightAttachment[],
+    sensitiveAnnotated: boolean,
+    producerId: string,
+  ): void {
+    const pipeline = this.pipeline;
+    if (pipeline === undefined) return;
+    const work = pipeline.process({
+      attachments,
+      sensitiveAnnotated,
+      runId: this.runId,
+      producerId,
+      executionKey: attempt.identity.execution_key,
+      attemptNo: attempt.attemptNo,
+    });
+    this.attachmentsQueued += 1;
+    this.attachChain = this.attachChain.then(async () => {
+      try {
+        const outcome = await work;
+        for (const warning of outcome.warnings) this.warn(warning);
+        this.appendAttempt(writer, {
+          ...attempt,
+          artifactIds: outcome.artifactIds,
+          records: outcome.records,
+        });
+        this.emitSpoolNotices();
+      } catch (error) {
+        // A spool failure while appending a held batch is buffered like every other callback
+        // failure: `onEnd` rethrows it (synchronously when nothing else is pending).
+        this.bufferedError ??= toError(error);
+      } finally {
+        this.attachmentsQueued -= 1;
+      }
     });
   }
 
@@ -398,16 +605,66 @@ export class EvidgateReporter implements Reporter {
    * (node_modules/playwright/lib/runner/index.js:1644). The override applies only to a
    * `passed` run — an `interrupted`/`timedout` run keeps its own status (C3). The gate
    * also writes one `[evidgate]` line to stderr, naming the per-cause counts, so a CI log
-   * explains the failure. A buffered write failure still throws synchronously.
+   * explains the failure.
    *
-   * The declared return type is `void`, not the interface's
-   * `Promise<{status?} | undefined | void> | void`: the reporter must keep throwing
-   * synchronously from `onEnd` (a buffered spool failure), and a Promise-typed return
-   * would turn every synchronous call site into a floating promise. The status object is
-   * returned regardless — TypeScript erases the assertion, and Playwright awaits whatever
-   * comes back (`node_modules/playwright/lib/runner/index.js`).
+   * 04.3.3-T2.2 split: with no attachment work pending this is called synchronously from
+   * `onEnd`, so a buffered spool failure still THROWS synchronously; with uploads pending it
+   * is called from {@link endAfterDrain} and the same failure surfaces as a rejection, which
+   * Playwright awaits. The declaration stays `void` (Playwright's own interface allows a
+   * Promise, and it awaits whatever is returned), so both arms return their real value behind
+   * a `void` assertion: the synchronous one keeps its synchronous throw and the identity-gate
+   * object, and a Promise-typed declaration would turn every existing bare
+   * `reporter.onEnd(...)` call site into a floating promise (see the arm comments).
    */
   onEnd(result: FullResult): void {
+    // 04.3.3-T2.2: nothing pending → the 04.3.1 callback, unchanged and synchronous.
+    if (this.attachmentsQueued === 0 && !(this.pipeline?.hasPending ?? false)) {
+      // The identity-gate object is returned at runtime behind the `void` arm, exactly as the
+      // pre-split signature documented: Playwright awaits whatever comes back, and a
+      // Promise-typed declaration would make every synchronous call site a floating promise.
+      return this.finishRun(result) as unknown as void;
+    }
+    // Same idiom for the async arm: Playwright awaits the returned Promise, while the
+    // declared `void` keeps every existing bare `reporter.onEnd(...)` call site legal.
+    return this.endAfterDrain(result) as unknown as void;
+  }
+
+  /**
+   * The asynchronous `onEnd` (04.3.3-T2.2): drains the attachment pipeline under the deadline,
+   * appends the held batches, emits ONE `attachment_drain_deadline` warning naming how many
+   * attempts lost their `artifact_ids`, then runs the synchronous end sequence. Never blocks
+   * past `attachment_drain_deadline_ms`; a buffered failure becomes a rejection.
+   */
+  private async endAfterDrain(result: FullResult): Promise<{ status: 'failed' } | undefined> {
+    try {
+      const pipeline = this.pipeline;
+      const drained =
+        pipeline === undefined
+          ? { timedOut: false, abandoned: 0, deadlineAttempts: 0 }
+          : await pipeline.finish();
+      // Every held batch is appended before the end markers: a late test must never land
+      // after `run_end` (the server would read it as a post-run event).
+      await this.attachChain;
+      if (drained.deadlineAttempts > 0 || drained.abandoned > 0) {
+        this.warn({
+          code: 'attachment_drain_deadline',
+          message:
+            `the attachment drain deadline (${String(this.attachmentDrainDeadlineMs)} ms) ` +
+            `abandoned ${String(drained.deadlineAttempts)} attempt(s); their test.finished ` +
+            'envelopes carry no artifact_ids',
+          count: drained.deadlineAttempts,
+        });
+      }
+      this.emitSpoolNotices();
+    } catch (error) {
+      // The drain never rejects; an append failure is already buffered by `holdAttempt`.
+      this.bufferedError ??= toError(error);
+    }
+    return this.finishRun(result);
+  }
+
+  /** The end sequence itself: summary, `run_end`, close, identity gate, buffered rethrow. */
+  private finishRun(result: FullResult): { status: 'failed' } | undefined {
     const writer = this.writer;
     if (writer !== undefined) {
       this.guard(() => {
@@ -459,7 +716,7 @@ export class EvidgateReporter implements Reporter {
     const failure = this.bufferedError ?? closeError;
     if (failure !== null) throw failure;
     if (gateTripped && result.status === 'passed') {
-      return { status: 'failed' } as unknown as void;
+      return { status: 'failed' };
     }
     return undefined;
   }
@@ -580,8 +837,12 @@ export class EvidgateReporter implements Reporter {
     );
   }
 
-  /** Emits one warning envelope, up to the cap; the overflow is counted, not emitted. */
-  private warn(warning: WarningPayload): void {
+  /**
+   * Emits one warning envelope, up to the cap; the overflow is counted, not emitted. The
+   * payload is either an identity warning (`WarningPayload`) or an attachment/spool warning
+   * (`AttachmentWarning`, 04.3.3-T2.2) — both are `ext.warn` objects with the same shape.
+   */
+  private warn(warning: WarningPayload | AttachmentWarning): void {
     if (this.warningCount >= MAX_WARNING_ENVELOPES) {
       this.suppressedWarnings += 1;
       return;
@@ -590,7 +851,7 @@ export class EvidgateReporter implements Reporter {
     this.emitWarning(warning);
   }
 
-  private emitWarning(warning: WarningPayload): void {
+  private emitWarning(warning: WarningPayload | AttachmentWarning): void {
     const writer = this.activeWriter();
     if (writer === undefined) return;
     writer.append(
@@ -603,6 +864,30 @@ export class EvidgateReporter implements Reporter {
     );
   }
 
+  /** ONE `attachments_unavailable` warning per run: no pipeline, so nothing is uploaded. */
+  private warnUnavailable(): void {
+    if (this.unavailableWarned) return;
+    this.unavailableWarned = true;
+    this.warn({
+      code: 'attachments_unavailable',
+      message: 'the attachment pipeline is unavailable for this run; attachments are skipped',
+    });
+  }
+
+  /**
+   * Turns the writer's once-per-writer notices into `run.log` warnings (04.3.3-T2, handed
+   * over from T1). `takeNotices()` is a drain — it clears what it returns — and the writer
+   * already guarantees one notice per code per run, so calling this after every flush that can
+   * rotate cannot duplicate a warning. The messages are path-free by construction.
+   */
+  private emitSpoolNotices(): void {
+    const writer = this.activeWriter();
+    if (writer === undefined) return;
+    for (const notice of writer.takeNotices()) {
+      this.warn({ code: notice.code, message: notice.message });
+    }
+  }
+
   /**
    * The `ext` of a test envelope. The four status keys are set explicitly — `undefined`
    * (absent) on `test.started` — after the Playwright members, so a same-named member of
@@ -613,6 +898,7 @@ export class EvidgateReporter implements Reporter {
     result: TestResult,
     identity: Identity,
     mapping?: StatusMapping,
+    records?: readonly AttachmentRecord[],
   ): ExtPayload {
     return this.applyExtFilter({
       ...ownMembers(test),
@@ -629,6 +915,10 @@ export class EvidgateReporter implements Reporter {
       skip_reason: mapping?.skip_reason,
       xfail: mapping?.xfail,
       error_summary: mapping?.error_summary,
+      // 04.3.3-T2.2: base names, kinds, outcomes and artifact ids only — the allow-list
+      // (`extFilter.ts`) is what lets the member through, and the record shape carries no
+      // path, no URL and no token.
+      attachments: records,
     });
   }
 
@@ -721,6 +1011,18 @@ function* walkSteps(steps: readonly TestStep[]): Generator<TestStep> {
     yield step;
     yield* walkSteps(step.steps);
   }
+}
+
+/**
+ * AC7: the suite (test) or the case (result) opted in through the `evidgate.sensitive`
+ * annotation. Presence is the opt-in, whatever value the annotation carries — a suite that
+ * annotated the case at all meant to mark it sensitive, and the flag is never downgraded.
+ */
+function hasSensitiveAnnotation(test: TestCase, result: TestResult): boolean {
+  for (const annotation of [...(test.annotations ?? []), ...(result.annotations ?? [])]) {
+    if (annotation.type === 'evidgate.sensitive') return true;
+  }
+  return false;
 }
 
 function toError(error: unknown): Error {
