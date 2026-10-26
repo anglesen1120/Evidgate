@@ -24,7 +24,10 @@
 //   error_summary — first line of the first error message, ANSI-stripped, ≤ 256 chars;
 //              never a stack line (04.3.2-T2.1)
 //   attachments — the attempt's attachment records (base name, kind, sensitive, outcome,
-//              code, artifact id) on a test.finished that carried attachments (04.3.3-T2.2)
+//              code, artifact id) on a test.finished that carried attachments (04.3.3-T2.2).
+//              Set ONLY by the reporter's `testExt` from our own `AttachmentRecord` rows, and
+//              never from a Playwright member: `stepExt` deletes a raw `TestStep.attachments`
+//              (its `{path, body}` would put an absolute path and the bytes into the spool).
 export const EXT_ALLOWED_KEYS = [
   'schema',
   'title',

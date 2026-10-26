@@ -13,12 +13,16 @@
 // Three properties this module fixes, each asserted by `drain.test.ts`:
 // - bounded concurrency: at most two uploads in flight, whatever the caller passes (the
 //   cap is clamped into [1, 2], so a misconfigured option cannot open a hundred sockets);
-// - FIFO start order: a later attachment never overtakes an earlier one, so the trace the
-//   reporter queued first is not left unstarted while a screenshot runs;
-// - the deadline is a hard stop: at `deadlineMs` the shared `AbortSignal` aborts, every
-//   running AND queued job resolves `{status:'deadline'}`, a queued job is never started,
-//   and a job whose real promise settles later is ignored (its rejection is swallowed).
-//   A late rejection escaping here would fail an otherwise green Playwright run.
+// - FIFO START order: a later attachment's job is never started before an earlier one's, so
+//   the trace the reporter queued first is not left unstarted while a screenshot runs. The
+//   requests themselves may still interleave — a job's own first awaits (the path guard, the
+//   uploader load) decide when its PUT goes out — so this module promises start order only;
+// - the deadline stops the WAIT, it does not cancel work in flight: at `deadlineMs` the
+//   shared `AbortSignal` aborts, every running AND queued job resolves `{status:'deadline'}`,
+//   a queued job is never started, and a job whose real promise settles later is ignored (its
+//   rejection is swallowed). A job that already made its request is ABANDONED at the next
+//   checkpoint that reads the signal, not cancelled mid-request. A late rejection escaping
+//   here would fail an otherwise green Playwright run.
 //
 // A leaf module on purpose: it imports no reporter file and no `@evidgate/cli` type, so it
 // can bound `uploadFile()` and nothing else. `timers`/`now` are injected seams, so the
@@ -47,7 +51,11 @@ export type JobOutcome<T> =
 
 /** What a job may read: the deadline signal and the time it has left. */
 export interface DrainJobContext {
-  /** Aborted at the drain deadline, so a streaming upload can stop early. */
+  /**
+   * Aborted at the drain deadline. Read it at the job's own checkpoints: the deadline stops
+   * the wait, so a request already in flight is abandoned at the next checkpoint, never
+   * cancelled mid-request.
+   */
   readonly signal: AbortSignal;
   /** Milliseconds until the deadline; `Infinity` before `finish()` was called. */
   remainingMs(): number;
@@ -140,7 +148,8 @@ function clampDeadline(value: number | undefined): number {
 }
 
 /**
- * A bounded-concurrency FIFO upload queue with one shared deadline (04.3.3-T2.2).
+ * A bounded-concurrency upload queue with FIFO START order and one shared deadline
+ * (04.3.3-T2.2). Jobs start in submission order; their requests may interleave.
  *
  * Lifecycle: `submit()` any number of times, then `finish()` once, near `onEnd`. Every
  * submitted job resolves to a {@link JobOutcome}; nothing here ever rejects.
@@ -313,8 +322,9 @@ export class UploadDrain {
   }
 
   /**
-   * The deadline: abort the shared signal, answer every unsettled job `{status:'deadline'}`
-   * (queued ones are never started) and resolve `finish()` as timed out.
+   * The deadline: abort the shared signal — which stops the WAIT, it cannot cancel a request a
+   * job already started — answer every unsettled job `{status:'deadline'}` (queued ones are
+   * never started) and resolve `finish()` as timed out.
    */
   private onDeadline(): void {
     this.timerArmed = false;

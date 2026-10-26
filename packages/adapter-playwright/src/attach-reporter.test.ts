@@ -7,7 +7,10 @@
 // - AC5: `artifact_ids` carries ONLY the completed uploads, and `ext.attachments` carries one
 //   record per attachment, in attachment order, with base names only;
 // - sequences stay contiguous from 1 even though the batches are appended after the uploads
-//   settled (a later test never overtakes an earlier one);
+//   settled (held batches keep test-end order among themselves; an attempt WITHOUT
+//   attachments is appended immediately and may precede a held one);
+// - a raw Playwright `TestStep.attachments` never reaches a `test.step` envelope (SEC/F1: it
+//   carries an absolute path and the body bytes, and only `test.finished` has our records);
 // - a test WITHOUT attachments takes the 04.3.1 path unchanged: same members, same `ext` keys,
 //   no CLI load at all, and two runs agree byte for byte apart from the volatile fields;
 // - `onEnd` without pending uploads is still synchronous (no promise) and still THROWS a
@@ -145,12 +148,15 @@ function fakeTest(title: string, line: number): TestArg {
   } as unknown as TestArg;
 }
 
-function fakeResult(attachments: readonly PlaywrightAttachment[]): ResultArg {
+function fakeResult(
+  attachments: readonly PlaywrightAttachment[],
+  steps: readonly unknown[] = [],
+): ResultArg {
   return {
     status: 'passed',
     duration: 11,
     retry: 0,
-    steps: [],
+    steps: [...steps],
     annotations: [],
     errors: [],
     attachments: [...attachments],
@@ -270,6 +276,57 @@ describe('attachments through the reporter (04.3.3-T2.2)', () => {
     for (const envelope of finished) {
       expect(envelope.artifact_ids).toEqual([ARTIFACT_TRACE]);
       expect(recordsOf(envelope)).toHaveLength(1);
+    }
+  });
+
+  it('keeps_a_raw_step_attachment_out_of_the_spool (SEC/F1)', async () => {
+    const root = tempDir('evidgate-rep-step-');
+    const spool = tempDir('evidgate-rep-step-spool-');
+    const trace = file(root, 'trace-own.zip');
+    const { reporter } = reporterHarness(spool, root, () => uploader());
+    // A step carries Playwright's raw shape: an absolute path plus the body bytes in memory.
+    // Neither member is one the reporter declares, and only `test.finished` may carry records.
+    const stepPath = join(realpathSync(root), 'test-results', 'step-note.txt');
+    const body = Buffer.from('STEP-BODY-MARKER-9f3a-04.3.3-T2');
+    const test = fakeTest('a step with its own attachment', 6);
+    // Playwright's `TestStep` shape, as a plain record: the reporter's own members come from
+    // the real object, so a plain record with the same members is the seam under test.
+    const stepRecord = {
+      title: 'the user step',
+      category: 'test.step',
+      location: { file: 'tests/attach.spec.ts', line: 6, column: 3 },
+      duration: 3,
+      startTime: new Date(),
+      steps: [],
+      attachments: [{ name: 'step-note.txt', contentType: 'text/plain', path: stepPath, body }],
+    };
+    const own = attachment(trace, 'trace-own.zip', 'application/zip');
+    const result = fakeResult([own], [stepRecord]);
+
+    reporter.onBegin(configFor(root));
+    reporter.onTestBegin(test, result);
+    reporter.onTestEnd(test, result);
+    await endOfRun(reporter);
+
+    const envelopes = envelopesOf(spool);
+    const steps = envelopes.filter((item) => item.type === 'test.step');
+    expect(steps.length).toBeGreaterThan(0);
+    for (const step of steps) {
+      expect(step.ext).not.toHaveProperty('attachments');
+      expect(step.ext.title).toBe('the user step');
+    }
+
+    // The attempt's own records are untouched: the base name of `result.attachments` only.
+    const finished = envelopes.filter((item) => item.type === 'test.finished');
+    expect(finished).toHaveLength(1);
+    expect(recordsOf(finished[0]).map((record) => record.name)).toEqual(['trace-own.zip']);
+
+    // Neither the step path, its base name, nor the body (raw or as a serialised Buffer) leaks.
+    for (const line of spoolLines(spool)) {
+      expect(line).not.toContain(stepPath);
+      expect(line).not.toContain('step-note.txt');
+      expect(line).not.toContain('STEP-BODY-MARKER');
+      expect(line).not.toContain('"type":"Buffer"');
     }
   });
 

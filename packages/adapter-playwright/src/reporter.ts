@@ -38,14 +38,19 @@
 // path unchanged: one `test.finished`, its steps, one flush, all synchronous. When it is
 // not, `attach.ts` uploads them (AC5–AC7) and this file HOLDS the drafted batch until every
 // upload of that attempt settled, then appends `test.finished` (with `artifact_ids`) and its
-// steps in one go; batches are appended in test-end order, so sequences stay contiguous.
+// steps in one go. Held batches are appended in test-end order AMONG ATTEMPTS WITH
+// ATTACHMENTS; an attempt without attachments is appended immediately, so it may precede an
+// earlier test whose uploads are still in flight. Sequence numbers stay contiguous either
+// way: they are assigned at append time, never at draft time.
 // Warnings (`attachment_*`, `shards_*`) go through the capped `warn()` path. `onEnd`
 // therefore has two shapes: with nothing pending it is the synchronous callback of 04.3.1
 // (a buffered failure still THROWS synchronously); with uploads pending it returns a Promise
-// that drains them under `attachment_drain_deadline_ms` (default 120 s, NFR-04-1), appends
-// the held batches, emits one `attachment_drain_deadline` warning, then runs the same end
-// sequence, where a buffered failure surfaces as a rejection instead. A merge-replay or a
-// reporter without a writer never touches attachments at all.
+// that waits for them under `attachment_drain_deadline_ms` (default 120 s, NFR-04-1) and
+// then appends the held batches. The deadline stops the WAIT only: an upload whose PUT
+// already started runs until its own deadline and is abandoned at its next checkpoint, never
+// cancelled mid-PUT; one `attachment_drain_deadline` warning summarises every abandoned
+// attempt. Then the same end sequence runs, where a buffered failure surfaces as a rejection
+// instead. A merge-replay or a reporter without a writer never touches attachments at all.
 import { delimiter } from 'node:path';
 
 import type {
@@ -556,8 +561,9 @@ export class EvidgateReporter implements Reporter {
   /**
    * Starts the attempt's uploads NOW (the drain keeps at most two in flight, across tests) and
    * holds its drafts until they settled. Only the append is serialised, through
-   * {@link attachChain}, so a later test can never overtake an earlier one and every
-   * `sequence` stays assigned at append time, in test-end order.
+   * {@link attachChain}, so no held batch can overtake another held batch; every `sequence`
+   * is assigned at append time, in test-end order among the attempts that carry attachments.
+   * (An attempt WITHOUT attachments is appended immediately and may precede a held one.)
    */
   private holdAttempt(
     writer: SpoolWriter,
@@ -650,8 +656,8 @@ export class EvidgateReporter implements Reporter {
           code: 'attachment_drain_deadline',
           message:
             `the attachment drain deadline (${String(this.attachmentDrainDeadlineMs)} ms) ` +
-            `abandoned ${String(drained.deadlineAttempts)} attempt(s); their test.finished ` +
-            'envelopes carry no artifact_ids',
+            `abandoned ${String(drained.deadlineAttempts)} attempt(s); an abandoned ` +
+            'attachment has no artifact_id in its test.finished envelope',
           count: drained.deadlineAttempts,
         });
       }
@@ -935,6 +941,11 @@ export class EvidgateReporter implements Reporter {
     // `Fill "hunter2"` or a `goto` URL with its query string — so `title` is forwarded
     // only for user-authored categories. `category` and `location` still identify the step.
     if (!isUserAuthoredStepCategory(step.category)) delete candidate.title;
+    // SEC/F1: `attachments` is allow-listed for `test.finished` ONLY, where `testExt` sets it
+    // from our own `AttachmentRecord` rows (base name, kind, outcome, code, artifact id). A
+    // raw Playwright `TestStep.attachments` is `{name, contentType, path, body}` — an absolute
+    // path and the attachment bytes in memory — so a step envelope must never carry one.
+    delete candidate.attachments;
     return this.applyExtFilter(candidate);
   }
 

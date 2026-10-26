@@ -341,6 +341,18 @@ redacted), ≤ 256 UTF-16 units, never a stack line. These four keys are set on
 
 ## Attachments (04.3.3-T2)
 
+**Uploads need a real execution key.** With the built-in identity resolver the
+`execution_key` is the server-owned placeholder (`'0'.repeat(64)`) until the server-supplied
+key lands — `identity.ts` says so, and the STATUS row "04.3.1-T1 placeholder execution_key"
+tracks the hand-over. The wire member is `^[0-9a-f]{64}$`: the server's
+`sha256(case_id ‖ variant_hash ‖ target_env)` (00 §7 / 05.2.1-T3). An upload under the
+placeholder would be an unplanned attempt the server must refuse, so a run that keeps the
+built-in resolver uploads **nothing**: every attachment is skipped with
+`attachment_no_execution_key` and the test result is kept. To upload, pass the `identity`
+option and return the server-computed key for the test — the reporter itself only checks that
+it is not the placeholder — alongside `case_id`, `variant_hash` and `target_env` (see
+[Identity](#identity-0432-t1) for the members).
+
 Every `result.attachments` entry of a test is classified, policy-checked and — when it
 passes every check — uploaded as an artifact through the CLI's `uploadFile()` facade
 (`createAttachmentUploader` from `@evidgate/cli`, 04.2.4-T1). The `artifact_ids` the upload
@@ -384,6 +396,20 @@ or device, or a symlink planted inside a root after resolution. A path that does
 or cannot be inspected is `attachment_unreadable`. `..` traversal is resolved away by the
 same rule as `packages/cli`'s `--file` guard, so the two cannot disagree. A refusal names
 the file's base name and a filtered reason — never the full path, never a root list.
+
+Two consequences of sharing that guard:
+
+- **A root that is itself a symbolic link is refused.** The CLI's `openUploadFile` inspects
+  the root's final component (a repo-planted `test-results -> $HOME` must not authorise a home
+  directory), and it resolves **every** root before it looks at the file — so one symlinked
+  `attachment_dirs` or `EVIDGATE_ATTACHMENT_DIRS` entry fails **every attachment upload of the
+  run** with `attachment_upload_failed` carrying `upload_path_refused`, not only the files
+  under that root. List the real directory; ancestor aliases such as macOS
+  `/tmp -> /private/tmp` are fine, because only the final component is inspected.
+- **A hard link is not a symbolic link and is accepted.** No code path treats one specially:
+  a hard link to a file inside an allowed root uploads normally, and the guard still refuses a
+  file that is not owned by the running user (`owned by another user`), so a link can never
+  bring in another user's file.
 
 ### Size caps (AC6)
 
@@ -431,14 +457,25 @@ that attempt's uploads settle, then appends them in one go — so the envelope c
 `artifact_ids`; the callback itself returns once the uploads are queued. At most **two
 uploads are in flight per shard** (a fixed cap — the reporter lives inside the test process
 and must never starve the tests), in FIFO start order, and `onEnd` waits for them for at most
-`attachment_drain_deadline_ms` (default **120 000 ms**, NFR-04-1). At the deadline the
-in-flight uploads are aborted, a queued one is never started, and every unfinished attachment
-becomes one `attachment_drain_deadline` warning; a late rejection is swallowed so it can
-never fail an otherwise green run.
+`attachment_drain_deadline_ms` (default **120 000 ms**, NFR-04-1).
 
-Held batches are appended in test-end order through one serialiser, so a waiting test never
-overtakes an earlier one and `sequence` stays contiguous per producer (the 00 §9.4 order
-rule) — while the spool order can differ from the callback order.
+The deadline stops the **wait**, not the uploads. An upload that has not started its PUT is
+**abandoned at its next checkpoint** — before the file is opened, after the digest (before the
+bearer or any request), before the journal and before the engine's first mint — and **not
+cancelled mid-PUT**: the stopped call rejects with the CLI's `upload_aborted`, but the drain has
+already settled that job as abandoned, so the attachment's record carries
+`attachment_drain_deadline` and the run emits the single summary warning. A PUT already in
+flight runs until its own deadline, `min(per-upload deadline, remaining drain time)`, and a
+queued one is never started. A late rejection is swallowed so it can never fail an otherwise
+green run. The deadline costs exactly **one** `attachment_drain_deadline` warning for the run,
+naming how many attempts were abandoned — never one warning per attachment.
+
+Held batches are appended in test-end order **among the attempts that carry attachments**,
+through one serialiser; `sequence` stays contiguous per producer (the 00 §9.4 order rule)
+because it is assigned at append time, never at draft time. An attempt **without**
+attachments does not wait for anything: it appends immediately. So the spool order can differ
+from the callback order, and a test without attachments may appear before an earlier test
+whose uploads were still in flight — the ordering guarantee is among held batches only.
 
 There is a hard bound on what one run considers: at most **50 attachments per test** and
 **1 000 per run** (`MAX_ATTACHMENTS_PER_TEST` / `MAX_ATTACHMENTS_PER_RUN`). The overflow is
@@ -463,9 +500,19 @@ the identity warnings (so they obey the same 100-per-run cap):
 | `attachment_no_execution_key`        | the reporter's `execution_key` is still the placeholder (05.2.1-T3)        |
 | `attachments_unconfigured`           | the CLI configuration is missing/invalid; all attachments skipped, once    |
 | `attachments_unavailable`            | the lazy `import('@evidgate/cli')` failed; all attachments skipped, once   |
-| `attachment_drain_deadline`          | `onEnd`'s drain deadline abandoned unfinished uploads                      |
+| `attachment_drain_deadline`          | `onEnd`'s deadline gave up: ONE warning with the abandoned attempt count   |
 | `attachment_limit`                   | the 50-per-test / 1 000-per-run attachment bound was reached, once per run |
 | `attachment_sensitivity_not_carried` | an annotated attachment whose kind has no sensitive default (see below)    |
+
+The **per-attachment** codes are the six skip codes, `attachment_upload_failed` and
+`attachment_sensitivity_not_carried`: each is emitted once per attachment it describes, so a
+run that skips or annotates many attachments spends the 100-warning budget fast. Past the
+cap, the surplus becomes **one** `warnings_truncated` envelope at `onEnd` that names how many
+warnings were lost — so on a long run the per-attachment warnings you see are the first 100,
+not the whole story. The remaining codes are bounded by the number of tests and runs rather
+than by the attachment count: `attachment_no_execution_key` is once per test,
+`attachments_unconfigured`, `attachments_unavailable`, `attachment_drain_deadline`,
+`attachment_limit` and the `shards_*` notices are once per run.
 
 ### Sensitivity (AC7) and its limit
 

@@ -25,6 +25,14 @@
 //    so a crashed shard resumes its artifact rows instead of minting a second one;
 // 5. the descriptor the guard pinned is closed on EVERY path, including the failing one.
 //
+// The drain deadline (NFR-04-1, 04.3.3-T2.2): the caller may hand over its `AbortSignal`. The
+// deadline stops the WAIT; it never cancels work in flight. So the signal is read at the
+// checkpoints this module controls — before the file is opened, after the digest (before the
+// bearer), after the bearer (before the journal is opened) and before the engine's first mint —
+// and an aborted call rejects with `upload_aborted`. An upload whose presigned PUT already
+// started runs until its own deadline and is ABANDONED at the next checkpoint, not cancelled
+// mid-PUT: `uploadFile()` takes no signal (its retries are 04.2.4-T1's).
+//
 // Secret hygiene (04 §6, S3): this module formats no path, token or presigned URL into any
 // message — the refusals it rethrows are the guard's own filtered text, and the success
 // value is an artifact id plus a byte count. No artifact bytes are buffered here: the
@@ -34,6 +42,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { getToken } from './auth/getToken.js';
 import { deleteCachedToken } from './auth/tokenCache.js';
 import { resolveConfig, type ResolvedConfig } from './config.js';
+import { CliError } from './errors.js';
 import { ProducerSpool } from './spool.js';
 import { UploadFailedError, hashUploadFile, uploadFile, type UploadDeps } from './upload.js';
 import { journalFor, type UploadJournal, type UploadJournalLockOptions } from './uploadJournal.js';
@@ -70,15 +79,32 @@ export interface AttachmentUploadResult {
   readonly bytes: number;
 }
 
+/**
+ * The caller's own bounds for ONE upload. Both are optional: a caller that knows nothing about
+ * a drain deadline gets the uploader's own budget.
+ */
+export interface AttachmentUploadContext {
+  /** The budget of this upload; the uploader's own default when absent. */
+  readonly deadlineMs?: number;
+  /**
+   * The drain deadline (04.3.3-T2.2, NFR-04-1). Read at this module's checkpoints only: an
+   * abort rejects with `upload_aborted` before the file is opened, after the digest, after the
+   * bearer and before the engine's first mint. A PUT already in flight is not cancelled; it is
+   * abandoned at the next checkpoint.
+   */
+  readonly signal?: AbortSignal;
+}
+
 export interface AttachmentUploader {
   /**
    * Uploads one attachment, or rejects with the CLI's own error (a refused path is
    * `upload_path_refused`, an oversize file `upload_too_large`, an unplanned attempt the
-   * server's 422, and so on). It never resolves with a partial result.
+   * server's 422, an abandoned drain `upload_aborted`, and so on). It never resolves with a
+   * partial result.
    */
   upload(
     input: AttachmentUploadInput,
-    ctx?: { readonly deadlineMs?: number },
+    ctx?: AttachmentUploadContext,
   ): Promise<AttachmentUploadResult>;
   /** The static per-kind caps the guard applies, so a caller can pre-screen without I/O. */
   readonly kindMaxBytes: Readonly<Record<ArtifactKind, number | undefined>>;
@@ -135,11 +161,31 @@ export function createAttachmentUploader(options: AttachmentUploaderOptions): At
     }
   }
 
+  /**
+   * `upload_aborted`: the caller's drain deadline fired, and this module stopped at its next
+   * checkpoint. The code only — no path, no URL, no token (04 §6, S3).
+   */
+  function uploadAborted(): CliError {
+    return new CliError('the attachment upload was abandoned (the drain deadline fired)', {
+      code: 'upload_aborted',
+    });
+  }
+
   async function upload(
     input: AttachmentUploadInput,
-    ctx?: { readonly deadlineMs?: number },
+    ctx?: AttachmentUploadContext,
   ): Promise<AttachmentUploadResult> {
     const deadlineMs = ctx?.deadlineMs ?? defaultDeadlineMs;
+    const signal = ctx?.signal;
+    // A function, not a one-time read: `aborted` flips while this call awaits.
+    const aborted = (): boolean => signal?.aborted === true;
+    // The budget starts HERE, before the guard: hashing a large trace is part of the upload
+    // and must not sit outside the deadline the caller granted (04.3.3-T2.2, NFR-04-1).
+    const deadlineAt = deps.now() + deadlineMs;
+    // Checkpoint 1: an aborted call opens nothing at all.
+    if (aborted()) {
+      throw uploadAborted();
+    }
     // The guard runs before anything else: a file outside `dirs`, a symlink, a non-regular
     // file or one over its kind's cap is refused here, with no HTTP call made.
     const opened = await openUploadFile({
@@ -153,13 +199,29 @@ export function createAttachmentUploader(options: AttachmentUploaderOptions): At
       // `upload-url` body and the signed checksum header are built from.
       const sha256 = await hashUploadFile(opened);
 
+      // Checkpoint 2: the digest is done and nothing has been requested yet, so an abandoned
+      // upload costs no token exchange and no mint.
+      if (aborted()) {
+        throw uploadAborted();
+      }
+
       try {
         const bearer = await token();
+        // Checkpoint 3: a token fetch may itself have outlived the deadline.
+        if (aborted()) {
+          throw uploadAborted();
+        }
+        // The journal lock waits no longer than the upload's own budget.
         const journal = await openJournal(config, input.runId, input.producerId, {
-          deadlineAt: deps.now() + deadlineMs,
+          deadlineAt,
           now: deps.now,
           sleep: (milliseconds) => deps.sleep(milliseconds),
         });
+        // Checkpoint 4: the last one this module controls. What remains of the budget is
+        // what the engine gets, so the open, the digest and the journal wait are inside it.
+        if (aborted()) {
+          throw uploadAborted();
+        }
         const outcome = await uploadFile({
           config,
           token: bearer,
@@ -172,7 +234,7 @@ export function createAttachmentUploader(options: AttachmentUploaderOptions): At
           file: opened,
           sha256,
           journal,
-          deadlineMs,
+          deadlineMs: Math.max(0, deadlineAt - deps.now()),
           deps,
         });
         return { artifactId: outcome.artifactId, bytes: outcome.bytes };

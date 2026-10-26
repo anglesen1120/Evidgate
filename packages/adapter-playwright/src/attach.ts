@@ -187,7 +187,7 @@ export interface AttachmentPipelineOptions {
 interface UploaderState {
   readonly uploader: AttachmentUploader | null;
   readonly warning: AttachmentWarning | undefined;
-  /** Set by the first attempt that observes the warning, so it is emitted once per run. */
+  /** Set by the first attempt that CARRIES the warning, so it is emitted once per run. */
   emitted: boolean;
 }
 
@@ -246,6 +246,8 @@ export class AttachmentPipeline {
   /** The memoised CLI module load; `undefined` until the first uploadable attachment. */
   private cliModule: Promise<CliModule> | undefined;
   private uploaderState: Promise<UploaderState> | undefined;
+  /** The same state, once resolved: what {@link noteRunWarning} reads without awaiting. */
+  private resolvedState: UploaderState | undefined;
   /** Attempts (`process()` calls) whose uploads have not all settled yet. */
   private readonly attempts = new Set<Promise<AttachmentProcessResult>>();
   /** Attempt sequence numbers with at least one deadline outcome (for the onEnd warning). */
@@ -284,9 +286,11 @@ export class AttachmentPipeline {
    * Maps, guards, caps and uploads one attempt's attachments. Never rejects: every failure is
    * a record plus a warning, so the caller can always emit the test result (AC5).
    *
-   * The uploads of one attachment start as the previous ones do (`UploadDrain` keeps at most
-   * two in flight); the returned promise settles when the attempt's jobs settled or the drain
-   * deadline abandoned them.
+   * The upload JOBS of one attachment start in the order they were queued (`UploadDrain` keeps
+   * at most two in flight). Their PUTs may still interleave: a job's own first awaits (the path
+   * guard, the uploader load) decide when its request actually goes out, so request order is
+   * not part of this contract. The returned promise settles when the attempt's jobs settled or
+   * the drain deadline abandoned them.
    */
   process(input: AttachmentProcessInput): Promise<AttachmentProcessResult> {
     const attemptId = ++this.attemptSeq;
@@ -355,6 +359,10 @@ export class AttachmentPipeline {
         );
       }
       await Promise.all(pending);
+      // Once per run, and never swallowed by a job the deadline abandoned: the warning belongs
+      // to the ATTEMPT that observed the uploader state, so a job whose step was discarded can
+      // no longer consume it (F5).
+      this.noteRunWarning(warnings);
       for (const slot of slots) {
         if (slot === undefined) continue;
         records.push(slot.record);
@@ -425,20 +433,21 @@ export class AttachmentPipeline {
     const warnings = [...plan.warnings];
     const candidate = plan.attachment;
     try {
-      // AC6 first: no CLI load and no request for a path outside the allow-list.
+      // AC6 first: no CLI load and no request for a path outside the allow-list. This await is
+      // also why two started jobs can issue their PUTs in either order: the guard (and the
+      // uploader load below) resolves per file, so `UploadDrain`'s FIFO is a START order only
+      // (O-4).
       const verdict = await this.guard.check(candidate.path);
       if (!verdict.ok) {
         return { state: 'skipped', code: verdict.code, message: verdict.message, warnings };
       }
       const state = await this.uploader();
-      if (!state.emitted) {
-        // Once per run, whichever attachment observes the state first (the check-and-set is
-        // synchronous after the await, so two concurrent jobs cannot both emit).
-        state.emitted = true;
-        if (state.warning !== undefined) warnings.push(state.warning);
-      }
       const uploader = state.uploader;
       if (uploader === null) {
+        // The run-level warning (`attachments_unavailable`/`attachments_unconfigured`) is
+        // claimed once per run by the ATTEMPT that observed this state, in `runAttempt` — not
+        // here: a job abandoned at the deadline must not consume a warning no envelope then
+        // carries (F5).
         return { state: 'unconfigured', warnings };
       }
       // The cap is checked on the guard's own size, before the CLI reads a byte.
@@ -456,6 +465,11 @@ export class AttachmentPipeline {
       const deadlineMs = Number.isFinite(remaining)
         ? Math.min(this.deadlineMs, remaining)
         : this.deadlineMs;
+      // The drain's own signal travels with the upload: the deadline stops the WAIT, so the
+      // facade reads it at ITS checkpoints (before the file is opened, after the digest, after
+      // the bearer and before the first mint) and answers `upload_aborted`. A PUT already in
+      // flight runs to its own deadline — abandoned at the next checkpoint, never cancelled
+      // mid-PUT (`uploadFile` takes no signal; that engine is 04.2.4-T1).
       const uploaded = await uploader.upload(
         {
           runId: input.runId,
@@ -466,7 +480,7 @@ export class AttachmentPipeline {
           mediaType: candidate.mediaType,
           file: verdict.realPath,
         },
-        { deadlineMs },
+        { deadlineMs, signal: context.signal },
       );
       if (!UUID_PATTERN.test(uploaded.artifactId)) {
         return {
@@ -560,8 +574,28 @@ export class AttachmentPipeline {
    * run keeps emitting every test result and stays spool-only (AC5, Q1, Q3).
    */
   private uploader(): Promise<UploaderState> {
-    this.uploaderState ??= this.loadUploader();
+    this.uploaderState ??= this.loadUploader().then((state) => {
+      // Published synchronously as soon as it resolves, so an attempt that is aggregating its
+      // warnings right then can claim the run-level warning without awaiting the load again.
+      this.resolvedState = state;
+      return state;
+    });
     return this.uploaderState;
+  }
+
+  /**
+   * Carries the ONE run-level warning (`attachments_unavailable`/`attachments_unconfigured`) on
+   * the first attempt that observed the state, whatever became of its jobs. Called
+   * synchronously after an attempt's jobs settled; a state that never resolved has no warning
+   * to carry yet — the run never learned of a problem.
+   */
+  private noteRunWarning(warnings: AttachmentWarning[]): void {
+    const state = this.resolvedState;
+    if (state === undefined || state.emitted || state.warning === undefined) {
+      return;
+    }
+    state.emitted = true;
+    warnings.push(state.warning);
   }
 
   private async loadUploader(): Promise<UploaderState> {

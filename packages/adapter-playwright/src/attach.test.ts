@@ -20,8 +20,8 @@
 //   summary is emitted ONCE per run;
 // - §7 Performance: never more than two uploads in flight;
 // - §8 S3: no presigned URL, token or directory path ever reaches an envelope;
-// - NFR-04-1: a hung upload is cut off by `attachment_drain_deadline_ms` and its attempt's
-//   `test.finished` carries no `artifact_ids`.
+// - NFR-04-1: a hung upload is cut off by `attachment_drain_deadline_ms`; the abandoned
+//   attachment has no artifact id, while an attempt's completed uploads keep theirs.
 import {
   mkdirSync,
   mkdtempSync,
@@ -39,6 +39,7 @@ import type { FullConfig } from '@playwright/test/reporter';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type {
+  AttachmentUploadContext,
   AttachmentUploadInput,
   AttachmentUploadResult,
   AttachmentUploader,
@@ -95,8 +96,10 @@ interface FakeUploader {
   uploader: AttachmentUploader;
   /** Every input the uploader was asked for, in call order. */
   calls: AttachmentUploadInput[];
-  /** The highest number of uploads that were in flight at the same time. */
-  peak: number;
+  /** The caller context of each call (drain signal and per-upload budget), in call order. */
+  contexts: AttachmentUploadContext[];
+  /** A LIVE read: the count keeps rising while the uploads run, never a snapshot at zero. */
+  readonly peak: number;
 }
 
 interface FakeUploaderOptions {
@@ -109,6 +112,7 @@ interface FakeUploaderOptions {
 
 function fakeUploader(options: FakeUploaderOptions = {}): FakeUploader {
   const calls: AttachmentUploadInput[] = [];
+  const contexts: AttachmentUploadContext[] = [];
   let inFlight = 0;
   let peak = 0;
   const answer =
@@ -120,8 +124,9 @@ function fakeUploader(options: FakeUploaderOptions = {}): FakeUploader {
       }));
   const uploader: AttachmentUploader = {
     kindMaxBytes: options.kindMaxBytes ?? { trace: 1024, video: 1024, screenshot: 1024 },
-    async upload(input) {
+    async upload(input, context) {
       calls.push(input);
+      contexts.push(context ?? {});
       inFlight += 1;
       peak = Math.max(peak, inFlight);
       try {
@@ -131,7 +136,27 @@ function fakeUploader(options: FakeUploaderOptions = {}): FakeUploader {
       }
     },
   };
-  return { uploader, calls, peak };
+  return {
+    uploader,
+    calls,
+    contexts,
+    get peak() {
+      return peak;
+    },
+  };
+}
+
+/**
+ * A release gate for uploads that must overlap. Deterministic: nothing waits on the wall
+ * clock, a case releases the gate when the condition it asserts has been observed. (The
+ * repo targets ES2022, so the executor form is the only way to keep the resolver.)
+ */
+function gate(): { readonly opened: Promise<void>; open: () => void } {
+  let release: () => void = () => undefined;
+  const opened = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { opened, open: () => release() };
 }
 
 /** The `@evidgate/cli` surface as the pipeline sees it: only the uploader factory is used. */
@@ -463,14 +488,23 @@ describe('attachment pipeline (04.3.3-T2.2)', () => {
   });
 
   it('keeps_at_most_two_uploads_in_flight (AC5/§7)', async () => {
+    // The gate opens when the SECOND upload enters, so both are provably in flight at once and
+    // a third can never be (the drain's pump is synchronous). `peak` is read live: with the
+    // snapshot it used to return, an immediately-resolving fake made the old assertion pass at
+    // zero (D-QA-1). If the ceiling were 1 this case hangs and fails on its timeout instead of
+    // passing vacuously.
+    const startGate = gate();
+    let started = 0;
     const { pipeline, uploader, root } = harness({
-      // No clock at all: the fake counts what is in flight, and the drain's own pump decides
-      // how many start. A real delay would only make the assertion depend on host load.
-      uploads: (_uploadInput, index) =>
-        Promise.resolve({
+      uploads: async (_uploadInput, index) => {
+        started += 1;
+        if (started >= 2) startGate.open();
+        await startGate.opened;
+        return {
           artifactId: `0000000${String(index)}-0000-4000-8000-000000000000`,
           bytes: 8,
-        }),
+        };
+      },
     });
     const files = Array.from({ length: 6 }, (_, index) =>
       file(root, `trace-c${String(index)}.zip`),
@@ -486,8 +520,40 @@ describe('attachment pipeline (04.3.3-T2.2)', () => {
     await pipeline.finish();
 
     expect(uploader.calls).toHaveLength(6);
-    expect(uploader.peak).toBeLessThanOrEqual(2);
+    expect(uploader.peak).toBe(2);
     expect(result.artifactIds).toHaveLength(6);
+  });
+
+  it('hands_the_drain_signal_and_budget_to_the_upload (NFR-04-1)', async () => {
+    const { pipeline, uploader, root } = harness(
+      // Never resolves: only the drain deadline ends this job, and the fake already recorded
+      // the context it was handed, so the abort is observable afterwards (F2/SEC-1/P-1).
+      { uploads: () => new Promise<AttachmentUploadResult>(() => undefined) },
+      { deadlineMs: 50 },
+    );
+    const trace = file(root, 'trace-signal.zip');
+
+    const processing = pipeline.process(
+      input([attachment(trace.path, 'trace-signal.zip', 'application/zip')]),
+    );
+    const drained = pipeline.finish();
+    const [result, finished] = await Promise.all([processing, drained]);
+
+    const context = uploader.contexts[0];
+    if (context?.signal === undefined) {
+      throw new Error('the upload was handed no drain signal');
+    }
+    // The very signal the drain aborts is what the uploader got, and it is aborted now.
+    expect(context.signal.aborted).toBe(true);
+    // The facade's budget is the drain deadline (or what is left of it), never "unbounded".
+    expect(context.deadlineMs).toBeGreaterThan(0);
+    expect(context.deadlineMs).toBeLessThanOrEqual(50);
+    expect(finished).toMatchObject({ timedOut: true, abandoned: 1, deadlineAttempts: 1 });
+    expect(recordOf(result)).toMatchObject({
+      name: 'trace-signal.zip',
+      outcome: 'failed',
+      code: 'attachment_drain_deadline',
+    });
   });
 
   it('never_leaks_a_presigned_url_the_token_or_a_directory_into_the_spool (§8 S3)', async () => {
@@ -563,6 +629,77 @@ describe('attachment pipeline (04.3.3-T2.2)', () => {
     expect(deadlineWarnings).toHaveLength(1);
     const deadlineWarning = deadlineWarnings[0];
     expect(deadlineWarning === undefined ? undefined : warnOf(deadlineWarning).count).toBe(1);
+  });
+
+  it('carries_the_run_level_uploader_warning_when_its_job_is_abandoned (F5)', async () => {
+    // The uploader state resolves, then the deadline fires BEFORE that job's step can settle:
+    // the job ends as a deadline and its step is discarded. The once-per-run warning must
+    // survive that — it belongs to the attempt, not to the job that observed the state.
+    const root = tempDir('evidgate-attach-f5-');
+    const trace = file(root, 'trace-f5.zip');
+    const missingConfig = Object.assign(new Error('missing configuration: EVIDGATE_PROJECT'), {
+      name: 'CliError',
+      code: 'missing_config',
+    });
+    let releaseLoad: () => void = () => undefined;
+    const load = new Promise<void>((resolve) => {
+      releaseLoad = resolve;
+    });
+    // Resolved when the JOB reached the uploader load: the only deterministic point from which
+    // releasing the gate means "the job is parked here". A fixed number of event-loop turns
+    // would be a guess — the guard's realpath/stat may not have finished yet (review note).
+    let importCalled: () => void = () => undefined;
+    const called = new Promise<void>((resolve) => {
+      importCalled = resolve;
+    });
+    const cli = fakeCli(() => {
+      throw missingConfig;
+    });
+    let fireDeadline: () => void = () => undefined;
+    const pipeline = new AttachmentPipeline({
+      roots: [root],
+      cwd: root,
+      env: {},
+      deadlineMs: 50,
+      // A virtual clock: the deadline fires where this case says so, never 50 ms later.
+      timers: {
+        set: (_milliseconds, fn) => {
+          fireDeadline = fn;
+          return 'deadline';
+        },
+        clear: () => undefined,
+      },
+      importCli: () => {
+        importCalled();
+        return load.then(() => cli);
+      },
+    });
+    // Registered on `load` BEFORE the pipeline awaits its own `load.then(...)`, so this
+    // callback runs first and queues the deadline as the next microtask: the drain abandons the
+    // job once the uploader state is computed and before the job's step can settle, which is
+    // the window in which a consumed run-level warning used to be lost.
+    void load.then(() => {
+      queueMicrotask(() => {
+        fireDeadline();
+      });
+    });
+
+    const processing = pipeline.process(
+      input([attachment(trace.path, 'trace-f5.zip', 'application/zip')]),
+    );
+    const drained = pipeline.finish();
+    await called;
+    releaseLoad();
+    const [result, finished] = await Promise.all([processing, drained]);
+
+    expect(recordOf(result)).toMatchObject({
+      name: 'trace-f5.zip',
+      outcome: 'failed',
+      code: 'attachment_drain_deadline',
+    });
+    // Exactly once, and never lost with the discarded step.
+    expect(codesOf(result.warnings)).toEqual(['attachments_unconfigured']);
+    expect(finished).toMatchObject({ timedOut: true, deadlineAttempts: 1 });
   });
 
   it('skips_every_attachment_of_an_attempt_without_a_planned_execution_key', () => {

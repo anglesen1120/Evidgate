@@ -12,6 +12,10 @@
 // - AC: a 401 purges the cached CI token (contracts/cli.md §7) and resolves nothing;
 // - AC: the descriptor the guard pinned is closed on the failing path as well as the
 //   succeeding one (`/dev/fd` + `fstat`, skipped on win32 where that view does not exist);
+// - AC5 failure path: the caller's drain `AbortSignal` (04.3.3-T2.2, NFR-04-1) is read at this
+//   module's own checkpoints: an already-aborted call opens nothing and requests nothing, and
+//   an abort after the digest mints nothing and puts nothing — `upload_aborted`, code only;
+//   a PUT already in flight is not cancelled, it is abandoned at the next checkpoint;
 // - boundary: no production source of this package imports the Playwright adapter, so the
 //   dependency arrow stays cli ← adapter and never cli → adapter.
 //
@@ -434,6 +438,65 @@ describe('createAttachmentUploader', () => {
     expect(error.code).toBe('upload_too_large');
     expect(store.calls).toHaveLength(0);
   });
+
+  // 04.3.3-T2.2 NFR-04-1 (F2/SEC-1): the drain signal is read BEFORE the file is opened. The
+  // path is outside the allowed roots and does not exist, so `upload_aborted` (instead of
+  // `upload_path_refused`/`upload_unreadable`) proves that nothing was opened and no request
+  // was made: an abandoned attachment costs no descriptor and no token exchange.
+  it('opens_nothing_and_requests_nothing_when_the_signal_is_already_aborted', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'evidgate-attach-aborted-'));
+    directories.push(outside);
+    const path = join(outside, 'never-opened.zip');
+    const controller = new AbortController();
+    controller.abort();
+    const store = harness(() => json(200, {}));
+
+    const error = await rejection(
+      uploader(store).upload(input(path), { signal: controller.signal }),
+    );
+
+    expect(error).toBeInstanceOf(CliError);
+    expect(error.code).toBe('upload_aborted');
+    expect(store.calls).toHaveLength(0);
+    // The refusal carries the code and a fixed message: no path, no token (04 §6, S3).
+    expect(error.message).not.toContain(outside);
+  });
+
+  // Same deadline, one checkpoint later: the file was opened and hashed, and the abort lands
+  // before the mint. The digest is done, so nothing may be requested for an artifact — no
+  // upload-url, no PUT, no complete — and the pinned descriptor is still released.
+  it.skipIf(process.platform === 'win32')(
+    'mints_nothing_and_puts_nothing_when_the_signal_aborts_after_the_digest',
+    async () => {
+      const { path } = await attachment('trace-aborted.zip');
+      const controller = new AbortController();
+      const ciEnv = env({
+        EVIDGATE_ENV: 'ci',
+        EVIDGATE_DEV_TOKEN: undefined,
+        EVIDGATE_INGEST_TOKEN: ingestToken,
+      });
+      // The CI exchange is the first request of an upload, so aborting inside it is the drain
+      // deadline firing after the digest and before any artifact exists.
+      const store = harness(() => {
+        controller.abort();
+        return json(200, {
+          token: cachedBearer,
+          expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+          project_id: runId,
+        });
+      });
+
+      const error = await rejection(
+        uploader(store, { env: ciEnv }).upload(input(path), { signal: controller.signal }),
+      );
+
+      expect(error).toBeInstanceOf(CliError);
+      expect(error.code).toBe('upload_aborted');
+      expect(store.calls.map((call) => call.method)).toEqual(['POST']);
+      expect(store.calls.some((call) => call.url.endsWith('/v1/artifacts/upload-url'))).toBe(false);
+      expect(await openDescriptors(path)).toBe(0);
+    },
+  );
 
   // AC: a surface that cannot resolve is the CLI's own `missing_config`, raised at creation
   // so a run fails before its first test rather than after it.
