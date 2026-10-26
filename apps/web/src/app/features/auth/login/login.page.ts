@@ -5,6 +5,12 @@ import { AuthFlow } from '../auth-flow';
 @Component({
   selector: 'app-login-page',
   standalone: true,
+  // 09.1.1-T5 review (delta): the flow belongs to THIS page instance. A route-level `providers`
+  // entry is built once per Route object in the router's environment injector, so it would keep the
+  // first visit's query and resolve `ActivatedRoute` from the root chain. In the component injector
+  // the route is the activation's own, and the flow (with its `pageshow` listener) is destroyed with
+  // the page.
+  providers: [AuthFlow],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shell/layout/shell-page.css', './login.page.css'],
   template: `

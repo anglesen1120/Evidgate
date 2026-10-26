@@ -26,6 +26,11 @@ describe('LoginPage', () => {
       redirecting: signal(false),
       start: vi.fn<(provider: LoginProvider) => void>(),
     };
+    // The page declares `providers: [AuthFlow]` (the real flow), which shadows a TestBed provider:
+    // the fake is installed on the component itself so these cases stay about the template.
+    TestBed.overrideComponent(LoginPage, {
+      set: { providers: [{ provide: AuthFlow, useValue: flow }] },
+    });
     await TestBed.configureTestingModule({
       imports: [LoginPage],
       providers: [provideZonelessChangeDetection(), { provide: AuthFlow, useValue: flow }],
