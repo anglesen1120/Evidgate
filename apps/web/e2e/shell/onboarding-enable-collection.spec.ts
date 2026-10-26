@@ -70,6 +70,10 @@ const POLICY_PREVIEW = '[data-testid="enable-collection-policy-preview"]';
 const NOT_GATING = '[data-testid="enable-collection-not-gating"]';
 /** The confirm control: a real `<button>`, natively `disabled` without `policy:write`. */
 const CONFIRM = '[data-testid="enable-collection-confirm"]';
+/** D-S104-Q2: the hazard acknowledgement; the confirm stays disabled until it is checked. */
+const ACKNOWLEDGE = '[data-testid="enable-collection-acknowledge"]';
+/** The replace-policy warning, which the confirm points at while the acknowledgement is open. */
+const REPLACES_WARNING = '[data-testid="enable-collection-replaces-active"]';
 /** The "ask your release approver" copy, rendered only for a session without `policy:write`. */
 const ASK_APPROVER = '[data-testid="enable-collection-ask-approver"]';
 /** The terminal panel: the project is enabled and collecting. */
@@ -95,6 +99,17 @@ async function openStepFive(
   await expect(page.locator(ENABLE_ROOT)).toBeVisible();
 }
 
+/**
+ * The acknowledgement a real confirm requires (D-S104-Q2): checked with the label the user sees,
+ * so a checkbox the page never enabled could not be acknowledged silently.
+ */
+async function acknowledge(page: Page): Promise<void> {
+  const box = page.locator(ACKNOWLEDGE);
+  await expect(box).toBeEnabled();
+  await box.check();
+  await expect(box).toBeChecked();
+}
+
 test.describe('step 5 previews the policy in advisory mode (AC5, T5.1)', () => {
   test('the preview, the "not gating yet" statement and an enabled confirm render together', async ({
     page,
@@ -115,11 +130,25 @@ test.describe('step 5 previews the policy in advisory mode (AC5, T5.1)', () => {
     await expect(notGating).toBeVisible();
     expect((await notGating.innerText()).trim()).not.toBe('');
 
-    // The control is a real button and it is enabled for a holder of `policy:write`.
+    // The control is a real button; for a holder of `policy:write` it is gated by the hazard
+    // acknowledgement alone (D-S104-Q2), which starts unchecked.
     const confirm = page.locator(CONFIRM);
     await expect(confirm).toBeVisible();
     expect(await confirm.evaluate((control) => control.tagName)).toBe('BUTTON');
+    await expect(confirm).toBeDisabled();
+    const warning = page.locator(REPLACES_WARNING);
+    await expect(warning).toBeVisible();
+    expect((await warning.innerText()).trim()).not.toBe('');
+    // The disabled control names the warning as its reason, and an unchecked box is not a submit.
+    await expect(confirm).toHaveAttribute('aria-describedby', /enable-replaces-warning/);
+    const box = page.locator(ACKNOWLEDGE);
+    await expect(box).not.toBeChecked();
+    await page.locator(CONFIRM).click({ force: true });
+    await expect(page.locator(ENABLED)).toHaveCount(0);
+
+    await acknowledge(page);
     await expect(confirm).toBeEnabled();
+    await expect(confirm).not.toHaveAttribute('aria-describedby', /enable-replaces-warning/);
 
     // Nothing has been activated yet, so no terminal panel and no error; the ask-approver copy
     // belongs to the disabled state alone.
@@ -151,6 +180,13 @@ test.describe('step 5 previews the policy in advisory mode (AC5, T5.1)', () => {
     await expect(askApprover).toBeVisible();
     expect((await askApprover.innerText()).trim()).not.toBe('');
 
+    // The acknowledgement cannot stand in for the grant: its own box is disabled and unchecked, so
+    // the state is "ask your approver", never a self-service acknowledgement (D-S104-Q2, T98).
+    const box = page.locator(ACKNOWLEDGE);
+    await expect(box).toBeVisible();
+    await expect(box).toBeDisabled();
+    await expect(box).not.toBeChecked();
+
     // The seeded answer would have been `ok`: nothing was activated, so no terminal panel exists.
     await expect(page.locator(ENABLED)).toHaveCount(0);
     await expect(page.locator(ERROR)).toHaveCount(0);
@@ -163,6 +199,7 @@ test.describe('confirming activates the project (AC5, T5.2)', () => {
     // its `ok` document (200, `changed: true`, mode `advisory`).
     await openStepFive(page, 'en', [ENABLE_GRANTS_TOGGLE]);
 
+    await acknowledge(page);
     await page.locator(CONFIRM).click();
 
     const terminal = page.locator(ENABLED);
@@ -182,6 +219,7 @@ test.describe('confirming activates the project (AC5, T5.2)', () => {
     // from), and the second confirm is answered with the same replay — not with an error.
     await openStepFive(page, 'en', [ENABLE_GRANTS_TOGGLE, activationVariantToggle('unchanged')]);
 
+    await acknowledge(page);
     await page.locator(CONFIRM).click();
     await expect(page.locator(ENABLED)).toBeVisible();
     await expect(page.locator(ERROR)).toHaveCount(0);
@@ -189,10 +227,13 @@ test.describe('confirming activates the project (AC5, T5.2)', () => {
     await page.reload();
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 5);
-    // Not derived: the terminal panel is gone and the confirm is back, still enabled.
+    // Not derived: the terminal panel is gone and the confirm is back — and unacknowledged again,
+    // because the acknowledgement is per-visit state and never persisted (D-S104-Q2).
     await expect(page.locator(ENABLED)).toHaveCount(0);
-    await expect(page.locator(CONFIRM)).toBeEnabled();
+    await expect(page.locator(ACKNOWLEDGE)).not.toBeChecked();
+    await expect(page.locator(CONFIRM)).toBeDisabled();
 
+    await acknowledge(page);
     await page.locator(CONFIRM).click();
     await expect(page.locator(ENABLED)).toBeVisible();
     await expect(page.locator(ERROR)).toHaveCount(0);
@@ -210,6 +251,7 @@ test.describe('a refused activation is rendered verbatim (00 §9.2)', () => {
       activationVariantToggle('invalid-transition'),
     ]);
 
+    await acknowledge(page);
     await page.locator(CONFIRM).click();
 
     const error = page.locator(ERROR);
@@ -234,6 +276,7 @@ test.describe('a refused activation is rendered verbatim (00 §9.2)', () => {
     // forbidden panel), so the envelope is asserted verbatim, as for the 409.
     await openStepFive(page, 'en', [ENABLE_GRANTS_TOGGLE, activationVariantToggle('forbidden')]);
 
+    await acknowledge(page);
     await page.locator(CONFIRM).click();
 
     const error = page.locator(ERROR);
@@ -262,6 +305,7 @@ test.describe('an in-flight double click produces one activation render (00 §9.
   test('the terminal panel renders once and no error appears', async ({ page }) => {
     await openStepFive(page, 'en', [ENABLE_GRANTS_TOGGLE, latencyToggle(IN_FLIGHT_MS)]);
 
+    await acknowledge(page);
     await page.locator(CONFIRM).dblclick();
 
     const terminal = page.locator(ENABLED);
@@ -283,6 +327,10 @@ test.describe('the step 5 page is WCAG 2.2 AA clean (09.1.1 AC6, plan §8)', () 
         await expect(page.locator(POLICY_PREVIEW)).toBeVisible();
         await expect(page.locator(NOT_GATING)).toBeVisible();
         await expect(page.locator(CONFIRM)).toBeVisible();
+        // The acknowledgement row is part of the scanned surface: its label association and the
+        // warning it points at are what the scan must not flag (D-S104-Q2).
+        await expect(page.locator(ACKNOWLEDGE)).toBeVisible();
+        await expect(page.locator(REPLACES_WARNING)).toBeVisible();
         await expect(page.locator('#onboarding-step-title')).toBeVisible();
         await expect(page.locator('html')).toHaveAttribute('lang', locale);
         // The theme the label claims: a scan of the wrong token set would be a false pass.

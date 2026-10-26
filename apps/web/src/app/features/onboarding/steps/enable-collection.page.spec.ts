@@ -104,8 +104,27 @@ describe('EnableCollectionPage', () => {
     await fixture.whenStable();
   });
 
-  /** The form's submit event: the one path a real Enter key or button click takes. */
+  function acknowledgeBox(): HTMLInputElement {
+    return root.querySelector<HTMLInputElement>('[data-testid="enable-collection-acknowledge"]')!;
+  }
+
+  /** The acknowledgement the step requires before its confirm is pressable (D-S104-Q2). */
+  function acknowledge(): void {
+    const box = acknowledgeBox();
+    if (!box.checked) {
+      box.checked = true;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  /** The path a real confirm takes: the acknowledgement first, then the form's submit. */
   function pressConfirm(): void {
+    acknowledge();
+    pressConfirmUnacknowledged();
+  }
+
+  /** The form's submit event without the acknowledgement, i.e. what a disabled control must not do. */
+  function pressConfirmUnacknowledged(): void {
     root
       .querySelector('form')!
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -137,7 +156,7 @@ describe('EnableCollectionPage', () => {
     return root.querySelector(selector)?.textContent?.trim() ?? '';
   }
 
-  it('previews the default advisory policy and states that nothing is gated yet (AC5)', () => {
+  it('previews the default advisory policy and states that nothing is gated yet (AC5)', async () => {
     const preview = text('[data-testid="enable-collection-policy-preview"]');
     // T62: the 24 h late-evidence window, in minutes, as the body carries it.
     expect(preview).toContain('1440');
@@ -147,10 +166,63 @@ describe('EnableCollectionPage', () => {
     expect(preview).toContain('Required suites');
     expect(preview).toContain('None');
     expect(text('[data-testid="enable-collection-not-gating"]')).toContain('never blocks a merge');
-    // The lone creator holds `policy:write` (T98), so the confirm is available unaided.
+    // The lone creator holds `policy:write` (T98)…
     expect(has).toHaveBeenCalledWith('policy:write');
-    expect(confirmButton().disabled).toBe(false);
     expect(root.querySelector('[data-testid="enable-collection-ask-approver"]')).toBeNull();
+    // …but D-S104-Q2 still requires the hazard acknowledgement before the press.
+    expect(text('[data-testid="enable-collection-replaces-active"]')).toContain(
+      'Gating stops until a gating policy is activated again',
+    );
+    expect(confirmButton().disabled).toBe(true);
+    expect(acknowledgeBox().checked).toBe(false);
+    expect(confirmButton().getAttribute('aria-describedby')).toBe('enable-replaces-warning');
+
+    acknowledge();
+    await settle();
+    expect(confirmButton().disabled).toBe(false);
+    expect(confirmButton().getAttribute('aria-describedby')).toBeNull();
+  });
+
+  it('requires the hazard acknowledgement before the confirm is pressable (D-S104-Q2)', async () => {
+    const box = acknowledgeBox();
+    // A native checkbox with a visible, associated label: the acknowledgement is not a hidden flag.
+    expect(box.type).toBe('checkbox');
+    expect(box.disabled).toBe(false);
+    const label = root.querySelector<HTMLLabelElement>('label[for="enable-acknowledge"]');
+    expect(label).not.toBeNull();
+    expect(label!.textContent?.trim()).toBe('I understand this replaces the active policy.');
+
+    // Unacknowledged, the form cannot be submitted: no append, no activation, no intent.
+    pressConfirmUnacknowledged();
+    await settle();
+    expect(createPolicyRevision).not.toHaveBeenCalled();
+    expect(activatePolicy).not.toHaveBeenCalled();
+    expect(root.querySelector('[data-testid="enable-collection-enabled"]')).toBeNull();
+
+    acknowledge();
+    await settle();
+    pressConfirm();
+    await settle();
+    // Acknowledged, the same submit runs the one chain.
+    expect(createPolicyRevision).toHaveBeenCalledTimes(1);
+    expect(activatePolicy).toHaveBeenCalledTimes(1);
+  });
+
+  it('withdraws the acknowledgement and its action when the grant goes away (T98)', async () => {
+    acknowledge();
+    await settle();
+
+    permitted.set(false);
+    await settle();
+
+    // Unchecked and disabled: a withdrawn grant must not leave a stale acknowledgement behind.
+    expect(acknowledgeBox().checked).toBe(false);
+    expect(acknowledgeBox().disabled).toBe(true);
+    expect(confirmButton().disabled).toBe(true);
+    // Both reasons are named, so the disabled control explains itself to assistive tech.
+    expect(confirmButton().getAttribute('aria-describedby')).toBe(
+      'enable-permission enable-replaces-warning',
+    );
   });
 
   it('appends the exact default body once, then activates it in advisory mode, and shows the terminal panel (AC5)', async () => {
@@ -205,15 +277,37 @@ describe('EnableCollectionPage', () => {
     await settle();
 
     expect(confirmButton().disabled).toBe(true);
-    expect(confirmButton().getAttribute('aria-describedby')).toBe('enable-permission');
+    expect(confirmButton().getAttribute('aria-describedby')).toContain('enable-permission');
     expect(text('[data-testid="enable-collection-ask-approver"]')).toContain(
       'Ask your release approver',
     );
-    pressConfirm();
+    // The acknowledgement is not a way around the grant: its own control is disabled and unchecked.
+    expect(acknowledgeBox().disabled).toBe(true);
+    expect(acknowledgeBox().checked).toBe(false);
+    pressConfirmUnacknowledged();
     await settle();
     // Disabled is not decoration: neither call leaves the page.
     expect(createPolicyRevision).not.toHaveBeenCalled();
     expect(activatePolicy).not.toHaveBeenCalled();
+  });
+
+  it('keeps the retry action closed while the acknowledgement is withdrawn (D-S104-Q2)', async () => {
+    activatePolicy.mockRejectedValueOnce(failure('timeout', 0, { retryable: true }));
+    pressConfirm();
+    await settle();
+    expect(activatePolicy).toHaveBeenCalledTimes(1);
+    expect(retryButton()!.disabled).toBe(false);
+
+    // A retry is the same intent, so it must be as deliberate as the first press.
+    acknowledgeBox().checked = false;
+    acknowledgeBox().dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+
+    expect(confirmButton().disabled).toBe(true);
+    expect(retryButton()!.disabled).toBe(true);
+    pressConfirmUnacknowledged();
+    await settle();
+    expect(activatePolicy).toHaveBeenCalledTimes(1);
   });
 
   it('sends one intent for two synchronous presses and one stable activation key', async () => {
@@ -318,10 +412,10 @@ describe('EnableCollectionPage', () => {
   });
 
   it('says confirming replaces the active policy, and names the revision it replaced (F1)', async () => {
-    // The hazard is stated before the press: the confirm is a REPLACE, not an addition.
-    expect(text('[data-testid="enable-collection-replaces-active"]')).toContain(
-      'replaces any policy',
-    );
+    // The hazard is stated before the press: the confirm is a REPLACE, and gating stops with it.
+    const warning = text('[data-testid="enable-collection-replaces-active"]');
+    expect(warning).toContain('replaces whatever policy is active now');
+    expect(warning).toContain('Gating stops until a gating policy is activated again');
 
     activatePolicy.mockResolvedValue({
       ...ACTIVATION,
@@ -514,7 +608,19 @@ describe('EnableCollectionPage scope changes', () => {
   let host: ComponentFixture<EnableCollectionHost>;
   let hostRoot: HTMLElement;
 
+  function acknowledgeBox(): HTMLInputElement {
+    return hostRoot.querySelector<HTMLInputElement>(
+      '[data-testid="enable-collection-acknowledge"]',
+    )!;
+  }
+
+  /** The path a real confirm takes (the acknowledgement first, then the submit). */
   function press(): void {
+    const box = acknowledgeBox();
+    if (!box.checked) {
+      box.checked = true;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     hostRoot
       .querySelector('form')!
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -557,6 +663,12 @@ describe('EnableCollectionPage scope changes', () => {
     await drain();
     expect(hostRoot.querySelector('[data-testid="enable-collection-enabled"]')).toBeNull();
     expect(hostRoot.querySelector('[data-testid="enable-collection-confirm"]')).not.toBeNull();
+    // …and the new scope starts unacknowledged: consent for project-1 is not consent for project-2.
+    expect(acknowledgeBox().checked).toBe(false);
+    expect(
+      hostRoot.querySelector<HTMLButtonElement>('[data-testid="enable-collection-confirm"]')!
+        .disabled,
+    ).toBe(true);
 
     press();
     await drain();

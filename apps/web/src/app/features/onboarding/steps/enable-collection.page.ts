@@ -118,6 +118,8 @@ export class EnableCollectionPage {
   );
 
   protected readonly permitted = computed(() => this.session.has('policy:write'));
+  // Remove the acknowledgement once activation is readable (F18), D-S104-Q2.
+  protected readonly acknowledged = signal(false);
   protected readonly busy = computed(() => this.activation.status() === 'running');
   protected readonly failure = this.activation.error;
   protected readonly enabled = computed(() => this.activation.result() ?? null);
@@ -128,7 +130,7 @@ export class EnableCollectionPage {
   });
   /** Only a failure the contract calls retryable offers the same-intent retry action. */
   protected readonly retryEligible = computed(
-    () => this.permitted() && this.activation.retryEligible(),
+    () => this.permitted() && this.acknowledged() && this.activation.retryEligible(),
   );
   /**
    * R5: a retryable failure whose `Retry-After` window is still open disables the confirm natively —
@@ -142,8 +144,19 @@ export class EnableCollectionPage {
       !this.activation.retryEligible(),
   );
   protected readonly confirmDisabled = computed(
-    () => this.busy() || !this.permitted() || this.waitingForRetryAfter(),
+    () => this.busy() || !this.permitted() || !this.acknowledged() || this.waitingForRetryAfter(),
   );
+  /**
+   * Why the confirm cannot be pressed, as the ids of the copy that says so: the missing grant
+   * (T98) and the unacknowledged hazard (D-S104-Q2). A native `disabled` control takes no focus, so
+   * the reason must be reachable from the control itself rather than only from the surrounding text.
+   */
+  protected readonly confirmDescribedBy = computed<string | null>(() => {
+    const reasons: string[] = [];
+    if (!this.permitted()) reasons.push('enable-permission');
+    if (!this.acknowledged()) reasons.push('enable-replaces-warning');
+    return reasons.length === 0 ? null : reasons.join(' ');
+  });
   /**
    * F2: the step only knows how to report `advisory`. Any other mode in a 200 answer is a contract
    * change this page cannot present as success, so it becomes the typed error state — the same panel
@@ -193,7 +206,8 @@ export class EnableCollectionPage {
   private readonly enabledHeadingRef = viewChild<ElementRef<HTMLElement>>('enabledHeadingTarget');
 
   protected readonly intro = $localize`:@@onboarding.enable.intro:Enabling collection records a decision for every run of this project. It does not gate any merge yet.`;
-  protected readonly replacesActiveCopy = $localize`:@@onboarding.enable.replaces-active:Confirming activates this default policy and replaces any policy that is active for the project now.`;
+  protected readonly replacesActiveCopy = $localize`:@@onboarding.enable.replaces-active:Confirming activates the default advisory policy for this project and replaces whatever policy is active now. Gating stops until a gating policy is activated again.`;
+  protected readonly acknowledgeLabel = $localize`:@@onboarding.enable.acknowledge:I understand this replaces the active policy.`;
   protected readonly previewHeading = $localize`:@@onboarding.enable.preview-heading:Default advisory policy`;
   protected readonly notGatingCopy = $localize`:@@onboarding.enable.not-gating:Not gating yet. This policy runs in advisory mode, so Evidgate records what it would have decided and never blocks a merge.`;
   protected readonly lateWindowLabel = $localize`:@@onboarding.enable.late-window:Late-evidence window`;
@@ -229,8 +243,12 @@ export class EnableCollectionPage {
     effect(() => {
       this.orgId();
       this.projectId();
+      this.acknowledged.set(false);
       this.appendedRevision.set(null);
       this.activation.reset();
+    });
+    effect(() => {
+      if (!this.permitted()) this.acknowledged.set(false);
     });
     // QA-01: the confirm disappears on success, so the focus it carried would be dropped. The
     // terminal heading is the announcement target (`tabindex="-1"`, `role="status"` on the panel):
@@ -243,6 +261,14 @@ export class EnableCollectionPage {
       this.enabledHeadingRef()?.nativeElement.focus();
     });
     this.destroyRef.onDestroy(() => this.activation.reset());
+  }
+
+  /** The acknowledgement is per-visit component state (never storage): D-S104-Q2. */
+  protected setAcknowledged(event: Event): void {
+    const target = event.target;
+    if (target instanceof HTMLInputElement) {
+      this.acknowledged.set(target.checked);
+    }
   }
 
   /** The confirm action, once per user intent (guarded by the runner while it runs). */

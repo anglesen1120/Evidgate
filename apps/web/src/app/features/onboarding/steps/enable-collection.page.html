@@ -8,8 +8,13 @@
   >
     <h3 id="enable-preview-heading">{{ previewHeading }}</h3>
     <p class="advisory" data-testid="enable-collection-not-gating">{{ notGatingCopy }}</p>
-    <!-- F1: the confirm is a REPLACE command, so the hazard is stated before the press, not after. -->
-    <p class="replaces-active" data-testid="enable-collection-replaces-active">
+    <!-- F1: the confirm is a REPLACE command, so the hazard is stated before the press, not after.
+         It also anchors the confirm's `aria-describedby` while the acknowledgement is open. -->
+    <p
+      class="replaces-active"
+      id="enable-replaces-warning"
+      data-testid="enable-collection-replaces-active"
+    >
       {{ replacesActiveCopy }}
     </p>
     <dl class="metadata">
@@ -51,12 +56,26 @@
       @if (!permitted()) {
         <p id="enable-permission" data-testid="enable-collection-ask-approver">{{ askApprover }}</p>
       }
+      <!-- D-S104-Q2: the acknowledgement is required for every confirm, not only when a policy is
+           known to be active — until activation is readable (F18) the page cannot prove there is
+           none. It starts unchecked and is reset when the step moves or the grant goes away. -->
+      <div class="acknowledge">
+        <input
+          id="enable-acknowledge"
+          data-testid="enable-collection-acknowledge"
+          type="checkbox"
+          [checked]="acknowledged()"
+          [disabled]="!permitted() || busy()"
+          (change)="setAcknowledged($event)"
+        />
+        <label for="enable-acknowledge">{{ acknowledgeLabel }}</label>
+      </div>
       <button
         class="state-panel__action primary"
         data-testid="enable-collection-confirm"
         type="submit"
         [disabled]="confirmDisabled()"
-        [attr.aria-describedby]="!permitted() ? 'enable-permission' : null"
+        [attr.aria-describedby]="confirmDescribedBy()"
       >
         {{ busy() ? confirmingLabel : confirmLabel }}
       </button>
