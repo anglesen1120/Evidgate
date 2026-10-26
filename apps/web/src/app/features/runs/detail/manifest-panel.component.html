@@ -1,0 +1,69 @@
+<section aria-labelledby="manifest-title" class="metadata-panel">
+  <h2 id="manifest-title">{{ copy.title }}</h2>
+  <dl>
+    <div>
+      <dt>{{ copy.hash }}</dt>
+      <dd data-manifest-hash>
+        @if (summary().manifestHash !== null) {
+          <bdi class="identifier">{{ display(summary().manifestHash!) }}</bdi>
+          <button type="button" (click)="copyHash()" [disabled]="copying()">
+            {{ copy.copyHash }}
+          </button>
+        } @else {
+          <app-status-pill [tone]="'neutral'" label="" />
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>{{ copy.suite }}</dt>
+      <dd data-manifest-suite>
+        @if (summary().suiteRevisionId !== null) {
+          <bdi class="identifier">{{ display(summary().suiteRevisionId!) }}</bdi>
+        } @else {
+          <app-status-pill [tone]="'neutral'" label="" />
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>{{ copy.policy }}</dt>
+      <dd data-manifest-policy>
+        @if (summary().policyRevisionId !== null) {
+          <bdi class="identifier">{{ display(summary().policyRevisionId!) }}</bdi>
+        } @else {
+          <app-status-pill [tone]="'neutral'" label="" />
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>{{ copy.shards }}</dt>
+      <dd data-manifest-shards>
+        @if (summary().shardCount !== null) {
+          {{ summary().shardCount }}
+        } @else {
+          <app-status-pill [tone]="'neutral'" label="" />
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>{{ copy.producers }}</dt>
+      <dd data-manifest-producers>
+        @if (summary().producers; as producers) {
+          @if (producers.length === 0) {
+            {{ copy.noProducers }}
+          } @else {
+            <ul>
+              @for (producer of producers; track $index) {
+                <li>
+                  <bdi>{{ producerLabel(producer) }}</bdi>
+                </li>
+              }
+            </ul>
+          }
+        } @else {
+          <app-status-pill [tone]="'neutral'" label="" />
+        }
+      </dd>
+    </div>
+  </dl>
+  <p role="status" [attr.aria-live]="'polite'">{{ copyStatus() }}</p>
+</section>

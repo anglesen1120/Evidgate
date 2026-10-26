@@ -12,6 +12,8 @@ import { describe, expect, it } from 'vitest';
 import { UiGalleryComponent } from '../../shared/ui/gallery';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
 import { RunListPage } from '../../features/runs/list/run-list.page';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the review-only route loads the real product detail page.
+import { RunDetailPage } from '../../features/runs/detail/run-detail.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
 import { PolicyPage } from '../../features/settings/policy/policy.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
@@ -24,7 +26,7 @@ describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(4);
+    expect(table).toHaveLength(5);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();
@@ -85,8 +87,25 @@ describe('dev routes (review only)', () => {
     expect(projectRoute?.canMatch).toHaveLength(2);
     expect(projectRoute?.canMatch?.[1]).toBeTypeOf('function');
     // Phase is deliberately not overridden: the product route keeps `phaseGuard`.
-    const loadComponent = projectRoute?.loadComponent;
+    const loadComponent = projectRoute?.children?.find((entry) => entry.path === '')?.loadComponent;
     if (loadComponent === undefined) throw new Error('no lazy Run list review route');
     expect(await loadComponent()).toBe(RunListPage);
+  });
+  it('mounts detail deep links and relative row links under the same project permission gates', async () => {
+    for (const path of ['dev/run-list', 'dev/run-detail']) {
+      const route = devRoutes().find((entry) => entry.path === path);
+      expect(route?.component).toBe(ShellComponent);
+      const org = route?.children?.[0];
+      expect(org?.canMatch).toEqual([authGuard, orgScopeGuard]);
+      const project = org?.children?.[0];
+      expect(project?.path).toBe('projects/:projectId');
+      expect(project?.canMatch?.[0]).toBe(projectScopeGuard);
+      expect(project?.canMatch).toHaveLength(2);
+      const parent = path === 'dev/run-detail' ? project?.children?.[0] : project;
+      expect(parent?.data?.['pageHeadingLevel']).toBe(1);
+      const load = parent?.children?.find((entry) => entry.path === ':runId')?.loadComponent;
+      if (!load) throw new Error('no lazy run detail review route');
+      expect(await load()).toBe(RunDetailPage);
+    }
   });
 });

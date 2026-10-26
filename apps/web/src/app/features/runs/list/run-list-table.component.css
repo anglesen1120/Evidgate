@@ -90,3 +90,19 @@ cdk-virtual-scroll-viewport {
   outline: var(--eg-focus-width) solid var(--eg-focus);
   outline-offset: calc(-1 * var(--eg-focus-width));
 }
+.identifier a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--eg-control-touch);
+  color: var(--eg-accent);
+}
+.identifier a:hover {
+  text-decoration-thickness: var(--eg-border-width);
+}
+.identifier a:active {
+  color: var(--eg-text);
+}
+.identifier a:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
