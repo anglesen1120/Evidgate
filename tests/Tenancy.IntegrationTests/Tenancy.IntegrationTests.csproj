@@ -42,6 +42,9 @@
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring\Evidgate.Modules.Authoring.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring.Contracts\Evidgate.Modules.Authoring.Contracts.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+    <!-- 12.3.1-T1.4: the ledger write path (one-statement batch insert, dedupe, 422 rules) through the same host and database. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Usage\Evidgate.Modules.Usage.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Usage.Contracts\Evidgate.Modules.Usage.Contracts.csproj" />
     <!-- 02.1.1-T2: the endpoint suites drive Program (ApiHost) through WebApplicationFactory. -->
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
   </ItemGroup>
