@@ -2605,6 +2605,30 @@
       <trans-unit id="runs.list.unverified-ref" datatype="html"><source>Unverified ref</source><target>Tham chiếu chưa xác minh</target></trans-unit>
       <trans-unit id="runs.list.ref-unavailable" datatype="html"><source>Ref unavailable</source><target>Chưa có tham chiếu</target></trans-unit>
       <trans-unit id="runs.list.child" datatype="html"><source>Derived run</source><target>Lượt chạy phát sinh</target></trans-unit>
+      <trans-unit id="onboarding.enable.intro" datatype="html"><source>Enabling collection records a decision for every run of this project. It does not gate any merge yet.</source><target>Bật thu thập sẽ ghi lại một quyết định cho mỗi lượt chạy của dự án này. Nó chưa chặn lần hợp nhất nào.</target></trans-unit>
+      <trans-unit id="onboarding.enable.preview-heading" datatype="html"><source>Default advisory policy</source><target>Chính sách cố vấn mặc định</target></trans-unit>
+      <trans-unit id="onboarding.enable.not-gating" datatype="html"><source>Not gating yet. This policy runs in advisory mode, so Evidgate records what it would have decided and never blocks a merge.</source><target>Chưa chặn hợp nhất. Chính sách này chạy ở chế độ cố vấn, nên Evidgate ghi lại điều nó sẽ quyết định và không bao giờ chặn lần hợp nhất.</target></trans-unit>
+      <trans-unit id="onboarding.enable.late-window" datatype="html"><source>Late-evidence window</source><target>Khoảng nhận bằng chứng muộn</target></trans-unit>
+      <trans-unit id="onboarding.enable.minutes" datatype="html"><source>minutes</source><target>phút</target></trans-unit>
+      <trans-unit id="onboarding.enable.required-suites" datatype="html"><source>Required suites</source><target>Bộ kiểm thử bắt buộc</target></trans-unit>
+      <trans-unit id="onboarding.enable.required-cases" datatype="html"><source>Required cases</source><target>Ca kiểm thử bắt buộc</target></trans-unit>
+      <trans-unit id="onboarding.enable.gated-branch" datatype="html"><source>Default branch gated</source><target>Nhánh mặc định bị chặn</target></trans-unit>
+      <trans-unit id="onboarding.enable.not-set" datatype="html"><source>Not set</source><target>Chưa đặt</target></trans-unit>
+      <trans-unit id="onboarding.enable.none" datatype="html"><source>None</source><target>Không có</target></trans-unit>
+      <trans-unit id="onboarding.enable.yes" datatype="html"><source>Yes</source><target>Có</target></trans-unit>
+      <trans-unit id="onboarding.enable.no" datatype="html"><source>No</source><target>Không</target></trans-unit>
+      <trans-unit id="onboarding.enable.confirm" datatype="html"><source>Enable collection</source><target>Bật thu thập</target></trans-unit>
+      <trans-unit id="onboarding.enable.confirming" datatype="html"><source>Enabling collection…</source><target>Đang bật thu thập…</target></trans-unit>
+      <trans-unit id="onboarding.enable.ask-approver" datatype="html"><source>Ask your release approver to enable collection for this project.</source><target>Hãy nhờ người duyệt phát hành bật thu thập cho dự án này.</target></trans-unit>
+      <trans-unit id="onboarding.enable.response-uncertain" datatype="html"><source>The confirmation may already be recorded. Retrying is safe: it reuses the same idempotency key.</source><target>Xác nhận có thể đã được ghi. Thử lại vẫn an toàn vì dùng lại đúng khóa idempotency đó.</target></trans-unit>
+      <trans-unit id="onboarding.enable.enabled-heading" datatype="html"><source>Project enabled and collecting</source><target>Dự án đã bật và đang thu thập</target></trans-unit>
+      <trans-unit id="onboarding.enable.changed" datatype="html"><source>This project now collects evidence in advisory mode.</source><target>Dự án này giờ thu thập bằng chứng ở chế độ cố vấn.</target></trans-unit>
+      <trans-unit id="onboarding.enable.unchanged" datatype="html"><source>This project was already enabled in advisory mode, so this confirmation changed nothing on the server.</source><target>Dự án này đã được bật ở chế độ cố vấn, nên lần xác nhận này không thay đổi gì trên máy chủ.</target></trans-unit>
+      <trans-unit id="onboarding.enable.mode" datatype="html"><source>Mode</source><target>Chế độ</target></trans-unit>
+      <trans-unit id="onboarding.enable.mode-advisory" datatype="html"><source>Advisory</source><target>Cố vấn</target></trans-unit>
+      <trans-unit id="onboarding.enable.revision" datatype="html"><source>Policy revision</source><target>Bản sửa chính sách</target></trans-unit>
+      <trans-unit id="onboarding.enable.hash" datatype="html"><source>Revision hash</source><target>Mã băm bản sửa</target></trans-unit>
+      <trans-unit id="onboarding.enable.activated-at" datatype="html"><source>Activated (UTC)</source><target>Đã kích hoạt (UTC)</target></trans-unit>
     </body>
   </file>
 </xliff>

@@ -28,6 +28,9 @@ import type {
   IngestTokenCreatedResponse,
   IngestTokenListResponse,
   IngestTokenView,
+  PolicyActivationDto,
+  PolicyRevisionDto,
+  PolicyRevisionV1,
   ProjectDto,
   ProjectListResponse,
   RunPage,
@@ -107,6 +110,39 @@ const BINDING_BODY: CreateCiBindingRequest = {
 };
 
 const TOKEN_BODY: CreateIngestTokenRequest = { name: 'ci ingest' };
+
+/** 09.2.1-T5.1: the same closed body the step-5 page sends (07.1.1-T3, ruling T62). */
+const POLICY_BODY: PolicyRevisionV1 = {
+  required_suites: [],
+  required_cases: [],
+  late_window_minutes: 1440,
+  gating_refs: { default_branch: false },
+};
+
+const POLICY_REVISION_ID = '018f0000-0000-7000-8000-00000000a004';
+
+const POLICY_REVISION: PolicyRevisionDto = {
+  id: POLICY_REVISION_ID,
+  project_id: 'p-1',
+  revision_no: 4,
+  hash: 'sha256:f250bb2c0d1e9a3b5c7d1f2a4b6c8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a0b1c',
+  state: 'draft',
+  body: POLICY_BODY,
+  created_by: '01990000-0000-7000-8000-000000000001',
+  created_at: '2026-10-26T08:20:00Z',
+  version: 1,
+};
+
+const ACTIVATION: PolicyActivationDto = {
+  project_id: 'p-1',
+  policy_revision_id: POLICY_REVISION_ID,
+  hash: POLICY_REVISION.hash,
+  mode: 'advisory',
+  activated_by: '01990000-0000-7000-8000-000000000001',
+  activated_at: '2026-10-26T08:22:00Z',
+  previous_policy_revision_id: null,
+  changed: true,
+};
 
 const RUN_STATE: RunStateDto = {
   run_id: 'r-1',
@@ -498,6 +534,68 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
     expect(isApiRequestError(cause)).toBe(true);
     if (isApiRequestError(cause)) {
       expect(cause.error.kind).toBe('not_found');
+    }
+  });
+
+  it('createPolicyRevision() posts the closed body and reads the stored revision', async () => {
+    const created = service.createPolicyRevision('p-1', POLICY_BODY);
+    const request = await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/policies`);
+    expect(request.request.method).toBe('POST');
+    // The SDK serialises the body, so the assertion compares the same text the wire carries.
+    expect(request.request.body).toBe(JSON.stringify(POLICY_BODY));
+    // Nothing is asserted about `Idempotency-Key` here: the service passes none (this route's
+    // idempotency is the content hash), and the header on the wire is the platform interceptor's
+    // fallback for untyped mutations (`core/http/idempotency.interceptor.ts`), which owns that
+    // behaviour. The activation case below is the one that pins a caller-supplied key.
+    request.flush(JSON.stringify(POLICY_REVISION), {
+      status: 201,
+      statusText: '',
+      headers: JSON_HEADERS,
+    });
+
+    const answer: PolicyRevisionDto = await created;
+    expect(answer.id).toBe(POLICY_REVISION_ID);
+    expect(answer.revision_no).toBe(4);
+  });
+
+  it('activatePolicy() sends the caller intent key and answers the advisory pointer', async () => {
+    const intent = createIntent();
+    const activated = service.activatePolicy('p-1', POLICY_REVISION_ID, intent);
+    const request = await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/policy-activation`);
+    expect(request.request.method).toBe('POST');
+    // The mode is the service's own decision: the wizard never offers `enforcing` (07.7.1).
+    expect(request.request.body).toBe(
+      JSON.stringify({ policy_revision_id: POLICY_REVISION_ID, mode: 'advisory' }),
+    );
+    expect(request.request.headers.get('Idempotency-Key')).toBe(intent.idempotencyKey);
+    request.flush(JSON.stringify(ACTIVATION), { headers: JSON_HEADERS });
+
+    const answer: PolicyActivationDto = await activated;
+    expect(answer.mode).toBe('advisory');
+    expect(answer.changed).toBe(true);
+    expect(answer.policy_revision_id).toBe(POLICY_REVISION_ID);
+  });
+
+  it('activatePolicy() surfaces a 409 envelope as a typed conflict, never a value', async () => {
+    const activated = service.activatePolicy('p-1', POLICY_REVISION_ID, createIntent());
+    const envelope = {
+      error: {
+        code: 'invalid_transition',
+        message: 'A retired policy revision can never be activated again.',
+        request_id: '3f2b9d54-0d7e-4c1a-9a2e-6b0f5c7d81c4',
+        retryable: false,
+      },
+    };
+    (await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/policy-activation`)).flush(
+      JSON.stringify(envelope),
+      { status: 409, statusText: '', headers: JSON_HEADERS },
+    );
+
+    const cause = await rejectionOf(activated);
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('conflict');
+      expect(cause.error.code).toBe('invalid_transition');
     }
   });
 });

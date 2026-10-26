@@ -1,0 +1,161 @@
+/* 09.2.1-T5.1: the step-5 layout. Tokens only (docs/design/web/tokens.md), both themes resolve the
+   same roles, and every block reflows at 360 px: the grid columns are `minmax(0, …)`/auto and the
+   hash wraps anywhere instead of widening the page. The shared `.state-panel__action` class comes
+   from `shared/ui/states/state-panel.css`; this file adds the primary variant create-project uses. */
+:host,
+.enable,
+.panel,
+form {
+  display: grid;
+  gap: var(--eg-space-5);
+  min-inline-size: var(--eg-space-0);
+}
+.panel {
+  gap: var(--eg-space-3);
+  align-content: start;
+  padding: var(--eg-space-5);
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-surface);
+}
+/* The enabled panel is the only success-tinted surface on the step, and it says "collecting", never
+   a release verdict (state sheet: collection completeness is not a decision). */
+.panel--done {
+  border-color: var(--eg-success-fg);
+  background: var(--eg-success-bg);
+}
+/* The text of the tinted panel uses the one documented pair for this surface — `--eg-success-fg` on
+   `--eg-success-bg` (docs/design/web/tokens.md contrast rows, 6.52 light / 7.70 dark) — instead of
+   the default `--eg-text`/`--eg-text-muted` roles, a pair the token file does not document and
+   which would have to be regenerated through contrast.py before use. The `.advisory` chip keeps its
+   own neutral pair, so it is excluded. */
+.panel--done :is(h3, dt, dd, code),
+.panel--done p:not(.advisory) {
+  color: var(--eg-success-fg);
+}
+h3,
+p,
+dl,
+dd {
+  margin: var(--eg-space-0);
+}
+h3 {
+  color: var(--eg-text);
+  font-family: var(--eg-font-display);
+  font-size: var(--eg-text-lg);
+  line-height: var(--eg-leading-lg);
+  overflow-wrap: anywhere;
+}
+p {
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+  overflow-wrap: anywhere;
+}
+.advisory {
+  padding: var(--eg-space-3) var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-sm);
+  background: var(--eg-neutral-bg);
+  color: var(--eg-neutral-fg);
+  font-size: var(--eg-text-sm);
+  font-weight: var(--eg-weight-semibold);
+  line-height: var(--eg-leading-sm);
+}
+.metadata,
+dl > div {
+  display: grid;
+  gap: var(--eg-space-2);
+  min-inline-size: var(--eg-space-0);
+}
+.metadata {
+  padding: var(--eg-space-0);
+}
+@media (min-width: 768px) {
+  .metadata {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    gap: var(--eg-space-4);
+  }
+}
+dt {
+  color: var(--eg-text);
+  font-size: var(--eg-text-sm);
+  font-weight: var(--eg-weight-semibold);
+}
+dd {
+  color: var(--eg-text);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+  overflow-wrap: anywhere;
+}
+code {
+  font-family: var(--eg-font-mono);
+  font-size: var(--eg-text-xs);
+  overflow-wrap: anywhere;
+}
+button {
+  justify-self: start;
+  max-inline-size: 100%;
+  min-block-size: var(--eg-control-md);
+  padding: var(--eg-space-0) var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-sm);
+  background: var(--eg-surface);
+  color: var(--eg-text);
+  font: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: var(--eg-surface-raised);
+  border-color: var(--eg-accent);
+}
+button:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+button:disabled {
+  border-color: var(--eg-border);
+  background: var(--eg-neutral-bg);
+  color: var(--eg-text-muted);
+  cursor: not-allowed;
+}
+.primary:not(:disabled) {
+  border-color: var(--eg-accent);
+  background: var(--eg-accent);
+  color: var(--eg-on-accent);
+}
+.primary:hover:not(:disabled),
+.primary:active:not(:disabled) {
+  box-shadow: inset var(--eg-space-0) var(--eg-space-0) var(--eg-space-0) var(--eg-border-width)
+    var(--eg-on-accent);
+}
+.validation {
+  color: var(--eg-danger-fg);
+}
+.notice {
+  display: grid;
+  gap: var(--eg-space-3);
+  padding: var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-sm);
+  background: var(--eg-neutral-bg);
+  color: var(--eg-neutral-fg);
+}
+/* The live confirmation region reserves its line so the layout does not jump when it speaks. */
+.busy-status {
+  min-block-size: var(--eg-leading-sm);
+}
+app-error-pattern {
+  display: block;
+  min-inline-size: var(--eg-space-0);
+}
+@media (pointer: coarse), (max-width: 767px) {
+  button {
+    min-block-size: var(--eg-control-touch);
+  }
+  .panel {
+    padding: var(--eg-space-4);
+  }
+}

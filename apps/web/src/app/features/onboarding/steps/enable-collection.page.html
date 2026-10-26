@@ -1,0 +1,118 @@
+<section class="enable" data-testid="enable-collection" [attr.aria-busy]="busy()">
+  <p>{{ intro }}</p>
+
+  <section
+    class="panel"
+    aria-labelledby="enable-preview-heading"
+    data-testid="enable-collection-policy-preview"
+  >
+    <h3 id="enable-preview-heading">{{ previewHeading }}</h3>
+    <p class="advisory" data-testid="enable-collection-not-gating">{{ notGatingCopy }}</p>
+    <dl class="metadata">
+      <div>
+        <dt>{{ lateWindowLabel }}</dt>
+        <dd>
+          @if (preview.lateWindowMinutes !== null) {
+            {{ preview.lateWindowMinutes }} {{ minutesSuffix }}
+          } @else {
+            {{ notSetLabel }}
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ requiredSuitesLabel }}</dt>
+        <dd>{{ preview.requiredSuites.join(', ') || noneLabel }}</dd>
+      </div>
+      <div>
+        <dt>{{ requiredCasesLabel }}</dt>
+        <dd>{{ preview.requiredCases.join(', ') || noneLabel }}</dd>
+      </div>
+      <div>
+        <dt>{{ gatedBranchLabel }}</dt>
+        <dd>{{ preview.gatesDefaultBranch ? yesLabel : noLabel }}</dd>
+      </div>
+    </dl>
+  </section>
+
+  <p class="busy-status" role="status">
+    @if (busy()) {
+      {{ confirmingLabel }}
+    }
+  </p>
+
+  @if (enabled(); as activation) {
+    <section
+      class="panel panel--done"
+      role="status"
+      [attr.aria-live]="'polite'"
+      aria-labelledby="enable-enabled-heading"
+      data-testid="enable-collection-enabled"
+    >
+      <h3 id="enable-enabled-heading">{{ enabledHeading }}</h3>
+      <p>{{ activation.changed ? changedCopy : unchangedCopy }}</p>
+      <p class="advisory">{{ notGatingCopy }}</p>
+      <dl class="metadata">
+        <div>
+          <dt>{{ modeLabel }}</dt>
+          <dd>{{ modeText(activation.mode) }}</dd>
+        </div>
+        @if (enabledRevisionNo(); as revisionNo) {
+          <div>
+            <dt>{{ revisionLabel }}</dt>
+            <dd>{{ revisionNo }}</dd>
+          </div>
+        }
+        <div>
+          <dt>{{ hashLabel }}</dt>
+          <dd>
+            <code
+              ><bdi>{{ enabledHash() }}</bdi></code
+            >
+          </dd>
+        </div>
+        <div>
+          <dt>{{ activatedAtLabel }}</dt>
+          <dd>
+            <time [attr.datetime]="activation.activated_at">{{
+              activation.activated_at | date: 'medium' : '+0000'
+            }}</time>
+          </dd>
+        </div>
+      </dl>
+    </section>
+  } @else {
+    <form (ngSubmit)="confirm()">
+      @if (!permitted()) {
+        <p id="enable-permission" data-testid="enable-collection-ask-approver">{{ askApprover }}</p>
+      }
+      <button
+        class="state-panel__action primary"
+        data-testid="enable-collection-confirm"
+        type="submit"
+        [disabled]="busy() || !permitted()"
+        [attr.aria-describedby]="!permitted() ? 'enable-permission' : null"
+      >
+        {{ busy() ? confirmingLabel : confirmLabel }}
+      </button>
+    </form>
+
+    @if (failure(); as error) {
+      <section data-testid="enable-collection-error">
+        <app-error-pattern
+          [error]="error"
+          [headingLevel]="3"
+          [retryDisabled]="!retryEligible() || busy()"
+          (retry)="retry()"
+        />
+        @if (responseUncertain()) {
+          <p class="notice" data-testid="enable-collection-response-uncertain">
+            {{ uncertainLabel }}
+          </p>
+        }
+        @for (detail of error.details; track $index) {
+          <p class="validation">{{ detail.path }} {{ detail.reason }}</p>
+        }
+      </section>
+    }
+  }
+</section>

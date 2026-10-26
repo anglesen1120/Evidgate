@@ -2610,6 +2610,30 @@
       <trans-unit id="runs.list.unverified-ref" datatype="html"><source>Unverified ref</source></trans-unit>
       <trans-unit id="runs.list.ref-unavailable" datatype="html"><source>Ref unavailable</source></trans-unit>
       <trans-unit id="runs.list.child" datatype="html"><source>Derived run</source></trans-unit>
+      <trans-unit id="onboarding.enable.intro" datatype="html"><source>Enabling collection records a decision for every run of this project. It does not gate any merge yet.</source></trans-unit>
+      <trans-unit id="onboarding.enable.preview-heading" datatype="html"><source>Default advisory policy</source></trans-unit>
+      <trans-unit id="onboarding.enable.not-gating" datatype="html"><source>Not gating yet. This policy runs in advisory mode, so Evidgate records what it would have decided and never blocks a merge.</source></trans-unit>
+      <trans-unit id="onboarding.enable.late-window" datatype="html"><source>Late-evidence window</source></trans-unit>
+      <trans-unit id="onboarding.enable.minutes" datatype="html"><source>minutes</source></trans-unit>
+      <trans-unit id="onboarding.enable.required-suites" datatype="html"><source>Required suites</source></trans-unit>
+      <trans-unit id="onboarding.enable.required-cases" datatype="html"><source>Required cases</source></trans-unit>
+      <trans-unit id="onboarding.enable.gated-branch" datatype="html"><source>Default branch gated</source></trans-unit>
+      <trans-unit id="onboarding.enable.not-set" datatype="html"><source>Not set</source></trans-unit>
+      <trans-unit id="onboarding.enable.none" datatype="html"><source>None</source></trans-unit>
+      <trans-unit id="onboarding.enable.yes" datatype="html"><source>Yes</source></trans-unit>
+      <trans-unit id="onboarding.enable.no" datatype="html"><source>No</source></trans-unit>
+      <trans-unit id="onboarding.enable.confirm" datatype="html"><source>Enable collection</source></trans-unit>
+      <trans-unit id="onboarding.enable.confirming" datatype="html"><source>Enabling collection…</source></trans-unit>
+      <trans-unit id="onboarding.enable.ask-approver" datatype="html"><source>Ask your release approver to enable collection for this project.</source></trans-unit>
+      <trans-unit id="onboarding.enable.response-uncertain" datatype="html"><source>The confirmation may already be recorded. Retrying is safe: it reuses the same idempotency key.</source></trans-unit>
+      <trans-unit id="onboarding.enable.enabled-heading" datatype="html"><source>Project enabled and collecting</source></trans-unit>
+      <trans-unit id="onboarding.enable.changed" datatype="html"><source>This project now collects evidence in advisory mode.</source></trans-unit>
+      <trans-unit id="onboarding.enable.unchanged" datatype="html"><source>This project was already enabled in advisory mode, so this confirmation changed nothing on the server.</source></trans-unit>
+      <trans-unit id="onboarding.enable.mode" datatype="html"><source>Mode</source></trans-unit>
+      <trans-unit id="onboarding.enable.mode-advisory" datatype="html"><source>Advisory</source></trans-unit>
+      <trans-unit id="onboarding.enable.revision" datatype="html"><source>Policy revision</source></trans-unit>
+      <trans-unit id="onboarding.enable.hash" datatype="html"><source>Revision hash</source></trans-unit>
+      <trans-unit id="onboarding.enable.activated-at" datatype="html"><source>Activated (UTC)</source></trans-unit>
     </body>
   </file>
 </xliff>

@@ -329,7 +329,8 @@ test.describe('a session without the write grants cannot connect (AC2, §8)', ()
     page,
   }) => {
     // `permissions-list-onboarding-no-writes`: the wizard's own catalogue minus `ci_binding:write`
-    // and `ingest_token:write`, keeping `project:create` so the route itself still opens.
+    // and `ingest_token:write` (and, since 09.2.1-T5, plus `policy:write`), keeping
+    // `project:create` so the route itself still opens.
     await page.goto(
       withVariant(
         onboardingPath('en'),

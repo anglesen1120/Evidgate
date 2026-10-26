@@ -304,8 +304,8 @@ export function stepItem(page: Page, step: StepNumber) {
 
 /**
  * Every stepper item, scoped to the stepper itself: `[data-testid^="onboarding-step-"]` alone would
- * also match the pending panel (`onboarding-step-pending`) the steps no page owns yet render — 3–5
- * since 09.2.1-T2 replaced step 2's placeholder with the connect page.
+ * also match the pending panel (`onboarding-step-pending`) the steps no page owns yet render — 3–4
+ * since 09.2.1-T2 replaced step 2's placeholder and 09.2.1-T5 replaced step 5's with the enable page.
  */
 export function stepperItems(page: Page) {
   return page.locator('[data-testid="onboarding-stepper"] [data-testid^="onboarding-step-"]');
@@ -559,4 +559,40 @@ export async function expectSecretOnlyInReveal(
 export async function expectNoReveal(page: Page): Promise<void> {
   await expect(revealSlot(page)).toHaveCount(0);
   await expect(revealValue(page)).toHaveCount(0);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Step 5 (09.2.1-T5, plan §2 AC5, §8 rows T98 and "idempotency", §10 T5.1/T5.2). Two things are
+// toggles and nothing here is a DOM contract: the confirm is derived from `policy:write`, and the
+// two wizard grant sets differ in exactly that one code, so the enabled and the disabled state are
+// the same seed under a different `listPermissions` variant. `permissions-list-onboarding` (the
+// wizard's default here) holds the seven codes of steps 1–4 and no `policy:write`; step 5's control
+// is natively disabled under it. `permissions-list-onboarding-enable` is that set plus
+// `policy:write` — the lone org creator's `release_approver` grants (T98) — so the confirm is
+// reachable without a second member.
+//
+// Step 5 is never derived done: `contracts/openapi.yaml` has only the activation POST, so a reload
+// shows the confirm again (plan §10 Notes). A repeated confirm is the `unchanged` answer below, not
+// an error; that is why the replay is a corpus document and not a state the suite has to fake.
+// ---------------------------------------------------------------------------------------------
+
+/** `fixtures/web-api/permissions-list-onboarding-enable`: the wizard grants plus `policy:write`. */
+export const ENABLE_GRANTS_TOGGLE = 'fixture.variant.listPermissions=onboarding-enable';
+
+/** The four answers `activatePolicyRevision` carries in the corpus. */
+export type ActivationAnswer = 'ok' | 'unchanged' | 'invalid-transition' | 'forbidden';
+
+/** A variant toggle for the step-5 confirm's answer, to append through `seedQueryWith`. */
+export function activationVariantToggle(answer: ActivationAnswer = 'ok'): string {
+  return `fixture.variant.activatePolicyRevision=${answer}`;
+}
+
+/**
+ * The `?fixture.latency=` toggle in milliseconds, every operation. `fixture-backend.ts` applies it
+ * ahead of a document's own `latency_ms`, which is how a submit can be observed while it is still
+ * in flight — the only in-flight seam the fixtures build has, because it answers in process
+ * (`HttpBackend`) and exposes no network request to hold or count.
+ */
+export function latencyToggle(milliseconds: number): string {
+  return `fixture.latency=${milliseconds}`;
 }
