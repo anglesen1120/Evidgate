@@ -10,7 +10,7 @@
 |---|---|
 | Stack | Changed by the owner (DECISIONS CR-D-1): .NET 10 LTS + CQRS server/worker, Angular 22 web, PostgreSQL 18; customer-side CLI/adapters/agent stay Node/TypeScript |
 | High-level plans 01–12 | Reviewed (§2), migrated to the new stack and patched with the §3 rulings |
-| Feature plans | One file per story, `plans/features/<NN>-<area>/<story-id>-<slug>.md`, 164 stories (§7) |
+| Feature plans | One file per story, `plans/features/<NN>-<area>/<story-id>-<slug>.md`: 195 files for 195 of the 205 stories in §7; the other ten (13.3.1, 13.4.1, 13.5.1, 13.5.2, 13.6.1, 13.7.1, 13.7.2, 13.8.1, 13.8.2, 13.9.1) are the "(feature plan pending)" rows, verified 2026-10-26 against `ls plans/features/*/` |
 | Definition of Ready | Checked per feature plan at the start of its build (§6); open owner decisions still gate the stories named in §5.3 |
 
 ## 2. Tech Lead verdict on the high-level plans
@@ -32,7 +32,7 @@ Method: four parallel reviewers (01–03, 04–06, 07–08, 09–12) read every 
 | 11 Security & compliance | Good; supply chain npm-only (B) | NuGet lock/vulnerability/licence scanning missing; CSRF; token hashing re-decision |
 | 12 Pilot & commercial | Stack-neutral; ledger modelling issues | `billing_key` contradicts itself; per-pilot prices unrepresentable; `quota_counter` lacks tenant columns |
 
-Verdict [DECISION]: the plan set is **fit to build after the §3 rulings are applied**; no area needs re-scoping. Stack migration + rulings changed the estimate from 487 tasks / 543.5 raw / 652.2 buffered to **502 tasks / 560.25 raw / 672.3 buffered** (+15 tasks, +16.75 raw; 00 §14), including the tasks added while detailing the feature plans (06.3.2-T2, 06.4.4-T3, 05.2.1-T5, 07.2.2-T4, 08.5.3-T3 M→L, 08.6.3-T1 moved to V1). Buffered V1 is now 519.9 person-days. **Known estimate risk [OPEN]:** the security and data-correctness controls of the final review (T70–T100) were placed inside existing task sizes; they must be re-estimated at each story's DoR, and 672.3 buffered days should be read as a lower bound until then.
+Verdict [DECISION]: the plan set is **fit to build after the §3 rulings are applied**; no area needs re-scoping. Stack migration + rulings changed the estimate from 487 tasks / 543.5 raw / 652.2 buffered to **502 tasks / 560.25 raw / 672.3 buffered** (+15 tasks, +16.75 raw; 00 §14), including the tasks added while detailing the feature plans (06.3.2-T2, 06.4.4-T3, 05.2.1-T5, 07.2.2-T4, 08.5.3-T3 M→L, 08.6.3-T1 moved to V1). Buffered V1 is now 519.9 person-days. **Known estimate risk [OPEN]:** the security and data-correctness controls of the final review (T70–T100) were placed inside existing task sizes; they must be re-estimated at each story's DoR, and 672.3 buffered days should be read as a lower bound until then. **Updated 2026-10-26 (S92):** the plan graph now holds **655 tasks / 702.75 raw / 843.3 buffered person-days** (702.75 × 1.2, `scripts/plan_graph.py`), after the CR-D-2 G1 authoring story 13.2.2 and the S52/S92 additions were rolled into plan 00 §14; the 502 / 560.25 / 672.3 figures above stay as the 2026-10-02 verdict's record, and **843.3 buffered days** is the lower bound the T70–T100 re-estimate must be applied to.
 
 ## 3. TL rulings (binding)
 
@@ -221,6 +221,7 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | G1 | 20 | 08.5.5, 09.7.1 | 17 |
 | G1 | 21 | 13.3.1 | 7 |
 | G1 | 22 | 13.4.1, 13.9.1 | 11.5 |
+| G1 | 34 | 13.2.2 | 9.5 |
 | G2 | 1 | 13.7.1 | 2 |
 | G2 | 4 | 04.3.1, 05.7.1 | 3 |
 | G2 | 5 | 01.10.1, 05.7.2, 10.5.2 | 9 |
@@ -266,6 +267,8 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | G4 | 22 | 08.9.1 | 3 |
 | G4 | 23 | 08.9.2 | 2 |
 
+Checked 2026-10-26 against `scripts/plan_graph.py --json`: every story of §7 appears in exactly one row as a placement (the bundle rosters repeated after the em dash are names, not placements; a bracket's `+`-joined stories are placed in the row that carries the bracket), each row's day figure is the story's full size, and the rows sum to 702.75 raw person-days (the graph's 655-task total), split 352.25 G1 · 168.25 G2 · 93.75 G3 · 88.5 G4. That split counts each story once, in the phase of its earliest task; the task-level split in `plans/13-product-phases.md` §4.4 is 281.25 · 195.5 · 106.75 · 119.25 because it counts every task in its own Milestone cell, and the two agree only in their sum (702.75).
+
 ### 5.2 Critical chain (task level)
 
 | Up to | Work in this milestone (raw d) | Longest dependency chain from start (d) | Chain |
@@ -275,7 +278,7 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | G3 | 106.75 | 52.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 → 08.8.3-T2 |
 | G4 | 119.25 | 57.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 → 08.8.3-T2 → 08.9.1-T1 → 08.9.1-T2 → 08.9.2-T1 → 08.9.2-T2 |
 
-Reading [INFERENCE] (arithmetic over the graph): the longest dependency chain to the end of G1 is 29 raw days (28 before story 13.2.2; the role-profile chain through 13.2.2-T6 is now the longest) while G1 holds 281.25 raw days of work (G2: 39.5 against 195.5; both totals include work already merged), so the schedule is **capacity-bound, not dependency-bound**: adding engineers shortens the calendar almost linearly up to roughly 8–10 parallel lanes. The G3 chain runs through tenancy (01.4.1 → 02.1.1) → catalog (03.1–03.2) → manifest/run (05.1–05.2) → ingest/attempts bundle → evidence freeze → healing (08.1–08.4): these tasks get the most senior owner and are never blocked on review.
+Reading [INFERENCE] (arithmetic over the graph): the longest dependency chain to the end of G1 is 29 raw days (28 before story 13.2.2; the role-profile chain through 13.2.2-T6 is now the longest) while G1 holds 281.25 raw days of work (G2: 39.5 against 195.5; both totals include work already merged), so the schedule is **capacity-bound, not dependency-bound**: adding engineers shortens the calendar almost linearly up to roughly 8–10 parallel lanes. The G3 chain runs through tenancy (01.4.1 → 02.1.1) → catalog (03.1–03.2) → manifest/run (05.1–05.2) → ingest/attempts bundle → evidence freeze → healing (08.1–08.4): these tasks get the most senior owner and are never blocked on review. Re-checked 2026-10-26 against `scripts/plan_graph.py --json` as the longest weighted path over the dependency edges restricted to each phase prefix: 29 / 39.5 / 52.5 / 57.5 with the chains above unchanged, and 28 with the 13.2.2 tasks removed.
 
 ### 5.3 Bundles (build together, ordered by task)
 
