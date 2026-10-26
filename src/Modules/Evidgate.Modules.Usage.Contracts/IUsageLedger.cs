@@ -18,25 +18,40 @@ public interface IUsageLedger
     const int MaxBillingKeyLength = 200;
 
     /// <summary>
+    /// Longest <see cref="UsageEntryInput.Unit"/> the column accepts (<c>unit</c> 1..32 characters, counted in code
+    /// points as the column's <c>char_length</c> check does).
+    /// </summary>
+    const int MaxUnitLength = 32;
+
+    /// <summary>
     /// Records <paramref name="request"/>'s entries as ledger rows. Each row is one fact: the same
     /// <c>(org_id, billing_key)</c> is inserted once, so a resent metering event reports its key under
-    /// <see cref="UsageBatchResult.Duplicates"/> instead of writing a second row (ruling T43). The whole batch is one
+    /// <see cref="UsageBatchResult.Duplicates"/> instead of writing a second row (ruling T43). The rows themselves are one
     /// <c>INSERT … SELECT FROM unnest(…)</c> statement with <c>ON CONFLICT (org_id, billing_key) DO NOTHING</c>
-    /// (ruling T50, plan §8 P2), so a batch costs one round trip whatever its size.
+    /// (ruling T50, plan §8 P2) whatever the batch size, and the projects it names are read once before it, so a batch is
+    /// two statements — never one per entry. The rows are written in billing-key order, so two concurrent batches with
+    /// overlapping keys lock in one order and cannot deadlock.
     /// <para>
     /// An entry that repeats an earlier entry's billing key inside the same request is reported under
-    /// <see cref="UsageBatchResult.Duplicates"/> as well: the first occurrence is the one recorded. Price and amount
-    /// stay null until 12.3.1-T3 resolves prices (DECISIONS O5, ruling T60).
+    /// <see cref="UsageBatchResult.Duplicates"/> as well: the first occurrence is the one recorded. A key already on
+    /// file is a duplicate whatever its payload — the first write wins and a later payload is ignored, not compared.
+    /// Price and amount stay null until 12.3.1-T3 resolves prices (DECISIONS O5, ruling T60). Before the insert the
+    /// distinct <see cref="UsageEntryInput.ProjectId"/> values are checked in one read inside the caller's transaction,
+    /// so an unknown project — or one of another org, which row security hides — is a refused entry instead of a
+    /// foreign-key error that would abort the caller's transaction.
     /// </para>
     /// </summary>
     /// <param name="request">The entries to record; an empty batch writes nothing and answers two empty lists.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     /// <returns>The inserted and the duplicate billing keys, in request order.</returns>
     /// <exception cref="ArgumentException">
-    /// The batch breaks the entry rules — a null or longer-than-1000 entry list, a null entry, an undeclared metric,
-    /// a <c>period</c> that is not <c>YYYY-MM</c>, or a billing key that is empty or longer than
-    /// <see cref="MaxBillingKeyLength"/>. The caller built these entries, so this is the caller's bug: the message
-    /// names the first offending entry, and nothing was written.
+    /// The batch breaks the entry rules: a null or longer-than-1000 entry list, a null entry, an undeclared metric, a
+    /// negative <c>quantity</c> (a correction is an adjustment row, never a negative plain row), a <c>period</c> that is
+    /// not <c>YYYY-MM</c>, a billing key that is empty, longer than <see cref="MaxBillingKeyLength"/> or not storable
+    /// text, a <c>unit</c> that is empty, longer than <see cref="MaxUnitLength"/> or not storable text, or a project that
+    /// is not one of the caller's org. Storable text carries no U+0000 and no lone UTF-16 surrogate, which PostgreSQL
+    /// <c>text</c> cannot hold. The caller built these entries, so this is the caller's bug: the message names the first
+    /// offending entry, and nothing was written.
     /// </exception>
     /// <exception cref="InvalidOperationException">
     /// No tenant transaction is open: the tenant-scope guard throws before any statement runs.

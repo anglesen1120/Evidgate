@@ -75,6 +75,18 @@ internal sealed class RecordUsageBatchHandler(
 
         // (c) The tenant comes from the open scope only (00 §5.4 rule: never from the request).
         var orgId = scopes.Require().OrgId;
+
+        // (c.1) The projects are checked in one read in this same transaction before anything is written: a foreign-key
+        // violation would abort the caller's transaction, so an unknown (or other-org) project is refused per entry instead.
+        var projectViolations = await store.ValidateProjectsAsync(orgId, command.Entries, cancellationToken)
+            .ConfigureAwait(false);
+        if (projectViolations.Count > 0)
+        {
+            return Result.Failure<UsageBatchResult>(Error.Invalid(
+                "the usage batch was rejected",
+                [.. projectViolations.Select(violation => new ErrorDetail(violation.Path, violation.Reason, violation.Index))]));
+        }
+
         var batch = UsageBatchRules.Prepare(command.Entries);
 
         // (d) One statement for the batch (plan §8 P2); the returning set is the inserted half of the answer.

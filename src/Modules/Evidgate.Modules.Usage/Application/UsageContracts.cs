@@ -46,6 +46,19 @@ internal sealed class UsageContracts(
 
         var batch = UsageBatchRules.Prepare(request.Entries);
         var orgId = scopes.Require().OrgId;
+
+        // The projects are checked in one read inside the caller's transaction: a foreign-key error would abort that
+        // transaction, and the caller is mid-work — a refused entry it can fix beats a broken unit of work.
+        var projectViolations = await store.ValidateProjectsAsync(orgId, request.Entries, cancellationToken)
+            .ConfigureAwait(false);
+        if (projectViolations.Count > 0)
+        {
+            var first = projectViolations[0];
+            throw new ArgumentException(
+                $"the usage batch is invalid: {first.Path} is {first.Reason}",
+                nameof(request));
+        }
+
         var inserted = await store
             .InsertAsync(orgId, batch.Rows, cancellationToken)
             .ConfigureAwait(false);

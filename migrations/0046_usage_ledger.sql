@@ -44,8 +44,13 @@
 -- `period` is the §4 `YYYY-MM` form (a period is a calendar month, never an instant), `billing_key`
 -- is a 1-200 character source id (T43), and `reason` is mandatory — 1-2000 characters — exactly
 -- when the row is an adjustment, which is what makes the two-person adjustment act (T69) auditable
--- per row. `unit`, `amount`, `currency` and `occurred_at` carry no bound here because the plan's §4
--- does not give one; the emitters that first write a metric own its unit vocabulary (12.3.1-T2).
+-- per row. `quantity` is nonnegative unless the row is an adjustment (a correction may subtract),
+-- and `unit` is a 1-32 character label: both are backstops for the domain rules of
+-- `RecordUsageBatch`, which answer 422 before the statement runs, and the 32 is that contract's
+-- `IUsageLedger.MaxUnitLength`. Both bounds are additive to the feature plan §4 — its column list
+-- gives `quantity numeric not null` / `unit text not null` and no CHECK on either — while `amount`,
+-- `currency` and `occurred_at` stay unbounded for the same reason; the emitters that first write a
+-- metric own its unit vocabulary (12.3.1-T2).
 --
 -- Idempotent like 0025/0027/0028: `create table if not exists` / `drop … if exists` so a re-run is a
 -- no-op. One file runs in one transaction, so the table, its policies, its grants and its journal row
@@ -82,6 +87,8 @@ create table if not exists public.usage_ledger_entry (
     references public.usage_ledger_entry (org_id, id),
   constraint usage_ledger_entry_metric_check check (
     metric in ('results', 'artifact_gb_month', 'egress_gb', 'ai_tokens', 'support_hours', 'runner_minutes', 'device_minutes')),
+  constraint usage_ledger_entry_quantity_check check (adjustment_of is not null or quantity >= 0),
+  constraint usage_ledger_entry_unit_check check (char_length(unit) between 1 and 32),
   constraint usage_ledger_entry_period_check check (period ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
   constraint usage_ledger_entry_billing_key_check check (char_length(billing_key) between 1 and 200),
   constraint usage_ledger_entry_adjustment_reason_check check (

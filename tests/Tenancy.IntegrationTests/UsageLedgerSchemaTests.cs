@@ -10,7 +10,8 @@ namespace Tenancy.IntegrationTests;
 /// 12.3.1-T1.1/T1.2 against a real PostgreSQL: migration 0046's append-only <c>usage_ledger_entry</c>
 /// and migration 0047's <c>usage_rollup</c> — the tenant keys, the dedupe unique key (AC1, T43), the
 /// composite adjustment self-reference and the reason CHECK (AC2), the app role's missing UPDATE and
-/// DELETE (AC3, C6), the closed-list and bounded CHECKs of the plan §4, the roll-up's both uniques and
+/// DELETE (AC3, C6), the plan §4 closed-list CHECKs (metric, period, billing_key) plus the additive
+/// quantity and unit bounds the plan does not state, the roll-up's both uniques and
 /// its coalesce-index upsert target (AC6, NFR-12-1), FORCE RLS with the tenant policy (T2, T3) and the
 /// deploy path onto a database that already holds data.
 /// <para>
@@ -203,6 +204,16 @@ public sealed class UsageLedgerSchemaTests
         ledgerKeys.ShouldContain("f:usage_ledger_entry_project_fk");
         (await _fixture.ConstraintNamesAsync(database, "usage_rollup")).ShouldContain("f:usage_rollup_project_fk");
 
+        // The two backstops behind the domain rules of RecordUsageBatch: a negative quantity only on
+        // an adjustment row, and a 1-32 character unit. Both are named so the behaviour tests below
+        // and the domain rules cite the same constraint.
+        ledgerKeys.ShouldContain(
+            "c:usage_ledger_entry_quantity_check",
+            "a negative quantity must be refused by the database, not only by the domain rule (F-B)");
+        ledgerKeys.ShouldContain(
+            "c:usage_ledger_entry_unit_check",
+            "unit needs a database bound of its own (F-D)");
+
         // §4 P4: one index serves every roll-up/summary/statement filter.
         (await _fixture.IndexesAsync(database, "usage_ledger_entry")).ShouldContain(
             index => index.StartsWith("idx_ledger_period:", StringComparison.Ordinal)
@@ -221,6 +232,16 @@ public sealed class UsageLedgerSchemaTests
             index => index.StartsWith("usage_rollup_project_idx:", StringComparison.Ordinal)
                 && index.Contains("(org_id, project_id)", StringComparison.Ordinal),
             "usage_rollup_project_idx must serve the composite project FK (0028 precedent)");
+
+        // P-2: every roll-up row is rewritten by the recompute, so each page keeps headroom for the
+        // new tuple version (a 100-fillfactor table would push every upsert to a new page).
+        (await _fixture.ScalarAsync<string>(
+            database,
+            "select coalesce(array_to_string(reloptions, ','), '') from pg_catalog.pg_class "
+            + "where oid = 'public.usage_rollup'::regclass"))
+            .ShouldContain(
+                "fillfactor=80",
+                customMessage: "0047 creates usage_rollup with (fillfactor = 80) (P-2)");
     }
 
     [Fact]
@@ -529,6 +550,118 @@ public sealed class UsageLedgerSchemaTests
         (await _fixture.ScalarAsync<long>(database, "select count(*) from public.usage_ledger_entry")).ShouldBe(1);
     }
 
+    [Fact]
+    public async Task Ledger_NegativeQuantity_OnlyOnAnAdjustmentRow()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
+
+        // F-B: a plain metering row cannot carry a negative quantity. The domain rule refuses it with
+        // 422 first; this CHECK is the backstop for every writer that reaches SQL directly.
+        await using (var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org))
+        {
+            var negative = LedgerInsert(
+                Guid.CreateVersion7(),
+                org,
+                project,
+                quantity: -1m,
+                billingKey: "batch:negative:results");
+            var error = await app.CaptureErrorAsync(negative.Sql, negative.Parameters);
+
+            error.SqlState.ShouldBe("23514", "a negative quantity on a plain ledger row must be refused");
+            error.ConstraintName.ShouldBe("usage_ledger_entry_quantity_check");
+        }
+
+        var originalId = Guid.CreateVersion7();
+        await using (var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org))
+        {
+            var original = LedgerInsert(originalId, org, project, quantity: 40m, billingKey: "batch:correction:results");
+            (await app.ExecuteAsync(original.Sql, original.Parameters)).ShouldBe(1);
+
+            // AC2: a correction subtracts, so a negative quantity is legal exactly here.
+            var correction = LedgerInsert(
+                Guid.CreateVersion7(),
+                org,
+                project,
+                quantity: -40m,
+                billingKey: "adjustment:correction:results",
+                adjustmentOf: originalId,
+                reason: "the batch was rejected after it had been billed");
+            (await app.ExecuteAsync(correction.Sql, correction.Parameters))
+                .ShouldBe(1, "a negative quantity is the point of an adjustment row");
+
+            // The CHECK bounds the plain rows only: a positive adjustment is equally legal.
+            var topUp = LedgerInsert(
+                Guid.CreateVersion7(),
+                org,
+                project,
+                quantity: 5m,
+                billingKey: "adjustment:topup:results",
+                adjustmentOf: originalId,
+                reason: "five accepted events were missing from the batch");
+            (await app.ExecuteAsync(topUp.Sql, topUp.Parameters)).ShouldBe(1);
+            await app.CommitAsync();
+        }
+
+        (await _fixture.ScalarAsync<long>(
+            database,
+            $"select count(*) from public.usage_ledger_entry where org_id = '{org}'"))
+            .ShouldBe(3, "the refused negative row wrote nothing; the original and both adjustments did");
+        (await _fixture.ScalarAsync<decimal>(
+            database,
+            $"select sum(quantity) from public.usage_ledger_entry where org_id = '{org}'"))
+            .ShouldBe(5m, "40 - 40 + 5 is what the period statement reconciles to");
+    }
+
+    [Fact]
+    public async Task Ledger_Unit_BoundedToOneTo32Characters()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
+
+        var refused = new (string Label, string Unit)[]
+        {
+            ("empty", string.Empty),
+            ("33 ASCII characters", new string('u', 33)),
+            // char_length counts characters, not bytes: 33 two-byte characters are still 33.
+            ("33 two-byte characters", new string('\u00e9', 33)),
+        };
+
+        foreach (var (label, unit) in refused)
+        {
+            await using var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org);
+            var row = LedgerInsert(
+                Guid.CreateVersion7(),
+                org,
+                project,
+                unit: unit,
+                billingKey: $"batch:unit:{label}");
+            var error = await app.CaptureErrorAsync(row.Sql, row.Parameters);
+
+            error.SqlState.ShouldBe("23514", $"a {label} unit must be refused");
+            error.ConstraintName.ShouldBe("usage_ledger_entry_unit_check");
+        }
+
+        // The inclusive bounds are legal rows, including a multibyte unit at the limit.
+        foreach (var (label, unit) in new[]
+        {
+            ("one", "u"),
+            ("32 ASCII characters", new string('u', 32)),
+            ("32 two-byte characters", new string('\u00e9', 32)),
+        })
+        {
+            await ExecuteAsync(
+                _fixture.AppConnectionString(database),
+                org,
+                LedgerInsert(Guid.CreateVersion7(), org, project, unit: unit, billingKey: $"batch:unit:ok:{label}"));
+        }
+
+        (await _fixture.ScalarAsync<long>(
+            database,
+            $"select count(*) from public.usage_ledger_entry where org_id = '{org}'"))
+            .ShouldBe(3, "only the three in-bound rows exist; every refused unit wrote nothing");
+    }
+
     // ------------------------------------------------------------------ (g) T1.2: the roll-up
 
     [Fact]
@@ -649,6 +782,45 @@ public sealed class UsageLedgerSchemaTests
         }
     }
 
+    [Fact]
+    public async Task Rollup_AppRole_CannotDeleteTruncateOrRewriteTheKey()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
+
+        var rollupId = Guid.CreateVersion7();
+        await ExecuteAsync(
+            _fixture.AppConnectionString(database),
+            org,
+            RollupInsert(rollupId, org, project, totalQuantity: 7m, rowCount: 2));
+
+        // F-J: DELETE, TRUNCATE and every key column are refused at the ACL in execution, not only in
+        // the catalogue. 0047 grants the recompute UPDATE per column and no DELETE/TRUNCATE at all, so
+        // an aggregate can never be deleted, duplicated by a truncate or moved to another scope.
+        foreach (var (label, sql) in new[]
+        {
+            ("delete the aggregate", $"delete from public.usage_rollup where id = '{rollupId}'"),
+            ("move the aggregate to another period", $"update public.usage_rollup set period = '2026-11' where id = '{rollupId}'"),
+            ("move the aggregate to org level", $"update public.usage_rollup set project_id = null where id = '{rollupId}'"),
+            ("rewrite the aggregate's row id", $"update public.usage_rollup set id = '{Guid.CreateVersion7()}' where id = '{rollupId}'"),
+            ("truncate the aggregates", "truncate public.usage_rollup"),
+            ("truncate the ledger", "truncate public.usage_ledger_entry"),
+        })
+        {
+            var error = await CaptureErrorAsync(_fixture.AppConnectionString(database), org, sql);
+
+            error.SqlState.ShouldBe("42501", $"{label} must be a permission error for evidgate_app");
+        }
+
+        // Every refused statement left the aggregate byte-identical for its own scope.
+        (await _fixture.ScalarAsync<long>(
+            database,
+            $"select count(*) from public.usage_rollup where id = '{rollupId}' "
+            + $"and org_id = '{org}' and project_id = '{project}' and period = '2026-10' "
+            + "and total_quantity = 7 and row_count = 2 and version = 1"))
+            .ShouldBe(1, "a refused DELETE/TRUNCATE/key UPDATE must leave the aggregate in place");
+    }
+
     // ------------------------------------------------------------------ (h) T2/T3: RLS isolation
 
     [Fact]
@@ -674,10 +846,24 @@ public sealed class UsageLedgerSchemaTests
             (await other.ScalarAsync<long>("select count(*) from public.usage_ledger_entry")).ShouldBe(0);
             (await other.ScalarAsync<long>("select count(*) from public.usage_rollup")).ShouldBe(0);
 
-            // Writing into the other tenant's ledger is refused by the policy's with-check half.
+            // Writing into the other tenant's rows is refused by each policy's with-check half, on
+            // both tables: the tenant id in the payload is what the policy compares against. Each
+            // refused statement aborts its own transaction (25P02), so each gets its own scope.
             var foreign = LedgerInsert(Guid.CreateVersion7(), org, project);
             var denied = await other.CaptureErrorAsync(foreign.Sql, foreign.Parameters);
-            denied.SqlState.ShouldBe("42501");
+            denied.SqlState.ShouldBe("42501", "a cross-tenant ledger INSERT must fail the with-check");
+        }
+
+        await using (var other = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), otherOrg))
+        {
+            var foreignRollup = RollupInsert(
+                Guid.CreateVersion7(),
+                org,
+                projectId: null,
+                totalQuantity: 2m,
+                rowCount: 1);
+            var deniedRollup = await other.CaptureErrorAsync(foreignRollup.Sql, foreignRollup.Parameters);
+            deniedRollup.SqlState.ShouldBe("42501", "a cross-tenant roll-up INSERT must fail the with-check");
         }
 
         // No tenant context: the helpers return NULL, so the policies match no row.

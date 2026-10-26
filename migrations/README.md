@@ -85,10 +85,12 @@ The playbook for changing a table without breaking the running version is
   `evidgate_resolve.session_user` lookup the cookie path no longer uses, `0046` is 12.3.1-T1.1's
   `usage_ledger_entry` — the append-only, tenant-scoped usage ledger every metered metric writes one
   deduplicated row into (`unique (org_id, billing_key)`, T43/AC1; the composite `adjustment_of`
-  self-reference plus the reason CHECK that makes a correction a new row, AC2; `revoke update,
-  delete` for the app role, the SQL half of C6/AC3), and `0047` is 12.3.1-T1.2's `usage_rollup` —
-  the per-`(org, project, period, metric)` aggregate whose coalesce-project unique index is the
-  idempotent recompute's upsert target (AC6, NFR-12-1), with a column-scoped app-role UPDATE; the
+  self-reference plus the reason CHECK that makes a correction a new row, AC2; the quantity CHECK
+  that allows a negative quantity only on an adjustment and the 1-32 character `unit` CHECK;
+  `revoke update, delete` for the app role, the SQL half of C6/AC3), and `0047` is 12.3.1-T1.2's
+  `usage_rollup` — the per-`(org, project, period, metric)` aggregate whose coalesce-project unique
+  index is the idempotent recompute's upsert target (AC6, NFR-12-1), created `with (fillfactor =
+  80)` and granted a column-scoped app-role UPDATE; the
   next
   free number is `0048`;
   a gap means two branches
@@ -190,13 +192,30 @@ is written by the tenant-scope primitive, never from request input.
 
 ## Notes on the usage tables (12.3.1-T1, `0046`/`0047`)
 
-- `0046`'s `usage_ledger_entry` is append-only by grant, not by trigger:
-  `evidgate_app` holds `select, insert` and nothing else, so a correction is an
-  adjustment row (`adjustment_of` → the corrected row's `(org_id, id)`, the
-  reason CHECK requiring a 1-2000 character reason) and the original row is never
-  rewritten. `DELETE` is owner-path only; the `usage_ledger_entry_owner_backfill`
+- `0046`'s `usage_ledger_entry` is append-only by grant, not by trigger, and
+  the grant binds the app role only: `evidgate_app` holds `select, insert` and
+  nothing else, so a correction is an adjustment row (`adjustment_of` → the
+  corrected row's `(org_id, id)`, the reason CHECK requiring a 1-2000 character
+  reason) and the original row is never rewritten. The owner/migration role
+  keeps `update` and `delete` (an erasure sweep or a backfill is a real UPDATE),
+  which is why the immutability claim is about the app role and not about the
+  table. `DELETE` is owner-path only; the `usage_ledger_entry_owner_backfill`
   policy is what lets that owner path (and a backfill) see the rows under FORCE
-  row level security.
+  row level security. That policy is the accepted `0004`/`0028` precedent —
+  `for all to evidgate_owner using (true) with check (true)` — because FORCE row
+  level security applies to the table owner too and the alternative,
+  `BYPASSRLS`, is what DECISIONS F5 rejects.
+- `0046` bounds the two numeric-ish columns the emitters cannot police alone:
+  `usage_ledger_entry_quantity_check` (`adjustment_of is not null or quantity >=
+  0`) makes a negative quantity legal only on an adjustment row, and
+  `usage_ledger_entry_unit_check` (`char_length(unit) between 1 and 32`) keeps
+  `unit` a nonempty short label (PostgreSQL `char_length` counts characters, so
+  a 32-character multibyte unit is inside the bound). Both are backstops for the
+  domain rules of `RecordUsageBatch`, which answer 422 first, and the 32 is the
+  contract's `IUsageLedger.MaxUnitLength`. Both bounds are additive to the
+  feature plan §4, whose column list gives `quantity numeric not null` and
+  `unit text not null` with no CHECK on either — recorded here and in the
+  migration header, not read from the plan.
 - `0047`'s `usage_rollup` is the recompute's upsert target, and it is the one
   place where the plan's `unique (org_id, project_id, period, metric)` needed a
   correction: a plain unique key treats every NULL `project_id` as distinct, so
@@ -211,7 +230,11 @@ is written by the tenant-scope primitive, never from request input.
   explicitly in the same expression the index is built on. `evidgate_app` may
   `update` only the derived columns
   (`total_quantity`, `total_amount`, `currency`, `row_count`, `gap_flag`,
-  `computed_at`) — never the key it belongs to — and may not `delete`.
+  `computed_at`) — never the key it belongs to — and may not `delete`. The table
+  is created `with (fillfactor = 80)` (P-2), additive to the plan §4, which gives
+  no storage parameters: every row is an upsert target that is rewritten once per
+  recompute, so leaving headroom in each page keeps the new tuple on the same page
+  instead of fanning the table out over HOT chains.
 - **Known gap, 12.3.1-T2.2 (T60).** `usage_ledger_entry.quantity` is
   `numeric not null`, the literal of the feature plan §4. T60 and the same plan's
   §7/§9 say `egress_gb` rows must carry `quantity null` with a reason until
@@ -219,9 +242,11 @@ is written by the tenant-scope primitive, never from request input.
   one column. `0046` keeps the plan's NOT NULL and records the conflict in its
   header; 12.3.1-T2.2 owns the resolution (a follow-up migration relaxing the
   column with a reason-required CHECK, or the plan dropping the null-quantity
-  rule). Until then no `egress_gb` row can be inserted at all, so the metric has
-  no ledger rows and AC8's "unavailable, never 0" is a read-path decision of the
-  summary query (12.3.1-T6 / 09.7.1), not something this schema can express.
+  rule). Until then no null-quantity `egress_gb` row can exist — the column
+  refuses it — while a numeric one can (a measured egress byte count is an
+  ordinary ledger row), so AC8's "unavailable, never 0" is a read-path decision
+  of the summary query (12.3.1-T6 / 09.7.1), not something this schema can
+  express.
 
 ## Tests and fixtures
 

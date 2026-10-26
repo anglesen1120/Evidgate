@@ -40,6 +40,11 @@
 -- deliberately no `TO evidgate_operator` policy (TL T76, D1) — the operator's SELECT grant below
 -- reads zero rows until 02.8.1's grant-gated policy lands.
 --
+-- `with (fillfactor = 80)` (P-2), additive to the feature plan §4 (its `usage_rollup` line gives no
+-- storage parameters): every row is an upsert target rewritten once per recompute, and the UPDATE
+-- touches only non-indexed columns, so 20 % page headroom keeps each rewrite a HOT update instead of
+-- spilling a new tuple version to a fresh page.
+--
 -- Idempotent like 0025/0027/0028: `create table if not exists` / `drop … if exists`.
 
 create table if not exists public.usage_rollup (
@@ -67,7 +72,7 @@ create table if not exists public.usage_rollup (
     metric in ('results', 'artifact_gb_month', 'egress_gb', 'ai_tokens', 'support_hours', 'runner_minutes', 'device_minutes')),
   constraint usage_rollup_row_count_check check (row_count >= 0),
   constraint usage_rollup_version_check check (version >= 1)
-);
+) with (fillfactor = 80);
 
 -- The upsert target of the recompute (AC6): one aggregate per (org, project-or-org-level, period,
 -- metric). See the header for why the project member is coalesced to the all-zero sentinel instead

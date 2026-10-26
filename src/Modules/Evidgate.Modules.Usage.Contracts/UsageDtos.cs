@@ -15,7 +15,11 @@ public enum UsageMetric
     /// <summary><c>artifact_gb_month</c>: stored artifact size, billed per GB-month (06.5.2).</summary>
     ArtifactGbMonth,
 
-    /// <summary><c>egress_gb</c>: artifact egress, billed per GB. Its source does not exist yet, so rows stay null-not-zero (T60).</summary>
+    /// <summary>
+    /// <c>egress_gb</c>: artifact egress, billed per GB. Its source does not exist yet. Whether an unmetered row is
+    /// representable at all is 12.3.1-T2.2's open decision: <c>quantity</c> is NOT NULL today, so no null-quantity row can
+    /// exist, while T60/AC8 want this metric reported as unavailable rather than 0.
+    /// </summary>
     EgressGb,
 
     /// <summary><c>ai_tokens</c>: model tokens consumed by an authoring or healing run.</summary>
@@ -80,10 +84,24 @@ public static class UsageLedgerMetricNames
 /// <param name="BillingKey">The per-source dedupe key, 1..200 characters, unique per org (ruling T43).</param>
 /// <param name="Metric">The metered metric; it must be a declared <see cref="UsageMetric"/>.</param>
 /// <param name="ProjectId">The project the usage belongs to, or null for an org-level metric (support hours).</param>
-/// <param name="Quantity">The measured amount in <paramref name="Unit"/>. A row is a fact, never a counter: the roll-up sums rows (T43).</param>
-/// <param name="Unit">The unit <paramref name="Quantity"/> is expressed in, e.g. <c>batch</c>, <c>gb_month</c>, <c>hour</c>.</param>
+/// <param name="Quantity">
+/// The measured amount in <paramref name="Unit"/>, never negative: a correction is a new row with <c>adjustment_of</c>
+/// set (12.3.1-T1's adjustment model, the two-person act of T69), so a plain row that subtracted from the roll-up would
+/// be history nobody can audit. A row is a fact, never a counter: the roll-up sums rows (T43).
+/// </param>
+/// <param name="Unit">
+/// The unit <paramref name="Quantity"/> is expressed in, e.g. <c>batch</c>, <c>gb_month</c>, <c>hour</c>; 1..32
+/// characters, counted in code points as the column's check does.
+/// </param>
 /// <param name="Period">The billing period, exactly <c>YYYY-MM</c>.</param>
-/// <param name="OccurredAt">When the metered work happened (the ledger keeps it apart from <c>created_at</c>).</param>
+/// <param name="OccurredAt">
+/// When the metered work happened (the ledger keeps it apart from <c>created_at</c>), stored to the microsecond as the
+/// instant it names; the offset it was written with never reaches the row.
+/// </param>
+/// <remarks>
+/// <see cref="BillingKey"/> and <see cref="Unit"/> are stored as PostgreSQL <c>text</c>: neither may carry U+0000 or a
+/// lone UTF-16 surrogate, which the database cannot represent and would reject as a server error.
+/// </remarks>
 public sealed record UsageEntryInput(
     string BillingKey,
     UsageMetric Metric,
@@ -95,21 +113,29 @@ public sealed record UsageEntryInput(
 
 /// <summary>
 /// One <see cref="IUsageLedger.RecordAsync"/> call: the entries of one metering source (04.8.1's batch,
-/// 06.5.2's period, 12.2.1's support hours) and, on the operator route 12.3.1-T2.4, the request's
-/// <c>Idempotency-Key</c>.
+/// 06.5.2's period, 12.2.1's support hours).
+/// <para>
+/// There is no <c>Idempotency-Key</c> here on purpose: the billing keys already make the write idempotent per row
+/// (T43), while 00 §9.1's key governs a whole <em>request</em> and belongs to the route that serves one — the manual
+/// operator intake of 12.3.1-T2.4, whose command claims it through the idempotency pipeline. A member here that the
+/// in-process write path cannot honour would be a promise the contract does not keep.
+/// </para>
 /// </summary>
 /// <param name="Entries">The entries to record; empty is a no-op and at most 1000 are accepted per call.</param>
-/// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c> (00 §9.1), null on an in-process call (the billing key is the dedupe there).</param>
 public sealed record RecordUsageBatchRequest(
-    IReadOnlyList<UsageEntryInput> Entries,
-    string? IdempotencyKey = null);
+    IReadOnlyList<UsageEntryInput> Entries);
 
 /// <summary>
 /// What one batch recorded (12.3.1 §5): the billing keys of the rows this call inserted and the ones it did not,
 /// both in request order and never containing a key twice.
 /// </summary>
 /// <param name="Inserted">The billing keys of the rows inserted by this call.</param>
-/// <param name="Duplicates">The billing keys already on file (a resent metering event) or repeated inside the request; the first occurrence wins.</param>
+/// <param name="Duplicates">
+/// The billing keys already on file (a resent metering event) or repeated inside the request. A key that is on file is a
+/// duplicate whatever its payload: the first write of a <c>(org_id, billing_key)</c> wins and the payload of a later
+/// call is ignored, never compared and never applied. Detecting a replay whose payload disagrees with the stored row is
+/// the reconciliation task's job (12.3.1-T5), not this write path's.
+/// </param>
 public sealed record UsageBatchResult(
     IReadOnlyList<string> Inserted,
     IReadOnlyList<string> Duplicates);

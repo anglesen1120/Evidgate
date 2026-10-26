@@ -29,7 +29,8 @@ internal static class UsageModule
         services.TryAddScoped<IUsageLedger, UsageContracts>();
 
         // IQuotaGate stays unregistered until 12.3.1-T4 implements it: a hot path that asks for it must fail at
-        // resolution rather than meter against a stub that always answers Ok.
+        // resolution rather than meter against a stub that always answers Ok. Fail closed is the contract (IQuotaGate's
+        // docs), so nothing here substitutes an always-Ok default, now or later.
 
         return services;
     }

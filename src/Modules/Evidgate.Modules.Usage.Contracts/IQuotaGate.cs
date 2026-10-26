@@ -6,9 +6,16 @@ namespace Evidgate.Modules.Usage.Contracts;
 /// <c>quota_counter</c> sees the caller's uncommitted state and a <see cref="QuotaDecision.Block"/> is the caller's
 /// cue to refuse the write, never a rollback of work already committed.
 /// <para>
-/// The interface is the contract 12.3.1 exports; its implementation lands with 12.3.1-T4 (quota counters and
-/// enforcement), so no host registers it yet and a caller must treat a missing registration as "no limit row":
-/// <see cref="QuotaDecision.Ok"/> is the documented default when the org has no counter (12.3.1 §11).
+/// This interface is the contract 12.3.1 exports; its implementation lands with 12.3.1-T4 (quota counters and
+/// enforcement), so no host registers it yet. <b>An unregistered gate is a wiring error, not "no limit":</b> a caller
+/// that resolves it in a host that never registered the implementation fails at resolution (a container throws for the
+/// missing service), and that failure is the documented, fail-closed behaviour. A host must never register a stub that
+/// answers <see cref="QuotaDecision.Ok"/> to paper over the gap.
+/// </para>
+/// <para>
+/// <see cref="QuotaDecision.Ok"/> therefore means exactly one thing: the gate ran and the org has no counter row for
+/// the requested <c>(org, project, period, metric)</c> (or holds one below the warning line). It never means the gate
+/// was skipped or never existed.
 /// </para>
 /// </summary>
 public interface IQuotaGate
