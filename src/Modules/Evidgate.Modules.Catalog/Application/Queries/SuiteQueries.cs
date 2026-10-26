@@ -218,8 +218,10 @@ internal static class SuiteRevisions
             [.. before.Keys.Where(key => !now.ContainsKey(key)).OrderBy(key => key.CaseRevisionId).ThenBy(key => key.VariantHash, StringComparer.Ordinal)],
             [.. now.Where(pair => before.TryGetValue(pair.Key, out var old) && old.Required != pair.Value.Required).Select(pair => pair.Key)
                 .OrderBy(key => key.CaseRevisionId).ThenBy(key => key.VariantHash, StringComparer.Ordinal)],
-            [.. nowEdges.Where(edge => !beforeEdges.Contains(edge)).OrderBy(edge => edge.Parent.CaseRevisionId).ThenBy(edge => edge.Child.CaseRevisionId)],
-            [.. beforeEdges.Where(edge => !nowEdges.Contains(edge)).OrderBy(edge => edge.Parent.CaseRevisionId).ThenBy(edge => edge.Child.CaseRevisionId)],
+            [.. nowEdges.Where(edge => !beforeEdges.Contains(edge)).OrderBy(edge => edge.Parent.CaseRevisionId).ThenBy(edge => edge.Child.CaseRevisionId)
+                .ThenBy(edge => edge.Parent.VariantHash, StringComparer.Ordinal).ThenBy(edge => edge.Child.VariantHash, StringComparer.Ordinal)],
+            [.. beforeEdges.Where(edge => !nowEdges.Contains(edge)).OrderBy(edge => edge.Parent.CaseRevisionId).ThenBy(edge => edge.Child.CaseRevisionId)
+                .ThenBy(edge => edge.Parent.VariantHash, StringComparer.Ordinal).ThenBy(edge => edge.Child.VariantHash, StringComparer.Ordinal)],
             Delta(current.ShardStrategy, against.ShardStrategy),
             Delta(current.RetryPolicy, against.RetryPolicy),
             Delta(current.EnvironmentRequirements, against.EnvironmentRequirements));
