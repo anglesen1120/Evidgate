@@ -1,5 +1,6 @@
 using System.Net;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.Modules.Identity.Sessions;
 using Evidgate.Testing;
 using Shouldly;
 using Xunit;
@@ -352,10 +353,44 @@ public sealed class SessionAuthTests : HarnessTest
 
     /// <summary>
     /// D2 (negative): a value no session was ever minted from answers 401 <c>unauthenticated</c> — the same answer
-    /// an absent cookie gets, so the route is no oracle for whether a value looks like one of its own.
+    /// an absent cookie gets, so the route is no oracle for whether a value looks like one of its own. The value is
+    /// minted SHAPE (43 base64url characters) and unknown at once, which is the only case that reaches the lookup.
     /// </summary>
     [Fact]
     public async Task An_Unknown_Cookie_Answers_Unauthenticated()
+    {
+        using var host = SessionTestHost.Start(Fixture);
+        using var client = host.CreateSessionClient();
+        var member = await host.SignInMemberAsync(client);
+
+        member.SessionCookie.Length.ShouldBe(
+            SessionAuthenticationStore.CookieValueLength,
+            "the shape check's length is derived from the mint and must equal what the store actually issues");
+
+        host.Statements.Clear();
+        using var response = await SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Get,
+            OrgsPath,
+            SessionTestHost.SessionCookieName + "=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcde");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await SessionTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.Unauthenticated);
+        host.Statements.Containing(AuthStatement).Count.ShouldBe(1, "the lookup ran: this is the database's answer");
+    }
+
+    /// <summary>
+    /// SEC3: a value of the wrong LENGTH or the wrong ALPHABET cannot have been minted by this server, so it is
+    /// answered 401 <c>unauthenticated</c> without an HMAC and without a statement — an attacker cannot choose the
+    /// work a garbage cookie costs. Discoverable only as the same 401 an absent cookie gets (no oracle).
+    /// </summary>
+    [Theory]
+    [InlineData("AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcd")]
+    [InlineData("AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcdef")]
+    [InlineData("AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abc+e")]
+    [InlineData("AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_ab/de")]
+    [InlineData("AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcd=")]
+    public async Task A_Value_Of_The_Wrong_Shape_Never_Reaches_The_Database(string value)
     {
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
@@ -366,11 +401,12 @@ public sealed class SessionAuthTests : HarnessTest
             client,
             HttpMethod.Get,
             OrgsPath,
-            SessionTestHost.SessionCookieName + "=AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcd");
+            SessionTestHost.SessionCookieName + "=" + value);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await SessionTestHost.ErrorCodeAsync(response)).ShouldBe(ApiErrorCode.Unauthenticated);
-        host.Statements.Containing(AuthStatement).Count.ShouldBe(1, "the lookup ran: this is the database's answer");
+        host.Statements.Containing(AuthStatement).ShouldBeEmpty(
+            "a value that cannot be a minted one is refused before the HMAC and before the statement");
     }
 
     /// <summary>

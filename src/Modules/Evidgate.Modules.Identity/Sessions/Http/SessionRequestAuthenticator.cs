@@ -12,7 +12,8 @@ namespace Evidgate.Modules.Identity.Sessions.Http;
 /// The request-path session authenticator of 02.3.2-T1 (D2/D3/D5): it reads the <c>__Host-evidgate_session</c>
 /// cookie, hands the value to <see cref="ISessionAuthentication"/> — one statement, the HMAC lookup and the
 /// throttled slide — and turns the row's state into the request's outcome. When the row says a privilege change
-/// demands rotation, it rotates FIRST and answers with the new session, all inside the same memoized call.
+/// demands rotation, it proves the antiforgery pair of the session it presented and only then rotates, all inside
+/// the same memoized call.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -26,9 +27,21 @@ namespace Evidgate.Modules.Identity.Sessions.Http;
 /// <para>
 /// <b>Rotation is single-winner (D5b).</b> Two requests that present the same rotation-required cookie race for
 /// one <c>session_rotate</c>; the store decides one winner, and this class never authenticates the loser on the
-/// old row: a rotation failure that is not an outage is answered as 401 <c>session_revoked</c>, because the old
-/// cookie is exactly what it is. That closes the window a stolen pre-rotation cookie would otherwise keep open
+/// old row. The failure is mapped by its cause, never flattened: a session that is <c>not_live</c> (revoked,
+/// expired, or the loser of the race) is 401 <c>session_revoked</c> because the old cookie is exactly what it is;
+/// a disabled account is 403 <c>account_disabled</c>, an authorization answer the browser must not read as "sign in
+/// again"; and an outage — or a code this build does not map — is 503 <c>unavailable</c>, which never signs a user
+/// out of a session nobody judged. That closes the window a stolen pre-rotation cookie would otherwise keep open
 /// for the length of the old row's idle deadline.
+/// </para>
+/// <para>
+/// <b>The pair is proved before the rotation (R1/SEC-1).</b> A privilege-marked session is still the credential a
+/// mutation presents, so the request must pass the antiforgery check of THAT session's pair before anything
+/// writes: a forged cross-site mutation can neither burn the session (old row revoked, successor minted) nor be
+/// handed a <c>Set-Cookie</c> — it answers 403 <c>csrf_failed</c> and the flag stays for the next legitimate
+/// request. Only an in-scope mutating request pays this second look: a rotation-required read has no pair to
+/// prove (it is a safe method) and rotates exactly as before, and the middleware's own check stays the single
+/// check for every non-rotating request.
 /// </para>
 /// <para>
 /// <b>Nothing is logged, ever (D9).</b> The cookie value, the session id, the client address and the user agent
@@ -38,7 +51,8 @@ namespace Evidgate.Modules.Identity.Sessions.Http;
 /// </remarks>
 /// <param name="authentication">The one statement that answers what the presented value is (D3).</param>
 /// <param name="sessions">The rotation writer (D5b).</param>
-/// <param name="antiforgery">The service that mints the refreshed pair on a rotation.</param>
+/// <param name="antiforgery">The service that mints the refreshed pair on a rotation, and the one that proves the
+/// presented pair before it.</param>
 /// <param name="clock">The clock the rotated cookie's browser lifetime is measured from.</param>
 internal sealed class SessionRequestAuthenticator(
     ISessionAuthentication authentication,
@@ -69,11 +83,6 @@ internal sealed class SessionRequestAuthenticator(
         return new ValueTask<SessionRequestOutcome>(outcome);
     }
 
-    /// <summary>Why <paramref name="error"/> is an outage rather than a verdict on the credential.</summary>
-    private static bool IsOutage(Error error) =>
-        error.Status == StatusCodes.Status503ServiceUnavailable
-        || string.Equals(error.Code, ApiErrorCode.Unavailable, StringComparison.Ordinal);
-
     private async Task<SessionRequestOutcome> ResolveAsync(HttpContext http, CancellationToken cancellationToken)
     {
         // T38: a bearer request is never authenticated by its cookie. Asked FIRST, before the cookie is even read,
@@ -81,7 +90,7 @@ internal sealed class SessionRequestAuthenticator(
         // counted: no session authentication was attempted, so no outcome exists to count (D9).
         if (http.Request.Headers.ContainsKey(HeaderNames.Authorization))
         {
-            return new SessionRequestOutcome(SessionErrors.Unauthenticated, UserId: null, SessionId: null);
+            return Refuse(SessionErrors.Unauthenticated);
         }
 
         var presented = http.Request.Cookies[SessionCookieNames.Session];
@@ -97,7 +106,7 @@ internal sealed class SessionRequestAuthenticator(
             // No pepper, or the database could not answer: the credential was not judged, and neither is it
             // accepted. 503 with Retry-After, never a 401 that would sign the user out of a healthy session.
             // The store already counted this outcome (S1's contract); counting it here would double it.
-            return new SessionRequestOutcome(authenticated.Error, UserId: null, SessionId: null);
+            return Refuse(authenticated.Error!);
         }
 
         var session = authenticated.Value;
@@ -123,12 +132,23 @@ internal sealed class SessionRequestAuthenticator(
 
         if (!session.RotationRequired)
         {
-            // The store counted this authenticated outcome inside the one statement that judged it (S1).
-            return new SessionRequestOutcome(
-                Refusal: null,
-                session.UserId,
-                session.SessionId,
-                ProofOf(presented));
+            // The store counted this authenticated outcome inside the one statement that judged it (S1). The proof
+            // is lazy (P2): the one HMAC is paid only if a handler that must re-resolve this session asks for it.
+            return SessionRequestOutcome.Live(session.UserId, session.SessionId, () => ProofOf(presented));
+        }
+
+        // R1/SEC-1: the presented pair is proved BEFORE the rotation. A rotation-required session is still the
+        // credential, so an in-scope mutation must prove the pair minted for it — otherwise a cross-site forged
+        // mutation would revoke the old row, mint a successor and answer with a Set-Cookie, and only then report
+        // 403. On a failed pair nothing happens at all: no session_rotate, no cookie, the flag untouched.
+        if (SessionXsrfPolicy.IsInScope(http)
+            && !await SessionXsrfPolicy.ValidatesAsync(http, antiforgery, cancellationToken).ConfigureAwait(false))
+        {
+            // Counted HERE because this layer answers the refusal: the middleware returns on a refusal and counts
+            // nothing, so one request still produces one outcome (D9).
+            SessionTelemetry.AuthOutcome(ApiErrorCode.CsrfFailed);
+
+            return Refuse(SessionErrors.CsrfFailed);
         }
 
         var rotated = await sessions
@@ -137,9 +157,19 @@ internal sealed class SessionRequestAuthenticator(
 
         if (!rotated.IsSuccess)
         {
-            // Single-winner (D5b): the loser of the race, and every other non-outage failure, means the presented
-            // cookie is dead. Never authenticate on it.
-            return Refuse(IsOutage(rotated.Error!) ? SessionErrors.Unavailable : SessionErrors.SessionRevoked);
+            // Single-winner (D5b) and R2: the loser of the race — a session that is not live — is 401
+            // session_revoked, because the presented cookie is exactly what it is. A disabled account is 403
+            // account_disabled: an authorization answer, never a credential one. An outage (or a code this build
+            // does not map) is 503: it never signs a user out of a session nobody judged. Never authenticate on
+            // the old cookie.
+            var failure = rotated.Error!;
+
+            return Refuse(failure.Code switch
+            {
+                ApiErrorCode.AccountDisabled => SessionErrors.AccountDisabled,
+                ApiErrorCode.SessionRevoked => SessionErrors.SessionRevoked,
+                _ => SessionErrors.Unavailable,
+            });
         }
 
         var ticket = rotated.Value;
@@ -153,13 +183,10 @@ internal sealed class SessionRequestAuthenticator(
         // privilege change is one rotation however many layers observe it.
         //
         // The proof is of the NEW cookie: the presented value is dead the moment the old row was revoked, so a
-        // handler that resolves the session server-side (link confirm, D8/SEC2) must be handed the successor's hash,
-        // never a hash of what the browser sent (orchestrator ruling).
-        return new SessionRequestOutcome(
-            Refusal: null,
-            session.UserId,
-            ticket.SessionId,
-            ProofOf(ticket.CookieValue));
+        // handler that resolves the session server-side (link confirm, D8/SEC2) must be handed the successor's
+        // hash, never a hash of what the browser sent (orchestrator ruling). Still lazy (P2): computed only if
+        // such a handler asks.
+        return SessionRequestOutcome.Live(session.UserId, ticket.SessionId, () => ProofOf(ticket.CookieValue));
     }
 
     /// <summary>
@@ -176,7 +203,7 @@ internal sealed class SessionRequestAuthenticator(
     private byte[] ProofOf(string cookieValue) =>
         secrets.HashCurrent(Encoding.ASCII.GetBytes(cookieValue)).Hash;
 
-    /// <summary>The refusal outcome for <paramref name="error"/>: no caller, no session, nothing counted here.</summary>
-    private static SessionRequestOutcome Refuse(Error error) =>
-        new(error, UserId: null, SessionId: null);
+    /// <summary>The refusal outcome for <paramref name="error"/>: no caller, no session, no proof.</summary>
+    /// <param name="error">The 00 §9.2 error the request answers.</param>
+    private static SessionRequestOutcome Refuse(Error error) => SessionRequestOutcome.Refused(error);
 }

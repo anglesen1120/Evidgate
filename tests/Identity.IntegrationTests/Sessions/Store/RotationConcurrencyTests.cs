@@ -8,7 +8,7 @@ using Xunit;
 namespace Identity.IntegrationTests.Sessions.Store;
 
 /// <summary>
-/// Addendum (a) of the 02.3.2-T1.1 review: rotation is ATOMIC AND SINGLE-WINNER (0045:415-451). Two rotations
+/// Addendum (a) of the 02.3.2-T1.1 review: rotation is ATOMIC AND SINGLE-WINNER (0045:498-531). Two rotations
 /// of one predecessor run here against the real server at the same time — genuinely concurrent, held on the
 /// row lock by a third transaction — and exactly one of them may mint a successor. The loser's UPDATE matches
 /// no row (the row it saw live is revoked once the lock is released) and it answers 401

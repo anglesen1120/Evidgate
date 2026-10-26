@@ -569,10 +569,11 @@ internal static class LinkEndpoints
     }
 
     /// <summary>
-    /// The live session's proof for the link store (<c>SessionRequestOutcome.SessionProof</c>): the HMAC the
-    /// authenticator computed for that session's cookie, which after an in-request lazy rotation is the hash of
+    /// The live session's proof for the link store (<see cref="SessionRequestOutcome.GetSessionProof"/>): the HMAC
+    /// the authenticator derives for that session's cookie, which after an in-request lazy rotation is the hash of
     /// the newly issued cookie. Asked of the same per-request memoized authenticator, so this costs no second
-    /// statement and no second rotation.
+    /// statement and no second rotation — and, because the proof is lazy, this is the only request path that pays
+    /// for it at all.
     /// </summary>
     /// <param name="context">The authenticated request.</param>
     /// <param name="authenticator">The deployment's authenticator.</param>
@@ -585,7 +586,7 @@ internal static class LinkEndpoints
     {
         var outcome = await authenticator.AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
 
-        return outcome.Refusal is null ? outcome.SessionProof : null;
+        return outcome.GetSessionProof();
     }
 
     /// <summary>Deletes the staged-link cookie when the request presented one.</summary>

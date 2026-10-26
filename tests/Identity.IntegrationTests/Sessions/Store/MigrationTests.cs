@@ -54,7 +54,11 @@ public sealed class MigrationTests : SessionHardeningTestBase
         var userId = await SeedUserAsync("legacy-row@example.com");
         var clock = ClockAt();
         var sessionId = Guid.CreateVersion7();
-        const string CookieValue = "a-cookie-minted-before-0045";
+
+        // A value of the shape 0042's mint produced — 43 base64url characters — because that is what a live row
+        // written before 0045 holds: the store's SEC3 shape guard refuses anything else before it hashes, so an
+        // arbitrary string here would prove the guard instead of the migration.
+        var cookieValue = UnknownCookieValue();
 
         await OwnerExecuteAsync(
             """
@@ -65,13 +69,13 @@ public sealed class MigrationTests : SessionHardeningTestBase
             """,
             ("id", sessionId),
             ("user_id", userId),
-            ("hmac", HmacOf(Pepper, CookieValue)),
+            ("hmac", HmacOf(Pepper, cookieValue)),
             ("version", CurrentVersion),
             ("created", clock.UtcNow),
             ("expires", clock.UtcNow.AddHours(8)),
             ("absolute", clock.UtcNow.AddDays(7)));
 
-        var result = await AuthenticateAsync(CookieValue, clock);
+        var result = await AuthenticateAsync(cookieValue, clock);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Code ?? "a row without rotation_required_at is still live");
         result.Value.Status.ShouldBe(SessionAuthStatus.Active);

@@ -6,7 +6,7 @@ using Xunit;
 namespace Identity.IntegrationTests.Sessions.Store;
 
 /// <summary>
-/// Addendum (c) of the 02.3.2-T1.1 review: the two index claims of 0045:103-121, proven against the real
+/// Addendum (c) of the 02.3.2-T1.1 review: the two index claims of 0045:116-134, proven against the real
 /// planner, plus the HOT property the sliding update depends on.
 /// </summary>
 /// <remarks>
@@ -32,7 +32,7 @@ public sealed class SessionIndexPlanTests : SessionHardeningTestBase
     {
     }
 
-    /// <summary>0045:103-111: the cookie lookup probes the unique full key, not a sequential scan.</summary>
+    /// <summary>0045:116-124: the cookie lookup probes the unique full key, not a sequential scan.</summary>
     [Fact]
     public async Task The_Cookie_Lookup_Plans_The_Unique_Hmac_Index()
     {
@@ -48,7 +48,7 @@ public sealed class SessionIndexPlanTests : SessionHardeningTestBase
         plan.ShouldNotContain("Seq Scan", Case.Sensitive);
     }
 
-    /// <summary>0045:113-121: the per-user paths use the partial live index, not the dropped one.</summary>
+    /// <summary>0045:126-134: the per-user paths use the partial live index, not the dropped one.</summary>
     [Fact]
     public async Task The_Per_User_Paths_Plan_The_Partial_Live_Index()
     {
@@ -88,7 +88,7 @@ public sealed class SessionIndexPlanTests : SessionHardeningTestBase
     }
 
     /// <summary>
-    /// P3 (0045:113-121): a slide can be a heap-only update because neither column it writes is in any index,
+    /// P3 (0045:126-134): a slide can be a heap-only update because neither column it writes is in any index,
     /// and the page keeps room for a second tuple version. This is the structural half of the HOT claim and it
     /// is deterministic — the counter half (<c>pg_stat_get_tuples_hot_updated</c>) is not asserted here on
     /// purpose: publishing that figure needs <c>pg_stat_force_next_flush()</c>, which <c>evidgate_owner</c>

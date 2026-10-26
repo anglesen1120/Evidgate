@@ -29,9 +29,11 @@ namespace Evidgate.Api.Middleware;
 /// </para>
 /// <para>
 /// <b>Rotation.</b> Auth here is the request authenticator's memoized call, so a mutation that triggers a
-/// privilege-change rotation rotates, re-issues the pair and still validates the pair the client sent (the
-/// presented-session slot of <see cref="SessionAntiforgeryDataProvider"/>) — and the tenant filter and the endpoint
-/// then see the same outcome with no second statement (P1/P3).
+/// privilege-change rotation proves the presented pair INSIDE that call, before the rotation writes anything
+/// (R1/SEC-1: a forged mutation can neither burn the session nor be handed a successor's cookie), rotates, re-issues
+/// the pair and returns; the check below then validates the same pair the client sent (the presented-session slot of
+/// <see cref="SessionAntiforgeryDataProvider"/>) and the tenant filter and the endpoint see one outcome with no
+/// second statement and no second rotation (P1/P3). For every other request this check is the only one.
 /// </para>
 /// </remarks>
 /// <param name="next">The rest of the pipeline.</param>

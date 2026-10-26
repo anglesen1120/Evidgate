@@ -76,7 +76,7 @@ internal interface ILinkIdentityStore
     /// </summary>
     /// <param name="sessionProof">
     /// The HMAC the deployment's session authenticator computed for the LIVE session's cookie value
-    /// (<c>SessionRequestOutcome.SessionProof</c>) — a hash, never the raw cookie. After an in-request lazy
+    /// (<c>SessionRequestOutcome.GetSessionProof()</c>) — a hash, never the raw cookie. After an in-request lazy
     /// rotation it is the hash of the newly issued cookie, which is the only value the function can still match;
     /// null or empty is <see cref="LinkResult.Unauthenticated"/> without a database call.
     /// </param>

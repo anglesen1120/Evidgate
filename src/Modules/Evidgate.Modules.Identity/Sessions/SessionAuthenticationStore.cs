@@ -18,8 +18,9 @@ namespace Evidgate.Modules.Identity.Sessions;
 /// <para>
 /// The HMAC is computed here and the COMPARISON happens in the database against the unique index: the app role
 /// holds no privilege on <c>session</c> (0041), and an app-side comparison of a secret is exactly the timing
-/// side channel this design removes. The presented value is bounded before it is hashed — a value longer than
-/// any this server mints cannot be a session, so it is refused without a database round trip.
+/// side channel this design removes. The presented value is shape-checked before it is hashed — the mint emits
+/// exactly <see cref="SessionAuthenticationStore.CookieValueLength"/> base64url characters, so any other length or
+/// alphabet cannot be a session and is refused before the HMAC and without a database round trip.
 /// </para>
 /// <para>
 /// A session's state is a SUCCESS value (<see cref="SessionAuthResult"/>), never a failure: the caller renders
@@ -31,10 +32,18 @@ namespace Evidgate.Modules.Identity.Sessions;
 internal sealed class SessionAuthenticationStore : ISessionAuthentication
 {
     /// <summary>
-    /// Longest cookie value that is still hashed, in characters. A minted value is 43 base64url characters
-    /// (<c>SessionStore.CookieValueBytes</c>), so anything longer cannot be one and is refused unhashed.
+    /// Outer guard on the presented value, in characters: longer than this cannot be a session this server minted,
+    /// so it is refused by one length compare — before the charset walk and before any HMAC, so an attacker never
+    /// chooses the work this request costs.
     /// </summary>
     internal const int MaxCookieValueLength = 128;
+
+    /// <summary>
+    /// Length of a minted cookie value, in characters: base64 of <see cref="SessionStore.CookieValueBytes"/> without
+    /// padding, which the URL-safe alphabet keeps at that length. DERIVED from the minting constant, so the mint
+    /// (<c>SessionStore.NewCookieValue</c>) and this check cannot drift apart — a different entropy size moves both.
+    /// </summary>
+    internal const int CookieValueLength = (SessionStore.CookieValueBytes * 4 + 2) / 3;
 
     private const string ActiveStatus = "active";
     private const string UnknownStatus = "unknown";
@@ -81,9 +90,11 @@ internal sealed class SessionAuthenticationStore : ISessionAuthentication
             return Result.Failure<SessionAuthResult>(SessionErrors.Unavailable);
         }
 
-        if (string.IsNullOrEmpty(cookieValue) || cookieValue.Length > MaxCookieValueLength)
+        if (!LooksMinted(cookieValue))
         {
-            // No usable cookie value: no session can carry it, and hashing it would be work an attacker chose.
+            // The value cannot have been minted by this deployment (wrong length, or a character outside the
+            // base64url alphabet SessionStore.NewCookieValue emits): no HMAC, no statement, and the same 401
+            // `unauthenticated` an absent cookie gets, so the route is no oracle for the shape either.
             SessionTelemetry.AuthOutcome(ApiErrorCode.Unauthenticated);
             SessionTelemetry.SlideWrite(false);
 
@@ -94,7 +105,7 @@ internal sealed class SessionAuthenticationStore : ISessionAuthentication
                 RotationRequired: false));
         }
 
-        var candidates = _secrets.Candidates(Encoding.ASCII.GetBytes(cookieValue));
+        var candidates = CandidatesOf(cookieValue);
         if (candidates.Count == 0)
         {
             return Result.Failure<SessionAuthResult>(SessionErrors.Unavailable);
@@ -108,9 +119,14 @@ internal sealed class SessionAuthenticationStore : ISessionAuthentication
                 + "@cookie_hmacs, @current_hmac, @current_version, @now, @idle_seconds)");
 
             // Every candidate in one array, so the lookup is one index probe whatever the rotation window holds.
-            command.Parameters.AddWithValue(
-                "cookie_hmacs",
-                candidates.Select(candidate => candidate.Hash).ToArray());
+            // Built in place: one array, no LINQ iterator and no second copy on the request path.
+            var hashes = new byte[candidates.Count][];
+            for (var index = 0; index < hashes.Length; index++)
+            {
+                hashes[index] = candidates[index].Hash;
+            }
+
+            command.Parameters.AddWithValue("cookie_hmacs", hashes);
             command.Parameters.AddWithValue("current_hmac", candidates[0].Hash);
             command.Parameters.AddWithValue("current_version", candidates[0].Version);
             command.Parameters.AddWithValue("now", _clock.GetUtcNow().ToUniversalTime());
@@ -182,5 +198,50 @@ internal sealed class SessionAuthenticationStore : ISessionAuthentication
             // A pool or command timeout that surfaced as cancellation is an outage, not the caller leaving.
             return Result.Failure<SessionAuthResult>(SessionErrors.Unavailable);
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="cookieValue"/> has the shape of a value <c>SessionStore.NewCookieValue</c> mints:
+    /// exactly <see cref="CookieValueLength"/> characters of the base64url alphabet. The outer
+    /// <see cref="MaxCookieValueLength"/> guard is asked first, so a body of 'A's is rejected by one length compare
+    /// before the walk, and both are asked before any HMAC or any statement (SEC3).
+    /// </summary>
+    /// <param name="cookieValue">The presented cookie value, or null.</param>
+    private static bool LooksMinted([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] string? cookieValue)
+    {
+        // The outer guard first: an over-long body is rejected by one length compare and never walked.
+        if (cookieValue is null || cookieValue.Length > MaxCookieValueLength)
+        {
+            return false;
+        }
+
+        // A minted value has exactly ONE length, derived from the mint's own entropy constant.
+        if (cookieValue.Length != CookieValueLength)
+        {
+            return false;
+        }
+
+        foreach (var character in cookieValue)
+        {
+            if (!char.IsAsciiLetterOrDigit(character) && character != '-' && character != '_')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The lookup candidates of an already shape-checked cookie value, hashed without materialising the ASCII bytes
+    /// on the heap: the value is at most <see cref="CookieValueLength"/> characters, so a stack buffer covers it.
+    /// </summary>
+    /// <param name="cookieValue">The presented value (shape-checked by <see cref="LooksMinted"/>).</param>
+    private IReadOnlyList<(int Version, byte[] Hash)> CandidatesOf(string cookieValue)
+    {
+        Span<byte> ascii = stackalloc byte[CookieValueLength];
+        var written = Encoding.ASCII.GetBytes(cookieValue, ascii);
+
+        return _secrets.Candidates(ascii[..written]);
     }
 }

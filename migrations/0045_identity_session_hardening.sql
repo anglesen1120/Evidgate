@@ -34,7 +34,12 @@
 --           * it slides `last_seen_at`/`expires_at` only for an ACTIVE session and
 --             only when `last_seen_at < p_now - 60 s`, and never past
 --             `absolute_expires_at` (AC2/AC3, P1/P3: at most one write per 60 s per
---             session). A request that is not due for a slide writes nothing.
+--             session). The throttle is re-tested in the `update`'s own predicate,
+--             not only on the statement snapshot: two concurrent requests on one
+--             idle session both read "due", and only the one that takes the row
+--             lock first still passes the test when the statement re-evaluates it
+--             — the loser matches no row, so it writes nothing and answers
+--             `slid = false`. A request that is not due for a slide writes nothing.
 --           * it re-hashes the row to the current pepper when the row matched the
 --             previous pepper's hash (`cookie_hmac`/`pepper_version` updated in the
 --             same statement), which is what drains a retired pepper without a
@@ -48,7 +53,11 @@
 --         single `with` chain of data-modifying CTEs: `matched` → `decided` →
 --         `actions` → one `update … returning` (`written`), and the final select
 --         projects the decision plus what was written. The data-modifying CTE always
---         executes, so an unchanged row still yields its status.
+--         executes, so an unchanged row still yields its status. The snapshot alone
+--         cannot decide a WRITE (two requests may both read "due" and one of them
+--         would then slide a deadline the other just slid), which is why the update
+--         re-tests its own throttle against the row version it locks; see the
+--         `written` CTE.
 --
 --       - `session_create(...)` gains `p_predecessor_hmacs bytea[]` (D5a) and
 --         `p_now timestamptz`: the cookie the browser presented to the login callback
@@ -124,6 +133,18 @@
 -- `fillfactor = 80` keeps a page's worth of room so it stays that way instead of
 -- spilling to a new page. 0041's header already handed this decision to 02.3.2-T1.
 --
+-- `fillfactor` applies to pages written AFTER this file runs, and only to the freedom
+-- a page keeps: the pages the table already holds keep their 100 % fill until their
+-- rows are rewritten or the table is rebuilt, so the slide only becomes reliably HOT
+-- as those pages are reused. That is the intended steady state — the switch costs no
+-- rewrite (an `alter table … set` is a catalog change), sessions are short-lived, and
+-- the slide writes one heap tuple per request per session either way. A plain
+-- `VACUUM public.session` after the deploy is advisable: it turns the dead versions
+-- the pre-0045 writer left on those pages into reusable space and records it in the
+-- free space map, which is the room the slide's next tuple needs. NEVER
+-- `VACUUM FULL` — it rewrites and exclusively locks the table that every authenticated
+-- request touches, and buys nothing `VACUUM` does not.
+--
 -- Why every definer here is safe (TL T80, identical hygiene to 0014/0016/0042/0044):
 -- owned by `evidgate_owner`, whose `session_owner_backfill` policy (0041) lets it
 -- read and write under FORCE row level security; `set search_path = ''` with
@@ -170,6 +191,24 @@
 -- org to attribute a row to (0015's `audit_log` is org-scoped), and the two revocation
 -- writes are per-call effects the application already audits in the caller's
 -- transaction.
+
+-- Locking and the maintenance window. The runner executes one file in ONE transaction
+-- (migrations/README.md "File contract"), so the `set local` below bounds every lock
+-- this file waits for to 5 s and disappears with the transaction — it replaces nothing
+-- outside this file and needs no reset. Both `alter table` statements and the
+-- `drop index` take ACCESS EXCLUSIVE on `public.session` for the length of the
+-- transaction, i.e. for every session-authenticated request in flight: `add column`
+-- of a nullable column with no default is catalog-only (no table rewrite) and
+-- `set (fillfactor = 80)` is a catalog change too, so each statement is fast. The
+-- `create index` of `session_user_live_idx` is the longer one — a plain (not
+-- `concurrent`) build takes SHARE and therefore blocks every WRITE to the table,
+-- slides included, until it is done; on a table of live sessions that is seconds, but
+-- it is real. Expect a short maintenance window — apply the migration while traffic is
+-- drained or between request bursts — and treat exit 3 (lock timeout, file rolled back
+-- and unjournalled) as "retry when the table is quiet", not as a defect. The function
+-- definitions below take only an AccessShareLock on `public.session` while PostgreSQL
+-- validates their bodies, so they block no request and are safe whatever the traffic.
+set local lock_timeout = '5s';
 
 -- A privilege change flags every live session of the user; the next request with a
 -- flagged session rotates it (D5b, AC7). Nullable, no default, no backfill: every
@@ -357,12 +396,29 @@ as $$
            d.absolute_expires_at
       from decided d
   ),
+  -- The throttle is decided twice on purpose. `actions` above is the decision on the statement
+  -- snapshot; the update repeats both predicates against `s` — the row version it actually takes —
+  -- so under READ COMMITTED a request that loses the race writes NOTHING. Two requests on the same
+  -- idle session both read `slide = true`, the first to reach the row writes it, and the second,
+  -- after waiting for the row lock, re-evaluates this predicate on the committed version, sees
+  -- `last_seen_at = p_now`, matches no row at all and answers `slid = false`. One slide write per
+  -- 60 s per session, whoever asks (P1/P3).
+  --
+  -- The two SET cases repeat the same tests so that a request which is only due for the re-hash can
+  -- never slide on top of a peer's write. `returning` reads the NEW row, so a slide is
+  -- `last_seen_at = p_now` (the value the slide writes) and a re-hash is `pepper_version =
+  -- p_current_version`; a request that matched no row never reaches `written`, so both flags report
+  -- the writes THIS statement applied — the peer's slide is not this request's `slid`.
   written as (
     update public.session s
-       set last_seen_at = case when a.slide then p_now else s.last_seen_at end,
+       set last_seen_at = case
+                            when a.slide and s.last_seen_at < p_now - interval '60 seconds'
+                              then p_now
+                            else s.last_seen_at
+                          end,
            -- The idle deadline slides but never past the hard one (AC2/AC3).
            expires_at = case
-                          when a.slide
+                          when a.slide and s.last_seen_at < p_now - interval '60 seconds'
                             then least(p_now + make_interval(secs => p_idle_seconds), a.absolute_expires_at)
                           else s.expires_at
                         end,
@@ -370,8 +426,11 @@ as $$
            pepper_version = case when a.rehash then p_current_version else s.pepper_version end
       from actions a
      where s.id = a.id
-       and (a.slide or a.rehash)
-    returning s.id as id, a.slide as slide, a.rehash as rehash
+       and ((a.slide and s.last_seen_at < p_now - interval '60 seconds')
+            or (a.rehash and s.pepper_version <> p_current_version))
+    returning s.id as id,
+              (a.slide and s.last_seen_at = p_now) as slide,
+              (a.rehash and s.pepper_version = p_current_version) as rehash
   )
   select coalesce(d.status, 'unknown'::text),
          coalesce(d.id, '00000000-0000-0000-0000-000000000000'::uuid),

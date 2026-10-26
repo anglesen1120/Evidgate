@@ -230,6 +230,70 @@ public sealed class RotationTests(DatabaseFixture fixture) : HarnessTest(fixture
     }
 
     /// <summary>
+    /// R1/SEC-1: a mutation on a rotation-required session that does NOT prove the antiforgery pair answers 403
+    /// <c>csrf_failed</c> and burns nothing — no <c>session_rotate</c>, no successor row, no <c>Set-Cookie</c>, the
+    /// flag still set — and the same browser's next legitimate request still rotates. Without this ordering a
+    /// forged cross-site mutation would revoke the user's session and hand the attacker a successor's cookie
+    /// before answering 403.
+    /// </summary>
+    [Fact]
+    public async Task A_Mutation_Without_The_Pair_Never_Rotates_The_Session()
+    {
+        await using var host = SessionTestHost.Start(Fixture);
+        using var client = host.CreateSessionClient();
+        var signIn = await SignInAsync(host, client);
+        var (member, sessionCookie, pair) = (signIn.Member, signIn.SessionCookie, signIn.Pair);
+        var predecessorId = await host.SessionIdOfAsync(sessionCookie);
+
+        (await RequireRotationAsync(host, member.OrgId, member.UserId)).ShouldBe(1, "one live session is flagged");
+        host.Clock.Advance(Elapsed);
+
+        host.Statements.Clear();
+
+        // The forged shape: the credential travels but the proof does not — the request carries the session cookie
+        // and no X-XSRF-TOKEN at all. A page on the same site (or any client that omits the header, e.g. one
+        // replaying a stolen cookie without a page) can produce exactly this, and it is what the pair check exists
+        // to refuse. Cross-site forms are NOT the vector: SameSite=Lax already withholds the cookie from a
+        // cross-site submit, and a form cannot send DELETE.
+        using var forged = await SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Delete,
+            PendingPath,
+            cookieHeader: SessionTestHost.CookieHeaderFor(sessionCookie));
+
+        forged.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await SessionTestHost.ErrorCodeAsync(forged)).ShouldBe(ApiErrorCode.CsrfFailed);
+        SessionTestHost.SessionCookieValue(forged).ShouldBeNull(
+            "a request that proved nothing is issued no successor");
+        SessionTestHost.Cookies(forged, SessionTestHost.XsrfCookieName).ShouldBeEmpty();
+
+        host.Statements.Containing("session_rotate").ShouldBeEmpty("the pair is proved BEFORE the rotation");
+
+        (await host.CountAsync(
+            "select count(*) from public.session where rotated_from = @id",
+            ("id", predecessorId))).ShouldBe(0, "no successor exists for a rotation that never ran");
+
+        var untouched = await host.SessionRowAsync(predecessorId);
+        untouched.RevokedAt.ShouldBeNull("a forged mutation must not burn the session");
+        untouched.RotationRequiredAt.ShouldNotBeNull("the flag stays for the next legitimate request");
+
+        // The old cookie still authenticates, and the flag still does its job: the same request WITH its pair
+        // rotates exactly as before.
+        using var legitimate = await SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Delete,
+            PendingPath,
+            cookieHeader: SessionTestHost.CookieHeaderFor(sessionCookie, pair),
+            xsrfToken: pair.RequestToken);
+
+        legitimate.StatusCode.ShouldBe(HttpStatusCode.NoContent, "the legitimate request still rotates and is served");
+
+        var rotatedCookie = SessionTestHost.SessionCookieValue(legitimate);
+        rotatedCookie.ShouldNotBeNull("the rotation still issues the successor");
+        rotatedCookie.ShouldNotBe(sessionCookie, "the successor carries a new value");
+    }
+
+    /// <summary>
     /// AC7(b), the single-winner addendum: two requests with the SAME rotation-required cookie — exactly one is
     /// authenticated and receives the <c>Set-Cookie</c> pair, the other is 401 <c>session_revoked</c> and issues
     /// no cookie, and exactly one successor row exists.

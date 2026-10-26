@@ -144,6 +144,18 @@ next request, so no one is cut off between steps 1 and 3 and nothing has to be f
 boot when a value is set without its partner, when both peppers are equal, or when the version is below 1
 (`SessionOptionsValidator`, `infra/config-matrix.json`).
 
+Two deploy steps come with 0045 and neither is a key. (1) The migration sets `fillfactor = 80` on
+`public.session` so the idle slide stays a heap-only update; the setting applies to pages written AFTER
+the migration, and the pages the table already holds keep their 100 % fill until their rows are rewritten,
+so the steady state is reached as they turn over — run a plain `VACUUM public.session` after the deploy to
+make the dead versions those pages carry reusable, and NEVER `VACUUM FULL`, which rewrites and exclusively
+locks the table every authenticated request touches. (2) The file runs in one transaction with
+`set local lock_timeout = '5s'`, because its two `alter table` statements and the `drop index` take ACCESS
+EXCLUSIVE on that table and its `create index` takes SHARE, which blocks every write (every session slide)
+until the build is done: apply it while traffic is drained or between request bursts, and treat Migrator
+exit 3 (lock timeout, file rolled back and unjournalled) as "retry when the table is quiet", not as a
+defect. The header of `migrations/0045_identity_session_hardening.sql` records both expectations.
+
 `required` is the lint's per-environment rule: the environment must declare the key whatever the boot
 would do without it. That is how a security-relevant default stays visible — every environment declares
 the Worker's bind address and the OTLP endpoint even though both have a usable default (or an optional

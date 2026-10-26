@@ -16,7 +16,7 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 /// <b>The function resolves the target account (02.3.2-T1, D8 / residual SEC2).</b> It takes the HMAC of a live
 /// session's cookie and resolves the session and its active user itself, so a caller running as
 /// <c>evidgate_app</c> can no longer name an arbitrary user id to attach an identity to. The hash comes from the
-/// deployment's session authenticator (<c>SessionRequestOutcome.SessionProof</c>): the HTTP layer already spent
+/// deployment's session authenticator (<c>SessionRequestOutcome.GetSessionProof()</c>): the HTTP layer already spent
 /// the cookie to prove the request, so no raw credential and no second hashing live in this class.
 /// </para>
 /// <para>

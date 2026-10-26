@@ -61,6 +61,12 @@ internal static class SessionXsrfPolicy
     /// it authenticated as. A missing header, a mismatched token, a token minted for another session and an
     /// expired token all answer false and are one refusal to the client (no oracle).
     /// </summary>
+    /// <remarks>
+    /// Two callers, one rule: <c>SessionXsrfMiddleware</c> asks it for every in-scope request, and
+    /// <c>SessionRequestAuthenticator</c> asks it BEFORE it rotates a privilege-marked session (R1/SEC-1), so a
+    /// forged mutation cannot revoke the session it forged with. Both read the presented session id published by
+    /// <see cref="SessionAntiforgeryDataProvider"/>, so the pair is the same one the client's page holds.
+    /// </remarks>
     /// <param name="http">The request.</param>
     /// <param name="antiforgery">The antiforgery service.</param>
     /// <param name="cancellationToken">Request abort.</param>
