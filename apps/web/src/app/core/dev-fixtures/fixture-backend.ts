@@ -19,12 +19,12 @@
 // One operation is ID-KEYED (09.7.1-F15 note 3, the row's `idKeyParameter`): `getPolicyRevision`
 // answers the catalog document whose own `body.id` equals the revision id in the path, so a tab
 // that compares two revisions — or a 412 dialog that reads the head the server named — gets two
-// different bodies from one backend. One is CURSOR-KEYED (note 4, `cursorQueryParameter`):
+// different bodies from one backend. Two are CURSOR-KEYED (note 4, `cursorQueryParameter`):
 // `listCiBindings` answers the catalog row whose `cursor` equals the request's cursor, so the
 // Secrets tab's Load more gets a second page from the same backend and the control's terminal state
-// is reachable in a browser. An id no document carries, a cursor no page declares, and every
-// request-agnostic operation still answer by variant alone; `selectEntry` below holds that order and
-// nothing else changes.
+// is reachable in a browser; `listRuns` answers the same way for the Runs list (09.3.1-T1). An id no
+// document carries, a cursor no page declares, and every request-agnostic operation still answer by
+// variant alone; `selectEntry` below holds that order and nothing else changes.
 //
 // Shapes: a `>= 400` answer is raised as `HttpErrorResponse` and a `2xx` as `HttpResponse`, which is
 // what Angular's real backends produce; the adapter reads text (09.1.1-T8), so the body is the JSON

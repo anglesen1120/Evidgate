@@ -1,0 +1,123 @@
+<header class="page-header">
+  <h1>{{ copy.title }}</h1>
+  <p>{{ copy.description }}</p>
+</header>
+<form
+  class="filters"
+  (ngSubmit)="apply()"
+  aria-labelledby="run-filters-title"
+  [attr.aria-describedby]="'run-filter-hint'"
+>
+  <h2 id="run-filters-title">{{ copy.filters }}</h2>
+  <p id="run-filter-hint">{{ copy.filterHint }}</p>
+  <div class="filter-grid">
+    <label for="run-state"
+      >{{ copy.state }}
+      <select id="run-state" name="state" [(ngModel)]="draft.state">
+        <option value="">{{ copy.any }}</option>
+        <option value="created">{{ copy.created }}</option>
+        <option value="queued">{{ copy.queued }}</option>
+        <option value="running">{{ copy.running }}</option>
+        <option value="collecting">{{ copy.collecting }}</option>
+        <option value="complete">{{ copy.complete }}</option>
+        <option value="incomplete">{{ copy.incomplete }}</option>
+        <option value="canceled">{{ copy.canceled }}</option>
+      </select>
+    </label>
+    <label for="run-decision"
+      >{{ copy.decision }}
+      <select id="run-decision" name="decision" [(ngModel)]="draft.decision">
+        <option value="">{{ copy.any }}</option>
+        @for (decision of ['PASS', 'FAIL', 'INCONCLUSIVE']; track decision) {
+          <option [value]="decision">{{ decision }}</option>
+        }
+        <option value="pending">{{ copy.pending }}</option>
+      </select>
+    </label>
+    <label for="run-scope"
+      >{{ copy.scope }}
+      <select id="run-scope" name="scope" [(ngModel)]="draft.scope">
+        <option value="">{{ copy.any }}</option>
+        <option value="original">{{ copy.original }}</option>
+        <option value="rerun">{{ copy.rerun }}</option>
+        <option value="reprocess">{{ copy.reprocess }}</option>
+      </select>
+    </label>
+    <label for="run-ref"
+      >{{ copy.ref }}
+      <input
+        id="run-ref"
+        name="refName"
+        maxlength="255"
+        [(ngModel)]="draft.refName"
+        [attr.aria-invalid]="store.refRejected() ? 'true' : null"
+        [attr.aria-describedby]="store.refRejected() ? 'run-ref-error' : null"
+      />
+    </label>
+  </div>
+  @if (store.refRejected()) {
+    <p class="validation" id="run-ref-error" role="alert">{{ copy.refRejected }}</p>
+  }
+  <div class="filter-actions">
+    <button type="submit" class="primary" data-run-apply>{{ copy.apply }}</button>
+    <button type="button" data-run-clear (click)="clear()">{{ copy.clear }}</button>
+  </div>
+</form>
+<app-request-state
+  [status]="status()"
+  [error]="store.loadError()"
+  [empty]="store.isEmpty()"
+  [emptyTitle]="store.isFiltered() ? copy.filteredTitle : copy.emptyTitle"
+  [emptyDescription]="store.isFiltered() ? copy.filteredDescription : copy.emptyDescription"
+  [emptyActionLabel]="store.isFiltered() ? copy.clear : undefined"
+  (emptyAction)="clear()"
+  [retryEligible]="retryReady() && (store.loadError()?.retryable ?? false)"
+  (retry)="store.reload()"
+>
+  <app-run-list-table [rows]="store.visibleRows()" />
+</app-request-state>
+<!-- Keep cursor controls outside the nonempty projection: a filtered page may have zero matches. -->
+@if (status() === 'ready') {
+  <section
+    class="pagination"
+    [attr.aria-label]="copy.pagination"
+    [attr.aria-busy]="store.loadingMore()"
+  >
+    <p role="status" data-run-loaded-count [attr.data-run-loaded-filtered]="store.isFiltered()">
+      {{ loadedText() }}
+    </p>
+    @if (store.autoLoadCapped() || store.browseCapped()) {
+      <p data-run-browse-capped>{{ copy.capped }}</p>
+    }
+    @if (store.pagingError(); as failure) {
+      <div class="banner failure" role="alert" data-run-paging-error>
+        <p>{{ failure.message }}</p>
+        <code>{{ failure.code }}</code>
+        @if (failure.retryable) {
+          <button
+            type="button"
+            [disabled]="store.loadingMore() || !retryReady()"
+            (click)="store.loadMore()"
+          >
+            {{ copy.retryMore }}
+          </button>
+        }
+      </div>
+    }
+    @if (store.hasMore() && !store.pagingError()) {
+      <button
+        type="button"
+        data-run-load-more
+        [disabled]="store.loadingMore()"
+        (click)="store.loadMore()"
+      >
+        {{ copy.more }}
+      </button>
+    }
+    <p role="status">
+      @if (store.loadingMore()) {
+        {{ copy.loadingMore }}
+      }
+    </p>
+  </section>
+}

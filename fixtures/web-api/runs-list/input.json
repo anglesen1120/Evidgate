@@ -98,7 +98,7 @@
           "is_fork": false
         },
         "unverified_ref": true,
-        "decision": "INCONCLUSIVE",
+        "decision": null,
         "parent_run_id": "018f0000-0000-7000-8000-000000000022",
         "rerun_label": "failed_subset",
         "reprocess_label": null
@@ -123,6 +123,6 @@
         "reprocess_label": null
       }
     ],
-    "next_cursor": "08df2f4ab3c4bc00-018f0000-0000-7000-8000-000000000026"
+    "next_cursor": null
   }
 }

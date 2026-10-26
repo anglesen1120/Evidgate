@@ -28,9 +28,11 @@ const MARKERS = [
   'fixture_not_found',
   'dev/ui-gallery',
   'app-ui-gallery',
-  // The phase-later review addresses of the same `fileReplacements` seam (09.7.1-T3/T4, F20).
+  // The phase-later review addresses of the same `fileReplacements` seam (09.7.1-T3/T4,
+  // 09.3.1-T1, F20).
   'dev/settings-secrets',
   'dev/settings-policy',
+  'dev/run-list',
 ] as const;
 
 /** A corpus body string long enough to count as a leak signal, and absent from production code. */
@@ -327,8 +329,12 @@ describe('no-fixture-code gate', () => {
     );
     expect(ws.run().status).toBe(0);
 
-    for (const marker of ['dev/settings-secrets', 'dev/settings-policy'] as const) {
-      await ws.output('main-ABC123.js', `const review=["${marker}/orgs/:orgId"];`);
+    for (const [marker, address] of [
+      ['dev/settings-secrets', 'orgs/:orgId'],
+      ['dev/settings-policy', 'orgs/:orgId'],
+      ['dev/run-list', 'orgs/:orgId/projects/:projectId'],
+    ] as const) {
+      await ws.output('main-ABC123.js', `const review=["${marker}/${address}"];`);
       const leaked = ws.run();
       expect(leaked.status).toBe(1);
       expect(leaked.stderr).toContain(marker);

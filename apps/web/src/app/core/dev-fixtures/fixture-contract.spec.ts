@@ -200,6 +200,17 @@ interface CiBindingRowShape {
   readonly activated_at?: string | null;
   readonly created_at: string;
 }
+
+/**
+ * The `RunSummary` members the two paged run-list fixtures are asserted through (09.3.1-T1): the id
+ * the store de-duplicates by and the creation instant `KeysetCursor` derives the cursor from. The
+ * exemption is the one above: these are `input.json` members read to prove the two corpus pages
+ * continue one walk, not a body the app reads.
+ */
+interface RunRowShape {
+  readonly run_id: string;
+  readonly created_at: string;
+}
 /* eslint-enable evidgate/no-hand-written-wire-dto */
 
 /**
@@ -936,19 +947,21 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     }
   });
 
-  it('pins the cursor-keyed CI-binding walk to the two corpus pages (09.7.1-F15)', () => {
+  it('pins the cursor-keyed CI-binding and run-list walks to their corpus pages (09.7.1-F15, 09.3.1-T1)', () => {
     // 09.7.1-F15 note (4): `listCiBindings` answers the catalog row whose `cursor` equals the
     // request's cursor, so the Secrets tab's Load more reaches its terminal page in a browser
-    // instead of every fixture ending at `next_cursor: null`. That is only sound when (a) exactly
-    // one row is cursor-keyed and it names the query parameter the contract's list read takes, (b)
-    // exactly one catalog row declares a cursor, (c) the page it answers continues the page that
-    // named it — same project, disjoint ids, a cursor the server could have issued — and (d) it ends
-    // the walk, because a second cursor with no document behind it would leave the control on screen.
+    // instead of every fixture ending at `next_cursor: null`. 09.3.1-T1 adds the same seam for the
+    // Runs list (`listRuns`, `run-list-page-2`). It is only sound when (a) every cursor-keyed row
+    // names the query parameter the contract's list read takes, (b) each cursor-declaring catalog
+    // row continues a page that names it — same project, disjoint ids, a cursor the server could
+    // have issued — and (c) it ends the walk, because a second cursor with no document behind it
+    // would leave the control on screen. The lists here are exhaustive on purpose: a third
+    // cursor-keyed row or catalog cursor needs its own pin in this test.
     const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.cursorQueryParameter !== undefined);
     expect(
       keyed.map((route) => route.operationId),
-      'only listCiBindings is cursor-keyed; a second cursor-keyed row needs its own pin here',
-    ).toEqual(['listCiBindings']);
+      'listCiBindings and listRuns are cursor-keyed; a third row needs its own pin here',
+    ).toEqual(['listCiBindings', 'listRuns']);
     for (const route of keyed) {
       expect(
         route.cursorQueryParameter,
@@ -959,9 +972,9 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     const paged = FIXTURE_CATALOG.filter((entry) => entry.cursor !== undefined);
     expect(
       paged.map((entry) => entry.name),
-      'exactly one catalog row declares the request cursor it answers',
-    ).toEqual(['ci-bindings-list-settings-page-2']);
-    const secondPageRow = paged[0];
+      'each cursor-keyed walk has exactly one catalog row declaring the request cursor it answers',
+    ).toEqual(['ci-bindings-list-settings-page-2', 'run-list-page-2']);
+    const secondPageRow = paged.find((entry) => entry.name === 'ci-bindings-list-settings-page-2');
     if (secondPageRow === undefined || secondPageRow.cursor === undefined) {
       throw new Error(
         'the second CI-binding page declares no cursor, so Load more cannot answer it',
@@ -1038,6 +1051,96 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       ).toBe(true);
     }
     expect(oneTimeSecretMembers(second.body)).toEqual([]);
+
+    // 09.3.1-T1: the second cursor-keyed walk. `listRuns` answers `run-list-page-2` for the
+    // `next_cursor` `run-list-page-1` names, so the Runs list's Load more appends a second page
+    // instead of being answered with page 1 again (which the store refuses as a repeated cursor).
+    const runSecondPageRow = paged.find((entry) => entry.name === 'run-list-page-2');
+    if (runSecondPageRow === undefined || runSecondPageRow.cursor === undefined) {
+      throw new Error('the second run-list page declares no cursor, so Load more cannot answer it');
+    }
+    const runCursor = runSecondPageRow.cursor;
+
+    const runFirst = corpusDocument('run-list-page-1');
+    const runSecond = corpusDocument('run-list-page-2');
+    expect([runFirst.operation_id, runFirst.variant, runFirst.status]).toEqual([
+      'listRuns',
+      'page-1',
+      200,
+    ]);
+    expect([runSecond.operation_id, runSecond.variant, runSecond.status]).toEqual([
+      'listRuns',
+      'page-2',
+      200,
+    ]);
+
+    const runFirstBody = runFirst.body as {
+      items: RunRowShape[];
+      next_cursor: string | null;
+    };
+    const runSecondBody = runSecond.body as {
+      items: RunRowShape[];
+      next_cursor: string | null;
+    };
+    expect(runFirstBody.items.length, 'the first page holds no run to click past').toBeGreaterThan(
+      0,
+    );
+    expect(runSecondBody.items.length, 'the second page holds no run to append').toBeGreaterThan(0);
+    expect(
+      runFirstBody.next_cursor,
+      'the first run page must name exactly the cursor the backend answers, or Load more 501s',
+    ).toBe(runCursor);
+    expect(runSecondBody.next_cursor, 'the last run page must end the walk').toBeNull();
+
+    const lastRunOfFirstPage = runFirstBody.items[runFirstBody.items.length - 1];
+    if (lastRunOfFirstPage === undefined) {
+      throw new Error('the first run-list page is empty');
+    }
+    expect(runCursor, 'the run cursor must be the keyset position of the row it follows').toBe(
+      `${keysetTicks(lastRunOfFirstPage.created_at)}-${lastRunOfFirstPage.run_id}`,
+    );
+
+    const runIds = [...runFirstBody.items, ...runSecondBody.items].map((item) => item.run_id);
+    expect(
+      new Set(runIds).size,
+      'a run appears on both pages, so the store would drop the second copy silently',
+    ).toBe(runIds.length);
+  });
+
+  it('gives every cursor a catalog row that answers it (09.3.1-T1)', () => {
+    const keyedOperations = new Set(
+      FIXTURE_ROUTE_ROWS.filter((route) => route.cursorQueryParameter !== undefined).map(
+        (route) => route.operationId,
+      ),
+    );
+    const declared = new Set<string>();
+    for (const entry of FIXTURE_CATALOG) {
+      if (entry.cursor !== undefined) {
+        declared.add(entry.cursor);
+      }
+    }
+
+    // A page that names a cursor no row declares asks the backend for a document it does not have;
+    // the backend answers the variant's page again, and the store refuses that second answer as a
+    // repeated cursor. A plain visit (no `?fixture.variant.`) has to survive it: the `ok` page of a
+    // cursor-keyed operation therefore either names a cursor a row answers, or ends the walk.
+    const unanswered: string[] = [];
+    for (const fixture of CORPUS) {
+      const document = readDocument(fixture);
+      if (!keyedOperations.has(document.operation_id)) {
+        continue;
+      }
+      const body = document.body as { next_cursor?: string | null } | undefined;
+      const next = body?.next_cursor ?? null;
+      if (next !== null && !declared.has(next)) {
+        unanswered.push(`fixtures/web-api/${fixture.name} names ${next}`);
+      }
+    }
+
+    expect(
+      unanswered,
+      'a page names a cursor no catalog row declares, so following it re-answers the same page',
+    ).toEqual([]);
   });
 
   it('pins at most one ok variant per operation and the 403 and 412 error fixtures (AC10)', () => {

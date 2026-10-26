@@ -2472,6 +2472,43 @@
       <trans-unit id="settings.secrets.ci.retry" datatype="html"><source>Retry CI bindings</source><target>Thử tải lại liên kết CI</target></trans-unit>
       <trans-unit id="settings.secrets.ci.more" datatype="html"><source>Load more CI bindings</source><target>Tải thêm liên kết CI</target></trans-unit>
       <trans-unit id="settings.secrets.ci.loading-more" datatype="html"><source>Loading more CI bindings…</source><target>Đang tải thêm liên kết CI…</target></trans-unit>
+      <trans-unit id="runs.list.title" datatype="html"><source>Runs</source><target>Lượt chạy</target></trans-unit>
+      <trans-unit id="runs.list.description" datatype="html"><source>Review collection state and stored decisions. Evidence completeness is not provided by this list.</source><target>Xem trạng thái thu thập và quyết định đã lưu. Danh sách này không cung cấp độ đầy đủ của bằng chứng.</target></trans-unit>
+      <trans-unit id="runs.list.filters" datatype="html"><source>Filter loaded runs</source><target>Lọc các lượt chạy đã tải</target></trans-unit>
+      <trans-unit id="runs.list.filter-hint" datatype="html"><source>State, decision and run scope filter loaded runs only. Ref name filters the server list. Load more to search older runs.</source><target>Trạng thái, quyết định và phạm vi chỉ lọc các lượt chạy đã tải. Tên tham chiếu lọc danh sách trên máy chủ. Tải thêm để tìm các lượt chạy cũ hơn.</target></trans-unit>
+      <trans-unit id="runs.list.state-filter" datatype="html"><source>State in loaded runs</source><target>Trạng thái trong các lượt đã tải</target></trans-unit>
+      <trans-unit id="runs.list.decision-filter" datatype="html"><source>Decision in loaded runs</source><target>Quyết định trong các lượt đã tải</target></trans-unit>
+      <trans-unit id="runs.list.scope-filter" datatype="html"><source>Scope in loaded runs</source><target>Phạm vi trong các lượt đã tải</target></trans-unit>
+      <trans-unit id="runs.list.ref-filter" datatype="html"><source>Ref name (exact match)</source><target>Tên tham chiếu (khớp chính xác)</target></trans-unit>
+      <trans-unit id="runs.list.any" datatype="html"><source>All</source><target>Tất cả</target></trans-unit>
+      <trans-unit id="runs.list.original" datatype="html"><source>Original run</source><target>Lượt chạy gốc</target></trans-unit>
+      <trans-unit id="runs.list.rerun" datatype="html"><source>Rerun</source><target>Chạy lại</target></trans-unit>
+      <trans-unit id="runs.list.reprocess" datatype="html"><source>Reprocessed</source><target>Đã xử lý lại</target></trans-unit>
+      <trans-unit id="runs.list.apply" datatype="html"><source>Apply filters</source><target>Áp dụng bộ lọc</target></trans-unit>
+      <trans-unit id="runs.list.clear" datatype="html"><source>Clear filters</source><target>Xóa bộ lọc</target></trans-unit>
+      <trans-unit id="runs.list.empty-title" datatype="html"><source>No runs recorded</source><target>Chưa ghi nhận lượt chạy nào</target></trans-unit>
+      <trans-unit id="runs.list.empty-description" datatype="html"><source>Runs will appear here when a producer creates them.</source><target>Các lượt chạy sẽ xuất hiện khi bên gửi tạo chúng.</target></trans-unit>
+      <trans-unit id="runs.list.filtered-title" datatype="html"><source>No matching runs in the loaded rows</source><target>Không có lượt chạy khớp trong các hàng đã tải</target></trans-unit>
+      <trans-unit id="runs.list.filtered-description" datatype="html"><source>These filters apply to loaded runs, not the entire project. Load more when available, or clear filters.</source><target>Các bộ lọc này áp dụng cho lượt chạy đã tải, không phải toàn bộ dự án. Tải thêm khi có thể hoặc xóa bộ lọc.</target></trans-unit>
+      <trans-unit id="runs.list.pagination" datatype="html"><source>More runs</source><target>Các lượt chạy tiếp theo</target></trans-unit>
+      <trans-unit id="runs.list.more" datatype="html"><source>Load more</source><target>Tải thêm</target></trans-unit>
+      <trans-unit id="runs.list.loading-more" datatype="html"><source>Loading more runs…</source><target>Đang tải thêm lượt chạy…</target></trans-unit>
+      <trans-unit id="runs.list.capped" datatype="html"><source>Automatic browsing paused. Load more to continue, or narrow the ref name.</source><target>Đã tạm dừng tự động duyệt. Tải thêm để tiếp tục hoặc giới hạn tên tham chiếu.</target></trans-unit>
+      <trans-unit id="runs.list.retry-more" datatype="html"><source>Retry loading more</source><target>Thử tải thêm lần nữa</target></trans-unit>
+      <trans-unit id="runs.list.loaded-count" datatype="html"><source>Filtered from <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> loaded runs.</source><target>Đã lọc từ <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> lượt chạy đã tải.</target></trans-unit>
+      <trans-unit id="runs.list.loaded-plain" datatype="html"><source>Loaded <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> runs.</source><target>Đã tải <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> lượt chạy.</target></trans-unit>
+      <trans-unit id="runs.list.ref-invalid" datatype="html"><source>Ref name not applied: use 1 to 255 characters with no control characters.</source><target>Tên tham chiếu không được áp dụng: dùng từ 1 đến 255 ký tự và không có ký tự điều khiển.</target></trans-unit>
+      <trans-unit id="runs.list.table-caption" datatype="html"><source>Project runs</source><target>Lượt chạy của dự án</target></trans-unit>
+      <trans-unit id="runs.list.column-id" datatype="html"><source>Run id</source><target>Mã lượt chạy</target></trans-unit>
+      <trans-unit id="runs.list.column-state" datatype="html"><source>State</source><target>Trạng thái</target></trans-unit>
+      <trans-unit id="runs.list.column-evidence" datatype="html"><source>Evidence</source><target>Bằng chứng</target></trans-unit>
+      <trans-unit id="runs.list.column-decision" datatype="html"><source>Decision</source><target>Quyết định</target></trans-unit>
+      <trans-unit id="runs.list.column-ref" datatype="html"><source>Ref</source><target>Tham chiếu</target></trans-unit>
+      <trans-unit id="runs.list.column-scope" datatype="html"><source>Run scope</source><target>Phạm vi lượt chạy</target></trans-unit>
+      <trans-unit id="runs.list.column-created" datatype="html"><source>Created (UTC)</source><target>Thời điểm tạo (UTC)</target></trans-unit>
+      <trans-unit id="runs.list.unverified-ref" datatype="html"><source>Unverified ref</source><target>Tham chiếu chưa xác minh</target></trans-unit>
+      <trans-unit id="runs.list.ref-unavailable" datatype="html"><source>Ref unavailable</source><target>Chưa có tham chiếu</target></trans-unit>
+      <trans-unit id="runs.list.child" datatype="html"><source>Derived run</source><target>Lượt chạy phát sinh</target></trans-unit>
     </body>
   </file>
 </xliff>
