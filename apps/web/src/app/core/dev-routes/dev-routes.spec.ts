@@ -11,18 +11,20 @@ import { describe, expect, it } from 'vitest';
 
 import { UiGalleryComponent } from '../../shared/ui/gallery';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
+import { RunListPage } from '../../features/runs/list/run-list.page';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
 import { PolicyPage } from '../../features/settings/policy/policy.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
 import { SecretsPage } from '../../features/settings/secrets/secrets.page';
 import { ShellComponent } from '../../shell/layout/shell.component';
-import { authGuard, orgScopeGuard } from '../guards';
+import { authGuard, orgScopeGuard, projectScopeGuard } from '../guards';
 import { devRoutes } from './dev-routes.fixtures';
 
 describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(3);
+    expect(table).toHaveLength(4);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();
@@ -64,5 +66,27 @@ describe('dev routes (review only)', () => {
     const loadComponent = orgRoute?.loadComponent;
     if (loadComponent === undefined) throw new Error('no lazy Policy review route');
     expect(await loadComponent()).toBe(PolicyPage);
+  });
+
+  it('mounts the real Run list page under the project scope shell, review-only', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/run-list');
+    expect(route?.component).toBe(ShellComponent);
+    // The org entry keeps exactly the two gates the product shell puts on `orgs/:orgId`.
+    const orgRoute = route?.children?.[0];
+    expect(orgRoute?.path).toBe('orgs/:orgId');
+    expect(orgRoute?.canMatch).toEqual([authGuard, orgScopeGuard]);
+    // The project address is nested, not one flat `orgs/:orgId/projects/:projectId` child:
+    // `projectScopeGuard` reads its project id from `segments[1]` of the segments its route still
+    // has to consume, which is the product `projects/:projectId` shape. The second gate is the
+    // entry's own `run:read`; the comment states it because a guard closure has no identity.
+    const projectRoute = orgRoute?.children?.[0];
+    expect(projectRoute?.path).toBe('projects/:projectId');
+    expect(projectRoute?.canMatch?.[0]).toBe(projectScopeGuard);
+    expect(projectRoute?.canMatch).toHaveLength(2);
+    expect(projectRoute?.canMatch?.[1]).toBeTypeOf('function');
+    // Phase is deliberately not overridden: the product route keeps `phaseGuard`.
+    const loadComponent = projectRoute?.loadComponent;
+    if (loadComponent === undefined) throw new Error('no lazy Run list review route');
+    expect(await loadComponent()).toBe(RunListPage);
   });
 });

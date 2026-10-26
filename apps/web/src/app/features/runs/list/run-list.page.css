@@ -1,0 +1,123 @@
+:host {
+  display: block;
+  min-width: 0;
+  color: var(--eg-text);
+  font-family: var(--eg-font-body);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+}
+.page-header,
+.filters,
+.pagination,
+.banner {
+  display: grid;
+  min-width: 0;
+  gap: var(--eg-space-4);
+  margin-block-end: var(--eg-space-5);
+}
+h1,
+h2,
+p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+h1 {
+  font-family: var(--eg-font-display);
+  font-size: var(--eg-text-lg);
+  line-height: var(--eg-leading-lg);
+}
+h2 {
+  font-size: var(--eg-text-sm);
+}
+p {
+  color: var(--eg-text-muted);
+}
+.filters {
+  padding: var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-surface);
+}
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--eg-rail-width)), 1fr));
+  gap: var(--eg-space-4);
+}
+label {
+  display: grid;
+  min-width: 0;
+  gap: var(--eg-space-2);
+  overflow-wrap: anywhere;
+}
+.filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-4);
+}
+button,
+input,
+select {
+  font: inherit;
+  min-height: var(--eg-control-touch);
+  box-sizing: border-box;
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-sm);
+  color: var(--eg-text);
+  background: var(--eg-surface);
+}
+input,
+select {
+  min-width: 0;
+  width: 100%;
+  padding: var(--eg-space-2) var(--eg-space-3);
+}
+button {
+  padding: var(--eg-space-2) var(--eg-space-4);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  justify-self: start;
+}
+button:hover:not(:disabled),
+input:hover,
+select:hover {
+  background: var(--eg-surface-raised);
+  border-color: var(--eg-accent);
+}
+button:active:not(:disabled) {
+  box-shadow: inset 0 0 0 var(--eg-border-width) currentColor;
+}
+button.primary {
+  color: var(--eg-on-accent);
+  background: var(--eg-accent);
+  border-color: var(--eg-accent);
+}
+button.primary:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 var(--eg-border-width) var(--eg-on-accent);
+}
+button:disabled {
+  background: var(--eg-neutral-bg);
+  color: var(--eg-text-muted);
+  cursor: not-allowed;
+}
+:where(button, input, select):focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+.pagination {
+  margin-block-start: var(--eg-space-5);
+}
+.banner {
+  padding: var(--eg-space-3) var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-sm);
+}
+.failure {
+  background: var(--eg-danger-bg);
+  color: var(--eg-danger-fg);
+}
+.failure p {
+  color: inherit;
+}
+code {
+  overflow-wrap: anywhere;
+}

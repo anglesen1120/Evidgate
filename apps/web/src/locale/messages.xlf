@@ -2489,6 +2489,41 @@
       <trans-unit id="settings.secrets.ci.retry" datatype="html"><source>Retry CI bindings</source></trans-unit>
       <trans-unit id="settings.secrets.ci.more" datatype="html"><source>Load more CI bindings</source></trans-unit>
       <trans-unit id="settings.secrets.ci.loading-more" datatype="html"><source>Loading more CI bindings…</source></trans-unit>
+      <trans-unit id="runs.list.title" datatype="html"><source>Runs</source></trans-unit>
+      <trans-unit id="runs.list.description" datatype="html"><source>Review collection state and stored decisions. Evidence completeness is not provided by this list.</source></trans-unit>
+      <trans-unit id="runs.list.filters" datatype="html"><source>Filter loaded runs</source></trans-unit>
+      <trans-unit id="runs.list.filter-hint" datatype="html"><source>State, decision and run scope filter loaded runs only. Ref name filters the server list. Load more to search older runs.</source></trans-unit>
+      <trans-unit id="runs.list.state-filter" datatype="html"><source>State in loaded runs</source></trans-unit>
+      <trans-unit id="runs.list.decision-filter" datatype="html"><source>Decision in loaded runs</source></trans-unit>
+      <trans-unit id="runs.list.scope-filter" datatype="html"><source>Scope in loaded runs</source></trans-unit>
+      <trans-unit id="runs.list.ref-filter" datatype="html"><source>Ref name (exact match)</source></trans-unit>
+      <trans-unit id="runs.list.any" datatype="html"><source>All</source></trans-unit>
+      <trans-unit id="runs.list.original" datatype="html"><source>Original run</source></trans-unit>
+      <trans-unit id="runs.list.rerun" datatype="html"><source>Rerun</source></trans-unit>
+      <trans-unit id="runs.list.reprocess" datatype="html"><source>Reprocessed</source></trans-unit>
+      <trans-unit id="runs.list.apply" datatype="html"><source>Apply filters</source></trans-unit>
+      <trans-unit id="runs.list.clear" datatype="html"><source>Clear filters</source></trans-unit>
+      <trans-unit id="runs.list.empty-title" datatype="html"><source>No runs recorded</source></trans-unit>
+      <trans-unit id="runs.list.empty-description" datatype="html"><source>Runs will appear here when a producer creates them.</source></trans-unit>
+      <trans-unit id="runs.list.filtered-title" datatype="html"><source>No matching runs in the loaded rows</source></trans-unit>
+      <trans-unit id="runs.list.filtered-description" datatype="html"><source>These filters apply to loaded runs, not the entire project. Load more when available, or clear filters.</source></trans-unit>
+      <trans-unit id="runs.list.pagination" datatype="html"><source>More runs</source></trans-unit>
+      <trans-unit id="runs.list.more" datatype="html"><source>Load more</source></trans-unit>
+      <trans-unit id="runs.list.loading-more" datatype="html"><source>Loading more runs…</source></trans-unit>
+      <trans-unit id="runs.list.capped" datatype="html"><source>Automatic browsing paused. Load more to continue, or narrow the ref name.</source></trans-unit>
+      <trans-unit id="runs.list.retry-more" datatype="html"><source>Retry loading more</source></trans-unit>
+      <trans-unit id="runs.list.loaded-count" datatype="html"><source>Filtered from <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> loaded runs.</source></trans-unit>
+      <trans-unit id="runs.list.table-caption" datatype="html"><source>Project runs</source></trans-unit>
+      <trans-unit id="runs.list.column-id" datatype="html"><source>Run id</source></trans-unit>
+      <trans-unit id="runs.list.column-state" datatype="html"><source>State</source></trans-unit>
+      <trans-unit id="runs.list.column-evidence" datatype="html"><source>Evidence</source></trans-unit>
+      <trans-unit id="runs.list.column-decision" datatype="html"><source>Decision</source></trans-unit>
+      <trans-unit id="runs.list.column-ref" datatype="html"><source>Ref</source></trans-unit>
+      <trans-unit id="runs.list.column-scope" datatype="html"><source>Run scope</source></trans-unit>
+      <trans-unit id="runs.list.column-created" datatype="html"><source>Created (UTC)</source></trans-unit>
+      <trans-unit id="runs.list.unverified-ref" datatype="html"><source>Unverified ref</source></trans-unit>
+      <trans-unit id="runs.list.ref-unavailable" datatype="html"><source>Ref unavailable</source></trans-unit>
+      <trans-unit id="runs.list.child" datatype="html"><source>Derived run</source></trans-unit>
     </body>
   </file>
 </xliff>

@@ -104,6 +104,13 @@ import projectsListOnboardingEmpty from '../../../../../../fixtures/web-api/proj
 import projectsListOnboardingForbidden from '../../../../../../fixtures/web-api/projects-list-onboarding-forbidden/input.json';
 import projectsListOnboardingProjectNotFound from '../../../../../../fixtures/web-api/projects-list-onboarding-project-not-found/input.json';
 import rolesList from '../../../../../../fixtures/web-api/roles-list/input.json';
+import runList from '../../../../../../fixtures/web-api/run-list/input.json';
+import runList250 from '../../../../../../fixtures/web-api/run-list-250/input.json';
+import runListEmpty from '../../../../../../fixtures/web-api/run-list-empty/input.json';
+import runListNomatchPages from '../../../../../../fixtures/web-api/run-list-nomatch-pages/input.json';
+import runListPage1 from '../../../../../../fixtures/web-api/run-list-page-1/input.json';
+import runListPage2 from '../../../../../../fixtures/web-api/run-list-page-2/input.json';
+import runListUnavailable from '../../../../../../fixtures/web-api/run-list-unavailable/input.json';
 import runState from '../../../../../../fixtures/web-api/run-state/input.json';
 import runStateOnboardingEvidence from '../../../../../../fixtures/web-api/run-state-onboarding-evidence/input.json';
 import runStateOnboardingRunComplete from '../../../../../../fixtures/web-api/run-state-onboarding-run-complete/input.json';
@@ -457,14 +464,49 @@ export interface FixtureCatalogRow {
  * section's Load more in a browser at all:
  * `ci-bindings-list-settings-page-1` (`=settings-page-1`) is the first page — three bindings, one per
  * verification state, and a `next_cursor` in the `<utc ticks in hex>-<uuid>` form `KeysetCursor`
- * issues (`runs-list` spells it the same way) — and `ci-bindings-list-settings-page-2`
+ * issues (`run-list-page-1` below spells it the same way) — and `ci-bindings-list-settings-page-2`
  * (`=settings-page-2`) is the second, two further bindings with `next_cursor: null`, the terminal
- * page. The page-2 row is the one catalog row carrying a `cursor`, and its value is exactly the
- * `next_cursor` page 1 names, so the backend answers the cursor the screen actually got — not a
- * cursor a test made up. Both pages sit on the `Storefront web` project, their five `id`s are
+ * page. That row and — since 09.3.1-T1 — `run-list-page-2` below are the catalog rows carrying a
+ * `cursor`, and each value is exactly the `next_cursor` its first page names, so the backend answers
+ * the cursor the screen actually got — not a cursor a test made up. Both pages sit on the
+ * `Storefront web` project, their five `id`s are
  * disjoint (the store de-duplicates by `id`, so a repeated one would be silently dropped and the
  * second page would look empty), and the two `X-Request-Id` values (`…c8`, `…c9`) are distinct from
  * the three above.
+ *
+ * 09.3.1-T1 adds the Runs list's own page (`listRuns`). `run-list` (`?fixture.variant.listRuns=runs`)
+ * is the page's own set — without that toggle the operation still answers its `ok` document
+ * (`runs-list` above), which is what a stray visit to `/runs` renders — and holds five `RunSummary`
+ * rows
+ * on the `Storefront web` project, one per state the page must render apart: a `complete` run with
+ * `decision: PASS`; a `running` run whose `decision` is `null` (pending — the row must never render
+ * as a verdict); a `complete` pull-request run with `decision: FAIL`, a `parent_run_id` and a
+ * `rerun_label`, so the rerun label and the rerun-scope filter have a row; an `incomplete` run with
+ * `decision: null`, `unverified_ref: true`, an `evidence:reprocess` label of its own and a
+ * `ref.name` carrying U+202E, the format character `escapeFormatChars`
+ * (`features/runs/list/ref-name-display.ts`) exists to expose; and a `canceled` run with no identity
+ * at all (`kind`, `name`, `trigger_event` null, no `decision` member). No row carries a
+ * completeness member because the wire has none — the Evidence column is the badge's unavailable
+ * state for every row. `run-list-empty` (`=empty`) is the project with no runs, `run-list-250`
+ * (`=250-rows`) is one full page of exactly 250 deterministic rows (`018f0000-…-0000000020xx`) for
+ * the CDK virtual-scroll and axe checks, its decision a function of its state (a `complete` row
+ * carries PASS or FAIL by alternating position, an `incomplete` row null (pending), every other state
+ * `null`), and `run-list-nomatch-pages` (`=nomatch-pages`) is two
+ * `queued` rows: with `scope`/`state` narrowing to `complete` every loaded row fails the filter, so
+ * the page can show its "filtered from N loaded runs" note instead of the truly-empty copy.
+ *
+ * `run-list-page-1` (`=page-1`, three rows and a `next_cursor` in the `KeysetCursor` form) and
+ * `run-list-page-2` (`=page-2`, two further rows, disjoint ids `…0084`/`…0085`, `next_cursor: null`)
+ * are the paging pair. `run-list-page-2` declares that cursor (`08df2f51afe86800-…0083`, the keyset
+ * position of page 1's last row) and `listRuns` declares `cursorQueryParameter: 'cursor'`, so a
+ * browser `Load more` is answered with page 2 — the second cursor-keyed walk of the corpus after
+ * `listCiBindings`' — and `fixture-contract.spec.ts` pins both explicitly, one per walk. The older
+ * `runs-list` page ends the walk (`next_cursor: null`): its cursor was declared by no row, so a
+ * follow-up answered the same page again, which the store refuses as a repeated cursor — the
+ * screens that want a paged runs list take the pair above.
+ * `run-list-unavailable` (`=unavailable`) is the same read's 503 `unavailable` (always
+ * `Retry-After`, 00 §9.2), the state the list's error pattern renders with the server's retry hint.
+ * Every `X-Request-Id` above (`…e10`–`…e17`) is distinct from the older `runs-list*` rows.
  */
 export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'ci-binding-create', document: ciBindingCreate },
@@ -606,6 +648,17 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
     document: projectsListOnboardingProjectNotFound,
   },
   { name: 'roles-list', document: rolesList },
+  { name: 'run-list', document: runList },
+  { name: 'run-list-250', document: runList250 },
+  { name: 'run-list-empty', document: runListEmpty },
+  { name: 'run-list-nomatch-pages', document: runListNomatchPages },
+  { name: 'run-list-page-1', document: runListPage1 },
+  {
+    name: 'run-list-page-2',
+    document: runListPage2,
+    cursor: '08df2f51afe86800-018f0000-0000-7000-8000-000000000083',
+  },
+  { name: 'run-list-unavailable', document: runListUnavailable },
   { name: 'run-state', document: runState },
   { name: 'run-state-onboarding-evidence', document: runStateOnboardingEvidence },
   { name: 'run-state-onboarding-run-complete', document: runStateOnboardingRunComplete },

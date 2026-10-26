@@ -1,0 +1,92 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.table-scroll {
+  max-width: 100%;
+  overflow: auto;
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-surface);
+}
+.run-table {
+  min-inline-size: calc(var(--eg-rail-width) * 5);
+}
+h2 {
+  margin: 0;
+  padding: var(--eg-space-4);
+  font-size: var(--eg-text-sm);
+  font-weight: var(--eg-weight-semibold);
+}
+.table-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr 1fr 1.7fr 1.4fr 1.4fr;
+  border-block-start: var(--eg-border-width) solid var(--eg-border);
+}
+.table-row > span {
+  min-width: 0;
+  padding: var(--eg-space-3) var(--eg-space-4);
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+.table-header {
+  background: var(--eg-surface-raised);
+  font-weight: var(--eg-weight-semibold);
+}
+.ref-cell,
+.scope-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--eg-space-2);
+}
+bdi,
+app-data-table-value,
+.scope {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+bdi {
+  width: 100%;
+}
+.scope {
+  padding-inline-start: var(--eg-space-3);
+  border-inline-start: var(--eg-focus-width) solid var(--eg-info-fg);
+}
+.scope-reprocess {
+  border-inline-start-style: double;
+  border-inline-start-color: var(--eg-neutral-fg);
+}
+.scope strong {
+  display: block;
+  font-weight: var(--eg-weight-semibold);
+}
+.identifier {
+  font-family: var(--eg-font-mono);
+}
+abbr {
+  text-decoration: none;
+}
+cdk-virtual-scroll-viewport {
+  display: block;
+  height: calc(var(--eg-control-touch) * 10);
+}
+.virtual-row,
+.row-probe {
+  height: calc(var(--eg-control-touch) * 3);
+  box-sizing: border-box;
+}
+.virtual-row > span {
+  overflow: hidden;
+}
+.row-probe {
+  position: absolute;
+  inline-size: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+:where(.table-scroll, cdk-virtual-scroll-viewport):focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: calc(-1 * var(--eg-focus-width));
+}

@@ -80,7 +80,13 @@
 // corpus spells it out per page instead of the backend guessing. The order stays the id-keyed rule's:
 // a matching cursor wins over the variant, and a cursor no document declares (a stale one, or the
 // first request, which carries none) falls back to the variant exactly as before. Only one row
-// declares it; a second one needs its own pin in `fixture-contract.spec.ts`.
+// declared it until 09.3.1-T1; a second one needs its own pin in `fixture-contract.spec.ts`.
+//
+// 09.3.1-T1 adds the second cursor-keyed row: `listRuns` declares the same `cursor` parameter, and
+// `run-list-page-2` declares the `next_cursor` `run-list-page-1` names, so the Runs list's Load more
+// walks both corpus pages in a browser instead of the first page's cursor being answered with the
+// first page again (which the store refuses as a repeated-cursor contract violation). The pin in
+// `fixture-contract.spec.ts` names both rows explicitly, one per walk.
 
 import { API_BASE_PATH } from '../http/api-origin';
 
@@ -105,7 +111,7 @@ export interface FixtureRoute {
    * The value is compared against the `cursor` a catalog row declares for the page it holds, so a
    * cursor-paged list shows a second page only for the cursor the previous page actually named.
    * Absent on every route whose document does not depend on a query parameter — which is all of
-   * them but `listCiBindings`; the module comment holds the rule.
+   * them but `listCiBindings` and `listRuns`; the module comment holds the rule.
    */
   readonly cursorQueryParameter?: string;
 }
@@ -154,7 +160,12 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     path: '/orgs/{o}/memberships/{m}/roles/{r}',
   },
   { operationId: 'listAudit', method: 'GET', path: '/orgs/{o}/audit' },
-  { operationId: 'listRuns', method: 'GET', path: '/projects/{p}/runs' },
+  {
+    operationId: 'listRuns',
+    method: 'GET',
+    path: '/projects/{p}/runs',
+    cursorQueryParameter: 'cursor',
+  },
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
   { operationId: 'createPolicyRevision', method: 'POST', path: '/projects/{p}/policies' },
