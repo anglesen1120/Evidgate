@@ -2,14 +2,16 @@
 
 > Built 2026-10-02 from every `[OPEN]` and ⚠️ in `DECISIONS.md`, `RECOMMENDATIONS.md`, `plans/00`–`12`, `docs/decisions/` and all feature plans. Each row gives a recommended default (`[INFERENCE]`), the information needed and where to get it, and the task that must not start before the row is resolved. Nothing in this register is a decision until the owner accepts it; no external or legal fact here is verified unless it carries ✅ with a source.
 
-| File | Areas | Rows | Stage A blockers |
+| File | Areas | Rows | Stage A rows (open / total) |
 |---|---|---|---|
-| [`01-core-identity.md`](01-core-identity.md) | DECISIONS, RECOMMENDATIONS, 00, 01, 02 | 60 | 7 |
-| [`02-catalog-ingest-runs-evidence.md`](02-catalog-ingest-runs-evidence.md) | 03, 04, 05, 06 | 58 | 16 |
-| [`03-policy-healing-web.md`](03-policy-healing-web.md) | 07, 08, 09 | 58 | 2 |
-| [`04-ops-security-commercial.md`](04-ops-security-commercial.md) | 10, 11, 12, O1 pilot profile (includes the **counsel brief**) | 51 | 3 |
-| [`05-product-phases-g1.md`](05-product-phases-g1.md) | 13.1.1, 13.1.2, 13.2.1 (CR-D-2 G1 authoring, S52, 2026-10-23), 13.2.2 (role profiles, S92, 2026-10-26) | 26 | 0 |
-| **Total** | | **253** | **28** |
+| [`01-core-identity.md`](01-core-identity.md) | DECISIONS, RECOMMENDATIONS, 00, 01, 02 | 60 | 3 / 7 |
+| [`02-catalog-ingest-runs-evidence.md`](02-catalog-ingest-runs-evidence.md) | 03, 04, 05, 06 | 58 | 6 / 16 |
+| [`03-policy-healing-web.md`](03-policy-healing-web.md) | 07, 08, 09 | 58 | 1 / 2 |
+| [`04-ops-security-commercial.md`](04-ops-security-commercial.md) | 10, 11, 12, O1 pilot profile (includes the **counsel brief**) | 51 | 2 / 3 |
+| [`05-product-phases-g1.md`](05-product-phases-g1.md) | 13.1.1, 13.1.2, 13.2.1 (CR-D-2 G1 authoring, S52, 2026-10-23), 13.2.2 (role profiles, S92, 2026-10-26) | 42 | 0 / 0 |
+| **Total** | | **269** | **12 / 28** |
+
+Rows counted 2026-10-26 over every `| OI-` row of the five files; the Stage A column counts only the §2 rows, and a Stage A row is open until it carries a closing marker (`Closed`, `DECIDED`, `Resolved`, `delivered`) or is a `hand-over`. No folder-wide open/handed/closed totals are published here: per-row state is recorded in the row itself, and a row whose blocking task has landed but which records no decision stays open (the owner decides it, the merge does not — e.g. OI-02-08, OI-02-09, OI-05-15, OI-13-132, and the role-profile rows OI-13-301…308, whose plan calls their defaults `[INFERENCE]` and not owner decisions). Each row's own `Resolve before` and source cite stay authoritative over this summary.
 
 ## 1. How to use it
 
@@ -39,8 +41,8 @@ Stage A order from `plans/features/SOLO-PATH.md` §2. "Type" tells you what clos
 | 13 | OI-06-11 partition key `run_created_at` + composite FK | 04.1.1-T1, 05.2.1-T1, 05.3.3-T1 | TL decision + 00 edit | Adopt 06.4.6 default now (changes the 04.1.1-T2 `ON CONFLICT` target); a later change needs a data migration |
 | 14 | OI-04-04 gzip expanded-size/ratio cap | 04.1.1-T3 | owner decision | **Closed (D-A8)** Expanded ≤ 8 MiB per batch, ratio ≤ 20:1, streaming abort; relax after the 10.6.1 load test |
 | 15 | OI-05-03 run identity fields in 00 | 05.2.2-T1 | contract edit | **Closed 2026-10-13 (05.2.2-T1, S45)** 00 §7/§8.1/§15 carry the eight fields (`ref_kind`, `ref_name`, `pr_number`, `head_sha`, `base_sha`, `trigger_event`, `is_fork`, `unverified_ref`), the verified-claim trust rules and the wire `ref` block |
-| 16 | OI-05-04 OIDC claim and payload names, fork token | 05.2.2-T1 | verify (GitHub OIDC docs) | **Answered for T1 2026-10-13 (05.2.2-T1, S45)** verified claims are `ref` and `sha` only: the PR number is parsed from `refs/pull/<N>/merge` and that `sha` is GitHub's test-merge commit (never `head_sha`); `event_name`/`ref_type`/base sha/fork flag are not in the token, so `trigger_event`/`base_sha` are body-only; a fork PR exchange is refused 403 (02.4.1 AC3). Fork-token doc ⚠️ → 05.2.2-T3 |
-| 17 | OI-04-05 OIDC token request from the CLI | 04.2.1-T1 | verify (GitHub Actions docs) | Use the documented request URL/token env vars with a custom audience |
+| 16 | OI-05-04 OIDC claim and payload names, fork token | 05.2.2-T1 | verify (GitHub OIDC docs) | **Resolved for the T1 field set 2026-10-13 (05.2.2-T1, S45)** verified claims are `ref` and `sha` only: the PR number is parsed from `refs/pull/<N>/merge` and that `sha` is GitHub's test-merge commit (never `head_sha`); `event_name`/`ref_type`/base sha/fork flag are not in the token, so `trigger_event`/`base_sha` are body-only; a fork PR exchange is refused 403 (02.4.1 AC3). Fork-token doc ⚠️ → 05.2.2-T3 |
+| 17 | OI-04-05 OIDC token request from the CLI | 04.2.1-T1 | verify (GitHub Actions docs) | **Closed 2026-10-26 — delivered:** the CLI reads `ACTIONS_ID_TOKEN_REQUEST_URL` and requests a token with `ACTIONS_ID_TOKEN_REQUEST_TOKEN` at `audience=evidgate` (`packages/cli/src/auth/exchange.ts:216`, `exchange.test.ts:157-158`), which are the documented Actions variables; delivered by 04.2.1-T1 (#23, `8d89194`) |
 | 18 | OI-04-06 `contracts/cli.md` exit-code registry | 04.2.1-T2 | contract edit | **Closed 2026-10-07 (04.2.1-T2)** `contracts/cli.md` created with 0/1/2/3 from 00 §9.3 and FR-07-13; replay codes 10–19 stay `[OPEN]` for 04.9.1-T4 |
 | 19 | OI-04-01 Playwright reporter types + browserless e2e | 04.3.1-T1 | verify (Playwright 1.63 types) | Check `TestResult.retry`, steps, attachments in the pinned version |
 | 20 | OI-04-08 bounded `GET /v1/runs/{r}` shape | 05.3.1-T1 | contract edit | Paged from day one, never an unbounded array; error codes logged in 00 §9.2/§15 |
@@ -57,7 +59,7 @@ Exact wording, sources and the information needed for each row are in the area f
 
 ## 3. Owner decisions taken
 
-The eleven Stage A owner-decision rows (2, 3, 5, 8, 9, 11, 12, 14, 24, 27, 28) were accepted with their recommended defaults on 2026-10-02 and recorded as DECISIONS §8.1 D-A1…D-A11. Stage A now has 14 open rows: contract edits (13, 20, 21, 23, 26), done by the developer at the story's DoR; doc checks (1, 4, 6, 7, 16, 17, 19), each a short check at the start of the task; and paperwork or design (10, 22). Row 25 was closed earlier; row 18 was closed 2026-10-07 by 04.2.1-T2; row 15 was closed 2026-10-13 by 05.2.2-T1, and row 16 is answered for the 05.2.2-T1 field set (its fork-token ⚠️ moves to 05.2.2-T3).
+The eleven Stage A owner-decision rows (2, 3, 5, 8, 9, 11, 12, 14, 24, 27, 28) were accepted with their recommended defaults on 2026-10-02 and recorded as DECISIONS §8.1 D-A1…D-A11. Stage A now has 12 open rows: contract edits (13, 20, 21, 23, 26), done by the developer at the story's DoR; doc checks (1, 4, 6, 7, 19), each a short check at the start of the task; and paperwork or design (10, 22). Row 25 was closed earlier; row 18 was closed 2026-10-07 by 04.2.1-T2, row 15 on 2026-10-13 by 05.2.2-T1 and row 17 on 2026-10-26 by 04.2.1-T1, so none of them counts as open; row 16 is answered for the 05.2.2-T1 field set, with its fork-token ⚠️ moved to 05.2.2-T3, so it does not block Stage A either.
 
 Outside Stage A, the items with the longest lead time are:
 
