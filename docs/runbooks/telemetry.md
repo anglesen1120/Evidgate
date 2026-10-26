@@ -56,9 +56,22 @@ Notes that matter during an incident:
 - **Validation:** a value outside `[0, 1]`, `NaN` or `Infinity` fails the boot naming the key. A typo
   can neither sample everything nor turn tracing off silently.
 - **Metrics are never head-sampled.** They are aggregates; the ratio applies to traces only.
-- **Per environment:** dev omits the key (ratio 1). staging and prod declare it in
-  [`../../infra/config-matrix.json`](../../infra/config-matrix.json) and set their own value;
-  the prod value is tuned with the load test (10.6.1) and is not guessed here.
+- **The ratio does not reduce local CPU.** A dropped trace is recorded in-process all the same (spans,
+  tags, events, the Npgsql and HttpClient child spans) so an error in it can still be exported; only
+  the export of its non-error spans is skipped. Lowering the ratio buys backend volume and network,
+  not cheaper requests or jobs — 10.3.1-T2's collector-side tail sampling is what would relax that.
+- **Per environment:** dev omits the key (ratio 1). staging and prod set their own value in the
+  deployment environment (the matrix row records the key, the default and the type; it carries no
+  per-environment value) and the prod value is tuned with the load test (10.6.1), not guessed here.
+- **An inbound `traceparent` is honoured — including its sampled flag.** AC1 needs the W3C link from a
+  client (an adapter, the web app) into our trace, so the ASP.NET Core instrumentation adopts the
+  caller's trace id and parent span. Two consequences: a caller that sends `00-<trace>-<span>-01`
+  forces that trace to be exported whatever this host's ratio says (`ParentBased` keeps a
+  sampled parent's children), and a caller can place its request inside a trace id of its choosing.
+  That is an accepted trade-off `[DECISION]`, recorded for owner review rather than fixed here: it
+  is the price of propagating a real end-to-end trace, the span is still ours and still tagged with
+  our `request_id`, and refusing the remote parent for unauthenticated routes (or keeping it only as
+  a link, and capping `tracestate`/carrier size) is a separate decision with its own test plan.
 
 ### Errors are always kept, and what that costs
 
@@ -97,6 +110,16 @@ Two layers, both in the app, because the collector is the third (10.3.1-T2.2):
 |---|---|---|
 | Logger decorator | `RedactingLoggerFactory` / `RedactingLogger` in `src/BuildingBlocks/Observability/Redaction/` | The state pairs of every log entry, scope state, and the exception object, for **every** provider (console, OpenTelemetry, tests) |
 | Export processor | `LogRedactionProcessor`, added by `AddEvidgateTelemetry` | Each `LogRecord` just before the export processor: attributes (including any a processor added), body, formatted message, and the exception attributes |
+
+**The order is fixed, and it is part of the contract.** `AddEvidgateTelemetry` registers the log
+pipeline's processors in one place and in this order: `CorrelationLogRecordProcessor` first (it only
+ever *adds* `evidgate.request_id`/`evidgate.run_id`/`evidgate.job_id`/`evidgate.trace_id`, read from
+the current span's tags and baggage and validated — a value that is not a request id or a GUID is
+dropped, so a forged `baggage: evidgate.run_id=…` from a client signs nothing), then
+`LogRedactionProcessor` (which therefore also covers a value an earlier processor added), then the
+export processor. An exporter buffers the record at its own `OnEnd`, so a processor registered after
+it is invisible to the backend: that is why `AddEvidgateCorrelation` (instrumentation only) never
+touches the logging options, and why a review of this pipeline must check order, not just presence.
 
 The list (`SecretRedactor`):
 

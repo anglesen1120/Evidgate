@@ -72,6 +72,13 @@ public static partial class ApiHost
         builder.Services.AddEvidgateSecrets(builder.Configuration);
 
         var otel = builder.AddEvidgateTelemetry(ServiceName);
+        // 10.3.1-T1.2 (F6, documented trade-off): the server instrumentation adopts an
+        // inbound W3C `traceparent`, so a caller may choose the trace id its requests join
+        // and may ask for `sampled=1`; a client trace is worth keeping whole, and the head
+        // sampler (group P) still governs the roots this host starts itself. What stays
+        // client-controlled is bounded at the edge instead: `RequestIdMiddleware` drops an
+        // oversized or non-printable `tracestate` and a planted `evidgate.run_id` baggage,
+        // and `TaskCorrelation.Stamp` bounds the carrier it persists into every payload.
         otel.WithTracing(tracing =>
             tracing.AddAspNetCoreInstrumentation(options =>
                 // 00 §5.7 S3 / 02.3.1 §5: the browser reaches the login callback with `code` and `state`

@@ -1,6 +1,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
+using System.Reflection;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Outbox;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Npgsql;
 using Xunit;
 
 namespace Hosts.IntegrationTests;
@@ -12,13 +18,25 @@ namespace Hosts.IntegrationTests;
 /// in any label, because a label is a series and a series is a bill.
 /// </summary>
 /// <remarks>
-/// The measurement surface is a <see cref="MeterListener"/> over the platform meter — the same surface
-/// the OTel pipeline subscribes to — and every public recording method of
-/// <see cref="EvidgateTelemetry"/> is exercised, so a new instrument or a new tag fails here rather
-/// than in the billing dashboard.
+/// The measurement surface is a <see cref="MeterListener"/> over every platform meter (each
+/// <c>Evidgate*</c> meter name, which includes the dispatcher's own meter of 01.5.1), the same surface the
+/// OTel pipeline subscribes to. Every public recording method of <see cref="EvidgateTelemetry"/> is
+/// discovered by reflection and invoked, and the dispatcher's instruments are published by constructing
+/// the real class, so a new recording method, a new instrument or a new tag fails here rather than in
+/// the billing dashboard: a method whose parameters have no probe value throws, an instrument that is
+/// not declared as a constant trips the inventory assertion, and a tag key outside the allowlist trips
+/// the measurement assertion.
 /// </remarks>
 public sealed class MetricCardinalityTests
 {
+    /// <summary>
+    /// A connection string nothing listens on: the dispatcher's instruments are created by its
+    /// constructor, and no code in this test opens the data source (the gauge callback is only run by
+    /// an explicit collection). It carries no credential, so the secret scan stays clean.
+    /// </summary>
+    private const string DispatcherProbeConnectionString =
+        "Host=127.0.0.1;Port=1;Username=evidgate_app;Database=evidgate;Timeout=2";
+
     /// <summary>
     /// The closed set of tag KEYS. Adding one is a reviewable decision about what may travel in a
     /// label; it is not a formality, and a key not listed here fails the test.
@@ -62,13 +80,15 @@ public sealed class MetricCardinalityTests
     public void Every_Emitted_Tag_Key_And_Value_Is_From_A_Closed_Vocabulary()
     {
         var measurements = new ConcurrentQueue<(string Instrument, KeyValuePair<string, object?>[] Tags)>();
+        var published = new ConcurrentQueue<string>();
 
         using var listener = new MeterListener
         {
             InstrumentPublished = (instrument, publisher) =>
             {
-                if (instrument.Meter.Name == EvidgateTelemetry.MeterName)
+                if (IsPlatformMeter(instrument.Meter.Name))
                 {
+                    published.Enqueue(instrument.Name);
                     publisher.EnableMeasurementEvents(instrument);
                 }
             },
@@ -80,10 +100,24 @@ public sealed class MetricCardinalityTests
             (instrument, _, tags, _) => measurements.Enqueue((instrument.Name, tags.ToArray())));
         listener.Start();
 
-        RecordEverything();
+        // The dispatcher creates its own meter and instruments in its constructor; publishing them
+        // is what proves its two instruments sit on a watched meter.
+        using var dataSource = NpgsqlDataSource.Create(DispatcherProbeConnectionString);
+        int measurementsInvoked;
+        using (new OutboxDispatcher(
+                   dataSource,
+                   Options.Create(new TasksOptions()),
+                   NullLogger<OutboxDispatcher>.Instance))
+        {
+            measurementsInvoked = RecordEveryMeasurement();
+        }
 
         var recorded = measurements.ToArray();
-        Assert.True(recorded.Length >= 12, $"only {recorded.Length} measurements were captured — the probe is not alive");
+        Assert.True(
+            recorded.Length >= measurementsInvoked + 1,
+            $"only {recorded.Length} measurements were captured for {measurementsInvoked} recording methods and the "
+            + "module counter — a recording method returned without emitting (a count of 0 is a no-op) and its tags "
+            + "would never be seen");
 
         foreach (var (instrument, tags) in recorded)
         {
@@ -118,28 +152,130 @@ public sealed class MetricCardinalityTests
         Assert.Contains("outcome", observedKeys);
         Assert.Contains("trigger", observedKeys);
         Assert.Contains("written", observedKeys);
+
+        AssertInstrumentInventory(
+            published.ToArray(),
+            recorded.Select(measurement => measurement.Instrument).ToHashSet(StringComparer.Ordinal));
     }
 
-    /// <summary>Calls every public recording method once, with closed-vocabulary arguments.</summary>
-    private static void RecordEverything()
+    /// <summary>
+    /// Asserts the instrument inventory: the dispatcher's two instruments are published on a watched
+    /// meter, every instrument this suite measured is a declared <see cref="EvidgateTelemetry"/>
+    /// constant, and every declared constant produced a measurement.
+    /// </summary>
+    /// <remarks>
+    /// The inventory is checked against what was <em>measured</em>, not against what was published:
+    /// the other platform meters state the same meter name by value (<c>TaskQueueMetrics</c>,
+    /// <c>GoogleJwksCache</c>) or a sibling name (<c>Evidgate.Audit</c>), so their instruments replay
+    /// into the published set as soon as any other test in this process initialised them. Those are
+    /// watched for tag keys, and are never measured by this suite, so a new one cannot fail here —
+    /// while a new recording method or an undeclared instrument name still does.
+    /// </remarks>
+    private static void AssertInstrumentInventory(string[] published, HashSet<string> measured)
     {
-        using (EvidgateTelemetry.StartModuleActivity("ingestion", "CreateRun"))
+        // The pipeline subscribes once, by name: AddMeter(EvidgateTelemetry.MeterName). The
+        // dispatcher states the same name by value (Persistence does not reference Observability),
+        // so the two constants must agree or its metrics silently leave the pipeline.
+        Assert.Equal(EvidgateTelemetry.MeterName, OutboxDispatchMetrics.MeterName);
+
+        Assert.Contains(OutboxDispatchMetrics.DispatchLagHistogramName, published);
+        Assert.Contains(OutboxDispatchMetrics.UndispatchedGaugeName, published);
+
+        var declared = DeclaredInstrumentNames();
+        foreach (var name in measured)
+        {
+            Assert.Contains(name, declared);
+        }
+
+        foreach (var name in declared)
+        {
+            Assert.Contains(name, measured);
+        }
+    }
+
+    /// <summary>
+    /// Every metric-name constant of <see cref="EvidgateTelemetry"/>: a new instrument that is not
+    /// declared here fails <see cref="AssertInstrumentInventory"/>, and so does a constant nothing
+    /// records.
+    /// </summary>
+    private static HashSet<string> DeclaredInstrumentNames() =>
+        typeof(EvidgateTelemetry)
+            .GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(field => field.IsLiteral
+                && field.FieldType == typeof(string)
+                && (field.Name.EndsWith("MetricName", StringComparison.Ordinal)
+                    || field.Name.EndsWith("CounterName", StringComparison.Ordinal)))
+            .Select(field => (string)field.GetRawConstantValue()!)
+            .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>Whether <paramref name="meterName"/> is a meter the platform owns and the pipeline subscribes to.</summary>
+    private static bool IsPlatformMeter(string meterName) =>
+        meterName.StartsWith("Evidgate", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Exercises the whole recording surface of <see cref="EvidgateTelemetry"/>: the two span starters
+    /// (the module one also counts on <c>evidgate.module.operations</c>, the only instrument whose
+    /// labels come from a span API) and then every public static <c>Record*</c> method once, deriving
+    /// its arguments from the signature. The list is discovered, not maintained by hand, so a new
+    /// recording method is exercised without an edit here — and one whose parameters have no probe
+    /// value fails loudly instead of being skipped.
+    /// </summary>
+    /// <returns>How many recording methods were invoked, so the caller can require one measurement each.</returns>
+    private static int RecordEveryMeasurement()
+    {
+        using (EvidgateTelemetry.StartModuleActivity("ingestion", "Probe"))
+        using (EvidgateTelemetry.StartPipelineActivity("Probe"))
         {
         }
 
-        EvidgateTelemetry.RecordManifestRejected("schema");
-        EvidgateTelemetry.RecordAdapterCapabilityRejected("capability_invalid", 3);
-        EvidgateTelemetry.RecordAdapterCapabilityRejected("unsupported_protocol_major", null);
-        EvidgateTelemetry.RecordIngestBatchRejected("event_count");
-        EvidgateTelemetry.RecordCaseAttemptWritten("accepted", 2);
-        EvidgateTelemetry.RecordCaseAttemptBlockedBySetup(1);
-        EvidgateTelemetry.RecordFinalizeProducerSlotTaken();
-        EvidgateTelemetry.RecordFinalizeDeclarationMismatch();
-        EvidgateTelemetry.RecordLoginAttempt("google", "started");
-        EvidgateTelemetry.RecordSessionAuthOutcome("active");
-        EvidgateTelemetry.RecordSessionRotated("login");
-        EvidgateTelemetry.RecordSessionRevoked(2);
-        EvidgateTelemetry.RecordSessionSlideWrite(true);
-        EvidgateTelemetry.RecordPipelineDuration("CreateRun", TimeSpan.FromMilliseconds(5), error: false);
+        var methods = typeof(EvidgateTelemetry)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(method => method.Name.StartsWith("Record", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.NotEmpty(methods);
+
+        foreach (var method in methods)
+        {
+            var arguments = method.GetParameters().Select(ArgumentFor).ToArray();
+            method.Invoke(null, arguments);
+        }
+
+        return methods.Length;
+    }
+
+    /// <summary>A closed-vocabulary argument for one parameter of a recording method.</summary>
+    private static object? ArgumentFor(ParameterInfo parameter)
+    {
+        var type = parameter.ParameterType;
+        if (type == typeof(string))
+        {
+            return "probe";
+        }
+
+        if (type == typeof(long))
+        {
+            return 2L;
+        }
+
+        if (type == typeof(int?))
+        {
+            return 3;
+        }
+
+        if (type == typeof(bool))
+        {
+            return true;
+        }
+
+        if (type == typeof(TimeSpan))
+        {
+            return TimeSpan.FromMilliseconds(5);
+        }
+
+        throw new InvalidOperationException(
+            $"the parameter '{parameter.Name}' of a public recording method has type {type}, which this "
+            + "probe has no closed-vocabulary value for: add one so the new tag vocabulary is verified "
+            + "here rather than discovered in the billing dashboard");
     }
 }

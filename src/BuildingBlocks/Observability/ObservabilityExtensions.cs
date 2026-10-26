@@ -1,4 +1,5 @@
 using System.Reflection;
+using Evidgate.BuildingBlocks.Observability.Correlation;
 using Evidgate.BuildingBlocks.Observability.Redaction;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,8 +19,9 @@ namespace Evidgate.BuildingBlocks.Observability;
 /// <summary>
 /// Host wiring shared by <c>Evidgate.Api</c> and <c>Evidgate.Worker</c>
 /// (01.1.2-T1.2, 10.3.1-T1): one log pipeline with the secret redactor in front of
-/// every provider, one activity source and meter, the resource attributes of
-/// 10.3.1-T1.3 on traces, metrics and logs, and an OTLP exporter that exists only
+/// every provider and its processors in a fixed order (correlation enrichment, then
+/// redaction, then the exporter), one activity source and meter, the resource attributes
+/// of 10.3.1-T1.3 on traces, metrics and logs, and an OTLP exporter that exists only
 /// when <c>EVIDGATE__TELEMETRY__OTLPENDPOINT</c> is set.
 /// </summary>
 public static class ObservabilityExtensions
@@ -53,24 +55,35 @@ public static class ObservabilityExtensions
         var otlpEndpoint = ResolveOtlpEndpoint(options.OtlpEndpoint);
         var environmentName = builder.Environment.EnvironmentName;
         var serviceVersion = ResolveServiceVersion(options.ServiceVersion);
+        var resourceBuilder = CreateTelemetryResource(serviceName, environmentName, serviceVersion);
 
         builder.Logging.AddOpenTelemetry(logging =>
         {
             // 10.3.1-T1.3: the same resource as traces and metrics, so one filter in the
             // backend finds all three signals of a deployment.
-            logging.SetResourceBuilder(CreateTelemetryResource(serviceName, environmentName, serviceVersion));
+            logging.SetResourceBuilder(resourceBuilder);
 
             // The state is already redacted by RedactingLogger; the rendered
             // message would duplicate it, so only the structured pairs are exported.
             logging.IncludeFormattedMessage = false;
             logging.IncludeScopes = false;
 
-            // 10.3.1-T1.4: the export-side half of the redaction list. The logger decorator
+            // Processor order is registration order, and each processor hands the record to
+            // the next one: an exporter registered here buffers the record at its own OnEnd,
+            // so anything added after it never reaches the backend. All three stages are
+            // therefore registered in this one block, in pipeline order.
+            //
+            // 1. Correlation enrichment (10.3.1-T1.2): it only ever adds a field, so it runs
+            // first and every later stage sees the complete record.
+            logging.AddProcessor(new CorrelationLogRecordProcessor());
+
+            // 2. 10.3.1-T1.4: the export-side half of the redaction list. The logger decorator
             // covers everything written through ILoggerFactory; this processor covers the
             // record itself (exception text, and any pair a processor put back), so a value
             // cannot reach the backend because it took a path that skipped the decorator.
             logging.AddProcessor(new LogRedactionProcessor());
 
+            // 3. The export processor, last.
             if (otlpEndpoint is not null)
             {
                 logging.AddOtlpExporter(exporter => exporter.Endpoint = otlpEndpoint);
@@ -78,9 +91,8 @@ public static class ObservabilityExtensions
         });
 
         var otel = builder.Services.AddOpenTelemetry();
-        otel.ConfigureResource(resource => resource
-            .AddService(serviceName, serviceVersion: serviceVersion)
-            .AddAttributes([new KeyValuePair<string, object>(DeploymentEnvironmentAttribute, environmentName)]));
+        otel.ConfigureResource(resource =>
+            ConfigureTelemetryResource(resource, serviceName, environmentName, serviceVersion));
         otel.WithTracing(tracing =>
         {
             tracing.SetSampler(TelemetrySampling.CreateSampler(ResolveSampleRatio(options.SampleRatio)));
@@ -114,8 +126,10 @@ public static class ObservabilityExtensions
     /// The resource shared by the three signals (10.3.1-T1.3): <c>service.name</c>,
     /// <c>deployment.environment</c> and <c>service.version</c>. Logs take it through
     /// <see cref="OpenTelemetryLoggerOptions.SetResourceBuilder"/>, traces and metrics
-    /// through <see cref="OpenTelemetryBuilderSdkExtensions.ConfigureResource"/>, and both
-    /// call sites use this one method, so a backend can join a log line to its trace.
+    /// through <see cref="OpenTelemetryBuilderSdkExtensions.ConfigureResource"/>, and all
+    /// three call sites apply <see cref="ConfigureTelemetryResource"/> — the one definition
+    /// of the attribute set — so a backend can join a log line to its trace and the three
+    /// signals cannot drift apart.
     /// </summary>
     /// <param name="serviceName">The host's service identity, e.g. <c>evidgate-api</c>.</param>
     /// <param name="environmentName">The host environment name, e.g. <c>Production</c>.</param>
@@ -129,10 +143,26 @@ public static class ObservabilityExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(environmentName);
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceVersion);
 
-        return ResourceBuilder.CreateDefault()
+        return ConfigureTelemetryResource(
+            ResourceBuilder.CreateDefault(),
+            serviceName,
+            environmentName,
+            serviceVersion);
+    }
+
+    /// <summary>
+    /// Applies the resource attribute set of 10.3.1-T1.3 to <paramref name="resource"/>: the
+    /// one place the three attributes are defined, used by <see cref="CreateTelemetryResource"/>
+    /// (the logging path) and by the traces/metrics <c>ConfigureResource</c> callback.
+    /// </summary>
+    private static ResourceBuilder ConfigureTelemetryResource(
+        ResourceBuilder resource,
+        string serviceName,
+        string environmentName,
+        string serviceVersion) =>
+        resource
             .AddService(serviceName, serviceVersion: serviceVersion)
             .AddAttributes([new KeyValuePair<string, object>(DeploymentEnvironmentAttribute, environmentName)]);
-    }
 
     /// <summary>
     /// Puts <see cref="SecretRedactor"/> in front of every logger (AC4): the

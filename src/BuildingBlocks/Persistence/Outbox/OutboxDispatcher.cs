@@ -43,13 +43,6 @@ public sealed partial class OutboxDispatcher : IDisposable
     /// <summary>Operation name of one dispatch batch's span (10.3.1-T1.1).</summary>
     public const string DispatchOperationName = "outbox.dispatch";
 
-    /// <summary>
-    /// The span source of the dispatch, named by value like the meter above: the
-    /// Persistence assembly does not reference Observability, so a rename there must
-    /// update <see cref="TaskCorrelation.ActivitySourceName"/> too.
-    /// </summary>
-    private static readonly ActivitySource Source = new(TaskCorrelation.ActivitySourceName);
-
     private readonly NpgsqlDataSource _dataSource;
     private readonly TasksOptions _options;
     private readonly ILogger<OutboxDispatcher> _logger;
@@ -110,12 +103,6 @@ public sealed partial class OutboxDispatcher : IDisposable
     /// </remarks>
     public async Task<OutboxDispatchResult> DispatchBatchAsync(CancellationToken cancellationToken = default)
     {
-        // 10.3.1-T1.1: one span per batch, tagged with the batch's own counts (bounded
-        // numbers, never an id — the span is what pairs dispatch latency with the
-        // queue's state; the per-row trace link travels inside each payload instead,
-        // because one dispatcher serves rows of many producer traces).
-        using var activity = Source.StartActivity(DispatchOperationName, ActivityKind.Internal);
-
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
@@ -165,6 +152,12 @@ public sealed partial class OutboxDispatcher : IDisposable
             _dispatchLag.Record(lag);
         }
 
+        // 10.3.1-T1.1: one span per batch that moved rows, tagged with the batch's own
+        // counts (bounded numbers, never an id — the per-row trace link travels inside
+        // each payload instead, because one dispatcher serves rows of many producer
+        // traces). An idle poll gets no span at all: the poller runs every second, so a
+        // span per empty batch would bury the real traces.
+        using var activity = TaskCorrelation.Source.StartActivity(DispatchOperationName, ActivityKind.Internal);
         activity?.SetTag("outbox.claimed", claimed.Length);
         activity?.SetTag("outbox.enqueued", enqueued.Length);
 

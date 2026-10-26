@@ -59,18 +59,35 @@ internal sealed class LogRedactionProcessor : BaseProcessor<LogRecord>
             return record.Attributes;
         }
 
-        var pairs = new List<KeyValuePair<string, object?>>(attributes.Count);
-        foreach (var pair in attributes)
+        // The copies are built only once a value actually changes: the decorator has already
+        // redacted the state, so most records leave here with their own list untouched
+        // (10.3.1-T1.4 review F8).
+        List<KeyValuePair<string, object?>>? pairs = null;
+        for (var index = 0; index < attributes.Count; index++)
         {
+            var pair = attributes[index];
             var redacted = _redactor.RedactValue(pair.Key, pair.Value);
 
             // A value the list does not touch keeps its own type (a boolean stays a boolean tag).
-            pairs.Add(string.Equals(redacted, SecretRedactor.TextOf(pair.Value), StringComparison.Ordinal)
-                ? pair
-                : new KeyValuePair<string, object?>(pair.Key, redacted));
+            if (string.Equals(redacted, SecretRedactor.TextOf(pair.Value), StringComparison.Ordinal))
+            {
+                pairs?.Add(pair);
+                continue;
+            }
+
+            if (pairs is null)
+            {
+                pairs = new List<KeyValuePair<string, object?>>(attributes.Count);
+                for (var copied = 0; copied < index; copied++)
+                {
+                    pairs.Add(attributes[copied]);
+                }
+            }
+
+            pairs.Add(new KeyValuePair<string, object?>(pair.Key, redacted));
         }
 
-        return pairs;
+        return pairs ?? record.Attributes;
     }
 
     private void RedactText(LogRecord record)
@@ -88,7 +105,13 @@ internal sealed class LogRedactionProcessor : BaseProcessor<LogRecord>
 
     private void RedactException(LogRecord record)
     {
-        if (_redactor.RedactException(record.Exception) is not RedactedException redacted)
+        // The decorator already wrapped a masked exception, and the processor only has to publish
+        // the attributes: redacting it again would cost a second ToString and its pattern passes
+        // (10.3.1-T1.4 review F8).
+        var redacted = record.Exception as RedactedException
+            ?? _redactor.RedactException(record.Exception) as RedactedException;
+
+        if (redacted is null)
         {
             // Null (nothing logged) or the same instance (nothing to mask): the exporter's
             // own exception path is already correct, so it stays untouched.

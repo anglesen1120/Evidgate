@@ -13,6 +13,12 @@ namespace Evidgate.Api.Middleware;
 /// no-op when nothing listens to tracing (01.1.2-T1.2), and none of them can throw
 /// into the request path: a correlation field is observability, not behaviour
 /// (00 §11: telemetry must never fail a request).
+/// <para>
+/// Both ids are validated where they are written: a request id only when it is a
+/// bounded printable token, a run id only from the routed <c>{r}</c> parsed as a GUID.
+/// The run id therefore has exactly one source, the route — never the client's
+/// <c>baggage</c> header, which ASP.NET Core copies into the request activity as-is.
+/// </para>
 /// </remarks>
 public static class RequestCorrelation
 {
@@ -34,7 +40,7 @@ public static class RequestCorrelation
             return;
         }
 
-        if (!string.IsNullOrEmpty(requestId))
+        if (CorrelationNames.IsSafeRequestId(requestId))
         {
             activity.SetTag(CorrelationNames.RequestId, requestId);
         }

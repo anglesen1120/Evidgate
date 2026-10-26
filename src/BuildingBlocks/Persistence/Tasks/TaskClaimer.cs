@@ -108,8 +108,6 @@ public sealed partial class TaskClaimer : ITaskClaimer
     /// <summary>Operation name of one claim pass's span (10.3.1-T1.1).</summary>
     public const string ClaimOperationName = "task.claim";
 
-    private static readonly ActivitySource Source = new(TaskCorrelation.ActivitySourceName);
-
     private readonly NpgsqlDataSource _dataSource;
     private readonly ITaskAlertSink _alerts;
     private readonly int _visibilityTimeoutSeconds;
@@ -148,11 +146,6 @@ public sealed partial class TaskClaimer : ITaskClaimer
 
         string[] types = [.. taskTypes];
 
-        // 10.3.1-T1.1: the claim is the hop where work exists as an id, so it gets its
-        // own span; the job_id of each row is tagged by the consumer span that runs it.
-        using var activity = Source.StartActivity(ClaimOperationName, ActivityKind.Internal);
-        activity?.SetTag("task.queue", queue);
-
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var reclaim = await ReclaimAsync(connection, transaction, queue, cancellationToken).ConfigureAwait(false);
@@ -180,7 +173,27 @@ public sealed partial class TaskClaimer : ITaskClaimer
         await NotifyDeadLetteredAsync(reclaim.DeadLettered, cancellationToken).ConfigureAwait(false);
 
         var claimed = rows as IReadOnlyList<TaskClaim> ?? [.. rows];
+
+        // 10.3.1-T1.1: the claim is the hop where work exists as an id, so a poll that
+        // found work gets its own span. An idle poll gets none: the loop runs every
+        // `PollIntervalMilliseconds` (1 s by default) per consumer, so a span per empty
+        // poll would bury the real traces under idle markers.
+        if (claimed.Count == 0)
+        {
+            return claimed;
+        }
+
+        using var activity = TaskCorrelation.Source.StartActivity(ClaimOperationName, ActivityKind.Internal);
+        activity?.SetTag("task.queue", queue);
         activity?.SetTag("task.claimed", claimed.Count);
+
+        // A single-row claim names the row it claimed, which is what an operator follows
+        // into the consumer span. A batch has no single id — each row gets its own
+        // `job_id` on the consumer span that runs it.
+        if (claimed.Count == 1)
+        {
+            activity?.SetTag(TaskCorrelation.JobIdAttribute, claimed[0].Id.ToString("D"));
+        }
 
         return claimed;
     }

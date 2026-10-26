@@ -4,8 +4,8 @@ namespace Evidgate.BuildingBlocks.Observability.Correlation;
 
 /// <summary>
 /// The one correlation vocabulary of the two entry points (10.3.1-T1.2, 00 §9.1,
-/// NFR-10-1): the attribute names a span, a log record and a metric may carry, the
-/// header the edge accepts, and the shape an accepted value must have.
+/// NFR-10-1): the attribute names a span or a log record may carry, the header the edge
+/// accepts, and the shape an accepted value must have.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -86,4 +86,61 @@ public static class CorrelationNames
 
         return true;
     }
+
+    /// <summary>
+    /// The request id to tag a span or a log record with: <paramref name="value"/> when it is
+    /// an acceptable id, otherwise <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Every read of a correlation id repeats the check the edge applied — a parent's span tag
+    /// and a baggage item are both input, and baggage is client-controlled on the request path
+    /// (a caller can send <c>baggage: evidgate.request_id=…</c>). An id copied without this
+    /// check would reach a span tag, a log attribute and, from there, every child span.
+    /// </remarks>
+    /// <param name="value">A correlation id read from a tag or a baggage item, or null.</param>
+    /// <returns>The id to use, or null when the value is not a request id.</returns>
+    public static string? SafeRequestId(string? value) => IsSafeRequestId(value) ? value : null;
+
+    /// <summary>
+    /// The run id to tag a span or a log record with, canonicalised to the <c>D</c> GUID form:
+    /// <paramref name="value"/> when it is a GUID, otherwise <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Same reason as <see cref="SafeRequestId"/>: a run id arrives as a route value, a span tag
+    /// or a baggage item, and only a GUID is a run id. Canonicalising means a value copied from a
+    /// tag and one read from baggage compare equal downstream.
+    /// </remarks>
+    /// <param name="value">A correlation id read from a tag or a baggage item, or null.</param>
+    /// <returns>The GUID in <c>D</c> form, or null when the value is not a GUID.</returns>
+    public static string? SafeRunId(string? value) => CanonicalGuid(value);
+
+    /// <summary>
+    /// The job id to tag a span or a log record with, canonicalised to the <c>D</c> GUID form: the
+    /// claimed task row's <c>task.id</c>, or <c>null</c> when the value is not a GUID.
+    /// </summary>
+    /// <param name="value">A correlation id read from a tag, or null.</param>
+    /// <returns>The GUID in <c>D</c> form, or null when the value is not a GUID.</returns>
+    public static string? SafeJobId(string? value) => CanonicalGuid(value);
+
+    /// <summary>
+    /// The text of a correlation value read from a span tag: a <see cref="string"/> as it is, a
+    /// <see cref="Guid"/> in <c>D</c> form, anything else <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// A module tags the run with the run's <see cref="Guid"/> object rather than its text
+    /// (<c>CreateRun</c>, <c>PlanExecutions</c>), while the edge and the task carrier tag text. Reading
+    /// only <c>as string</c> would silently drop the module-tagged value and leave every child span of
+    /// a run without its <c>run_id</c>.
+    /// </remarks>
+    /// <param name="value">A tag value of any type, or null.</param>
+    /// <returns>The correlation text, or null when the value is not a string or a GUID.</returns>
+    public static string? CorrelationText(object? value) => value switch
+    {
+        string text => text,
+        Guid id => id.ToString("D"),
+        _ => null,
+    };
+
+    private static string? CanonicalGuid(string? value) =>
+        Guid.TryParse(value, out var id) ? id.ToString("D") : null;
 }

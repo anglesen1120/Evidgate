@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -22,16 +24,30 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 /// the ids; every handler binds its own record with
 /// <c>TaskPayloadSerializer</c>'s snake_case options, which ignore unknown top-level
 /// members, and no reader of a specific member is affected. A payload that already
-/// carries the key is left untouched, and a document that cannot be re-read (never
-/// valid JSON for the <c>jsonb</c> column anyway) is returned exactly as it came in:
-/// correlation never fails a producer.
+/// carries the key has it <em>replaced</em> by the stamping activity's own carrier (a
+/// producer that embeds client JSON must never pass a client-chosen parent trace or
+/// ids through), and a document that cannot be re-read (never valid JSON for the
+/// <c>jsonb</c> column anyway) is returned exactly as it came in: correlation never
+/// fails a producer.
+/// </para>
+/// <para>
+/// <b>What is trusted.</b> Only two sources feed the ids: the attributes the edge put
+/// on the span (<see cref="RequestIdAttribute"/>, and <see cref="RunIdAttribute"/> —
+/// the latter written only from a routed <c>{r}</c>) and, for the run, the producer's
+/// own top-level <c>run_id</c> payload member. Ambient baggage is deliberately never a
+/// source: ASP.NET Core copies a client's <c>baggage</c> header into
+/// <see cref="Activity.Baggage"/>, so reading it here would let a caller choose another
+/// tenant's run id or an unbounded request id. Everything read back is validated the
+/// same way (a bounded printable request id, a GUID run id, a bounded
+/// <c>tracestate</c>), so a row written by any other path degrades instead of
+/// injecting.
 /// </para>
 /// <para>
 /// <b>Why the names are repeated.</b> The Persistence assembly deliberately does not
 /// reference <c>Evidgate.BuildingBlocks.Observability</c> (the same reason
-/// <c>OutboxDispatchMetrics</c> repeats the meter name), so the four attribute names
-/// and the activity-source name are repeated here by value. A rename there must update
-/// these constants too.
+/// <c>OutboxDispatchMetrics</c> repeats the meter name), so the four attribute names,
+/// the two baggage names, the request-id shape and the activity-source name are
+/// repeated here by value. A rename there must update these constants too.
 /// </para>
 /// </remarks>
 public static class TaskCorrelation
@@ -78,11 +94,30 @@ public static class TaskCorrelation
     /// <summary>Activity-source name (mirrors <c>EvidgateTelemetry.ActivitySourceName</c>).</summary>
     public const string ActivitySourceName = "Evidgate";
 
-    private static readonly ActivitySource Source = new(ActivitySourceName);
+    /// <summary>Cap on an accepted request id (mirrors <c>CorrelationNames.MaxRequestIdLength</c>).</summary>
+    public const int MaxRequestIdLength = 128;
+
+    /// <summary>
+    /// Cap on a carried W3C <c>tracestate</c>. The header is client-controlled on any
+    /// public request and the propagator copies it onto the request's
+    /// <see cref="Activity"/>; without a bound it would be persisted into every payload
+    /// the request produces and re-emitted by the consumer. A longer value is dropped,
+    /// never truncated (a truncated list is not a valid <c>tracestate</c>).
+    /// </summary>
+    public const int MaxTraceStateLength = 256;
+
+    /// <summary>
+    /// The one activity source of this assembly's queue spans (<see cref="TaskOperationName"/>,
+    /// <c>TaskClaimer.ClaimOperationName</c>, <c>OutboxDispatcher.DispatchOperationName</c>).
+    /// One instance, so a listener or <c>AddSource</c> sees every span of the queue through
+    /// one name and one sampling decision path.
+    /// </summary>
+    internal static ActivitySource Source { get; } = new(ActivitySourceName);
 
     /// <summary>
     /// Adds the current activity's <c>traceparent</c> and correlation ids to
-    /// <paramref name="payloadJson"/> under <see cref="CarrierKey"/>.
+    /// <paramref name="payloadJson"/> under <see cref="CarrierKey"/>, replacing a carrier
+    /// the document already carried.
     /// </summary>
     /// <param name="payloadJson">The producer's payload document.</param>
     /// <returns>The stamped document, or <paramref name="payloadJson"/> unchanged when there is nothing to stamp.</returns>
@@ -100,33 +135,39 @@ public static class TaskCorrelation
         {
             using var document = JsonDocument.Parse(payloadJson);
             var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || root.TryGetProperty(CarrierKey, out _))
+            if (root.ValueKind != JsonValueKind.Object)
             {
                 return payloadJson;
             }
 
-            var requestId = activity.GetTagItem(RequestIdAttribute) as string
-                ?? activity.GetBaggageItem(RequestIdBaggage);
-            var runId = TopLevelString(root, RunIdPayloadMember) ?? activity.GetBaggageItem(RunIdBaggage);
+            // Only the span attributes and the producer's own payload member are read;
+            // ambient baggage is a client-supplied header at the edge, so it is never a
+            // source of an id here (see the type's remarks).
+            var requestId = NormalizeRequestId(activity.GetTagItem(RequestIdAttribute) as string);
+            var runId = NormalizeRunId(TopLevelString(root, RunIdPayloadMember))
+                ?? NormalizeRunId(activity.GetTagItem(RunIdAttribute) as string);
+            var traceState = NormalizeTraceState(activity.TraceStateString);
 
-            using var buffer = new MemoryStream(payloadJson.Length + 512);
+            // One payload-sized buffer, written as UTF-8 once: the writer fills it and the
+            // string is built from the written span, with no intermediate stream copy.
+            var buffer = new ArrayBufferWriter<byte>(payloadJson.Length + 512);
             using (var writer = new Utf8JsonWriter(buffer))
             {
                 writer.WriteStartObject();
 
                 writer.WriteStartObject(CarrierKey);
                 writer.WriteString(TraceParentField, activity.Id);
-                if (!string.IsNullOrEmpty(activity.TraceStateString))
+                if (traceState is not null)
                 {
-                    writer.WriteString(TraceStateField, activity.TraceStateString);
+                    writer.WriteString(TraceStateField, traceState);
                 }
 
-                if (!string.IsNullOrEmpty(requestId))
+                if (requestId is not null)
                 {
                     writer.WriteString(RequestIdField, requestId);
                 }
 
-                if (!string.IsNullOrEmpty(runId))
+                if (runId is not null)
                 {
                     writer.WriteString(RunIdField, runId);
                 }
@@ -135,13 +176,21 @@ public static class TaskCorrelation
 
                 foreach (var property in root.EnumerateObject())
                 {
+                    // The carrier above is this activity's. A document that already carried
+                    // the key (client JSON embedded at the top level, or a payload stamped
+                    // by an earlier hop) does not get to keep its own.
+                    if (string.Equals(property.Name, CarrierKey, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
                     property.WriteTo(writer);
                 }
 
                 writer.WriteEndObject();
             }
 
-            return Encoding.UTF8.GetString(buffer.ToArray());
+            return Encoding.UTF8.GetString(buffer.WrittenSpan);
         }
         catch (JsonException)
         {
@@ -153,7 +202,9 @@ public static class TaskCorrelation
 
     /// <summary>
     /// Reads the carrier of a stored payload. A missing, unparsable or malformed
-    /// carrier yields the empty value, so the consumer simply starts a root trace.
+    /// carrier yields the empty value, so the consumer simply starts a root trace; every
+    /// member that survives the read has passed the same shape checks the edge applies
+    /// (a bounded printable request id, a GUID run id, a bounded <c>tracestate</c>).
     /// </summary>
     /// <param name="payloadJson">The stored payload of a claimed row.</param>
     public static CorrelationCarrier Read(string payloadJson)
@@ -185,7 +236,7 @@ public static class TaskCorrelation
                 runId ??= TopLevelString(carrier, RunIdField);
             }
 
-            return new CorrelationCarrier(traceParent, traceState, requestId, runId);
+            return Normalize(new CorrelationCarrier(traceParent, traceState, requestId, runId));
         }
         catch (JsonException)
         {
@@ -204,6 +255,8 @@ public static class TaskCorrelation
     public static Activity? StartTaskActivity(TaskClaim claim, CorrelationCarrier carrier)
     {
         ArgumentNullException.ThrowIfNull(claim);
+
+        carrier = Normalize(carrier);
 
         var activity = ActivityContext.TryParse(carrier.TraceParent, carrier.TraceState, out var parent)
             ? Source.StartActivity(TaskOperationName, ActivityKind.Consumer, parent)
@@ -255,6 +308,8 @@ public static class TaskCorrelation
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(claim);
 
+        carrier = Normalize(carrier);
+
         var state = new List<KeyValuePair<string, object?>>(4)
         {
             new(JobIdAttribute, claim.Id.ToString("D")),
@@ -273,6 +328,89 @@ public static class TaskCorrelation
         return logger.BeginScope(state);
     }
 
+    /// <summary>
+    /// The request id an inbound value may be exported as: a bounded printable-ASCII
+    /// token (the edge's rule, mirrored here because this assembly cannot reference it).
+    /// </summary>
+    /// <param name="value">A candidate request id, from a span attribute or a header.</param>
+    /// <returns>The value, or null when it is absent or unsafe.</returns>
+    public static string? NormalizeRequestId(string? value) =>
+        IsSafeRequestId(value) ? value : null;
+
+    /// <summary>Parses a run id, so only a GUID ever reaches a span tag, a log attribute or the carrier.</summary>
+    /// <param name="value">A candidate run id.</param>
+    /// <returns>The GUID in <c>"D"</c> form, or null when the value is not a GUID.</returns>
+    public static string? NormalizeRunId(string? value) =>
+        Guid.TryParse(value, out var runId) ? runId.ToString("D") : null;
+
+    /// <summary>
+    /// The <c>tracestate</c> a carrier may store: a bounded, printable value. A value the
+    /// client sent is dropped rather than truncated or persisted unbounded
+    /// (<see cref="MaxTraceStateLength"/>).
+    /// </summary>
+    /// <param name="value">A candidate <c>tracestate</c>.</param>
+    /// <returns>The value, or null when it is absent or out of bounds.</returns>
+    public static string? NormalizeTraceState(string? value) =>
+        IsSafeTraceState(value) ? value : null;
+
+    /// <summary>Whether a request id may be exported as-is: printable ASCII, at most <see cref="MaxRequestIdLength"/> characters.</summary>
+    /// <param name="value">A candidate request id.</param>
+    public static bool IsSafeRequestId([NotNullWhen(true)] string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length > MaxRequestIdLength)
+        {
+            return false;
+        }
+
+        foreach (var character in value)
+        {
+            // Visible ASCII only (0x21–0x7E), exactly as the edge accepts an X-Request-Id:
+            // a control character would forge a log line, and a space is not part of a token.
+            if (character is < '!' or > '~')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether a <c>tracestate</c> may be carried: at most <see cref="MaxTraceStateLength"/>
+    /// characters of printable ASCII (the W3C list separator is a comma, and a space may
+    /// follow it).
+    /// </summary>
+    /// <param name="value">A candidate <c>tracestate</c>.</param>
+    public static bool IsSafeTraceState([NotNullWhen(true)] string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length > MaxTraceStateLength)
+        {
+            return false;
+        }
+
+        foreach (var character in value)
+        {
+            if (character is < ' ' or > '~')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Applies the three shape checks to a carrier that came from anywhere other than
+    /// <see cref="Stamp"/>'s own validated inputs — a stored payload, or a caller that
+    /// built one. Idempotent.
+    /// </summary>
+    private static CorrelationCarrier Normalize(CorrelationCarrier carrier) =>
+        new(
+            carrier.TraceParent,
+            NormalizeTraceState(carrier.TraceState),
+            NormalizeRequestId(carrier.RequestId),
+            NormalizeRunId(carrier.RunId));
+
     private static string? TopLevelString(JsonElement root, string member) =>
         root.TryGetProperty(member, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
@@ -282,7 +420,11 @@ public static class TaskCorrelation
 /// <summary>
 /// The correlation a stored payload carries: the producer's W3C context and the ids
 /// an operator searches by. Every member is optional — a row written before this
-/// task, or by SQL, has none.
+/// task, or by SQL, has none — and every member is validated where it is read
+/// (<see cref="TaskCorrelation.Read"/>): a request id only when it is a bounded
+/// printable token, a run id only when it is a GUID, a <c>tracestate</c> only when it
+/// is bounded. The <c>traceparent</c> is kept as text and parsed by the W3C rules when
+/// the consumer span is started, so an unparsable one simply starts a root trace.
 /// </summary>
 /// <param name="TraceParent">W3C <c>traceparent</c> of the producing activity.</param>
 /// <param name="TraceState">W3C <c>tracestate</c> of the producing activity.</param>

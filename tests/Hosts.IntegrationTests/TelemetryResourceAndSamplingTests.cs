@@ -34,15 +34,20 @@ public sealed class TelemetryResourceAndSamplingTests
     private const string ServiceVersion = "9.9.9-test+sha";
 
     [Fact]
-    public void Resource_Builder_Carries_Service_Name_Environment_And_Version()
+    public async Task CreateTelemetryResource_Is_The_Definition_The_Three_Providers_Use()
     {
-        var resource = ObservabilityExtensions
-            .CreateTelemetryResource("evidgate-api", EnvironmentName, ServiceVersion)
+        await using var host = await StartHostAsync(sampleRatio: "1");
+
+        // The helper the logging path calls and the resource the traces and metrics paths build
+        // through the same private definition must be one and the same attribute set: pinning only
+        // the helper would let the traces/metrics wiring drift while this test stayed green.
+        var expected = ObservabilityExtensions
+            .CreateTelemetryResource("evidgate-test", EnvironmentName, ServiceVersion)
             .Build();
 
-        Assert.Equal("evidgate-api", AttributeOf(resource, "service.name"));
-        Assert.Equal(EnvironmentName, AttributeOf(resource, "deployment.environment"));
-        Assert.Equal(ServiceVersion, AttributeOf(resource, "service.version"));
+        AssertSameAttributes(expected, host.Services.GetRequiredService<TracerProvider>().GetResource());
+        AssertSameAttributes(expected, host.Services.GetRequiredService<MeterProvider>().GetResource());
+        AssertSameAttributes(expected, host.Services.GetRequiredService<LoggerProvider>().GetResource());
     }
 
     [Fact]
@@ -59,6 +64,11 @@ public sealed class TelemetryResourceAndSamplingTests
             Assert.Equal(EnvironmentName, AttributeOf(resource, "deployment.environment"));
             Assert.Equal(ServiceVersion, AttributeOf(resource, "service.version"));
         }
+
+        // One resource, not three similar ones: a filter in the backend must join a log line to
+        // its trace, which only holds while the three signals carry the identical attribute set.
+        AssertSameAttributes(traces, metrics);
+        AssertSameAttributes(traces, logs);
     }
 
     [Fact]
@@ -235,6 +245,23 @@ public sealed class TelemetryResourceAndSamplingTests
             .Where(attribute => attribute.Key == key)
             .Select(attribute => attribute.Value as string)
             .SingleOrDefault();
+
+    /// <summary>
+    /// Asserts two resources carry the identical attribute set (keys and values), ordered by key so
+    /// the comparison does not depend on dictionary enumeration order.
+    /// </summary>
+    private static void AssertSameAttributes(
+        OpenTelemetry.Resources.Resource expected,
+        OpenTelemetry.Resources.Resource actual)
+    {
+        var left = expected.Attributes.OrderBy(attribute => attribute.Key, StringComparer.Ordinal).ToArray();
+        var right = actual.Attributes.OrderBy(attribute => attribute.Key, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(left.Select(attribute => attribute.Key), right.Select(attribute => attribute.Key));
+        Assert.Equal(
+            left.Select(attribute => attribute.Value?.ToString()),
+            right.Select(attribute => attribute.Value?.ToString()));
+    }
 
     /// <summary>
     /// The exporter's sink: the in-memory exporter wants an <see cref="ICollection{T}"/>, the batch

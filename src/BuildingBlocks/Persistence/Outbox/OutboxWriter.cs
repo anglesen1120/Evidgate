@@ -80,7 +80,8 @@ public sealed class OutboxWriter : IOutboxWriter
                 nameof(idempotencyKey));
         }
 
-        if (Encoding.UTF8.GetByteCount(payloadJson) > MaxPayloadBytes)
+        var originalBytes = Encoding.UTF8.GetByteCount(payloadJson);
+        if (originalBytes > MaxPayloadBytes)
         {
             throw new ArgumentException(
                 $"the outbox payload is longer than {MaxPayloadBytes} bytes (0006 `outbox_payload_size_check`)",
@@ -91,7 +92,8 @@ public sealed class OutboxWriter : IOutboxWriter
         // ids travel inside the payload, because neither `outbox` nor `task` has a
         // headers column and this task adds no migration. Stamping stays inside the
         // column's size contract: a payload that would cross the cap with the carrier
-        // is stored without it — losing a trace link never fails a producer.
+        // is stored without it — losing a trace link never fails a producer. The
+        // document is stamped once; only the fallback re-reads the byte count.
         var stamped = TaskCorrelation.Stamp(payloadJson);
         var stored = Encoding.UTF8.GetByteCount(stamped) > MaxPayloadBytes ? payloadJson : stamped;
 
