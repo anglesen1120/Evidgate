@@ -13,6 +13,7 @@ import type { StepNumber } from '../data/step-derivation';
 import { OnboardingStore } from '../onboarding.store';
 import { CreateProjectPage } from '../steps/create-project.page';
 import { ConnectCiPage } from '../steps/connect-ci.page';
+import { EnableCollectionPage } from '../steps/enable-collection.page';
 import { OnboardingShellComponent } from './onboarding-shell.component';
 
 @Component({ selector: 'app-onboarding-create-project', template: '' })
@@ -25,6 +26,15 @@ class CreateProjectStub {
   template: '<div data-testid="connect-ci-page">{{ orgId() }} {{ projectId() }}</div>',
 })
 class ConnectCiStub {
+  readonly orgId = input.required<string>();
+  readonly projectId = input.required<string>();
+}
+
+@Component({
+  selector: 'app-onboarding-enable-collection',
+  template: '<div data-testid="enable-collection-page">{{ orgId() }} {{ projectId() }}</div>',
+})
+class EnableCollectionStub {
   readonly orgId = input.required<string>();
   readonly projectId = input.required<string>();
 }
@@ -129,8 +139,8 @@ describe('OnboardingShellComponent', () => {
       ],
     })
       .overrideComponent(OnboardingShellComponent, {
-        remove: { imports: [CreateProjectPage, ConnectCiPage] },
-        add: { imports: [CreateProjectStub, ConnectCiStub] },
+        remove: { imports: [CreateProjectPage, ConnectCiPage, EnableCollectionPage] },
+        add: { imports: [CreateProjectStub, ConnectCiStub, EnableCollectionStub] },
       })
       .compileComponents();
     fixture = TestBed.createComponent(OnboardingShellComponent);
@@ -263,11 +273,24 @@ describe('OnboardingShellComponent', () => {
     );
   });
 
-  it.each([3, 4, 5] as const)('keeps step %s as the placeholder', async (step) => {
+  it.each([3, 4] as const)('keeps step %s as the placeholder', async (step) => {
     store.viewStep.set(step);
     await fixture.whenStable();
     expect(root.querySelector('[data-testid="onboarding-step-pending"]')).not.toBeNull();
     expect(root.querySelector('[data-testid="connect-ci-page"]')).toBeNull();
+  });
+
+  it('renders the enable step at step 5 with the wizard scope (09.2.1-T5)', async () => {
+    store.done.set({ 1: true, 2: true, 3: true, 4: true, 5: false });
+    store.viewStep.set(5);
+    await fixture.whenStable();
+    // The receiving page replaced the placeholder for this step only.
+    expect(root.querySelector('[data-testid="onboarding-step-pending"]')).toBeNull();
+    expect(root.querySelector('[data-testid="enable-collection-page"]')?.textContent).toContain(
+      'org-1 project-1',
+    );
+    // Step 5 is never derived done without an activation read (plan 09.2.1 line 148).
+    expect(button('next').disabled).toBe(true);
   });
 
   it('renders the scope a create just published, and reads any other (S71 F1)', async () => {
@@ -367,8 +390,8 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
       ],
     })
       .overrideComponent(OnboardingShellComponent, {
-        remove: { imports: [CreateProjectPage, ConnectCiPage] },
-        add: { imports: [CreateProjectStub, ConnectCiStub] },
+        remove: { imports: [CreateProjectPage, ConnectCiPage, EnableCollectionPage] },
+        add: { imports: [CreateProjectStub, ConnectCiStub, EnableCollectionStub] },
       })
       .compileComponents();
     const activate = async (): Promise<ComponentFixture<OnboardingShellComponent>> => {

@@ -20,11 +20,23 @@
 // one in-flight submit and maps a `409` through the typed error path instead.
 // `POST /v1/ci/token` is CI's own pre-tenant exchange — the credential is the request — so the
 // web never calls it.
+//
+// Step 5's two commands (09.2.1-T5.2, AC5) are the last two methods: the append of the default
+// advisory policy (`POST /v1/projects/{p}/policies`, 07.1.1-T3) and the activation that moves the
+// project's policy pointer to it in `advisory` mode
+// (`POST /v1/projects/{p}/policy-activation`, 07.1.1-T4). The append takes no `Idempotency-Key` —
+// the contract makes the content hash its idempotency — while the activation requires one, so the
+// caller's `Intent` is passed to the second and only the second call. `PolicyDataService.publish`
+// is the Settings area's append and quotes a cached head revision in `If-Match`; the wizard owns no
+// head (it cannot read one, queue row F18), so its append never quotes one and stays here, where
+// plan §5 line 73 puts every call the wizard makes.
 
 import { inject, Injectable } from '@angular/core';
 import {
+  activatePolicyRevision,
   createCiBinding,
   createIngestToken,
+  createPolicyRevision,
   createProject,
   getProject,
   getRun,
@@ -44,6 +56,9 @@ import {
   type ListIngestTokensData,
   type ListProjectsData,
   type ListRunsData,
+  type PolicyActivationDto,
+  type PolicyRevisionDto,
+  type PolicyRevisionV1,
   type ProjectDto,
   type ProjectListResponse,
   type RunPage,
@@ -177,5 +192,50 @@ export class OnboardingDataService {
   /** One run's state and current evidence revision (`GET /v1/runs/{r}`, step 4's input). */
   getRun(runId: string): Promise<RunStateDto> {
     return this.gateway.call((client) => getRun({ client, path: { r: runId } }));
+  }
+
+  /**
+   * Append one policy revision (`POST /v1/projects/{p}/policies`, step 5;
+   * `policy:write`). No `Idempotency-Key` is supplied because the route asks for none: the server
+   * canonicalises the body (RFC 8785), hashes it, and answers `200` with the revision already
+   * stored for that hash, or `201` for a new one (07.1.1-T3). Sending the identical body again is
+   * therefore idempotent by content, which is what lets a retried confirm re-run this step without
+   * appending a second revision. (The platform's interceptor stamps an untyped mutation with a
+   * random `Idempotency-Key` anyway — this route ignores it, so it neither helps nor collides: F6.)
+   *
+   * No `If-Match` is sent either: the wizard cannot read the project's head revision (the contract
+   * has no such read) and a precondition it cannot quote would only produce `412`s. The Settings
+   * area's publish (`PolicyDataService.publish`) is the caller that owns that `ETag`.
+   */
+  createPolicyRevision(projectId: string, body: PolicyRevisionV1): Promise<PolicyRevisionDto> {
+    return this.gateway.call((client) =>
+      createPolicyRevision({ client, path: { p: projectId }, body }),
+    );
+  }
+
+  /**
+   * Activate a policy revision (`POST /v1/projects/{p}/policy-activation`, step 5's confirm;
+   * `policy:write` = `release_approver`, T98). The mode is always `advisory`: `enforcing` is
+   * refused `422` until 07.7.1 and the wizard offers no mode choice, so the parameter does not
+   * exist here.
+   *
+   * The route requires an `Idempotency-Key`, so the caller's intent supplies it: a double submit
+   * and every retry of the same confirm send the same key and the server replays the stored answer
+   * instead of writing a second `policy_activation` row. `changed: false` is a success — the
+   * revision was already the active one — and arrives as a normal `PolicyActivationDto`.
+   */
+  activatePolicy(
+    projectId: string,
+    revisionId: string,
+    intent: Intent,
+  ): Promise<PolicyActivationDto> {
+    return this.gateway.call((client) =>
+      activatePolicyRevision({
+        client,
+        path: { p: projectId },
+        body: { policy_revision_id: revisionId, mode: 'advisory' },
+        headers: intentHeaders(intent),
+      }),
+    );
   }
 }
