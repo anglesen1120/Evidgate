@@ -102,6 +102,7 @@ import projectUpdatePreconditionFailed from '../../../../../../fixtures/web-api/
 import projectsList from '../../../../../../fixtures/web-api/projects-list/input.json';
 import projectsListOnboardingEmpty from '../../../../../../fixtures/web-api/projects-list-onboarding-empty/input.json';
 import projectsListOnboardingForbidden from '../../../../../../fixtures/web-api/projects-list-onboarding-forbidden/input.json';
+import projectsListUnauthenticated from '../../../../../../fixtures/web-api/projects-list-unauthenticated/input.json';
 import projectsListOnboardingProjectNotFound from '../../../../../../fixtures/web-api/projects-list-onboarding-project-not-found/input.json';
 import rolesList from '../../../../../../fixtures/web-api/roles-list/input.json';
 import runList from '../../../../../../fixtures/web-api/run-list/input.json';
@@ -474,6 +475,15 @@ export interface FixtureCatalogRow {
  * second page would look empty), and the two `X-Request-Id` values (`…c8`, `…c9`) are distinct from
  * the three above.
  *
+ * 09.1.1-T5 adds the one refusal the web sign-in flow needs and the corpus did not have:
+ * `projects-list-unauthenticated` (`?fixture.variant.listProjects=unauthenticated`) is the `401` of
+ * the scope read. `orgs-list-unauthenticated` covers the FIRST read of the session (a deep link with
+ * no session renders `/login`), but an expiry happens after that read succeeded: the org is known and
+ * the project list is the request that answers `session_expired`, which is what puts the store on its
+ * `/login?reason=expired&returnUrl=…` path with a route to return to. The `code` is the contract's
+ * `session_expired` (`contracts/openapi.yaml:6812-6818`) rather than `unauthenticated`, because the
+ * two are the same client-side kind and only this one describes a session that existed a moment ago.
+ *
  * 09.3.1-T1 adds the Runs list's own page (`listRuns`). `run-list` (`?fixture.variant.listRuns=runs`)
  * is the page's own set — without that toggle the operation still answers its `ok` document
  * (`runs-list` above), which is what a stray visit to `/runs` renders — and holds five `RunSummary`
@@ -643,6 +653,7 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'projects-list', document: projectsList },
   { name: 'projects-list-onboarding-empty', document: projectsListOnboardingEmpty },
   { name: 'projects-list-onboarding-forbidden', document: projectsListOnboardingForbidden },
+  { name: 'projects-list-unauthenticated', document: projectsListUnauthenticated },
   {
     name: 'projects-list-onboarding-project-not-found',
     document: projectsListOnboardingProjectNotFound,

@@ -1,0 +1,23 @@
+/* 09.1.1-T5.1: the callback landing is one centred state panel, on the same tokens the pattern
+   pages use, so the moment before the redirect looks like the app rather than a blank document. */
+.callback {
+  box-sizing: border-box;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--eg-space-4);
+  min-block-size: 100dvh;
+  padding: var(--eg-space-8) var(--eg-space-5);
+  background: var(--eg-surface);
+  color: var(--eg-text);
+  font-family: var(--eg-font-body);
+  text-align: center;
+}
+
+.callback__explanation {
+  margin: var(--eg-space-0);
+  max-inline-size: 42ch;
+  color: var(--eg-text-muted);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+}

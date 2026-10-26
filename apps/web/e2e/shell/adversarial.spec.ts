@@ -7,6 +7,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import {
+  ANONYMOUS_SESSION,
   fixturesBaseUrl,
   LIMITED_GRANTS,
   LOCALES,
@@ -19,6 +20,7 @@ import {
   UNKNOWN_ORG,
   UNREADABLE_SESSION,
   withVariant,
+  withVariants,
 } from './support';
 
 /** Every G1 entry of the registry: URL below `/orgs/:orgId` and the code its route requires. */
@@ -310,12 +312,18 @@ test.describe('returnUrl is never an open redirect', () => {
         if (url.host !== appHost) offOrigin.push(url.href);
       });
       const errors = watchPageErrors(page);
+      // Anonymous, so the login page stays on screen: an authenticated tab is redirected through
+      // the same validator (that half is `auth.spec.ts` "a tampered returnUrl sends the visitor
+      // home"), and neither path may reflect the value.
       await page.goto(
-        withVariant(localePath('en', '/login'), `?returnUrl=${encodeURIComponent(attempt)}`),
+        withVariants(localePath('en', '/login'), [
+          ANONYMOUS_SESSION,
+          `?returnUrl=${encodeURIComponent(attempt)}`,
+        ]),
       );
 
-      // Still the sign-in placeholder, same origin, nothing executed.
-      await expect(page.locator('main h1')).toHaveText('Sign in required');
+      // Still the sign-in card, same origin, nothing executed.
+      await expect(page.locator('main h1')).toHaveText('Sign in to Evidgate');
       expect(new URL(page.url()).pathname).toBe('/en/login');
       expect(new URL(page.url()).host).not.toContain('evil');
       expect(await page.title()).not.toBe('pwned');

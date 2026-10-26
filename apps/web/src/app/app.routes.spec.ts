@@ -43,6 +43,8 @@ import { routes } from './app.routes';
 import { IdentityDataService } from './core/data/identity-data.service';
 import { ApiRequestError, type ApiError } from './core/http/api-error';
 import { EffectivePermissionsSource } from './core/session/effective-permissions.source';
+import { CallbackPage } from './features/auth/callback/callback.page';
+import { LoginPage } from './features/auth/login/login.page';
 import { SettingsNoTabsPage } from './features/settings/settings-no-tabs.page';
 import { SettingsShellPage } from './features/settings/settings-shell.page';
 import { SettingsTabPlaceholderPage } from './features/settings/settings-tab-placeholder.page';
@@ -54,7 +56,6 @@ import { ForbiddenPage } from './shell/pages/forbidden.page';
 import { NoOrganizationPage } from './shell/pages/no-organization.page';
 import { NotFoundPage } from './shell/pages/not-found.page';
 import { ServiceUnavailablePage } from './shell/pages/service-unavailable.page';
-import { SignInRequiredPage } from './shell/pages/sign-in-required.page';
 
 /** Marker text each stub renders, so a case can prove which page the router mounted. */
 const FORBIDDEN_MARKER = 'forbidden-stub';
@@ -162,7 +163,8 @@ const COMPONENT_STUBS = new Map<unknown, Type<unknown>>([
   [NotFoundPage, NotFoundStub],
   [NoOrganizationPage, WelcomeStub],
   [ServiceUnavailablePage, UnavailableStub],
-  [SignInRequiredPage, LoginStub],
+  [LoginPage, LoginStub],
+  [CallbackPage, LoginStub],
   [SettingsShellPage, SettingsShellStub],
   [SettingsTabPlaceholderPage, SettingsTabStub],
   [SettingsNoTabsPage, SettingsNoTabsStub],
@@ -183,6 +185,16 @@ function withComponentStubs(table: readonly Route[]): Routes {
     const next: Route = { ...route };
     if (route.component !== undefined) {
       next.component = COMPONENT_STUBS.get(route.component) ?? route.component;
+    }
+    // 09.1.1-T5.1: `/login` and `/auth/callback` are lazy screens, so the stub has to sit behind
+    // their loader — the route table is otherwise untouched and the loader is still the production
+    // one, which is what makes the lazy boundary itself part of this spec.
+    if (typeof route.loadComponent === 'function') {
+      const load = route.loadComponent as () => Promise<Type<unknown>>;
+      next.loadComponent = async () => {
+        const loaded = await load();
+        return COMPONENT_STUBS.get(loaded) ?? loaded;
+      };
     }
     if (route.children !== undefined) {
       next.children = withComponentStubs(route.children);

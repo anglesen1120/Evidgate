@@ -5,7 +5,7 @@
 //
 // Shape (Q4 — the URL mirrors the API paths):
 //
-//   /login                                  → sign-in placeholder, outside the shell (real login is T5)
+//   /login, /auth/callback                  → sign-in flow, outside the shell (09.1.1-T5)
 //   /orgs/:orgId                            → shell; org scope guards
 //   /orgs/:orgId/<segment>                  → one org-scope entry
 //   /orgs/:orgId/projects/:projectId        → project scope guards; '' redirects to `overview`
@@ -45,6 +45,7 @@ import type { Type } from '@angular/core';
 import type { Route, Routes } from '@angular/router';
 
 import { devRoutes } from './core/dev-routes/dev-routes';
+import { AUTH_ROUTES } from './features/auth/auth.routes';
 import {
   authGuard,
   landingRedirectGuard,
@@ -61,7 +62,6 @@ import { ForbiddenPage } from './shell/pages/forbidden.page';
 import { NoOrganizationPage } from './shell/pages/no-organization.page';
 import { NotFoundPage } from './shell/pages/not-found.page';
 import { ServiceUnavailablePage } from './shell/pages/service-unavailable.page';
-import { SignInRequiredPage } from './shell/pages/sign-in-required.page';
 
 /**
  * The lazy route table of each `features/<area>` folder. A registry row whose `area` is not named
@@ -161,7 +161,9 @@ export const routes: Routes = [
   ...devRoutes(),
 
   // Outside the shell: a signed-out visitor must not see a navigation they cannot use.
-  { path: 'login', component: SignInRequiredPage },
+  // 09.1.1-T5.1 replaced the T4 placeholder with the real flow: `/login` (provider buttons, the
+  // validated `returnUrl`, the reason notice) and `/auth/callback` (the post-login landing).
+  ...AUTH_ROUTES,
 
   {
     path: '',

@@ -31,12 +31,16 @@ test.describe('no usable session (AC5)', () => {
     await expect(page.locator('app-scope-switcher')).toHaveCount(0);
     await expect(page.getByRole('navigation')).toHaveCount(0);
     await expect(page.locator('#main-content')).toHaveCount(0);
-    await expect(page.locator('main h1')).toHaveText('Sign in required');
-    await expect(page.locator('main p')).toHaveText(
-      'Sign-in is not available in this workspace yet.',
-    );
-    // The placeholder offers no action: every route an anonymous visitor can reach ends back here
-    // (the `/` landing redirect), so a link would loop. T5 ships the real sign-in form (review D2).
+    // 09.1.1-T5.1 replaced the T4 placeholder with the real sign-in screen: the page is a login
+    // card that offers the provider buttons its flow has (D-S98-Q3) and no password field.
+    await expect(page.locator('main h1')).toHaveText('Sign in to Evidgate');
+    await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeEnabled();
+    await expect(page.locator('main input')).toHaveCount(0);
+    // No notice: nothing happened to this tab yet.
+    await expect(page.locator('.login-notice')).toHaveText('');
+    // The card links nowhere: every route an anonymous visitor can reach ends back here (the `/`
+    // landing redirect), so a link would loop.
     await expect(page.locator('main a')).toHaveCount(0);
   });
 
@@ -46,7 +50,7 @@ test.describe('no usable session (AC5)', () => {
     await expect.poll(() => new URL(page.url()).pathname).toBe('/en/login');
     // The attempt was `/` itself; a login round trip back to `/` needs no parameter.
     expect(new URL(page.url()).search).toBe('');
-    await expect(page.locator('main h1')).toHaveText('Sign in required');
+    await expect(page.locator('main h1')).toHaveText('Sign in to Evidgate');
   });
 
   test('the redirect speaks the bundle’s language', async ({ page }) => {
@@ -54,7 +58,9 @@ test.describe('no usable session (AC5)', () => {
 
     await expect.poll(() => new URL(page.url()).pathname).toBe('/vi/login');
     await expect(page.locator('html')).toHaveAttribute('lang', 'vi');
-    await expect(page.locator('main h1')).toHaveText('Cần đăng nhập');
+    // vi: `@@auth.login.heading` ("Đăng nhập vào Evidgate"), so the redirect speaks the bundle's
+    // language rather than the source language.
+    await expect(page.locator('main h1')).toHaveText('Đăng nhập vào Evidgate');
   });
 });
 

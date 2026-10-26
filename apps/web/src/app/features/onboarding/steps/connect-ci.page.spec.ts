@@ -120,7 +120,15 @@ describe('ConnectCiPage', () => {
             refresh,
           },
         },
-        { provide: SessionStore, useValue: { has: () => permitted() } },
+        {
+          provide: SessionStore,
+          useValue: {
+            has: () => permitted(),
+            // 09.1.1-T5.2: the page registers its health timer with the session boundary, so a fake
+            // store without the registration seam would throw in the constructor.
+            onSessionEnd: () => () => undefined,
+          },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(ConnectCiPage);
