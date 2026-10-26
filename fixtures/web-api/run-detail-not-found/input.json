@@ -1,0 +1,17 @@
+{
+  "operation_id": "getRun",
+  "variant": "detail-not-found",
+  "status": 404,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000da0"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "not_found",
+      "message": "The requested resource could not be found.",
+      "request_id": "018f0000-0000-7000-8000-000000000da0",
+      "retryable": false
+    }
+  }
+}

@@ -33,6 +33,7 @@ const MARKERS = [
   'dev/settings-secrets',
   'dev/settings-policy',
   'dev/run-list',
+  'dev/run-detail',
 ] as const;
 
 /** A corpus body string long enough to count as a leak signal, and absent from production code. */
@@ -333,6 +334,7 @@ describe('no-fixture-code gate', () => {
       ['dev/settings-secrets', 'orgs/:orgId'],
       ['dev/settings-policy', 'orgs/:orgId'],
       ['dev/run-list', 'orgs/:orgId/projects/:projectId'],
+      ['dev/run-detail', 'orgs/:orgId/projects/:projectId/runs/:runId'],
     ] as const) {
       await ws.output('main-ABC123.js', `const review=["${marker}/${address}"];`);
       const leaked = ws.run();

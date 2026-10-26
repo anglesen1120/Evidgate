@@ -789,6 +789,47 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     }
   });
 
+  it('pins run-detail to the current getRun response without invented manifest data', () => {
+    const names = [
+      'run-detail',
+      'run-detail-not-found',
+      'run-detail-forbidden',
+      'run-detail-ref-format',
+      'run-detail-null-evidence',
+    ];
+    expect(FIXTURE_ROUTES.find((route) => route.operationId === 'getRun')).toEqual({
+      operationId: 'getRun',
+      method: 'GET',
+      path: '/runs/{r}',
+    });
+    for (const name of names) {
+      const document = corpusDocument(name);
+      expect(document.operation_id).toBe('getRun');
+      expect(VALIDATOR.validateResponse('getRun', document.status, document.body).errors).toEqual(
+        [],
+      );
+      if (document.status === 200) {
+        expect(Object.keys(document.body as object).sort()).toEqual([
+          'current_evidence_revision_id',
+          'purpose',
+          'ref',
+          'run_id',
+          'state',
+          'unverified_ref',
+          'version',
+        ]);
+      }
+    }
+    expect(corpusDocument('run-detail-not-found').status).toBe(404);
+    expect(corpusDocument('run-detail-forbidden').status).toBe(403);
+    const absent = corpusDocument('run-detail-null-evidence').body;
+    expect(isRecord(absent) && absent['current_evidence_revision_id'] === null).toBe(true);
+    const formatted = corpusDocument('run-detail-ref-format').body;
+    const ref = isRecord(formatted) ? formatted['ref'] : undefined;
+    expect(isRecord(ref) && typeof ref['name'] === 'string' && ref['name'].includes('\u202e')).toBe(
+      true,
+    );
+  });
   for (const fixture of CORPUS) {
     it(`validates fixtures/web-api/${fixture.name} against contracts/openapi.yaml`, () => {
       const document = readDocument(fixture);

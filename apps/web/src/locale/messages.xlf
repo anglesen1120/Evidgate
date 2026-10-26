@@ -2638,6 +2638,36 @@
       <trans-unit id="onboarding.enable.previous-revision" datatype="html"><source>Revision this replaced</source></trans-unit>
       <trans-unit id="onboarding.enable.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
       <trans-unit id="onboarding.enable.unexpected-mode" datatype="html"><source>This step cannot present the policy mode the server reported, so the project was not shown as enabled. Reload the wizard to read the project's policy again.</source></trans-unit>
+      <trans-unit id="runs.detail.title" datatype="html"><source>Run detail</source></trans-unit>
+      <trans-unit id="runs.detail.back" datatype="html"><source>Back to runs</source></trans-unit>
+      <trans-unit id="runs.detail.id" datatype="html"><source>Run id</source></trans-unit>
+      <trans-unit id="runs.detail.state" datatype="html"><source>Collection state</source></trans-unit>
+      <trans-unit id="runs.detail.version" datatype="html"><source>Version</source></trans-unit>
+      <trans-unit id="runs.detail.purpose" datatype="html"><source>Purpose</source></trans-unit>
+      <trans-unit id="runs.detail.ref" datatype="html"><source>Ref</source></trans-unit>
+      <trans-unit id="runs.detail.ref-kind" datatype="html"><source>Ref kind</source></trans-unit>
+      <trans-unit id="runs.detail.pr" datatype="html"><source>Pull request number</source></trans-unit>
+      <trans-unit id="runs.detail.head" datatype="html"><source>Head commit</source></trans-unit>
+      <trans-unit id="runs.detail.base" datatype="html"><source>Base commit</source></trans-unit>
+      <trans-unit id="runs.detail.trigger" datatype="html"><source>Trigger event</source></trans-unit>
+      <trans-unit id="runs.detail.fork" datatype="html"><source>Fork</source></trans-unit>
+      <trans-unit id="runs.detail.yes" datatype="html"><source>Yes</source></trans-unit>
+      <trans-unit id="runs.detail.no" datatype="html"><source>No</source></trans-unit>
+      <trans-unit id="runs.detail.unverified" datatype="html"><source>Unverified ref</source></trans-unit>
+      <trans-unit id="runs.detail.evidence" datatype="html"><source>Evidence revision</source></trans-unit>
+      <trans-unit id="runs.detail.none" datatype="html"><source>None recorded</source></trans-unit>
+      <trans-unit id="runs.detail.context" datatype="html"><source>Execution context</source></trans-unit>
+      <trans-unit id="runs.detail.environment" datatype="html"><source>Environment</source></trans-unit>
+      <trans-unit id="runs.detail.policy" datatype="html"><source>Policy revision</source></trans-unit>
+      <trans-unit id="runs.detail.manifest" datatype="html"><source>Manifest summary</source></trans-unit>
+      <trans-unit id="runs.detail.manifest-hash" datatype="html"><source>Manifest hash</source></trans-unit>
+      <trans-unit id="runs.detail.suite" datatype="html"><source>Suite revision</source></trans-unit>
+      <trans-unit id="runs.detail.shards" datatype="html"><source>Shard count</source></trans-unit>
+      <trans-unit id="runs.detail.producers" datatype="html"><source>Declared producers</source></trans-unit>
+      <trans-unit id="runs.detail.no-producers" datatype="html"><source>No producers declared</source></trans-unit>
+      <trans-unit id="runs.detail.copy-hash" datatype="html"><source>Copy full manifest hash</source></trans-unit>
+      <trans-unit id="runs.detail.copied" datatype="html"><source>Manifest hash copied</source></trans-unit>
+      <trans-unit id="runs.detail.copy-failed" datatype="html"><source>Copy failed. Select and copy the full hash shown above.</source></trans-unit>
     </body>
   </file>
 </xliff>
