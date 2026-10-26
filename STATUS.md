@@ -21,10 +21,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 165 | 171.25 |
-| Via merged PRs | 139 | 146.75 |
+| Fully landed on develop | 166 | 173.25 |
+| Via merged PRs | 140 | 148.75 |
 | Direct commits on develop, no PR | 26 | 24.5 |
-| Remaining | 490 | 531.5 |
+| Remaining | 489 | 529.5 |
 | Plan total | 655 | 702.75 |
 
 Five partial parents are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence (163); the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -44,19 +44,19 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 09 | 17 | 0 | 5 | 9 | 3 | 0 | 17.5 |
 | 10 | 3 | 0 | 1 | 2 | 0 | 0 | 2.5 |
 | 11 | 5 | 1 | 2 | 1 | 1 | 0 | 4.25 |
-| 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 165 | 3 | 43 | 90 | 28 | 1 | 171.25 |
+| TOTAL | 166 | 3 | 43 | 90 | 29 | 1 | 173.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 122 | 3 | 25 | 68 | 25 | 1 | 134.25 |
+| G1 | 123 | 3 | 25 | 68 | 26 | 1 | 136.25 |
 | G2 | 37 | 0 | 16 | 19 | 2 | 0 | 31 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 165 | 3 | 43 | 90 | 28 | 1 | 171.25 |
+| TOTAL | 166 | 3 | 43 | 90 | 29 | 1 | 173.25 |
 
 ### Landed task groups
 
@@ -309,9 +309,9 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **88 tasks / 98 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 88 / 98 d is the figure used here.
+Dependency-ready: **91 tasks / 102 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 91 / 102 d is the figure used here.
 
-### G1: 42 tasks / 42 d
+### G1: 44 tasks / 46 d
 
 | Task | Size | Note |
 |---|---|---|
@@ -326,9 +326,11 @@ Dependency-ready: **88 tasks / 98 raw person-days**, using the exact expanded ta
 | 03.4.1-T1 | L | GitHub App registration + installation binding + `git_repo_binding`; typed `HttpClient` + RS256 app JWT |
 | 04.1.2-T1 | S | Per-project rate limit/quota with `Retry-After`; counters and spans |
 | 04.4.1-T1 | L | Per-producer mapping registry + pytest mapping |
+| 04.8.1-T1 | M | Emit `results` usage rows through `IUsageLedger.RecordAsync` in the accepted-batch transaction; unblocked by 12.3.1-T1 (04.1.1-T2 merged) |
 | 06.2.2-T1 | M | Adapter capability + per-project options (disable kinds, allowlisted redaction rules) with 04 |
 | 06.2.3-T1 | M | Async secret-scan `task` handler (outbox row written by `complete`): scan the object, set `scan_state`, write `masking_event`, enforce `reject_on_secret` |
 | 06.4.1-T1 | S | `retention_policy` table, validation floor, defaults, `GET/PUT` |
+| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1 |
 | 08.6.3-T1 | M | Switch model (`enabled / shadow / disabled` settable, `unavailable` derived, T33), resolution order, immediate effect on in-flight work — ships before any apply capability (T29) |
 | 09.1.1-T5 | M | OIDC login/logout + cookie session |
 | 09.1.1-T9 | S | Partial: resume T9.2 emission, opt-out and browser proof |
@@ -358,7 +360,7 @@ Dependency-ready: **88 tasks / 98 raw person-days**, using the exact expanded ta
 | 13.3.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
 | 13.4.1-T1 | L | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
 
-### G2: 31 tasks / 33 d
+### G2: 33 tasks / 35 d
 
 | Task | Size | Note |
 |---|---|---|
@@ -391,6 +393,8 @@ Dependency-ready: **88 tasks / 98 raw person-days**, using the exact expanded ta
 | 09.3.1-T4 | M | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible |
 | 09.3.1-T6 | M | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events |
 | 10.7.1-T1 | M | Dead-letter runbook |
+| 12.3.1-T3 | M | Versioned price table + loader (price stays `[OPEN] O5`; fixtures only); unblocked by 12.3.1-T1 |
+| 12.3.1-T5 | M | Roll-up job + reconciliation query; unblocked by 12.3.1-T1 |
 | 13.5.2-T1 | L | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
 | 13.7.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
 
@@ -604,7 +608,7 @@ Dependency-ready: **88 tasks / 98 raw person-days**, using the exact expanded ta
 | Invite lifetime is the constant 7 days, and a lapsed unswept pending invite keeps its seat until the hourly sweep (02.1.2-T2, S78) | `InviteLifetime.Default = TimeSpan.FromDays(7)` (`src/Modules/Evidgate.Modules.Identity/Invites/InviteLifetime.cs:16`) is used unchanged by create and every resend, and `infra/config-matrix.json` gains only `EVIDGATE__INVITE__PEPPER` and `__PEPPERVERSION` (`:919,939`), so no org can tune how long an invite stays bindable; between `invite_expires_at` and the next `invite-expiry` run a lapsed pending row still counts toward `max_seats` (accepted, review finding F7). Recorded as a decision, not a gap | receiver: F11; hand-over Notes: `plans/features/02-identity-tenancy/02.1.2-membership-and-invites.md:71`; queue: `.omp/coordinator/next-wave-queue.md` |
 | Re-invite of a removed member and the concurrent-invite race test (02.1.2-T2, S78) | (1) A user whose row in the org is `removed` (or `active`) can never bind a new pending invite: `MembershipBinder` refuses when any `membership` row of that `user_id` exists in the org (`membership_org_user_key` is not status-filtered, `migrations/0011_identity_membership.sql`) and invite create does not refuse such an address, so the pending row holds a seat until the sweep. (2) Concurrent invites at the `max_seats` boundary have no race test (only bind and resend/cancel races are covered); the lock is the same `SeatQuota` row lock the bind race test exercises | receiver: 02.1.2-T3; hand-over Notes: `plans/features/02-identity-tenancy/02.1.2-membership-and-invites.md:72` |
 | Merge debt (#171) | Merged delivery; review/calibration or phase-review debt is recorded in the receiving register, not an unmerged task. Product hand-overs that remain open are listed separately in this section. | receiver: `docs/phase-review.md:30` D-S79-M1; Notes: receiving register row |
-| Older `docs/phase-review.md` rows cite `STATUS.md` lines that are now other rows — closed by S93 (status sync) | S93 re-pointed the drifted cites it owns by row title instead of by number: D-S51-Q3, D-S56-M1, D-S57-M1/Q10/Q11, D-S67-Q3, D-S68-M1, D-S69-Q1, D-S72-M1, D-S73-Q3, D-S79-M1/Q1, D-S80-Q1, D-S82-Q6 and D-S83-Q1 in `docs/phase-review.md`, plus the 09.7.1 Notes (audit cap-hit telemetry) and 02.3.1 Notes (PERF3-PERF5, SEC7) cites; the S93 head was then scanned once with a one-off line-range check (202 `STATUS.md:NNN` cites, none out of range or blank); no cite-check stage is committed, so that scan is not an automated guard. `docs/phase-review.md:90` and `:92` still cite `STATUS.md:662` for hand-over rows whose own §6 rows are gone, and those two rows are read by row title | receiver: closed by S93; hand-over Notes: `plans/features/09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md:246` |
+| Older `docs/phase-review.md` rows cite `STATUS.md` lines that are now other rows — closed by S93 (status sync) | S93 re-pointed the drifted cites it owns by row title instead of by number: D-S51-Q3, D-S56-M1, D-S57-M1/Q10/Q11, D-S67-Q3, D-S68-M1, D-S69-Q1, D-S72-M1, D-S73-Q3, D-S79-M1/Q1, D-S80-Q1, D-S82-Q6 and D-S83-Q1 in `docs/phase-review.md`, plus the 09.7.1 Notes (audit cap-hit telemetry) and 02.3.1 Notes (PERF3-PERF5, SEC7) cites; the S93 head was then scanned once with a one-off line-range check (202 `STATUS.md:NNN` cites, none out of range or blank); no cite-check stage is committed, so that scan is not an automated guard. `docs/phase-review.md:90` and `:92` still cite `STATUS.md:666` for hand-over rows whose own §6 rows are gone, and those two rows are read by row title | receiver: closed by S93; hand-over Notes: `plans/features/09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md:246` |
 | `IngestTokenView` has no `rotation_state` or `last_rotated_at` (09.7.1-T3, S82, P3) | The Secrets list renders the wire fields only: `status` is the rotation state (`active`, `rotated`, `expired`, `revoked`), `overlap_ends_at` the overlap window; there is no last-rotated time. The rotate answer also declares no `Cache-Control: no-store` (`contracts/openapi.yaml`, `rotateIngestToken` 200), unlike the invite answers (security review finding, contract and server change). Decided A by the coordinator (owner rule 2026-10-23), recorded for owner phase review as D-S82-Q3 | receiver: F14; hand-over Notes: `plans/features/09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md:177`; queue: `.omp/coordinator/next-wave-queue.md` |
 | Invite reveal shows the raw `invite_token`, no accept URL (09.7.1-F12, S82, P6) | The invite-token staging API and login binding are delivered. The client accept route/composed URL is still absent; the reveal displays the raw token, and no unbuilt task is assigned to that web route. | receiver: queue row F41; recorded owner: 02.3.1-T2 (S81 D-S81-Q1: `POST /v1/auth/invite-token` stages the token; the web accept route and a composed link follow it); Notes `plans/features/09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md:177`; hand-over Notes: `plans/features/09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md:177` |
 | Secrets and invite UI low review notes (09.7.1-T3/F12 hand-over, S82) | Five non-blocking notes from the T3 review and its delta check: (1) `rotation-reminder-chip.component.ts` evaluates the reminder when it renders and has no clock tick, so a tab left open never flips from `expires-soon` to `expired`; (2) the Secrets list renders up to 200 rows at once (`INGEST_TOKEN_PAGE_LIMIT`), bounded and without virtual scroll; (3) `SecretsPage` is a static import in `settings-shell.routes.ts`, like the other tabs, with no `loadComponent` split; (4) after a resend the private `resendInFlight` lock stays set until the detached member refresh settles, so a Resend pressed in that one-read window in a reopened dialog returns without any visible state (`members.store.ts`, `resend-invite-dialog.component.ts`); (5) the Secrets `unavailable` Reload re-reads the list but does not clear `rotateState`, so the "rotation may have been applied" hint stays visible after a successful reload. None affects an Acceptance check | receiver: 09.7.1-T8.2; hand-over Notes: `plans/features/09-web-ui/09.7.1-administer-without-seeing-secrets-acceptance-an.md:226` |
