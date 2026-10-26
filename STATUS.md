@@ -321,7 +321,7 @@ Dependency-ready: **90 tasks / 100.0 d** (G1 41 / 42.5, G2 34 / 35.5, G3 5 / 8, 
 
 Stricter variant that also requires every dependency task's whole story to be merged: **48 tasks / 51.5 d** (G1 19 / 20.5, G2 21 / 21, G3 0 / 0, G4 8 / 10), recomputed on `b0be589` from the plan graph plus the landed set. It supersedes the S93 print of 28 / 31.25 d, which no longer recomputes from the landed set under that definition.
 
-### G1: 42 tasks / 43.5 d (backend lane 28 / 28.5 d, web-only 1 / 1 d, docs-only 13 / 14 d)
+### G1: 41 tasks / 42.5 d (backend lane 28 / 28.5 d, web-only 0 / 0 d, docs-only 13 / 14 d)
 
 #### G1 backend lane
 
