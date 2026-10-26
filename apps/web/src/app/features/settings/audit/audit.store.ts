@@ -56,12 +56,14 @@
 //    a signal of its own, and no field name here is secret-shaped (the Settings feature's
 //    `no-secret-field-in-store` rule pins that).
 //
-// Recorded gap (plan §8 telemetry row: "audit export cap hits logged as an error-funnel event with
-// ids only"): this store emits NO telemetry event when `capped` is true. The web telemetry facade
-// has no named-event API and its exporter admits an empty event-name set and a closed attribute
-// allow-list (`core/telemetry/telemetry-names.ts`, `attribute-allowlist.ts`) with no row-count
-// key; adding one would mean widening the allow-list, which is a reviewed change of its own and
-// outside this task's file scope.
+// Telemetry (plan §8: "audit export cap hits logged as an error-funnel event with ids only"): a
+// capped export records exactly one `audit.export_capped` event through `TelemetryService`, the
+// facade's named-event API. The event arrives on a zero-duration `client.event` span that holds
+// the route and the locale and nothing else, and the event itself carries no attribute — no row
+// count, no filter value, no id (`core/telemetry/telemetry-names.ts`,
+// `core/telemetry/telemetry-sdk.ts`). Before the telemetry chunk loads, when the visit opted out
+// (Do-Not-Track / Global Privacy Control) and after a failed load the facade drops the call, so
+// the export never depends on telemetry and the call never throws into it.
 
 import { computed, DestroyRef, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
@@ -69,6 +71,8 @@ import type { AuditEntryDto, AuditListResponse } from '@evidgate/sdk';
 
 import { AuditDataService, type AuditListQuery } from '../../../core/data/audit-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
+import { AUDIT_EXPORT_CAPPED_EVENT } from '../../../core/telemetry/telemetry-names';
+import { TelemetryService } from '../../../core/telemetry/telemetry.service';
 import { toAuditCsv } from './audit-csv';
 
 /** One actor-type filter value: one of the wire's five, or `''` for "every actor". */
@@ -227,6 +231,8 @@ export const AuditStore = signalStore(
   withMethods((store) => {
     const data = inject(AuditDataService);
     const lifetime = inject(DestroyRef);
+    /** `providedIn: 'root'`, so a spec that does not provide it gets the real (opt-out-aware) one. */
+    const telemetry = inject(TelemetryService);
 
     /** Bumped by every `load`; an answer of an older generation publishes nothing (header 2). */
     let newestLoad = 0;
@@ -456,6 +462,11 @@ export const AuditStore = signalStore(
         patchState(store, {
           exportState: { phase: 'done', rows: collected.length, capped },
         });
+        if (capped) {
+          // One event for the cap hit (header: telemetry), and only after the supersession check
+          // above, so a loop the page has already dropped records nothing.
+          telemetry.reportEvent(AUDIT_EXPORT_CAPPED_EVENT);
+        }
         return toAuditCsv(collected);
       },
 

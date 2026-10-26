@@ -92,9 +92,10 @@ function scrubbedEvent(event: TimedEvent): TimedEvent {
 }
 
 /**
- * The events that cross the network: only the names in `EVENT_NAMES` (none today). An event name
- * this app did not write is content — it is where a message or a URL would sit — so it is
- * dropped rather than renamed: a scrubbed name would still be a name the receiver cannot trust.
+ * The events that cross the network: only the names in `EVENT_NAMES` (this app records one,
+ * `audit.export_capped`). An event name this app did not write is content — it is where a message
+ * or a URL would sit — so it is dropped rather than renamed: a scrubbed name would still be a name
+ * the receiver cannot trust.
  */
 function scrubbedEvents(events: readonly TimedEvent[]): TimedEvent[] {
   return events.filter((event) => EVENT_NAMES.has(event.name)).map(scrubbedEvent);
