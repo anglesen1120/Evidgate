@@ -1,0 +1,44 @@
+{
+  "operation_id": "listRuns",
+  "variant": "nomatch-pages",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000e15"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "run_id": "018f0000-0000-7000-8000-000000000090",
+        "state": "queued",
+        "created_at": "2026-10-22T07:00:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "main",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000000091",
+        "state": "queued",
+        "created_at": "2026-10-22T07:30:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "main",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false
+      }
+    ],
+    "next_cursor": null
+  }
+}

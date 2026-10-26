@@ -1,0 +1,4052 @@
+{
+  "operation_id": "listRuns",
+  "variant": "250-rows",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-000000000e14"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002000",
+        "state": "complete",
+        "created_at": "2026-10-01T00:00:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-000",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002001",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:01:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-001",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002002",
+        "state": "running",
+        "created_at": "2026-10-01T00:02:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-002",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002003",
+        "state": "queued",
+        "created_at": "2026-10-01T00:03:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-003",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002004",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:04:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-004",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002005",
+        "state": "complete",
+        "created_at": "2026-10-01T00:05:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-005",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002006",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:06:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-006",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002007",
+        "state": "running",
+        "created_at": "2026-10-01T00:07:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-007",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002008",
+        "state": "queued",
+        "created_at": "2026-10-01T00:08:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-008",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002009",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:09:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-009",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000200a",
+        "state": "complete",
+        "created_at": "2026-10-01T00:10:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-010",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000200b",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:11:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-011",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000200c",
+        "state": "running",
+        "created_at": "2026-10-01T00:12:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-012",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000200d",
+        "state": "queued",
+        "created_at": "2026-10-01T00:13:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-013",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-00000000200c",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000200e",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:14:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-014",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000200f",
+        "state": "complete",
+        "created_at": "2026-10-01T00:15:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-015",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002010",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:16:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-016",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002011",
+        "state": "running",
+        "created_at": "2026-10-01T00:17:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-017",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002012",
+        "state": "queued",
+        "created_at": "2026-10-01T00:18:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-018",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002013",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:19:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-019",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002014",
+        "state": "complete",
+        "created_at": "2026-10-01T00:20:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-020",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002015",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:21:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-021",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002016",
+        "state": "running",
+        "created_at": "2026-10-01T00:22:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-022",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002017",
+        "state": "queued",
+        "created_at": "2026-10-01T00:23:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-023",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002018",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:24:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-024",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002019",
+        "state": "complete",
+        "created_at": "2026-10-01T00:25:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-025",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000201a",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:26:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-026",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-000000002019",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000201b",
+        "state": "running",
+        "created_at": "2026-10-01T00:27:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-027",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000201c",
+        "state": "queued",
+        "created_at": "2026-10-01T00:28:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-028",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000201d",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:29:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-029",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000201e",
+        "state": "complete",
+        "created_at": "2026-10-01T00:30:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-030",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000201f",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:31:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-031",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002020",
+        "state": "running",
+        "created_at": "2026-10-01T00:32:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-032",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002021",
+        "state": "queued",
+        "created_at": "2026-10-01T00:33:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-033",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002022",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:34:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-034",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002023",
+        "state": "complete",
+        "created_at": "2026-10-01T00:35:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-035",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002024",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:36:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-036",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002025",
+        "state": "running",
+        "created_at": "2026-10-01T00:37:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-037",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002026",
+        "state": "queued",
+        "created_at": "2026-10-01T00:38:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-038",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002027",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:39:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-039",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-000000002026",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002028",
+        "state": "complete",
+        "created_at": "2026-10-01T00:40:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-040",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002029",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:41:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-041",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000202a",
+        "state": "running",
+        "created_at": "2026-10-01T00:42:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-042",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000202b",
+        "state": "queued",
+        "created_at": "2026-10-01T00:43:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-043",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000202c",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:44:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-044",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000202d",
+        "state": "complete",
+        "created_at": "2026-10-01T00:45:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-045",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000202e",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:46:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-046",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000202f",
+        "state": "running",
+        "created_at": "2026-10-01T00:47:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-047",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002030",
+        "state": "queued",
+        "created_at": "2026-10-01T00:48:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-048",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002031",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:49:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-049",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002032",
+        "state": "complete",
+        "created_at": "2026-10-01T00:50:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-050",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002033",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:51:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-051",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002034",
+        "state": "running",
+        "created_at": "2026-10-01T00:52:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-052",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-000000002033",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002035",
+        "state": "queued",
+        "created_at": "2026-10-01T00:53:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-053",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002036",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:54:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-054",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002037",
+        "state": "complete",
+        "created_at": "2026-10-01T00:55:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-055",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002038",
+        "state": "incomplete",
+        "created_at": "2026-10-01T00:56:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-056",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002039",
+        "state": "running",
+        "created_at": "2026-10-01T00:57:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-057",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000203a",
+        "state": "queued",
+        "created_at": "2026-10-01T00:58:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-058",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000203b",
+        "state": "canceled",
+        "created_at": "2026-10-01T00:59:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-059",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000203c",
+        "state": "complete",
+        "created_at": "2026-10-01T01:00:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-060",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000203d",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:01:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-061",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000203e",
+        "state": "running",
+        "created_at": "2026-10-01T01:02:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-062",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000203f",
+        "state": "queued",
+        "created_at": "2026-10-01T01:03:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-063",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002040",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:04:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-064",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002041",
+        "state": "complete",
+        "created_at": "2026-10-01T01:05:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-065",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL",
+        "parent_run_id": "018f0000-0000-7000-8000-000000002040",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002042",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:06:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-066",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002043",
+        "state": "running",
+        "created_at": "2026-10-01T01:07:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-067",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002044",
+        "state": "queued",
+        "created_at": "2026-10-01T01:08:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-068",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002045",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:09:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-069",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002046",
+        "state": "complete",
+        "created_at": "2026-10-01T01:10:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-070",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002047",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:11:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-071",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002048",
+        "state": "running",
+        "created_at": "2026-10-01T01:12:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-072",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002049",
+        "state": "queued",
+        "created_at": "2026-10-01T01:13:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-073",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000204a",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:14:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-074",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000204b",
+        "state": "complete",
+        "created_at": "2026-10-01T01:15:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-075",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000204c",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:16:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-076",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000204d",
+        "state": "running",
+        "created_at": "2026-10-01T01:17:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-077",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000204e",
+        "state": "queued",
+        "created_at": "2026-10-01T01:18:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-078",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-00000000204d",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000204f",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:19:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-079",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002050",
+        "state": "complete",
+        "created_at": "2026-10-01T01:20:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-080",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002051",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:21:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-081",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002052",
+        "state": "running",
+        "created_at": "2026-10-01T01:22:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-082",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002053",
+        "state": "queued",
+        "created_at": "2026-10-01T01:23:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-083",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002054",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:24:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-084",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002055",
+        "state": "complete",
+        "created_at": "2026-10-01T01:25:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-085",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002056",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:26:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-086",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002057",
+        "state": "running",
+        "created_at": "2026-10-01T01:27:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-087",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002058",
+        "state": "queued",
+        "created_at": "2026-10-01T01:28:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-088",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002059",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:29:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-089",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000205a",
+        "state": "complete",
+        "created_at": "2026-10-01T01:30:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-090",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000205b",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:31:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-091",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-00000000205a",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000205c",
+        "state": "running",
+        "created_at": "2026-10-01T01:32:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-092",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000205d",
+        "state": "queued",
+        "created_at": "2026-10-01T01:33:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-093",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000205e",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:34:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-094",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000205f",
+        "state": "complete",
+        "created_at": "2026-10-01T01:35:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-095",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002060",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:36:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-096",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002061",
+        "state": "running",
+        "created_at": "2026-10-01T01:37:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-097",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002062",
+        "state": "queued",
+        "created_at": "2026-10-01T01:38:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-098",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002063",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:39:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-099",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002064",
+        "state": "complete",
+        "created_at": "2026-10-01T01:40:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-100",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002065",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:41:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-101",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002066",
+        "state": "running",
+        "created_at": "2026-10-01T01:42:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-102",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002067",
+        "state": "queued",
+        "created_at": "2026-10-01T01:43:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-103",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002068",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:44:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-104",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-000000002067",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002069",
+        "state": "complete",
+        "created_at": "2026-10-01T01:45:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-105",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000206a",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:46:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-106",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000206b",
+        "state": "running",
+        "created_at": "2026-10-01T01:47:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-107",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000206c",
+        "state": "queued",
+        "created_at": "2026-10-01T01:48:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-108",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000206d",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:49:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-109",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000206e",
+        "state": "complete",
+        "created_at": "2026-10-01T01:50:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-110",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000206f",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:51:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-111",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002070",
+        "state": "running",
+        "created_at": "2026-10-01T01:52:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-112",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002071",
+        "state": "queued",
+        "created_at": "2026-10-01T01:53:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-113",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002072",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:54:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-114",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002073",
+        "state": "complete",
+        "created_at": "2026-10-01T01:55:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-115",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002074",
+        "state": "incomplete",
+        "created_at": "2026-10-01T01:56:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-116",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002075",
+        "state": "running",
+        "created_at": "2026-10-01T01:57:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-117",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-000000002074",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002076",
+        "state": "queued",
+        "created_at": "2026-10-01T01:58:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-118",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002077",
+        "state": "canceled",
+        "created_at": "2026-10-01T01:59:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-119",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002078",
+        "state": "complete",
+        "created_at": "2026-10-01T02:00:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-120",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002079",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:01:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-121",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000207a",
+        "state": "running",
+        "created_at": "2026-10-01T02:02:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-122",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000207b",
+        "state": "queued",
+        "created_at": "2026-10-01T02:03:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-123",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000207c",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:04:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-124",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000207d",
+        "state": "complete",
+        "created_at": "2026-10-01T02:05:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-125",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000207e",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:06:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-126",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000207f",
+        "state": "running",
+        "created_at": "2026-10-01T02:07:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-127",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002080",
+        "state": "queued",
+        "created_at": "2026-10-01T02:08:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-128",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002081",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:09:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-129",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002082",
+        "state": "complete",
+        "created_at": "2026-10-01T02:10:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-130",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS",
+        "parent_run_id": "018f0000-0000-7000-8000-000000002081",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002083",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:11:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-131",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002084",
+        "state": "running",
+        "created_at": "2026-10-01T02:12:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-132",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002085",
+        "state": "queued",
+        "created_at": "2026-10-01T02:13:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-133",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002086",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:14:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-134",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002087",
+        "state": "complete",
+        "created_at": "2026-10-01T02:15:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-135",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002088",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:16:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-136",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002089",
+        "state": "running",
+        "created_at": "2026-10-01T02:17:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-137",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000208a",
+        "state": "queued",
+        "created_at": "2026-10-01T02:18:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-138",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000208b",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:19:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-139",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000208c",
+        "state": "complete",
+        "created_at": "2026-10-01T02:20:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-140",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000208d",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:21:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-141",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000208e",
+        "state": "running",
+        "created_at": "2026-10-01T02:22:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-142",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000208f",
+        "state": "queued",
+        "created_at": "2026-10-01T02:23:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-143",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-00000000208e",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002090",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:24:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-144",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002091",
+        "state": "complete",
+        "created_at": "2026-10-01T02:25:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-145",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002092",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:26:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-146",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002093",
+        "state": "running",
+        "created_at": "2026-10-01T02:27:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-147",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002094",
+        "state": "queued",
+        "created_at": "2026-10-01T02:28:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-148",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002095",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:29:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-149",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002096",
+        "state": "complete",
+        "created_at": "2026-10-01T02:30:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-150",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002097",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:31:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-151",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002098",
+        "state": "running",
+        "created_at": "2026-10-01T02:32:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-152",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-000000002099",
+        "state": "queued",
+        "created_at": "2026-10-01T02:33:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-153",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000209a",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:34:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-154",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000209b",
+        "state": "complete",
+        "created_at": "2026-10-01T02:35:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-155",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000209c",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:36:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-156",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-00000000209b",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000209d",
+        "state": "running",
+        "created_at": "2026-10-01T02:37:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-157",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000209e",
+        "state": "queued",
+        "created_at": "2026-10-01T02:38:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-158",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-00000000209f",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:39:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-159",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a0",
+        "state": "complete",
+        "created_at": "2026-10-01T02:40:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-160",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a1",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:41:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-161",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a2",
+        "state": "running",
+        "created_at": "2026-10-01T02:42:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-162",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a3",
+        "state": "queued",
+        "created_at": "2026-10-01T02:43:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-163",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a4",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:44:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-164",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a5",
+        "state": "complete",
+        "created_at": "2026-10-01T02:45:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-165",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a6",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:46:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-166",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a7",
+        "state": "running",
+        "created_at": "2026-10-01T02:47:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-167",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a8",
+        "state": "queued",
+        "created_at": "2026-10-01T02:48:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-168",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020a9",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:49:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-169",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-0000000020a8",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020aa",
+        "state": "complete",
+        "created_at": "2026-10-01T02:50:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-170",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ab",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:51:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-171",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ac",
+        "state": "running",
+        "created_at": "2026-10-01T02:52:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-172",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ad",
+        "state": "queued",
+        "created_at": "2026-10-01T02:53:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-173",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ae",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:54:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-174",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020af",
+        "state": "complete",
+        "created_at": "2026-10-01T02:55:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-175",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b0",
+        "state": "incomplete",
+        "created_at": "2026-10-01T02:56:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-176",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b1",
+        "state": "running",
+        "created_at": "2026-10-01T02:57:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-177",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b2",
+        "state": "queued",
+        "created_at": "2026-10-01T02:58:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-178",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b3",
+        "state": "canceled",
+        "created_at": "2026-10-01T02:59:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-179",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b4",
+        "state": "complete",
+        "created_at": "2026-10-01T03:00:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-180",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b5",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:01:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-181",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b6",
+        "state": "running",
+        "created_at": "2026-10-01T03:02:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-182",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-0000000020b5",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b7",
+        "state": "queued",
+        "created_at": "2026-10-01T03:03:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-183",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b8",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:04:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-184",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020b9",
+        "state": "complete",
+        "created_at": "2026-10-01T03:05:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-185",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ba",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:06:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-186",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020bb",
+        "state": "running",
+        "created_at": "2026-10-01T03:07:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-187",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020bc",
+        "state": "queued",
+        "created_at": "2026-10-01T03:08:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-188",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020bd",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:09:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-189",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020be",
+        "state": "complete",
+        "created_at": "2026-10-01T03:10:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-190",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020bf",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:11:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-191",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c0",
+        "state": "running",
+        "created_at": "2026-10-01T03:12:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-192",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c1",
+        "state": "queued",
+        "created_at": "2026-10-01T03:13:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-193",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c2",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:14:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-194",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c3",
+        "state": "complete",
+        "created_at": "2026-10-01T03:15:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-195",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL",
+        "parent_run_id": "018f0000-0000-7000-8000-0000000020c2",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c4",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:16:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-196",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c5",
+        "state": "running",
+        "created_at": "2026-10-01T03:17:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-197",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c6",
+        "state": "queued",
+        "created_at": "2026-10-01T03:18:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-198",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c7",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:19:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-199",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c8",
+        "state": "complete",
+        "created_at": "2026-10-01T03:20:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-200",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020c9",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:21:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-201",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ca",
+        "state": "running",
+        "created_at": "2026-10-01T03:22:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-202",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020cb",
+        "state": "queued",
+        "created_at": "2026-10-01T03:23:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-203",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020cc",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:24:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-204",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020cd",
+        "state": "complete",
+        "created_at": "2026-10-01T03:25:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-205",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ce",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:26:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-206",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020cf",
+        "state": "running",
+        "created_at": "2026-10-01T03:27:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-207",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d0",
+        "state": "queued",
+        "created_at": "2026-10-01T03:28:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-208",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-0000000020cf",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d1",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:29:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-209",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d2",
+        "state": "complete",
+        "created_at": "2026-10-01T03:30:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-210",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d3",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:31:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-211",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d4",
+        "state": "running",
+        "created_at": "2026-10-01T03:32:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-212",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d5",
+        "state": "queued",
+        "created_at": "2026-10-01T03:33:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-213",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d6",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:34:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-214",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d7",
+        "state": "complete",
+        "created_at": "2026-10-01T03:35:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-215",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d8",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:36:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-216",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020d9",
+        "state": "running",
+        "created_at": "2026-10-01T03:37:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-217",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020da",
+        "state": "queued",
+        "created_at": "2026-10-01T03:38:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-218",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020db",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:39:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-219",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020dc",
+        "state": "complete",
+        "created_at": "2026-10-01T03:40:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-220",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020dd",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:41:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-221",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-0000000020dc",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020de",
+        "state": "running",
+        "created_at": "2026-10-01T03:42:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-222",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020df",
+        "state": "queued",
+        "created_at": "2026-10-01T03:43:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-223",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e0",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:44:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-224",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e1",
+        "state": "complete",
+        "created_at": "2026-10-01T03:45:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-225",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e2",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:46:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-226",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e3",
+        "state": "running",
+        "created_at": "2026-10-01T03:47:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-227",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e4",
+        "state": "queued",
+        "created_at": "2026-10-01T03:48:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-228",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e5",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:49:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-229",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e6",
+        "state": "complete",
+        "created_at": "2026-10-01T03:50:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-230",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e7",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:51:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-231",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e8",
+        "state": "running",
+        "created_at": "2026-10-01T03:52:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-232",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020e9",
+        "state": "queued",
+        "created_at": "2026-10-01T03:53:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-233",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ea",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:54:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-234",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-0000000020e9",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020eb",
+        "state": "complete",
+        "created_at": "2026-10-01T03:55:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-235",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ec",
+        "state": "incomplete",
+        "created_at": "2026-10-01T03:56:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-236",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ed",
+        "state": "running",
+        "created_at": "2026-10-01T03:57:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-237",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ee",
+        "state": "queued",
+        "created_at": "2026-10-01T03:58:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-238",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020ef",
+        "state": "canceled",
+        "created_at": "2026-10-01T03:59:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-239",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f0",
+        "state": "complete",
+        "created_at": "2026-10-01T04:00:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-240",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "PASS"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f1",
+        "state": "incomplete",
+        "created_at": "2026-10-01T04:01:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-241",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f2",
+        "state": "running",
+        "created_at": "2026-10-01T04:02:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-242",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": true,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f3",
+        "state": "queued",
+        "created_at": "2026-10-01T04:03:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-243",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f4",
+        "state": "canceled",
+        "created_at": "2026-10-01T04:04:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-244",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f5",
+        "state": "complete",
+        "created_at": "2026-10-01T04:05:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-245",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": "FAIL"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f6",
+        "state": "incomplete",
+        "created_at": "2026-10-01T04:06:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-246",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f7",
+        "state": "running",
+        "created_at": "2026-10-01T04:07:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-247",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null,
+        "parent_run_id": "018f0000-0000-7000-8000-0000000020f6",
+        "rerun_label": "subset:smoke"
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f8",
+        "state": "queued",
+        "created_at": "2026-10-01T04:08:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-248",
+          "pr_number": null,
+          "head_sha": "018f000000000000000000000000000000000001",
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      },
+      {
+        "run_id": "018f0000-0000-7000-8000-0000000020f9",
+        "state": "canceled",
+        "created_at": "2026-10-01T04:09:00Z",
+        "ref": {
+          "kind": "branch",
+          "name": "feature/batch-249",
+          "pr_number": null,
+          "head_sha": null,
+          "base_sha": null,
+          "trigger_event": "push",
+          "is_fork": false
+        },
+        "unverified_ref": false,
+        "decision": null
+      }
+    ],
+    "next_cursor": null
+  }
+}

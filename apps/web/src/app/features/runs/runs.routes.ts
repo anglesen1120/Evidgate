@@ -8,7 +8,12 @@
 
 import type { Routes } from '@angular/router';
 
-import { RouteStubPage } from '../../shell/stub/route-stub.page';
-
-/** Everything mounted under a `runs` segment: the shell placeholder until its feature story. */
-export const routes: Routes = [{ path: '', pathMatch: 'full', component: RouteStubPage }];
+/** The run list owns the page heading; project context is inherited from the shell. */
+export const routes: Routes = [
+  {
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./list/run-list.page').then((module) => module.RunListPage),
+    data: { pageHeadingLevel: 1 },
+  },
+];
