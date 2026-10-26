@@ -3,6 +3,11 @@
 // so only the members the schema declares are ever set; `sequence` is assigned by the
 // spool writer (the per-producer authority), which is why the pre-sequence shape is a
 // separate type.
+//
+// 04.3.3-T2.2: `artifact_ids` is the schema's own member for the artifacts a `test.finished`
+// references (04.3.3 AC5). It is set only on a `test.finished` whose attempt completed at
+// least one upload, in attachment order and deduplicated by the caller, and is absent —
+// never an empty array — for every other event.
 import { uuidv7 } from './uuidv7.js';
 
 /** `schema_version` is a const 1 in the contract. */
@@ -36,6 +41,8 @@ export interface UnsignedEnvelope {
   occurred_at: string;
   status?: string;
   duration_ms?: number;
+  /** Ids of the artifacts a `test.finished` references (04.3.3 AC5); never empty. */
+  artifact_ids?: string[];
   ext: ExtPayload;
 }
 
@@ -53,6 +60,7 @@ export interface EnvelopeInput {
   ext: ExtPayload;
   status?: string;
   duration_ms?: number;
+  artifact_ids?: string[];
   event_id?: string;
   occurred_at?: string;
 }
@@ -74,5 +82,10 @@ export function buildEnvelope(input: EnvelopeInput): UnsignedEnvelope {
   };
   if (input.status !== undefined) envelope.status = input.status;
   if (input.duration_ms !== undefined) envelope.duration_ms = input.duration_ms;
+  // An empty array would claim "this attempt had attachments and none survived", which the
+  // absence already says; only a real reference is emitted.
+  if (input.artifact_ids !== undefined && input.artifact_ids.length > 0) {
+    envelope.artifact_ids = [...input.artifact_ids];
+  }
   return envelope;
 }

@@ -184,5 +184,7 @@ describe('identity resolution complexity (load-tolerant, #49)', () => {
     } finally {
       for (const dir of [smallDir, largeDir]) rmSync(dir, { recursive: true, force: true });
     }
-  });
+    // 04.3.3-T2: a synchronous CPU-ratio spec starved by sibling workers can exceed the
+    // 5 s default while its ratio bound still holds; the bound, not the wall clock, is the spec.
+  }, 30_000);
 });

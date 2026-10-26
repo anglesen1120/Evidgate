@@ -41,16 +41,19 @@ Playwright loads a reporter module and uses its **default export** as the report
 
 ## Options
 
-| Option          | Type                      | Default  | Meaning                                                                     |
-| --------------- | ------------------------- | -------- | --------------------------------------------------------------------------- |
-| `spool_dir`     | `string`                  | —        | Spool root. Falls back to `EVIDGATE_SPOOL_DIR`.                             |
-| `run_id`        | `string`                  | —        | Run id. Falls back to `EVIDGATE_RUN_ID`.                                    |
-| `producer_id`   | `string`                  | —        | Producer id. **Required** (see below).                                      |
-| `steps`         | `boolean`                 | `true`   | Emit `test.step` envelopes for `result.steps`; sets `supports.step_events`. |
-| `mode`          | `'full' \| 'ingest_only'` | `'full'` | Capability `mode`.                                                          |
-| `identity`      | `(test) => Identity`      | —        | Execution-identity resolver; overrides the built-in mapping (see below).    |
-| `sidecarFs`     | `SidecarFs`               | —        | Test-only seam: injects the sidecar filesystem reader.                      |
-| `engineVersion` | `string`                  | —        | Test-only seam: overrides the detected `@playwright/test` version.          |
+| Option                         | Type                       | Default                 | Meaning                                                                                                        |
+| ------------------------------ | -------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `spool_dir`                    | `string`                   | —                       | Spool root. Falls back to `EVIDGATE_SPOOL_DIR`.                                                                |
+| `run_id`                       | `string`                   | —                       | Run id. Falls back to `EVIDGATE_RUN_ID`.                                                                       |
+| `producer_id`                  | `string`                   | —                       | Producer id. **Required** (see below).                                                                         |
+| `steps`                        | `boolean`                  | `true`                  | Emit `test.step` envelopes for `result.steps`; sets `supports.step_events`.                                    |
+| `mode`                         | `'full' \| 'ingest_only'`  | `'full'`                | Capability `mode`.                                                                                             |
+| `identity`                     | `(test) => Identity`       | —                       | Execution-identity resolver; overrides the built-in mapping (see below).                                       |
+| `sidecarFs`                    | `SidecarFs`                | —                       | Test-only seam: injects the sidecar filesystem reader.                                                         |
+| `engineVersion`                | `string`                   | —                       | Test-only seam: overrides the detected `@playwright/test` version.                                             |
+| `attachment_dirs`              | `string[]`                 | `[]`                    | Extra allow-listed attachment directories (see Attachments). Falls back to `EVIDGATE_ATTACHMENT_DIRS`.         |
+| `attachment_drain_deadline_ms` | `number`                   | `120000`                | How long `onEnd` waits for attachment uploads before it abandons them (see Attachments).                       |
+| `importCli`                    | `() => Promise<CliModule>` | the real dynamic import | Test-only seam: injects the CLI module loader `attach.ts` uses (`CliModule = typeof import('@evidgate/cli')`). |
 
 ### Construction is fail-fast
 
@@ -76,14 +79,26 @@ the value (one producer per shard).
 
 ## Environment
 
-| Variable                  | Used for                                                                    |
-| ------------------------- | --------------------------------------------------------------------------- |
-| `EVIDGATE_SPOOL_DIR`      | `spool_dir` fallback                                                        |
-| `EVIDGATE_RUN_ID`         | `run_id` fallback                                                           |
-| `EVIDGATE_TARGET_ENV`     | `ext.target_env`; validated in the ctor, else the Playwright project name   |
-| `EVIDGATE_ALLOW_UNMAPPED` | `'1'` keeps a run without a complete identity from failing the CI job (AC2) |
+| Variable                   | Used for                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| `EVIDGATE_SPOOL_DIR`       | `spool_dir` fallback                                                                    |
+| `EVIDGATE_RUN_ID`          | `run_id` fallback                                                                       |
+| `EVIDGATE_TARGET_ENV`      | `ext.target_env`; validated in the ctor, else the Playwright project name               |
+| `EVIDGATE_ALLOW_UNMAPPED`  | `'1'` keeps a run without a complete identity from failing the CI job (AC2)             |
+| `EVIDGATE_ATTACHMENT_DIRS` | extra allow-listed attachment directories, path-delimiter separated (`attachment_dirs`) |
 
-Every variable is read **once in the constructor**; no callback reads `process.env`.
+Every variable above is read **once in the constructor**; no callback reads `process.env`.
+
+Attachment uploads additionally use the **CLI's own** environment surface — the one
+`evidgate artifacts upload` resolves — because the upload is the CLI's: `EVIDGATE_API_URL`,
+`EVIDGATE_PROJECT` and one token source (`EVIDGATE_OIDC_TOKEN`, the GitHub Actions pair
+`ACTIONS_ID_TOKEN_REQUEST_URL` + `ACTIONS_ID_TOKEN_REQUEST_TOKEN`, `EVIDGATE_INGEST_TOKEN`
+or `EVIDGATE_DEV_TOKEN`), plus `EVIDGATE_SPOOL_DIR` when you want the uploads to have a
+resume journal. All three of the url, the project and a token source are required: a missing
+one is the CLI's own `missing_config`, reported as `attachments_unconfigured`. That surface
+is resolved when the uploader is built, i.e. at the first attachment that is actually
+uploadable — not in the constructor (see
+[Attachments](#attachments-0433-t2)).
 
 ## Spool layout
 
@@ -139,6 +154,10 @@ Every variable is read **once in the constructor**; no callback reads `process.e
   lines (`chunkMaxLines`), whichever comes first; a batch larger than the limit is split
   across chunks.
 - The reporter deletes nothing; the CLI spooler (04.2.3-T1) consumes the files.
+- The writer's own once-per-run notices reach the same `run.log` warning channel:
+  `shards_write_failed` (a `shards.json` write failed at rotation; the flush itself still
+  succeeded, and `close()` rethrows) and `shards_floor_ahead` (a `shards.json` floor ahead of
+  the chunks was read at startup, which `events send` would refuse as `spool_corrupt`).
 
 ## Envelopes
 
@@ -161,6 +180,11 @@ carries the resolved identity (`ext.case_id`, `ext.variant_hash`, `ext.target_en
 `ext.identity_conflict` — see Identity below); every `test.finished` also carries the
 mapped status (`ext.normalized`, `ext.skip_reason`, `ext.xfail`, `ext.error_summary` — see
 Status below).
+
+A `test.finished` for a test whose attachments uploaded also carries the envelope member
+`artifact_ids` (`[uuid]`, the schema's own member — not an `ext` key): the ids
+`upload-url`/`complete` returned for this attempt. It is omitted when nothing uploaded —
+see [Attachments](#attachments-0433-t2).
 
 ### `duration_ms`
 
@@ -190,7 +214,13 @@ document under `ext`:
     "protocol": { "major": 1, "minor": 0 },
     "engine": { "family": "playwright", "version": "1.63.0" },
     "platforms": ["darwin-arm64"],
-    "supports": { "discovery": false, "step_events": true, "retry": true, "cancel": false },
+    "supports": {
+      "discovery": false,
+      "step_events": true,
+      "retry": true,
+      "cancel": false,
+      "capture_control": false
+    },
     "mode": "full"
   }
 }
@@ -200,6 +230,14 @@ document under `ext`:
 validates against `contracts/adapter/capability.v1.json`; `engine.version` is the
 installed `@playwright/test` version read at runtime (D8). `platforms` is the platform
 this reporter is running on (`<process.platform>-<process.arch>`).
+
+`supports.capture_control: false` (04.3.3-T2) is the honest declaration: per
+`contracts/adapter/README.md`, an **absent** flag means the run-create configuration
+document (`contracts/adapter/config.v1.json`, T97) is delivered and must be honoured, and
+this reporter does not read capture flags, redaction patterns or per-kind size caps from it
+yet. Declaring `false` makes the server label the runs it produces `capture_uncontrolled`,
+so silent non-conformance is visible on the run. It is a declared boolean of the closed
+`supports` object, not a new schema member.
 
 ### `ext` allow-list
 
@@ -260,7 +298,9 @@ Every test envelope carries the resolved identity. The full contract is
   `{ code, message, path?, count? }`. Codes: `duplicate_case_id`, `identity_conflict`,
   `invalid_annotation`, `invalid_variant_params`, `invalid_target_env`,
   `invalid_sidecar`, `invalid_sidecar_entry`, `sidecar_conflict`, `unknown_status`,
-  `unmapped`, `warnings_truncated`. At most 100 warning envelopes per run
+  `unmapped`, `warnings_truncated`. The attachment path adds the `attachment_*` /
+  `attachments_*` codes listed under [Attachments](#attachments-0433-t2). At most 100
+  warning envelopes per run
   (`MAX_WARNING_ENVELOPES`); the overflow is summarised once at `onEnd`, and the two
   `onEnd` summaries bypass the cap. A message never echoes file content or a parameter
   value.
@@ -298,6 +338,196 @@ warning per distinct raw status. `ext.error_summary` is the first line of the fi
 message (ANSI, control and BIDI characters removed, URL userinfo and query/fragment
 redacted), ≤ 256 UTF-16 units, never a stack line. These four keys are set on
 `test.finished` only.
+
+## Attachments (04.3.3-T2)
+
+**Uploads need a real execution key.** With the built-in identity resolver the
+`execution_key` is the server-owned placeholder (`'0'.repeat(64)`) until the server-supplied
+key lands — `identity.ts` says so, and the STATUS row "04.3.1-T1 placeholder execution_key"
+tracks the hand-over. The wire member is `^[0-9a-f]{64}$`: the server's
+`sha256(case_id ‖ variant_hash ‖ target_env)` (00 §7 / 05.2.1-T3). An upload under the
+placeholder would be an unplanned attempt the server must refuse, so a run that keeps the
+built-in resolver uploads **nothing**: every attachment is skipped with
+`attachment_no_execution_key` and the test result is kept. To upload, pass the `identity`
+option and return the server-computed key for the test — the reporter itself only checks that
+it is not the placeholder — alongside `case_id`, `variant_hash` and `target_env` (see
+[Identity](#identity-0432-t1) for the members).
+
+Every `result.attachments` entry of a test is classified, policy-checked and — when it
+passes every check — uploaded as an artifact through the CLI's `uploadFile()` facade
+(`createAttachmentUploader` from `@evidgate/cli`, 04.2.4-T1). The `artifact_ids` the upload
+returns are written on that attempt's `test.finished` envelope. An attachment that is
+skipped or fails **never** loses the test result: the envelope is still written and a
+`run.log` warning says why (AC5).
+
+| Playwright attachment | Kind         | Media type                 |
+| --------------------- | ------------ | -------------------------- |
+| `trace*.zip`          | `trace`      | `application/zip`          |
+| `video*.(webm\|mp4)`  | `video`      | `video/webm` / `video/mp4` |
+| `*.(png\|jpeg\|jpg)`  | `screenshot` | `image/png` / `image/jpeg` |
+
+The extension decides the kind and the media type; the attachment's own `contentType` is
+only **checked** against that table, so a disagreement is a skip
+(`attachment_type_mismatch`), never a re-typed upload. `trace` and `video` also require
+their name prefix, so `report.zip` is unmapped rather than a trace. An extension the table
+does not name is skipped (`attachment_unmapped_type`) — nothing is ever uploaded under a
+guessed kind, because a guessed kind would file evidence under the wrong retention row. A
+body-only attachment (no path) is skipped as `attachment_no_path`: uploading it would mean
+buffering the whole attachment inside the test process.
+
+The reporter declares `supports.capture_control: false` (see
+[Capability carrier](#capability-carrier)), so a run produced by it is labelled
+`capture_uncontrolled` server-side: the uploads follow the project's artifact policy, not a
+run-create configuration document.
+
+### Allowed directories (AC6)
+
+Deny by default. The file's **real** path (symlinks resolved) must sit under one of:
+
+- every Playwright `outputDir` of the run;
+- `<rootDir>/test-results` (Playwright's default output directory);
+- every directory in the `attachment_dirs` option, or in `EVIDGATE_ATTACHMENT_DIRS`
+  (path-delimiter separated, read once in the constructor). Relative entries resolve
+  against `rootDir`, as Playwright resolves config paths.
+
+Anything else is refused before a byte is read (`attachment_path_refused`), and so is a
+Windows drive-letter or UNC path on another platform, a NUL in the path, a directory, FIFO
+or device, or a symlink planted inside a root after resolution. A path that does not exist
+or cannot be inspected is `attachment_unreadable`. `..` traversal is resolved away by the
+same rule as `packages/cli`'s `--file` guard, so the two cannot disagree. A refusal names
+the file's base name and a filtered reason — never the full path, never a root list.
+
+Two consequences of sharing that guard:
+
+- **A root that is itself a symbolic link is refused.** The CLI's `openUploadFile` inspects
+  the root's final component (a repo-planted `test-results -> $HOME` must not authorise a home
+  directory), and it resolves **every** root before it looks at the file — so one symlinked
+  `attachment_dirs` or `EVIDGATE_ATTACHMENT_DIRS` entry fails **every attachment upload of the
+  run** with `attachment_upload_failed` carrying `upload_path_refused`, not only the files
+  under that root. List the real directory; ancestor aliases such as macOS
+  `/tmp -> /private/tmp` are fine, because only the final component is inspected.
+- **A hard link is not a symbolic link and is accepted.** No code path treats one specially:
+  a hard link to a file inside an allowed root uploads normally, and the guard still refuses a
+  file that is not owned by the running user (`owned by another user`), so a link can never
+  bring in another user's file.
+
+### Size caps (AC6)
+
+Checked before anything is read or hashed, against the CLI's static per-kind defaults
+(`contracts/evidence/artifact-kind-defaults.v1.json`): trace 100 MiB, video 200 MiB,
+screenshot 10 MiB. Exactly at the cap passes, one byte over is skipped as
+`attachment_over_cap`. **The server's project policy wins**: its row may lower the cap, and
+`effective_max_bytes = min(row, default)` is applied by the server, so the local check is
+only an early refusal that costs no request.
+
+`.webm` videos: the static default for the video kind accepts only `video/mp4`, so a WebM
+recording (Playwright's own container) may be refused by the server with 422
+`media_type_not_allowed` unless the project's artifact policy for `video` lists
+`video/webm`. The refusal shows up as an `attachment_upload_failed` warning and the test
+result is kept; allowing WebM is a project-policy decision (06), not a reporter one.
+
+### Configuration, and what happens without it
+
+Uploads are enabled only while the CLI's configuration resolves from the environment — the
+same surface `evidgate artifacts upload` uses, listed under
+[Environment](#environment) (`EVIDGATE_API_URL`, `EVIDGATE_PROJECT`, one token source; all
+three are required). Two degradations, one warning each per run, both keeping every test
+result and the spool-only offline mode intact:
+
+- `attachments_unconfigured` — the configuration is missing or invalid, so every
+  attachment is skipped and no request is made.
+- `attachments_unavailable` — the lazy `import('@evidgate/cli')` failed (the CLI package is
+  not installed in the customer's workspace). The warning carries the code only, never a
+  stack or a path.
+
+`attachment_no_execution_key` is the third "cannot upload yet" case: the reporter's
+`execution_key` is still the server-owned placeholder (00 §7, 05.2.1-T3), and an upload
+under it would be an unplanned attempt the server must refuse, so the attachment is skipped
+instead of sending a request that cannot succeed.
+
+No token, no presigned URL and no attachment byte ever reaches a log line or the spool; a
+warning carries a base name, a code and a filtered reason.
+
+### Concurrency and the drain
+
+Uploads run off the event hot path, but the event batch does not. A test with **no**
+attachments takes the 04.3.1 path unchanged: one `test.finished`, its steps, one flush, all
+synchronous. A test **with** attachments holds its drafted `test.finished` and steps until
+that attempt's uploads settle, then appends them in one go — so the envelope can carry their
+`artifact_ids`; the callback itself returns once the uploads are queued. At most **two
+uploads are in flight per shard** (a fixed cap — the reporter lives inside the test process
+and must never starve the tests), in FIFO start order, and `onEnd` waits for them for at most
+`attachment_drain_deadline_ms` (default **120 000 ms**, NFR-04-1).
+
+The deadline stops the **wait**, not the uploads. An upload that has not started its PUT is
+**abandoned at its next checkpoint** — before the file is opened, after the digest (before the
+bearer or any request), before the journal and before the engine's first mint — and **not
+cancelled mid-PUT**: the stopped call rejects with the CLI's `upload_aborted`, but the drain has
+already settled that job as abandoned, so the attachment's record carries
+`attachment_drain_deadline` and the run emits the single summary warning. A PUT already in
+flight runs until its own deadline, `min(per-upload deadline, remaining drain time)`, and a
+queued one is never started. A late rejection is swallowed so it can never fail an otherwise
+green run. The deadline costs exactly **one** `attachment_drain_deadline` warning for the run,
+naming how many attempts were abandoned — never one warning per attachment.
+
+Held batches are appended in test-end order **among the attempts that carry attachments**,
+through one serialiser; `sequence` stays contiguous per producer (the 00 §9.4 order rule)
+because it is assigned at append time, never at draft time. An attempt **without**
+attachments does not wait for anything: it appends immediately. So the spool order can differ
+from the callback order, and a test without attachments may appear before an earlier test
+whose uploads were still in flight — the ordering guarantee is among held batches only.
+
+There is a hard bound on what one run considers: at most **50 attachments per test** and
+**1 000 per run** (`MAX_ATTACHMENTS_PER_TEST` / `MAX_ATTACHMENTS_PER_RUN`). The overflow is
+skipped, never uploaded, and summarised with **one** `attachment_limit` warning per run —
+so a suite that attaches a screenshot per step cannot flood the capped warning channel or
+the spool.
+
+### Warnings
+
+All attachment warnings are ordinary `run.log` warnings on the same `ext.warn` channel as
+the identity warnings (so they obey the same 100-per-run cap):
+
+| Code                                 | Meaning                                                                    |
+| ------------------------------------ | -------------------------------------------------------------------------- |
+| `attachment_unmapped_type`           | extension not in the AC4 table (or a trace/video without its prefix)       |
+| `attachment_no_path`                 | a body-only attachment; it is never buffered and never uploaded            |
+| `attachment_type_mismatch`           | the attachment's `contentType` disagrees with the table's media type       |
+| `attachment_over_cap`                | larger than the kind's static cap                                          |
+| `attachment_path_refused`            | outside the allow-listed roots, traversal, exotic path form, not a file    |
+| `attachment_unreadable`              | allowed path, but the file is missing or cannot be inspected               |
+| `attachment_upload_failed`           | the CLI's upload rejected (5xx, 422, network, …); the result is kept       |
+| `attachment_no_execution_key`        | the reporter's `execution_key` is still the placeholder (05.2.1-T3)        |
+| `attachments_unconfigured`           | the CLI configuration is missing/invalid; all attachments skipped, once    |
+| `attachments_unavailable`            | the lazy `import('@evidgate/cli')` failed; all attachments skipped, once   |
+| `attachment_drain_deadline`          | `onEnd`'s deadline gave up: ONE warning with the abandoned attempt count   |
+| `attachment_limit`                   | the 50-per-test / 1 000-per-run attachment bound was reached, once per run |
+| `attachment_sensitivity_not_carried` | an annotated attachment whose kind has no sensitive default (see below)    |
+
+The **per-attachment** codes are the six skip codes, `attachment_upload_failed` and
+`attachment_sensitivity_not_carried`: each is emitted once per attachment it describes, so a
+run that skips or annotates many attachments spends the 100-warning budget fast. Past the
+cap, the surplus becomes **one** `warnings_truncated` envelope at `onEnd` that names how many
+warnings were lost — so on a long run the per-attachment warnings you see are the first 100,
+not the whole story. The remaining codes are bounded by the number of tests and runs rather
+than by the attachment count: `attachment_no_execution_key` is once per test,
+`attachments_unconfigured`, `attachments_unavailable`, `attachment_drain_deadline`,
+`attachment_limit` and the `shards_*` notices are once per run.
+
+### Sensitivity (AC7) and its limit
+
+An attachment is `sensitive` when the suite or the case opts in with the annotation
+`evidgate.sensitive` (`test.annotations` or `result.annotations`; presence is the opt-in) or
+when its kind is sensitive by default — `trace` is (T57); video and screenshot are not. A
+more specific decision never downgrades a sensitive one.
+
+The wire has **no** sensitivity member (`createArtifactUploadUrl` has none; D-S56-Q7), so
+the attachment still uploads under the project's policy, and this is a stated limit rather
+than a silent one: when an **annotated** attachment's kind has no sensitive default, the
+reporter emits one `attachment_sensitivity_not_carried` warning naming only the attachment's
+base name and kind, and records the opt-in on the local attachment record. Carrying
+sensitivity on the wire is follow-up **F34**; until then, use a kind that is sensitive by
+default (a trace) for evidence that must be treated as personal data.
 
 ## Version guard
 
@@ -349,3 +579,12 @@ loader), `index`, `memory`, `reporter-boundary`, `reporter-hardening` (the revie
 flaky and fixme-on-retry through the reporter), `status-reporter` (unknown status warning,
 xfail, `interrupted` vs `timedOut`) and `reporter.e2e` (the real `playwright test` CLI on
 `test-fixtures/`, including an annotated test and a sidecar-mapped test).
+
+The 04.3.3-T2 attachment specs are `attach-map` (the AC4 kind table, the MIME check, the
+size-cap boundary), `paths` (the AC6 allow-list: traversal, symlinks, exotic path forms,
+non-regular files), `drain` (bounded concurrency, FIFO order, the deadline and its
+swallowed late rejections), `attach` (the AC5/AC7 wiring: `artifact_ids` on
+`test.finished`, a failed upload keeping the result, the sensitivity opt-in and its
+warning) and `cli-boundary` (this package's only runtime `import('@evidgate/cli')` is the
+one lazy load in `attach.ts`, every other file only takes types, and `packages/cli` never
+imports this adapter).
