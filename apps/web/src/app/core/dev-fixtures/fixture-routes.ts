@@ -9,8 +9,9 @@
 // fixture covers" visible instead of returning a plausible empty page.
 //
 // Resolution is method + path only, against the same-origin `/v1` path the app calls (ADR-0008
-// rule 1): the origin is irrelevant to a fixture, and query parameters never select a fixture — a
-// `cursor`, a `limit` or a filter changes nothing in the body the corpus holds. Templates such as
+// rule 1): the origin is irrelevant to a fixture, and a query parameter never selects a fixture by
+// itself — a `limit` or a filter changes nothing in the body the corpus holds, and a `cursor` only
+// answers the page a catalog row explicitly declares for it (note (4) below). Templates such as
 // `/projects/{p}/runs` match one non-empty path segment per `{name}`, so `/projects/p-1/runs`
 // resolves and `/projects/p-1/runs/r-1` does not.
 //
@@ -68,6 +69,18 @@
 // explicit selection of a document while the path id is what the app asked for; an id no
 // document holds changes nothing. Every other row stays id-agnostic: `{p}`, `{m}`, `{r}` and `{t}`
 // are matched against the template only.
+//
+// 09.7.1-F15 note (4) is the same selection one dimension over, on the QUERY string: `listCiBindings`
+// declares `cursorQueryParameter: 'cursor'`, and a request that carries a cursor some catalog row
+// declares for the page it holds is answered by THAT row. It closes residual (1) of the S86
+// low-notes row in `STATUS.md` ("the ci-binding list has no Playwright load-more case because
+// `ci-bindings-list-settings` ends with `next_cursor: null`; a cursor-page fixture seam is needed").
+// The rule above — "query parameters never select a fixture" — held because no corpus row declared
+// one; a cursor page is the one case where the query string *is* the identity of the answer, so the
+// corpus spells it out per page instead of the backend guessing. The order stays the id-keyed rule's:
+// a matching cursor wins over the variant, and a cursor no document declares (a stale one, or the
+// first request, which carries none) falls back to the variant exactly as before. Only one row
+// declares it; a second one needs its own pin in `fixture-contract.spec.ts`.
 
 import { API_BASE_PATH } from '../http/api-origin';
 
@@ -86,6 +99,15 @@ export interface FixtureRoute {
    * 3). Absent on every id-agnostic row, where the variant alone selects the document.
    */
   readonly idKeyParameter?: string;
+  /**
+   * The *query* parameter whose request value selects the answer among this operation's catalog
+   * documents — the same selection as `idKeyParameter`, one dimension over (09.7.1-F15 note 4).
+   * The value is compared against the `cursor` a catalog row declares for the page it holds, so a
+   * cursor-paged list shows a second page only for the cursor the previous page actually named.
+   * Absent on every route whose document does not depend on a query parameter — which is all of
+   * them but `listCiBindings`; the module comment holds the rule.
+   */
+  readonly cursorQueryParameter?: string;
 }
 
 /**
@@ -102,7 +124,12 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'listProjects', method: 'GET', path: '/orgs/{o}/projects' },
   { operationId: 'getProject', method: 'GET', path: '/projects/{p}' },
   { operationId: 'createCiBinding', method: 'POST', path: '/projects/{p}/ci-bindings' },
-  { operationId: 'listCiBindings', method: 'GET', path: '/projects/{p}/ci-bindings' },
+  {
+    operationId: 'listCiBindings',
+    method: 'GET',
+    path: '/projects/{p}/ci-bindings',
+    cursorQueryParameter: 'cursor',
+  },
   { operationId: 'createIngestToken', method: 'POST', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'listIngestTokens', method: 'GET', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'rotateIngestToken', method: 'POST', path: '/ingest-tokens/{t}/rotate' },
@@ -222,4 +249,24 @@ export function matchFixtureRoute(method: string, relativePath: string): Fixture
   return FIXTURE_ROUTES.find(
     (route) => route.method === normalisedMethod && pathMatches(route.path, requestSegments),
   );
+}
+
+/**
+ * The request value of query parameter `name` in `url`, or `null` when the URL carries none — the
+ * query-side counterpart of {@link pathParameter}, read for a route that declares a
+ * `cursorQueryParameter` (09.7.1-F15 note 4).
+ *
+ * It reads the URL, not `HttpRequest.params`: the SDK's fetch adapter hands `HttpClient` a URL that
+ * already holds the query string (`core/http/http-client-fetch.ts`), so `params` is empty even
+ * though the request carries a cursor. Reading both would mean two sources for one fact; the URL is
+ * the one the request is actually made with, and `urlWithParams` is exactly that URL.
+ */
+export function queryParameter(url: string, name: string): string | null {
+  const queryStart = url.indexOf('?');
+  if (queryStart < 0) {
+    return null;
+  }
+  const hashStart = url.indexOf('#', queryStart);
+  const search = hashStart < 0 ? url.slice(queryStart + 1) : url.slice(queryStart + 1, hashStart);
+  return new URLSearchParams(search).get(name);
 }

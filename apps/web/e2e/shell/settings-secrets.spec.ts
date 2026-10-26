@@ -6,9 +6,12 @@
 // or assert its headers. These cases observe the real consumer, SDK error mapping and UI only.
 // The static list remains unchanged after a rotate, so focus returns to the still-connected opener;
 // successor/fallback focus after a changed list and stale-response guards are Vitest's subject.
-// The corpus is six rows with next_cursor:null; this suite asserts the terminal pagination state,
-// not a cursor traversal the static corpus cannot supply. Reminder dates are pinned with a browser
-// clock, not compared to the machine's changing calendar. No source-text assertions or mock UI.
+// The token corpus is six rows with next_cursor:null; that suite asserts the terminal pagination
+// state. The CI-binding track is the one list whose corpus holds two cursor pages
+// (09.7.1-F15 note 4), so ITS Load more is clicked here in a real browser: first page, append,
+// terminal page, focus back on the section heading.
+// Reminder dates are pinned with a browser clock, not compared to the machine's changing calendar.
+// No source-text assertions or mock UI.
 // Project changes during a native modal are injected as a DOM change event: the modal correctly
 // makes the picker inert to users, but a scope-change event must still clear the reveal immediately.
 // All selectors use component/data hooks, IDs or roles; localized text is asserted, never selected.
@@ -19,6 +22,8 @@ import conflict from '../../../../fixtures/web-api/ingest-token-rotate-conflict/
 import rateLimited from '../../../../fixtures/web-api/ingest-token-rotate-rate-limited/input.json';
 import references from '../../../../fixtures/web-api/ingest-tokens-list-settings/input.json';
 import ciBindings from '../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
+import ciBindingsPageOne from '../../../../fixtures/web-api/ci-bindings-list-settings-page-1/input.json';
+import ciBindingsPageTwo from '../../../../fixtures/web-api/ci-bindings-list-settings-page-2/input.json';
 import {
   expectNoA11yViolations,
   LOCALES,
@@ -409,3 +414,72 @@ for (const locale of LOCALES) {
     await expectNoA11yViolations(page, `CI bindings expanded ${locale} 360px`);
   });
 }
+
+// 09.7.1-F15: the corpus now holds a real two-page cursor walk for `listCiBindings`, so the
+// section's Load more is exercised here in Chromium instead of only in the store and component
+// specs. `…-page-1` names the cursor the fixture backend answers with `…-page-2`, whose
+// `next_cursor` is null. The walk is locale-independent (the rows, the ids and the focus target are
+// the same in both), so it runs once, in `en`; the axe and 360 px cases above already cover `vi`.
+test('CI bindings Load more appends the cursor page and ends on the section heading (en)', async ({
+  page,
+}) => {
+  const firstPageRows = ciBindingsPageOne.body.items;
+  const secondPageRows = ciBindingsPageTwo.body.items;
+  expect(
+    ciBindingsPageOne.body.next_cursor,
+    'the first page must name a cursor, or the control never renders',
+  ).toBeTruthy();
+  expect(ciBindingsPageTwo.body.next_cursor, 'the second page must end the walk').toBeNull();
+
+  await visit(page, 'en', SETTINGS_ADMIN_GRANTS, [
+    '?fixture.variant.listCiBindings=settings-page-1',
+  ]);
+  const section = page.locator(CI_SECTION);
+  await expect(section.locator('section')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator(CI_ROWS)).toHaveCount(firstPageRows.length);
+  await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
+    firstPageRows.map((binding) => binding.repository_full_name),
+  );
+
+  // Keyboard: focus the control and press Enter, exactly as a keyboard user reaches it.
+  const more = section.getByRole('button', { name: 'Load more CI bindings' });
+  await expect(more).toHaveCount(1);
+  await more.focus();
+  await expect(more).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // The second page is appended, in order: page one is still there, page two follows it.
+  await expect(page.locator(CI_ROWS)).toHaveCount(firstPageRows.length + secondPageRows.length);
+  await expect(page.locator(`${CI_ROWS} h3`)).toHaveText(
+    [...firstPageRows, ...secondPageRows].map((binding) => binding.repository_full_name),
+  );
+
+  // No row appears twice: the appended page must add rows, not re-render one of them. A row's id is
+  // the one the header renders in its allowlist labels (`ci-label-<id>-refs`), so the ids read
+  // straight off the DOM are the ids the store de-duplicated by.
+  const rendered = await page.locator(CI_ROWS).evaluateAll((rows) =>
+    rows.map((row) => ({
+      name: row.querySelector('h3')?.textContent?.trim() ?? '',
+      labelIds: Array.from(row.querySelectorAll('dt[id]')).map(
+        (label) => label.getAttribute('id') ?? '',
+      ),
+    })),
+  );
+  const names = rendered.map((row) => row.name);
+  expect(new Set(names).size, 'a repository name was rendered twice').toBe(names.length);
+  const labelIds = rendered.flatMap((row) => row.labelIds);
+  expect(new Set(labelIds).size, 'a row id was rendered twice').toBe(labelIds.length);
+  for (const binding of [...firstPageRows, ...secondPageRows]) {
+    expect(labelIds, `${binding.id} is missing from the rendered rows`).toContain(
+      `ci-label-${binding.id}-refs`,
+    );
+  }
+
+  // The last page removes the control; focus must not be dropped to the document, so the component
+  // restores it to the section heading.
+  await expect(section.locator('[data-ci-load-more]')).toHaveCount(0);
+  await expect(section.locator('#ci-bindings-heading')).toBeFocused();
+  await expect(section.locator('section')).toHaveAttribute('aria-busy', 'false');
+  await expectNoBindingChallenge(page);
+  await expectNoA11yViolations(page, 'CI bindings after Load more en');
+});

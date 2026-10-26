@@ -28,6 +28,7 @@ import {
   getPolicyRevision,
   getRunDecision,
   isErrorEnvelope,
+  listCiBindings,
   listPermissions,
   listRoles,
   listRuns,
@@ -48,6 +49,7 @@ import {
   provideFixtureBackend,
 } from './fixture-backend';
 import { FIXTURE_CATALOG, type FixtureDocument } from './fixture-catalog';
+import { queryParameter } from './fixture-routes';
 import { FixtureToggles } from './fixture-toggles';
 
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
@@ -115,6 +117,29 @@ function revisionIdOf(document: FixtureDocument): string {
 
 /** An id no corpus document of `getPolicyRevision` carries: the fallback case's subject. */
 const UNKNOWN_REVISION_ID = '018f0000-0000-7000-8000-00000000a0ff';
+
+/**
+ * The `Storefront web` project both paged CI-binding fixtures belong to: the project the Secrets
+ * tab reads (`018f0000-0000-7000-8000-000000000011`, as `ingest-tokens-list-settings`).
+ */
+const BINDINGS_PROJECT = '018f0000-0000-7000-8000-000000000011';
+
+/** A cursor no catalog row declares: the cursor fallback case's subject. */
+const UNKNOWN_CURSOR = '08df2cdfd69f6800-018f0000-0000-7000-8000-0000000000ff';
+
+/**
+ * The `next_cursor` a list page names — the cursor the next `Load more` follows — or `null` when the
+ * page ends the walk. Read from the document, never hard-coded, so a fixture edit cannot make the
+ * cursor cases below assert something else.
+ */
+function nextCursorOf(document: FixtureDocument): string | null {
+  const body = document.body as { next_cursor?: string | null } | undefined;
+  const cursor = body?.next_cursor;
+  if (cursor !== null && typeof cursor !== 'string') {
+    throw new Error('the document carries no list page `next_cursor`');
+  }
+  return cursor;
+}
 
 describe('fixture backend (09.1.1-T12.1)', () => {
   let gateway: ApiGateway;
@@ -246,6 +271,67 @@ describe('fixture backend (09.1.1-T12.1)', () => {
     expect(answered.map((event) => event.headers.get(FIXTURE_RESPONSE_HEADER))).toEqual([
       'policy-revision-head',
       'policy-revision-previous',
+    ]);
+  });
+
+  // 09.7.1-F15 note (4): `listCiBindings` is the one CURSOR-KEYED route. The first request carries
+  // no cursor and gets the first page by its variant; the cursor that page names gets the second
+  // page; the second page ends the walk. That is the exact sequence the Secrets tab's Load more
+  // performs, which is why a browser can now exercise it against the corpus.
+  it('answers the page the request cursor names, so Load more reaches the last page (09.7.1-F15)', async () => {
+    toggles.setVariant('listCiBindings', 'settings-page-1');
+    const first = documentOf('ci-bindings-list-settings-page-1');
+    const second = documentOf('ci-bindings-list-settings-page-2');
+    const cursor = nextCursorOf(first);
+    expect(
+      cursor,
+      'the first page names no cursor, so Load more has nothing to follow',
+    ).toBeTruthy();
+    expect(nextCursorOf(second), 'the second page must end the walk').toBeNull();
+
+    const pageOne = await gateway.call((client) =>
+      listCiBindings({ client, path: { p: BINDINGS_PROJECT }, query: { limit: 200 } }),
+    );
+    const pageTwo = await gateway.call((client) =>
+      listCiBindings({
+        client,
+        path: { p: BINDINGS_PROJECT },
+        query: { limit: 200, ...(cursor === null ? {} : { cursor }) },
+      }),
+    );
+
+    expect(pageOne).toEqual(first.body);
+    expect(pageTwo).toEqual(second.body);
+    expect(pageTwo).not.toEqual(pageOne);
+    // The cursor travels in the URL the SDK built (the adapter forwards it to `HttpClient`
+    // unchanged), which is what `queryParameter` reads — `HttpRequest.params` is empty here.
+    expect(queryParameter(handled.at(0)?.url ?? '', 'cursor')).toBeNull();
+    expect(queryParameter(handled.at(1)?.url ?? '', 'cursor')).toBe(cursor);
+    const answered = events.filter((event) => event instanceof HttpResponse);
+    expect(answered.map((event) => event.headers.get(FIXTURE_RESPONSE_HEADER))).toEqual([
+      'ci-bindings-list-settings-page-1',
+      'ci-bindings-list-settings-page-2',
+    ]);
+  });
+
+  // A cursor no page declares is not a refusal: the variant answers, exactly as an unknown revision
+  // id does, so a stale cursor shows the review page instead of a 501 no UI state expects.
+  it('keeps the variant selection for a cursor no page declares (09.7.1-F15)', async () => {
+    toggles.setVariant('listCiBindings', 'settings-page-1');
+    const first = documentOf('ci-bindings-list-settings-page-1');
+
+    const stale = await gateway.call((client) =>
+      listCiBindings({
+        client,
+        path: { p: BINDINGS_PROJECT },
+        query: { limit: 200, cursor: UNKNOWN_CURSOR },
+      }),
+    );
+
+    expect(stale).toEqual(first.body);
+    const answered = events.filter((event) => event instanceof HttpResponse);
+    expect(answered.map((event) => event.headers.get(FIXTURE_RESPONSE_HEADER))).toEqual([
+      'ci-bindings-list-settings-page-1',
     ]);
   });
 

@@ -29,6 +29,8 @@ import ciBindingsListOnboardingRun from '../../../../../../fixtures/web-api/ci-b
 import ciBindingsListSettings from '../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
 import ciBindingsListSettingsEmpty from '../../../../../../fixtures/web-api/ci-bindings-list-settings-empty/input.json';
 import ciBindingsListSettingsForbidden from '../../../../../../fixtures/web-api/ci-bindings-list-settings-forbidden/input.json';
+import ciBindingsListSettingsPage1 from '../../../../../../fixtures/web-api/ci-bindings-list-settings-page-1/input.json';
+import ciBindingsListSettingsPage2 from '../../../../../../fixtures/web-api/ci-bindings-list-settings-page-2/input.json';
 import ingestTokenCreate from '../../../../../../fixtures/web-api/ingest-token-create/input.json';
 import ingestTokenRotate from '../../../../../../fixtures/web-api/ingest-token-rotate/input.json';
 import ingestTokenRotateConflict from '../../../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
@@ -139,6 +141,23 @@ export interface FixtureDocument {
   body?: unknown;
 }
 /* eslint-enable evidgate/no-hand-written-wire-dto */
+
+/**
+ * One catalog row: the corpus directory name, the document it holds, and — for a route that
+ * declares a `cursorQueryParameter` (`fixture-routes.ts`, 09.7.1-F15 note 4) — the request cursor
+ * that document answers.
+ *
+ * `cursor` is a catalog fact, not a corpus field: `input.json` is the 01.6.1-T3 file format shared
+ * with the .NET loader and holds a *response*, while which request a page answers is the dev
+ * backend's business. A row without one answers a request that carries no cursor, which is why the
+ * first page of a paged list needs nothing but its variant.
+ */
+export interface FixtureCatalogRow {
+  readonly name: string;
+  readonly document: FixtureDocument;
+  /** The `cursor` query value this page answers; absent on the first page and every unpaged row. */
+  readonly cursor?: string;
+}
 
 /**
  * Every document the dev backend can answer, by fixture directory name. Alphabetical by name so a
@@ -432,11 +451,22 @@ export interface FixtureDocument {
  * the store renders as its own `forbidden` phase. The three `X-Request-Id` values (`…c5`–`…c7`) are
  * distinct from the older `ci-bindings-list*` rows, so a page that echoes one can only echo the
  * answer it actually received. `ci-bindings-list` and every `onboarding-*` row stay byte-identical.
+ *
+ * 09.7.1-F15 note (4) adds the two pages of that same section's cursor walk, because every document
+ * above ends with `next_cursor: null` and a list that never names another page cannot exercise the
+ * section's Load more in a browser at all:
+ * `ci-bindings-list-settings-page-1` (`=settings-page-1`) is the first page — three bindings, one per
+ * verification state, and a `next_cursor` in the `<utc ticks in hex>-<uuid>` form `KeysetCursor`
+ * issues (`runs-list` spells it the same way) — and `ci-bindings-list-settings-page-2`
+ * (`=settings-page-2`) is the second, two further bindings with `next_cursor: null`, the terminal
+ * page. The page-2 row is the one catalog row carrying a `cursor`, and its value is exactly the
+ * `next_cursor` page 1 names, so the backend answers the cursor the screen actually got — not a
+ * cursor a test made up. Both pages sit on the `Storefront web` project, their five `id`s are
+ * disjoint (the store de-duplicates by `id`, so a repeated one would be silently dropped and the
+ * second page would look empty), and the two `X-Request-Id` values (`…c8`, `…c9`) are distinct from
+ * the three above.
  */
-export const FIXTURE_CATALOG: readonly {
-  readonly name: string;
-  readonly document: FixtureDocument;
-}[] = [
+export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'ci-binding-create', document: ciBindingCreate },
   { name: 'ci-binding-create-conflict', document: ciBindingCreateConflict },
   { name: 'audit-list', document: auditList },
@@ -449,6 +479,12 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'ci-bindings-list-settings', document: ciBindingsListSettings },
   { name: 'ci-bindings-list-settings-empty', document: ciBindingsListSettingsEmpty },
   { name: 'ci-bindings-list-settings-forbidden', document: ciBindingsListSettingsForbidden },
+  { name: 'ci-bindings-list-settings-page-1', document: ciBindingsListSettingsPage1 },
+  {
+    name: 'ci-bindings-list-settings-page-2',
+    document: ciBindingsListSettingsPage2,
+    cursor: '08df2cdfd69f6800-018f0000-0000-7000-8000-000000000063',
+  },
   { name: 'ingest-token-create', document: ingestTokenCreate },
   { name: 'ingest-token-rotate', document: ingestTokenRotate },
   { name: 'ingest-token-rotate-conflict', document: ingestTokenRotateConflict },
@@ -580,7 +616,7 @@ export const FIXTURE_CATALOG: readonly {
   { name: 'runs-list-onboarding-run', document: runsListOnboardingRun },
 ];
 
-/** One catalog entry: the corpus directory name and the document it holds. */
+/** One catalog entry: the corpus directory name, the document it holds and the cursor it answers. */
 export type FixtureEntry = (typeof FIXTURE_CATALOG)[number];
 
 /**
@@ -618,5 +654,21 @@ function documentId(document: FixtureDocument): string | undefined {
 export function findFixtureEntryById(operationId: string, id: string): FixtureEntry | undefined {
   return FIXTURE_CATALOG.find(
     (entry) => entry.document.operation_id === operationId && documentId(entry.document) === id,
+  );
+}
+
+/**
+ * The entry of `operationId` whose catalog row declares `cursor` — the cursor-keyed selection
+ * `fixture-backend.ts` makes for a route that declares a `cursorQueryParameter`, ahead of the variant
+ * (09.7.1-F15 note 4). `undefined` means no page of that operation answers this cursor — the first
+ * request of a list carries none at all — and the caller then falls back to the variant it would
+ * have used anyway.
+ */
+export function findFixtureEntryByCursor(
+  operationId: string,
+  cursor: string,
+): FixtureEntry | undefined {
+  return FIXTURE_CATALOG.find(
+    (entry) => entry.document.operation_id === operationId && entry.cursor === cursor,
   );
 }

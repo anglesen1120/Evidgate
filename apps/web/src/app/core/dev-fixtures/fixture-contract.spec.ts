@@ -179,7 +179,28 @@ interface FixtureRouteShape {
   readonly path: string;
   /** 09.7.1-F15 note 3: the `{name}` parameter the answer is keyed by, where a route declares one. */
   readonly idKeyParameter?: string;
+  /** 09.7.1-F15 note 4: the query parameter whose value selects the page, where a route declares one. */
+  readonly cursorQueryParameter?: string;
 }
+
+/**
+ * The `CiBindingView` members the two paged CI-binding fixtures are asserted through
+ * (09.7.1-F15 note 4): the id the store de-duplicates by, the project the page belongs to, the
+ * verification state, and the creation instant the keyset cursor is derived from.
+ *
+ * The `evidgate/no-hand-written-wire-dto` exemption is `FixtureDocumentShape`'s above: these are
+ * `input.json` members, read to prove the two corpus pages continue one walk, not a body the app
+ * reads. The row type belongs to `@evidgate/sdk`; nothing here is imported by production code.
+ */
+/* eslint-disable evidgate/no-hand-written-wire-dto -- the corpus members of a fixture page (see above). */
+interface CiBindingRowShape {
+  readonly id: string;
+  readonly project_id: string;
+  readonly status: string;
+  readonly activated_at?: string | null;
+  readonly created_at: string;
+}
+/* eslint-enable evidgate/no-hand-written-wire-dto */
 
 /**
  * The repository root. `ng test` runs with `apps/web` as its working directory (the same fact
@@ -643,6 +664,20 @@ function corpusDocument(name: string): FixtureDocumentShape {
 }
 
 /**
+ * The .NET `DateTime` ticks of an RFC 3339 UTC instant, written the way the server's `KeysetCursor`
+ * writes a cursor (16 lower-case hex digits, zero-padded), so the corpus page can be proven to name
+ * a cursor the server could actually have issued rather than a random opaque string.
+ */
+function keysetTicks(instant: string): string {
+  const unixMs = Date.parse(instant);
+  if (Number.isNaN(unixMs)) {
+    throw new Error(`'${instant}' is not an RFC 3339 instant a cursor can be derived from`);
+  }
+  const ticks = (BigInt(unixMs) / 1_000n) * 10_000_000n + 621_355_968_000_000_000n;
+  return ticks.toString(16).padStart(16, '0');
+}
+
+/**
  * The `runs-list` fixture document — the subject of every negative control. `readDocument`
  * re-parses `input.json` on every call, so a document handed out here is never shared.
  */
@@ -899,6 +934,110 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
         `the ids '${route.operationId}' can answer differ from the revision ids the corpus page offers, so a page load would fall back to the variant`,
       ).toEqual(pageIds.map(String).sort());
     }
+  });
+
+  it('pins the cursor-keyed CI-binding walk to the two corpus pages (09.7.1-F15)', () => {
+    // 09.7.1-F15 note (4): `listCiBindings` answers the catalog row whose `cursor` equals the
+    // request's cursor, so the Secrets tab's Load more reaches its terminal page in a browser
+    // instead of every fixture ending at `next_cursor: null`. That is only sound when (a) exactly
+    // one row is cursor-keyed and it names the query parameter the contract's list read takes, (b)
+    // exactly one catalog row declares a cursor, (c) the page it answers continues the page that
+    // named it — same project, disjoint ids, a cursor the server could have issued — and (d) it ends
+    // the walk, because a second cursor with no document behind it would leave the control on screen.
+    const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.cursorQueryParameter !== undefined);
+    expect(
+      keyed.map((route) => route.operationId),
+      'only listCiBindings is cursor-keyed; a second cursor-keyed row needs its own pin here',
+    ).toEqual(['listCiBindings']);
+    for (const route of keyed) {
+      expect(
+        route.cursorQueryParameter,
+        `'${route.operationId}' declares an empty cursorQueryParameter`,
+      ).toBe('cursor');
+    }
+
+    const paged = FIXTURE_CATALOG.filter((entry) => entry.cursor !== undefined);
+    expect(
+      paged.map((entry) => entry.name),
+      'exactly one catalog row declares the request cursor it answers',
+    ).toEqual(['ci-bindings-list-settings-page-2']);
+    const secondPageRow = paged[0];
+    if (secondPageRow === undefined || secondPageRow.cursor === undefined) {
+      throw new Error(
+        'the second CI-binding page declares no cursor, so Load more cannot answer it',
+      );
+    }
+    const cursor = secondPageRow.cursor;
+
+    const first = corpusDocument('ci-bindings-list-settings-page-1');
+    const second = corpusDocument('ci-bindings-list-settings-page-2');
+    expect([first.operation_id, first.variant, first.status]).toEqual([
+      'listCiBindings',
+      'settings-page-1',
+      200,
+    ]);
+    expect([second.operation_id, second.variant, second.status]).toEqual([
+      'listCiBindings',
+      'settings-page-2',
+      200,
+    ]);
+
+    const firstBody = first.body as {
+      items: CiBindingRowShape[];
+      next_cursor: string | null;
+    };
+    const secondBody = second.body as {
+      items: CiBindingRowShape[];
+      next_cursor: string | null;
+    };
+    expect(firstBody.items.length, 'the first page holds no binding to click past').toBeGreaterThan(
+      0,
+    );
+    expect(secondBody.items.length, 'the second page holds no binding to append').toBeGreaterThan(
+      0,
+    );
+    expect(
+      firstBody.next_cursor,
+      'the first page must name exactly the cursor the backend answers, or Load more 501s',
+    ).toBe(cursor);
+    expect(secondBody.next_cursor, 'the last page must end the walk').toBeNull();
+
+    // A real keyset cursor over `(created_at, id)` of the row it follows — `<utc ticks>-<uuid>` —
+    // not an opaque string a test made up.
+    const lastOfFirstPage = firstBody.items[firstBody.items.length - 1];
+    if (lastOfFirstPage === undefined) {
+      throw new Error('the first CI-binding page is empty');
+    }
+    expect(cursor, 'the cursor must be the keyset position of the row it follows').toBe(
+      `${keysetTicks(lastOfFirstPage.created_at)}-${lastOfFirstPage.id}`,
+    );
+
+    const rows = [...firstBody.items, ...secondBody.items];
+    const ids = rows.map((item) => item.id);
+    expect(
+      new Set(ids).size,
+      'a binding id appears on both pages, so the store would drop the second copy silently',
+    ).toBe(ids.length);
+    expect(
+      [...new Set(rows.map((item) => item.project_id))],
+      'both pages must belong to the Storefront web project the tab read',
+    ).toEqual([STOREFRONT_PROJECT_ID]);
+    expect(
+      new Set(firstBody.items.map((item) => item.status)),
+      'the first page must still cover every verification state',
+    ).toEqual(new Set(['active', 'pending_verification', 'disabled']));
+    // An activation can never precede the binding's creation: the OIDC handshake that activates a
+    // pending binding happens after it exists. Same-second RFC 3339 UTC instants compare as strings.
+    for (const row of rows) {
+      if (row.activated_at === undefined || row.activated_at === null) {
+        continue;
+      }
+      expect(
+        row.activated_at >= row.created_at,
+        `${row.id} is activated at ${row.activated_at}, before it was created at ${row.created_at}`,
+      ).toBe(true);
+    }
+    expect(oneTimeSecretMembers(second.body)).toEqual([]);
   });
 
   it('pins at most one ok variant per operation and the 403 and 412 error fixtures (AC10)', () => {
