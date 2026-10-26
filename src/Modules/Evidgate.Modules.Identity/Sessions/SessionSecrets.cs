@@ -158,8 +158,8 @@ internal sealed class SessionOptionsValidator : IValidateOptions<SessionOptions>
 
         var failures = new List<string>();
 
-        CheckPepper(failures, "Pepper", options.Pepper);
-        CheckPepper(failures, "PreviousPepper", options.PreviousPepper);
+        CheckPepper(failures, nameof(SessionOptions.Pepper), options.Pepper);
+        CheckPepper(failures, nameof(SessionOptions.PreviousPepper), options.PreviousPepper);
 
         if (options.PepperVersion < 1)
         {
