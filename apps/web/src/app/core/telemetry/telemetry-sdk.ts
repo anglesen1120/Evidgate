@@ -42,11 +42,13 @@ import { ScrubbingSpanExporter } from './scrubbing-exporter';
 import type { TelemetryConfig } from './telemetry-config';
 import {
   API_SPAN_NAME,
+  CLIENT_EVENT_SPAN_NAME,
   ERROR_SPAN_NAME,
   INSTRUMENTATION_NAME,
   ROUTE_SPAN_NAME,
   VITAL_SPAN_NAME,
 } from './telemetry-names';
+import type { TelemetryEventName } from './telemetry-names';
 import { UNKNOWN_ROUTE } from './route-template';
 
 /** `service.name` of every span this app exports. */
@@ -125,6 +127,12 @@ export interface TelemetryRuntime {
   startApiCall(input: { method: string; route: string }): ApiCall;
   /** Records a `client.error` span: source, type and ids; no message text, ever. */
   reportError(report: ErrorReport): void;
+  /**
+   * Records one named client event as a zero-duration `client.event` span: the current route and
+   * the locale, plus one attribute-free span event with that name. The name is the whole payload
+   * (plan 09.7.1 §8, ids only), so nothing about the thing that happened is recorded here.
+   */
+  reportEvent(name: TelemetryEventName): void;
   /** Emits one `web_vital` span per metric that changed since the last flush. */
   flushVitals(): void;
   /**
@@ -420,6 +428,27 @@ export function startTelemetrySdk(
     span.end();
   }
 
+  /**
+   * A named client event: a zero-duration `client.event` span carrying the current route and the
+   * locale, and one attribute-free span event with that name. The name is the whole payload — no
+   * row count, no id, no filter value — and a point-in-time event has no duration, so start and
+   * end are the same instant.
+   */
+  function reportEvent(name: TelemetryEventName): void {
+    const at = Date.now();
+    const span = tracer.startSpan(
+      CLIENT_EVENT_SPAN_NAME,
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: { ...localeAttributes(options.locale), 'evidgate.route': currentRoute },
+        startTime: at,
+      },
+      parentContext(),
+    );
+    span.addEvent(name);
+    span.end(at);
+  }
+
   function recordVital(metric: Metric): void {
     const name = metric.name;
     if (name !== 'LCP' && name !== 'INP' && name !== 'CLS') {
@@ -505,6 +534,7 @@ export function startTelemetrySdk(
     setRoute,
     startApiCall,
     reportError,
+    reportEvent,
     flushVitals,
     forceFlush,
     disableExport,

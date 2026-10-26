@@ -28,6 +28,8 @@ import type { AuditEntryDto, AuditListResponse } from '@evidgate/sdk';
 
 import { AuditDataService, type AuditListQuery } from '../../../core/data/audit-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
+import { AUDIT_EXPORT_CAPPED_EVENT } from '../../../core/telemetry/telemetry-names';
+import { TelemetryService } from '../../../core/telemetry/telemetry.service';
 import {
   AUDIT_EXPORT_MAX_PAGES,
   AUDIT_MAX_PAGES,
@@ -475,6 +477,7 @@ describe('AuditStore (09.7.1-T6)', () => {
     it('caps a server that never ends at the page bound, without failing', async () => {
       data.all = rows(1_000);
       data.pageSizeOverride = 1;
+      const reported = vi.spyOn(TestBed.inject(TelemetryService), 'reportEvent');
 
       const csv = await store.exportCsv('o-1');
 
@@ -487,6 +490,8 @@ describe('AuditStore (09.7.1-T6)', () => {
         rows: AUDIT_EXPORT_MAX_PAGES,
         capped: true,
       });
+      // A cap hit is a cap hit: the page bound logs the same one event, with the name alone.
+      expect(reported.mock.calls).toEqual([[AUDIT_EXPORT_CAPPED_EVENT]]);
     });
 
     it('ignores a second export while one is running, and resets to idle', async () => {
@@ -504,6 +509,43 @@ describe('AuditStore (09.7.1-T6)', () => {
 
       store.resetExport();
       expect(store.exportState()).toEqual({ phase: 'idle' });
+    });
+
+    it('records one audit.export_capped event when the export is capped, and nothing else', async () => {
+      data.all = rows(15_000);
+      const reported = vi.spyOn(TestBed.inject(TelemetryService), 'reportEvent');
+
+      await store.exportCsv('o-1');
+
+      expect(store.exportState()).toEqual({ phase: 'done', rows: 10_000, capped: true });
+      // One event, one argument: the name is the whole payload — no row count, no org id, no
+      // filter value (plan §8, ids only; the event itself carries no attribute).
+      expect(reported.mock.calls).toEqual([[AUDIT_EXPORT_CAPPED_EVENT]]);
+      expect(JSON.stringify(reported.mock.calls)).not.toContain('10000');
+      expect(JSON.stringify(reported.mock.calls)).not.toContain('o-1');
+    });
+
+    it('records no event when the export is not capped', async () => {
+      data.all = rows(3_000);
+      const reported = vi.spyOn(TestBed.inject(TelemetryService), 'reportEvent');
+
+      await store.exportCsv('o-1');
+
+      expect(store.exportState()).toEqual({ phase: 'done', rows: 3_000, capped: false });
+      expect(reported).not.toHaveBeenCalled();
+    });
+
+    it('records no event for an export the page already dropped', async () => {
+      data.all = rows(15_000);
+      data.manual = true;
+      const reported = vi.spyOn(TestBed.inject(TelemetryService), 'reportEvent');
+
+      const running = store.exportCsv('o-1');
+      store.resetExport();
+      data.pending[0]?.resolve({ items: rows(4), next_cursor: 'more' });
+
+      expect(await running).toBeNull();
+      expect(reported).not.toHaveBeenCalled();
     });
   });
 

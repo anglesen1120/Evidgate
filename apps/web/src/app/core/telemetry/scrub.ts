@@ -4,9 +4,9 @@
 // One layer, not two, and no regular-expression text scrubber anywhere in the telemetry path.
 // That is a property of the design, not a gap:
 // - a span *name* is admitted only when it is one of the fixed constants of `telemetry-names.ts`
-//   (`SPAN_NAMES`), and an event only when its name is in `EVENT_NAMES` (empty today), so a name
-//   that carries content — a URL, a message, an e-mail address — is dropped rather than rewritten
-//   (`scrubbing-exporter.ts`);
+//   (`SPAN_NAMES`), and an event only when its name is in `EVENT_NAMES` (one name:
+//   `audit.export_capped`), so a name that carries content — a URL, a message, an e-mail address —
+//   is dropped rather than rewritten (`scrubbing-exporter.ts`);
 // - D-S69-Q2 removed `error.message`, so no attribute carries free text at all: a client error
 //   reports its kind, code, status and retryable flag and nothing else;
 // - what remains is a closed set of structured values, which is what this file filters: an
