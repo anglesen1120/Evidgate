@@ -14,6 +14,10 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Authoring.Contracts\Evidgate.Modules.Authoring.Contracts.csproj" />
+    <!-- 13.1.1-T5.2: the XLSX import/export reads its workbook parts through the 06.3.1 parser profile
+         (IParsing.ReadArchiveEntries), the sanctioned module-to-module route: exactly the .Contracts
+         project, never another module's implementation (00 §5.5 C7, Architecture.Tests). -->
+    <ProjectReference Include="..\Evidgate.Modules.Evidence.Contracts\Evidgate.Modules.Evidence.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <!-- 13.1.1-T1.4: the read model runs on Dapper (C1) and the write model on EF Core, both through this block. -->
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />

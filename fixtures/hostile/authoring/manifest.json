@@ -1,0 +1,44 @@
+[
+  {
+    "file": "xlsx_control_valid.xlsx",
+    "guard": "xlsx-carrier — the positive control: a well-formed workbook of inline strings is accepted and yields its rows",
+    "driven_through": "XlsxFormat.Read",
+    "expected_outcome": "accepted"
+  },
+  {
+    "file": "xlsx_ratio_bomb.xlsx",
+    "guard": "xlsx-zip-ratio — one worksheet entry of 2 MiB of zeros expands about 1 000:1, over the 20:1 cap",
+    "driven_through": "XlsxFormat.Read",
+    "expected_reason": "zip_ratio_exceeded"
+  },
+  {
+    "file": "xlsx_part_size_caps.xlsx",
+    "guard": "xlsx-zip-size — one selected worksheet entry expands to 33 MiB, over the 32 MiB single-part cap, at about 7:1 so only the size guard can fire",
+    "driven_through": "XlsxFormat.Read",
+    "expected_reason": "zip_size_exceeded"
+  },
+  {
+    "file": "xlsx_entry_flood.xlsx",
+    "guard": "xlsx-zip-entries — the archive declares 1 001 entries, over the 1 000-entry cap",
+    "driven_through": "XlsxFormat.Read",
+    "expected_reason": "zip_entries_exceeded"
+  },
+  {
+    "file": "xlsx_sheet_dtd.xlsx",
+    "guard": "xlsx-xml-dtd — the worksheet part declares a DOCTYPE with an external entity, which the reader profile prohibits",
+    "driven_through": "XlsxFormat.Read",
+    "expected_reason": "dtd_prohibited"
+  },
+  {
+    "file": "xlsx_macro_part.xlsx",
+    "guard": "xlsx-macro — the package carries xl/vbaProject.bin and a macro-enabled workbook content type, refused before a sheet is parsed",
+    "driven_through": "XlsxFormat.Read",
+    "expected_reason": "macro_prohibited"
+  },
+  {
+    "file": "xlsx_traversal_entry.xlsx",
+    "guard": "xlsx-zip-entry-name — an entry is named ../evil.xml, so no normalized name can leave the archive root",
+    "driven_through": "XlsxFormat.Read",
+    "expected_reason": "unsupported_format"
+  }
+]

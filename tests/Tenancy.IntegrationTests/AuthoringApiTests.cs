@@ -46,6 +46,10 @@ public sealed class AuthoringApiTests
 
         public string Versions => $"/v1/projects/{Project}/authoring/versions";
 
+        public string Import => $"/v1/projects/{Project}/authoring/import";
+
+        public string Export => $"/v1/projects/{Project}/authoring/export";
+
         public string Version(Guid v) => $"{Versions}/{v:D}";
 
         public async ValueTask DisposeAsync()
@@ -89,9 +93,9 @@ public sealed class AuthoringApiTests
     }
 
     /// <summary>
-    /// 13.1.1 §5/AC10: every one of the twenty-two authoring routes asks for the permission §5 assigns it. A member
+    /// 13.1.1 §5/AC10: every one of the twenty-four authoring routes asks for the permission §5 assigns it. A member
     /// holding only the <c>viewer</c> role (which carries <c>authoring:read</c>, never <c>authoring:write</c>) is refused
-    /// 403 <c>forbidden</c> on the sixteen writes and served 200 on the six reads; a member holding no role at all is
+    /// 403 <c>forbidden</c> on the seventeen writes and served 200 on the seven reads; a member holding no role at all is
     /// refused 403 on a read too, so no route is ungated; the founder, who holds the permission, is never refused. The
     /// refused writes leave no entity row, no version row and no audit row behind.
     /// </summary>
@@ -155,10 +159,33 @@ public sealed class AuthoringApiTests
             new("list versions", HttpMethod.Get, world.Versions),
             new("version detail", HttpMethod.Get, world.Version(version)),
             new("restore version", HttpMethod.Post, $"{world.Version(version)}/restore"),
+
+            // 13.1.1-T5: route 25, the import/export pair. The import is a dry run of a valid one-row document, so the
+            // founder's control request writes nothing while still proving the permission (a refused import must reach
+            // the C2 stage, which is why the file has to be one the readers accept).
+            new(
+                "import",
+                HttpMethod.Post,
+                $"{world.Import}?format=json&dry_run=true",
+                new
+                {
+                    format = "authoring-import",
+                    version = 1,
+                    rows = new object[]
+                    {
+                        new { kind = "node", key = "n1", node_kind = "module", title = "Imported module" },
+                    },
+                }),
+            // The export is read as JSON: the table's helper parses every body as a document, and the permission, the
+            // route and the projection are the same three formats' (CSV and XLSX differ only in the writer).
+            new(
+                "export",
+                HttpMethod.Get,
+                $"{world.Export}?format=json"),
         };
 
-        routes.Count.ShouldBe(22, "13.1.1 §5 numbers twenty-two routes for this task");
-        routes.Count(route => route.IsWrite).ShouldBe(16, "§5 has sixteen write routes and six reads in this task");
+        routes.Count.ShouldBe(24, "13.1.1 §5 numbers twenty-four routes once 13.1.1-T5 adds route 25");
+        routes.Count(route => route.IsWrite).ShouldBe(17, "§5 has seventeen write routes and seven reads");
 
         var viewer = await AddMemberAsync(world, "viewer");
         var stranger = await AddMemberAsync(world, roleCode: null);

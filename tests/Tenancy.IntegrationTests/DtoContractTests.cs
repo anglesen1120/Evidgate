@@ -242,6 +242,32 @@ public sealed class DtoContractTests
             .ShouldNotContain("\"data\"", Case.Sensitive);
     }
 
+    /// <summary>
+    /// 13.1.1-T5: <c>ImportResponse</c> (route 25's 200 body) pins the <c>ImportResponse</c>, <c>ImportCountsDto</c> and
+    /// <c>ImportRowDto</c> schemas — <c>batch_id</c>, <c>counts</c> with its four outcomes, and one row per input row
+    /// carrying only its position, key, kind, outcome and code (never a title, a step or a refusal's cell text).
+    /// </summary>
+    [Fact]
+    public void AuthoringImport_Dto_Matches_The_OpenApi_Schemas()
+    {
+        JsonSerializer.Serialize(
+                new ImportResponse(
+                    Guid.Parse("018f0000-0000-7000-8000-000000000010"),
+                    new ImportCountsDto(2, 1, 0, 3),
+                    [new ImportRowDto(1, "n1", "node", "create", null)]),
+                SnakeCase)
+            .ShouldBe(
+                """
+                {"batch_id":"018f0000-0000-7000-8000-000000000010","counts":{"created":2,"updated":1,"restored":0,"unchanged":3},"rows":[{"index":1,"key":"n1","kind":"node","outcome":"create","code":null}]}
+                """);
+
+        // A dry run and an all-unchanged file carry no batch: the member is present and null, never absent.
+        JsonSerializer.Serialize(
+                new ImportResponse(null, new ImportCountsDto(0, 0, 0, 1), [new ImportRowDto(1, "c1", "case", "unchanged", "CHEC-101")]),
+                SnakeCase)
+            .ShouldContain("{\"batch_id\":null,", Case.Sensitive);
+    }
+
     internal static JsonSerializerOptions SnakeCase { get; } =
         new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 }

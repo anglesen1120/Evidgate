@@ -1,0 +1,58 @@
+{
+  "format": "authoring-import",
+  "version": 1,
+  "rows": [
+    {
+      "kind": "node",
+      "key": "n1",
+      "node_kind": "module",
+      "title": "Shop",
+      "position": 0
+    },
+    {
+      "kind": "node",
+      "key": "n2",
+      "parent_key": "n1",
+      "node_kind": "feature",
+      "title": "Checkout",
+      "position": 0
+    },
+    {
+      "kind": "node",
+      "key": "n3",
+      "parent_key": "n2",
+      "node_kind": "category",
+      "title": "Payment",
+      "position": 0
+    },
+    {
+      "kind": "item",
+      "key": "i1",
+      "parent_key": "n3",
+      "title": "Pay with a card",
+      "description": "The customer pays with a card",
+      "priority": "high",
+      "state": "active",
+      "position": 0
+    },
+    {
+      "kind": "case",
+      "key": "c1",
+      "item_key": "i1",
+      "title": "Declined card",
+      "steps": {
+        "steps": [
+          {
+            "no": 1,
+            "action": "Pay with a declined card",
+            "expected": "the payment is refused"
+          }
+        ]
+      },
+      "priority": "high",
+      "state": "draft",
+      "code": "SHOP-001",
+      "position": 0
+    }
+  ]
+}

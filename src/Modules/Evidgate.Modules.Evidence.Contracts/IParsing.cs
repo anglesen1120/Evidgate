@@ -74,6 +74,53 @@ public interface IParsing
     Result<IReadOnlyList<ArchiveEntry>> EnumerateArchive(Stream content, long maxBytes, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Validates one zip archive exactly as <see cref="EnumerateArchive"/> does and hands back, together with the
+    /// entry metadata, the content of the entries the caller selects (13.1.1-T5.2, 13.1.1 AC16). It exists so a
+    /// caller that must parse parts <em>inside</em> a zip — the authoring XLSX reader, whose workbook, sheet and
+    /// shared-string parts are separate entries — never opens the archive itself: the profile still checks the
+    /// declared entry count, every normalized name, duplicate names and symbolic links, the cumulative expanded
+    /// size and each entry's compression ratio, and only then reads the selected content.
+    /// </summary>
+    /// <remarks>
+    /// The caps are the caller's, not the profile's defaults: <paramref name="caps"/> states the entry count, the
+    /// expanded size and the compression ratio the caller's file format allows (XLSX passes 1 000 entries,
+    /// 64 MiB and 20:1 for 13.1.1 AC16), while the nesting depth and the parse timeout stay the profile's own
+    /// (<c>ParsingLimits</c>), so no caller can widen those two guards. A caller that wants today's behaviour
+    /// keeps calling <see cref="EnumerateArchive"/>, which is unchanged.
+    /// <para>
+    /// <paramref name="selectEntry"/> receives each entry's <em>normalized</em> name (the same spelling
+    /// <see cref="ArchiveContents.Entries"/> reports) and must be a pure predicate: it decides which content is
+    /// worth buffering, nothing else. Only the selected, non-directory entries have their bytes read into memory,
+    /// each bounded by <paramref name="maxEntryBytes"/> <em>before</em> the allocation and then again by a
+    /// counting read that never trusts a declared length, so a hostile header cannot make one entry expand into
+    /// an unbounded buffer. Total selected bytes are bounded by the cumulative expanded cap as well.
+    /// </para>
+    /// <para>
+    /// A failure carries a generic reason only and no entry content at all — never a name, a path or an
+    /// artifact byte (00 §5.7 S3): the archive is validated first and read second, so a refused archive hands
+    /// back nothing it had already buffered. The returned content is immutable to the caller (read-only memory
+    /// over a buffer the profile owns and never hands out as an array).
+    /// </para>
+    /// </remarks>
+    /// <param name="content">
+    /// The untrusted, already-bounded archive bytes; the caller keeps ownership of the stream. The profile's
+    /// timeout is cooperative and cannot interrupt a blocking read, so a caller passes a buffered stream.
+    /// </param>
+    /// <param name="maxBytes">The per-kind cap for the archive object itself from <c>artifact_kind_policy.max_bytes</c>.</param>
+    /// <param name="caps">The entry count, expanded size and compression ratio this caller's format allows.</param>
+    /// <param name="selectEntry">Decides, from an entry's normalized name, whether its content is kept.</param>
+    /// <param name="maxEntryBytes">The most bytes one selected entry may expand to; over it is <c>size_exceeded</c>.</param>
+    /// <param name="cancellationToken">Cancels the read; a timeout of its own is added by the profile.</param>
+    /// <returns>The entry metadata plus the selected entries' content, or the profile failure.</returns>
+    Result<ArchiveContents> ReadArchiveEntries(
+        Stream content,
+        long maxBytes,
+        ArchiveCaps caps,
+        Func<string, bool> selectEntry,
+        long maxEntryBytes,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Checks the leading bytes of one object against its declared media type (06.3.1 AC5). The declared
     /// type's parameters are stripped and compared case-insensitively; a type the profile has no signature
     /// for answers <see cref="MediaSniffVerdict.Mismatch"/> (fail closed).
@@ -133,6 +180,77 @@ public sealed class ParsedXmlReport
 /// <param name="ExpandedBytes">The expanded bytes the walk actually counted for this entry.</param>
 /// <param name="IsDirectory">True for a directory entry (a name trailing <c>/</c> in the archive).</param>
 public sealed record ArchiveEntry(string Name, long CompressedBytes, long ExpandedBytes, bool IsDirectory);
+
+/// <summary>
+/// The three caps a caller states for its own file format when it reads an archive through
+/// <see cref="IParsing.ReadArchiveEntries"/> (13.1.1-T5.2; 13.1.1 AC16 passes 1 000 entries, 64 MiB and 20:1 for
+/// XLSX). They are the caller's numbers and not profile defaults: <see cref="IParsing.EnumerateArchive"/> keeps
+/// enforcing <c>ParsingLimits</c>, and the two caps that are not here — the zip-in-zip nesting depth and the parse timeout —
+/// always stay the profile's own, so a caller can tighten or loosen the three size caps it names but never widen
+/// those two guards.
+/// </summary>
+/// <param name="MaxEntries">The most entries the archive may hold; more is <c>entry_count_exceeded</c>.</param>
+/// <param name="MaxExpandedBytes">The most expanded bytes counted across the archive; more is <c>size_exceeded</c>.</param>
+/// <param name="MaxCompressionRatio">The most one entry may expand against the compressed bytes it consumed; more is <c>compression_ratio_exceeded</c>.</param>
+public sealed record ArchiveCaps(int MaxEntries, long MaxExpandedBytes, int MaxCompressionRatio);
+
+/// <summary>
+/// The outcome of <see cref="IParsing.ReadArchiveEntries"/>: the metadata of every entry the profile accepted —
+/// the same shape <see cref="IParsing.EnumerateArchive"/> returns — plus the content of the entries the caller
+/// selected, looked up by their normalized name (00 §5.7 S3/S5, 13.1.1 AC16).
+/// <para>
+/// The content is read-only: each entry's bytes live in a buffer this object owns and is never handed out as an
+/// array, so a consumer of an untrusted archive cannot mutate what its neighbours read. The lookup is
+/// case-insensitive because the profile's duplicate rule is — a normalized name is unique in one archive however
+/// it is spelled, so one archive can never hold two entries a lookup could confuse (06.3.1 AC4).
+/// </para>
+/// <para>
+/// An entry that was not selected, a directory entry and a name the archive does not hold all answer
+/// <see langword="false"/> from <see cref="TryGetEntry"/>, never an exception: a caller that asks for an optional
+/// part decides what its absence means.
+/// </para>
+/// </summary>
+public sealed class ArchiveContents
+{
+    private readonly Dictionary<string, ReadOnlyMemory<byte>> selected;
+
+    /// <summary>
+    /// Builds the result over the walk's entry metadata and the content of the entries it kept. Internal by
+    /// design: only the parser profile produces these, and the Evidence module sees this constructor through
+    /// <c>InternalsVisibleTo</c>.
+    /// </summary>
+    /// <param name="entries">The metadata of every accepted entry, in archive order.</param>
+    /// <param name="selectedEntries">The content of the selected entries, keyed by normalized name.</param>
+    internal ArchiveContents(
+        IReadOnlyList<ArchiveEntry> entries,
+        Dictionary<string, ReadOnlyMemory<byte>> selectedEntries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(selectedEntries);
+
+        Entries = entries;
+        selected = new Dictionary<string, ReadOnlyMemory<byte>>(selectedEntries, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The metadata of every entry the profile accepted, in archive order.</summary>
+    public IReadOnlyList<ArchiveEntry> Entries { get; }
+
+    /// <summary>
+    /// Reads the content of one entry the caller selected, by its normalized name.
+    /// </summary>
+    /// <param name="normalizedName">
+    /// The entry's normalized relative path as <see cref="Entries"/> reports it (forward separators, no leading
+    /// separator); matching is case-insensitive.
+    /// </param>
+    /// <param name="bytes">The entry's content; empty when this method returns <see langword="false"/>.</param>
+    /// <returns>True when the archive held the entry and the caller selected it.</returns>
+    public bool TryGetEntry(string normalizedName, out ReadOnlyMemory<byte> bytes)
+    {
+        bytes = ReadOnlyMemory<byte>.Empty;
+
+        return !string.IsNullOrEmpty(normalizedName) && selected.TryGetValue(normalizedName, out bytes);
+    }
+}
 
 /// <summary>The media-sniff outcome of <see cref="IParsing.SniffMediaType"/> (06.3.1 AC5).</summary>
 public enum MediaSniffVerdict

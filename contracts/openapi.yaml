@@ -5948,6 +5948,172 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/import:
+    post:
+      operationId: importAuthoring
+      tags: [authoring]
+      summary: Import a feature tree from a CSV, XLSX or JSON file as one batch (13.1.1-T5)
+      description: >-
+        13.1.1 §5 route 25 (`authoring:write`). The request body is the file itself and the
+        required `format` query names it: `text/csv` (also accepted as `text/csv; charset=utf-8`; UTF-8, RFC 4180, the header being the
+        thirteen columns `kind,key,parent_key,item_key,node_kind,title,description,precondition,
+        steps,priority,state,code,position`), `application/json` (the document of
+        `contracts/schemas/authoring-import.v1.json`) or the XLSX media type (SpreadsheetML, read
+        under the 06.3.1 archive caps). One flat row table — `kind` is `node`, `item` or `case` —
+        carries the whole tree, and every format validates against that one schema. A body over
+        5 MiB is 413 `payload_too_large` before a byte is parsed, a file over 5 000 data rows is
+        413, an unknown or absent `format` is 422 `request_invalid` with `details[].path = /format`
+        and reason `unsupported_format`, and a malformed `dry_run` is 422 with `/dry_run`. The
+        whole file is validated before anything is written, and the refusals come in two classes.
+        ROW-LEVEL entries carry `index` (the 1-based data row), a fixed member pointer (`/title`,
+        `/steps`, `/code`, `/position`, …) and one of `unknown_parent`, `orphan_row`,
+        `duplicate_key`, `code_conflict`, `value_invalid`, `steps_invalid` or `invalid_text`; a case
+        `steps` document is checked against `authoring-steps.v1` first, so a document that is valid
+        JSON but violates that contract is `index=N`, `path=/steps`, `reason=steps_invalid` in every
+        format. FILE-LEVEL entries OMIT `index` and point at `/file` (the document is not
+        well-formed, deeper than 32, carries a member name that is not valid UTF-16, or the upload
+        is empty) or `/header` (a CSV header that is not exactly the thirteen contract columns) —
+        both with `reason=unsupported_format`. A cell-level text refusal names its column (`/title`)
+        with `reason=invalid_text`. At most 100 details are returned, and no cell value, step text,
+        key text or catalog name is ever echoed. Any invalid row refuses the whole file and nothing is written;
+        a valid file is applied in one transaction under one `batch_id`. A case row is matched by
+        `code`: a code outside the project's `case_prefix` is `code_conflict`, a code that names a
+        live case updates it, one that names a soft-deleted case restores it (`change_kind =
+        restore`), and an empty code allocates a fresh number from one batch allocation per file; an
+        explicit code number above 999 999 is `code_conflict` (a write-only caller cannot exhaust the
+        project's counter). An empty `state` cell keeps an existing row's stored state (new rows start
+        `draft` for a case and `active` for an item), a non-empty one must be a move the state routes
+        allow (otherwise `value_invalid` at `/state`), a restored case is always `draft`, and a case
+        under a retired item is refused. A
+        `dry_run=true` answers the same report and writes nothing (no version row, no code
+        allocation, no audit row); a file whose every row is unchanged writes nothing either and
+        answers `batch_id: null`. `Idempotency-Key` is required: the same key with the same file
+        replays the stored report without a second audit row, a different file under that key is 409
+        `idempotency_conflict`. Another tenant's project is 404 `not_found`, a credential scoped to a
+        sibling project 403 `project_scope_mismatch`, a lock timeout 503 `unavailable` with
+        `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringFormat'
+        - $ref: '#/components/parameters/AuthoringDryRun'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+              format: binary
+          application/json:
+            schema:
+              $ref: './schemas/authoring-import.v1.json'
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: The import report — one batch id, the per-outcome totals and one row per input row
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/export:
+    get:
+      operationId: exportAuthoring
+      tags: [authoring]
+      summary: Export a project's feature tree, or one node's subtree, as CSV, XLSX or JSON (13.1.1-T5)
+      description: >-
+        13.1.1 §5 route 25 (`authoring:read`, `viewer` included): the same flat row table the
+        import reads, generated for this response and never persisted or cached (`Cache-Control:
+        no-store`, `Content-Disposition: attachment` with a fixed ASCII name —
+        `authoring-export.csv`, `.json` or `.xlsx`, never a project name or a posted value). Rows
+        are emitted depth first: a node row, then that node's items in `(position, id)` order, each
+        item's cases in `(code, id)` order, then the node's child nodes; keys are `n1…` for nodes,
+        `i1…` for items and `c1…` for cases, numbered over the whole tree, so two exports of an
+        unchanged tree are byte-identical and an export re-imports into an empty project as the same
+        tree. `node_id` scopes the export to one node's subtree, `include` is a comma list of
+        `nodes`, `items` and `cases` (default all three; an unknown token is 422 `request_invalid`
+        with `details[].path = /include`), and only live rows are exported. A spreadsheet text cell
+        that would start a formula (`=`, `+`, `-`, `@`, TAB, CR, LF) is written with one leading
+        apostrophe; the import strips exactly that apostrophe back and stores literal text, so a
+        round trip returns the authored value. At most 5 000 data rows and 5 MiB of emitted text —
+        the import caps, so every export re-imports — are served: a larger scope is 413
+        `payload_too_large` with one detail,
+        `details[].path = /node_id` and `details[].reason = body_too_large`, never a truncated file. An unknown or soft-deleted `node_id`, or another tenant's project, is 404
+        `not_found`; an absent or unknown `format` is 422 with `/format`, as on the import.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringFormat'
+        - $ref: '#/components/parameters/AuthoringNodeIdFilter'
+        - $ref: '#/components/parameters/AuthoringExportInclude'
+      responses:
+        '200':
+          description: The export file in the requested format
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Content-Disposition:
+              description: >-
+                `attachment; filename="authoring-export.csv"` / `.json` / `.xlsx` — a fixed ASCII
+                name, never a project or caller value.
+              schema:
+                type: string
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                $ref: './schemas/authoring-import.v1.json'
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
 components:
   securitySchemes:
     sessionCookie:
@@ -6425,6 +6591,37 @@ components:
         Comma-separated tokens. `path` adds `path` (the addressed node's ancestors, root first);
         `counts` is always present and needs no token. Any other token is 422 `request_invalid`
         with `details[].path = /include`.
+      schema:
+        type: string
+        maxLength: 64
+    AuthoringFormat:
+      name: format
+      in: query
+      required: true
+      description: >-
+        The file format of route 25: `csv`, `json` or `xlsx`. An absent or unknown value is 422
+        `request_invalid` with `details[].path = /format` and reason `unsupported_format`
+        (13.1.1-T5).
+      schema:
+        type: string
+        enum: [csv, json, xlsx]
+    AuthoringDryRun:
+      name: dry_run
+      in: query
+      required: false
+      description: >-
+        `true` answers the import report without writing anything — no version row, no code
+        allocation, no audit row (13.1.1 AC13).
+      schema:
+        type: boolean
+        default: false
+    AuthoringExportInclude:
+      name: include
+      in: query
+      required: false
+      description: >-
+        Comma-separated tokens `nodes`, `items`, `cases`; absent or empty means all three. Any other
+        token is 422 `request_invalid` with `details[].path = /include` (13.1.1 §5 route 25).
       schema:
         type: string
         maxLength: 64
@@ -8917,6 +9114,44 @@ components:
       required: [version]
       properties:
         version: { type: integer, minimum: 1 }
+    ImportResponse:
+      type: object
+      description: >-
+        The 200 body of the import route (13.1.1 §5 route 25, AC13/AC15): one `batch_id` for every
+        `authoring_version` row the file wrote, the per-outcome totals and one row report per input
+        row in file order. `batch_id` is null on a dry run and on a file whose every row is
+        unchanged; no cell text travels back.
+      required: [batch_id, counts, rows]
+      properties:
+        batch_id: { type: [string, 'null'], format: uuid }
+        counts:
+          $ref: '#/components/schemas/ImportCountsDto'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportRowDto'
+    ImportCountsDto:
+      type: object
+      description: The per-outcome totals of one import (13.1.1 AC13/AC15).
+      required: [created, updated, restored, unchanged]
+      properties:
+        created: { type: integer, minimum: 0 }
+        updated: { type: integer, minimum: 0 }
+        restored: { type: integer, minimum: 0 }
+        unchanged: { type: integer, minimum: 0 }
+    ImportRowDto:
+      type: object
+      description: >-
+        One row of the import report: the row's 1-based position, its file-local key, its kind and
+        its outcome — never its text (S3).
+      required: [index, key, kind, outcome, code]
+      properties:
+        index: { type: integer, minimum: 1 }
+        key: { type: string, minLength: 1, maxLength: 64 }
+        kind: { type: string, enum: [node, item, case] }
+        outcome: { type: string, enum: [create, update, restore, unchanged] }
+        code: { type: [string, 'null'] }
+
 security:
   - sessionCookie: []
   - bearerToken: []
