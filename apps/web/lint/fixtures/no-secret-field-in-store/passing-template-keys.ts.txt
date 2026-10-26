@@ -1,0 +1,45 @@
+// 09.7.1-T3 fixture (queue F16, QA defect R1, plan 09.7.1 §8 S3, AC3): the shapes the stricter
+// ternary test must still leave alone. The identifier in front of a `:` is an object KEY when the
+// last non-blank character before it opens the member (`{` or `,`) — so `token` below declares a
+// class name and never reads a value. An array literal of strings is not a subscript either, and a
+// `@defer` block without a header evaluates nothing. The rule reports nothing in this file.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-secret-object-key',
+  template: '<button type="button" [ngClass]="{ token: active }">Copy</button>',
+})
+export class SecretObjectKeyPanel {}
+
+// The second member of the same literal, behind a comma: `label` and `token` are keys, `name` and
+// `active` are the reads.
+@Component({
+  selector: 'app-secret-object-members',
+  template: '<button type="button" (click)="pick({ label: name, token: active })">Copy</button>',
+})
+export class SecretObjectMembersPanel {}
+
+// An ARRAY literal is not a member access: the quoted name is a string, which stays masked.
+@Component({
+  selector: 'app-secret-array-literal',
+  template: "<p [ngClass]=\"['token']\">Hidden.</p>",
+})
+export class SecretArrayLiteralPanel {}
+
+// An object literal inside a ternary BRANCH is still an object literal: its key declares a name,
+// and only the value next to it is the read.
+@Component({
+  selector: 'app-secret-ternary-object',
+  template: '<button type="button" [ngClass]="ok ? { token: active } : {}">Copy</button>',
+})
+export class SecretTernaryObjectPanel {}
+
+// A `@defer` block with no header declares nothing to evaluate. The `(` of the `@if` inside it is
+// that block's own header, and a bare `@defer` must not borrow it.
+@Component({
+  selector: 'app-secret-defer-block',
+  template: '@defer { @if (ready()) { <p>{{ tokenPrefix }}</p> } }',
+})
+export class SecretDeferBlockPanel {}

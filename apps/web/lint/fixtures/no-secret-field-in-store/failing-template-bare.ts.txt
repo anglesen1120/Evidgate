@@ -1,0 +1,53 @@
+// 09.7.1-T3 fixture (queue F16, plan 09.7.1 §8 S3, AC3): the BARE reads the rule used to miss in
+// an inline template. Each component below plants exactly one violation, in one expression kind:
+// an interpolation, a property binding on its own, an `@if` condition, the right-hand side of an
+// `@let`, the iterated expression of an `@for`, a structural directive and an `@switch` subject.
+// The rule reports one finding per template property, and the name of the first bare read in it —
+// which is why the binding value has a component of its own instead of sharing one.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-secret-reads',
+  template: '<p>{{ token }}</p><input [value]="signingSecret" />',
+})
+export class SecretReadsPanel {}
+
+// The binding VALUE on its own, so the planted `[value]` read is the one whose name is reported:
+// a template reports its first secret-shaped name once, so it cannot be pinned next to another.
+@Component({
+  selector: 'app-secret-binding',
+  template: '<input [value]="signingSecret" />',
+})
+export class SecretBindingPanel {}
+
+@Component({
+  selector: 'app-secret-conditional',
+  template: '@if (password) { <p>The token rotated.</p> }',
+})
+export class SecretConditionalPanel {}
+
+@Component({
+  selector: 'app-secret-let',
+  template: '@let label = signingSecret; <p>{{ label }}</p>',
+})
+export class SecretLetPanel {}
+
+@Component({
+  selector: 'app-secret-rows',
+  template: '@for (entry of pendingToken; track entry.id) { <p>{{ entry.prefix }}</p> }',
+})
+export class SecretRowsPanel {}
+
+@Component({
+  selector: 'app-secret-hidden',
+  template: '<p *ngIf="secretValue">Not shown.</p>',
+})
+export class SecretHiddenPanel {}
+
+@Component({
+  selector: 'app-secret-switch',
+  template: '@switch (credential) { @case (1) { <p>One.</p> } }',
+})
+export class SecretSwitchPanel {}

@@ -19,8 +19,12 @@ export const POLICY_BODY_MAX_BYTES = 65_536;
 
 /**
  * The UTF-8 byte length of the compact body `text` describes — `JSON.stringify(JSON.parse(text))`,
- * i.e. the bytes the request would carry, with no indentation — or `null` when `text` is not JSON at
- * all, in which case there is no body to measure.
+ * i.e. the bytes the request would carry, with no indentation — or `null` when there is no
+ * measurable wire body: `text` is not JSON at all, or the engine refuses to WRITE the compact form
+ * of what it parsed (a pathological body, e.g. nesting deep enough to exhaust the stack and raise
+ * `RangeError`; delta finding D2). Both are refusals that send nothing, so one answer covers both:
+ * a body whose wire size cannot be measured cannot be checked against the cap, and a size invented
+ * for it is worse than no size.
  *
  * A multi-byte character counts as the bytes it occupies, because the cap is declared in bytes.
  */
@@ -31,6 +35,17 @@ export function policyBodyBytes(text: string): number | null {
   } catch {
     return null;
   }
-  // `JSON.parse` never yields `undefined`, so `JSON.stringify` always answers a string here.
-  return new TextEncoder().encode(JSON.stringify(parsed)).byteLength;
+  // `JSON.parse` never yields `undefined`, so `JSON.stringify` always answers a string here — but
+  // it can THROW, so it belongs inside the guard (D2): a `RangeError` escaping this pure helper
+  // would surface as a bug in the publish and byte-counter paths instead of the refusal they know.
+  let compact: string | undefined;
+  try {
+    compact = JSON.stringify(parsed);
+  } catch {
+    return null;
+  }
+  if (compact === undefined) {
+    return null;
+  }
+  return new TextEncoder().encode(compact).byteLength;
 }

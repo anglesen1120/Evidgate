@@ -2466,6 +2466,29 @@
       <trans-unit id="settings.policy.conflict-not-set" datatype="html"><source>(not set)</source></trans-unit>
       <trans-unit id="settings.policy.load-failed" datatype="html"><source>The policy revisions could not be loaded.</source></trans-unit>
       <trans-unit id="settings.policy.load-retry" datatype="html"><source>Retry</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.title" datatype="html"><source>CI bindings</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.description" datatype="html"><source>Repository bindings and allowed CI references. Metadata only; bindings are managed during onboarding.</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.provider" datatype="html"><source>Provider</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.status" datatype="html"><source>Verification state</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.active" datatype="html"><source>Active</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.pending" datatype="html"><source>Pending verification</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.disabled" datatype="html"><source>Disabled</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.pending-hint" datatype="html"><source>Waiting for the first CI exchange.</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.refs" datatype="html"><source>Allowed ref patterns</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.workflows" datatype="html"><source>Allowed workflow references</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.activated" datatype="html"><source>Activated · UTC</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.created" datatype="html"><source>Created · UTC</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.not-activated" datatype="html"><source>Not activated</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.none" datatype="html"><source>None configured</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.show-all" datatype="html"><source>Show all</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.show-fewer" datatype="html"><source>Show fewer</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.loading" datatype="html"><source>Loading CI bindings…</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.empty" datatype="html"><source>No CI bindings for this project. Bindings are created during onboarding.</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.forbidden" datatype="html"><source>You are not permitted to view CI bindings for this project.</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.unavailable" datatype="html"><source>CI bindings are unavailable. Check your connection and try again.</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.retry" datatype="html"><source>Retry CI bindings</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.more" datatype="html"><source>Load more CI bindings</source></trans-unit>
+      <trans-unit id="settings.secrets.ci.loading-more" datatype="html"><source>Loading more CI bindings…</source></trans-unit>
     </body>
   </file>
 </xliff>

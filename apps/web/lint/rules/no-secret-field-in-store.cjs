@@ -40,7 +40,8 @@
 // longer than `MAX_NAME_CHARS` is examined as its first and last `NAME_WINDOW_CHARS`
 // characters, so the work per identifier stays constant (09.7.1-T2).
 //
-// Reported positions, once per occurrence:
+// Reported positions (one message per occurrence; a template reports its first secret-shaped
+// name once per property, because a template is one string and one finding is enough to fail):
 //   1. an object-literal key of the state literal handed to a `withState(...)`,
 //      `patchState(...)` or `signalState(...)` call, nested objects included — the state of a
 //      SignalStore. A `signalStore(...)` argument is not walked on its own: its state is the
@@ -59,21 +60,81 @@
 //      `constructor(private token: string)`, `get signingSecret()`);
 //   4. an inline `template:` string of a component: a member read whose property is
 //      secret-shaped — `{{ store.token() }}`, `{{ row.secret }}`, `[value]="x.signing_secret"`,
-//      `store.plaintext` — reported once per template property.
+//      `store.plaintext` — reported once per template property;
+//   5. a `templateUrl` `.html` file of a component (queue F16): the constant URL is resolved
+//      relative to the component file — an absolute or relative `context.filename` both work, the
+//      relative one against `process.cwd()` — and the file is read with `node:fs` and scanned
+//      with the SAME member-read check as position 4 plus the bare reads of position 6. A file
+//      larger than `MAX_TEMPLATE_CHARS`, a missing or unreadable file, an absolute path and any
+//      URL with a scheme (`http(s):`, `data:`) are silently skipped: the check never throws and
+//      never fetches. Reported once, on the `templateUrl` property's value;
+//   6. a BARE identifier read in a template expression, inline or in a `templateUrl` file: an
+//      interpolation `{{ token }}`, a property/event/attribute binding `[value]="secret"`,
+//      `x="{{ token }}"`, a block header `@if (password)`, `@switch (credential)`,
+//      `@case (credential)`, `@defer (when password)`, the right-hand side of
+//      `@let label = signingSecret;`, the iterated expression of
+//      `@for (row of pendingToken; track row.id)` — the `of` keyword is matched with a whitespace
+//      class, so a header wrapped before `of` still names its expression — and a `*ngIf`-style
+//      structural directive `*ngIf="secretValue"`, including a bracketed member read whose name is
+//      a string literal (`store['token']()`, `row["signing_secret"]`). Only an identifier that
+//      READS a field counts, so the rule does not report a name that is the root of an object
+//      access (`token.prefix`, `token?.prefix` — whose member names are checked as in position 4),
+//      a template-reference declaration (`#token`), an object KEY (`{ token: true }`,
+//      `[ngClass]="{ token: active }"`), a quoted string (`'signingSecret'`, which is masked —
+//      except the direct subscript of a member access, see above), a sigil name (`$index`,
+//      `$event`), the declaration variable of an `@for` (`@for (token of tokens)`), the identifier
+//      a `let` clause of a structural directive declares (`*ngFor="let token of tokens"`) or the
+//      alias of an `index as name` clause — and no HTML text outside an expression is scanned at
+//      all, so the copy `Token is shown once.` stays legal. A ternary BRANCH is a read even though
+//      a `:` follows it: `{{ ok ? token : '' }}` and `[title]="a ? secret : b"` are reported,
+//      because the name in front of a `:` is a key only when the last non-blank character before
+//      it opens an object member (`{` or `,`) and no `?` is awaiting its `:` — an optional chain
+//      `a?.b` and a nullish `a ?? b` do not open a ternary. A read of a loop variable named like a
+//      secret (`*ngFor="let token of tokens"` then `{{ token }}` in the body) is still reported:
+//      the declaration is skipped, the body read is not, so rename the variable;
+//   7. a secret-carrying RESULT type held in state (`secretCarryingType`): `IssuedInvite`,
+//      `RotationResult`, `IngestTokenCreatedResponse`, `InviteIssuedView` and
+//      `CiBindingCreatedResponse` are the shapes a route answers with a ONE-TIME value, so a
+//      field, accessor or constructor parameter property of a `/Store$/` class typed with one is
+//      reported at any depth (`Signal<IssuedInvite | null>`, `readonly last: RotationResult`), as
+//      is a `signal<...>()`/`computed<...>()`/`withState<...>()` type argument of one in a
+//      Settings file and a member type of an `interface`/`type` named `…State|…Store`. A method
+//      that RETURNS one (`async rotate(): Promise<RotationResult | null>`) is the sanctioned
+//      shape — a one-time value is a return value and never state — so a return type, a method
+//      parameter, a local variable and the declaration of the type itself stay legal, and
+//      `secrets.store.ts`/`members.store.ts` lint clean.
 //
 // A top-level `const token = signal('')` outside a `/Store$/` class is NOT reported: a local
 // variable is not store state, and reporting every signal would make the rule unusable.
 //
 // Blind spots (a lint rule is defence in depth, not the only defence):
-//   - a `templateUrl` `.html` file is not scanned by this rule — only an inline `template:`
-//     string is read, and the Angular template rules that run over `.html` do not look for a
-//     secret-shaped member read;
+//   - a template built at run time is not scanned: `template:` must be a constant string (a
+//     template literal with `${}` is not folded) and `templateUrl:` must be a constant, relative
+//     path — an absolute path, a scheme (`http(s):`, `data:`) and a computed URL are skipped;
+//   - a QUOTED string is masked before the bare-read check, backtick included: a `${token}`
+//     interpolation inside a template literal in a binding (a backtick string) is blanked with
+//     it, so that read is not reported. Only the direct subscript of a member access is unmasked;
+//   - a `templateUrl` file is read only up to `MAX_TEMPLATE_CHARS`, a single binding expression
+//     only up to `MAX_EXPRESSION_CHARS`, and one template contributes at most
+//     `MAX_EXPRESSION_WINDOWS` expressions: a violation past either bound is not seen. A file over
+//     the size cap, a missing file and an unreadable file are skipped SILENTLY — no message says
+//     the template was not scanned — and the resolved path is not confined to the component's
+//     directory: a `templateUrl: '../shared/x.html'` is read from wherever it resolves;
+//   - the `track` clause of an `@for` and the `; as alias` clause of an `@if` are not scanned,
+//     and neither is the `let`/`as` DECLARATION of a `*` microsyntax binding: only the iterated
+//     expression, the condition, the `when` clause of a `@defer` and the binding value are. A
+//     `@placeholder`, `@loading` and `@error` block carries no header and is not scanned at all;
+//   - a result type reached through a type alias (`type Issued = IssuedInvite`) or a generic
+//     parameter is caught only where the NAME itself is written, and a component class field
+//     typed with one is not reported (only a `/Store$/` class, a `signal`/`computed`/`withState`
+//     generic and a `…State|…Store` member are). The TYPE coverage is exactly those three
+//     positions plus an ANNOTATED field: `signal(x as IssuedInvite)`, `linkedSignal(...)`,
+//     `model(...)`, a `BehaviorSubject`/`resource` held in a field without the result type in its
+//     annotation, and an unannotated field (`readonly last = make()`) are not seen;
 //   - a member read assembled at run time (`row[key]`, `store[this.field]`) has no name in the
 //     source to match;
-//   - an inline `template:` that is a template literal with `${}` expressions is not folded, so
-//     only a constant template string is scanned;
-//   - a store field reached only through a string key (`state()['token']`) is not a property
-//     name this rule sees;
+//   - a store field reached only through a string key outside the template (`state()['token']`) is
+//     not a property name this rule sees; inside a template the bracketed string IS read;
 //   - a name longer than `MAX_NAME_CHARS` is examined only in its first and last
 //     `NAME_WINDOW_CHARS` characters: a secret word buried in the middle of a 150-character
 //     identifier is not reported. The cap is what keeps the split linear, and no real field name
@@ -106,6 +167,9 @@
 // enough that a bare `Linter` handed the rule directly gets the same answer.
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 /** The application root, as the sequence of path segments it must appear as. */
 const APP_ROOT_SEGMENTS = ['apps', 'web', 'src', 'app'];
 
@@ -122,6 +186,52 @@ const ALLOWED_REVEAL_FILE = /(?:^|[-.])reveal(?:[-.]|$)/;
 
 /** A spec has to spell the forbidden name to assert its absence. */
 const SPEC_FILE = /\.spec\.ts$/;
+
+/**
+ * The response shapes that carry a ONE-TIME secret value (queue F16, position 7): the app-local
+ * result interfaces the stores declare (`IssuedInvite` in members.store.ts, `RotationResult` in
+ * secrets.store.ts) and the generated ones the routes answer with (`@evidgate/sdk`
+ * `packages/sdk/gen/types.gen.ts`, from `contracts/openapi.yaml`). A field, a signal generic or a
+ * state member of one of these holds the value in state, which is what AC3 forbids; a method that
+ * returns one is the sanctioned shape.
+ */
+const SECRET_CARRYING_TYPES = new Set([
+  'IssuedInvite',
+  'RotationResult',
+  'IngestTokenCreatedResponse',
+  'InviteIssuedView',
+  'CiBindingCreatedResponse',
+]);
+
+/** The calls whose type argument a Settings file must not fill with a secret-carrying type. */
+const RESULT_TYPE_CALLS = new Set(['signal', 'computed', 'withState']);
+
+/**
+ * What one template may contribute, as characters: a `template:` string and a `templateUrl` file
+ * are both scanned at most this far, and a file larger than this is not read at all. Bounded work
+ * per property, like `MAX_NAME_CHARS` bounds the split (queue F16).
+ */
+const MAX_TEMPLATE_CHARS = 262_144;
+
+/** What one binding expression may contribute: `{{ ... }}`, a binding value, a block header. */
+const MAX_EXPRESSION_CHARS = 4_000;
+
+/**
+ * The most expression windows one template contributes. A Settings template writes a few dozen;
+ * the cap is what keeps the scan linear on a pathological template (`@switch (` repeated), where
+ * every header would otherwise cost a bounded paren scan of its own.
+ */
+const MAX_EXPRESSION_WINDOWS = 4_096;
+
+/** Bound on the type nodes one annotation may contribute to the result-type walk. */
+const MAX_TYPE_NODES = 256;
+
+/**
+ * A `templateUrl` that names a scheme is never read: an `http(s)`/`data:` URL is not a local file,
+ * and a Windows drive (`C:\...`) is not one either. An absolute path is skipped for the same
+ * reason — a template the linter reads is the one the component ships next to itself.
+ */
+const TEMPLATE_URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 
 /** The bare secret words: the whole name is the value. */
 const BARE_SECRET_WORDS = new Set([
@@ -204,16 +314,17 @@ const FIELD_KINDS = new Set([
 ]);
 
 /**
- * A member read inside an inline Angular template: the property name after a `.`, which is what
- * `{{ store.token() }}`, `{{ store?.token }}`, `{{ row.secret }}`, `a.b.token` and
- * `[value]="x.signing_secret"` all have. The dot only counts when it is glued to the member in
- * front of it (an identifier character, or the `)`/`]` that closes a call or an index — with the
- * `?` of an optional chain allowed in between) and to the property name behind it, so the full
- * stop of a sentence is not a member read: `Rotate the key. Token is shown once.`, `Copy it now.
- * Secret values are hidden.` and `e.g. token` stay legal. A bare `{{ token }}` read of a component
- * field has no dot either and is not matched — the class-field position above is what catches it,
- * and only in a `/Store$/` class. The lookbehind keeps the preceding character out of the match,
- * so `a.b.token` reports `b` and then still reports `token`.
+ * A member read inside a template — inline, or in the file a `templateUrl` names: the property
+ * name after a `.`, which is what `{{ store.token() }}`, `{{ store?.token }}`, `{{ row.secret }}`,
+ * `a.b.token` and `[value]="x.signing_secret"` all have. The dot only counts when it is glued to
+ * the member in front of it (an identifier character, or the `)`/`]` that closes a call or an
+ * index — with the `?` of an optional chain allowed in between) and to the property name behind
+ * it, so the full stop of a sentence is not a member read: `Rotate the key. Token is shown once.`,
+ * `Copy it now. Secret values are hidden.` and `e.g. token` stay legal. A bare `{{ token }}` read
+ * of a field has no dot and is not matched here: `firstSecretShapedBareRead` below is what
+ * reports it, in an interpolation, a binding value or a block header (queue F16). The lookbehind
+ * keeps the preceding character out of the match, so `a.b.token` reports `b` and then still
+ * reports `token`.
  */
 const TEMPLATE_MEMBER_READ = /(?<=[\w$]|\)|\])\??\.([A-Za-z_$][\w$]*)/g;
 
@@ -275,6 +386,491 @@ function isSecretShaped(name) {
     }
   }
   return false;
+}
+
+/**
+ * The text of every `{{ ... }}` interpolation in a template, as a window starting where its
+ * expression starts. A manual scan rather than a regex, so the work is one pass over the text and
+ * no quantifier can backtrack: the closing `}}` is looked up with `indexOf`, and an unterminated
+ * or over-long interpolation contributes at most `MAX_EXPRESSION_CHARS`.
+ */
+function interpolationWindows(text, windows) {
+  let index = 0;
+  while (index < text.length && windows.length < MAX_EXPRESSION_WINDOWS) {
+    const open = text.indexOf('{{', index);
+    if (open < 0) {
+      return;
+    }
+    const close = text.indexOf('}}', open + 2);
+    if (close < 0) {
+      return;
+    }
+    const start = open + 2;
+    windows.push({ start, text: text.slice(start, Math.min(close, start + MAX_EXPRESSION_CHARS)) });
+    index = close + 2;
+  }
+}
+
+/**
+ * A property/event/attribute binding whose value Angular evaluates: `[x]="..."`, `(x)="..."`,
+ * `[(x)]="..."`, `*ngIf="..."`, `bind-x="..."`, `on-x="..."`, `attr.x="..."`, in either quote.
+ * Each alternative starts with a different character and each class excludes its own terminator,
+ * so nothing here can backtrack over the same text twice.
+ */
+const BOUND_ATTRIBUTE =
+  /(?:\[\(?[^\]\s"'<>()]{1,80}\)?\]|\([^)\s"'<>]{1,80}\)|\*[^=\s"'<>]{1,80}|bind-[^=\s"'<>]{1,80}|on-[^=\s"'<>]{1,80}|attr\.[^=\s"'<>]{1,80})\s*=\s*(?:"([^"]{0,4000})"|'([^']{0,4000})')/g;
+
+/**
+ * The text of every binding value in a template, as a window starting at its first character. A
+ * `*` structural directive carries microsyntax, not an expression: its `let`/`as` clauses declare
+ * names, so the window is marked and the bare-read check skips those declarations (QA defect R5).
+ */
+function attributeWindows(text, windows) {
+  for (const match of text.matchAll(BOUND_ATTRIBUTE)) {
+    if (windows.length >= MAX_EXPRESSION_WINDOWS) {
+      return;
+    }
+    if (match.index === undefined) {
+      continue;
+    }
+    const value = match[1] ?? match[2];
+    if (value === undefined) {
+      continue;
+    }
+    const start = (match.index ?? 0) + match[0].length - value.length - 1;
+    windows.push({
+      start,
+      text: value.slice(0, MAX_EXPRESSION_CHARS),
+      microsyntax: match[0].startsWith('*'),
+    });
+  }
+}
+
+/** The index of the `)` that closes the `(` at `open`, or -1: a depth count, bounded by the cap. */
+function closingParenthesis(text, open) {
+  let depth = 0;
+  const limit = Math.min(text.length, open + 1 + MAX_EXPRESSION_CHARS);
+  for (let index = open; index < limit; index += 1) {
+    const char = text[index];
+    if (char === '(') {
+      depth += 1;
+    } else if (char === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
+/** The text between `(` and its closing `)`, cut at the first top-level `;` (an `as`/`track` clause). */
+function headerExpression(text, open, close) {
+  const body = text.slice(open + 1, Math.min(close, open + 1 + MAX_EXPRESSION_CHARS));
+  const semicolon = body.indexOf(';');
+  return semicolon < 0 ? body : body.slice(0, semicolon);
+}
+
+/**
+ * The most whitespace a block keyword may put between itself and the `(` of its header. Angular
+ * writes zero to two spaces; the allowance is what lets a header be wrapped onto the next line
+ * without letting a bare `@defer { ... }` borrow the parenthesis of the block it opens.
+ */
+const MAX_HEADER_GAP = 8;
+
+/**
+ * The index of the `(` that opens the header of a block keyword at `from`, or -1. Only blanks may
+ * stand in between: `@defer { @if (x) { ... } }` declares a block with no header, and the `(`
+ * of the `@if` inside it is that `@if`'s own header, visited by its own scan (queue F16).
+ */
+function headerParenthesis(text, from) {
+  const limit = Math.min(text.length, from + MAX_HEADER_GAP);
+  for (let index = from; index < limit; index += 1) {
+    if (text[index] === '(') {
+      return index;
+    }
+    if (!isBlank(text[index])) {
+      return -1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The `of` keyword of an `@for` header, with a whitespace class on both sides: the declaration and
+ * the iterated expression may be wrapped onto different lines, and only the expression behind `of`
+ * is a read (R4). The class on each side is what keeps a member such as `offset` or `profile` from
+ * matching, so the first match in a header is the keyword itself.
+ */
+const FOR_OF_KEYWORD = /(?:^|\s)of\s/;
+
+/**
+ * The expressions of the block headers Angular evaluates: the condition of `@if (...)` and
+ * `@else if (...)` (its `; as alias` clause excluded), the subject of `@switch (...)` and of a
+ * `@case (...)`, the `when` condition of a `@defer (...)` (its `on`/`prefetch` clause excluded),
+ * the ITERATED expression of `@for (... of EXPR; track ...)` — not the declaration variable in
+ * front of ` of ` — and the right-hand side of `@let name = EXPR;`.
+ *
+ * Every search is bounded by `MAX_EXPRESSION_CHARS` and every step advances the cursor, so a
+ * template that repeats `@let` or `@if` with no `=`/`(` behind it costs one line of work per
+ * occurrence instead of a rescan to the end of the file.
+ */
+function blockWindows(text, windows) {
+  for (const keyword of ['@if', '@else if', '@switch', '@case', '@defer', '@for']) {
+    let index = 0;
+    while (index < text.length && windows.length < MAX_EXPRESSION_WINDOWS) {
+      const at = text.indexOf(keyword, index);
+      if (at < 0) {
+        break;
+      }
+      const after = at + keyword.length;
+      // The parenthesis that opens the header, within the few blanks a header allows after it.
+      const open = headerParenthesis(text, after);
+      if (open < 0) {
+        index = after;
+        continue;
+      }
+      const close = closingParenthesis(text, open);
+      if (close < 0) {
+        index = open + 1;
+        continue;
+      }
+      if (keyword === '@for') {
+        const body = headerExpression(text, open, close);
+        const of = FOR_OF_KEYWORD.exec(body);
+        index = close + 1;
+        if (of === null) {
+          continue;
+        }
+        // The declaration in front of `of` is not a read; the iterated expression behind it is.
+        const iterateFrom = of.index + of[0].length;
+        windows.push({
+          start: open + 1 + iterateFrom,
+          text: body.slice(iterateFrom, iterateFrom + MAX_EXPRESSION_CHARS),
+        });
+        continue;
+      }
+      windows.push({ start: open + 1, text: headerExpression(text, open, close) });
+      index = close + 1;
+    }
+  }
+
+  let index = 0;
+  while (index < text.length && windows.length < MAX_EXPRESSION_WINDOWS) {
+    const at = text.indexOf('@let', index);
+    if (at < 0) {
+      return;
+    }
+    const start = at + '@let'.length;
+    // The right-hand side is one expression, so it runs at most `MAX_EXPRESSION_CHARS`. A `@let`
+    // with no `=` inside that window declares nothing this rule can read, and the cursor moves
+    // past the window so the scan stays linear.
+    const window = text.slice(start, Math.min(text.length, start + MAX_EXPRESSION_CHARS));
+    const equals = window.indexOf('=');
+    if (equals < 0) {
+      index = start + window.length;
+      continue;
+    }
+    const semicolon = window.indexOf(';', equals);
+    const end = semicolon < 0 ? window.length : semicolon;
+    windows.push({ start: start + equals + 1, text: window.slice(equals + 1, end) });
+    index = start + end + 1;
+  }
+}
+
+/** Whether a character is one of the blanks a template expression may carry. */
+function isBlank(char) {
+  return char === ' ' || char === '\t' || char === '\n' || char === '\r';
+}
+
+/**
+ * The index of the nearest non-blank character at or after every position, and at or before it:
+ * `next[index]` and `previous[index]`, built once per expression window in two passes. The
+ * neighbour lookups below (`isSubscriptLiteral`, the object-key test) are then constant time, so a
+ * window that repeats a quote or an identifier costs one line of work per character and not a
+ * rescan to the end of the window (ReDoS-free, like every other scan here).
+ */
+function blankNeighbours(text) {
+  const next = new Int32Array(text.length + 1);
+  const previous = new Int32Array(text.length);
+  next[text.length] = text.length;
+  for (let index = text.length - 1; index >= 0; index -= 1) {
+    next[index] = isBlank(text[index]) ? next[index + 1] : index;
+  }
+  let last = -1;
+  for (let index = 0; index < text.length; index += 1) {
+    previous[index] = last;
+    if (!isBlank(text[index])) {
+      last = index;
+    }
+  }
+  return { next, previous };
+}
+
+/**
+ * Whether the quoted literal between `open` and `close` is the direct subscript of a member access
+ * (`row['signing_secret']`, `store["token"]`, `a?.['token']`): the `[` sits immediately before the
+ * quote, a member expression ends right before that `[`, and the `]` sits immediately behind the
+ * closing quote. An array literal (`['token']`, `[ngClass]="['token', 'x']"`) has no member in
+ * front of its `[` and stays masked (QA defect O5).
+ */
+function isSubscriptLiteral(text, neighbours, open, close) {
+  const bracket = neighbours.previous[open];
+  if (bracket < 0 || text[bracket] !== '[') {
+    return false;
+  }
+  const member = neighbours.previous[bracket];
+  if (member < 0) {
+    return false;
+  }
+  const before = text[member];
+  const endsMember = before === '.' || before === ')' || before === ']' || /[\w$]/.test(before);
+  if (!endsMember) {
+    return false;
+  }
+  const after = neighbours.next[close + 1];
+  return after < text.length && text[after] === ']';
+}
+
+/**
+ * The window's text with every quoted literal blanked out, so a name inside a string
+ * (`[attr.aria-label]="'signingSecret'"`, `[title]="'Token is shown once.'"`) is not read as an
+ * identifier. One linear pass; an escaped character inside a string is blanked with it.
+ *
+ * The one exception is a quoted string that is the direct subscript of a member access: in
+ * `store['token']()` and `row["signing_secret"]` the string IS the member name, so its content is
+ * restored and the bare-read check reports it (QA defect O5). Every other quoted string — the copy
+ * of a sentence, an array literal, a template reference — stays masked.
+ */
+function maskedQuoted(text) {
+  const neighbours = blankNeighbours(text);
+  const chars = text.split('');
+  let quote = null;
+  let open = -1;
+  for (let index = 0; index < chars.length; index += 1) {
+    const char = chars[index];
+    if (quote === null) {
+      if (char === "'" || char === '"' || char === '`') {
+        quote = char;
+        open = index;
+        chars[index] = ' ';
+      }
+      continue;
+    }
+    if (char === '\\') {
+      chars[index] = ' ';
+      index += 1;
+      if (index < chars.length) {
+        chars[index] = ' ';
+      }
+      continue;
+    }
+    if (char === quote) {
+      quote = null;
+      chars[index] = ' ';
+      // A backtick may interpolate an expression this pass cannot follow, so it is never restored.
+      if (char !== '`' && isSubscriptLiteral(text, neighbours, open, index)) {
+        for (let content = open + 1; content < index; content += 1) {
+          chars[content] = text[content];
+        }
+      }
+      continue;
+    }
+    chars[index] = ' ';
+  }
+  return chars.join('');
+}
+
+/** An identifier in a template expression: the name a binding reads or declares. */
+const TEMPLATE_IDENTIFIER = /[A-Za-z_$][\w$]*/g;
+
+/**
+ * The first BARE secret-shaped identifier an expression window reads, or null. A name is a bare
+ * read when it stands on its own: not a member of an object (`token.prefix`, `token?.prefix` —
+ * the member pass reports those), not a template-reference declaration (`#token`), not a sigil
+ * (`$index`, `$event`), not an object KEY (`{ token: true }`, `{ token: active }`) and not a
+ * quoted string. Only the expression windows are scanned, so HTML text outside a binding never
+ * reaches this check.
+ *
+ * The object-key test is positional, not "the next character is a `:`": the identifier in front of
+ * a `:` is a key when the last non-blank character before it opens an object member (`{` or `,`)
+ * and no `?` of the same nesting is awaiting its `:`. Everything else in front of a `:` is a READ,
+ * so a ternary branch (`{{ ok ? token : '' }}`, `[title]="a ? secret : b"`) is reported (QA defect
+ * R1). The `?` of an optional chain (`a?.b`) and of a nullish coalesce (`a ?? b`) does not open a
+ * ternary, and an object literal resets the count, so `a ? { token: 1 } : b` still declares a key.
+ *
+ * In a `*` structural-directive window the identifier a `let` clause declares is skipped — the
+ * declaration in `*ngFor="let token of tokens"` is not a read — and so is the alias of an
+ * `index as name` clause. The template BODY is another window: `{{ token }}` on a loop variable
+ * named like a secret is still reported, and renaming the variable is the fix (QA defect R5).
+ */
+function firstSecretShapedBareRead(text, microsyntax) {
+  const masked = maskedQuoted(text);
+  const neighbours = blankNeighbours(masked);
+  let lastSignificant = '';
+  let openTernary = 0;
+  let previousWord = '';
+  let previousEnd = 0;
+  let cursor = 0;
+  for (const match of masked.matchAll(TEMPLATE_IDENTIFIER)) {
+    const name = match[0];
+    const start = match.index;
+    if (start === undefined) {
+      continue;
+    }
+    // The punctuation between two identifiers decides two things: whether a `?` ternary is open,
+    // and whether the identifier in front of a `:` opens an object member.
+    for (let index = cursor; index < start; index += 1) {
+      const char = masked[index];
+      if (isBlank(char)) {
+        continue;
+      }
+      if (char === '?') {
+        const after = masked[index + 1];
+        const before = index === 0 ? '' : masked[index - 1];
+        if (after !== '.' && after !== '?' && before !== '?') {
+          openTernary += 1;
+        }
+      } else if (char === ':') {
+        if (openTernary > 0) {
+          openTernary -= 1;
+        }
+      } else if (char === '{') {
+        // An object literal opens its own nesting: a `:` inside it belongs to a key, whatever
+        // ternary the literal itself sits in (`a ? { token: 1 } : b` declares a key).
+        openTernary = 0;
+      }
+      lastSignificant = char;
+    }
+    cursor = start + name.length;
+    const declaredHere =
+      microsyntax === true &&
+      (previousWord === 'let' || previousWord === 'as') &&
+      /^\s*$/.test(masked.slice(previousEnd, start));
+    previousWord = name;
+    previousEnd = cursor;
+    if (declaredHere || name.startsWith('$')) {
+      continue;
+    }
+    const before = start === 0 ? '' : masked[start - 1];
+    if (before === '.' || before === '#' || before === '$') {
+      continue;
+    }
+    // An object access root names no value of its own: only its members are checked.
+    const rest = masked.slice(cursor, cursor + 3);
+    if (rest.startsWith('.') || rest.startsWith('?.')) {
+      continue;
+    }
+    // An object KEY declares a name; it does not read one. A `:` in a ternary branch reads one.
+    const colonAt = neighbours.next[cursor];
+    const isKey =
+      colonAt < masked.length &&
+      masked[colonAt] === ':' &&
+      openTernary === 0 &&
+      (lastSignificant === '{' || lastSignificant === ',');
+    if (isKey) {
+      continue;
+    }
+    if (isSecretShaped(name)) {
+      return name;
+    }
+  }
+  return null;
+}
+
+/**
+ * The first secret-shaped binding in a template's text, or null: the member reads of position 4
+ * over the whole text — which also covers a `store.plaintext` that stands outside any binding —
+ * and then the bare reads of position 6, in source order of their expression windows. One name is
+ * all a property reports, so the answer stops at the first one found.
+ */
+function firstSecretShapedBinding(text) {
+  const bounded = text.length > MAX_TEMPLATE_CHARS ? text.slice(0, MAX_TEMPLATE_CHARS) : text;
+  for (const match of bounded.matchAll(TEMPLATE_MEMBER_READ)) {
+    if (isSecretShaped(match[1])) {
+      return match[1];
+    }
+  }
+  const windows = [];
+  interpolationWindows(bounded, windows);
+  attributeWindows(bounded, windows);
+  blockWindows(bounded, windows);
+  windows.sort((left, right) => left.start - right.start);
+  for (const window of windows) {
+    const name = firstSecretShapedBareRead(window.text, window.microsyntax === true);
+    if (name !== null) {
+      return name;
+    }
+  }
+  return null;
+}
+
+/**
+ * The text of the `.html` file a constant `templateUrl` names, or null: a URL with a scheme, an
+ * absolute path, a missing or unreadable file and a file over `MAX_TEMPLATE_CHARS` all yield
+ * nothing, so the rule never fetches, never throws and never reads an unbounded file. The URL is
+ * resolved against the component's own directory — `context.filename` is absolute under the CLI
+ * and repository-relative under a bare `Linter`, which is resolved against `process.cwd()`.
+ */
+function templateUrlText(filename, templateUrl) {
+  if (filename === '' || templateUrl === '' || templateUrl.length > MAX_EXPRESSION_CHARS) {
+    return null;
+  }
+  if (TEMPLATE_URL_SCHEME.test(templateUrl) || path.isAbsolute(templateUrl)) {
+    return null;
+  }
+  const absolute = path.isAbsolute(filename) ? filename : path.resolve(process.cwd(), filename);
+  const resolved = path.resolve(path.dirname(absolute), templateUrl);
+  try {
+    const stats = fs.statSync(resolved);
+    if (!stats.isFile() || stats.size > MAX_TEMPLATE_CHARS) {
+      return null;
+    }
+    return fs.readFileSync(resolved, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The `TSTypeReference` names of secret-carrying result types inside a type annotation, at any
+ * depth: `Signal<IssuedInvite | null>`, `readonly last: RotationResult`,
+ * `Promise<IngestTokenCreatedResponse>`. A stack walk, bounded by `MAX_TYPE_NODES`, skipping the
+ * keys that carry no AST child.
+ */
+function secretCarryingTypeNames(node, found) {
+  const stack = [node];
+  let visited = 0;
+  while (stack.length > 0 && visited < MAX_TYPE_NODES) {
+    const current = stack.pop();
+    visited += 1;
+    if (current === null || typeof current !== 'object') {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      for (const item of current) {
+        stack.push(item);
+      }
+      continue;
+    }
+    if (typeof current.type !== 'string') {
+      continue;
+    }
+    if (
+      current.type === 'TSTypeReference' &&
+      current.typeName?.type === 'Identifier' &&
+      SECRET_CARRYING_TYPES.has(current.typeName.name)
+    ) {
+      found.push(current.typeName);
+    }
+    for (const [key, value] of Object.entries(current)) {
+      if (key === 'parent' || key === 'loc' || key === 'range' || key === 'tokens') {
+        continue;
+      }
+      stack.push(value);
+    }
+  }
+  return found;
 }
 
 /**
@@ -522,7 +1118,7 @@ module.exports = {
     type: 'problem',
     docs: {
       description:
-        'No secret-shaped field in a Settings store, state type or inline template binding.',
+        'No secret-shaped field, bare template read or one-time result type in Settings store state or in a template binding.',
     },
     schema: [],
     messages: {
@@ -530,6 +1126,8 @@ module.exports = {
         'Do not name a Settings store field "{{name}}": a Settings store holds metadata only (plan 09.7.1 §8 S3): keep the value server-side or in the one-time reveal component. Bind metadata such as tokenPrefix, secretRef or rotationState instead.',
       secretShapedTemplateBinding:
         'Do not bind "{{name}}" in a Settings template: a Settings store holds metadata only (plan 09.7.1 §8 S3): keep the value server-side or in the one-time reveal component. The reveal dialog is the only place a value is shown, once.',
+      secretCarryingType:
+        'Do not type Settings state with "{{type}}": a one-time secret result may only be a RETURN value, never state (plan 09.7.1 §8 S3, AC3): keep it out of every field, signal and state member. The reveal dialog shows the value once.',
     },
   },
 
@@ -574,8 +1172,34 @@ module.exports = {
         if (name !== null) {
           reportField(member.key, name);
         }
+        // A state member TYPED with a one-time result holds the value itself, so the name check
+        // above is not the only one that applies to it (queue F16).
+        reportCarryingType(member.typeAnnotation);
       }
     };
+
+    /**
+     * Reports every secret-carrying result type inside a type annotation (position 7): a field,
+     * accessor or constructor parameter property of a `/Store$/` class, a `signal`/`computed`/
+     * `withState` type argument and a `…State|…Store` member all reach one. A method return type
+     * never does — that is the sanctioned position for a one-time value.
+     */
+    function reportCarryingType(annotation) {
+      if (annotation === undefined || annotation === null) {
+        return;
+      }
+      for (const typeName of secretCarryingTypeNames(annotation, [])) {
+        if (reported.has(typeName)) {
+          continue;
+        }
+        reported.add(typeName);
+        context.report({
+          node: typeName,
+          messageId: 'secretCarryingType',
+          data: { type: typeName.name },
+        });
+      }
+    }
 
     return {
       CallExpression(node) {
@@ -599,6 +1223,15 @@ module.exports = {
           const literal = typeArgumentLiteral(node);
           if (literal !== null) {
             reportTypeMembers(literal.members);
+          }
+        }
+        // `signal<IssuedInvite | null>(null)`, `computed<RotationResult | null>(...)`,
+        // `withState<{ last: CiBindingCreatedResponse }>(...)`: the type argument holds the
+        // one-time value in state, which is exactly what the return position does not (queue F16).
+        if (RESULT_TYPE_CALLS.has(name)) {
+          const argumentsNode = node.typeArguments ?? node.typeParameters;
+          for (const parameter of argumentsNode?.params ?? []) {
+            reportCarryingType(parameter);
           }
         }
       },
@@ -628,6 +1261,9 @@ module.exports = {
               const identifier = parameterPropertyName(parameter);
               if (identifier !== null) {
                 reportField(identifier, identifier.name);
+                // `constructor(private readonly last: RotationResult) {}` holds the one-time
+                // value as a field, so its TYPE is reported too; a plain parameter is neither.
+                reportCarryingType(identifier.typeAnnotation);
               }
             }
             continue;
@@ -639,34 +1275,48 @@ module.exports = {
           if (name !== null) {
             reportField(member.key, name);
           }
+          // A getter's declared type is a method return type — the sanctioned position for a
+          // one-time value — so only a stored field's annotation is checked (queue F16).
+          if (!isGetter) {
+            reportCarryingType(member.typeAnnotation);
+          }
         }
       },
 
-      // An inline Angular template is source text, not AST: `{{ store.token() }}` passes every
-      // visitor above. The property value is scanned by content instead, once per property.
+      // A component template is source text, not AST: `{{ store.token() }}` passes every visitor
+      // above. The `template:` string is scanned by content, and a `templateUrl:` is resolved and
+      // its file read, once per property (queue F16 adds the file and the bare reads).
       Property(node) {
         const key = node.key;
-        const isTemplate =
-          !node.computed &&
-          ((key.type === 'Identifier' && key.name === 'template') ||
-            (key.type === 'Literal' && key.value === 'template'));
-        if (!isTemplate) {
+        const isConstantKey = !node.computed;
+        const propertyName = !isConstantKey
+          ? null
+          : key.type === 'Identifier'
+            ? key.name
+            : key.type === 'Literal' && typeof key.value === 'string'
+              ? key.value
+              : null;
+        if (propertyName !== 'template' && propertyName !== 'templateUrl') {
           return;
         }
-        const template = constantString(node.value);
-        if (template === null) {
+        const constant = constantString(node.value);
+        if (constant === null) {
           return;
         }
-        for (const match of template.matchAll(TEMPLATE_MEMBER_READ)) {
-          const name = match[1];
-          if (isSecretShaped(name)) {
-            context.report({
-              node: node.value,
-              messageId: 'secretShapedTemplateBinding',
-              data: { name },
-            });
-            return;
-          }
+        const text =
+          propertyName === 'template'
+            ? constant
+            : templateUrlText(context.filename ?? '', constant);
+        if (text === null) {
+          return;
+        }
+        const name = firstSecretShapedBinding(text);
+        if (name !== null) {
+          context.report({
+            node: node.value,
+            messageId: 'secretShapedTemplateBinding',
+            data: { name },
+          });
         }
       },
     };

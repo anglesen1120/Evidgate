@@ -1,0 +1,28 @@
+// 09.7.1-T3 fixture (queue F16, QA defects R2 and R4, plan 09.7.1 §8 S3, AC3): the block headers
+// the scan used to skip, and the `@for` whose iterated expression is wrapped. Each component below
+// plants exactly one violation, in one header kind: a `@case (...)`, a `@defer (when ...)` and an
+// `@for (... of ...)` whose `of` sits on the next line.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-secret-case',
+  template: "@switch (phase()) { @case (credential) { <p>One.</p> } }",
+})
+export class SecretCasePanel {}
+
+@Component({
+  selector: 'app-secret-defer',
+  template: '@defer (when password) { <p>Later.</p> }',
+})
+export class SecretDeferPanel {}
+
+// The declaration and the iterated expression on different lines, with the newline directly in
+// front of `of`: the `of` keyword is matched with a whitespace class, so the expression behind it
+// is still the one that is read.
+@Component({
+  selector: 'app-secret-wrapped-for',
+  template: '@for (row\nof pendingToken; track row.id) { <p>{{ row.prefix }}</p> }',
+})
+export class SecretWrappedForPanel {}

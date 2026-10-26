@@ -1,0 +1,13 @@
+<!-- A metadata-only template: the prefix, the rotation state and the timestamps describe a
+     secret reference without ever holding its value. -->
+<table>
+  <tbody>
+    <tr>
+      <td>{{ row.token_prefix }}</td>
+      <td>{{ row.rotationState }}</td>
+      <td>{{ row.lastRotatedAt }}</td>
+      <td>{{ store?.hasToken }}</td>
+    </tr>
+  </tbody>
+</table>
+<p>Token is shown once, right after a rotation.</p>
