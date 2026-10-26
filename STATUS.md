@@ -5,18 +5,18 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 ## 1. Snapshot
 
 ### Resume here
-- Develop: `a9b2d09` (PR #203, S91 10.3.1-T1 OpenTelemetry, merged 2026-10-27); 202 first-parent PR merges into develop. Migration lane free (S94 12.3.1-T1 merged in #198/#204); highest migration `0047_usage_rollup.sql`, next free `0048`.
+- Develop: `408f9a8` (PR #212, S101 09.3.1-T1 web run list, merged 2026-10-27); 204 first-parent PR merges into develop. Migration lane free (S94 12.3.1-T1 merged in #198/#204); highest migration `0047_usage_rollup.sql`, next free `0048`.
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only. S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here.
-- Fully landed on develop: 169/655 tasks; 176.25/702.75 raw person-days; remaining 486 tasks / 526.5 d. Strict merged-PR-only figure: 142 tasks / 151.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- By phase (done tasks / raw d): G1 126 / 139.25; G2 37 / 31; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop: 170/655 tasks; 177.25/702.75 raw person-days; remaining 485 tasks / 525.5 d. Strict merged-PR-only figure: 143 tasks / 152.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- By phase (done tasks / raw d): G1 126 / 139.25; G2 38 / 32; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in this S100 docs pass on `b0be589`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1 with the same 10 missing 13.x feature plans (queue F37, §6 row), unchanged.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
 - Next picks, web-only lane: 09.1.1-T5 (held prompt S98, T3); the other web-only G1 pick 09.1.1-T9.2 is done (#209), so G1 web-only work after T5 moves to G2 (§5).
 - Next picks, backend lane: refill order in `.omp/coordinator/prompts/held/README.md`; when a backend slot frees, 08.5.1-T1 (XL, split, migration lane) unless §5 ranks another G1 task higher, and 04.1.2-T1 only after S91 releases.
-- Next step: §5, 92 dependency-ready tasks / 102.0 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
+- Next step: §5, 91 dependency-ready tasks / 101.0 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
 
 ## 2. Done
 
@@ -24,10 +24,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 169 | 176.25 |
-| Via merged PRs | 142 | 151.25 |
+| Fully landed on develop | 170 | 177.25 |
+| Via merged PRs | 143 | 152.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 486 | 526.5 |
+| Remaining | 485 | 525.5 |
 | Plan total | 655 | 702.75 |
 
 Four partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -44,22 +44,22 @@ Four partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6) 
 | 06 | 11 | 0 | 3 | 8 | 0 | 0 | 9.5 |
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
 | 08 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 09 | 18 | 0 | 6 | 9 | 3 | 0 | 18 |
+| 09 | 19 | 0 | 6 | 10 | 3 | 0 | 19 |
 | 10 | 4 | 0 | 1 | 2 | 1 | 0 | 4.5 |
 | 11 | 5 | 1 | 2 | 1 | 1 | 0 | 4.25 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 169 | 3 | 45 | 90 | 30 | 1 | 176.25 |
+| TOTAL | 170 | 3 | 45 | 91 | 30 | 1 | 177.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
 | G1 | 126 | 3 | 27 | 68 | 27 | 1 | 139.25 |
-| G2 | 37 | 0 | 16 | 19 | 2 | 0 | 31 |
+| G2 | 38 | 0 | 16 | 20 | 2 | 0 | 32 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 169 | 3 | 45 | 90 | 30 | 1 | 176.25 |
+| TOTAL | 170 | 3 | 45 | 91 | 30 | 1 | 177.25 |
 
 ### Landed task groups
 
@@ -177,7 +177,7 @@ Four partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6) 
 | 04.1.1 | 04.1.1-T2 | merged (#201, 036c806) | `event_id` dedupe and `sequence_reused` mapping proven on real PostgreSQL; behaviour landed with T1, tests added (`IngestDedupeTests`). |
 | 12.3.1 | 12.3.1-T1 (T1.1–T1.4) | merged (#198, 2f66be8) | Append-only `usage_ledger_entry` and `usage_rollup` (0046/0047), `IUsageLedger`/`IQuotaGate` contracts, idempotent `RecordUsageBatch` (one unnest statement, `ON CONFLICT DO NOTHING`). The operator route `POST /internal/operator/billing/usage` and its SDK drift gate stay with 12.3.1-T2.4 (COORDINATOR-DECISION S94); open hand-overs: N-1 probabilistic deadlock test (T5), `egress_gb` null quantity (T2.2), P-3 index include and F4 payload-mismatch (T5), price resolution (T3), `IQuotaGate` implementation (T4.2). |
 | 10.3.1 | 10.3.1-T1.1–T1.4 | merged (#203, a9b2d09) | OpenTelemetry in Api and Worker: HTTP→Mediator→Npgsql trace with `request_id`; `run_id`/`job_id`/`trace_id` correlation on spans and logs, carried through the outbox/task row (`_evidgate_correlation`); resource attributes + head sampling with errors always kept; log redaction (`SecretRedactor`, fail closed) before the OTLP exporter; web-vitals intake schema `docs/runbooks/web-vitals-intake.md`. No migration. Residual hardening N1–N9 is in the §6 row "Telemetry redaction/baggage residuals (10.3.1-T1 delivery, S91, PR #203)". |
-| 09.3.1 | 09.3.1-T1 (T1.1 + T1.2) | PR #212 open | Run list at `features/runs/list/`: `RunListStore` (cursor paging, `ref_name` server filter, state/decision/rerun-scope URL filters applied to loaded rows with a 5-page/1000-row auto-load bound), `RunDataService`, virtual-scroll table with `EvidenceBadge` (unavailable) and `DecisionChip` columns, escaped `ref_name`/rerun labels, vi + en strings, review route `dev/run-list`. Decisions D-S101-Q1/Q2 (plan 09.3.1 Notes). |
+| 09.3.1 | 09.3.1-T1 (T1.1 + T1.2) | merged (#212, 408f9a8) | Run list at `features/runs/list/`: `RunListStore` (cursor paging, `ref_name` server filter, state/decision/rerun-scope URL filters applied to loaded rows with a 5-page/1000-row auto-load bound), `RunDataService`, virtual-scroll table with `EvidenceBadge` (unavailable) and `DecisionChip` columns, escaped `ref_name`/rerun labels, vi + en strings, review route `dev/run-list`. Decisions D-S101-Q1/Q2 (plan 09.3.1 Notes). |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -316,7 +316,7 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **92 tasks / 102.0 d** (G1 42 / 43.5, G2 35 / 36.5, G3 5 / 8, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0048`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
+Dependency-ready: **91 tasks / 101.0 d** (G1 42 / 43.5, G2 34 / 35.5, G3 5 / 8, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0048`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
 
 Stricter variant that also requires every dependency task's whole story to be merged: **48 tasks / 51.5 d** (G1 19 / 20.5, G2 21 / 21, G3 0 / 0, G4 8 / 10), recomputed on `b0be589` from the plan graph plus the landed set. It supersedes the S93 print of 28 / 31.25 d, which no longer recomputes from the landed set under that definition.
 
@@ -374,7 +374,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 13.3.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | n/a | no — `[OPEN]` no feature plan: `scripts/check_features.py` reports "expected 1 feature file, found 0" (STATUS §6 row) |
 | 13.4.1-T1 | L | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | plan first, then split by its sub-tasks; declared L = wireframes/all states + CR-D-2 deltas | no — `[OPEN]` no feature plan (STATUS §6 row); size L is `plans/13-product-phases.md:175` |
 
-### G2: 35 tasks / 36.5 d (backend lane 25 / 25.5 d = 24 code + 1 docs writing `infra/`, web-only 6 / 8 d, docs-only 4 / 3 d)
+### G2: 34 tasks / 35.5 d (backend lane 25 / 25.5 d = 24 code + 1 docs writing `infra/`, web-only 5 / 7 d, docs-only 4 / 3 d)
 
 #### G2 backend lane
 
@@ -720,3 +720,4 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Merge debt (#203) | Merged delivery under coordinator-review 6c after one send-back: merge sha a9b2d09, reviewed tip 0fb1c9a3e9a07b0c47ac44b981726835072ba235 (code gated at 0291a09; docs-only after it). jev r1 on 8a441e8: acceptance 0.34, reviews 0.42, clean 0.45, handed_over 0.67 (bar 0.8); r2: acceptance 0.84, reviews 0.55, clean 0.90, handed_over 0.68. The send-back asked for one phase-2 run on the final head (EXIT=0, 4707/4707 across 12 projects; the first run failed once on a load-related 5 s HttpClient timeout in Hosts `EnvelopeTransportTests.Oversize_Body_Returns_413_Envelope`, which passes alone), a code+security reviewer over 33ae1c7..0291a09 (OtelFinalReview, two P3), inline acceptance rows, and decision D-S91-Q3. Last code reviews QA, code review, perf+security at 597b1b6, delta and security delta over 597b1b6..33ae1c7 (18/21 closed, 3 partly); CI refused for billing (owner treats as pass); smoke-clean-build exit 2 only on the 25 pre-existing Foundation FixtureLoaderTests. Open hand-over rows: STATUS.md:719 (N1–N9, receivers 10.3.1-T2.1, T2.2 and the 02.3.1-T2 owner) and plan `10.3.1-telemetry-and-alerting.md:115`. Owner-review decision ids: D-S91-Q3, D-S91-M1 (`docs/phase-review.md`). | coordinator (D-S91-M1, `docs/phase-review.md`) |
 | listRuns lacks state/decision/rerun filters and completeness (S101) | `contracts/openapi.yaml` `listRuns` filters only by `ref_name`, `pr_number`, `head_sha`, `trigger_event`, `is_fork`; `RunSummary` has no completeness member. 09.3.1-T1 filters state/decision/rerun scope client-side over loaded rows (D-S101-Q1) and shows the Evidence column as unavailable. Plan 09.3.1 Notes (delivery of 09.3.1-T1) | receiver: queue row F43; hand-over Notes: `plans/features/09-web-ui/09.3.1-run-detail-is-the-truth-surface.md:234` |
 | Run list accepted low review notes (S101, #212) | F3 the page discards the store's re-thrown non-API rejection and repeated-cursor errors (`apps/web/src/app/features/runs/list/run-list.page.ts` `void` calls), the same pattern as `AuditStore`: accepted, no action; F4 each followed page copies the `rows` array, O(n²) bounded at 50-row pages: accepted, no action; F5 the new `runs.list.*` units in `apps/web/src/locale/messages*.xlf` are hand-written without extractor context-groups: accepted, no action | accepted, no action (receiver: none; reason above); recorded in plan `plans/features/09-web-ui/09.3.1-run-detail-is-the-truth-surface.md:234` |
+| Merge debt (#212) | Merged delivery under coordinator-review 6c with the send-back waived (D-S101-M1, `docs/phase-review.md`): merge sha 408f9a8, reviewed code sha 03b75b6 (fix round 8f8c414, delta over 03b75b6..f5a6df1 closed A-E); web-only gate phase 1 rc 0 + e2e 45 passed + e2e:fixtures 338 passed on f5a6df1; later commits docs-only; CI not observed. Open hand-over rows: STATUS.md:721 (listRuns lacks state/decision/rerun filters and completeness, receiver queue row F43) and STATUS.md:722 (accepted low review notes, no action); plan 09.3.1 Notes line 234. Owner-review decision ids: D-S101-Q1, D-S101-Q2, D-S101-M1 (`docs/phase-review.md`). | coordinator (D-S101-M1, `docs/phase-review.md`) |
