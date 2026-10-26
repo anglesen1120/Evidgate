@@ -15,14 +15,19 @@
 //   answers `changed: false` and still audits exactly one activation per confirm intent). T5.2's
 //   "reload restores enabled-and-collecting from server state" therefore stays OPEN until F18
 //   ships — do not close it in this file by inventing a read.
-// - Confirm is a two-call chain: append the default body (`createPolicyRevision`, no
-//   `Idempotency-Key` — the content hash is its idempotency), then activate that revision in
-//   `advisory` mode (`activatePolicy`, `Idempotency-Key` required). ONE intent covers the chain:
-//   `createIntentRunner` mints the key on the first press and reuses it on every explicit retry and
-//   on a double submit (which does not even start a second chain, because the runner refuses a
-//   second attempt while one is running). The appended revision id is kept per intent, so a retry
-//   after an activation failure does not append again; if it ever does re-append (a new intent), it
-//   sends the identical constant body, which the server answers with the same revision.
+// - Confirm is a two-call chain: append the default body (`createPolicyRevision`), then activate that
+//   revision in `advisory` mode (`activatePolicy`, whose route requires an `Idempotency-Key`). ONE
+//   intent covers the chain: `createIntentRunner` mints the key on the first press and reuses it on
+//   every explicit retry and on a double submit (which does not even start a second chain, because
+//   the runner refuses a second attempt while one is running). The appended revision id is kept per
+//   intent, so a retry after an activation failure does not append again; if it ever does re-append
+//   (a new intent), it sends the identical constant body, which the server answers with the same
+//   revision. The append route takes no `Idempotency-Key` of its own: the platform's interceptor
+//   stamps an untyped mutation with a random key that this route ignores (F6), which is why the
+//   append's idempotency is — and can only be — the content hash.
+// - The activation is a command that REPLACES the project's current policy pointer, so the preview
+//   says so before the user presses (F1), and the terminal panel names the revision it replaced when
+//   the answer carries one.
 // - `advisory` is the only mode: `enforcing` is refused `422` until 07.7.1 and the UI offers no
 //   choice, so no mode control exists here at all.
 // - `policy:write` is the permission (AC5: the lone org creator holds it through the T98
@@ -49,23 +54,29 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import type { PolicyActivationDto, PolicyRevisionDto } from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
+import type { ApiError } from '../../../core/http/api-error';
 import type { Intent } from '../../../core/http/intent';
 import { createIntentRunner } from '../../../core/http/retry';
 import { SessionStore } from '../../../core/session/session.store';
 import { ErrorPatternComponent } from '../../../shared/ui/states';
 import {
   DEFAULT_ADVISORY_POLICY,
-  abbreviatePolicyHash,
+  activationInstantLabel,
+  policyHashLabel,
   previewDefaultPolicy,
+  sanitizeLabel,
+  sanitizedIdentifier,
 } from './default-policy';
 
 /** The revision this page appended for the current intent, and the key it belongs to. */
@@ -119,10 +130,51 @@ export class EnableCollectionPage {
   protected readonly retryEligible = computed(
     () => this.permitted() && this.activation.retryEligible(),
   );
-  protected readonly enabledHash = computed(() => {
-    const activation = this.enabled();
-    return activation === null ? '' : abbreviatePolicyHash(activation.hash);
+  /**
+   * R5: a retryable failure whose `Retry-After` window is still open disables the confirm natively —
+   * pressing it could only be a no-op (`run()` from a retryable failure waits), so the control must
+   * not invite the press. The window belongs to the runner, not to this page.
+   */
+  protected readonly waitingForRetryAfter = computed(
+    () =>
+      this.activation.status() === 'failed' &&
+      this.failure()?.retryable === true &&
+      !this.activation.retryEligible(),
+  );
+  protected readonly confirmDisabled = computed(
+    () => this.busy() || !this.permitted() || this.waitingForRetryAfter(),
+  );
+  /**
+   * F2: the step only knows how to report `advisory`. Any other mode in a 200 answer is a contract
+   * change this page cannot present as success, so it becomes the typed error state — the same panel
+   * a refusal uses, with the reason stated instead of a server envelope.
+   */
+  protected readonly advisoryMode = computed(() => this.enabled()?.mode === 'advisory');
+  private readonly unsupportedMode = computed<ApiError | null>(() => {
+    if (this.enabled() === null || this.advisoryMode()) {
+      return null;
+    }
+    return {
+      kind: 'validation',
+      status: 200,
+      code: 'unexpected_mode',
+      message: this.unexpectedModeMessage,
+      requestId: null,
+      retryable: false,
+      details: [],
+      retryAfterSeconds: null,
+    };
   });
+  /** What the error panel shows: the server's refusal, or the mode this step cannot present. */
+  protected readonly failureView = computed(() => this.failure() ?? this.unsupportedMode());
+  /** F5: guarded members, so a malformed answer renders "unavailable" instead of throwing. */
+  protected readonly enabledHash = computed(() => policyHashLabel(this.enabled()?.hash));
+  protected readonly enabledInstant = computed(() =>
+    activationInstantLabel(this.enabled()?.activated_at),
+  );
+  protected readonly enabledPreviousRevision = computed(() =>
+    sanitizedIdentifier(this.enabled()?.previous_policy_revision_id),
+  );
   /** The revision number, only when the appended revision is the one that became active. */
   protected readonly enabledRevisionNo = computed<number | null>(() => {
     const activation = this.enabled();
@@ -133,8 +185,15 @@ export class EnableCollectionPage {
       ? appended.revision.revision_no
       : null;
   });
+  /** R3: the page renders the envelope's detail paths itself, so it renders them sanitised. */
+  protected clean(value: string | null | undefined): string {
+    return sanitizeLabel(value ?? '');
+  }
+  /** The terminal heading takes focus on success (see the focus effect in the constructor). */
+  private readonly enabledHeadingRef = viewChild<ElementRef<HTMLElement>>('enabledHeadingTarget');
 
   protected readonly intro = $localize`:@@onboarding.enable.intro:Enabling collection records a decision for every run of this project. It does not gate any merge yet.`;
+  protected readonly replacesActiveCopy = $localize`:@@onboarding.enable.replaces-active:Confirming activates this default policy and replaces any policy that is active for the project now.`;
   protected readonly previewHeading = $localize`:@@onboarding.enable.preview-heading:Default advisory policy`;
   protected readonly notGatingCopy = $localize`:@@onboarding.enable.not-gating:Not gating yet. This policy runs in advisory mode, so Evidgate records what it would have decided and never blocks a merge.`;
   protected readonly lateWindowLabel = $localize`:@@onboarding.enable.late-window:Late-evidence window`;
@@ -158,6 +217,9 @@ export class EnableCollectionPage {
   protected readonly revisionLabel = $localize`:@@onboarding.enable.revision:Policy revision`;
   protected readonly hashLabel = $localize`:@@onboarding.enable.hash:Revision hash`;
   protected readonly activatedAtLabel = $localize`:@@onboarding.enable.activated-at:Activated (UTC)`;
+  protected readonly previousRevisionLabel = $localize`:@@onboarding.enable.previous-revision:Revision this replaced`;
+  protected readonly unavailableLabel = $localize`:@@onboarding.enable.unavailable:Unavailable`;
+  protected readonly unexpectedModeMessage = $localize`:@@onboarding.enable.unexpected-mode:This step cannot present the policy mode the server reported, so the project was not shown as enabled. Reload the wizard to read the project's policy again.`;
 
   constructor() {
     // A scope change abandons the intent and the appended revision: the next confirm belongs to a
@@ -170,12 +232,22 @@ export class EnableCollectionPage {
       this.appendedRevision.set(null);
       this.activation.reset();
     });
+    // QA-01: the confirm disappears on success, so the focus it carried would be dropped. The
+    // terminal heading is the announcement target (`tabindex="-1"`, `role="status"` on the panel):
+    // focus moves there once the panel exists. Reading the ref inside this effect keeps it tracked,
+    // so the pass that mounts the panel re-runs it with a resolved element.
+    effect(() => {
+      if (this.enabled() === null || !this.advisoryMode()) {
+        return;
+      }
+      this.enabledHeadingRef()?.nativeElement.focus();
+    });
     this.destroyRef.onDestroy(() => this.activation.reset());
   }
 
   /** The confirm action, once per user intent (guarded by the runner while it runs). */
   protected async confirm(): Promise<void> {
-    if (this.busy() || !this.permitted()) return;
+    if (this.confirmDisabled()) return;
     await this.activation.run();
   }
 
@@ -197,14 +269,23 @@ export class EnableCollectionPage {
   /**
    * Append the default body, then activate it — both under `intent`.
    *
-   * The project is captured once so a scope change mid-flight cannot split the chain across two
-   * projects. The append is skipped when this intent already produced a revision (the retry path);
-   * otherwise the constant body is sent unchanged, which is what makes a repeat append idempotent
-   * by content hash.
+   * The scope is captured once so a change mid-flight cannot split the chain across two projects,
+   * and F3 closes the window between the two calls: an append that settles after the page went away
+   * or the scope moved must NOT be followed by the activation command, which would otherwise commit
+   * a `policy_activation` for a view the user has left. The chain is abandoned the way the runner
+   * understands (`AbortError`), so no failure is shown and the half-written append is harmless — it
+   * is one immutable revision that a later confirm reuses by content hash.
+   *
+   * The append is skipped when this intent already produced a revision (the retry path); otherwise
+   * the constant body is sent unchanged, which is what makes a repeat append idempotent by content.
    */
   private async confirmPolicy(intent: Intent): Promise<PolicyActivationDto> {
+    const orgId = this.orgId();
     const projectId = this.projectId();
     const revision = await this.appendDefaultPolicy(projectId, intent);
+    if (this.destroyRef.destroyed || this.orgId() !== orgId || this.projectId() !== projectId) {
+      throw new DOMException('The step was left before the activation was sent.', 'AbortError');
+    }
     return this.data.activatePolicy(projectId, revision.id, intent);
   }
 

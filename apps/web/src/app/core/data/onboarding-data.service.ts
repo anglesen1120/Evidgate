@@ -196,11 +196,12 @@ export class OnboardingDataService {
 
   /**
    * Append one policy revision (`POST /v1/projects/{p}/policies`, step 5;
-   * `policy:write`). No `Idempotency-Key` is passed because the contract requires none: the server
+   * `policy:write`). No `Idempotency-Key` is supplied because the route asks for none: the server
    * canonicalises the body (RFC 8785), hashes it, and answers `200` with the revision already
    * stored for that hash, or `201` for a new one (07.1.1-T3). Sending the identical body again is
    * therefore idempotent by content, which is what lets a retried confirm re-run this step without
-   * appending a second revision.
+   * appending a second revision. (The platform's interceptor stamps an untyped mutation with a
+   * random `Idempotency-Key` anyway — this route ignores it, so it neither helps nor collides: F6.)
    *
    * No `If-Match` is sent either: the wizard cannot read the project's head revision (the contract
    * has no such read) and a precondition it cannot quote would only produce `412`s. The Settings

@@ -24,8 +24,11 @@ import { parse as parseYaml } from 'yaml';
 import {
   DEFAULT_ADVISORY_POLICY,
   abbreviatePolicyHash,
+  activationInstantLabel,
+  policyHashLabel,
   previewDefaultPolicy,
   sanitizeLabel,
+  sanitizedIdentifier,
 } from './default-policy';
 
 /**
@@ -121,7 +124,7 @@ describe('the default advisory policy body', () => {
   it('serialises to identical bytes on every send, so the content hash stays the idempotency key', () => {
     // 07.1.1-T3: the server hashes the canonical body. Two attempts must therefore be the same
     // text in the same key order, or a retry would append a second revision instead of replaying.
-    expect(JSON.stringify(DEFAULT_ADVISORY_POLICY)).toBe(JSON.stringify(DEFAULT_ADVISORY_POLICY));
+    // (A `JSON.stringify(x)` vs `JSON.stringify(x)` pair would assert nothing — QA-05.)
     expect(JSON.stringify(DEFAULT_ADVISORY_POLICY)).toBe(
       '{"required_suites":[],"required_cases":[],"late_window_minutes":1440,"gating_refs":{"default_branch":false}}',
     );
@@ -225,5 +228,36 @@ describe('sanitizeLabel', () => {
     const cleaned = sanitizeLabel('a\u0000b\u001Fc\u202Ed\u200Ee\u{E0001}f');
     expect(cleaned).toBe('abcdef');
     expect([...cleaned].some((character) => /[\p{Cc}\p{Cf}]/u.test(character))).toBe(false);
+  });
+});
+
+describe('the display guards for a member the answer may not carry (F5)', () => {
+  it('reads a sanitised identifier, and refuses everything that is not a non-blank string', () => {
+    expect(sanitizedIdentifier('018f0000-0000-7000-8000-00000000a003')).toBe(
+      '018f0000-0000-7000-8000-00000000a003',
+    );
+    // A format character is stripped before the value is shown (T47 precedent).
+    expect(sanitizedIdentifier('abc\u202Edef')).toBe('abcdef');
+    expect(sanitizedIdentifier('   ')).toBeNull();
+    expect(sanitizedIdentifier('')).toBeNull();
+    expect(sanitizedIdentifier(null)).toBeNull();
+    expect(sanitizedIdentifier(undefined)).toBeNull();
+    expect(sanitizedIdentifier(42)).toBeNull();
+  });
+
+  it('abbreviates a hash it can read and answers null for one it cannot', () => {
+    expect(policyHashLabel('sha256:9f2c1d7b4a6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f901234')).toBe(
+      'sha256:9f2c1d7b4a6e…',
+    );
+    expect(policyHashLabel(undefined)).toBeNull();
+    expect(policyHashLabel({ hash: 'x' })).toBeNull();
+  });
+
+  it('accepts only an instant the date pipe can render, so the pipe never throws', () => {
+    expect(activationInstantLabel('2026-10-27T01:00:00Z')).toBe('2026-10-27T01:00:00Z');
+    // `DatePipe` throws on these; the panel must render "unavailable" instead of breaking.
+    expect(activationInstantLabel('not a date')).toBeNull();
+    expect(activationInstantLabel('')).toBeNull();
+    expect(activationInstantLabel(null)).toBeNull();
   });
 });

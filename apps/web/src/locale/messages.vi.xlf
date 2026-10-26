@@ -2629,6 +2629,10 @@
       <trans-unit id="onboarding.enable.revision" datatype="html"><source>Policy revision</source><target>Bản sửa chính sách</target></trans-unit>
       <trans-unit id="onboarding.enable.hash" datatype="html"><source>Revision hash</source><target>Mã băm bản sửa</target></trans-unit>
       <trans-unit id="onboarding.enable.activated-at" datatype="html"><source>Activated (UTC)</source><target>Đã kích hoạt (UTC)</target></trans-unit>
+      <trans-unit id="onboarding.enable.replaces-active" datatype="html"><source>Confirming activates this default policy and replaces any policy that is active for the project now.</source><target>Xác nhận sẽ kích hoạt chính sách mặc định này và thay thế chính sách đang áp dụng cho dự án hiện tại.</target></trans-unit>
+      <trans-unit id="onboarding.enable.previous-revision" datatype="html"><source>Revision this replaced</source><target>Bản sửa đã bị thay thế</target></trans-unit>
+      <trans-unit id="onboarding.enable.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="onboarding.enable.unexpected-mode" datatype="html"><source>This step cannot present the policy mode the server reported, so the project was not shown as enabled. Reload the wizard to read the project's policy again.</source><target>Bước này không hiển thị được chế độ chính sách mà máy chủ báo về, nên dự án chưa được hiển thị là đã bật. Hãy tải lại trình hướng dẫn để đọc lại chính sách của dự án.</target></trans-unit>
     </body>
   </file>
 </xliff>

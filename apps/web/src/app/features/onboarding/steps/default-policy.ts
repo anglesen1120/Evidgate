@@ -124,3 +124,41 @@ export function previewDefaultPolicy(body: PolicyRevisionV1): DefaultPolicyPrevi
     gatesDefaultBranch: body.gating_refs?.default_branch === true,
   };
 }
+
+/**
+ * A server-provided identifier (a revision id, a hash) as the page may render it: sanitised, and
+ * `null` when the answer carries no usable string.
+ *
+ * F5: the answer is data, not a guarantee. A missing, blank or non-string member must reach the
+ * shared "unavailable" copy instead of an empty cell, an `undefined` interpolation or a crash — and
+ * a format character must not survive into a panel that names a revision (T47 precedent).
+ */
+export function sanitizedIdentifier(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const clean = sanitizeLabel(value).trim();
+  return clean === '' ? null : clean;
+}
+
+/** {@link abbreviatePolicyHash} for a member the answer may not carry. */
+export function policyHashLabel(value: unknown): string | null {
+  const clean = sanitizedIdentifier(value);
+  return clean === null ? null : abbreviatePolicyHash(clean);
+}
+
+/**
+ * The activation instant as the ISO string `<time datetime>` and the `date` pipe both accept, or
+ * `null` when the answer carries something `Date.parse` refuses.
+ *
+ * F5: `DatePipe` throws on an invalid date, so a malformed `activated_at` would break the render of
+ * the very panel that reports a successful activation. The page therefore hands the pipe only a
+ * value this function accepted, and shows the shared "unavailable" copy otherwise.
+ */
+export function activationInstantLabel(value: unknown): string | null {
+  const clean = sanitizedIdentifier(value);
+  if (clean === null) {
+    return null;
+  }
+  return Number.isFinite(Date.parse(clean)) ? clean : null;
+}

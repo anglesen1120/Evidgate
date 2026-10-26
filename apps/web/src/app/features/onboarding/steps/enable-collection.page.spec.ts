@@ -12,7 +12,7 @@
 //   `tests/Tenancy.IntegrationTests/PolicyActivationTests.cs`, not in a component spec.
 // - The disabled state is about a missing `policy:write` (a `release_approver` reassigned away,
 //   AC5/T98), not about a server refusal: a refusal is rendered as the typed error state instead.
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { PolicyActivationDto, PolicyRevisionDto } from '@evidgate/sdk';
 
@@ -116,9 +116,13 @@ describe('EnableCollectionPage', () => {
    * the macrotask turn before it drains the mocked promise the page awaits between the append and
    * the activation, so an assertion never reads a half-run chain.
    */
-  async function settle(): Promise<void> {
+  async function drain(target: ComponentFixture<unknown>): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0));
-    await fixture.whenStable();
+    await target.whenStable();
+  }
+
+  function settle(): Promise<void> {
+    return drain(fixture);
   }
 
   function confirmButton(): HTMLButtonElement {
@@ -311,5 +315,255 @@ describe('EnableCollectionPage', () => {
     expect(enabled.textContent).toContain('sha256:9f2c1d7b4a6e…');
     // The label is still interpolated text inside `<bdi>`, never markup.
     expect(enabled.querySelector('code')?.innerHTML).not.toContain('&lt;');
+  });
+
+  it('says confirming replaces the active policy, and names the revision it replaced (F1)', async () => {
+    // The hazard is stated before the press: the confirm is a REPLACE, not an addition.
+    expect(text('[data-testid="enable-collection-replaces-active"]')).toContain(
+      'replaces any policy',
+    );
+
+    activatePolicy.mockResolvedValue({
+      ...ACTIVATION,
+      previous_policy_revision_id: '018f0000-0000-7000-8000-00000000a003',
+    });
+    pressConfirm();
+    await settle();
+
+    const enabled = root.querySelector('[data-testid="enable-collection-enabled"]')!;
+    expect(enabled.textContent).toContain('Revision this replaced');
+    expect(enabled.textContent).toContain('018f0000-0000-7000-8000-00000000a003');
+  });
+
+  it('omits the replaced-revision row when the answer names none', async () => {
+    pressConfirm();
+    await settle();
+
+    const enabled = root.querySelector('[data-testid="enable-collection-enabled"]')!;
+    expect(enabled.textContent).not.toContain('Revision this replaced');
+  });
+
+  it('renders the typed error instead of a terminal panel for a mode it cannot present (F2)', async () => {
+    activatePolicy.mockResolvedValue({ ...ACTIVATION, mode: 'enforcing' });
+    pressConfirm();
+    await settle();
+
+    // No success surface, and the advisory-only sentences are not asserted about this answer.
+    expect(root.querySelector('[data-testid="enable-collection-enabled"]')).toBeNull();
+    expect(root.textContent).not.toContain('Project enabled and collecting');
+    const error = root.querySelector('[data-testid="enable-collection-error"]');
+    expect(error).not.toBeNull();
+    expect(error!.textContent).toContain('cannot present the policy mode');
+  });
+
+  it('renders the shared "Unavailable" copy instead of throwing on a malformed answer (F5)', async () => {
+    activatePolicy.mockResolvedValue({
+      ...ACTIVATION,
+      hash: '',
+      activated_at: 'not-a-date',
+    });
+    pressConfirm();
+    await settle();
+
+    const enabled = root.querySelector('[data-testid="enable-collection-enabled"]')!;
+    // `DatePipe` throws on an invalid date, so no `<time>` may be built from this answer.
+    expect(enabled.querySelector('time')).toBeNull();
+    expect(enabled.textContent).toContain('Unavailable');
+  });
+
+  it('sanitises the refusal detail rows it renders itself (R3)', async () => {
+    activatePolicy.mockRejectedValue(
+      failure('validation', 422, {
+        details: [{ path: '/late\u202Ewindow', reason: 'number_too_long\u200E' }],
+      }),
+    );
+    pressConfirm();
+    await settle();
+
+    const error = root.querySelector('[data-testid="enable-collection-error"]')!;
+    expect(error.textContent).not.toContain('\u202E');
+    expect(error.textContent).not.toContain('\u200E');
+    expect(error.textContent).toContain('/latewindow');
+  });
+
+  it('disables the confirm while a retryable Retry-After window is still open (R5)', async () => {
+    activatePolicy.mockRejectedValueOnce(
+      new ApiRequestError({
+        kind: 'rate_limited',
+        status: 429,
+        code: 'rate_limited',
+        message: 'Too many requests.',
+        requestId: 'request-1',
+        retryable: true,
+        details: [],
+        retryAfterSeconds: 30,
+      }),
+    );
+    pressConfirm();
+    await settle();
+
+    // The runner owns the window: while it is open the action could only be a no-op, so the control
+    // says so natively instead of inviting a press. (The window opening is the runner's own spec.)
+    expect(confirmButton().disabled).toBe(true);
+    expect(retryButton()?.disabled).toBe(true);
+  });
+
+  it('moves focus to the terminal heading when the confirm goes away (QA-01)', async () => {
+    pressConfirm();
+    await settle();
+
+    const heading = root.querySelector('#enable-enabled-heading');
+    expect(heading).not.toBeNull();
+    expect(heading!.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it('re-appends after a failed append and keeps one activation key across attempts (R4)', async () => {
+    createPolicyRevision.mockRejectedValueOnce(failure('timeout', 0, { retryable: true }));
+    pressConfirm();
+    await settle();
+    expect(createPolicyRevision).toHaveBeenCalledTimes(1);
+    expect(activatePolicy).not.toHaveBeenCalled();
+
+    activatePolicy.mockRejectedValueOnce(failure('timeout', 0, { retryable: true }));
+    retryButton()!.click();
+    await settle();
+    // The append is retried because this intent produced no revision yet.
+    expect(createPolicyRevision).toHaveBeenCalledTimes(2);
+    expect(activatePolicy).toHaveBeenCalledTimes(1);
+
+    retryButton()!.click();
+    await settle();
+    // …and once it has, the retry reuses it instead of appending a third time.
+    expect(createPolicyRevision).toHaveBeenCalledTimes(2);
+    expect(activatePolicy).toHaveBeenCalledTimes(2);
+    const keys = activatePolicy.mock.calls.map(([, , intent]) => intent.idempotencyKey);
+    expect(keys[0]).toBe(keys[1]);
+    expect(root.querySelector('[data-testid="enable-collection-enabled"]')).not.toBeNull();
+  });
+
+  it('mints a new key after a non-retryable refusal (R4)', async () => {
+    activatePolicy.mockRejectedValueOnce(failure('conflict', 409));
+    pressConfirm();
+    await settle();
+    expect(retryButton()).toBeNull();
+
+    pressConfirm();
+    await settle();
+
+    expect(activatePolicy).toHaveBeenCalledTimes(2);
+    // A new intent means a new key — and therefore a fresh append, whose body is still identical.
+    expect(createPolicyRevision).toHaveBeenCalledTimes(2);
+    const keys = activatePolicy.mock.calls.map(([, , intent]) => intent.idempotencyKey);
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
+  it('retries a retryable failure through the main confirm button with the same key (R4)', async () => {
+    activatePolicy.mockRejectedValueOnce(failure('timeout', 0, { retryable: true }));
+    pressConfirm();
+    await settle();
+
+    // The main control, not the error panel's action: `run()` from a retryable failure keeps the key.
+    pressConfirm();
+    await settle();
+
+    expect(createPolicyRevision).toHaveBeenCalledTimes(1);
+    expect(activatePolicy).toHaveBeenCalledTimes(2);
+    const keys = activatePolicy.mock.calls.map(([, , intent]) => intent.idempotencyKey);
+    expect(keys[0]).toBe(keys[1]);
+    expect(root.querySelector('[data-testid="enable-collection-enabled"]')).not.toBeNull();
+  });
+
+  it('sends no activation when the append settles after the step was left (F3)', async () => {
+    let release!: (revision: PolicyRevisionDto) => void;
+    createPolicyRevision.mockImplementationOnce(
+      () =>
+        new Promise<PolicyRevisionDto>((resolve) => {
+          release = resolve;
+        }),
+    );
+    pressConfirm();
+    await settle();
+    expect(createPolicyRevision).toHaveBeenCalledTimes(1);
+
+    fixture.destroy();
+    release(REVISION);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The half-written append is one immutable revision (content-idempotent); the command that would
+    // change the project's policy pointer must never leave for a view the user has left.
+    expect(activatePolicy).not.toHaveBeenCalled();
+  });
+});
+
+@Component({
+  selector: 'app-enable-collection-host',
+  imports: [EnableCollectionPage],
+  template: `<app-onboarding-enable-collection [orgId]="orgId()" [projectId]="projectId()" />`,
+})
+class EnableCollectionHost {
+  readonly orgId = signal('org-1');
+  readonly projectId = signal('project-1');
+}
+
+describe('EnableCollectionPage scope changes', () => {
+  const permitted = signal(true);
+  const has = vi.fn((code: string) => permitted() && code === 'policy:write');
+  const createPolicyRevision = vi.fn<OnboardingDataService['createPolicyRevision']>();
+  const activatePolicy = vi.fn<OnboardingDataService['activatePolicy']>();
+  let host: ComponentFixture<EnableCollectionHost>;
+  let hostRoot: HTMLElement;
+
+  function press(): void {
+    hostRoot
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  }
+
+  async function drain(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await host.whenStable();
+  }
+
+  beforeEach(async () => {
+    permitted.set(true);
+    createPolicyRevision.mockReset().mockResolvedValue(REVISION);
+    activatePolicy.mockReset().mockResolvedValue(ACTIVATION);
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [EnableCollectionHost],
+      providers: [
+        provideZonelessChangeDetection(),
+        {
+          provide: OnboardingDataService,
+          useValue: { createPolicyRevision, activatePolicy },
+        },
+        { provide: SessionStore, useValue: { has } },
+      ],
+    }).compileComponents();
+    host = TestBed.createComponent(EnableCollectionHost);
+    hostRoot = host.nativeElement as HTMLElement;
+    await host.whenStable();
+  });
+
+  it('clears the appended revision and the intent when the scope moves (F3)', async () => {
+    press();
+    await drain();
+    expect(hostRoot.querySelector('[data-testid="enable-collection-enabled"]')).not.toBeNull();
+    const firstKey = activatePolicy.mock.calls[0]![2].idempotencyKey;
+
+    // The wizard moved to another project: the terminal panel describes an answer for the old one.
+    host.componentInstance.projectId.set('project-2');
+    await drain();
+    expect(hostRoot.querySelector('[data-testid="enable-collection-enabled"]')).toBeNull();
+    expect(hostRoot.querySelector('[data-testid="enable-collection-confirm"]')).not.toBeNull();
+
+    press();
+    await drain();
+    // A new intent for the new scope: new key, and the cached revision of the old intent is gone.
+    expect(createPolicyRevision).toHaveBeenCalledTimes(2);
+    expect(createPolicyRevision).toHaveBeenLastCalledWith('project-2', DEFAULT_ADVISORY_POLICY);
+    expect(activatePolicy).toHaveBeenCalledTimes(2);
+    expect(activatePolicy.mock.calls[1]![2].idempotencyKey).not.toBe(firstKey);
   });
 });

@@ -170,6 +170,8 @@ test.describe('confirming activates the project (AC5, T5.2)', () => {
     // The panel is the step's terminal state, not a second preview: one panel and no error.
     await expect(terminal).toHaveCount(1);
     await expect(page.locator(ERROR)).toHaveCount(0);
+    // QA-01: the confirm the user pressed is gone, so focus must not be dropped on `<body>`.
+    await expect(page.locator('#enable-enabled-heading')).toBeFocused();
   });
 
   test('a replay answer (`changed: false`) is a success, and a reload never derives the step done', async ({
@@ -178,10 +180,7 @@ test.describe('confirming activates the project (AC5, T5.2)', () => {
     // `policy-activation-unchanged` is the contract's replay: same revision, same hash,
     // `changed: false`. After a reload the wizard is back on step 5 (there is no read to derive it
     // from), and the second confirm is answered with the same replay — not with an error.
-    await openStepFive(page, 'en', [
-      ENABLE_GRANTS_TOGGLE,
-      activationVariantToggle('unchanged'),
-    ]);
+    await openStepFive(page, 'en', [ENABLE_GRANTS_TOGGLE, activationVariantToggle('unchanged')]);
 
     await page.locator(CONFIRM).click();
     await expect(page.locator(ENABLED)).toBeVisible();
@@ -233,10 +232,7 @@ test.describe('a refused activation is rendered verbatim (00 §9.2)', () => {
     // the server decides otherwise — the answer a request rejected for `policy:write` produces. The
     // page renders the typed refusal here on purpose (`app-error-pattern`, not the generic
     // forbidden panel), so the envelope is asserted verbatim, as for the 409.
-    await openStepFive(page, 'en', [
-      ENABLE_GRANTS_TOGGLE,
-      activationVariantToggle('forbidden'),
-    ]);
+    await openStepFive(page, 'en', [ENABLE_GRANTS_TOGGLE, activationVariantToggle('forbidden')]);
 
     await page.locator(CONFIRM).click();
 

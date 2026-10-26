@@ -93,6 +93,23 @@ code {
   font-size: var(--eg-text-xs);
   overflow-wrap: anywhere;
 }
+/* F1: the replace hazard is a sentence of its own, read before the press — a warning-tinted block
+   rather than muted prose, because it changes what the confirm means. */
+.replaces-active {
+  padding: var(--eg-space-3) var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-warning-fg);
+  border-radius: var(--eg-radius-sm);
+  background: var(--eg-warning-bg);
+  color: var(--eg-warning-fg);
+  font-weight: var(--eg-weight-semibold);
+}
+/* The terminal heading receives focus when the confirm goes away (QA-01); a programmatic focus is
+   not always `:focus-visible`, so the ring is on `:focus`. */
+.panel--done h3:focus {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+  border-radius: var(--eg-radius-sm);
+}
 button {
   justify-self: start;
   max-inline-size: 100%;

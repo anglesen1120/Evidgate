@@ -2634,6 +2634,10 @@
       <trans-unit id="onboarding.enable.revision" datatype="html"><source>Policy revision</source></trans-unit>
       <trans-unit id="onboarding.enable.hash" datatype="html"><source>Revision hash</source></trans-unit>
       <trans-unit id="onboarding.enable.activated-at" datatype="html"><source>Activated (UTC)</source></trans-unit>
+      <trans-unit id="onboarding.enable.replaces-active" datatype="html"><source>Confirming activates this default policy and replaces any policy that is active for the project now.</source></trans-unit>
+      <trans-unit id="onboarding.enable.previous-revision" datatype="html"><source>Revision this replaced</source></trans-unit>
+      <trans-unit id="onboarding.enable.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
+      <trans-unit id="onboarding.enable.unexpected-mode" datatype="html"><source>This step cannot present the policy mode the server reported, so the project was not shown as enabled. Reload the wizard to read the project's policy again.</source></trans-unit>
     </body>
   </file>
 </xliff>

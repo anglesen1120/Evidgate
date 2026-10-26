@@ -8,6 +8,10 @@
   >
     <h3 id="enable-preview-heading">{{ previewHeading }}</h3>
     <p class="advisory" data-testid="enable-collection-not-gating">{{ notGatingCopy }}</p>
+    <!-- F1: the confirm is a REPLACE command, so the hazard is stated before the press, not after. -->
+    <p class="replaces-active" data-testid="enable-collection-replaces-active">
+      {{ replacesActiveCopy }}
+    </p>
     <dl class="metadata">
       <div>
         <dt>{{ lateWindowLabel }}</dt>
@@ -34,53 +38,15 @@
     </dl>
   </section>
 
+  <!-- QA-01: the busy line is a live region by `role="status"` alone; a second `aria-live` on the
+       same node is redundant (and the terminal panel below relies on `role="status"` too). -->
   <p class="busy-status" role="status">
     @if (busy()) {
       {{ confirmingLabel }}
     }
   </p>
 
-  @if (enabled(); as activation) {
-    <section
-      class="panel panel--done"
-      role="status"
-      [attr.aria-live]="'polite'"
-      aria-labelledby="enable-enabled-heading"
-      data-testid="enable-collection-enabled"
-    >
-      <h3 id="enable-enabled-heading">{{ enabledHeading }}</h3>
-      <p>{{ activation.changed ? changedCopy : unchangedCopy }}</p>
-      <p class="advisory">{{ notGatingCopy }}</p>
-      <dl class="metadata">
-        <div>
-          <dt>{{ modeLabel }}</dt>
-          <dd>{{ modeText(activation.mode) }}</dd>
-        </div>
-        @if (enabledRevisionNo(); as revisionNo) {
-          <div>
-            <dt>{{ revisionLabel }}</dt>
-            <dd>{{ revisionNo }}</dd>
-          </div>
-        }
-        <div>
-          <dt>{{ hashLabel }}</dt>
-          <dd>
-            <code
-              ><bdi>{{ enabledHash() }}</bdi></code
-            >
-          </dd>
-        </div>
-        <div>
-          <dt>{{ activatedAtLabel }}</dt>
-          <dd>
-            <time [attr.datetime]="activation.activated_at">{{
-              activation.activated_at | date: 'medium' : '+0000'
-            }}</time>
-          </dd>
-        </div>
-      </dl>
-    </section>
-  } @else {
+  @if (enabled() === null) {
     <form (ngSubmit)="confirm()">
       @if (!permitted()) {
         <p id="enable-permission" data-testid="enable-collection-ask-approver">{{ askApprover }}</p>
@@ -89,29 +55,90 @@
         class="state-panel__action primary"
         data-testid="enable-collection-confirm"
         type="submit"
-        [disabled]="busy() || !permitted()"
+        [disabled]="confirmDisabled()"
         [attr.aria-describedby]="!permitted() ? 'enable-permission' : null"
       >
         {{ busy() ? confirmingLabel : confirmLabel }}
       </button>
     </form>
+  }
 
-    @if (failure(); as error) {
-      <section data-testid="enable-collection-error">
-        <app-error-pattern
-          [error]="error"
-          [headingLevel]="3"
-          [retryDisabled]="!retryEligible() || busy()"
-          (retry)="retry()"
-        />
-        @if (responseUncertain()) {
-          <p class="notice" data-testid="enable-collection-response-uncertain">
-            {{ uncertainLabel }}
-          </p>
-        }
-        @for (detail of error.details; track $index) {
-          <p class="validation">{{ detail.path }} {{ detail.reason }}</p>
-        }
+  @if (failureView(); as error) {
+    <section data-testid="enable-collection-error">
+      <app-error-pattern
+        [error]="error"
+        [headingLevel]="3"
+        [retryDisabled]="!retryEligible() || busy()"
+        (retry)="retry()"
+      />
+      @if (responseUncertain()) {
+        <p class="notice" data-testid="enable-collection-response-uncertain">
+          {{ uncertainLabel }}
+        </p>
+      }
+      @for (detail of error.details; track $index) {
+        <!-- R3: the shared error pattern renders `message`/`code` itself; these rows are the page's
+             own, so the page sanitises them before they reach the DOM. -->
+        <p class="validation">{{ clean(detail.path) }} {{ clean(detail.reason) }}</p>
+      }
+    </section>
+  }
+
+  @if (enabled(); as activation) {
+    @if (advisoryMode()) {
+      <section
+        class="panel panel--done"
+        role="status"
+        aria-labelledby="enable-enabled-heading"
+        data-testid="enable-collection-enabled"
+      >
+        <h3 id="enable-enabled-heading" tabindex="-1" #enabledHeadingTarget>{{ enabledHeading }}</h3>
+        <p>{{ activation.changed ? changedCopy : unchangedCopy }}</p>
+        <p class="advisory">{{ notGatingCopy }}</p>
+        <dl class="metadata">
+          <div>
+            <dt>{{ modeLabel }}</dt>
+            <dd>{{ modeText(activation.mode) }}</dd>
+          </div>
+          @if (enabledRevisionNo(); as revisionNo) {
+            <div>
+              <dt>{{ revisionLabel }}</dt>
+              <dd>{{ revisionNo }}</dd>
+            </div>
+          }
+          @if (enabledPreviousRevision(); as replaced) {
+            <div>
+              <dt>{{ previousRevisionLabel }}</dt>
+              <dd>
+                <code
+                  ><bdi>{{ replaced }}</bdi></code
+                >
+              </dd>
+            </div>
+          }
+          <div>
+            <dt>{{ hashLabel }}</dt>
+            <dd>
+              @if (enabledHash(); as hash) {
+                <code
+                  ><bdi>{{ hash }}</bdi></code
+                >
+              } @else {
+                {{ unavailableLabel }}
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>{{ activatedAtLabel }}</dt>
+            <dd>
+              @if (enabledInstant(); as instant) {
+                <time [attr.datetime]="instant">{{ instant | date: 'medium' : '+0000' }}</time>
+              } @else {
+                {{ unavailableLabel }}
+              }
+            </dd>
+          </div>
+        </dl>
       </section>
     }
   }
