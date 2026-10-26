@@ -100,9 +100,58 @@ export function devRoutes(): Routes {
               // The product table carries this on the same leaf (`runs.routes.ts`); it is route
               // data, not a gate, so the review address keeps it too.
               data: { pageHeadingLevel: 1 },
-              loadComponent: () =>
-                // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph; mounts the real G2 page without changing its product phase.
-                import('../../features/runs/list/run-list.page').then((m) => m.RunListPage),
+              children: [
+                {
+                  path: '',
+                  pathMatch: 'full',
+                  loadComponent: () =>
+                    // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement; real G2 list, same product guards.
+                    import('../../features/runs/list/run-list.page').then((m) => m.RunListPage),
+                },
+                {
+                  path: ':runId',
+                  loadComponent: () =>
+                    // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only detail child makes relative product row links usable in G1 review.
+                    import('../../features/runs/detail/run-detail.page').then((m) => m.RunDetailPage),
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      path: 'dev/run-detail',
+      component: ShellComponent,
+      children: [
+        {
+          path: 'orgs/:orgId',
+          canMatch: [authGuard, orgScopeGuard],
+          children: [
+            {
+              path: 'projects/:projectId',
+              canMatch: [projectScopeGuard, permissionGuard('run:read')],
+              children: [
+                {
+                  path: 'runs',
+                  data: { pageHeadingLevel: 1 },
+                  children: [
+                    {
+                      path: '',
+                      pathMatch: 'full',
+                      loadComponent: () =>
+                        // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement; back-to-runs target under identical product guards.
+                        import('../../features/runs/list/run-list.page').then((m) => m.RunListPage),
+                    },
+                    {
+                      path: ':runId',
+                      loadComponent: () =>
+                        // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement; real G2 detail, no product phase change.
+                        import('../../features/runs/detail/run-detail.page').then((m) => m.RunDetailPage),
+                    },
+                  ],
+                },
+              ],
             },
           ],
         },

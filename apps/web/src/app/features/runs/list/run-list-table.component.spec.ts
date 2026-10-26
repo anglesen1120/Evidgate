@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
 import { RunListTableComponent } from './run-list-table.component';
 
@@ -26,7 +27,7 @@ describe('RunListTableComponent', () => {
   beforeEach(() =>
     TestBed.configureTestingModule({
       imports: [RunListTableComponent],
-      providers: [provideZonelessChangeDetection()],
+      providers: [provideZonelessChangeDetection(), provideRouter([])],
     }),
   );
   afterEach(() => TestBed.resetTestingModule());
@@ -36,6 +37,13 @@ describe('RunListTableComponent', () => {
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
+  it('links the row id to its detail child and preserves the current filter query', async () => {
+    await TestBed.inject(Router).navigateByUrl('/?state=complete&ref=main');
+    const { root } = await render([run(1)]);
+    const link = root.querySelector<HTMLAnchorElement>('.identifier a')!;
+    expect(link.getAttribute('href')).toBe(`/${run(1).run_id}?state=complete&ref=main`);
+    expect(link.textContent).toContain(run(1).run_id.slice(0, 8));
+  });
   it('keeps collection state, evidence unavailable and stored decisions independent; no outcome column', async () => {
     const { root } = await render([
       run(1, { decision: 'PASS' }),

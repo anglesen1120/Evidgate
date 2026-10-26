@@ -26,6 +26,7 @@ import {
   createCiBinding,
   createIngestToken,
   getPolicyRevision,
+  getRun,
   getRunDecision,
   isErrorEnvelope,
   listCiBindings,
@@ -192,6 +193,30 @@ describe('fixture backend (09.1.1-T12.1)', () => {
     if (response instanceof HttpResponse) {
       expect(response.headers.get(FIXTURE_RESPONSE_HEADER)).toBe('runs-list');
     }
+  });
+  it('serves each run-detail success variant through GET /runs/{r}', async () => {
+    for (const name of ['run-detail', 'run-detail-ref-format', 'run-detail-null-evidence']) {
+      const document = documentOf(name);
+      toggles.setVariant('getRun', document.variant);
+      const response = await gateway.call((client) => getRun({ client, path: { r: 'detail-id' } }));
+      expect(response).toEqual(document.body);
+      expect(handled.at(-1)?.url).toBe(`${API_BASE_URL}/runs/detail-id`);
+    }
+  });
+  it('keeps foreign and missing run 404s identical, and maps 403 separately', async () => {
+    toggles.setVariant('getRun', 'detail-not-found');
+    for (const id of ['foreign-id', 'missing-id']) {
+      const failure = await rejectionOf(gateway.call((client) => getRun({ client, path: { r: id } })));
+      expect(isApiRequestError(failure)).toBe(true);
+      if (isApiRequestError(failure)) {
+        expect(failure.error.kind).toBe('not_found');
+        expect(failure.error.status).toBe(404);
+        expect(failure.error.message).not.toContain(id);
+      }
+    }
+    toggles.setVariant('getRun', 'detail-forbidden');
+    const denied = await rejectionOf(gateway.call((client) => getRun({ client, path: { r: 'denied' } })));
+    expect(isApiRequestError(denied) && denied.error.kind).toBe('forbidden');
   });
 
   // 09.7.1-F15 note (3): `getPolicyRevision` is the one ID-KEYED route. Each corpus revision

@@ -1,0 +1,10 @@
+<header class="page-header">
+  <h1>{{ copy.title }}</h1>
+  <a routerLink=".." queryParamsHandling="preserve">{{ copy.back }}</a>
+</header>
+<app-request-state [status]="requestStatus()" [error]="store.loadError()" [retryEligible]="retryEligible()" (retry)="reload()">
+  @if (store.run(); as run) {
+    <app-run-header [run]="run" />
+    <app-manifest-panel [summary]="store.manifest()" />
+  }
+</app-request-state>

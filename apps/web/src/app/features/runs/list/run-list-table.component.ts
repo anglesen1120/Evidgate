@@ -15,6 +15,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
@@ -28,6 +29,7 @@ import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
   standalone: true,
   imports: [
     NgTemplateOutlet,
+    RouterLink,
     CdkVirtualScrollViewport,
     CdkFixedSizeVirtualScroll,
     CdkVirtualForOf,

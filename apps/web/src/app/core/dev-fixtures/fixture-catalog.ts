@@ -104,6 +104,11 @@ import projectsListOnboardingEmpty from '../../../../../../fixtures/web-api/proj
 import projectsListOnboardingForbidden from '../../../../../../fixtures/web-api/projects-list-onboarding-forbidden/input.json';
 import projectsListOnboardingProjectNotFound from '../../../../../../fixtures/web-api/projects-list-onboarding-project-not-found/input.json';
 import rolesList from '../../../../../../fixtures/web-api/roles-list/input.json';
+import runDetail from '../../../../../../fixtures/web-api/run-detail/input.json';
+import runDetailForbidden from '../../../../../../fixtures/web-api/run-detail-forbidden/input.json';
+import runDetailNotFound from '../../../../../../fixtures/web-api/run-detail-not-found/input.json';
+import runDetailNullEvidence from '../../../../../../fixtures/web-api/run-detail-null-evidence/input.json';
+import runDetailRefFormat from '../../../../../../fixtures/web-api/run-detail-ref-format/input.json';
 import runList from '../../../../../../fixtures/web-api/run-list/input.json';
 import runList250 from '../../../../../../fixtures/web-api/run-list-250/input.json';
 import runListEmpty from '../../../../../../fixtures/web-api/run-list-empty/input.json';
@@ -648,6 +653,11 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
     document: projectsListOnboardingProjectNotFound,
   },
   { name: 'roles-list', document: rolesList },
+  { name: 'run-detail', document: runDetail },
+  { name: 'run-detail-forbidden', document: runDetailForbidden },
+  { name: 'run-detail-not-found', document: runDetailNotFound },
+  { name: 'run-detail-null-evidence', document: runDetailNullEvidence },
+  { name: 'run-detail-ref-format', document: runDetailRefFormat },
   { name: 'run-list', document: runList },
   { name: 'run-list-250', document: runList250 },
   { name: 'run-list-empty', document: runListEmpty },

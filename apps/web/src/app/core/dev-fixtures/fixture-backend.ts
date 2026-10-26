@@ -25,6 +25,8 @@
 // is reachable in a browser; `listRuns` answers the same way for the Runs list (09.3.1-T1). An id no
 // document carries, a cursor no page declares, and every request-agnostic operation still answer by
 // variant alone; `selectEntry` below holds that order and nothing else changes.
+// `getRun` is likewise variant-only: run-detail's ready/404/403/ref-format/null-evidence
+// documents exercise the real SDK response/error path without manufacturing missing wire fields.
 //
 // Shapes: a `>= 400` answer is raised as `HttpErrorResponse` and a `2xx` as `HttpResponse`, which is
 // what Angular's real backends produce; the adapter reads text (09.1.1-T8), so the body is the JSON

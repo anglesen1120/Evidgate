@@ -1,6 +1,6 @@
 import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router, convertToParamMap, type ParamMap } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter, type ParamMap } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
 import { BehaviorSubject } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
@@ -94,18 +94,22 @@ describe('RunListPage', () => {
         { paramMap: new BehaviorSubject(convertToParamMap({})) },
       ],
       queryParamMap: query,
+      snapshot: undefined as unknown,
     };
     TestBed.configureTestingModule({
       imports: [RunListPage],
       providers: [
         provideZonelessChangeDetection(),
+        provideRouter([]),
         { provide: ActivatedRoute, useValue: route },
-        { provide: Router, useValue: { navigate } },
       ],
     });
     TestBed.overrideComponent(RunListPage, {
       set: { providers: [{ provide: RunListStore, useValue: store }] },
     });
+    const router = TestBed.inject(Router);
+    route.snapshot = router.routerState.snapshot.root;
+    vi.spyOn(router, 'navigate').mockImplementation((commands, extras) => navigate(commands, extras));
   });
   afterEach(() => {
     TestBed.resetTestingModule();
