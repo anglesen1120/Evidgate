@@ -27,7 +27,12 @@ export const RunDetailStore = signalStore(
     return {
       async load(runId: string): Promise<void> {
         const read = ++generation;
-        patchState(store, { run: null, manifest: UNAVAILABLE_MANIFEST, status: 'loading', loadError: null });
+        patchState(store, {
+          run: null,
+          manifest: UNAVAILABLE_MANIFEST,
+          status: 'loading',
+          loadError: null,
+        });
         try {
           const run = await data.get(runId);
           if (read !== generation) return;
@@ -35,14 +40,27 @@ export const RunDetailStore = signalStore(
           patchState(store, { run, manifest: UNAVAILABLE_MANIFEST, status: 'ready' });
         } catch (failure: unknown) {
           if (read !== generation) return;
-          const error: ApiError = isApiRequestError(failure) ? failure.error : {
-            kind: 'unexpected', status: 0, code: '', message: '', requestId: null,
-            retryable: false, details: [], retryAfterSeconds: null,
-          };
+          const error: ApiError = isApiRequestError(failure)
+            ? failure.error
+            : {
+                kind: 'unexpected',
+                status: 0,
+                code: '',
+                message: '',
+                requestId: null,
+                retryable: false,
+                details: [],
+                retryAfterSeconds: null,
+              };
           patchState(store, {
             run: null,
             manifest: UNAVAILABLE_MANIFEST,
-            status: error.kind === 'not_found' ? 'not-found' : error.kind === 'forbidden' ? 'forbidden' : 'error',
+            status:
+              error.kind === 'not_found'
+                ? 'not-found'
+                : error.kind === 'forbidden'
+                  ? 'forbidden'
+                  : 'error',
             loadError: error,
           });
         }

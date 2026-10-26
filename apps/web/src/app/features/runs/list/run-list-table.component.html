@@ -59,7 +59,7 @@
 </div>
 <ng-template #cells let-row>
   <span role="rowheader" class="identifier">
-    <a [routerLink]="[row.run_id]" queryParamsHandling="preserve">
+    <a [routerLink]="[row.run_id]" [queryParamsHandling]="'preserve'">
       <abbr [attr.title]="row.run_id" [attr.aria-label]="row.run_id"
         >{{ row.run_id.slice(0, 8) }}…{{ row.run_id.slice(-8) }}</abbr
       >

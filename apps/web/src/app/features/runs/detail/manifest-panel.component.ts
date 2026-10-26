@@ -28,7 +28,10 @@ export class ManifestPanelComponent {
     copyFailed: $localize`:@@runs.detail.copy-failed:Copy failed. Select and copy the full hash shown above.`,
   };
   constructor() {
-    effect(() => { this.summary(); this.copyStatus.set(''); });
+    effect(() => {
+      this.summary();
+      this.copyStatus.set('');
+    });
   }
   protected producerLabel(producer: number | string): string {
     const value = String(producer);

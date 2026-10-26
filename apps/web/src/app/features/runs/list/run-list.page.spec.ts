@@ -1,6 +1,12 @@
 import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router, convertToParamMap, provideRouter, type ParamMap } from '@angular/router';
+import {
+  ActivatedRoute,
+  Router,
+  convertToParamMap,
+  provideRouter,
+  type ParamMap,
+} from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
 import { BehaviorSubject } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
@@ -82,12 +88,12 @@ describe('RunListPage', () => {
   let store = pageStore();
   let query: BehaviorSubject<ParamMap>;
   let project: BehaviorSubject<ParamMap>;
-  let navigate = vi.fn().mockResolvedValue(true);
+  let navigate = vi.fn<Router['navigate']>().mockResolvedValue(true);
   beforeEach(() => {
     store = pageStore();
     query = new BehaviorSubject(convertToParamMap({}));
     project = new BehaviorSubject(convertToParamMap({ projectId: 'project-1' }));
-    navigate = vi.fn().mockResolvedValue(true);
+    navigate = vi.fn<Router['navigate']>().mockResolvedValue(true);
     const route = {
       pathFromRoot: [
         { paramMap: project },
@@ -109,7 +115,9 @@ describe('RunListPage', () => {
     });
     const router = TestBed.inject(Router);
     route.snapshot = router.routerState.snapshot.root;
-    vi.spyOn(router, 'navigate').mockImplementation((commands, extras) => navigate(commands, extras));
+    vi.spyOn(router, 'navigate').mockImplementation((commands, extras) =>
+      navigate(commands, extras),
+    );
   });
   afterEach(() => {
     TestBed.resetTestingModule();

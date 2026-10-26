@@ -206,7 +206,9 @@ describe('fixture backend (09.1.1-T12.1)', () => {
   it('keeps foreign and missing run 404s identical, and maps 403 separately', async () => {
     toggles.setVariant('getRun', 'detail-not-found');
     for (const id of ['foreign-id', 'missing-id']) {
-      const failure = await rejectionOf(gateway.call((client) => getRun({ client, path: { r: id } })));
+      const failure = await rejectionOf(
+        gateway.call((client) => getRun({ client, path: { r: id } })),
+      );
       expect(isApiRequestError(failure)).toBe(true);
       if (isApiRequestError(failure)) {
         expect(failure.error.kind).toBe('not_found');
@@ -215,7 +217,9 @@ describe('fixture backend (09.1.1-T12.1)', () => {
       }
     }
     toggles.setVariant('getRun', 'detail-forbidden');
-    const denied = await rejectionOf(gateway.call((client) => getRun({ client, path: { r: 'denied' } })));
+    const denied = await rejectionOf(
+      gateway.call((client) => getRun({ client, path: { r: 'denied' } })),
+    );
     expect(isApiRequestError(denied) && denied.error.kind).toBe('forbidden');
   });
 

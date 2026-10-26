@@ -11,23 +11,37 @@ import { RunDetailStore } from './run-detail.store';
 const run = ready.body as RunStateDto;
 function refused(kind: 'not_found' | 'forbidden'): ApiRequestError {
   const error: ApiError = {
-    kind, status: kind === 'not_found' ? 404 : 403, code: kind,
-    message: 'Resource unavailable.', requestId: 'request-detail',
-    retryable: false, details: [], retryAfterSeconds: null,
+    kind,
+    status: kind === 'not_found' ? 404 : 403,
+    code: kind,
+    message: 'Resource unavailable.',
+    requestId: 'request-detail',
+    retryable: false,
+    details: [],
+    retryAfterSeconds: null,
   };
   return new ApiRequestError(error);
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
   return { promise, resolve, reject };
 }
 describe('RunDetailStore', () => {
   const get = vi.fn<(id: string) => Promise<RunStateDto>>();
   beforeEach(() => {
     get.mockReset();
-    TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection(), RunDetailStore, { provide: RunsDataService, useValue: { get } }] });
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        RunDetailStore,
+        { provide: RunsDataService, useValue: { get } },
+      ],
+    });
   });
   afterEach(() => TestBed.resetTestingModule());
   it('maps only the stored response and an all-null manifest presentation model', async () => {
@@ -67,18 +81,22 @@ describe('RunDetailStore', () => {
     expect(store.run()).toBeNull();
     expect(store.manifest()).toEqual(UNAVAILABLE_MANIFEST);
   });
-  it.each(['success', 'failure'] as const)('ignores stale %s after route identity changes', async (result) => {
-    const old = deferred<RunStateDto>();
-    get.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ ...run, version: 8 });
-    const store = TestBed.inject(RunDetailStore);
-    const previous = store.load('old');
-    await store.load('new');
-    if (result === 'success') old.resolve(run); else old.reject(refused('not_found'));
-    await previous;
-    expect(store.status()).toBe('ready');
-    expect(store.run()?.version).toBe(8);
-    expect(store.loadError()).toBeNull();
-  });
+  it.each(['success', 'failure'] as const)(
+    'ignores stale %s after route identity changes',
+    async (result) => {
+      const old = deferred<RunStateDto>();
+      get.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ ...run, version: 8 });
+      const store = TestBed.inject(RunDetailStore);
+      const previous = store.load('old');
+      await store.load('new');
+      if (result === 'success') old.resolve(run);
+      else old.reject(refused('not_found'));
+      await previous;
+      expect(store.status()).toBe('ready');
+      expect(store.run()?.version).toBe(8);
+      expect(store.loadError()).toBeNull();
+    },
+  );
   it('clears data synchronously when a new request starts and surfaces unexpected failures', async () => {
     get.mockResolvedValueOnce(run).mockRejectedValueOnce(new Error('private diagnostic'));
     const store = TestBed.inject(RunDetailStore);

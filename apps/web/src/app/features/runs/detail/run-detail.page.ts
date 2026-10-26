@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
@@ -22,7 +29,11 @@ export class RunDetailPage {
   protected readonly retryEligible = signal(false);
   protected readonly requestStatus = computed<'loading' | 'ready' | 'error'>(() => {
     const status = this.store.status();
-    return status === 'idle' || status === 'loading' ? 'loading' : status === 'ready' ? 'ready' : 'error';
+    return status === 'idle' || status === 'loading'
+      ? 'loading'
+      : status === 'ready'
+        ? 'ready'
+        : 'error';
   });
   protected readonly copy = {
     title: $localize`:@@runs.detail.title:Run detail`,
