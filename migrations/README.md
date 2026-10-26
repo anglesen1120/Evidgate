@@ -82,8 +82,15 @@ The playbook for changing a table without breaking the running version is
   same statement) together with a `p_now` clock parameter (`created_at` and `last_seen_at` are stamped
   from the caller's clock, so the idle slide compares one clock — the 9-arg signature is revoked and
   dropped, not left behind), the `login_link_identity` cookie input, and the drop of the read-only
-  `evidgate_resolve.session_user` lookup the cookie path no longer uses; the next
-  free number is `0046`;
+  `evidgate_resolve.session_user` lookup the cookie path no longer uses, `0046` is 12.3.1-T1.1's
+  `usage_ledger_entry` — the append-only, tenant-scoped usage ledger every metered metric writes one
+  deduplicated row into (`unique (org_id, billing_key)`, T43/AC1; the composite `adjustment_of`
+  self-reference plus the reason CHECK that makes a correction a new row, AC2; `revoke update,
+  delete` for the app role, the SQL half of C6/AC3), and `0047` is 12.3.1-T1.2's `usage_rollup` —
+  the per-`(org, project, period, metric)` aggregate whose coalesce-project unique index is the
+  idempotent recompute's upsert target (AC6, NFR-12-1), with a column-scoped app-role UPDATE; the
+  next
+  free number is `0048`;
   a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
@@ -180,6 +187,41 @@ is written by the tenant-scope primitive, never from request input.
   deferred to 02.7.1 (`audit_log` does not exist in M1); the scheduled handler
   logs function/limit/row-count at Information instead. Accepted as a carried
   item in STATUS.md.
+
+## Notes on the usage tables (12.3.1-T1, `0046`/`0047`)
+
+- `0046`'s `usage_ledger_entry` is append-only by grant, not by trigger:
+  `evidgate_app` holds `select, insert` and nothing else, so a correction is an
+  adjustment row (`adjustment_of` → the corrected row's `(org_id, id)`, the
+  reason CHECK requiring a 1-2000 character reason) and the original row is never
+  rewritten. `DELETE` is owner-path only; the `usage_ledger_entry_owner_backfill`
+  policy is what lets that owner path (and a backfill) see the rows under FORCE
+  row level security.
+- `0047`'s `usage_rollup` is the recompute's upsert target, and it is the one
+  place where the plan's `unique (org_id, project_id, period, metric)` needed a
+  correction: a plain unique key treats every NULL `project_id` as distinct, so
+  an org-level aggregate (support hours, tenant-wide limits) would be appended
+  again on every recompute instead of updated. The index is therefore
+  `usage_rollup_scope_key` over
+  `(org_id, coalesce(project_id, '00000000-0000-0000-0000-000000000000'), period,
+  metric)` and the recompute declares exactly that expression as its `on
+  conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
+  are UUIDv7 (00 §7). `nulls not distinct` (0007/0039) would carry the same
+  equality; the coalesce form is used so the arbiter names the null rule
+  explicitly in the same expression the index is built on. `evidgate_app` may
+  `update` only the derived columns
+  (`total_quantity`, `total_amount`, `currency`, `row_count`, `gap_flag`,
+  `computed_at`) — never the key it belongs to — and may not `delete`.
+- **Known gap, 12.3.1-T2.2 (T60).** `usage_ledger_entry.quantity` is
+  `numeric not null`, the literal of the feature plan §4. T60 and the same plan's
+  §7/§9 say `egress_gb` rows must carry `quantity null` with a reason until
+  `IObjectStore` reports egress ("unavailable, never 0"). Both cannot hold for
+  one column. `0046` keeps the plan's NOT NULL and records the conflict in its
+  header; 12.3.1-T2.2 owns the resolution (a follow-up migration relaxing the
+  column with a reason-required CHECK, or the plan dropping the null-quantity
+  rule). Until then no `egress_gb` row can be inserted at all, so the metric has
+  no ledger rows and AC8's "unavailable, never 0" is a read-path decision of the
+  summary query (12.3.1-T6 / 09.7.1), not something this schema can express.
 
 ## Tests and fixtures
 

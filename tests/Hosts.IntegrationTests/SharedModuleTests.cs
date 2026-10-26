@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Policy.Application.Queries;
+using Evidgate.Modules.Usage.Contracts;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -80,5 +81,25 @@ public sealed class SharedModuleTests
 
         Assert.NotNull(apiRegistry);
         Assert.Equal(apiRegistry.GetType().AssemblyQualifiedName, workerRegistry.GetType().AssemblyQualifiedName);
+    }
+
+    /// <summary>
+    /// 12.3.1-T1.3: the Usage module's ledger write path is composed by both entry points through the
+    /// one <c>AddUsageModule</c> seam, so the emitters that run in the Worker (06.5.2) and in the Api
+    /// (04.8.1) resolve the same <see cref="IUsageLedger"/> implementation.
+    /// </summary>
+    [Fact]
+    public async Task Same_Usage_Ledger_In_Api_And_Worker()
+    {
+        await using var factory = new EvidgateApiFactory(DeadConnectionString);
+        using var client = factory.CreateClient();
+
+        var apiLedger = factory.Services.GetRequiredService<IUsageLedger>();
+
+        using var worker = await WorkerHostFactory.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
+        var workerLedger = worker.Services.GetRequiredService<IUsageLedger>();
+
+        Assert.NotNull(apiLedger);
+        Assert.Equal(apiLedger.GetType().AssemblyQualifiedName, workerLedger.GetType().AssemblyQualifiedName);
     }
 }

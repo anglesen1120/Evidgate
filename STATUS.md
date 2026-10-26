@@ -7,7 +7,7 @@ Updated 2026-10-26. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 ### Resume here
 - Develop: `74c3fa4` (PR #195); 187 first-parent PR merges into develop.
 - Open PRs (GitHub query 2026-10-26): #196 S93 status sync (this PR); #193 NuGet updates; #192 npm updates; #113 TypeScript 7; #112 npm updates; #111 Actions updates.
-- Highest migration: `0045_identity_session_hardening.sql`.
+- Highest migration: `0047_usage_rollup.sql` (in review, PR #PR); next free number is `0048`.
 - Fully landed on develop: 163/655 tasks; 169.25/702.75 raw person-days; remaining 492 tasks / 533.5 d. Strict merged-PR-only figure: 137 tasks / 144.75 d (the other 26 tasks / 24.5 d are Stage A direct commits on develop). Method: task ranges in merged rows expanded against plan_graph ids; a parent counts only when all its sub-rows landed.
 - By phase (done tasks / raw d): G1 120 / 132.25; G2 37 / 31; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in the S93 pass on 74c3fa4: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` exits 1 with 10 errors, all missing feature plans for 13.3.1, 13.4.1, 13.5.1, 13.5.2, 13.6.1, 13.7.1, 13.7.2, 13.8.1, 13.8.2, 13.9.1 (reported by the S93 coordinator check on develop 74c3fa4, not re-run in this docs-only pass; §6 row).
@@ -168,6 +168,7 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 02.3.2 | 02.3.2-T1 | merged (#190, 88fc00f) | Real session authentication, rotation/revocation, throttled sliding expiry, pepper rotation and enforcing XSRF (0045). |
 | 13.2.2 | plan change (docs only, no task built) | merged (#194, c866fdc) | Role-profile/prompt-library story and feature plan only; eight planned tasks are unbuilt. |
 | 13.x / all | status and consistency sync (docs only, no task built) | merged (#196, b6cace6) | STATUS.md rebuilt against merged work (163/655 tasks, 169.25/702.75 d), AGENTS.md, plan 00 §14/§15, plan 13 §4.4, features README and open-items made consistent; no task credit. |
+| 12.3.1 | 12.3.1-T1 (T1.1–T1.4) | in review (#PR) | Append-only `usage_ledger_entry` and `usage_rollup` (0046/0047), `IUsageLedger`/`IQuotaGate` contracts, idempotent `RecordUsageBatch` (one unnest statement, `ON CONFLICT DO NOTHING`). The operator route `POST /internal/operator/billing/usage` and its SDK drift gate stay with 12.3.1-T2.4 (COORDINATOR-DECISION S94). |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -308,7 +309,7 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 Dependency-ready: **90 tasks / 100 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 90 / 100 d is the figure used here.
 
-### G1: 45 tasks / 46 d
+### G1: 44 tasks / 44 d
 
 | Task | Size | Note |
 |---|---|---|
@@ -349,7 +350,6 @@ Dependency-ready: **90 tasks / 100 raw person-days**, using the exact expanded t
 | 11.8.1-T2 | M | Privacy notice + counsel review |
 | 12.2.1-T2 | M | Baseline measurement kit |
 | 12.2.1-T3 | M | Pilot onboarding run + friction log |
-| 12.3.1-T1 | L | Ledger schema + append-only privileges + adjustment model + migrations |
 | 12.6.1-T1 | M | Trademark search classes 9/42 |
 | 13.1.1-T4 | S | `manual_case_link` to `test_case`; uncovered-case view |
 | 13.1.2-T1 | M | `authoring_change` model; apply-as-one-version with `If-Match` and idempotency key |

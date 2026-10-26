@@ -8,5 +8,16 @@
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Usage.Contracts\Evidgate.Modules.Usage.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+    <!-- 12.3.1-T1.4: the ledger write runs as one Dapper statement on the caller's tenant transaction (00 §5.5 C3/C5). -->
+    <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <!-- 12.3.1-T1.4: the handler's span carries the `usage` module tag (01.1.2-T1.2). -->
+    <ProjectReference Include="..\..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+  </ItemGroup>
+  <!-- 12.3.1-T1.3: internal implementation, opened to the two composition roots and the tests (01.1.2-T2.1). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Evidgate.Api" />
+    <InternalsVisibleTo Include="Evidgate.Worker" />
+    <InternalsVisibleTo Include="Hosts.IntegrationTests" />
+    <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
   </ItemGroup>
 </Project>
