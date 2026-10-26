@@ -284,6 +284,53 @@ public sealed class SuiteDiffTests
         MemberKeys(reverse.Body, "required_changed").ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task Diff_OrdersEdgesOfTheSameCasePair_ByVariant_NotByStorageOrder()
+    {
+        await using var world = await StartAsync();
+        var first = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0], null, "x") } });
+        // Two variants of each case, and an edge between every variant pair of the same two cases: four edges tie on case ids alone.
+        var second = await CreateRevisionAsync(world, new
+        {
+            members = new[]
+            {
+                Member(world.Revisions[1], new { browser = "firefox" }, "c2"),
+                Member(world.Revisions[0], new { browser = "chromium" }, "p1"),
+                Member(world.Revisions[1], new { browser = "chromium" }, "c1"),
+                Member(world.Revisions[0], new { browser = "firefox" }, "p2"),
+            },
+            edges = new[]
+            {
+                new { parent = "p2", child = "c2" },
+                new { parent = "p1", child = "c2" },
+                new { parent = "p2", child = "c1" },
+                new { parent = "p1", child = "c1" },
+            },
+        });
+        first.Status.ShouldBe(HttpStatusCode.Created, first.ErrorMessage);
+        second.Status.ShouldBe(HttpStatusCode.Created, second.ErrorMessage);
+
+        var url = $"/v1/suite-revisions/{second.Id("suite_revision_id")}/diff?against={first.Id("suite_revision_id")}";
+        var diff = await RawAsync(world.Client, HttpMethod.Get, url, world.Admin);
+        diff.Status.ShouldBe(HttpStatusCode.OK, diff.Text);
+
+        var edges = diff.Body.GetProperty("edges_added").EnumerateArray()
+            .Select(edge => (
+                ParentCase: edge.GetProperty("parent").GetProperty("case_revision_id").GetGuid(),
+                ParentVariant: edge.GetProperty("parent").GetProperty("variant_hash").GetString()!,
+                ChildCase: edge.GetProperty("child").GetProperty("case_revision_id").GetGuid(),
+                ChildVariant: edge.GetProperty("child").GetProperty("variant_hash").GetString()!))
+            .ToList();
+
+        edges.Count.ShouldBe(4);
+        edges.Select(edge => edge.ParentVariant).Distinct().Count().ShouldBe(2); // positive control: the ties really are variant ties
+        edges.ShouldBe(edges
+            .OrderBy(edge => edge.ParentCase).ThenBy(edge => edge.ChildCase)
+            .ThenBy(edge => edge.ParentVariant, StringComparer.Ordinal).ThenBy(edge => edge.ChildVariant, StringComparer.Ordinal)
+            .ToList());
+        (await RawAsync(world.Client, HttpMethod.Get, url, world.Admin)).Text.ShouldBe(diff.Text);
+    }
+
     // ------------------------------------------------------------------ AC7 diff: a variant change
 
     [Fact]
@@ -383,7 +430,7 @@ public sealed class SuiteDiffTests
         }
     }
 
-    // ------------------------------------------------------------------ AC6 suite ETag
+    // ------------------------------------------------------------------ AC7 suite ETag
 
     [Fact]
     public async Task Suite_ETag_IsStrongQuotedAndStable()
@@ -454,7 +501,7 @@ public sealed class SuiteDiffTests
         (await Conditional(moved.ETag!)).Status.ShouldBe(HttpStatusCode.NotModified);
     }
 
-    // ------------------------------------------------------------------ AC8 preview writes nothing
+    // ------------------------------------------------------------------ T5.2 preview writes nothing
 
     [Fact]
     public async Task DryRun_WritesNoRowAnywhere()
@@ -512,7 +559,7 @@ public sealed class SuiteDiffTests
         created[6].ShouldBe(before[6] + 2, "idempotency_record"); // one record per keyed create
     }
 
-    // ------------------------------------------------------------------ AC8 preview standing
+    // ------------------------------------------------------------------ T5.2 preview standing
 
     [Fact]
     public async Task DryRun_NeedsTheSameStandingAsCreate()
