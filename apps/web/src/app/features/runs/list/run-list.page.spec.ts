@@ -49,6 +49,7 @@ function pageStore() {
     hasMore: signal(false),
     browseCapped: signal(false),
     autoLoadCapped: signal(false),
+    refRejected: signal(false),
     loadedCount: computed(() => rows().length),
     isEmpty: computed(() => rows().length === 0),
     isFiltered: computed(() => Object.values(filters()).some(Boolean)),
@@ -140,8 +141,57 @@ describe('RunListPage', () => {
     });
     expect(root.querySelectorAll('h1')).toHaveLength(1);
     expect((root.querySelector('#run-ref') as HTMLInputElement).value).toBe('release/việt');
-    expect(root.querySelector('[data-run-loaded-count]')?.textContent).toContain('1 loaded runs');
+    // The URL narrows the list, so the count says so and the element reports the filtered mode.
+    const loaded = root.querySelector('[data-run-loaded-count]')!;
+    expect(loaded.textContent).toContain('Filtered from 1 loaded runs');
+    expect(loaded.getAttribute('data-run-loaded-filtered')).toBe('true');
     expect(root.querySelector('[name="completeness"]')).toBeNull();
+  });
+  it('renders a plain loaded count when nothing is filtered', async () => {
+    const { root } = await render();
+
+    const loaded = root.querySelector('[data-run-loaded-count]')!;
+    expect(loaded.textContent).toContain('Loaded 1 runs.');
+    expect(loaded.textContent).not.toContain('Filtered');
+    expect(loaded.getAttribute('data-run-loaded-filtered')).toBe('false');
+  });
+  it('marks a refused ref name as invalid and explains it inline', async () => {
+    const { fixture, root } = await render();
+    const refInput = root.querySelector<HTMLInputElement>('#run-ref')!;
+    expect(refInput.getAttribute('aria-invalid')).toBeNull();
+    expect(root.querySelector('#run-ref-error')).toBeNull();
+
+    // The store refuses the value: the filter was not applied, and the page must say so rather
+    // than leave the field looking accepted. A 256-code-point name is the over-long case; the
+    // input's `maxlength` stops it arriving by typing or pasting, not by any other route.
+    const overLong = 'x'.repeat(256);
+    store.refRejected.set(true);
+    change(root, 'refName', overLong);
+    await fixture.whenStable();
+    expect(refInput.value).toBe(overLong);
+    expect(refInput.maxLength).toBe(255);
+    expect(refInput.getAttribute('aria-invalid')).toBe('true');
+    expect(refInput.getAttribute('aria-describedby')).toBe('run-ref-error');
+    const error = root.querySelector('#run-ref-error')!;
+    expect(error.textContent).toContain('not applied');
+    expect(error.textContent).toContain('255');
+
+    // A submission keeps the typed value in the field, so the operator can correct it.
+    root
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+    expect(store.setFilters).toHaveBeenLastCalledWith(
+      expect.objectContaining({ refName: overLong }),
+    );
+    expect(refInput.value).toBe(overLong);
+
+    // Accepting the next value clears both the message and the invalid state.
+    store.refRejected.set(false);
+    await fixture.whenStable();
+    expect(root.querySelector('#run-ref-error')).toBeNull();
+    expect(refInput.getAttribute('aria-invalid')).toBeNull();
+    expect(refInput.getAttribute('aria-describedby')).toBeNull();
   });
   it('applies filters to the store and merges URL state while clearing obsolete filter keys', async () => {
     const { fixture, root } = await render();
@@ -215,7 +265,7 @@ describe('RunListPage', () => {
     await fixture.whenStable();
     expect(root.querySelector<HTMLButtonElement>('[data-run-load-more]')!.disabled).toBe(true);
   });
-  it('renders the shared loading, generic error, forbidden and not-found patterns without HTML injection', async () => {
+  it('renders exactly one error surface per failure kind, with no duplicate page banner', async () => {
     store.status.set('loading');
     const { fixture, root } = await render();
     expect(root.querySelector('app-loading-pattern')).not.toBeNull();
@@ -223,17 +273,32 @@ describe('RunListPage', () => {
     store.loadError.set(failure);
     await fixture.whenStable();
     expect(root.querySelector('app-error-pattern')).not.toBeNull();
-    expect(root.textContent).toContain(failure.message);
+    // The generic pattern already announces the failure and carries its message and code, so the
+    // page adds nothing beside it: one alert, one copy of the text, no injection.
+    expect(root.querySelectorAll('[role="alert"]')).toHaveLength(1);
+    expect(root.textContent?.split(failure.message)).toHaveLength(2);
     expect(root.querySelector('b')).toBeNull();
+    expect(root.querySelector('.banner.failure')).toBeNull();
     root.querySelector<HTMLButtonElement>('app-error-pattern button')!.click();
     expect(store.reload).toHaveBeenCalledTimes(1);
     for (const [kind, status, selector] of [
       ['forbidden', 403, 'app-forbidden-pattern'],
       ['not_found', 404, 'app-not-found-pattern'],
+      ['rate_limited', 429, 'app-retry-after'],
+      ['unavailable', 503, 'app-retry-after'],
     ] as const) {
-      store.loadError.set({ ...failure, kind, status, retryable: false });
+      store.loadError.set({
+        ...failure,
+        kind,
+        status,
+        retryAfterSeconds: kind === 'unavailable' ? 30 : null,
+        retryable: kind === 'unavailable',
+      });
       await fixture.whenStable();
+      // The shared pattern is the single surface for the kind; the page renders no second alert.
       expect(root.querySelector(selector)).not.toBeNull();
+      expect(root.querySelectorAll('[role="alert"]')).toHaveLength(0);
+      expect(root.querySelector('.banner.failure')).toBeNull();
     }
   });
   it('retains loaded rows on paging failure and allows only an eligible retry', async () => {

@@ -10,7 +10,7 @@
 // mark (`Mn`), a zero-width space (U+200B is `Zs`, deliberately not escaped — it is invisible but it
 // is not a format character, and escaping it would misreport the category) and a plain name.
 
-import { escapeFormatChars } from './ref-name-display';
+import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
 
 describe('escapeFormatChars (09.3.1-T1)', () => {
   it('leaves a plain ref name byte-identical', () => {
@@ -68,5 +68,13 @@ describe('escapeFormatChars (09.3.1-T1)', () => {
     const escaped = escapeFormatChars('\u202E');
     expect(escaped).not.toContain('\u202E');
     expect(escaped).toBe('⟨U+202E⟩');
+  });
+
+  // A run row's rerun/reprocess labels are caller-written too, so the table escapes them with the
+  // alias below. It must stay the same function — a copy would drift from the cases above.
+  it('exposes the neutral label alias as the same escaping', () => {
+    expect(escapeFormatLabel).toBe(escapeFormatChars);
+    expect(escapeFormatLabel('failed\u202Esubset')).toBe('failed⟨U+202E⟩subset');
+    expect(escapeFormatLabel('plain_label')).toBe('plain_label');
   });
 });

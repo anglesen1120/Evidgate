@@ -82,16 +82,18 @@
   </span>
   <span role="cell" class="scope-cell">
     @if (row.rerun_label) {
+      @let rerunLabel = displayLabel(row.rerun_label);
       <span class="scope scope-rerun" data-run-rerun
         ><strong>{{ copy.rerun }}</strong
-        ><app-data-table-value [value]="row.rerun_label" [truncate]="virtual()"
-      /></span>
+        ><bdi><app-data-table-value [value]="rerunLabel" [truncate]="virtual()" /></bdi>
+      </span>
     }
     @if (row.reprocess_label) {
+      @let reprocessLabel = displayLabel(row.reprocess_label);
       <span class="scope scope-reprocess" data-run-reprocess
         ><strong>{{ copy.reprocess }}</strong
-        ><app-data-table-value [value]="row.reprocess_label" [truncate]="virtual()"
-      /></span>
+        ><bdi><app-data-table-value [value]="reprocessLabel" [truncate]="virtual()" /></bdi>
+      </span>
     }
     @if (!row.rerun_label && !row.reprocess_label) {
       <span>{{ row.parent_run_id ? copy.child : copy.original }}</span>

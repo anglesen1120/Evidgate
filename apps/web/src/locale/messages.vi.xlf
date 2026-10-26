@@ -2496,6 +2496,8 @@
       <trans-unit id="runs.list.capped" datatype="html"><source>Automatic browsing paused. Load more to continue, or narrow the ref name.</source><target>Đã tạm dừng tự động duyệt. Tải thêm để tiếp tục hoặc giới hạn tên tham chiếu.</target></trans-unit>
       <trans-unit id="runs.list.retry-more" datatype="html"><source>Retry loading more</source><target>Thử tải thêm lần nữa</target></trans-unit>
       <trans-unit id="runs.list.loaded-count" datatype="html"><source>Filtered from <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> loaded runs.</source><target>Đã lọc từ <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> lượt chạy đã tải.</target></trans-unit>
+      <trans-unit id="runs.list.loaded-plain" datatype="html"><source>Loaded <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> runs.</source><target>Đã tải <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> lượt chạy.</target></trans-unit>
+      <trans-unit id="runs.list.ref-invalid" datatype="html"><source>Ref name not applied: use 1 to 255 characters with no control characters.</source><target>Tên tham chiếu không được áp dụng: dùng từ 1 đến 255 ký tự và không có ký tự điều khiển.</target></trans-unit>
       <trans-unit id="runs.list.table-caption" datatype="html"><source>Project runs</source><target>Lượt chạy của dự án</target></trans-unit>
       <trans-unit id="runs.list.column-id" datatype="html"><source>Run id</source><target>Mã lượt chạy</target></trans-unit>
       <trans-unit id="runs.list.column-state" datatype="html"><source>State</source><target>Trạng thái</target></trans-unit>

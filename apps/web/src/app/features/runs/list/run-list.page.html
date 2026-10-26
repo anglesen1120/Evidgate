@@ -45,29 +45,24 @@
     </label>
     <label for="run-ref"
       >{{ copy.ref }}
-      <input id="run-ref" name="refName" [(ngModel)]="draft.refName" />
+      <input
+        id="run-ref"
+        name="refName"
+        maxlength="255"
+        [(ngModel)]="draft.refName"
+        [attr.aria-invalid]="store.refRejected() ? 'true' : null"
+        [attr.aria-describedby]="store.refRejected() ? 'run-ref-error' : null"
+      />
     </label>
   </div>
+  @if (store.refRejected()) {
+    <p class="validation" id="run-ref-error" role="alert">{{ copy.refRejected }}</p>
+  }
   <div class="filter-actions">
     <button type="submit" class="primary" data-run-apply>{{ copy.apply }}</button>
     <button type="button" data-run-clear (click)="clear()">{{ copy.clear }}</button>
   </div>
 </form>
-@if (status() === 'error') {
-  @if (store.loadError(); as failure) {
-    @if (
-      failure.kind === 'forbidden' ||
-      failure.kind === 'not_found' ||
-      failure.kind === 'rate_limited' ||
-      (failure.kind === 'unavailable' && failure.retryAfterSeconds !== null)
-    ) {
-      <div class="banner failure" role="alert">
-        <p>{{ failure.message }}</p>
-        <code>{{ failure.code }}</code>
-      </div>
-    }
-  }
-}
 <app-request-state
   [status]="status()"
   [error]="store.loadError()"
@@ -88,7 +83,9 @@
     [attr.aria-label]="copy.pagination"
     [attr.aria-busy]="store.loadingMore()"
   >
-    <p role="status" data-run-loaded-count>{{ loadedText() }}</p>
+    <p role="status" data-run-loaded-count [attr.data-run-loaded-filtered]="store.isFiltered()">
+      {{ loadedText() }}
+    </p>
     @if (store.autoLoadCapped() || store.browseCapped()) {
       <p data-run-browse-capped>{{ copy.capped }}</p>
     }

@@ -88,13 +88,23 @@ for (const locale of LOCALES) {
         await expect(rendered.locator('[data-run-rerun]')).toContainText(row.rerun_label);
       if (row.reprocess_label)
         await expect(rendered.locator('[data-run-reprocess]')).toContainText(row.reprocess_label);
+      // Scope labels are isolated in their own `<bdi>` too, so the ref name's is addressed
+      // through its cell rather than by `bdi` alone.
+      await expect(rendered.locator('.scope-cell bdi')).toHaveCount(
+        Number(Boolean(row.rerun_label)) + Number(Boolean(row.reprocess_label)),
+      );
       if (row.ref.name?.includes('\u202e')) {
-        await expect(rendered.locator('bdi')).toContainText('⟨U+202E⟩');
-        expect(await rendered.locator('bdi').textContent()).not.toContain('\u202e');
+        await expect(rendered.locator('.ref-cell bdi')).toContainText('⟨U+202E⟩');
+        expect(await rendered.locator('.ref-cell bdi').textContent()).not.toContain('\u202e');
       }
     }
     await expect(page.locator('[data-run-loaded-count]')).toContainText(
       String(runList.body.items.length),
+    );
+    // Nothing is filtered here, so the count is the neutral one, not "filtered from".
+    await expect(page.locator('[data-run-loaded-count]')).toHaveAttribute(
+      'data-run-loaded-filtered',
+      'false',
     );
     await expect(
       page.locator(
@@ -158,6 +168,11 @@ for (const locale of LOCALES) {
     await expect(page.locator('app-empty-pattern')).toBeVisible();
     expect(await page.locator('app-empty-pattern').textContent()).not.toBe(trulyEmpty);
     await expect(page.locator('[data-run-loaded-count]')).toContainText('2');
+    // A filtered view says "filtered from" — the neutral count is for an unfiltered list only.
+    await expect(page.locator('[data-run-loaded-count]')).toHaveAttribute(
+      'data-run-loaded-filtered',
+      'true',
+    );
     await expect(page.locator(ROWS)).toHaveCount(0);
     await page.locator('[data-run-clear]').click();
     await expect(page.locator(ROWS)).toHaveCount(2);
@@ -201,29 +216,38 @@ test('cursor pages preserve server ordering and append without offset pagination
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-run-id'))),
   ).toEqual(allRows.map((row) => row.run_id));
   await expect(page.locator('[data-run-load-more]')).toHaveCount(0);
+  // Unfiltered, the note is a plain count, never the "filtered from" phrasing.
+  await expect(page.locator('[data-run-loaded-count]')).toContainText(
+    `Loaded ${allRows.length} runs`,
+  );
   expect(new URL(page.url()).searchParams.has('offset')).toBe(false);
 });
 
-test('a server refusal renders the shared forbidden pattern and verbatim code', async ({
+test('a server refusal renders the shared forbidden pattern as the only error surface', async ({
   page,
 }) => {
   await page.goto(withVariants(path('en'), [VARIANTS.forbidden]));
   await expect(page.locator('app-run-list-page')).toHaveAttribute('data-run-list-status', 'error');
   await expect(page.locator('app-forbidden-pattern')).toBeVisible();
   await expect(page.locator(ROWS)).toHaveCount(0);
-  await expect(page.locator('app-run-list-page [role="alert"] code')).not.toBeEmpty();
+  // The shared pattern is the page's one error surface; the page adds no second banner.
+  await expect(page.locator('app-run-list-page .banner.failure')).toHaveCount(0);
+  await expect(page.locator('app-run-list-page [role="alert"]')).toHaveCount(0);
 });
 
-test('a 503 preserves its message and Retry-After before enabling an explicit retry', async ({
+test('a 503 with Retry-After renders the shared retry pattern once, with its code', async ({
   page,
 }) => {
   await page.clock.install();
   await page.goto(withVariants(path('en'), [VARIANTS.unavailable]));
   await expect(page.locator('app-run-list-page')).toHaveAttribute('data-run-list-status', 'error');
-  await expect(page.locator('app-run-list-page')).toContainText(
-    runListUnavailable.body.error.message,
-  );
   await expect(page.locator('app-retry-after')).toBeVisible();
+  // The error code and request id survive in the shared panel; the page renders no duplicate.
+  await expect(page.locator('app-retry-after')).toContainText(runListUnavailable.body.error.code);
+  await expect(page.locator('app-retry-after')).toContainText(
+    runListUnavailable.body.error.request_id,
+  );
+  await expect(page.locator('app-run-list-page .banner.failure')).toHaveCount(0);
   const retry = page.locator('app-retry-after button');
   await expect(retry).toBeDisabled();
   await page.clock.fastForward(5_000);

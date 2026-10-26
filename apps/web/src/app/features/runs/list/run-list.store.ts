@@ -44,7 +44,9 @@
 //    `EvidenceBadge`'s explicit unavailable copy in that column instead of a success tone.
 // 8. **Format characters are escaped for display only.** `ref_name` may carry Unicode Cf characters
 //    (the U+202E bidi override among them, plan Note line 226). The store keeps the served value;
-//    `escapeFormatChars` (`./ref-name-display.ts`) is what the template renders.
+//    `escapeFormatChars` (`./ref-name-display.ts`) is what the template renders, and the row's
+//    `rerun_label` / `reprocess_label` take the same escaping through the module's
+//    `escapeFormatLabel` alias.
 
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
@@ -158,6 +160,13 @@ export interface RunListState {
    * "filtered from N loaded runs" note instead of presenting a short list as the whole project.
    */
   autoLoadCapped: boolean;
+  /**
+   * True when the last submitted ref name was refused (over 255 code points, or carrying a control
+   * character). The value narrowed nothing — `filters.refName` is `''` and `toQuery` writes no
+   * `ref` — so the page can explain the refusal instead of showing an unfiltered list as if the
+   * field had been ignored.
+   */
+  refRejected: boolean;
 }
 
 const NO_ROWS: readonly RunSummary[] = [];
@@ -188,7 +197,6 @@ function filtersFromQuery(query: Record<string, string | null | undefined>): Run
   const state = query['state'];
   const decision = query['decision'];
   const scope = query['scope'];
-  const refName = query['ref'];
 
   return {
     state: RUN_STATES.includes(state as RunSummary['state']) ? (state as RunStateFilter) : '',
@@ -196,7 +204,8 @@ function filtersFromQuery(query: Record<string, string | null | undefined>): Run
       ? (decision as RunDecisionFilter)
       : '',
     scope: RUN_SCOPES.includes(scope as RunScopeFilter) ? (scope as RunScopeFilter) : '',
-    refName: isValidRefName(refName) ? refName : '',
+    // A link is not a form submission, so a refused value narrows nothing without a message.
+    refName: normalizeRefName(query['ref']).refName,
   };
 }
 
@@ -211,6 +220,29 @@ function isValidRefName(value: string | null | undefined): value is string {
     return false;
   }
   return !CONTROL_CHARACTER.test(value);
+}
+
+/**
+ * The ref filter a submitted (or URL-carried) value stands for.
+ *
+ * The value is trimmed first, because surrounding whitespace is never part of a ref name and a
+ * pasted value carries it; then it is accepted only when {@link isValidRefName} accepts it. An
+ * invalid value narrows nothing — `refName: ''`, so it is neither sent nor written to the URL — and
+ * `rejected` says that it was refused, so the form can explain why instead of looking as if the
+ * field had been ignored. A blank value is not a rejection: clearing the field is a valid request
+ * to stop filtering by ref.
+ */
+function normalizeRefName(value: string | null | undefined): {
+  refName: string;
+  rejected: boolean;
+} {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (trimmed === '') {
+    return { refName: '', rejected: false };
+  }
+  return isValidRefName(trimmed)
+    ? { refName: trimmed, rejected: false }
+    : { refName: '', rejected: true };
 }
 
 /** The request query of one read: the page size, plus `refName` when the screen holds one. */
@@ -270,8 +302,9 @@ export const RunListStore = signalStore(
     pagingError: null,
     loadingMore: false,
     autoLoadCapped: false,
+    refRejected: false,
   }),
-  withComputed(({ rows, nextCursor, status, filters, autoLoadCapped }) => {
+  withComputed(({ rows, nextCursor, status, filters, autoLoadCapped, loadingMore }) => {
     const visibleRows = computed(() => visibleOf(filters(), rows()));
     return {
       /** The rows the table renders: every loaded row that passes the client-side filters. */
@@ -283,8 +316,15 @@ export const RunListStore = signalStore(
        * (header 3): the next page exists, the store just stopped walking on its own.
        */
       hasMore: computed(() => nextCursor() !== null),
-      /** True when a ready list has nothing to show, filtered or not. */
-      isEmpty: computed(() => status() === 'ready' && visibleRows().length === 0),
+      /**
+       * True when a ready list has nothing to show, filtered or not — and no page is in flight.
+       *
+       * The `loadingMore` term matters: after the first page of a filtered read lands, the rows are
+       * published as `ready` and the top-up walk starts, so a filtered view of a first page can be
+       * empty while the walk is still fetching the rows that match. Without the term the empty
+       * pattern would flash for that window and then be replaced by the table.
+       */
+      isEmpty: computed(() => status() === 'ready' && !loadingMore() && visibleRows().length === 0),
       /**
        * True when the filters narrow the loaded rows — the page must not present a short filtered
        * view as "this project has no runs".
@@ -446,14 +486,15 @@ export const RunListStore = signalStore(
        *
        * Unknown or invalid member values are dropped and never sent (a `state` outside the wire's
        * seven, an empty or over-long `ref`, a control character in it). Calling it again is how the
-       * page follows a route query change: the previous rows, cursor and paging state are replaced.
+       * page follows a route query change: the previous rows, cursor and paging state are replaced,
+       * and a refusal a previous form submission reported is cleared — the URL says what applies.
        */
       async init(
         projectId: string,
         query: Record<string, string | null | undefined> = {},
       ): Promise<void> {
         ownerProject = projectId;
-        patchState(store, { filters: filtersFromQuery(query) });
+        patchState(store, { filters: filtersFromQuery(query), refRejected: false });
         await restart();
       },
 
@@ -461,19 +502,35 @@ export const RunListStore = signalStore(
        * Applies a filter patch and keeps the list consistent with it.
        *
        * A `refName` change is a SERVER filter: the rows and the cursor belong to the previous
-       * value, so the list restarts from the first page. Every other member is a client-side filter
-       * over the rows already loaded: the rows stay, the view re-filters immediately, and pages are
-       * followed only if the filtered view is short (header 3). With no project loaded yet (a page
-       * that has not called `init`) only the filter state changes.
+       * value, so the list restarts from the first page. The value is trimmed first, and one the
+       * contract refuses is not applied at all — it narrows nothing, is never sent, is not written
+       * by `toQuery`, and sets `refRejected` for the form to explain. Every other member is a
+       * client-side filter over the rows already loaded: the rows stay, the view re-filters
+       * immediately, and pages are followed only if the filtered view is short (header 3). With no
+       * project loaded yet (a page that has not called `init`) only the filter state changes.
        */
       async setFilters(patch: Partial<RunListFilters>): Promise<void> {
-        const applied = { ...store.filters(), ...patch };
+        const next = { ...store.filters(), ...patch };
+        // The form path takes the value as typed: it is trimmed, and dropped (with `refRejected`
+        // set) when the contract refuses it, so a pasted string cannot turn the read into a `422`
+        // and the field is not silently ignored either. `toQuery` writes no `ref` afterwards.
+        const ref = normalizeRefName(next.refName);
+        const applied: RunListFilters = { ...next, refName: ref.refName };
         if (applied.refName !== store.filters().refName) {
-          patchState(store, { filters: applied });
+          patchState(store, { filters: applied, refRejected: ref.rejected });
           await restart();
           return;
         }
-        patchState(store, { filters: applied, autoLoadCapped: false });
+        if (ref.rejected) {
+          // The refused value narrowed nothing, so the applied filter did not change and there is
+          // nothing to re-read: only the form's report changes.
+          patchState(store, { refRejected: true });
+          return;
+        }
+        // Reaching here means the value equals the stored, already-accepted ref filter and was not
+        // refused, so a report left by an earlier submission is cleared — emptying the field or
+        // "Clear filters" must not leave an error beside an empty input.
+        patchState(store, { filters: applied, refRejected: false, autoLoadCapped: false });
         const projectId = ownerProject;
         // A page already in flight keeps the walk: it re-reads these filters on its next iteration,
         // so starting a second one would request the same cursor twice and append the page twice.

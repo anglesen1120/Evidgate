@@ -70,6 +70,7 @@ export class RunListPage {
     loadingMore: $localize`:@@runs.list.loading-more:Loading more runs…`,
     capped: $localize`:@@runs.list.capped:Automatic browsing paused. Load more to continue, or narrow the ref name.`,
     retryMore: $localize`:@@runs.list.retry-more:Retry loading more`,
+    refRejected: $localize`:@@runs.list.ref-invalid:Ref name not applied: use 1 to 255 characters with no control characters.`,
   };
 
   constructor() {
@@ -96,8 +97,11 @@ export class RunListPage {
         ) {
           this.projectId = projectId;
           void this.store.init(projectId, raw);
+          // The URL is the form's source only when it actually changed. A refused ref name is never
+          // written to the URL, so re-syncing on an unchanged query would wipe the very value the
+          // inline error is about; `init` patches the filters synchronously, before its first await.
+          this.draft = { ...this.store.filters() };
         }
-        this.draft = { ...this.store.filters() };
       });
     effect((onCleanup) => {
       const seconds = (this.store.pagingError() ?? this.store.loadError())?.retryAfterSeconds;
@@ -124,7 +128,14 @@ export class RunListPage {
     this.apply();
   }
 
+  /**
+   * The loaded-row count, worded for what the list is actually showing: with no filter it is a
+   * plain count, and only a filtered view says "filtered from", because only then is the number
+   * larger than what the table shows.
+   */
   protected loadedText(): string {
-    return $localize`:@@runs.list.loaded-count:Filtered from ${formatNumber(this.store.loadedCount(), this.locale)}:count: loaded runs.`;
+    return this.store.isFiltered()
+      ? $localize`:@@runs.list.loaded-count:Filtered from ${formatNumber(this.store.loadedCount(), this.locale)}:count: loaded runs.`
+      : $localize`:@@runs.list.loaded-plain:Loaded ${formatNumber(this.store.loadedCount(), this.locale)}:count: runs.`;
   }
 }

@@ -71,7 +71,7 @@ describe('RunListTableComponent', () => {
       run(1, { ref: { ...row.ref, name: special }, unverified_ref: true }),
       run(2),
     ]);
-    const ref = root.querySelector('bdi')!;
+    const ref = root.querySelector('.ref-cell bdi')!;
     expect(ref.textContent).toContain('release/việt⟨U+202E⟩⟨U+200D⟩<script>');
     expect(ref.textContent).not.toContain('\u202e');
     expect(root.querySelector('script')).toBeNull();
@@ -82,6 +82,25 @@ describe('RunListTableComponent', () => {
         ?.closest('[data-run-row]')
         ?.getAttribute('data-run-id'),
     ).toBe(row.run_id);
+  });
+  it('escapes and isolates format characters in rerun and reprocess labels', async () => {
+    const { root } = await render([
+      run(1, { rerun_label: 'failed\u202E_subset', parent_run_id: run(9).run_id }),
+      run(2, { reprocess_label: 'evidence\u202E:reprocess', parent_run_id: run(9).run_id }),
+    ]);
+    const rerun = root.querySelector('[data-run-rerun]')!;
+    const reprocess = root.querySelector('[data-run-reprocess]')!;
+    // The label is escaped like the ref name: the override becomes a visible token, never a raw
+    // character that could reorder the rest of the row.
+    expect(rerun.textContent).toContain('failed⟨U+202E⟩_subset');
+    expect(rerun.textContent).not.toContain('\u202E');
+    expect(reprocess.textContent).toContain('evidence⟨U+202E⟩:reprocess');
+    expect(reprocess.textContent).not.toContain('\u202E');
+    // Both are wrapped in `<bdi>`, so even a label without a Cf character cannot reorder columns.
+    expect(rerun.querySelector('bdi')).not.toBeNull();
+    expect(reprocess.querySelector('bdi')).not.toBeNull();
+    // The shared overflow renderer receives the escaped text, so its popover copy is escaped too.
+    expect(rerun.querySelector('app-data-table-value')?.textContent).toContain('⟨U+202E⟩');
   });
   it('renders rerun and reprocess as visibly distinct labels without treating either as full regression', async () => {
     const { root } = await render([

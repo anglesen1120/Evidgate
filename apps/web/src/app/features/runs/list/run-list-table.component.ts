@@ -21,7 +21,7 @@ import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.compon
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { DecisionChipComponent } from '../../../shared/ui/verdict/decision-chip.component';
 import { EvidenceBadgeComponent } from '../../../shared/ui/verdict/evidence-badge.component';
-import { escapeFormatChars } from './ref-name-display';
+import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
 
 @Component({
   selector: 'app-run-list-table',
@@ -48,6 +48,12 @@ export class RunListTableComponent {
   private readonly probe = viewChild.required<ElementRef<HTMLElement>>('rowProbe');
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
   protected readonly displayRef = escapeFormatChars;
+  /**
+   * The same escaping for `rerun_label` / `reprocess_label`. Both are caller-written strings shown
+   * in the row, so neither may reach the cell as a raw value (a U+202E label would reorder the rest
+   * of the row). The template wraps each in `<bdi>` as well, exactly like the ref name.
+   */
+  protected readonly displayLabel = escapeFormatLabel;
   protected readonly trackRow = (_index: number, row: RunSummary) => row.run_id;
   protected readonly copy = {
     caption: $localize`:@@runs.list.table-caption:Project runs`,

@@ -10,9 +10,13 @@
 //
 // 1. **This helper** replaces every Cf code point with a visible token, `⟨U+202E⟩`, so the operator
 //    sees that the name carries a format character and which one.
-// 2. **`<bdi>` isolation** in the template (the PAGE agent's side, `run-list.page.html`): the name
-//    is rendered inside `<bdi>` so even a name without a Cf character cannot reorder the columns
-//    around it.
+// 2. **`<bdi>` isolation** in the table's cells (`run-list-table.component.html`: the ref cell and
+//    the two scope cells): the value is rendered inside `<bdi>` so even a name without a Cf
+//    character cannot reorder the columns around it.
+//
+// Both defences cover the row's `rerun_label` / `reprocess_label` too (see {@link escapeFormatLabel}):
+// those are caller-written strings rendered beside the ref name, so an unescaped one spoofs a row
+// exactly as an unescaped ref name would.
 //
 // Escaping happens on the value only. The markup is plain interpolation, never a sanitised HTML
 // string, and the token itself contains no `&`/`<`/`>` that a renderer could reinterpret.
@@ -50,3 +54,13 @@ export function escapeFormatChars(value: string): string {
   }
   return escaped;
 }
+
+/**
+ * Neutral alias of {@link escapeFormatChars} for a server-written value that is not a `ref_name`.
+ *
+ * A run row's `rerun_label` / `reprocess_label` comes from the same CI caller, carries the same
+ * invisible-character surface (a U+202E in a label reorders the rest of the row) and is rendered in
+ * the same row as the ref name, so it takes the identical escaping. The alias exists only to name
+ * the intent at the call site instead of claiming the value is a ref.
+ */
+export const escapeFormatLabel = escapeFormatChars;
