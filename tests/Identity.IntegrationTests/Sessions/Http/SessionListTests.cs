@@ -118,6 +118,9 @@ public sealed class SessionListTests : HarnessTest
         using var response = await ListAsync(client, member);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
+        (response.Headers.CacheControl?.NoStore ?? false).ShouldBeTrue(
+            "the list is personal data: no shared cache may keep a copy");
+
         var body = await SessionTestHost.BodyAsync(response);
         body.ShouldNotContain(member.SessionCookie, Case.Sensitive, "the cookie value is never echoed");
         body.ShouldNotContain(Convert.ToHexString(host.HmacOf(member.SessionCookie)), Case.Insensitive);

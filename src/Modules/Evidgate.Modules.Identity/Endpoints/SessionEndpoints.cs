@@ -38,10 +38,19 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// indistinguishable, so the route is never an oracle over other accounts' sessions (AC6).
 /// </para>
 /// <para>
-/// <b>Cookies on the way out.</b> A successful <c>logout</c>, and <c>revoke-all</c> with
-/// <c>keep_current: false</c>, expire the session cookie and the antiforgery pair in the same response
-/// (<see cref="SessionCookieWriter.Expire"/>) — but only AFTER the row was revoked, so a failed write never
-/// signs a live session out of its own credential. <c>revoke-all</c> defaults to keeping the current session.
+/// <b>The id is a string, parsed after authentication.</b> The segment binds as <c>string</c> and only becomes a
+/// <see cref="Guid"/> once the caller IS authenticated, so a value that is not a uuid — including the literal
+/// <c>revoke-all</c>, which the router happily hands to <c>{s}</c> — answers that same 404 instead of a binding
+/// 400 raised before the credential was judged. The statuses the contract declares (204, 401, 403, 404, 503)
+/// are therefore the only ones this route can produce, and a caller cannot probe the id format without a live
+/// session.
+/// </para>
+/// <para>
+/// <b>Cookies on the way out.</b> A successful <c>logout</c>, <c>revoke-all</c> with <c>keep_current: false</c>,
+/// and a <c>DELETE /sessions/{s}</c> whose id is the caller's OWN session, expire the session cookie and the
+/// antiforgery pair in the same response (<see cref="SessionCookieWriter.Expire"/>) — but only AFTER the row was
+/// revoked, so a failed write never signs a live session out of its own credential. <c>revoke-all</c> defaults to
+/// keeping the current session, and revoking any OTHER row of the account leaves the caller's pair untouched.
 /// </para>
 /// <para>
 /// <b>CSRF is enforced, not only declared.</b> The three mutations are cookie-authenticated
@@ -126,7 +135,7 @@ internal static class SessionEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        var (proof, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
+        var (proof, _, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         if (refusal is not null)
         {
             return Result.Failure(refusal);
@@ -159,13 +168,29 @@ internal static class SessionEndpoints
     /// <c>not_found</c> for a foreign, unknown, other-org or already-dead id; the authenticator's 401/403.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// <b>The segment is a string, and it is parsed LAST.</b> <paramref name="s"/> binds as text and is turned into
+    /// a <see cref="Guid"/> only after the caller was authenticated, so a malformed id — including the literal
+    /// <c>revoke-all</c>, which the router also matches for this template — answers the same single 404
+    /// <see cref="SessionNotFound"/> envelope instead of the undocumented 400 a typed binding raises BEFORE the
+    /// credential is judged. Authentication therefore outranks the id's shape, exactly as it outranks every other
+    /// answer on this route.
+    /// </para>
+    /// <para>
     /// A present <see cref="OrgHeader"/> names the org the caller administers; without it only the owner path
     /// applies. A value that is not a uuid is treated as absent — it can only narrow what the definer is asked
     /// to authorise, never widen it, and it keeps the answer for a malformed header identical to the owner path's.
+    /// </para>
+    /// <para>
+    /// Revoking the caller's OWN row ends the request's credential, so the answer expires the session cookie and
+    /// the antiforgery pair exactly as <c>logout</c> does (and only after the write succeeded). Any other
+    /// revocable row — the account's second device, or a member's session an admin ends — sets no cookie: the
+    /// caller's pair keeps authenticating.
+    /// </para>
     /// </remarks>
     private static async Task<Result> RevokeOneAsync(
         HttpContext context,
-        Guid s,
+        string s,
         ISessionRequestAuthenticator authenticator,
         ISessionRoutesStore store,
         CancellationToken cancellationToken)
@@ -176,23 +201,45 @@ internal static class SessionEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        var (proof, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
+        var (proof, currentSessionId, refusal) = await SessionProofAsync(context, authenticator, cancellationToken)
+            .ConfigureAwait(false);
         if (refusal is not null)
         {
             return Result.Failure(refusal);
         }
 
+        // Authenticated first: a caller without a live session never learns the id's shape, and a value that is not
+        // a uuid is answered with the route's one 404 rather than a binding 400 no response declares.
+        if (!Guid.TryParse(s, out var sessionId))
+        {
+            return Result.Failure(SessionNotFound);
+        }
+
         var status = await store
-            .RevokeOneAsync(proof, s, OrgOf(context), cancellationToken)
+            .RevokeOneAsync(proof, sessionId, OrgOf(context), cancellationToken)
             .ConfigureAwait(false);
 
-        return status switch
+        switch (status)
         {
-            SessionRouteStatus.Done => Result.Success(StatusCodes.Status204NoContent),
-            SessionRouteStatus.NotFound => Result.Failure(SessionNotFound),
-            SessionRouteStatus.Unauthenticated => Result.Failure(SessionErrors.Unauthenticated),
-            _ => Result.Failure(SessionErrors.Unavailable),
-        };
+            case SessionRouteStatus.Done:
+                // The row that was revoked IS the request's own row: nothing the browser holds names a live session
+                // any more, so the pair is expired like a logout (after the write, never before it).
+                if (sessionId == currentSessionId)
+                {
+                    SessionCookieWriter.Expire(context);
+                }
+
+                return Result.Success(StatusCodes.Status204NoContent);
+
+            case SessionRouteStatus.NotFound:
+                return Result.Failure(SessionNotFound);
+
+            case SessionRouteStatus.Unauthenticated:
+                return Result.Failure(SessionErrors.Unauthenticated);
+
+            default:
+                return Result.Failure(SessionErrors.Unavailable);
+        }
     }
 
     /// <summary>
@@ -212,7 +259,7 @@ internal static class SessionEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        var (proof, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
+        var (proof, _, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         if (refusal is not null)
         {
             return Result.Failure(refusal);
@@ -243,12 +290,9 @@ internal static class SessionEndpoints
             case SessionRouteStatus.Unauthenticated:
                 return Result.Failure(SessionErrors.Unauthenticated);
 
-            case SessionRouteStatus.NotFound:
-                // The row died between the authenticator's statement and this one (a concurrent logout or
-                // revoke): the browser's credential names nothing live, and 401 session_revoked is that state —
-                // never a 503 for a session nobody can revive.
-                return Result.Failure(SessionErrors.SessionRevoked);
-
+            // No `NotFound` branch: the definer behind this route has no addressed row to miss, it answers
+            // `unauthenticated` when the proof names nothing live. A code this build does not map — an outage, or a
+            // function/migration mismatch — is 503, never an invented answer about a session.
             default:
                 return Result.Failure(SessionErrors.Unavailable);
         }
@@ -271,7 +315,7 @@ internal static class SessionEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        var (proof, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
+        var (proof, _, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         if (refusal is not null)
         {
             return Result.Failure(refusal);
@@ -289,11 +333,8 @@ internal static class SessionEndpoints
             case SessionRouteStatus.Unauthenticated:
                 return Result.Failure(SessionErrors.Unauthenticated);
 
-            case SessionRouteStatus.NotFound:
-                // A row that vanished between the authenticator's statement and this one: the old value names
-                // nothing live, so the browser is signed out for the same reason a replay is (D9).
-                return Result.Failure(SessionErrors.SessionRevoked);
-
+            // No `NotFound` branch: `session_revoke_current` addresses no row by id and answers `unauthenticated`
+            // when the proof names nothing live, so any other code is an outage or a migration mismatch — 503.
             default:
                 return Result.Failure(SessionErrors.Unavailable);
         }
@@ -306,8 +347,11 @@ internal static class SessionEndpoints
     /// <param name="context">The request whose cookie is authenticated.</param>
     /// <param name="authenticator">The deployment's authenticator.</param>
     /// <param name="cancellationToken">Request abort.</param>
-    /// <returns>The stored HMAC of the live cookie value, or the error to answer.</returns>
-    private static async Task<(byte[] Proof, Error? Refusal)> SessionProofAsync(
+    /// <returns>
+    /// The stored HMAC of the live cookie value, the id of the row that answered (the caller's CURRENT session, so a
+    /// route can tell "I just revoked my own credential" from "I revoked another row"), and the error to answer.
+    /// </returns>
+    private static async Task<(byte[] Proof, Guid? SessionId, Error? Refusal)> SessionProofAsync(
         HttpContext context,
         ISessionRequestAuthenticator authenticator,
         CancellationToken cancellationToken)
@@ -316,12 +360,12 @@ internal static class SessionEndpoints
 
         if (outcome.Refusal is { } refusal)
         {
-            return ([], refusal);
+            return ([], null, refusal);
         }
 
         return outcome.GetSessionProof() is { } proof
-            ? (proof, null)
-            : ([], SessionErrors.Unavailable);
+            ? (proof, outcome.SessionId, null)
+            : ([], null, SessionErrors.Unavailable);
     }
 
     /// <summary>The org the caller names for an administrative revoke, or null when it names none (or not a uuid).</summary>

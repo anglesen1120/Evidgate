@@ -266,7 +266,11 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   self-FK of `0041:146` with no `on delete` action, so a row a remaining row still
   references cannot be deleted at all. The delete skips any row with a referrer, which
   unwinds a rotation chain from its tip across calls instead of failing; the task loops
-  bounded batches until a short one.
+  bounded batches until a call comes back EMPTY (a short batch is not the stop signal,
+  because one chain layer per call is normal), and `MaxBatchesPerFire` still bounds the fire.
+- `session_cleanup` clamps its `p_now` to `clock_timestamp()`, so a caller can look back but
+  never ahead: a future instant cannot stamp or delete a live row, and only moves the
+  30-day cutoff forward.
 - EXECUTE is scoped per function: `evidgate_app` for the four route statements,
   `evidgate_worker_sched` alone for `session_cleanup` (the `0043:208-211`
   `expire_pending_invites` posture). `SessionRoutesStore.CleanupAsync` therefore takes

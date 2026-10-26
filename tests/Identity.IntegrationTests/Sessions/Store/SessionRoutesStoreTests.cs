@@ -281,6 +281,112 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     }
 
     /// <summary>
+    /// Sec F1: <c>membership_role.role_id</c> carries no foreign key (0011:116-134), so a row written around
+    /// the commands can point an org-A membership at ANOTHER org's custom role. The app path leans on role
+    /// RLS, which this definer does not run under, so the grant join scopes the role itself: a custom role
+    /// is only ever an authority inside its own org. The same-org custom role in the same arrangement DOES
+    /// authorize (the positive control), so the only difference between the two halves is the org of the
+    /// role.
+    /// </summary>
+    [Fact]
+    public async Task Only_A_Custom_Role_Of_The_Same_Org_Authorizes_A_Revoke()
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var otherOrg = await Fixture.SeedOrgAsync(cancellationToken: Token);
+
+        var localActor = await SeedMemberWithRoleAsync(
+            org, await SeedCustomRoleAsync(org, "session_writer_local"), "custom-role-local@example.com");
+        var foreignActor = await SeedMemberWithRoleAsync(
+            org, await SeedCustomRoleAsync(otherOrg, "session_writer_foreign"), "custom-role-foreign@example.com");
+
+        var localTarget = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+        var refusedTarget = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var localTicket = await CreateSessionAsync(localActor, clock);
+        var foreignTicket = await CreateSessionAsync(foreignActor, clock);
+        var localTargetTicket = await CreateSessionAsync(localTarget, clock);
+        var refusedTargetTicket = await CreateSessionAsync(refusedTarget, clock);
+        var routes = CreateRoutes(clock);
+
+        (await routes.RevokeOneAsync(ProofOf(localTicket), localTargetTicket.SessionId, org, Token))
+            .ShouldBe(SessionRouteStatus.Done,
+                "a custom role of THIS org carrying membership:write authorizes the revoke");
+
+        (await routes.RevokeOneAsync(ProofOf(foreignTicket), refusedTargetTicket.SessionId, org, Token))
+            .ShouldBe(SessionRouteStatus.NotFound,
+                "one org's custom role grants nothing in another org, whatever the membership_role row says");
+
+        (await OwnerScalarAsync<bool>(
+            "select revoked_at is not null from public.session where id = @id",
+            ("id", localTargetTicket.SessionId))).ShouldBeTrue();
+
+        (await OwnerScalarAsync<bool>(
+            "select revoked_at is null from public.session where id = @id",
+            ("id", refusedTargetTicket.SessionId))).ShouldBeTrue("the refused revoke writes nothing");
+    }
+
+    /// <summary>
+    /// QA G4 (admin half): the grant join needs the ACTOR's membership active. A membership that was
+    /// removed, revoked, expired or never activated still holds its <c>membership_role</c> row, so only the
+    /// <c>status = 'active'</c> predicate can refuse it — and the refusal is the same <c>not_found</c>.
+    /// </summary>
+    /// <param name="status">The status the admin's own membership was left in.</param>
+    [Theory]
+    [InlineData("removed")]
+    [InlineData("revoked")]
+    [InlineData("expired")]
+    [InlineData("pending")]
+    public async Task An_Admin_Whose_Membership_Is_Not_Active_Cannot_Revoke(string status)
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(
+            Fixture, org, "tenant_admin", status, Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var memberTicket = await CreateSessionAsync(member, clock);
+
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+            .ShouldBe(SessionRouteStatus.NotFound, $"a '{status}' membership holds no membership:write");
+
+        (await OwnerScalarAsync<bool>(
+            "select revoked_at is null from public.session where id = @id",
+            ("id", memberTicket.SessionId))).ShouldBeTrue("the member's session survives the refusal");
+    }
+
+    /// <summary>
+    /// QA G4 (target half): the target must be an ACTIVE member of the org the admin acts in. A member
+    /// whose membership was removed, revoked or is still pending keeps a live session (sessions are
+    /// platform-scoped, not membership-scoped), and that session is exactly what the admin path must not
+    /// reach.
+    /// </summary>
+    /// <param name="status">The status the target's membership was left in.</param>
+    [Theory]
+    [InlineData("removed")]
+    [InlineData("revoked")]
+    [InlineData("pending")]
+    public async Task A_Target_That_Is_Not_Active_In_The_Org_Cannot_Be_Revoked(string status)
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(
+            Fixture, org, "tenant_admin", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", status, Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var memberTicket = await CreateSessionAsync(member, clock);
+
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+            .ShouldBe(SessionRouteStatus.NotFound, $"a '{status}' membership is not an active member of the org");
+
+        (await OwnerScalarAsync<bool>(
+            "select revoked_at is null from public.session where id = @id",
+            ("id", memberTicket.SessionId))).ShouldBeTrue("the target's session is left exactly as it was");
+    }
+
+    /// <summary>
     /// AC6 boundary: an id nothing names, and a live-looking id that is already past its idle deadline, are
     /// both <c>not_found</c> — and the revoke does not stamp a dead row it was refused on.
     /// </summary>
@@ -382,6 +488,76 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         (await OwnerScalarAsync<bool>(
             "select revoked_at is null from public.session where id = @id",
             ("id", ticket.SessionId))).ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// One custom (org-owned) role of <paramref name="org"/> carrying a single tenant-assignable
+    /// permission code, written through the owner seam the way the custom-role commands would write it.
+    /// </summary>
+    /// <param name="org">The org the role belongs to — the scope the definer has to honour.</param>
+    /// <param name="code">The role code (lowercase, as <c>role_code_format_check</c> requires).</param>
+    /// <param name="permission">The permission code the role grants.</param>
+    private async Task<Guid> SeedCustomRoleAsync(Guid org, string code, string permission = "membership:write")
+    {
+        var role = Guid.CreateVersion7();
+        await OwnerExecuteAsync(
+            """
+            insert into public.role (id, org_id, code, name, is_builtin, kind)
+            values (@id, @org_id, @code, @name, false, 'member')
+            """,
+            ("id", role),
+            ("org_id", org),
+            ("code", code),
+            ("name", code));
+
+        await OwnerExecuteAsync(
+            """
+            insert into public.role_permission (id, org_id, role_id, permission_code)
+            values (@id, @org_id, @role_id, @code)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", org),
+            ("role_id", role),
+            ("code", permission));
+
+        return role;
+    }
+
+    /// <summary>
+    /// An ACTIVE membership in <paramref name="org"/> whose single role is named by id — the arrangement that
+    /// can point at a role of another org, which no command would ever write.
+    /// </summary>
+    /// <param name="org">The org the membership belongs to.</param>
+    /// <param name="roleId">The role the membership holds.</param>
+    /// <param name="email">The account's address.</param>
+    private async Task<Guid> SeedMemberWithRoleAsync(Guid org, Guid roleId, string email)
+    {
+        var user = await SeedUserAsync(email);
+        var membership = Guid.CreateVersion7();
+
+        await OwnerExecuteAsync(
+            """
+            insert into public.membership
+                (id, org_id, user_id, invited_email, status, created_at, updated_at, version)
+            values (@id, @org_id, @user_id, @email, 'active', now(), now(), 1)
+            """,
+            ("id", membership),
+            ("org_id", org),
+            ("user_id", user),
+            ("email", email));
+
+        await OwnerExecuteAsync(
+            """
+            insert into public.membership_role
+                (id, org_id, membership_id, role_id, granted_at, created_at, updated_at, version)
+            values (@id, @org_id, @membership_id, @role_id, now(), now(), now(), 1)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", org),
+            ("membership_id", membership),
+            ("role_id", roleId));
+
+        return user;
     }
 
     /// <summary>

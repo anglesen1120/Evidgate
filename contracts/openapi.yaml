@@ -787,9 +787,15 @@ paths:
         (the admin path of AC6, which is what makes a member removal immediate). A session id that is unknown,
         belongs to another account, belongs to an account outside the named org, or is already revoked or expired
         answers the SAME 404 `not_found` a missing id does — never 403, so the route is no oracle for another
-        account's ids. The call is idempotent by contract (`Idempotency-Key` not required; see
-        `contracts/README.md`): a repeat on a dead row still answers 404, and the first successful call already
-        wrote the state. Every response carries `Cache-Control: no-store`.
+        account's ids. A segment that is not a uuid answers that SAME 404 as well, and only after the request was
+        authenticated: the id is parsed by the handler, not by parameter binding, so neither an anonymous caller
+        nor a malformed value ever reaches an undocumented 400 (the literal `revoke-all` included). Revoking the
+        caller's OWN session ends the request's credential, so that answer also expires the session and
+        antiforgery cookies (`Set-Cookie`, `Max-Age=0`), exactly like `POST /auth/logout`; revoking any other row
+        leaves the caller's own cookies untouched, because the caller stays signed in on both paths. The call is
+        idempotent by contract (`Idempotency-Key` not required; see `contracts/README.md`): a repeat on a dead row
+        still answers 404, and the first successful call already wrote the state. Every response carries
+        `Cache-Control: no-store`.
       x-permission: none
       x-auth: user_session
       x-version: v1
@@ -801,12 +807,24 @@ paths:
         - $ref: '#/components/parameters/OrgHeader'
       responses:
         '204':
-          description: The row is revoked; its next request answers 401 `session_revoked` (AC4).
+          description: >-
+            The row is revoked; its next request answers 401 `session_revoked` (AC4). When the revoked row was the
+            caller's OWN session, the response also expires the session and antiforgery cookies so the browser drops
+            them, exactly like `POST /auth/logout`; a client that keeps a copy still gets the 401 `session_revoked`,
+            because the row — not the cookie — is the state that changed.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
             Cache-Control:
               $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              description: >-
+                Present only when the revoked row was the request's own session: the expiry (`Max-Age=0`) of
+                `__Host-evidgate_session` and of the antiforgery pair cookies, with the same attributes they were
+                written with (`Path=/; Secure; HttpOnly; SameSite=Lax`, no `Domain`), exactly like
+                `POST /auth/logout`. Absent when another row was revoked.
+              schema:
+                type: string
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -827,7 +845,11 @@ paths:
         every other live row of the account is revoked and the answering session survives. With
         `keep_current: false` the current row is revoked too, exactly like `POST /auth/logout`, and the answer
         expires the session and antiforgery cookies so the browser cannot replay them. The acting user comes from
-        the cookie's HMAC inside the definer (`session_revoke_others`), never from the body. Every response
+        the cookie's HMAC inside the definer (`session_revoke_others`), never from the body. The optional body is
+        bounded and parsed here, so a body that is not `application/json`, not valid JSON or not the documented
+        shape answers 422 `request_invalid` (the same refusal `POST /auth/invite-token` gives the same body, since
+        the media type is a security boundary on both), and a body over 1024 bytes answers 413
+        `payload_too_large`; neither refusal reaches the definer, so every row stays as it was. Every response
         carries `Cache-Control: no-store`.
       x-permission: none
       x-auth: user_session
@@ -862,6 +884,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '503':
           $ref: '#/components/responses/Unavailable'
   /auth/logout:
@@ -6341,7 +6367,10 @@ components:
       description: >-
         The `session.id` of a row the caller may revoke (02.3.2-T2.1). An id that is unknown, another account's,
         outside the org named in `X-Evidgate-Org`, or already revoked or expired answers the same 404
-        `not_found`, so a caller learns nothing about other accounts' sessions.
+        `not_found`, so a caller learns nothing about other accounts' sessions. A value that is not a uuid — the
+        documented `format` is what clients should send, and the literal `revoke-all` is one such value — answers
+        that same 404 after the request was authenticated; the route never answers the binding 400, and never
+        before the credential was judged.
       schema:
         type: string
         format: uuid

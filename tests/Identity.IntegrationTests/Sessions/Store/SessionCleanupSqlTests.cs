@@ -12,12 +12,16 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// 02.3.2-T2.1's sweep (<c>evidgate.session_cleanup</c>, migration 0048) end to end through
 /// <see cref="SessionRoutesStore.CleanupAsync"/>: it stamps a dead row once, deletes only rows whose LAST
 /// deadline passed more than 30 days ago, unwinds a rotation chain from its tip, never touches a live row,
-/// is idempotent, and stops at the batch limit.
+/// is idempotent, stops at the batch limit on BOTH halves, and refuses to judge deadlines by a clock ahead
+/// of the server.
 /// </summary>
 /// <remarks>
 /// Rows are arranged with the owner connection and read back the same way (the app role holds no privilege on
 /// <c>public.session</c>, 0041). The batch itself runs through the store over the sweep connection — the same
 /// call the <c>session-cleanup</c> task makes — so the SQL of this task's half is exercised, not a copy of it.
+/// Every instant below comes from the wall clock rather than a fixed future one, because the definer clamps
+/// <c>p_now</c> to <c>clock_timestamp()</c>: a suite pinned to 2032 would be clamped into "yesterday" and every
+/// deadline arranged around it would read as live.
 /// </remarks>
 [Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
@@ -36,8 +40,7 @@ public sealed class SessionCleanupSqlTests : SessionHardeningTestBase
     [Fact]
     public async Task Cleanup_Stamps_Dead_Rows_Once_And_Never_A_Live_One()
     {
-        var clock = ClockAt();
-        var now = clock.UtcNow;
+        var now = DateTimeOffset.UtcNow;
         var user = await SeedUserAsync("cleanup-stamp@example.com");
 
         var live = await InsertSessionAsync(user, now.AddHours(8), now.AddDays(7));
@@ -71,8 +74,7 @@ public sealed class SessionCleanupSqlTests : SessionHardeningTestBase
     [Fact]
     public async Task Cleanup_Deletes_Old_Rows_Leaf_First_And_Is_Idempotent()
     {
-        var clock = ClockAt();
-        var now = clock.UtcNow;
+        var now = DateTimeOffset.UtcNow;
         var user = await SeedUserAsync("cleanup-chain@example.com");
         var store = CreateSweep();
 
@@ -111,8 +113,7 @@ public sealed class SessionCleanupSqlTests : SessionHardeningTestBase
     [Fact]
     public async Task Cleanup_Is_Bounded_By_The_Limit()
     {
-        var clock = ClockAt();
-        var now = clock.UtcNow;
+        var now = DateTimeOffset.UtcNow;
         var user = await SeedUserAsync("cleanup-bound@example.com");
         var store = CreateSweep();
 
@@ -137,14 +138,75 @@ public sealed class SessionCleanupSqlTests : SessionHardeningTestBase
     }
 
     /// <summary>
+    /// The STAMP half is bounded by the same limit as the purge (QA G5): one call stamps exactly
+    /// <c>limit</c> rows, the next stamps the remainder, and the third has nothing left. Without this
+    /// bound one unbounded statement would stamp a whole backlog in a single lock, which is what the
+    /// handler's loop exists to avoid.
+    /// </summary>
+    [Fact]
+    public async Task Cleanup_Stamps_At_Most_The_Limit_Per_Call()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var user = await SeedUserAsync("cleanup-stamp-limit@example.com");
+        var store = CreateSweep();
+
+        var dead = new List<Guid>();
+        for (var index = 0; index < 3; index++)
+        {
+            // Past the idle deadline, still inside the 30-day retention window: stamp only.
+            dead.Add(await InsertSessionAsync(user, now.AddHours(-1 - index), now.AddDays(7)));
+        }
+
+        var first = await store.CleanupAsync(now, 2, Token);
+        first.Stamped.ShouldBe(2, "the stamp part stamps at most the limit");
+        first.Deleted.ShouldBe(0, "none of these rows is past the retention window");
+
+        var second = await store.CleanupAsync(now, 2, Token);
+        second.Stamped.ShouldBe(1, "the next call stamps what the first one deferred");
+
+        (await store.CleanupAsync(now, 2, Token)).Stamped.ShouldBe(0, "nothing is left to stamp");
+
+        foreach (var id in dead)
+        {
+            (await IsStampedAsync(id, now)).ShouldBeTrue();
+        }
+    }
+
+    /// <summary>
+    /// A clock AHEAD of the server is clamped (Sec F2): the sweep may look back at a past instant, never
+    /// past the rows that are still usable. Called with +100 years, an un-clamped sweep would stamp a live
+    /// row <c>expired</c> and delete it (its deadlines are older than that cutoff); the clamp answers
+    /// <c>(0, 0)</c> and leaves the row exactly as it was.
+    /// </summary>
+    [Fact]
+    public async Task The_Sweep_Clamps_A_Clock_Ahead_Of_The_Server()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var user = await SeedUserAsync("cleanup-future@example.com");
+
+        var live = await InsertSessionAsync(user, now.AddHours(8), now.AddDays(7));
+
+        await using var connection = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await connection.OpenAsync(Token);
+
+        (await SweepAsync(connection, now.AddYears(100), limit: 10_000))
+            .ShouldBe((0, 0), "an instant after clock_timestamp() is clamped to the server clock");
+
+        (await OwnerScalarAsync<bool>(
+            "select expired_at is null from public.session where id = @id",
+            ("id", live))).ShouldBeTrue("a live row is never stamped by a future clock");
+
+        (await ExistsAsync(live)).ShouldBeTrue("a live row is never deleted, even by a future cutoff");
+    }
+
+    /// <summary>
     /// The function's own guard, called directly: a zero, a negative or an absent limit sweeps nothing, and an
     /// absent clock sweeps nothing even with a real limit — a caller that does not know "now" must not delete.
     /// </summary>
     [Fact]
     public async Task The_Sweep_Refuses_An_Absent_Limit_And_An_Absent_Clock()
     {
-        var clock = ClockAt();
-        var now = clock.UtcNow;
+        var now = DateTimeOffset.UtcNow;
         var user = await SeedUserAsync("cleanup-absent@example.com");
 
         var dead = await InsertSessionAsync(user, now.AddMinutes(-1), now.AddDays(7));
@@ -250,14 +312,19 @@ public sealed class SessionCleanupSqlTests : SessionHardeningTestBase
     private Task<bool> ExistsAsync(Guid id) =>
         OwnerScalarAsync<bool>("select exists (select 1 from public.session where id = @id)", ("id", id));
 
-    /// <summary>Whether the row carries the stamp, at exactly the instant the sweep was given.</summary>
+    /// <summary>
+    /// Whether the row carries the stamp, at (or within a minute of) the instant the sweep was given. The
+    /// window exists because the definer clamps <c>p_now</c> to the database's <c>clock_timestamp()</c>: the
+    /// stamp can be a few milliseconds off the test process's own clock, never more.
+    /// </summary>
     /// <param name="id">The session id.</param>
     /// <param name="now">The instant the sweep judged with.</param>
     private Task<bool> IsStampedAsync(Guid id, DateTimeOffset now) =>
         OwnerScalarAsync<bool>(
-            "select coalesce(expired_at = @now, false) from public.session where id = @id",
+            "select coalesce(expired_at between @from and @to, false) from public.session where id = @id",
             ("id", id),
-            ("now", now));
+            ("from", now.Subtract(TimeSpan.FromMinutes(1))),
+            ("to", now.AddMinutes(1)));
 
     /// <summary>The sweep seam over the owner connection the suite already owns.</summary>
     /// <param name="connectionString">The owner connection string.</param>

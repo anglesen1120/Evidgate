@@ -19,9 +19,10 @@
 --
 --       - `session_list(p_cookie_hmacs bytea[], p_now timestamptz)` — the caller's
 --         LIVE sessions (unrevoked, unexpired on both clocks), current one flagged,
---         newest activity first. Answers `unauthenticated` in one row when the
---         presented proof matches no live session, so the route can tell "no session"
---         from "an empty list" without a second statement.
+--         newest sign-in first (`created_at desc, id`): a slide moves the idle deadline,
+--         not the row's place in the list. Answers `unauthenticated` in one row when
+--         the presented proof matches no live session, so the route can tell "no
+--         session" from "an empty list" without a second statement.
 --       - `session_revoke_current(p_cookie_hmacs, p_now)` — logout: the row the
 --         presented proof belongs to.
 --       - `session_revoke_one(p_cookie_hmacs, p_session_id, p_org_id, p_now)` — one
@@ -33,7 +34,10 @@
 --         session of the caller, optionally keeping the current one; answers the count.
 --       - `session_cleanup(p_now, p_limit)` — the `session-cleanup` sweep: stamps
 --         `expired_at` on dead rows once, and hard-deletes rows whose LAST deadline
---         passed more than 30 days ago, in bounded batches, LEAF FIRST.
+--         passed more than 30 days ago, in bounded batches, LEAF FIRST. `p_now` is
+--         clamped to the server clock, so a caller cannot judge deadlines by a future
+--         instant; one fire of the task loops until a call comes back empty, so a whole
+--         rotation chain is removed in that one fire.
 --
 -- The acting user is resolved from the presented credential INSIDE every function,
 -- never accepted as an argument (the `login_link_identity` pattern of 0045:603 and
@@ -255,7 +259,11 @@ $$;
 -- The grant join is `IdentityAccessSql.MemberGrant`'s (02.2.1-T2.2, AC7) — active
 -- membership, `kind = 'member'` role, a grant row that belongs to its role's own org,
 -- and only a `tenant_assignable` code — so the read-time T79 filter cannot be bypassed
--- by a corrupted `role_permission` row. The target must ALSO be an active member of the
+-- by a corrupted `role_permission` row. Because `membership_role.role_id` has no foreign
+-- key (0011:116-134) and this definer runs under the owner policy rather than the role
+-- RLS the app path relies on, the join ALSO scopes the role itself
+-- (`r.org_id is null or r.org_id = p_org_id`): a membership_role row pointed at another
+-- org's custom role grants nothing here. The target must ALSO be an active member of the
 -- SAME org: an admin is never granted the whole platform's sessions, only the members of
 -- the org whose admin they are.
 --
@@ -264,10 +272,12 @@ $$;
 -- the route maps it to the same 404 body, so the endpoint cannot be used to enumerate
 -- session ids or to learn whether one belongs to somebody else (AC6, plan §8).
 --
--- `for update` on the target row serializes two concurrent revokes of the same session
--- (one answers `revoked`, the other re-reads it as dead and answers `not_found`); it
--- takes no lock on anything else, so two admins revoking different members never wait
--- on each other.
+-- The target is read WITHOUT a lock and the authorization runs before any write: the guarded
+-- `update` below is the arbiter, because it re-tests every liveness predicate in its own `where`
+-- clause and takes the row lock as it writes. Two concurrent revokes of the same session therefore
+-- still serialize (one answers `revoked`, the other re-reads the row as dead and answers
+-- `not_found`), while an authenticated caller who merely knows a live foreign id cannot stall that
+-- victim's slide — no lock is taken on a row this call turns out not to be allowed to write.
 create or replace function evidgate_resolve.session_revoke_one(
   p_cookie_hmacs bytea[],
   p_session_id uuid,
@@ -304,8 +314,7 @@ begin
          and s.absolute_expires_at > p_now
     into v_target_user, v_target_live
     from public.session s
-   where s.id = p_session_id
-     for update;
+   where s.id = p_session_id;
 
   if v_target_user is null or v_target_live is not true then
     return query select 'not_found'::text;
@@ -327,6 +336,12 @@ begin
         join public.role r
              on r.id = mr.role_id
             and r.kind = 'member'
+            -- `membership_role.role_id` carries no foreign key (0011:116-134), so a row written around
+            -- the commands could point a membership at another org's custom role; the app path is
+            -- protected by RLS (`role_catalogue_read`, 0010:184-188) and this definer runs under the
+            -- owner policy, so the same scope test has to be spelled out here. A built-in role
+            -- (`org_id is null`) is platform-wide; a custom role only ever grants inside its own org.
+            and (r.org_id is null or r.org_id = p_org_id)
         join public.role_permission rp
              on rp.role_id = r.id
             and rp.org_id is not distinct from r.org_id
@@ -364,7 +379,8 @@ begin
   returning s.id into v_revoked_id;
 
   if v_revoked_id is null then
-    -- Expired between the lock and this write: the same `not_found` any dead target gets.
+    -- Another writer got there first, or a deadline passed since the read above: the same
+    -- `not_found` any dead target gets, because this call did not touch the row.
     return query select 'not_found'::text;
     return;
   end if;
@@ -428,7 +444,7 @@ $$;
 -- The `session-cleanup` sweep (plan §7, §8 retention): bounded, idempotent, and it never
 -- touches a live row.
 --
---   (a) STAMP: an unrevoked row past idle or absolute expiry gets `expired_at = p_now`
+--   (a) STAMP: an unrevoked row past idle or absolute expiry gets `expired_at = v_now`
 --       once. The predicate is re-tested in the `update`'s own clause (not only on the
 --       statement snapshot), the lesson 0043:190-199 records: EvalPlanQual re-evaluates
 --       the UPDATE's condition, which is what stops a concurrent request's slide from
@@ -444,16 +460,21 @@ $$;
 --       predicate therefore skips any row with a referrer, which means a rotation chain
 --       unwinds from its tip across CALLS — each call deletes the rows whose successors
 --       are already gone — instead of failing or forcing an `on delete set null` that
---       would rewrite the chain the rotation tests read. A chain entirely inside the
---       30-day window is finished in a few calls, which is exactly what the task's
---       loop (bounded batches until a short one) is for.
+--       would rewrite the chain the rotation tests read. That is why the task's loop
+--       runs until a call comes back EMPTY rather than until one comes back short: one
+--       fire makes as many of those calls as the chain is deep, so the whole chain (and
+--       the IP and user-agent data it holds) leaves inside the retention window instead
+--       of one layer per daily fire.
 --
 -- A NULL or non-positive `p_limit` sweeps nothing (fail-closed, the 0043:170-176 rule:
 -- an absent batch size must never become an unbounded delete), and the cap is 10 000 per
 -- part so one call never holds a long lock. Both parts of one call are bounded by the
--- SAME limit, so the task's "stop on a short batch" test stays meaningful. A NULL `p_now`
--- matches nothing at all — no stamp, no delete — which is the safe reading of a caller
--- that does not know what "now" is.
+-- SAME limit, so a stamp backlog and a purge backlog drain at the same rate. A NULL
+-- `p_now` matches nothing at all — no stamp, no delete — which is the safe reading of a
+-- caller that does not know what "now" is; and an instant AHEAD of the server clock is
+-- clamped to it (`v_now := least(p_now, clock_timestamp())`), because a caller that can
+-- name the future would otherwise stamp and delete LIVE rows: a future `p_now` now only
+-- ever moves the cutoff forward, never past the rows that are still usable.
 create or replace function evidgate.session_cleanup(
   p_now timestamptz,
   p_limit integer)
@@ -465,6 +486,7 @@ set search_path = ''
 as $$
 declare
   v_limit integer := least(greatest(coalesce(p_limit, 0), 0), 10000);
+  v_now timestamptz;
   v_cutoff timestamptz;
   v_stamped integer := 0;
   v_deleted integer := 0;
@@ -474,25 +496,27 @@ begin
     return;
   end if;
 
-  v_cutoff := p_now - interval '30 days';
+  -- The server clock is the ceiling: `p_now` may look back (a caller catching up), never ahead.
+  v_now := least(p_now, clock_timestamp());
+  v_cutoff := v_now - interval '30 days';
 
   with batch as (
     select s.id
       from public.session s
      where s.expired_at is null
        and s.revoked_at is null
-       and (s.expires_at <= p_now or s.absolute_expires_at <= p_now)
+       and (s.expires_at <= v_now or s.absolute_expires_at <= v_now)
      order by s.expires_at
      limit v_limit
        for update skip locked
   ), stamped as (
     update public.session s
-       set expired_at = p_now
+       set expired_at = v_now
       from batch b
      where s.id = b.id
        and s.expired_at is null
        and s.revoked_at is null
-       and (s.expires_at <= p_now or s.absolute_expires_at <= p_now)
+       and (s.expires_at <= v_now or s.absolute_expires_at <= v_now)
     returning s.id
   )
   select count(*)::integer

@@ -38,7 +38,8 @@ internal static class SessionCleanupSweeps
 
     /// <summary>
     /// Batches one fire may drain before it stops; whatever is left waits for the next daily fire. Bounded so a
-    /// backlog never holds one long lock and a fire never outlives the lease it holds.
+    /// backlog never holds one long lock and a fire never outlives the lease it holds. A rotation chain of depth
+    /// <c>d</c> consumes <c>d</c> of these because the sweep unwinds it one row per call.
     /// </summary>
     public const int MaxBatchesPerFire = 50;
 
@@ -63,10 +64,14 @@ internal static class SessionCleanupSweeps
 /// app-role data source; only this sweep needs the sweep credential.
 /// </para>
 /// <para>
-/// The loop stops at the first batch that did less than a full <c>limit</c> of work — stamped plus deleted — which
-/// is what makes the sweep <c>done</c> on an empty table without a second empty call, and what bounds the fire when
-/// a backlog is larger than one batch. A rerun changes nothing: a stamped row is not stamped again
-/// (<c>expired_at is null</c> is part of the predicate) and a deleted row is gone.
+/// The loop ends on the first call that comes back EMPTY — stamped plus deleted equal zero — which is
+/// what makes the sweep <c>done</c> on an empty table, and it may spend at most
+/// <see cref="SessionCleanupSweeps.MaxBatchesPerFire"/> batches before it yields to the next daily fire.
+/// A short batch is deliberately NOT a stop signal: the sweep deletes a rotation chain from its tip, one
+/// row per call, so a chain of depth <c>d</c> is <c>d</c> calls and one fire must be allowed to make
+/// them, or the chain's IP and user-agent data would outlive the 30-day retention by <c>d</c> days.
+/// A rerun changes nothing: a stamped row is not stamped again (<c>expired_at is null</c> is part of the
+/// predicate) and a deleted row is gone.
 /// </para>
 /// </remarks>
 /// <param name="store">The route store, whose <see cref="ISessionRoutesStore.CleanupAsync"/> owns the SQL.</param>
@@ -99,16 +104,18 @@ internal sealed partial class SessionCleanupTaskHandler(
         var stamped = 0;
         var deleted = 0;
 
-        for (var batch = 0; batch < SessionCleanupSweeps.MaxBatchesPerFire; batch++)
+        // An EMPTY call is the stop signal, never a short one: the sweep unwinds a rotation chain one
+        // row per call (the self-FK keeps a predecessor until its successor is gone), so a chain of
+        // depth d is d calls, and stopping at the first batch below `limit` would spread that chain
+        // over d daily fires and keep its IP and user-agent data past the 30-day retention.
+        // MaxBatchesPerFire still bounds the fire.
+        var drained = false;
+        for (var batch = 0; batch < SessionCleanupSweeps.MaxBatchesPerFire && !drained; batch++)
         {
             var result = await store.CleanupAsync(now, limit, cancellationToken).ConfigureAwait(false);
             stamped += result.Stamped;
             deleted += result.Deleted;
-
-            if (result.Stamped + result.Deleted < limit)
-            {
-                break;
-            }
+            drained = result.Stamped + result.Deleted == 0;
         }
 
         LogCleaned(stamped, deleted, limit);

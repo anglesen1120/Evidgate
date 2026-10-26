@@ -121,7 +121,9 @@ internal interface ISessionRoutesStore
     /// One bounded cleanup batch: stamps dead rows <c>expired</c> once and deletes rows whose
     /// last deadline passed more than 30 days ago, leaf first.
     /// </summary>
-    /// <param name="now">The instant the sweep judges every deadline against.</param>
+    /// <param name="now">The instant the sweep judges every deadline against; the definer clamps it to the
+    /// database's own clock (<c>least(p_now, clock_timestamp())</c>), so a future value can only move the cutoff
+    /// forward and never reaches a live row.</param>
     /// <param name="limit">Rows per part; clamped to 0..10000, and 0 sweeps nothing.</param>
     /// <param name="cancellationToken">Task abort.</param>
     /// <returns>How many rows this batch stamped and deleted.</returns>

@@ -1995,7 +1995,7 @@ export type IngestTokenId = string;
 export type ProviderPath = 'google' | 'github';
 
 /**
- * The `session.id` of a row the caller may revoke (02.3.2-T2.1). An id that is unknown, another account's, outside the org named in `X-Evidgate-Org`, or already revoked or expired answers the same 404 `not_found`, so a caller learns nothing about other accounts' sessions.
+ * The `session.id` of a row the caller may revoke (02.3.2-T2.1). An id that is unknown, another account's, outside the org named in `X-Evidgate-Org`, or already revoked or expired answers the same 404 `not_found`, so a caller learns nothing about other accounts' sessions. A value that is not a uuid — the documented `format` is what clients should send, and the literal `revoke-all` is one such value — answers that same 404 after the request was authenticated; the route never answers the binding 400, and never before the credential was judged.
  */
 export type SessionId = string;
 
@@ -2676,7 +2676,7 @@ export type RevokeSessionData = {
     };
     path: {
         /**
-         * The `session.id` of a row the caller may revoke (02.3.2-T2.1). An id that is unknown, another account's, outside the org named in `X-Evidgate-Org`, or already revoked or expired answers the same 404 `not_found`, so a caller learns nothing about other accounts' sessions.
+         * The `session.id` of a row the caller may revoke (02.3.2-T2.1). An id that is unknown, another account's, outside the org named in `X-Evidgate-Org`, or already revoked or expired answers the same 404 `not_found`, so a caller learns nothing about other accounts' sessions. A value that is not a uuid — the documented `format` is what clients should send, and the literal `revoke-all` is one such value — answers that same 404 after the request was authenticated; the route never answers the binding 400, and never before the credential was judged.
          */
         s: string;
     };
@@ -2707,7 +2707,7 @@ export type RevokeSessionError = RevokeSessionErrors[keyof RevokeSessionErrors];
 
 export type RevokeSessionResponses = {
     /**
-     * The row is revoked; its next request answers 401 `session_revoked` (AC4).
+     * The row is revoked; its next request answers 401 `session_revoked` (AC4). When the revoked row was the caller's OWN session, the response also expires the session and antiforgery cookies so the browser drops them, exactly like `POST /auth/logout`; a client that keeps a copy still gets the 401 `session_revoked`, because the row — not the cookie — is the state that changed.
      */
     204: void;
 };
@@ -2736,6 +2736,14 @@ export type RevokeAllSessionsErrors = {
      * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
      */
     403: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
     /**
      * 503 unavailable — always `Retry-After` (00 §9.2)
      */

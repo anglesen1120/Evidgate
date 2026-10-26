@@ -88,8 +88,9 @@ internal static class SessionCookieWriter
     }
 
     /// <summary>
-    /// Expires the session cookie and the antiforgery pair on this response (02.3.2-T2: logout, and
-    /// <c>revoke-all</c> with <c>keep_current: false</c>).
+    /// Expires the session cookie and the antiforgery pair on this response (02.3.2-T2: logout,
+    /// <c>revoke-all</c> with <c>keep_current: false</c>, and a <c>DELETE /sessions/{s}</c> whose id is the
+    /// caller's own session).
     /// </summary>
     /// <param name="http">The request whose response carries the expiries.</param>
     /// <remarks>

@@ -90,8 +90,10 @@ public sealed class SessionCleanupTaskTests(PostgresTasksFixture fixture)
 
     /// <summary>
     /// The payload is an operator-replayable task row, so a small batch must still drain the whole backlog of one
-    /// fire: five expired rows at two per call is three calls (2, 2, then the short 1 that ends the loop). A single
-    /// call would have left three rows behind.
+    /// fire: five expired rows at two per call is four calls (2, 2, the remaining 1, then the empty call that ends
+    /// the loop). A single call would have left three rows behind. The per-call bound itself is pinned at the SQL
+    /// level (<c>SessionCleanupSqlTests.Cleanup_Stamps_At_Most_The_Limit_Per_Call</c>), because the handler only
+    /// exposes the totals.
     /// </summary>
     [Fact]
     public async Task Cleanup_HonoursTheBatchLimitAndDrainsTheBacklog()
@@ -112,38 +114,42 @@ public sealed class SessionCleanupTaskTests(PostgresTasksFixture fixture)
     }
 
     /// <summary>
-    /// The 30-day delete is leaf first (§7, AC6): <c>session.rotated_from</c> is a self-FK with no
-    /// <c>ON DELETE</c>, so one call that selected a whole chain must still be able to finish — it deletes the
-    /// successor and leaves the predecessor, which the next call then removes. Nothing is lost and no batch fails on
-    /// the foreign key.
+    /// The 30-day delete is leaf first (§7, AC6) and ONE fire still removes the WHOLE chain: the self-FK
+    /// has no <c>ON DELETE</c>, so each call can only remove the current tip, and the handler keeps calling
+    /// until a call comes back empty. A three-row chain therefore leaves nothing behind after one fire — the
+    /// retention rule holds for every row of the chain, not one layer per daily fire.
     /// </summary>
     [Fact]
-    public async Task Cleanup_DeletesLeafFirst_ARotatedChainTakesTwoCalls()
+    public async Task Cleanup_Deletes_A_Whole_Rotated_Chain_In_One_Fire()
     {
         var database = await fixture.CreateDatabaseAsync();
         var owner = fixture.OwnerConnectionString(database);
         var user = await SeedUserAsync(owner);
 
-        var predecessor = await SeedSessionAsync(owner, user, Now.AddDays(-40), Now.AddDays(-39));
-        var successor = await SeedSessionAsync(owner, user, Now.AddDays(-38), Now.AddDays(-37), rotatedFrom: predecessor);
+        var live = await SeedSessionAsync(owner, user, Now.AddHours(1), Now.AddHours(2));
+        var root = await SeedSessionAsync(owner, user, Now.AddDays(-42), Now.AddDays(-41));
+        var middle = await SeedSessionAsync(owner, user, Now.AddDays(-40), Now.AddDays(-39), rotatedFrom: root);
+        var tip = await SeedSessionAsync(owner, user, Now.AddDays(-38), Now.AddDays(-37), rotatedFrom: middle);
 
         await using var host = Start(database);
 
-        await FireAsync(owner, host, limit: 100, idempotencyKey: "session-cleanup-chain-first");
+        await FireAsync(owner, host, limit: 100, idempotencyKey: "session-cleanup-chain");
 
-        (await ExistsAsync(owner, successor)).ShouldBeFalse("the leaf of the chain is deleted first");
-        (await ExistsAsync(owner, predecessor)).ShouldBeTrue(
-            "the row the delete statement selected still has a referring row in its own snapshot, so it waits");
+        foreach (var ended in new[] { tip, middle, root })
+        {
+            (await ExistsAsync(owner, ended)).ShouldBeFalse(
+                "one fire drains the chain: each call removes the new tip until a call comes back empty");
+        }
 
-        await FireAsync(owner, host, limit: 100, idempotencyKey: "session-cleanup-chain-second");
-
-        (await ExistsAsync(owner, predecessor)).ShouldBeFalse("with the leaf gone the predecessor is deletable");
-        (await SessionCountAsync(owner)).ShouldBe(0);
+        (await ExistsAsync(owner, live)).ShouldBeTrue("a live session is never deleted");
+        (await SessionCountAsync(owner)).ShouldBe(1);
     }
 
     /// <summary>
-    /// One fire is bounded by <see cref="SessionCleanupSweeps.MaxBatchesPerFire"/>: a backlog larger than the cap is
-    /// left for the next daily fire instead of holding one long lock, and nothing is lost — the next fire finishes it.
+    /// One fire spends exactly <see cref="SessionCleanupSweeps.MaxBatchesPerFire"/> batches and no more: with
+    /// <c>limit: 1</c> every call stamps exactly one row, so the fire's total IS the batch count. A backlog
+    /// larger than the cap is left for the next daily fire instead of holding one long lock, and nothing is
+    /// lost — the next fire finishes it.
     /// </summary>
     [Fact]
     public async Task Cleanup_StopsAtMaxBatchesPerFire()
@@ -162,10 +168,9 @@ public sealed class SessionCleanupTaskTests(PostgresTasksFixture fixture)
 
         await FireAsync(owner, host, limit: 1, idempotencyKey: "session-cleanup-capped");
 
-        var afterFirstFire = await StampedCountAsync(owner);
-        afterFirstFire.ShouldBeGreaterThan(0);
-        afterFirstFire.ShouldBeLessThanOrEqualTo(SessionCleanupSweeps.MaxBatchesPerFire, "one fire never drains more than the cap");
-        afterFirstFire.ShouldBeLessThan(rows, "the cap leaves the rest of the backlog for the next fire");
+        (await StampedCountAsync(owner)).ShouldBe(
+            SessionCleanupSweeps.MaxBatchesPerFire,
+            "limit 1 stamps exactly one row per batch, so the fire stops at exactly the cap — not sooner, not later");
 
         await FireAsync(owner, host, limit: 1, idempotencyKey: "session-cleanup-capped-second");
 
@@ -174,7 +179,9 @@ public sealed class SessionCleanupTaskTests(PostgresTasksFixture fixture)
 
     /// <summary>
     /// §7: one platform fire per schedule time — the unique <c>(schedule_name, fire_at)</c> key is what makes a fleet
-    /// of workers fire once — at the documented daily cadence, with the documented payload and task type.
+    /// of workers fire once — with the documented payload and task type, at the cadence
+    /// <see cref="Cleanup_Schedule_FiresAtTheNextOccurrence_NotBefore"/> pins behaviourally. The constants are not
+    /// compared to copies of their own literals here: the assertions below read what the task row really carries.
     /// </summary>
     [Fact]
     public async Task Cleanup_Schedule_FiresOncePerTime_AtTheDocumentedCadence()
@@ -206,10 +213,39 @@ public sealed class SessionCleanupTaskTests(PostgresTasksFixture fixture)
             owner,
             "select task_type from public.task where schedule_name = @n",
             ("n", SessionCleanupSweeps.ScheduleName))).ShouldBe(SessionCleanupSweeps.TaskType);
+    }
 
-        SessionCleanupSweeps.TaskType.ShouldBe("session.cleanup");
-        SessionCleanupSweeps.ScheduleName.ShouldBe("session-cleanup");
-        SessionCleanupSweeps.Cron.ShouldBe("40 3 * * *");
+    /// <summary>
+    /// §7 (QA G9): what decides a fire is the cron occurrence, not the poll. A pass at 03:39:59 is still before
+    /// the 03:40 occurrence and inserts nothing; the pass that crosses it inserts one task row; and the NEXT
+    /// day's occurrence is a different <c>fire_at</c>, so it inserts a second row instead of being collapsed by
+    /// the first one's unique key.
+    /// </summary>
+    [Fact]
+    public async Task Cleanup_Schedule_FiresAtTheNextOccurrence_NotBefore()
+    {
+        var database = await fixture.CreateDatabaseAsync();
+        var owner = fixture.OwnerConnectionString(database);
+        await using var host = Start(database);
+
+        var before = new DateTimeOffset(2026, 10, 26, 3, 39, 59, TimeSpan.Zero);
+        (await host.Runner.RunOnceAsync(before, Token)).ShouldBe(0, "the 03:40 occurrence is not in the window yet");
+
+        var first = new DateTimeOffset(2026, 10, 26, 3, 40, 30, TimeSpan.Zero);
+        (await host.Runner.RunOnceAsync(first, Token)).ShouldBe(1, "the pass that crosses 03:40 fires");
+
+        (await host.Runner.RunOnceAsync(first.AddDays(1), Token))
+            .ShouldBe(1, "the next day's 03:40 is a different fire_at, so the key does not collapse it");
+
+        (await TaskSql.ScalarAsync<long>(
+            owner,
+            "select count(*) from public.task where schedule_name = @n",
+            ("n", SessionCleanupSweeps.ScheduleName))).ShouldBe(2);
+
+        (await TaskSql.ScalarAsync<long>(
+            owner,
+            "select count(distinct fire_at) from public.task where schedule_name = @n",
+            ("n", SessionCleanupSweeps.ScheduleName))).ShouldBe(2, "one row per occurrence, one occurrence per row");
     }
 
     /// <summary>
