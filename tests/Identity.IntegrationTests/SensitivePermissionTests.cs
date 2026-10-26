@@ -436,6 +436,11 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/authoring/checklist-items"] = $"/v1/projects/{project}/authoring/checklist-items",
             ["/v1/projects/{p}/authoring/manual-cases"] = $"/v1/projects/{project}/authoring/manual-cases",
             ["/v1/projects/{p}/authoring/versions"] = $"/v1/projects/{project}/authoring/versions",
+            // 13.1.1-T5's export: a project with no authoring rows exports an empty rows array, so the download is
+            // callable here like the lists above (no seeded tree, no secret in the file). The scan reads a JSON
+            // document, so the call takes the JSON format rather than the CSV default: the permission, the projection
+            // and the file itself are the same on the route, and the CSV bytes are not a document the scanner can read.
+            ["/v1/projects/{p}/authoring/export"] = $"/v1/projects/{project}/authoring/export?format=json",
             ["/v1/cases/{c}"] = $"/v1/cases/{seeded.CaseId}",
             ["/v1/cases/{c}/revisions"] = $"/v1/cases/{seeded.CaseId}/revisions",
             ["/v1/suites/{s}"] = $"/v1/suites/{seeded.SuiteId}",

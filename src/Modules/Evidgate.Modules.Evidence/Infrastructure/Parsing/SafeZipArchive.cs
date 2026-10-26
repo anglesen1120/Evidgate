@@ -151,6 +151,211 @@ internal static class SafeZipArchive
     }
 
     /// <summary>
+    /// Validates one archive exactly as <see cref="Enumerate"/> does and additionally keeps the content of the
+    /// entries a caller selects (13.1.1-T5.2, 13.1.1 AC16). This is the <em>caps-explicit</em> variant of the
+    /// archive arm: the caller states the entry count, the cumulative expanded size and the compression ratio its
+    /// own format allows — the authoring XLSX reader passes 1 000 entries, 64 MiB and 20:1 for 13.1.1 AC16 —
+    /// instead of inheriting <see cref="ParsingLimits"/>' archive numbers. The two caps that are not a file
+    /// format's business stay the profile's own: the nesting depth and the parse timeout come from
+    /// <c>ParsingLimits</c> through the <see cref="ZipArchiveOptions"/> the caller's adapter builds, so no caller
+    /// can widen them.
+    /// <para>
+    /// Two passes over the same bounded buffer, and never a file: pass one is the non-extracting walk every
+    /// production caller runs (<see cref="Enumerate"/>), so the declared entry count, every name, duplicate names,
+    /// symbolic links, the expanded budget, the ratio and the nesting are all decided before one byte is kept.
+    /// Pass two re-reads only the entries whose <em>normalized</em> name the predicate selects — the spelling
+    /// <see cref="ArchiveContents.Entries"/> reports, so a caller never has to normalize a name itself — and each
+    /// of those is bounded by <paramref name="maxEntryBytes"/> twice: once against the declared length, which is
+    /// only a hint a hostile writer controls and is refused before anything is allocated, and once against the
+    /// bytes actually read, which is the real bound.
+    /// </para>
+    /// <para>
+    /// Nothing is written to disk, no temporary root exists, and a failure hands back no content at all — the
+    /// bytes kept so far die with the failure, and the reason is a generic word, never a name or a byte
+    /// (00 §5.7 S3). The walk is synchronous with the profile's cooperative timeout, so a caller passes an
+    /// already-buffered, bounded stream, exactly as for <see cref="Enumerate"/>.
+    /// </para>
+    /// </summary>
+    /// <param name="content">The untrusted archive bytes; the caller keeps ownership of the stream.</param>
+    /// <param name="maxBytes">The per-kind byte cap for the archive object itself.</param>
+    /// <param name="options">The caps for this read (count, expanded size, ratio, nesting, timeout).</param>
+    /// <param name="selectEntry">Decides, from an entry's normalized name, whether its content is kept.</param>
+    /// <param name="maxEntryBytes">The most bytes one selected entry may expand to.</param>
+    /// <param name="cancellationToken">The caller's cancellation; a caller cancellation is never swallowed.</param>
+    /// <returns>The entry metadata plus the selected entries' content, or the profile failure.</returns>
+    internal static Result<ArchiveContents> ReadEntries(
+        Stream content,
+        long maxBytes,
+        ZipArchiveOptions options,
+        Func<string, bool> selectEntry,
+        long maxEntryBytes,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(selectEntry);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxEntryBytes);
+
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(options.Timeout);
+        var token = timeoutSource.Token;
+
+        try
+        {
+            var (buffer, length) = BoundedContent.ReadContiguous(content, maxBytes, token);
+            token.ThrowIfCancellationRequested();
+
+            // Pass 1: the same walk Enumerate runs, so every cap - the declared count, the whole central
+            // directory, the expanded budget, the ratio, the nesting - is decided before a single byte is kept.
+            List<ArchiveEntry> entries;
+
+            using (var probe = new MemoryStream(buffer, 0, length, writable: false))
+            using (var probeSource = new CountingStream(probe))
+            {
+                entries = WalkArchive(
+                    probeSource,
+                    buffer.AsSpan(0, length),
+                    options,
+                    new WalkState(options.MaxExpandedBytes),
+                    extract: false,
+                    depth: 1,
+                    token);
+            }
+
+            token.ThrowIfCancellationRequested();
+
+            // An archive pass 1 accepted cannot change between the passes: both read the same bounded buffer.
+            var selected = new Dictionary<string, ReadOnlyMemory<byte>>(StringComparer.OrdinalIgnoreCase);
+
+            if (entries.Count > 0)
+            {
+                // Pass 2: keep the content. The declared-count pre-check is not repeated - pass 1 already
+                // refused an oversized directory in these exact bytes - but the directory is validated again so
+                // the names the predicate sees are the normalized ones the walk accepted.
+                using var memory = new MemoryStream(buffer, 0, length, writable: false);
+                using var source = new CountingStream(memory);
+                using var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true);
+
+                var keepState = new WalkState(options.MaxExpandedBytes);
+
+                foreach (var candidate in ValidateDirectory(archive, options, token))
+                {
+                    if (candidate.IsDirectory || !selectEntry(candidate.Normalized))
+                    {
+                        continue;
+                    }
+
+                    selected[candidate.Normalized] = ReadEntryContent(candidate, keepState, maxEntryBytes, token);
+                }
+            }
+
+            return Result.Success(new ArchiveContents(entries, selected));
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The caller's own cancellation propagates; only the profile's timeout becomes a failure value.
+            return Result.Failure<ArchiveContents>(ParsingFailure.For(ParsingFailureReason.Timeout));
+        }
+        catch (ContentTooLongException)
+        {
+            return Result.Failure<ArchiveContents>(ParsingFailure.For(ParsingFailureReason.SizeExceeded));
+        }
+        catch (ArchiveLimitException limit)
+        {
+            return Result.Failure<ArchiveContents>(ParsingFailure.For(limit.Reason));
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException && !cancellationToken.IsCancellationRequested)
+        {
+            // The same fail-closed map Enumerate uses: a truncated or non-zip object, an entry shape the profile
+            // did not anticipate, or a predicate that throws all end a failure value rather than a 500.
+            var reason = token.IsCancellationRequested
+                ? ParsingFailureReason.Timeout
+                : ParsingFailureReason.Malformed;
+
+            return Result.Failure<ArchiveContents>(ParsingFailure.For(reason));
+        }
+    }
+
+    /// <summary>
+    /// Reads one selected entry's content into memory under <paramref name="maxEntryBytes"/>. The declared length
+    /// is only a fast refusal — a hostile header can announce anything — so the real bound is the counting read:
+    /// at most the cap is kept, and one byte past it is enough to refuse. The bytes land in a buffer only the
+    /// returned <see cref="ArchiveContents"/> can hand out, as read-only memory, so no consumer of an untrusted
+    /// archive can mutate what its neighbours read.
+    /// </summary>
+    /// <param name="candidate">The validated entry to keep.</param>
+    /// <param name="state">The cumulative expanded budget, charged as the content is read.</param>
+    /// <param name="maxEntryBytes">The most bytes this entry may expand to.</param>
+    /// <param name="token">The profile's token (caller cancellation linked with the timeout).</param>
+    /// <returns>The entry's content.</returns>
+    private static ReadOnlyMemory<byte> ReadEntryContent(
+        Candidate candidate,
+        WalkState state,
+        long maxEntryBytes,
+        CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+
+        var entry = candidate.Entry;
+
+        // Over the cap by declaration: refused before a single byte of content is allocated for it.
+        if (entry.Length > maxEntryBytes)
+        {
+            throw new ArchiveLimitException(ParsingFailureReason.SizeExceeded);
+        }
+
+        using var stream = entry.Open();
+
+        // Pre-sized from at most one read chunk: the declared length is a hint a hostile writer controls, so it
+        // may speed up a truthful entry's buffer but never sizes an allocation the cap has not already bounded.
+        using var kept = new MemoryStream((int)Math.Min(entry.Length, ReadChunkBytes));
+
+        var scratch = ArrayPool<byte>.Shared.Rent(ReadChunkBytes);
+        Span<byte> probe = stackalloc byte[1];
+
+        try
+        {
+            var keptBytes = 0L;
+
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+
+                var remaining = maxEntryBytes - keptBytes;
+
+                if (remaining <= 0)
+                {
+                    // One byte past the cap is all it takes to prove the content is longer than the caller allows.
+                    if (stream.Read(probe) != 0)
+                    {
+                        throw new ArchiveLimitException(ParsingFailureReason.SizeExceeded);
+                    }
+
+                    break;
+                }
+
+                var read = stream.Read(scratch, 0, (int)Math.Min(scratch.Length, remaining));
+                if (read == 0)
+                {
+                    break;
+                }
+
+                keptBytes += read;
+                state.Charge(read);
+                kept.Write(scratch, 0, read);
+            }
+
+            return new ReadOnlyMemory<byte>(kept.GetBuffer(), 0, (int)keptBytes);
+        }
+        finally
+        {
+            // Cleared on return: the scratch held untrusted artifact bytes and the pool is shared process-wide.
+            ArrayPool<byte>.Shared.Return(scratch, clearArray: true);
+        }
+    }
+
+    /// <summary>
     /// Bounds the object into one buffer under the kind's cap (never trusting a <see cref="Stream.Length"/> the
     /// caller controls), then walks it under the profile's cooperative timeout. When <paramref name="extract"/> is
     /// set, a non-extracting pass runs first — the same pass production uses through <see cref="Enumerate"/> — so

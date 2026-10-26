@@ -2,9 +2,11 @@ using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Application.Commands;
+using Evidgate.Modules.Authoring.Application.Import;
 using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
+using Evidgate.Modules.Evidence.Contracts;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -54,6 +56,19 @@ internal static class AuthoringModule
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<UpdateNodeCommand>, UpdateNodeCommandValidator>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<ReorderNodesCommand>, ReorderNodesCommandValidator>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<DeleteNodeCommand>, DeleteNodeCommandValidator>());
+
+        // 13.1.1-T5.4: route 25's two application services — the importer (whole file or nothing, one batch id) and the
+        // exporter (one read-only walk of the tree). Both are stateless over the caller's open tenant scope, so they take
+        // the same lifetime as the writer and the allocator above.
+        services.TryAddScoped<AuthoringImporter>();
+        services.TryAddScoped<AuthoringExporter>();
+
+        // 13.1.1-T5.2: reading an XLSX workbook means reading a zip under caps, which is the 06.3.1 parser profile's job
+        // (IParsing, the sanctioned module-to-module route: .Contracts only, 00 §5.5 C7). It is resolved LAZILY, exactly
+        // like the contract schema set above, so a host that composes Authoring without Evidence starts and serves CSV and
+        // JSON imports; in such a host — and in one whose parser refuses the archive — an XLSX upload answers the 422
+        // `unsupported_format` the route already has for an unknown token, never a 500 and never a silent CSV reading.
+        services.TryAddSingleton(provider => new Lazy<IParsing?>(() => provider.GetService<IParsing>()));
 
         return services;
     }

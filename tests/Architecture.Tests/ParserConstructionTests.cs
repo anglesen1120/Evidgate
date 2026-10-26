@@ -127,6 +127,100 @@ public class ParserConstructionTests
     }
 
     [Fact]
+    public void Write_Mode_Archive_Outside_The_Profile_Is_Not_A_Parse()
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", "using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);"),
+        };
+
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("using var archive = new ZipArchive(stream, ZipArchiveMode.Update);")]
+    [InlineData("using var archive = new ZipArchive(stream);")]
+    [InlineData("var a = new ZipArchive(output, ZipArchiveMode.Create); using var b = new ZipArchive(input, ZipArchiveMode.Read);")]
+    public void Non_Create_Mode_Archive_Next_To_A_Write_Mode_One_Is_Still_Detected(string text)
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),
+        };
+
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldHaveSingleItem();
+    }
+
+    [Theory]
+    [InlineData("using var archive = new ZipArchive(upload, ZipArchiveMode.Read /* ZipArchiveMode.Create */);")]
+    [InlineData("using var archive = new ZipArchive(upload, ZipArchiveMode.Read, false, Encoding.UTF8 /* ZipArchiveMode.Create */);")]
+    [InlineData("var pair = (new ZipArchive(upload, ZipArchiveMode.Read), new ZipArchive(output, ZipArchiveMode.Create));")]
+    [InlineData("using var archive = new ZipArchive(upload, write ? ZipArchiveMode.Create : ZipArchiveMode.Read);")]
+    [InlineData("using var archive = new ZipArchive(upload, ZipArchiveMode.Create || true ? ZipArchiveMode.Read : mode);")]
+    [InlineData("using var archive = new ZipArchive(upload, ZipMode());")]
+    [InlineData("using var archive = new ZipArchive(upload, ZipArchiveMode.Create).Entries.Count > 0 ? Read() : new ZipArchive(copy, ZipArchiveMode.Read);")]
+    public void The_Write_Mode_Exemption_Cannot_Be_Borrowed(string text)
+    {
+        // The exemption belongs to one constructor call: its own argument list, its own mode argument. A comment, a
+        // neighbouring constructor, a ternary or a call that merely evaluates to Create does not make a reader a writer.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),
+        };
+
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldHaveSingleItem();
+    }
+
+    [Theory]
+    [InlineData("var note = \"new ZipArchive(stream, ZipArchiveMode.Read);\";")]
+    [InlineData("// new ZipArchive(stream, ZipArchiveMode.Read);")]
+    [InlineData("/* new ZipArchive(stream, ZipArchiveMode.Read); */")]
+    [InlineData("var note = \"\"\"\n  new ZipArchive(stream, ZipArchiveMode.Read);\n  \"\"\";")]
+    public void A_Mention_Inside_Trivia_Is_Not_A_Construction(string text)
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),
+        };
+
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("using var archive = new ZipArchive(new MemoryStream(), ZipArchiveMode.Create, leaveOpen: true);")]
+    [InlineData("using var archive = new ZipArchive(Sized(output, 4096), ZipArchiveMode.Create);")]
+    [InlineData("using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: false);")]
+    public void The_Write_Mode_Exemption_Covers_A_Nested_First_Argument(string text)
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),
+        };
+
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldBeEmpty();
+    }
+
+    [Fact]
     public void Mentions_Of_The_Reader_Names_Outside_The_Profile_Are_Detected()
     {
         // The rule matches the construct, not the file: a module that merely mentions XmlReaderSettings is

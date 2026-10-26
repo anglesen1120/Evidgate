@@ -52,6 +52,10 @@ public sealed class PolicyPermissionContractTests
         ("Authoring", "restoreChecklistItem", "RestoreChecklistItemCommandHandler", "authoring:write"),
         ("Authoring", "restoreManualCase", "RestoreManualCaseCommandHandler", "authoring:write"),
         ("Authoring", "restoreAuthoringVersion", "RestoreVersionCommandHandler", "authoring:write"),
+
+        // 13.1.1-T5: route 25, the import/export pair — the import is a write on its own command, the export a read.
+        ("Authoring", "importAuthoring", "ImportAuthoringCommandHandler", "authoring:write"),
+        ("Authoring", "exportAuthoring", "ExportAuthoringQueryHandler", "authoring:read"),
     ];
 
     [Fact]

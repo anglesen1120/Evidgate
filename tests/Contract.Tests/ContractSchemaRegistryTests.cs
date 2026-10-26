@@ -110,6 +110,120 @@ public sealed class ContractSchemaRegistryTests
             .ShouldBe([new ContractValidationError(null, "/steps", "max_items")]);
     }
 
+    /// <summary>
+    /// 13.1.1-T5: the import/export table <c>authoring-import.v1</c> is discovered like every other schema (key = file
+    /// name without <c>.json</c>), its <c>$id</c> is its own file name, and it declares no transport cap — an import
+    /// arrives as CSV, XLSX or this document, so the 5 MiB cap and the 5 000-row cap are the route's (plan 13.1.1 §5
+    /// route 25, AC16). The row cap is asserted here as well, because the CSV and XLSX readers build the same document
+    /// and count against the schema's own bound. The steps shape a case row carries is inlined rather than referenced
+    /// across files, so this test also pins it field for field to <c>authoring-steps.v1.json</c>: a case may not pass
+    /// one contract and fail the other.
+    /// </summary>
+    [Fact]
+    public void AuthoringImportSchema_IsDiscovered()
+    {
+        Schemas.Value.Contains(ContractSchemaKeys.AuthoringImport).ShouldBeTrue(
+            "'authoring-import.v1' must be discovered under contracts/schemas (13.1.1-T5)");
+
+        var file = Path.Combine(
+            ContractPaths.ContractsDirectory,
+            "schemas",
+            ContractSchemaKeys.AuthoringImport + ".json");
+        using var schema = JsonDocument.Parse(File.ReadAllText(file));
+        schema.RootElement.GetProperty("$schema").GetString().ShouldBe(Dialect);
+        schema.RootElement.GetProperty("$id").GetString().ShouldBe(ContractSchemaKeys.AuthoringImport + ".json");
+
+        Schemas.Value.MaxBytes(ContractSchemaKeys.AuthoringImport).ShouldBeNull(
+            "an import is CSV, XLSX or this document: the 5 MiB cap is the route's, not the schema's");
+
+        schema.RootElement.GetProperty("properties").GetProperty("rows").GetProperty("maxItems").GetInt32()
+            .ShouldBe(5000, "the 5 000-row cap of AC16 is declared here too (plan 13.1.1 §5 route 25)");
+
+        // The declared shape, through the discovered key: a module and a case are accepted, an undeclared row member is
+        // not, and the steps member of a case is bounded by the same 100 steps as authoring-steps.v1.
+        string Steps(int count) => string.Join(
+            ',',
+            Enumerable.Range(1, count).Select(no => $$"""{"no":{{no}},"action":"Open the page","expected":"The page is shown"}"""));
+
+        // Three dollars: the case row closes two objects in a row, and a "}}" run is content here, not an interpolation.
+        using var accepted = JsonDocument.Parse(
+            $$$"""
+            {"format":"authoring-import","version":1,"rows":[
+              {"kind":"node","key":"n1","node_kind":"module","title":"Shop","position":0},
+              {"kind":"item","key":"i1","parent_key":"n1","title":"Pay","priority":"high"},
+              {"kind":"case","key":"c1","item_key":"i1","title":"Declined card","priority":"high","steps":{"steps":[{{{Steps(100)}}}]}}
+            ]}
+            """);
+        Schemas.Value.Validate(ContractSchemaKeys.AuthoringImport, accepted.RootElement).IsValid
+            .ShouldBeTrue("a node, an item and a case with 100 steps are the declared shape (plan 13.1.1 §3)");
+
+        // The conditional row selection must keep the leaf, not collapse the row: the importer answers steps_invalid by
+        // reading a "/rows/N/steps/…" instance path (the mapper drops only 'if' rows and reporting-composite subtrees,
+        // ContractErrorMapper.cs:138-143), so a row-level "/rows/N" error would become value_invalid instead.
+        using var overlongSteps = JsonDocument.Parse(
+            $$$"""
+            {"format":"authoring-import","version":1,"rows":[
+              {"kind":"case","key":"c1","item_key":"i1","title":"Declined card","priority":"high","steps":{"steps":[{{{Steps(101)}}}]}}
+            ]}
+            """);
+        var overlongResult = Schemas.Value.Validate(ContractSchemaKeys.AuthoringImport, overlongSteps.RootElement);
+        overlongResult.IsValid.ShouldBeFalse("101 steps exceed the 100-step bound of the steps contract (plan 13.1.1 §3)");
+        overlongResult.Errors.ShouldContain(
+            error => error.Path.StartsWith("/rows/0/steps", StringComparison.Ordinal),
+            "a steps violation keeps its row-scoped instance path, which the importer reports as steps_invalid at /steps");
+
+        using var badStep = JsonDocument.Parse(
+            $$$"""
+            {"format":"authoring-import","version":1,"rows":[
+              {"kind":"case","key":"c1","item_key":"i1","title":"Declined card","priority":"high","steps":{"steps":[{"no":1,"expected":"the payment is refused"}]}}
+            ]}
+            """);
+        var badStepResult = Schemas.Value.Validate(ContractSchemaKeys.AuthoringImport, badStep.RootElement);
+        badStepResult.IsValid.ShouldBeFalse("a step without an action breaks the steps contract, so the row is refused");
+        badStepResult.Errors.ShouldContain(
+            error => error.Path.StartsWith("/rows/0/steps", StringComparison.Ordinal),
+            "a required member inside a step is still a row-scoped steps violation, not a row-level one");
+
+        using var refused = JsonDocument.Parse(
+            """{"format":"authoring-import","version":1,"rows":[{"kind":"node","key":"n1","node_kind":"module","title":"Shop","bogus":1}]}""");
+        Schemas.Value.Validate(ContractSchemaKeys.AuthoringImport, refused.RootElement).IsValid
+            .ShouldBeFalse("a row member the contract does not declare is refused (additionalProperties: false)");
+
+        // The inlined steps shape equals authoring-steps.v1.json's: same root members, same array bounds, same step
+        // members and the same bounds on each.
+        using var steps = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+            ContractPaths.ContractsDirectory,
+            "schemas",
+            ContractSchemaKeys.AuthoringSteps + ".json")));
+        var theirs = steps.RootElement.GetProperty("properties").GetProperty("steps");
+        var mine = schema.RootElement.GetProperty("$defs").GetProperty("steps").GetProperty("properties").GetProperty("steps");
+
+        mine.GetProperty("minItems").GetInt32().ShouldBe(theirs.GetProperty("minItems").GetInt32());
+        mine.GetProperty("maxItems").GetInt32().ShouldBe(theirs.GetProperty("maxItems").GetInt32());
+        mine.GetProperty("items").GetProperty("required").GetRawText()
+            .ShouldBe(theirs.GetProperty("items").GetProperty("required").GetRawText());
+        mine.GetProperty("items").GetProperty("additionalProperties").GetBoolean()
+            .ShouldBe(theirs.GetProperty("items").GetProperty("additionalProperties").GetBoolean());
+
+        foreach (var field in new[] { "no", "action", "expected", "data" })
+        {
+            var mineField = mine.GetProperty("items").GetProperty("properties").GetProperty(field);
+            var theirField = theirs.GetProperty("items").GetProperty("properties").GetProperty(field);
+
+            foreach (var bound in new[] { "type", "minLength", "maxLength", "minimum", "maximum" })
+            {
+                var mineHas = mineField.TryGetProperty(bound, out var mineValue);
+                var theirHas = theirField.TryGetProperty(bound, out var theirValue);
+
+                mineHas.ShouldBe(theirHas, $"'{field}.{bound}' must be declared by both steps shapes");
+                if (mineHas)
+                {
+                    mineValue.GetRawText().ShouldBe(theirValue.GetRawText(), $"'{field}.{bound}' must not drift");
+                }
+            }
+        }
+    }
+
     [Fact]
     public void Byte_Cap_Rejects_A_Body_Before_It_Is_Parsed()
     {
