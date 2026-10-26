@@ -41,8 +41,9 @@ internal static class AuthoringImportEndpoints
     {
         ArgumentNullException.ThrowIfNull(authoring);
 
-        // The body is the file, so the accepted media types are declared without a body schema: the document a JSON
-        // import carries is contracts/schemas/authoring-import.v1.json, referenced by the contract operation itself.
+        // The body is the file, so the accepted media types carry a placeholder byte[] body type (no schema of their own:
+        // the document a JSON import carries is contracts/schemas/authoring-import.v1.json, referenced by the contract
+        // operation itself). byte[] keeps the served OpenAPI document serialisable and does not bind the request.
         // They are the contract's own tokens, parameter for parameter (openapi.yaml:6001-6008): the bare `text/csv` is
         // what the contract declares, and the route accepts the same type with `charset=utf-8` as well, because that is
         // the header a spreadsheet or browser upload actually sends and the accepted list is matched literally. The
