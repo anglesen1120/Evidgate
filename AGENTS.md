@@ -4,7 +4,7 @@
 
 Evidgate collects automated test results (web, API, mobile, unit) from customer CI or agents, keeps them as immutable evidence bound to exact builds, and turns that evidence into a release decision (PASS / FAIL / INCONCLUSIVE) through versioned policies. It adds **safe healing**: repairing test mechanics (for example a changed locator) without changing test intent, shadow first, never hiding a product bug.
 
-**Current state (2026-10-26).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next, §6 blocked), not here.
+**Current state (2026-10-27).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next, §6 blocked), not here.
 
 - Landed on `develop`: 167 of 655 planned tasks = 173.75 of 702.75 raw person-days (≈25 % of tasks, ≈25 % of effort); 488 tasks / 529 d remain.
 - Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 124 / 136.75 of 281.25 · G2 37 / 31 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
