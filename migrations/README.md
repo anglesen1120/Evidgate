@@ -71,8 +71,19 @@ The playbook for changing a table without breaking the running version is
   (`membership.user_id → public."user"`, added `not valid`, orphan-checked, then validated, with the
   `membership_user_idx` parent-side index), the read-only `evidgate_resolve.session_user` session
   lookup and the `evidgate_resolve.login_link_identity` writer that inserts, re-confirms or moves one
-  `(provider, subject)` identity and answers `conflict` rather than merging accounts; the next
-  free number is `0045`;
+  `(provider, subject)` identity and answers `conflict` rather than merging accounts, and `0045` is
+  02.3.2-T1's session hardening — `session.rotation_required_at` (a privilege change marks the live
+  sessions and the next authenticated request rotates, then clears the mark), the fillfactor-80 rewrite
+  and the index swap (`session_user_revoked_expires_idx` becomes `(user_id) where revoked_at is null` so
+  the sliding `expires_at` is not indexed; the full unique `session_cookie_hmac_key` stays the hot-path
+  index because a partial one could not tell `session_revoked` from `unauthenticated`), the
+  `session_authenticate`/`session_rotate`/`session_revoke_all_for_user`/`session_require_rotation`
+  functions, the `session_create` predecessor parameter (the forwarded cookie's row is revoked in the
+  same statement) together with a `p_now` clock parameter (`created_at` and `last_seen_at` are stamped
+  from the caller's clock, so the idle slide compares one clock — the 9-arg signature is revoked and
+  dropped, not left behind), the `login_link_identity` cookie input, and the drop of the read-only
+  `evidgate_resolve.session_user` lookup the cookie path no longer uses; the next
+  free number is `0046`;
   a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL

@@ -40,21 +40,31 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate_resolve.session_create"] = ["session_id", "expires_at", "status"],
         ["evidgate_resolve.invite_by_secret"] = ["org_id", "membership_id"],
         ["evidgate_resolve.invite_autobind_candidates"] = ["org_id", "membership_id"],
-        ["evidgate_resolve.session_user"] = ["user_id"],
+        ["evidgate_resolve.session_authenticate"] =
+            ["status", "session_id", "user_id", "rotation_required", "slid", "rehashed"],
+        ["evidgate_resolve.session_rotate"] = ["session_id", "expires_at", "absolute_expires_at", "status"],
+        ["evidgate_resolve.session_revoke_all_for_user"] = ["revoked_count"],
+        ["evidgate_resolve.session_require_rotation"] = ["marked_count"],
         ["evidgate_resolve.login_link_identity"] = ["outcome", "moved_from_user_id"],
     };
 
     /// <summary>
     /// The resolvers that act on platform-scope rows (<c>user</c>, <c>user_identity</c>, <c>session</c>, 0041:
-    /// no <c>org_id</c> column, owner-only policies) before any tenant exists: a federated login (02.3.1-T1.4)
-    /// resolves a person, not an org, so the tenant-tuple rule of 00 §5.4.8 does not apply to their first
-    /// column. Their documented tuple above is still pinned exactly, and every other resolver keeps the rule.
+    /// no <c>org_id</c> column, owner-only policies): a federated login (02.3.1-T1.4) resolves a person, not an
+    /// org, and the session lifecycle (02.3.2-T1.1) writes the credential of a person, so the tenant-tuple rule
+    /// of 00 §5.4.8 does not apply to their first column — a session status, a rotation result or a row count is
+    /// not a tenant tuple, and the two revocation writes run inside a caller's tenant transaction precisely
+    /// because they are NOT a lookup. Their documented tuple above is still pinned exactly, and every other
+    /// resolver keeps the rule.
     /// </summary>
     private static readonly HashSet<string> PlatformScopeResolvers = new(StringComparer.Ordinal)
     {
         "evidgate_resolve.login_upsert_identity",
         "evidgate_resolve.session_create",
-        "evidgate_resolve.session_user",
+        "evidgate_resolve.session_authenticate",
+        "evidgate_resolve.session_rotate",
+        "evidgate_resolve.session_revoke_all_for_user",
+        "evidgate_resolve.session_require_rotation",
         "evidgate_resolve.login_link_identity",
     };
 

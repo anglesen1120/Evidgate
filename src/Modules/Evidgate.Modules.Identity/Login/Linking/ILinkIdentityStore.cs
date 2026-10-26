@@ -17,11 +17,16 @@ internal enum LinkResult
     /// <summary>The identity belongs to another user that still holds a membership or a live session: never taken (AC6).</summary>
     Conflict,
 
-    /// <summary>The confirming user does not exist (its account was removed between the session check and this call).</summary>
-    UnknownUser,
-
     /// <summary>The confirming user is <c>disabled</c>: <c>user.status</c> changed after the session check.</summary>
     Disabled,
+
+    /// <summary>
+    /// No live session of an active account matches the presented cookie (0045, D2/D8): the cookie is unknown,
+    /// expired or revoked, or the session died between the route's own check and this call. The function does
+    /// not distinguish the three, so neither does this outcome; the route answers the same 401
+    /// <c>unauthenticated</c> the request authenticator would have.
+    /// </summary>
+    Unauthenticated,
 
     /// <summary>
     /// An outcome — or a shape — this build does not know. Fails closed as 503 <c>unavailable</c> rather than
@@ -38,9 +43,9 @@ internal sealed record LinkOutcome(LinkResult Result, Guid? MovedFromUserId);
 
 /// <summary>
 /// The only writer of a second-provider link (02.3.1-T2.2, Q4): the app role's way into
-/// <c>evidgate_resolve.login_link_identity</c> (migration 0044), which is the one statement that decides
-/// <c>linked</c> / <c>already_linked</c> / <c>moved</c> / <c>conflict</c> and refuses to steal an identity from
-/// an account that is still in use.
+/// <c>evidgate_resolve.login_link_identity</c> (migration 0045; 0044 introduced it), which is the one statement
+/// that decides <c>linked</c> / <c>already_linked</c> / <c>moved</c> / <c>conflict</c> and refuses to steal an
+/// identity from an account that is still in use.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -51,15 +56,30 @@ internal sealed record LinkOutcome(LinkResult Result, Guid? MovedFromUserId);
 /// <c>membership</c>.
 /// </para>
 /// <para>
+/// <b>The target account is the database's to resolve (02.3.2-T1, D8 / residual SEC2).</b> The function takes
+/// the presented cookie's HMAC candidates and resolves the live session and its active user itself, so a caller
+/// running as <c>evidgate_app</c> can no longer name an arbitrary user id to attach an identity to. This seam
+/// therefore passes the cookie value, never a user id, and a cookie no live session matches is the
+/// <see cref="LinkResult.Unauthenticated"/> business answer.
+/// </para>
+/// <para>
 /// One call, no transaction of its own, on the app-role data source, and never inside an open tenant scope:
-/// the confirm route runs pre-tenant and the function is owner-scoped. The two ids are app-generated UUIDv7
-/// (00 §7).
+/// the confirm route runs pre-tenant and the function is owner-scoped. The identity id is app-generated UUIDv7
+/// (00 §7), and the time is the deployment's <see cref="TimeProvider"/>.
 /// </para>
 /// </remarks>
 internal interface ILinkIdentityStore
 {
-    /// <summary>Attaches the provider identity to <paramref name="userId"/>, or answers why it cannot.</summary>
-    /// <param name="userId">The confirming user (resolved from the session cookie, never from the body).</param>
+    /// <summary>
+    /// Attaches the provider identity to the account the authenticated session belongs to, or answers why it
+    /// cannot.
+    /// </summary>
+    /// <param name="sessionProof">
+    /// The HMAC the deployment's session authenticator computed for the LIVE session's cookie value
+    /// (<c>SessionRequestOutcome.GetSessionProof()</c>) — a hash, never the raw cookie. After an in-request lazy
+    /// rotation it is the hash of the newly issued cookie, which is the only value the function can still match;
+    /// null or empty is <see cref="LinkResult.Unauthenticated"/> without a database call.
+    /// </param>
     /// <param name="provider">The provider's registered name.</param>
     /// <param name="subject">The provider's verified subject for this identity.</param>
     /// <param name="email">The verified address the provider reported (stored as <c>email_at_provider</c>).</param>
@@ -74,7 +94,7 @@ internal interface ILinkIdentityStore
     /// pretend to pass one.
     /// </remarks>
     ValueTask<Result<LinkOutcome>> LinkAsync(
-        Guid userId,
+        byte[]? sessionProof,
         string provider,
         string subject,
         string email,

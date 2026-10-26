@@ -131,6 +131,30 @@ host without it still serves every route and answers a verified callback 503 `un
 storing a session nothing can verify (`src/Modules/Evidgate.Modules.Identity/Sessions/SessionStore.cs:84-86`)
 — while `EVIDGATE__SESSION__PEPPERVERSION`, `__IDLESECONDS` and `__ABSOLUTESECONDS` keep their code
 defaults (1, 28 800 and 604 800 seconds; provisional, 02.3.1 plan §10 Notes [DECISION D-S75-Q1]).
+02.3.2-T1.1 adds the other half of that group for the pepper-rotation window: `EVIDGATE__SESSION__PREVIOUSPEPPER`
+is `secret: true` and resolved through `ISecretProvider`, empty in the normal state, and
+`EVIDGATE__SESSION__PREVIOUSPEPPERVERSION` is plain configuration that only means anything beside it. A
+previous pepper makes a lookup verify two peppers at once (current first) and re-hash the row it finds
+with the current one, so rotating the session pepper drains the old sessions without logging anyone out.
+The rotation is three steps, in this order: (1) move today's `EVIDGATE__SESSION__PEPPER` value and its
+version into `EVIDGATE__SESSION__PREVIOUSPEPPER` / `EVIDGATE__SESSION__PREVIOUSPEPPERVERSION`; (2) set the
+new pepper and bump `EVIDGATE__SESSION__PEPPERVERSION` above the previous one; (3) delete the previous pair
+once `absolute_expires_at` of the oldest session it signed has passed — every session re-hashes itself on its
+next request, so no one is cut off between steps 1 and 3 and nothing has to be forced. The pair is refused at
+boot when a value is set without its partner, when both peppers are equal, or when the version is below 1
+(`SessionOptionsValidator`, `infra/config-matrix.json`).
+
+Two deploy steps come with 0045 and neither is a key. (1) The migration sets `fillfactor = 80` on
+`public.session` so the idle slide stays a heap-only update; the setting applies to pages written AFTER
+the migration, and the pages the table already holds keep their 100 % fill until their rows are rewritten,
+so the steady state is reached as they turn over — run a plain `VACUUM public.session` after the deploy to
+make the dead versions those pages carry reusable, and NEVER `VACUUM FULL`, which rewrites and exclusively
+locks the table every authenticated request touches. (2) The file runs in one transaction with
+`set local lock_timeout = '5s'`, because its two `alter table` statements and the `drop index` take ACCESS
+EXCLUSIVE on that table and its `create index` takes SHARE, which blocks every write (every session slide)
+until the build is done: apply it while traffic is drained or between request bursts, and treat Migrator
+exit 3 (lock timeout, file rolled back and unjournalled) as "retry when the table is quiet", not as a
+defect. The header of `migrations/0045_identity_session_hardening.sql` records both expectations.
 
 `required` is the lint's per-environment rule: the environment must declare the key whatever the boot
 would do without it. That is how a security-relevant default stays visible — every environment declares
@@ -157,9 +181,10 @@ connection string (`EVIDGATE__DATABASE__CONNECTIONSTRING`), the task sweep conne
 identity (`EVIDGATE__OBJECT__ACCESSKEY`, `EVIDGATE__OBJECT__SECRETKEY`), the Migrator
 connection string (`EVIDGATE_MIGRATOR__CONNECTIONSTRING`), the Google login client secret
 (`EVIDGATE__OIDC__GOOGLE__CLIENTSECRET`, 02.3.1-T1.2), the GitHub login client secret
-(`EVIDGATE__OAUTH__GITHUB__CLIENTSECRET`, 02.3.1-T1.3) and the session-cookie pepper
+(`EVIDGATE__OAUTH__GITHUB__CLIENTSECRET`, 02.3.1-T1.3) and the two session-cookie peppers
 (`EVIDGATE__SESSION__PEPPER`, 02.3.1-T1.4: the cookie value is stored only as
-`HMAC-SHA256(pepper_vN, value)` in `session.cookie_hmac`). A name outside the registry is refused with an
+`HMAC-SHA256(pepper_vN, value)` in `session.cookie_hmac`; and `EVIDGATE__SESSION__PREVIOUSPEPPER`,
+02.3.2-T1.1: the pepper a rotation window is still draining, empty otherwise). A name outside the registry is refused with an
 `ArgumentException` that names only the name. The registry is not the list of `secret: true` rows in
 `infra/config-matrix.json`: a matrix row that only the dev stack uses (for example the S3 keys in
 `.env.dev.template`) joins `SecretNames` when a process starts to consume it, not before. The

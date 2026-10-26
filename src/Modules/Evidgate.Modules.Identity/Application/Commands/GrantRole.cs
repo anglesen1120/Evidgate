@@ -66,7 +66,8 @@ internal sealed class GrantRoleCommandHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     ICallerPermissionSet permissions,
-    IAuditTrail audit)
+    IAuditTrail audit,
+    ISessionPrivilegeChange privilegeChanges)
     : ICommandHandler<GrantRoleCommand, Result<MembershipView>>
 {
     /// <inheritdoc />
@@ -158,6 +159,16 @@ internal sealed class GrantRoleCommandHandler(
                 // `unique (membership_id, role_id)` is the arbiter: a concurrent grant
                 // that passed the check above still leaves exactly one row, and the
                 // request's intent (the role is held) is satisfied.
+            }
+
+            // 02.3.2-T1 (AC7, D5b): a grant is a privilege change, so every live session of the member is
+            // flagged for rotation in THIS transaction (the statement runs on the scope's connection), and a
+            // rollback unmarks it with the role. A request that found the role already held writes nothing —
+            // there is no privilege change to mark, and a concurrent grant's own transaction marked it.
+            if (membership.UserId is { } changedUser)
+            {
+                _ = await privilegeChanges.RequireRotationForUserAsync(changedUser, cancellationToken)
+                    .ConfigureAwait(false);
             }
         }
 

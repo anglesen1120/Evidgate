@@ -50,13 +50,17 @@ public sealed class UserShapeTests : CatalogueTestBase
     /// <summary>
     /// The exact column list of <c>session</c>. It ships here so login can insert
     /// (02.3.1 §3); <c>cookie_hmac</c>/<c>pepper_version</c> are 02.3.1-T1.4's
-    /// credential columns (migration 0042) and 02.3.2-T1 adds only its expiry/index
-    /// work on top.
+    /// credential columns (migration 0042) and <c>rotation_required_at</c> is
+    /// 02.3.2-T1's rotation flag (migration 0045, AC7): a privilege change stamps it
+    /// and the next request with that session rotates it. It is additive and
+    /// nullable, so no reviewed column left and none of the credential posture
+    /// changed.
     /// </summary>
     private static readonly string[] SessionColumns =
     [
         "id", "user_id", "created_at", "last_seen_at", "expires_at", "absolute_expires_at",
         "ip", "user_agent", "revoked_at", "rotated_from", "cookie_hmac", "pepper_version",
+        "rotation_required_at",
     ];
 
     /// <summary>

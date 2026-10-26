@@ -33,12 +33,21 @@ namespace Evidgate.Modules.Identity.Login.Completion;
 /// null when it staged none. It is the single-use half an invite binds with (AC4) and reaches the binder and
 /// nothing else: never the session row, a log line, a metric label, an error body or the <c>returnUrl</c>.
 /// </param>
+/// <param name="PredecessorCookieValue">
+/// The <c>__Host-evidgate_session</c> value the browser PRESENTED to the callback (02.3.2-T1, D5a), or null when
+/// it presented none. The session store revokes that row in the same transaction as the new insert and chains
+/// <c>rotated_from</c> to it when it belongs to the same user, so a sign-in always kills whatever session the
+/// browser was carrying (AC7). It is a credential value: it reaches the store and nothing else — never the
+/// session row, a log line, a metric, a body or the redirect. A client-supplied session ID is never honoured
+/// here, which is what makes fixation impossible: only the value the browser already held can die.
+/// </param>
 internal sealed record CompleteLoginCommand(
     VerifiedIdentity Identity,
     string ReturnUrl,
     string? ClientIpAddress,
     string? UserAgent,
-    string? InviteToken = null);
+    string? InviteToken = null,
+    string? PredecessorCookieValue = null);
 
 /// <summary>What a completed login hands back to the protocol: the session to cookie and where to redirect.</summary>
 /// <param name="UserId">The platform user the identity resolved to (the same one a later login reuses).</param>

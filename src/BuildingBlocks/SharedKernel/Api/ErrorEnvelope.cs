@@ -298,4 +298,24 @@ public static class ApiErrorCode
     /// login issues no session. Not retryable: only an administrator re-enables the account.
     /// </summary>
     public const string AccountDisabled = "account_disabled";
+
+    /// <summary>
+    /// 401: the session cookie is past its sliding (<c>expires_at</c>) or its absolute
+    /// (<c>absolute_expires_at</c>) deadline, so the request is refused before any handler runs and the browser
+    /// must sign in again (02.3.2 AC2, AC3, §9.2).
+    /// </summary>
+    public const string SessionExpired = "session_expired";
+
+    /// <summary>
+    /// 401: the session row's <c>revoked_at</c> is set — logout, the user's or an admin's revoke, rotation, or
+    /// the member removal that killed it — so the old cookie value stays dead on every later replay
+    /// (02.3.2 AC4, AC8).
+    /// </summary>
+    public const string SessionRevoked = "session_revoked";
+
+    /// <summary>
+    /// 403: a cookie-authenticated mutation carried no <c>X-XSRF-TOKEN</c> header or one that does not match the
+    /// antiforgery pair, so it is refused before the handler (02.3.2 AC5, T38).
+    /// </summary>
+    public const string CsrfFailed = "csrf_failed";
 }

@@ -1,30 +1,40 @@
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Identity.Sessions;
 using Npgsql;
+using NpgsqlTypes;
 
 namespace Evidgate.Modules.Identity.Login.Linking;
 
 /// <summary>
 /// The only implementation of <see cref="ILinkIdentityStore"/> (02.3.1-T2.2): one call to
-/// <c>evidgate_resolve.login_link_identity</c> (migration 0044) on the app-role data source, because the app
+/// <c>evidgate_resolve.login_link_identity</c> (migration 0045) on the app-role data source, because the app
 /// role holds no privilege on <c>public.user_identity</c> and <c>public."user"</c> (0041) — never a direct
 /// INSERT or UPDATE, which RLS and the missing grant would refuse.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The function always returns one row and never raises for a business outcome, so an empty result means the
-/// stored contract moved: this class then fails closed (503) instead of guessing that the identity was
-/// attached. An outcome string this build does not know is
-/// <see cref="LinkResult.Unrecognised"/> — also a 503, never a silent success.
+/// <b>The function resolves the target account (02.3.2-T1, D8 / residual SEC2).</b> It takes the HMAC of a live
+/// session's cookie and resolves the session and its active user itself, so a caller running as
+/// <c>evidgate_app</c> can no longer name an arbitrary user id to attach an identity to. The hash comes from the
+/// deployment's session authenticator (<c>SessionRequestOutcome.GetSessionProof()</c>): the HTTP layer already spent
+/// the cookie to prove the request, so no raw credential and no second hashing live in this class.
 /// </para>
 /// <para>
-/// Nothing here is logged: the address and the subject are personal data (02.3.1 §8), and the caller's audit
-/// row carries the provider name and, for a move, the previous user id only.
+/// The function always returns one row and never raises for a business outcome, so an empty result means the
+/// stored contract moved: this class then fails closed (503) instead of guessing that the identity was
+/// attached. An outcome string this build does not know is <see cref="LinkResult.Unrecognised"/> — also a 503,
+/// never a silent success.
+/// </para>
+/// <para>
+/// Nothing here is logged: the address and the subject are personal data (02.3.1 §8), the proof is a credential
+/// hash, and the caller's audit row carries the provider name and, for a move, the previous user id only.
 /// </para>
 /// </remarks>
 /// <param name="dataSource">The app-role <see cref="NpgsqlDataSource"/> (the only role that may call the resolver).</param>
-internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource) : ILinkIdentityStore
+/// <param name="clock">The clock the function's <c>p_now</c> is read from, so the session's liveness is judged on the deployment's own clock.</param>
+internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource, TimeProvider clock) : ILinkIdentityStore
 {
-    /// <summary>The outcome strings of the 0044 contract.</summary>
+    /// <summary>The outcome strings of the 0045 contract.</summary>
     private const string Linked = "linked";
 
     private const string AlreadyLinked = "already_linked";
@@ -33,13 +43,13 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource) : ILi
 
     private const string Conflict = "conflict";
 
-    private const string UnknownUser = "unknown_user";
-
     private const string Disabled = "disabled";
+
+    private const string Unauthenticated = "unauthenticated";
 
     /// <inheritdoc />
     public async ValueTask<Result<LinkOutcome>> LinkAsync(
-        Guid userId,
+        byte[]? sessionProof,
         string provider,
         string subject,
         string email,
@@ -47,14 +57,32 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource) : ILi
     {
         ArgumentException.ThrowIfNullOrEmpty(provider);
         ArgumentException.ThrowIfNullOrEmpty(subject);
-        ArgumentOutOfRangeException.ThrowIfEqual(userId, Guid.Empty);
+
+        // No proof, no lookup: an absent or empty hash cannot name a session, and the function would answer the
+        // same `unauthenticated` — without a database round trip.
+        if (sessionProof is not { Length: > 0 })
+        {
+            return Result.Success(new LinkOutcome(LinkResult.Unauthenticated, null));
+        }
 
         try
         {
             await using var command = dataSource.CreateCommand(
                 "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-                + "@user_id, @provider, @subject, @email, @identity_id)");
-            command.Parameters.AddWithValue("user_id", userId);
+                + "cast(@cookie_hmacs as bytea[]), @now, @provider, @subject, @email, @identity_id)");
+
+            // One element: the authenticator's proof of the live session, which after a lazy rotation is already
+            // the hash of the newly issued cookie.
+            command.Parameters.Add(new NpgsqlParameter(
+                "cookie_hmacs",
+                NpgsqlDbType.Array | NpgsqlDbType.Bytea)
+            {
+                Value = new[] { sessionProof },
+            });
+
+            // timestamptz takes a UTC instant: Npgsql refuses a non-UTC DateTimeOffset, so the clock's value is
+            // normalised here rather than at the database.
+            command.Parameters.AddWithValue("now", clock.GetUtcNow().ToUniversalTime());
             command.Parameters.AddWithValue("provider", provider);
             command.Parameters.AddWithValue("subject", subject);
             command.Parameters.AddWithValue("email", email);
@@ -66,7 +94,7 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource) : ILi
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                return Result.Failure<LinkOutcome>(LinkErrors.ServiceUnavailable);
+                return Result.Failure<LinkOutcome>(SessionErrors.Unavailable);
             }
 
             var outcome = await reader.GetFieldValueAsync<string>(0, cancellationToken).ConfigureAwait(false);
@@ -78,16 +106,16 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource) : ILi
         }
         catch (NpgsqlException)
         {
-            return Result.Failure<LinkOutcome>(LinkErrors.ServiceUnavailable);
+            return Result.Failure<LinkOutcome>(SessionErrors.Unavailable);
         }
         catch (TimeoutException)
         {
-            return Result.Failure<LinkOutcome>(LinkErrors.ServiceUnavailable);
+            return Result.Failure<LinkOutcome>(SessionErrors.Unavailable);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // A pool or command timeout that surfaced as cancellation is an outage, not the caller leaving.
-            return Result.Failure<LinkOutcome>(LinkErrors.ServiceUnavailable);
+            return Result.Failure<LinkOutcome>(SessionErrors.Unavailable);
         }
     }
 
@@ -104,8 +132,8 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource) : ILi
         AlreadyLinked => new LinkOutcome(LinkResult.AlreadyLinked, null),
         Moved when movedFrom is not null => new LinkOutcome(LinkResult.Moved, movedFrom),
         Conflict => new LinkOutcome(LinkResult.Conflict, null),
-        UnknownUser => new LinkOutcome(LinkResult.UnknownUser, null),
         Disabled => new LinkOutcome(LinkResult.Disabled, null),
+        Unauthenticated => new LinkOutcome(LinkResult.Unauthenticated, null),
         _ => new LinkOutcome(LinkResult.Unrecognised, null),
     };
 }

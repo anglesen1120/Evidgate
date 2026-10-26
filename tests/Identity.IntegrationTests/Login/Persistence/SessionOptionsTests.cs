@@ -181,6 +181,11 @@ public sealed class SessionOptionsTests
             SessionCreation request,
             CancellationToken cancellationToken) =>
             ValueTask.FromResult(Result.Failure<SessionTicket>(new Error("stub", "stub", 500)));
+
+        public ValueTask<Result<SessionTicket>> RotateAsync(
+            SessionRotation request,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromResult(Result.Failure<SessionTicket>(new Error("stub", "stub", 500)));
     }
 
     /// <summary>The platform's secret seam with one value (only the name the session group asks for is answered).</summary>

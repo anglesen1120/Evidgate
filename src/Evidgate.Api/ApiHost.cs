@@ -156,6 +156,11 @@ public static partial class ApiHost
                 ErrorEnvelopeWriter.MessageForStatus(status));
         });
 
+        // 02.3.2-T1 (D6, AC5): host-wide, so EVERY cookie-authenticated mutation is covered without an
+        // annotation — a new route included. It runs before the endpoint filters because the session it resolves
+        // is what the tenant filter and the antiforgery pair both read (memoized: one statement per request).
+        app.UseMiddleware<SessionXsrfMiddleware>();
+
         app.MapInternalEndpoints();
         app.MapSliceEndpoints();
         app.MapOperatorEndpoints();

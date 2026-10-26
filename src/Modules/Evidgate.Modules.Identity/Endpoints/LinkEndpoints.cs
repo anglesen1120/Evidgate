@@ -6,8 +6,9 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Login.Audit;
-using Evidgate.Modules.Identity.Login.Completion;
 using Evidgate.Modules.Identity.Login.Linking;
+using Evidgate.Modules.Identity.Sessions;
+using Evidgate.Modules.Identity.Sessions.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -24,8 +25,11 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// <para>
 /// PRE-TENANT, like the login routes they are mapped beside (00 §5.4.8): only the 00 §9.2 envelope filter
 /// applies, and the caller is authenticated by the <c>__Host-evidgate_session</c> cookie alone —
-/// <see cref="ISessionUserReader"/> turns it into a user, which is the only user any of these routes acts on.
-/// No route takes a user id, so one account can never link or read another's staged identities.
+/// <see cref="ISessionRequestAuthenticator"/> resolves it in one statement (0045), enforces the session's
+/// lifecycle (401 <c>unauthenticated</c> / <c>session_expired</c> / <c>session_revoked</c>) and the account's
+/// status (403 <c>account_disabled</c>), and is the only user any of these routes acts on. No route takes a
+/// user id, so one account can never link or read another's staged identities, and <c>confirm</c> hands the
+/// cookie — not the resolved id — to the database, which resolves the target account itself (D8).
 /// </para>
 /// <para>
 /// <b>Three steps, one confirmation.</b> <c>start</c> builds the provider authorization URL through the same
@@ -42,6 +46,15 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// <c>Origin</c> header that is not this deployment's public origin with 403 <c>forbidden</c>. The origin check
 /// is defence in depth on top of <c>SameSite=Lax</c>: a same-site browser form post still carries the session
 /// cookie, so the routes refuse a cross-origin caller that got the browser to send one.
+/// </para>
+/// <para>
+/// <b>CSRF is enforced, not only discouraged.</b> All three cookie-authenticated mutations — <c>start</c>
+/// (<c>POST /v1/auth/link/{provider}</c>), <c>confirm</c> (<c>POST /v1/auth/link/confirm</c>) and
+/// <c>DELETE /v1/auth/link/pending</c> — are on the deployment's antiforgery filter's scope (02.3.2-T1, AC5,
+/// the contract's <c>XsrfToken</c> on those three operations): they require the <c>XSRF-TOKEN</c> cookie /
+/// <c>X-XSRF-TOKEN</c> header pair bound to this session, so a request without it is refused with 403
+/// <c>csrf_failed</c> before any handler on this page runs. The origin check above stays as the second,
+/// cheaper line, and <c>DELETE pending</c> keeps its session requirement.
 /// </para>
 /// <para>
 /// <b>Nothing sensitive on the wire.</b> No token, code, subject, email or cookie value is echoed, logged or
@@ -127,7 +140,7 @@ internal static class LinkEndpoints
         string provider,
         IEnumerable<ILoginProvider> providers,
         LoginStateCookie stateCookie,
-        ISessionUserReader sessions,
+        ISessionRequestAuthenticator authenticator,
         ExchangeRateLimiter limiter,
         IOptions<LoginOptions> options,
         TimeProvider clock,
@@ -135,7 +148,7 @@ internal static class LinkEndpoints
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(stateCookie);
-        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(authenticator);
         ArgumentNullException.ThrowIfNull(limiter);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(clock);
@@ -161,7 +174,7 @@ internal static class LinkEndpoints
             return Result.Failure(LoginErrors.UnknownProvider);
         }
 
-        var resolved = await sessions.ResolveAsync(SessionValue(context), cancellationToken).ConfigureAwait(false);
+        var resolved = await AuthenticateAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         if (!resolved.IsSuccess)
         {
             return Result.Failure(resolved.Error!);
@@ -192,14 +205,14 @@ internal static class LinkEndpoints
     /// </summary>
     private static async Task<Result> PendingAsync(
         HttpContext context,
-        ISessionUserReader sessions,
+        ISessionRequestAuthenticator authenticator,
         LinkConfirmCookie cookie,
         ExchangeRateLimiter limiter,
         IOptions<LoginOptions> options,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(authenticator);
         ArgumentNullException.ThrowIfNull(cookie);
         ArgumentNullException.ThrowIfNull(limiter);
         ArgumentNullException.ThrowIfNull(options);
@@ -216,7 +229,7 @@ internal static class LinkEndpoints
             return Result.Failure(foreign);
         }
 
-        var resolved = await sessions.ResolveAsync(SessionValue(context), cancellationToken).ConfigureAwait(false);
+        var resolved = await AuthenticateAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         if (!resolved.IsSuccess)
         {
             return Result.Failure(resolved.Error!);
@@ -246,13 +259,13 @@ internal static class LinkEndpoints
     /// </summary>
     private static async Task<Result> DeletePendingAsync(
         HttpContext context,
-        ISessionUserReader sessions,
+        ISessionRequestAuthenticator authenticator,
         ExchangeRateLimiter limiter,
         IOptions<LoginOptions> options,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(authenticator);
         ArgumentNullException.ThrowIfNull(limiter);
         ArgumentNullException.ThrowIfNull(options);
 
@@ -268,10 +281,10 @@ internal static class LinkEndpoints
             return Result.Failure(foreign);
         }
 
-        var resolved = await sessions.ResolveAsync(SessionValue(context), cancellationToken).ConfigureAwait(false);
-        if (!resolved.IsSuccess)
+        var deleted = await AuthenticateAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
+        if (!deleted.IsSuccess)
         {
-            return Result.Failure(resolved.Error!);
+            return Result.Failure(deleted.Error!);
         }
 
         LinkConfirmCookie.Delete(context);
@@ -307,7 +320,7 @@ internal static class LinkEndpoints
     /// </remarks>
     private static async Task<Result> ConfirmAsync(
         HttpContext context,
-        ISessionUserReader sessions,
+        ISessionRequestAuthenticator authenticator,
         LinkConfirmCookie cookie,
         ILinkIdentityStore identities,
         IMemberOrgResolver memberOrgs,
@@ -317,7 +330,7 @@ internal static class LinkEndpoints
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(authenticator);
         ArgumentNullException.ThrowIfNull(cookie);
         ArgumentNullException.ThrowIfNull(identities);
         ArgumentNullException.ThrowIfNull(memberOrgs);
@@ -339,7 +352,7 @@ internal static class LinkEndpoints
             return Result.Failure(foreign);
         }
 
-        var resolved = await sessions.ResolveAsync(SessionValue(context), cancellationToken).ConfigureAwait(false);
+        var resolved = await AuthenticateAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         if (!resolved.IsSuccess)
         {
             return Result.Failure(resolved.Error!);
@@ -356,8 +369,14 @@ internal static class LinkEndpoints
             return Result.Failure(LinkErrors.LinkNotPending);
         }
 
+        // The proof of the live session, never a user id (D8 / SEC2, coordinator ruling): login_link_identity
+        // resolves the target account from the HMAC the authenticator computed for the session that this
+        // request was authenticated with — after a lazy rotation that is the newly issued cookie's hash, so a
+        // privilege-marked session links instead of answering `unauthenticated`. No raw cookie leaves the
+        // HTTP layer and nothing is re-resolved from the presented value.
+        var proof = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         var linked = await identities
-            .LinkAsync(userId, pending.Provider, pending.Subject, pending.Email, cancellationToken)
+            .LinkAsync(proof, pending.Provider, pending.Subject, pending.Email, cancellationToken)
             .ConfigureAwait(false);
 
         if (!linked.IsSuccess)
@@ -373,16 +392,19 @@ internal static class LinkEndpoints
             case LinkResult.Moved:
                 break;
 
-            case LinkResult.UnknownUser:
-                // The account the session named is gone: nothing was written, and the browser has to sign in.
+            case LinkResult.Unauthenticated:
+                // The session died between the authenticator's own check and the database's: nothing was written,
+                // and the browser has to sign in again (401 unauthenticated, the authenticator's own answer).
                 Discard(context, presented);
 
-                return Result.Failure(LinkErrors.Unauthenticated);
+                return Result.Failure(SessionErrors.Unauthenticated);
 
             case LinkResult.Disabled:
+                // The account was disabled between the authenticator's check and the confirm (0045 answers
+                // `disabled`, never `unauthenticated`, so the two stay distinguishable): 403 account_disabled.
                 Discard(context, presented);
 
-                return Result.Failure(LinkErrors.AccountDisabled);
+                return Result.Failure(SessionErrors.AccountDisabled);
 
             case LinkResult.Conflict:
                 // Another account still holds this identity and is in use (AC6): the route deletes the staged cookie.
@@ -517,8 +539,55 @@ internal static class LinkEndpoints
         _ => "linked",
     };
 
-    /// <summary>The session cookie value the request carried, or null (never read into a variable named like a secret).</summary>
-    private static string? SessionValue(HttpContext context) => context.Request.Cookies[SessionCookie.Name];
+    /// <summary>
+    /// The acting user of this request, from the deployment's session authenticator (02.3.2-T1, D2/D7): the
+    /// refusal the authenticator produced (401 <c>unauthenticated</c> / <c>session_expired</c> /
+    /// <c>session_revoked</c>, 403 <c>account_disabled</c>) is answered verbatim, so the link routes no longer
+    /// collapse a disabled account into "no session".
+    /// </summary>
+    /// <param name="context">The request whose cookie is authenticated (the authenticator reads it itself).</param>
+    /// <param name="authenticator">The deployment's authenticator, memoized per request.</param>
+    /// <param name="cancellationToken">Request abort.</param>
+    /// <returns>The acting user, or the refusal to answer.</returns>
+    private static async Task<Result<Guid>> AuthenticateAsync(
+        HttpContext context,
+        ISessionRequestAuthenticator authenticator,
+        CancellationToken cancellationToken)
+    {
+        var outcome = await authenticator.AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
+
+        if (outcome.Refusal is { } refusal)
+        {
+            return Result.Failure<Guid>(refusal);
+        }
+
+        // An outcome that is neither a refusal nor a live user and session is a composition bug, not a 401: it
+        // must not read as "signed out" to a caller that is in fact authenticated.
+        return outcome is { UserId: { } userId, SessionId: not null }
+            ? Result.Success(userId)
+            : Result.Failure<Guid>(SessionErrors.Unavailable);
+    }
+
+    /// <summary>
+    /// The live session's proof for the link store (<see cref="SessionRequestOutcome.GetSessionProof"/>): the HMAC
+    /// the authenticator derives for that session's cookie, which after an in-request lazy rotation is the hash of
+    /// the newly issued cookie. Asked of the same per-request memoized authenticator, so this costs no second
+    /// statement and no second rotation — and, because the proof is lazy, this is the only request path that pays
+    /// for it at all.
+    /// </summary>
+    /// <param name="context">The authenticated request.</param>
+    /// <param name="authenticator">The deployment's authenticator.</param>
+    /// <param name="cancellationToken">Request abort.</param>
+    /// <returns>The hash, or null when the authenticator refuses or reports no proof (answered as 401 <c>unauthenticated</c>).</returns>
+    private static async Task<byte[]?> SessionProofAsync(
+        HttpContext context,
+        ISessionRequestAuthenticator authenticator,
+        CancellationToken cancellationToken)
+    {
+        var outcome = await authenticator.AuthenticateAsync(context, cancellationToken).ConfigureAwait(false);
+
+        return outcome.GetSessionProof();
+    }
 
     /// <summary>Deletes the staged-link cookie when the request presented one.</summary>
     private static void Discard(HttpContext context, string? presented)

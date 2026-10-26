@@ -1,5 +1,7 @@
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Login.Completion;
+using Evidgate.Modules.Identity.Sessions;
+using Evidgate.Modules.Identity.Sessions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 
@@ -20,11 +22,13 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 /// or the 409 that refuses to take an identity from an account still in use.
 /// </para>
 /// <para>
-/// <b>Same user or nothing.</b> The session cookie is resolved through <see cref="ISessionUserReader"/> and
-/// must name exactly <see cref="LoginCompletionRequest.LinkUserId"/> — the account the state cookie was
-/// issued for. A missing session, another user's session, or a session that expired or was revoked during the
-/// provider round-trip answers 401 <c>unauthenticated</c> and stages no cookie: an attempt completed in another
-/// browser, or after a sign-out, buys nothing. A database fault answers 503 <c>unavailable</c> with
+/// <b>Same user or nothing.</b> The request is authenticated by
+/// <see cref="ISessionRequestAuthenticator"/> (0045, 02.3.2-T1) and its user must name exactly
+/// <see cref="LoginCompletionRequest.LinkUserId"/> — the account the state cookie was issued for. A missing
+/// session, another user's session, or a session that expired or was revoked during the provider round-trip
+/// answers that session's own 401 (<c>unauthenticated</c> / <c>session_expired</c> / <c>session_revoked</c>),
+/// and a disabled account its 403 <c>account_disabled</c>; either way no cookie is staged: an attempt completed
+/// in another browser, or after a sign-out, buys nothing. A database fault answers 503 <c>unavailable</c> with
 /// <c>Retry-After</c>, and the callback has already deleted the pending-login cookie and spent its `state`, so
 /// the answer means "start the link again".
 /// </para>
@@ -33,11 +37,11 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 /// (<see cref="ReturnUrlEncoder"/>), so a link attempt cannot drift from a sign-in in where the browser lands.
 /// </para>
 /// </remarks>
-/// <param name="sessions">The read-only session lookup the pre-tenant routes use.</param>
+/// <param name="authenticator">The deployment's session authenticator (stateless; memoized per request by the request's <c>HttpContext</c>).</param>
 /// <param name="cookie">The staged-link cookie written on success.</param>
 /// <param name="options">The bound login options (<c>Retry-After</c> of the 503).</param>
 internal sealed class LinkCompletion(
-    ISessionUserReader sessions,
+    ISessionRequestAuthenticator authenticator,
     LinkConfirmCookie cookie,
     IOptions<LoginOptions> options) : ILinkCompletion
 {
@@ -55,22 +59,30 @@ internal sealed class LinkCompletion(
             return Result.Failure<string>(LinkErrors.UnavailableWithRetryAfter(request.HttpContext, options.Value));
         }
 
-        var resolved = await sessions
-            .ResolveAsync(request.HttpContext.Request.Cookies[SessionCookie.Name], cancellationToken)
+        // This class is a singleton, so it holds no per-request state: the authenticator is asked on every call
+        // with THIS request's context, and answers this request's session only.
+        var outcome = await authenticator
+            .AuthenticateAsync(request.HttpContext, cancellationToken)
             .ConfigureAwait(false);
 
-        if (!resolved.IsSuccess)
+        if (outcome.Refusal is { } refusal)
         {
-            return Result.Failure<string>(resolved.Error!.Status == StatusCodes.Status503ServiceUnavailable
+            return Result.Failure<string>(refusal.Status == StatusCodes.Status503ServiceUnavailable
                 ? LinkErrors.UnavailableWithRetryAfter(request.HttpContext, options.Value)
-                : resolved.Error!);
+                : refusal);
         }
 
-        if (resolved.Value != linkUserId)
+        if (outcome is not { UserId: { } userId, SessionId: not null })
+        {
+            // Neither a refusal nor a live session: a composition fault, not a "signed out" answer.
+            return Result.Failure<string>(LinkErrors.UnavailableWithRetryAfter(request.HttpContext, options.Value));
+        }
+
+        if (userId != linkUserId)
         {
             // A link attempt completed in another browser, or after a sign-out and a sign-in as someone
             // else: the verified identity is not staged for ANY account, and nothing is written.
-            return Result.Failure<string>(LinkErrors.Unauthenticated);
+            return Result.Failure<string>(SessionErrors.Unauthenticated);
         }
 
         // Refused BEFORE the cookie exists, not at the confirm: a subject longer than the column's 255 or an

@@ -9,25 +9,30 @@ using Microsoft.Extensions.Options;
 namespace Evidgate.Modules.Identity.Sessions;
 
 /// <summary>
-/// Composition of the two persistence seams a completed federated login needs (02.3.1-T1.4): the identity
-/// upsert (<see cref="ILoginIdentityStore"/>) and session creation (<see cref="ISessions"/>), both over the
-/// app-role <c>NpgsqlDataSource</c> and the owner-scoped <c>evidgate_resolve</c> functions of migration 0042.
+/// Composition of the persistence seams a session needs (02.3.1-T1.4, completed by 02.3.2-T1.1): the identity
+/// upsert (<see cref="ILoginIdentityStore"/>), creation and rotation (<see cref="ISessions"/>), cookie
+/// verification (<see cref="ISessionAuthentication"/>) and the two writes another module's transaction calls
+/// (<see cref="ISessionRevocation"/>, <see cref="ISessionPrivilegeChange"/>), all over the app-role
+/// <c>NpgsqlDataSource</c> and the owner-scoped <c>evidgate_resolve</c> functions of migrations 0042/0045.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Follows the CI-authentication seam (<c>IdentityModule.AddCiAuthentication</c>) member by member: options
-/// bound and validated at boot, the pepper resolved through a post-configurer (never by binding), the
-/// collaborators singletons over the app-role data source. The clock is <see cref="TimeProvider.System"/>
-/// unless the host already registered one, so the two expiries of a session are moved by a test clock.
+/// bound and validated at boot, the peppers resolved through a post-configurer (never by binding), the
+/// collaborators singletons over the app-role data source. The clock is <see cref="TimeProvider.System"/> unless
+/// the host already registered one, so every instant of a session (creation, slide, rotation, revocation) is
+/// moved by a test clock.
 /// </para>
 /// <para>
 /// Called by <c>FederatedLoginServiceCollectionExtensions.AddFederatedLogin</c>; every registration uses
 /// <c>TryAdd</c>, so a host that replaces a seam (a test host swapping <see cref="ISessions"/>) keeps its own.
+/// The revocation and privilege-change seams share ONE <see cref="SessionRevocationStore"/> instance: both run
+/// on the ambient tenant scope, so a second instance would only be a second object with the same state.
 /// </para>
 /// </remarks>
 internal static class SessionsServiceCollectionExtensions
 {
-    /// <summary>Registers the session options, the pepper, the identity store and the session store.</summary>
+    /// <summary>Registers the session options, the peppers, the identity store and the four session seams.</summary>
     /// <param name="services">The host's service collection.</param>
     /// <param name="configuration">The host's configuration, for <see cref="SessionOptions"/>.</param>
     internal static IServiceCollection AddSessions(this IServiceCollection services, IConfiguration configuration)
@@ -44,15 +49,24 @@ internal static class SessionsServiceCollectionExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<SessionOptions>, SessionOptionsValidator>());
 
-        // 10.1.1-T2: the pepper is resolved through ISecretProvider after the binder (which skips the
-        // internal setter) and before validation runs.
+        // 10.1.1-T2: the peppers are resolved through ISecretProvider after the binder (which skips the
+        // internal setters) and before validation runs.
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IPostConfigureOptions<SessionOptions>, SessionOptionsSecretPostConfigure>());
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<SessionSecrets>();
         services.TryAddSingleton<ILoginIdentityStore, NpgsqlLoginIdentityStore>();
+
         services.TryAddSingleton<ISessions, SessionStore>();
+        services.TryAddSingleton<ISessionAuthentication, SessionAuthenticationStore>();
+
+        // One instance behind both contracts: they are the same two statements on the caller's tenant scope.
+        services.TryAddSingleton<SessionRevocationStore>();
+        services.TryAddSingleton<ISessionRevocation>(
+            provider => provider.GetRequiredService<SessionRevocationStore>());
+        services.TryAddSingleton<ISessionPrivilegeChange>(
+            provider => provider.GetRequiredService<SessionRevocationStore>());
 
         return services;
     }
