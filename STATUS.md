@@ -169,6 +169,7 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 13.2.2 | plan change (docs only, no task built) | merged (#194, c866fdc) | Role-profile/prompt-library story and feature plan only; eight planned tasks are unbuilt. |
 | 13.x / all | status and consistency sync (docs only, no task built) | merged (#196, b6cace6) | STATUS.md rebuilt against merged work (163/655 tasks, 169.25/702.75 d), AGENTS.md, plan 00 §14/§15, plan 13 §4.4, features README and open-items made consistent; no task credit. |
 | 13.2.2 | 13.2.2-T1 | merged (#199, 0114df0) | GitHub review of per-role prompts: `docs/research/role-prompts-github-review.md` (46 repos, licence ledger, gap matrix, ideas not copied; copy nothing for the first seed set `[INFERENCE]`). Docs only; the Done-when test `MemoAndLicenceLedgerComplete` is not built (§6 row "Role-prompt memo check"). |
+| 04.1.1 | 04.1.1-T2 | in review (S96) | `event_id` dedupe and `sequence_reused` mapping proven on real PostgreSQL; behaviour landed with T1, tests added (`IngestDedupeTests`). |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -322,7 +323,6 @@ Dependency-ready: **89 tasks / 99 raw person-days**, using the exact expanded ta
 | 03.1.4-T2 | S | `platform`, `level`, `purpose` on suite/template |
 | 03.2.1-T5 | S | Suite revision diff/preview API + `ETag` on suite head |
 | 03.4.1-T1 | L | GitHub App registration + installation binding + `git_repo_binding`; typed `HttpClient` + RS256 app JWT |
-| 04.1.1-T2 | M | `event_id` dedupe via single-statement unnest insert |
 | 04.1.2-T1 | S | Per-project rate limit/quota with `Retry-After`; counters and spans |
 | 04.4.1-T1 | L | Per-producer mapping registry + pytest mapping |
 | 06.2.2-T1 | M | Adapter capability + per-project options (disable kinds, allowlisted redaction rules) with 04 |
