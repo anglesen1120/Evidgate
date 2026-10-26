@@ -187,7 +187,7 @@ describe('ScrubbingSpanExporter', () => {
     expect(output.attributes['error.message']).toBeUndefined();
   });
 
-  it('exports a span name the four constants do not cover as unknown', () => {
+  it('exports a span name the fixed constants do not cover as unknown', () => {
     const { output } = exportOne(hostileSpan({ name: `GET /v1/runs?email=${EMAIL}` }));
 
     expect(output.name).toBe(UNKNOWN_SPAN_NAME);
@@ -195,11 +195,11 @@ describe('ScrubbingSpanExporter', () => {
     expect(JSON.stringify(output)).not.toContain(EMAIL);
   });
 
-  it('admits exactly the four span names and no event name', () => {
+  it('admits exactly the five span names and the one event name', () => {
     expect([...SPAN_NAMES].sort()).toEqual(
-      ['api.request', 'client.error', 'route.change', 'web_vital'].sort(),
+      ['api.request', 'client.error', 'client.event', 'route.change', 'web_vital'].sort(),
     );
-    expect([...EVENT_NAMES]).toEqual([]);
+    expect([...EVENT_NAMES]).toEqual(['audit.export_capped']);
   });
 
   it('drops an event whose name this app did not write, and the span links', () => {

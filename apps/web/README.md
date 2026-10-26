@@ -114,7 +114,7 @@ policy whose nonce appears anywhere but `style-src`.
 origin with an optional port 1–65535 — and fails closed on anything else; empty or unset adds
 nothing). It is **empty by default**, and `scripts/app-origin-csp.json` keeps `connect-src 'self'`
 with **no collector origin committed**: the deploy sets this variable to the origin of the
-`evidgate-otlp-endpoint` meta tag it injects ([Telemetry](#telemetry-0911-t91)), and the collector
+`evidgate-otlp-endpoint` meta tag it injects ([Telemetry](#telemetry-0911-t91-t92)), and the collector
 origin itself is owned by 10.3.1-T2, still open. A collector, object store or IdP origin a later
 task talks to stays unreachable until it is declared here.
 
@@ -369,7 +369,7 @@ call from the fixture corpus `fixtures/web-api/<name>/` (01.6.1-T3 shape: `input
   every fixture body against `contracts/openapi.yaml` with the `@evidgate/cli` Ajv validator inside
   `npm run test -w apps/web`, so a fixture that lost a required member fails the suite.
 
-## Telemetry (09.1.1-T9.1)
+## Telemetry (09.1.1-T9.1, T9.2)
 
 OpenTelemetry web traces for route changes and API calls, plus the three Web Vitals, with **one
 trace id end to end**: a navigation → its API calls → the `traceparent` the ASP.NET API continues.
@@ -385,18 +385,30 @@ initializer that starts the facade.
   300 kB initial one. Until that chunk resolves, or if it fails (one `console.warn`, then stay
   disabled), every facade call is a no-op: telemetry loss never breaks the app, and `start()` is
   idempotent.
-- **Configuration** is two `<meta>` tags of `index.html`, read once at boot
+- **Configuration** is three `<meta>` tags of `index.html`, read once at boot
   (`telemetry-config.ts`, exposed as `TELEMETRY_CONFIG`). This story does not edit `index.html`:
-  the hosting edge injects both tags (hand-over below).
+  the hosting edge injects all three (hand-over below).
 
   | Meta name                         | Accepted value                                                                                                       | Anything else                              |
   | --------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
   | `evidgate-otlp-endpoint`          | absolute `https:` OTLP/HTTP traces URL — no `http:`, not even on loopback; no userinfo, no query string, no fragment | treated as unset: the exporter is disabled |
   | `evidgate-telemetry-sample-ratio` | number in `[0, 1]`                                                                                                   | sampling ratio `1`                         |
+  | `evidgate-service-version`        | short token matching `/^[0-9A-Za-z.+-]{1,32}$/`, e.g. `1.2.3`; a path, a URL or free text does not count             | attribute absent: no `service.version`     |
 
   An unset endpoint disables the exporter — **no network call is ever made** — while tracing,
   span creation and `traceparent` propagation still run against a no-op exporter. A ratio decides
-  how much of the traffic is exported, never whether the app traces locally.
+  how much of the traffic is exported, never whether the app traces locally. An unset or malformed
+  `evidgate-service-version` is not repaired and not exported: the resource simply has no
+  `service.version`, so a deployment typo cannot put a path or a URL on the resource.
+
+- **Privacy opt-out.** The visit's own signals are read **once**, in the `TELEMETRY_OPT_OUT`
+  factory of `telemetry-config.ts`, before the chunk is requested; nothing is persisted and there
+  is no UI. Any one of Do-Not-Track `1` (or the legacy `yes`), `msDoNotTrack` `1`/`yes`, or Global
+  Privacy Control `true` means the same thing: no chunk, no span, no exporter, no telemetry
+  `traceparent` and no request — the app is otherwise untouched. A flag flipped after load has no
+  effect until the next visit, because an opt-out is a decision about a visit and not a live
+  switch. The `X-Request-Id`/`traceparent` pair T3 stamps on every same-origin `/v1` request
+  (`request-id.interceptor.ts`) is not telemetry and is still sent.
 
 - **CSP pairing.** `scripts/app-origin-csp.json` stays `connect-src 'self'` — no collector origin
   is committed — so the deploy must set **`EVIDGATE_WEB_CONNECT_SRC`** to the **origin of the
@@ -421,7 +433,7 @@ initializer that starts the facade.
   route change opens a **new root trace**, so the ratio is applied per navigation, and each
   `api.request`/`client.error` span follows its route trace's decision (a child of an unsampled
   parent is dropped). The decision travels in the `traceparent` flag byte (`01` sampled, `00` not).
-- **What is exported** — four fixed span names, never a URL in a span name, no metrics SDK:
+- **What is exported** — five fixed span names and one named event, never a URL in a span name, no metrics SDK:
 
   | Span           | Started by                                                                                                                                                                                                | Attributes (allowlisted keys only)                                                                                                                                                 |
   | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -429,6 +441,16 @@ initializer that starts the facade.
   | `api.request`  | `telemetryInterceptor`, one per same-origin `/v1` request                                                                                                                                                 | `http.request.method`, `http.route` template, `http.response.status_code`, `evidgate.request_id` (UUID only), `evidgate.api.error_*`, `evidgate.api.retryable`, `evidgate.outcome` |
   | `client.error` | `TelemetryErrorHandler` (Angular) and the `error`/`unhandledrejection` listeners                                                                                                                          | `evidgate.error.source`, `error.type`, status/api error keys, `evidgate.request_id`, current `evidgate.route` — no message attribute at all                                        |
   | `web_vital`    | LCP/INP/CLS flush                                                                                                                                                                                         | `web_vital.name`, `web_vital.value`, `web_vital.rating`, `web_vital.navigation_type`, `evidgate.route`                                                                             |
+
+  The fifth name and the only span event this app writes belong together:
+  `TelemetryService.reportEvent` records `client.event` — a **zero-duration** span attributed to
+  the current `evidgate.route` (plus `evidgate.locale`) — carrying exactly one span event, and the
+  only event name the exporter admits is `audit.export_capped` (the audit CSV export hit its
+  10,000-row cap, 09.1.1-T9.2). It is raised by `AuditStore`
+  (`src/app/features/settings/audit/audit.store.ts`) through `TelemetryService.reportEvent`, once
+  per capped export. The event itself has **no attribute**: the name is the whole
+  payload, so no row count, org id or filter value leaves the page. Any other event name is
+  content and is dropped.
 
   The closed key set is `attribute-allowlist.ts` (`ALLOWED_ATTRIBUTE_KEYS` /
   `ALLOWED_RESOURCE_KEYS`); anything outside it is dropped at export, not merely unset. Fields
@@ -455,8 +477,8 @@ initializer that starts the facade.
 - **Scrub policy.** One layer, not two, and no regular-expression text scrubber anywhere in the
   telemetry path — a property of the design, not a gap. A span _name_ is admitted only when it is
   one of the fixed constants of `telemetry-names.ts` (`SPAN_NAMES`) and an event only when its name
-  is in `EVENT_NAMES` (empty today), so a name that carries content is dropped rather than rewritten
-  (`scrubbing-exporter.ts`); D-S69-Q2 removed `error.message`, so no attribute carries free text at
+  is in `EVENT_NAMES` (one name: `audit.export_capped`), so a name that carries content is dropped
+  rather than rewritten (`scrubbing-exporter.ts`); D-S69-Q2 removed `error.message`, so no attribute carries free text at
   all; what remains is a closed set of structured values, which is what `scrub.ts` filters: an
   allowlist of keys (`ALLOWED_ATTRIBUTE_KEYS`, anything else dropped by key) and one rule per
   key — a method token, a status range, a route _template_ (`:param`, `**`, a version prefix, or
@@ -507,13 +529,29 @@ initializer that starts the facade.
   (`visibilitychange`), `pagehide`, and `shutdown()`. The page-leave paths are followed by an
   explicit `TelemetryRuntime.forceFlush`, because `BatchSpanProcessor`'s own page-leave listeners
   were registered before any span of this app existed.
-- **Deploy hand-over — 09.1.1-T10 and 10.2.1-T1.4.** The static hosting edge must (a) inject both
-  `<meta>` tags per deployment, the endpoint being an absolute `https:` URL, and (b) set
+- **Browser proof.** `e2e/telemetry.spec.ts` serves the production bundle from a spec-owned
+  `e2e/static-server.mjs` on a free port of its own — each case decides the policy, so
+  `playwright.config.ts` and `scripts/app-origin-csp.json` stay untouched — injects the deploy
+  `<meta>` tags into the document it serves (original headers, CSP and nonce preserved) and
+  intercepts `POST https://otlp.e2e.evidgate.test/v1/traces`, decoding the OTLP JSON. It asserts a
+  `route.change` export and a `web_vital` one whose LCP was finalised by a **real** click
+  (`web-vitals` ignores synthetic events), the resource's `service.name`/`service.version`, the
+  closed span-name and attribute-key sets, and that no attribute value carries a query, a fragment,
+  a URL or a UUID outside `evidgate.request_id`. Then the edges: a server started **without**
+  `EVIDGATE_WEB_CONNECT_SRC` answers `connect-src 'self'`, the browser refuses the export and the
+  page still renders with no page error; each opt-out signal produces zero collector requests and
+  never loads the chunk, with a control page of the same build exporting in the same window; and a
+  document with no endpoint tag emits nothing.
+- **Deploy hand-over — 09.1.1-T10 and 10.2.1-T1.4.** The static hosting edge must (a) inject all
+  three `<meta>` tags per deployment, the endpoint being an absolute `https:` URL, and (b) set
   `EVIDGATE_WEB_CONNECT_SRC` to that endpoint's origin when it emits the app-origin CSP — the
   committed policy keeps `connect-src 'self'` and no origin is committed to it (the pairing bullet
   above). No wildcard and no `unsafe-*` anywhere: a wrong or missing origin only stops the export,
-  while a too-wide `connect-src` would weaken the CSP for every request. Opt-out and the remaining
-  emission wiring are 09.1.1-T9.2.
+  while a too-wide `connect-src` would weaken the CSP for every request. Opt-out needs nothing from
+  the edge: 09.1.1-T9.2 decides it in the browser, from the visit's own signals, before any chunk
+  is requested. What is still open is the collector — its origin, its CORS answer and its retention,
+  owned by 10.3.1-T2 [OPEN] — and the edge that injects the tags and extends `connect-src`, owned by
+  10.2.1-T1.4 [OPEN].
 
 ## i18n
 
@@ -610,8 +648,11 @@ Specs: `e2e/smoke.spec.ts` (AC2 — the built bundle bootstraps at `/`, which re
 and renders `<html lang="vi">`, and at `/en/` which renders `lang="en"`: page title ending in `Evidgate`,
 the app shell (`app-root app-shell`) with a non-empty page heading — the production bundle has no
 fixture backend, so the bootstrap reads fail and the shell shows its `/unavailable` page — and no
-page or console errors during load) and `e2e/static-server.spec.ts` (locale routing, SPA fallback,
-and the traversal, symlink and bad-request guards of the server itself).
+page or console errors during load), `e2e/static-server.spec.ts` (locale routing, SPA fallback,
+and the traversal, symlink and bad-request guards of the server itself), and
+`e2e/telemetry.spec.ts` (09.1.1-T9.2 — the production bundle's telemetry emission, the CSP pairing
+and the privacy opt-out, each case served by a server it starts itself; see
+[Telemetry](#telemetry-0911-t91-t92)).
 
 ### Shell suite on the fixtures build (09.1.1-T4)
 

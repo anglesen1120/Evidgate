@@ -26,8 +26,9 @@ import {
 import type { Subscription } from 'rxjs';
 
 import { routeTemplate, UNKNOWN_ROUTE } from './route-template';
-import { TELEMETRY_CONFIG } from './telemetry-config';
+import { TELEMETRY_CONFIG, TELEMETRY_OPT_OUT } from './telemetry-config';
 import type { TelemetryConfig } from './telemetry-config';
+import type { TelemetryEventName } from './telemetry-names';
 import type {
   ApiCall,
   ErrorReport,
@@ -125,6 +126,7 @@ export class TelemetryService {
   private readonly document = inject(DOCUMENT);
   private readonly config: TelemetryConfig = inject(TELEMETRY_CONFIG);
   private readonly loader = inject(TELEMETRY_SDK_LOADER);
+  private readonly optedOut = inject(TELEMETRY_OPT_OUT);
   private readonly locale = primarySubtag(inject(LOCALE_ID));
   /** Optional on purpose: an app without `provideRouter` traces API calls and errors only. */
   private readonly router = inject(Router, { optional: true });
@@ -158,7 +160,8 @@ export class TelemetryService {
     if (this.state !== 'idle') {
       return;
     }
-    if (this.document.defaultView === null) {
+    if (this.document.defaultView === null || this.optedOut) {
+      // Opted out (Do-Not-Track / Global Privacy Control): nothing is loaded, subscribed or sent.
       this.state = 'disabled';
       return;
     }
@@ -180,9 +183,22 @@ export class TelemetryService {
     this.runtimeValue?.reportError(report);
   }
 
+  /**
+   * Records one named client event; a no-op until the chunk has loaded, when the visit opted out,
+   * and after a failed load. Never throws: telemetry loss must not break the caller.
+   */
+  reportEvent(name: TelemetryEventName): void {
+    this.runtimeValue?.reportEvent(name);
+  }
+
   private async load(): Promise<void> {
     const module = await this.loader();
-    this.runtimeValue = module.startTelemetrySdk(this.config, { locale: this.locale });
+    this.runtimeValue = module.startTelemetrySdk(this.config, {
+      locale: this.locale,
+      ...(this.config.serviceVersion === undefined
+        ? {}
+        : { serviceVersion: this.config.serviceVersion }),
+    });
     this.state = 'ready';
     if (this.exportDisabled) {
       this.runtimeValue.disableExport();

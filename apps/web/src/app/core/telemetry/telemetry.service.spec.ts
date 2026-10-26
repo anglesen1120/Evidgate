@@ -40,7 +40,8 @@ import type {
   TelemetrySdkOptions,
   VitalReporters,
 } from './telemetry-sdk';
-import { TELEMETRY_CONFIG, type TelemetryConfig } from './telemetry-config';
+import { AUDIT_EXPORT_CAPPED_EVENT, type TelemetryEventName } from './telemetry-names';
+import { TELEMETRY_CONFIG, TELEMETRY_OPT_OUT, type TelemetryConfig } from './telemetry-config';
 import { TELEMETRY_SDK_LOADER, TelemetryService } from './telemetry.service';
 
 /** A concrete id and query a navigation can carry but no span attribute may. */
@@ -65,10 +66,13 @@ function snapshot(paths: readonly (string | null)[]): ActivatedRouteSnapshot {
  */
 class RouterDouble {
   readonly routerState = { snapshot: { root: snapshot(['']) } };
+  /** How often the facade subscribed to `events`; `0` when it never wired the router. */
+  subscribed = 0;
   /** How often the facade tore its subscription down. */
   unsubscribed = 0;
   private readonly source = new Subject<RouterEvent>();
   readonly events: Observable<RouterEvent> = new Observable<RouterEvent>((subscriber) => {
+    this.subscribed += 1;
     const subscription = this.source.subscribe(subscriber);
     return () => {
       this.unsubscribed += 1;
@@ -110,6 +114,10 @@ class RuntimeDouble implements TelemetryRuntime {
 
   reportError(report: ErrorReport): void {
     this.calls.push(`reportError:${report.source}`);
+  }
+
+  reportEvent(name: TelemetryEventName): void {
+    this.calls.push(`reportEvent:${name}`);
   }
 
   flushVitals(): void {
@@ -157,6 +165,8 @@ interface HarnessOptions {
   readonly loader?: 'real' | 'stub' | 'reject' | 'deferred';
   /** Stand-ins for the three `web-vitals` reporters, so vitals can be dirty without a browser. */
   readonly vitalReporters?: VitalReporters;
+  /** `TELEMETRY_OPT_OUT`: `false` (the default here) means the visit did not opt out. */
+  readonly optedOut?: boolean;
 }
 
 function createHarness(options: HarnessOptions = {}): Harness {
@@ -214,6 +224,9 @@ function createHarness(options: HarnessOptions = {}): Harness {
   TestBed.configureTestingModule({
     providers: [
       { provide: TELEMETRY_SDK_LOADER, useValue: loader },
+      // The real token reads `navigator`, which jsdom exposes without a privacy signal: every
+      // existing spec states that answer explicitly, so a host browser setting cannot leak in.
+      { provide: TELEMETRY_OPT_OUT, useValue: options.optedOut ?? false },
       ...(options.router === false ? [] : [{ provide: Router, useValue: router }]),
       ...(options.config === undefined
         ? []
@@ -388,6 +401,45 @@ describe('TelemetryService', () => {
     expect(harness.sdkOptions).toEqual([{ locale: 'vi' }]);
   });
 
+  it('hands the build version of the configuration to the chunk', async () => {
+    const harness = createHarness({
+      config: {
+        endpoint: 'https://otlp.evidgate.example/v1/traces',
+        sampleRatio: 1,
+        serviceVersion: '1.2.3+abc',
+      },
+    });
+
+    harness.service.start();
+    await settle();
+    harness.service.runtime?.beginRouteChange().end('ok', '/runs');
+
+    expect(harness.configs).toEqual([
+      {
+        endpoint: 'https://otlp.evidgate.example/v1/traces',
+        sampleRatio: 1,
+        serviceVersion: '1.2.3+abc',
+      },
+    ]);
+    expect(harness.sdkOptions).toEqual([{ locale: 'en', serviceVersion: '1.2.3+abc' }]);
+    // The version is an identity value: it rides on the resource of every exported span.
+    const [span] = spansNamed(harness.exporter, 'route.change');
+    expect(span?.resource.attributes['service.version']).toBe('1.2.3+abc');
+  });
+
+  it('exports no service version when the configuration names none', async () => {
+    const harness = createHarness({ config: configFor('https://otlp.evidgate.example') });
+
+    harness.service.start();
+    await settle();
+    harness.service.runtime?.beginRouteChange().end('ok', '/runs');
+
+    expect(harness.sdkOptions).toEqual([{ locale: 'en' }]);
+    const [span] = spansNamed(harness.exporter, 'route.change');
+    expect(span).toBeDefined();
+    expect(span?.resource.attributes['service.version']).toBeUndefined();
+  });
+
   it('uses the configuration the document yields when none is provided', async () => {
     const harness = createHarness();
 
@@ -408,6 +460,60 @@ describe('TelemetryService', () => {
     expect(harness.service.runtime).toBeNull();
     expect(harness.service.startApiCall({ method: 'GET', route: '/v1/runs' })).toBeNull();
     expect(() => harness.service.reportError({ source: 'angular', type: 'Error' })).not.toThrow();
+  });
+
+  it('sends nothing at all when the visit opted out, not even the chunk', async () => {
+    // A configured endpoint and a working loader: opt-out alone has to stop everything.
+    const harness = createHarness({
+      optedOut: true,
+      config: configFor('https://otlp.evidgate.example'),
+    });
+    // Installed after the module is set up, so only the facade's own registrations are counted.
+    const windowAdd = vi.spyOn(window, 'addEventListener');
+    try {
+      harness.service.start();
+      await settle();
+      // Disabled is terminal: a later start must not resurrect the chunk either.
+      harness.service.start();
+      await settle();
+
+      // No lazy chunk, so no SDK, no exporter, no processor: not one OTLP request or span.
+      expect(harness.loadCount()).toBe(0);
+      expect(harness.configs).toEqual([]);
+      expect(harness.service.runtime).toBeNull();
+      expect(harness.exporter.getFinishedSpans()).toEqual([]);
+      expect(harness.logs).toEqual([]);
+
+      // No listener either: nothing observes the router, the page's lifetime or a CSP report.
+      expect(harness.router.subscribed).toBe(0);
+      const windowTypes = windowAdd.mock.calls.map(([type]) => type);
+      expect(windowTypes).not.toContain('visibilitychange');
+      expect(windowTypes).not.toContain('pagehide');
+      const documentTypes = documentListeners.mock.calls.map(([type]) => type);
+      expect(documentTypes).not.toContain('securitypolicyviolation');
+
+      // Every entry point answers without a runtime instead of throwing at the caller.
+      expect(harness.service.startApiCall({ method: 'GET', route: '/v1/runs' })).toBeNull();
+      expect(() => harness.service.reportError({ source: 'angular', type: 'Error' })).not.toThrow();
+      expect(() => harness.service.reportEvent(AUDIT_EXPORT_CAPPED_EVENT)).not.toThrow();
+      window.dispatchEvent(new Event('pagehide'));
+      expect(harness.exporter.getFinishedSpans()).toEqual([]);
+    } finally {
+      windowAdd.mockRestore();
+    }
+  });
+
+  it('traces and exports exactly as before when the visit did not opt out', async () => {
+    const harness = createHarness({ config: configFor('https://otlp.evidgate.example') });
+
+    harness.service.start();
+    await settle();
+    harness.service.runtime?.beginRouteChange().end('ok', '/runs');
+
+    expect(harness.loadCount()).toBe(1);
+    expect(harness.router.subscribed).toBe(1);
+    expect(spansNamed(harness.exporter, 'route.change')).toHaveLength(1);
+    expect(harness.logs).toContain('export:route.change');
   });
 
   it('stays disabled, with one warning, when the chunk fails to load', async () => {
