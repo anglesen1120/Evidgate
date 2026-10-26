@@ -202,8 +202,9 @@ export function writeVariantToggle(write: StepTwoWrite, variant = 'ok'): string 
 /**
  * The wizard grants with `ci_binding:write` and `ingest_token:write` removed
  * (`permissions-list-onboarding-no-writes`): step 2's two controls render disabled, with their
- * localized reason, instead of disappearing. Pass it as an extra toggle to `seedQueryWith`, whose
- * extras come last and therefore override `WIZARD_GRANTS`.
+ * localized reason, instead of disappearing. It also keeps `policy:write` (the document predates
+ * the 09.2.1-T5 split), so the step-5 confirm stays enabled under it. Pass it as an extra toggle to
+ * `seedQueryWith`, whose extras come last and therefore override `WIZARD_GRANTS`.
  */
 export const NO_WRITE_GRANTS_TOGGLE = 'fixture.variant.listPermissions=onboarding-no-writes';
 

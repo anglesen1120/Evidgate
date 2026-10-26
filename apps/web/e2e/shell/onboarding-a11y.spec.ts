@@ -6,7 +6,8 @@
 // 09.2.1-T2 replaced step 2's placeholder with the connect page, so the scan now covers that page in
 // its three states: empty, with a one-time value revealed (§8: the slot adds a read-only control,
 // two buttons and a live region to whatever the shell already had), and with the server's metadata
-// rows after a resume (AC7). Steps 3–5 are still the placeholders T3…T5 own.
+// rows after a resume (AC7). Steps 3–4 are still the placeholders T3/T4 own; step 5's enable page
+// carries its own axe matrix in `onboarding-enable-collection.spec.ts` (09.2.1-T5).
 //
 // The verdict case runs on a corpus whose sample run records `decision: "FAIL"`: the wizard may
 // render the run's state (it is collection progress) and must not render a verdict, so a failing

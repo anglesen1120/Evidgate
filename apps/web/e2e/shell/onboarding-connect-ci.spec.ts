@@ -91,7 +91,7 @@ test.describe('step 2 renders the connect page (plan §10 T2)', () => {
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 2);
 
-    // The page T2 ships, not the placeholder steps 3–5 still render while T3…T5 own them.
+    // The page T2 ships, not the placeholder steps 3–4 still render while T3/T4 own them.
     await expect(connectCiPage(page)).toBeVisible();
     await expect(page.locator('[data-testid="onboarding-step-pending"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="connect-oidc-panel"]')).toBeVisible();
