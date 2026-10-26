@@ -6,7 +6,7 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 
 ### Resume here
 - Develop: `b0be589` (PR #204, S94 close-out, merged 2026-10-27); 195 first-parent PR merges into develop. Migration lane free (S94 12.3.1-T1 merged in #198/#204); highest migration `0047_usage_rollup.sql`, next free `0048`.
-- Open PRs: #S100-PR (this STATUS/plan sync) plus dependabot PRs (not lanes).
+- Open PRs: #206 (this STATUS/plan sync) plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T1/T2 backend; S97 03.2.1-T5 backend tests-only — its landing is credited in §2 by S100, so the S97 close-out must not credit T5 again; S100 this docs lane.
 - Fully landed on develop: 167/655 tasks; 173.75/702.75 raw person-days; remaining 488 tasks / 529.0 d. Strict merged-PR-only figure: 140 tasks / 148.75 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
