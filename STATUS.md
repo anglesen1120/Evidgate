@@ -8,8 +8,8 @@ Updated 2026-10-26. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Develop: `74c3fa4` (PR #195); 187 first-parent PR merges into develop.
 - Open PRs (GitHub query 2026-10-26): #196 S93 status sync (this PR); #193 NuGet updates; #192 npm updates; #113 TypeScript 7; #112 npm updates; #111 Actions updates.
 - Highest migration: `0045_identity_session_hardening.sql`.
-- Fully landed on develop: 163/655 tasks; 169.25/702.75 raw person-days; remaining 492 tasks / 533.5 d. Strict merged-PR-only figure: 137 tasks / 144.75 d (the other 26 tasks / 24.5 d are Stage A direct commits on develop). Method: task ranges in merged rows expanded against plan_graph ids; a parent counts only when all its sub-rows landed.
-- By phase (done tasks / raw d): G1 120 / 132.25; G2 37 / 31; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop: 164/655 tasks; 170.25/702.75 raw person-days; remaining 491 tasks / 532.5 d. Strict merged-PR-only figure: 138 tasks / 145.75 d (the other 26 tasks / 24.5 d are Stage A direct commits on develop). Method: task ranges in merged rows expanded against plan_graph ids; a parent counts only when all its sub-rows landed.
+- By phase (done tasks / raw d): G1 121 / 133.25; G2 37 / 31; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in the S93 pass on 74c3fa4: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` exits 1 with 10 errors, all missing feature plans for 13.3.1, 13.4.1, 13.5.1, 13.5.2, 13.6.1, 13.7.1, 13.7.2, 13.8.1, 13.8.2, 13.9.1 (reported by the S93 coordinator check on develop 74c3fa4, not re-run in this docs-only pass; §6 row).
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -21,10 +21,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 163 | 169.25 |
-| Via merged PRs | 137 | 144.75 |
+| Fully landed on develop | 164 | 170.25 |
+| Via merged PRs | 138 | 145.75 |
 | Direct commits on develop, no PR | 26 | 24.5 |
-| Remaining | 492 | 533.5 |
+| Remaining | 491 | 532.5 |
 | Plan total | 655 | 702.75 |
 
 Five partial parents are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence (163); the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -45,18 +45,18 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 10 | 3 | 0 | 1 | 2 | 0 | 0 | 2.5 |
 | 11 | 5 | 1 | 2 | 1 | 1 | 0 | 4.25 |
 | 12 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 13 | 4 | 0 | 0 | 2 | 2 | 0 | 6 |
-| TOTAL | 163 | 3 | 43 | 88 | 28 | 1 | 169.25 |
+| 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
+| TOTAL | 164 | 3 | 43 | 89 | 28 | 1 | 170.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 120 | 3 | 25 | 66 | 25 | 1 | 132.25 |
+| G1 | 121 | 3 | 25 | 67 | 25 | 1 | 133.25 |
 | G2 | 37 | 0 | 16 | 19 | 2 | 0 | 31 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 163 | 3 | 43 | 88 | 28 | 1 | 169.25 |
+| TOTAL | 164 | 3 | 43 | 89 | 28 | 1 | 170.25 |
 
 ### Landed task groups
 
@@ -168,6 +168,7 @@ Five partial parents are excluded from done counts and dependency satisfaction; 
 | 02.3.2 | 02.3.2-T1 | merged (#190, 88fc00f) | Real session authentication, rotation/revocation, throttled sliding expiry, pepper rotation and enforcing XSRF (0045). |
 | 13.2.2 | plan change (docs only, no task built) | merged (#194, c866fdc) | Role-profile/prompt-library story and feature plan only; eight planned tasks are unbuilt. |
 | 13.x / all | status and consistency sync (docs only, no task built) | merged (#196, b6cace6) | STATUS.md rebuilt against merged work (163/655 tasks, 169.25/702.75 d), AGENTS.md, plan 00 §14/§15, plan 13 §4.4, features README and open-items made consistent; no task credit. |
+| 13.2.2 | 13.2.2-T1 | merged (#199, 0114df0) | GitHub review of per-role prompts: `docs/research/role-prompts-github-review.md` (46 repos, licence ledger, gap matrix, ideas not copied; copy nothing for the first seed set `[INFERENCE]`). Docs only; the Done-when test `MemoAndLicenceLedgerComplete` is not built (§6 row "Role-prompt memo check"). |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -306,9 +307,9 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **90 tasks / 100 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 90 / 100 d is the figure used here.
+Dependency-ready: **89 tasks / 99 raw person-days**, using the exact expanded task dependencies in the supplied audit. This is not owner approval or proof that non-graph blockers are cleared. G1–G4 hard-stop gates determine execution order; partial rows resume only their recorded remainder. Waived interview rows are graph-ready but are not scheduled. Stricter variant that also requires every dependency story to be fully merged: **28 tasks / 31.25 d** (G1 16/16.75, G2 9/10.5, G3 0, G4 3/4); plan_graph edges are task-level, so 89 / 99 d is the figure used here.
 
-### G1: 45 tasks / 46 d
+### G1: 44 tasks / 45 d
 
 | Task | Size | Note |
 |---|---|---|
@@ -354,7 +355,6 @@ Dependency-ready: **90 tasks / 100 raw person-days**, using the exact expanded t
 | 13.1.1-T4 | S | `manual_case_link` to `test_case`; uncovered-case view |
 | 13.1.2-T1 | M | `authoring_change` model; apply-as-one-version with `If-Match` and idempotency key |
 | 13.2.1-T1 | M | `project_ai_settings` + `ai_settings_template` (vi + en seeds), API, limits |
-| 13.2.2-T1 | M | GitHub review and re-research of per-role prompts (BA, QA / test plan, test-case writer, integration-scenario writer, PM / release summary, dev failure triage) in public repos and prompt collections; licence of every source recorded against the ADR-0002 licence rule; output = research memo docs/research/role-prompts-github-review.md with shortlist, gaps and licence table (in review: S95, memo written; flips to merged at close-out) |
 | 13.3.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
 | 13.4.1-T1 | L | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written |
 
@@ -665,4 +665,5 @@ Dependency-ready: **90 tasks / 100 raw person-days**, using the exact expanded t
 | Plan 13 §4.4 phase mismatches (found S93) | Left unchanged by S93 (status sync, no re-plan): 04.4.2 and 07.5.2 sit in G4 but have G3-only tasks; 07.2.1, 07.4.1, 07.5.1 and 05.7.1 are wholly G2. | receiver: next plan-13 re-plan pass (queue row F35); hand-over Notes: `plans/13-product-phases.md` §4.4 |
 | T80 purge-call audit for `evidgate.purge_expired_idempotency` | `audit_log` landed in 02.7.1, but the handler was not changed: `src/BuildingBlocks/Persistence/Tasks/SweepTaskHandlers.cs:18-19` still says the audit trail is this Information log line until `audit_log` exists (the deviation is recorded in `migrations/README.md:179`), so every purge call is still unaudited | receiver: queue row F40; recorded owner: 02.7.1 follow-up |
 | Merge debt (#196) | Merged delivery; review/calibration debt for this PR is recorded in the receiving register, not an unmerged task. Merged under coordinator-review 6c after one send-back (jev acceptance 0.78, reviews_cover_final 0.74, clean_of_blockers 0.85, handed_over_not_dropped 0.55 before queue rows F38-F41 were added). | receiver: `docs/phase-review.md:212` D-S93-M1; hand-over Notes: `.omp/coordinator/merge-debt.md` |
-| Role-prompt memo check (13.2.2-T1, S95) | `RolePromptResearchReviewTests.MemoAndLicenceLedgerComplete` (13.2.2-T1.1/T1.2 Done-when) is not implemented: no existing check stage in `scripts/verify.sh` validates a `docs/research/` memo and a new stage needs `scripts/check-ci-parity.sh` and CI changes outside this docs-only task; the memo was checked by a doc reviewer re-opening sources plus a repo-wide verbatim-phrase grep | receiver: 13.2.2-T2.1 (`RolePromptLibraryTests.ProvenanceAndChecklistComplete` may cover memo-id traceability); recorded in the 13.2.2 plan Notes refinement 9; LOC-4 (MIT plus attribution clause, `[INFERENCE]` copy = y) receiver: 13.2.2-T2.2, plan Notes refinement 10 |
+| Role-prompt memo check (13.2.2-T1, S95) | `RolePromptResearchReviewTests.MemoAndLicenceLedgerComplete` (13.2.2-T1.1/T1.2 Done-when) is not implemented: no existing check stage in `scripts/verify.sh` validates a `docs/research/` memo and a new stage needs `scripts/check-ci-parity.sh` and CI changes outside this docs-only task; the memo was checked by a doc reviewer re-opening sources plus a repo-wide verbatim-phrase grep | receiver: 13.2.2-T2.1 (`RolePromptLibraryTests.ProvenanceAndChecklistComplete` may cover memo-id traceability); recorded in the 13.2.2 plan Notes refinement 9 (merged #199); LOC-4 (MIT plus attribution clause, `[INFERENCE]` copy = y) receiver: 13.2.2-T2.2, plan Notes refinement 10 |
+| Merge debt (#199) | Merged delivery; review/calibration debt for this PR is recorded in the receiving register, not an unmerged task. Merged under coordinator-review 6c after one send-back (jev round 1 acceptance 0.89, reviews_cover_final 0.69, clean_of_blockers 0.90, handed_over_not_dropped 0.73; round 2 0.95, 0.70, 0.93, 0.83). | receiver: `docs/phase-review.md` D-S95-M1, D-S95-Q1; hand-over Notes: `.omp/coordinator/merge-debt.md` |
