@@ -502,6 +502,10 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
     /// <param name="xsrfToken">The <c>X-XSRF-TOKEN</c> value to send, or null for none.</param>
     /// <param name="authorization">The <c>Authorization</c> header to send, or null.</param>
     /// <param name="jsonBody">A JSON body to send as <c>application/json</c>, or null for none.</param>
+    /// <param name="orgHeader">
+    /// The <c>X-Evidgate-Org</c> value to send, or null for none. The administrative session revoke names the org
+    /// it acts in here (02.3.2-T2); without it only the owner path applies.
+    /// </param>
     internal static async Task<HttpResponseMessage> SendAsync(
         HttpClient client,
         HttpMethod method,
@@ -509,7 +513,8 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
         string? cookieHeader = null,
         string? xsrfToken = null,
         string? authorization = null,
-        string? jsonBody = null)
+        string? jsonBody = null,
+        string? orgHeader = null)
     {
         ArgumentNullException.ThrowIfNull(client);
 
@@ -523,6 +528,11 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
         if (xsrfToken is not null)
         {
             request.Headers.Add(XsrfHeaderName, xsrfToken);
+        }
+
+        if (orgHeader is not null)
+        {
+            request.Headers.Add("X-Evidgate-Org", orgHeader);
         }
 
         if (authorization is not null)

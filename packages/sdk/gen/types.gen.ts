@@ -1440,6 +1440,61 @@ export type LinkConfirmResponse = {
 };
 
 /**
+ * One live session of the caller (02.3.2-T2.1), body of `GET /v1/auth/sessions`. Owner-visible personal data only: the row's id is the handle `DELETE /v1/auth/sessions/{s}` takes, and no cookie value, HMAC, pepper version or other secret is ever a member.
+ */
+export type SessionView = {
+    /**
+     * The session row's id (the handle of the revoke route).
+     */
+    id: string;
+    /**
+     * True for the session that answered the list request.
+     */
+    current: boolean;
+    /**
+     * When the session was minted (login or rotation).
+     */
+    created_at: string;
+    /**
+     * The last activity the slide wrote. Because the slide is throttled to one update per 60 seconds, this can trail the true last request by up to a minute (AC2 trade-off).
+     */
+    last_seen_at: string;
+    /**
+     * The idle deadline; activity slides it but never past `absolute_expires_at`.
+     */
+    expires_at: string;
+    /**
+     * The hard deadline no activity extends.
+     */
+    absolute_expires_at: string;
+    /**
+     * The client address the session was minted from, as PostgreSQL's `inet` renders it; `null` when the deployment did not record one.
+     */
+    ip?: string | null;
+    /**
+     * The bounded (≤ 512 characters) user-agent string the session was minted with, or `null`.
+     */
+    user_agent?: string | null;
+};
+
+/**
+ * Body of `GET /v1/auth/sessions` (02.3.2-T2.1): the caller's live sessions, newest first. Bounded by the account itself, so there is no cursor (the `GET /v1/orgs` form rather than a `CursorList`).
+ */
+export type SessionListResponse = {
+    items: Array<SessionView>;
+};
+
+/**
+ * Optional body of `POST /v1/auth/sessions/revoke-all` (02.3.2-T2.1). An absent or empty body is the default: `keep_current: true`.
+ */
+export type RevokeAllSessionsRequest = {
+    /**
+     * `true` (default) revokes every other session and keeps the caller's; `false` revokes the current row too and the answer expires the session and antiforgery cookies, exactly like `POST /v1/auth/logout`.
+     */
+    keep_current?: boolean;
+};
+
+/**
  * One row of the version timeline (13.1.1 §5 route 22, AC9): the entity, the change kind, the source, the content digest and who wrote it. The list projection carries no `content`.
  */
 export type AuthoringVersionListItemDto = {
@@ -1938,6 +1993,16 @@ export type IngestTokenId = string;
  * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers. A route value no provider is registered under answers 404 `not_found`; a registered provider without a client credential answers 503 `unavailable`, never 404.
  */
 export type ProviderPath = 'google' | 'github';
+
+/**
+ * The `session.id` of a row the caller may revoke (02.3.2-T2.1). An id that is unknown, another account's, outside the org named in `X-Evidgate-Org`, or already revoked or expired answers the same 404 `not_found`, so a caller learns nothing about other accounts' sessions.
+ */
+export type SessionId = string;
+
+/**
+ * Names the org in which the caller claims `membership:write` (02.3.2-T2.1). Absent, only the session's owner may be revoked; present, the caller must hold an active membership in this org with `membership:write` AND the target session's user an active membership in the same org, otherwise the answer is the same 404 an unknown id gets. The org is never taken from the path or the body of a pre-tenant route.
+ */
+export type OrgHeader = string;
 
 /**
  * Post-login destination, allowlisted by `ReturnUrlPolicy` (02.3.1 §8): a same-origin path with exactly one leading `/`, no backslash or control character, at most 512 characters, re-checked through up to four percent-decoding passes. Any other value — `//host`, `/\host`, a scheme — is replaced by `/` and is not an error. The value travels only inside the protected pending-login cookie, never in a URL to the provider.
@@ -2563,6 +2628,169 @@ export type ConfirmProviderLinkResponses = {
 };
 
 export type ConfirmProviderLinkResponse = ConfirmProviderLinkResponses[keyof ConfirmProviderLinkResponses];
+
+export type ListSessionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/sessions';
+};
+
+export type ListSessionsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListSessionsError = ListSessionsErrors[keyof ListSessionsErrors];
+
+export type ListSessionsResponses = {
+    /**
+     * The caller's live sessions, newest first.
+     */
+    200: SessionListResponse;
+};
+
+export type ListSessionsResponse = ListSessionsResponses[keyof ListSessionsResponses];
+
+export type RevokeSessionData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+        /**
+         * Names the org in which the caller claims `membership:write` (02.3.2-T2.1). Absent, only the session's owner may be revoked; present, the caller must hold an active membership in this org with `membership:write` AND the target session's user an active membership in the same org, otherwise the answer is the same 404 an unknown id gets. The org is never taken from the path or the body of a pre-tenant route.
+         */
+        'X-Evidgate-Org'?: string;
+    };
+    path: {
+        /**
+         * The `session.id` of a row the caller may revoke (02.3.2-T2.1). An id that is unknown, another account's, outside the org named in `X-Evidgate-Org`, or already revoked or expired answers the same 404 `not_found`, so a caller learns nothing about other accounts' sessions.
+         */
+        s: string;
+    };
+    query?: never;
+    url: '/auth/sessions/{s}';
+};
+
+export type RevokeSessionErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RevokeSessionError = RevokeSessionErrors[keyof RevokeSessionErrors];
+
+export type RevokeSessionResponses = {
+    /**
+     * The row is revoked; its next request answers 401 `session_revoked` (AC4).
+     */
+    204: void;
+};
+
+export type RevokeSessionResponse = RevokeSessionResponses[keyof RevokeSessionResponses];
+
+export type RevokeAllSessionsData = {
+    body?: RevokeAllSessionsRequest;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/auth/sessions/revoke-all';
+};
+
+export type RevokeAllSessionsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RevokeAllSessionsError = RevokeAllSessionsErrors[keyof RevokeAllSessionsErrors];
+
+export type RevokeAllSessionsResponses = {
+    /**
+     * The other sessions (and the current one, when `keep_current` is false) are revoked.
+     */
+    204: void;
+};
+
+export type RevokeAllSessionsResponse = RevokeAllSessionsResponses[keyof RevokeAllSessionsResponses];
+
+export type LogoutData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/auth/logout';
+};
+
+export type LogoutErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
+
+export type LogoutResponses = {
+    /**
+     * The current session is revoked and its cookies are expired.
+     */
+    204: void;
+};
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
 
 export type CreateManifestData = {
     body: ManifestV1;

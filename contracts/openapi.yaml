@@ -732,6 +732,178 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+  /auth/sessions:
+    get:
+      operationId: listSessions
+      tags: [identity]
+      summary: List the caller's live sessions, current one marked (02.3.2-T2)
+      description: >-
+        Pre-tenant and session-cookie only (`x-permission: none`, `x-auth: user_session`): the caller is the
+        session the presented `__Host-evidgate_session` cookie proves, resolved INSIDE the owner-owned definer
+        from the cookie's HMAC candidates (`evidgate_resolve.session_list`, 02.3.2-T2.1) — no route value and no
+        body ever names a user. The answer is every row of that account that is neither revoked nor past its idle
+        or absolute deadline, newest first; it is bounded by the account itself (a person's live sessions), so
+        there is no `cursor` and no `limit`. `current` marks the session that answered this request, and the two
+        deadlines, `last_seen_at`, `ip` and `user_agent` are the caller's own data only. No cookie value, HMAC,
+        pepper version or any other secret is part of any answer, and every response carries
+        `Cache-Control: no-store` because the body is personal data. 401 `unauthenticated` / `session_expired` /
+        `session_revoked` are the request authenticator's own answers, raised before the handler runs (AC4, AC8);
+        403 `account_disabled` is the disabled-account answer of the same layer.
+      x-permission: none
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The caller's live sessions, newest first.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /auth/sessions/{s}:
+    delete:
+      operationId: revokeSession
+      tags: [identity]
+      summary: Revoke one of the caller's sessions, or a member's as an admin (02.3.2-T2)
+      description: >-
+        Pre-tenant, session-cookie only (`x-permission: none`, `x-auth: user_session`), and one of the three
+        cookie mutations that must carry the antiforgery pair (AC5): the session is the route's whole authority.
+        The acting user is again resolved inside the definer from the cookie's HMAC (`session_revoke_one`), never
+        from a parameter. Two paths exist and the definer decides between them: with no `X-Evidgate-Org` only the
+        session's OWNER may revoke the row; with the header the caller must hold an active membership in that org
+        carrying `membership:write`, and the target session's user must hold an active membership in the SAME org
+        (the admin path of AC6, which is what makes a member removal immediate). A session id that is unknown,
+        belongs to another account, belongs to an account outside the named org, or is already revoked or expired
+        answers the SAME 404 `not_found` a missing id does — never 403, so the route is no oracle for another
+        account's ids. The call is idempotent by contract (`Idempotency-Key` not required; see
+        `contracts/README.md`): a repeat on a dead row still answers 404, and the first successful call already
+        wrote the state. Every response carries `Cache-Control: no-store`.
+      x-permission: none
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/XsrfToken'
+        - $ref: '#/components/parameters/OrgHeader'
+      responses:
+        '204':
+          description: The row is revoked; its next request answers 401 `session_revoked` (AC4).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /auth/sessions/revoke-all:
+    post:
+      operationId: revokeAllSessions
+      tags: [identity]
+      summary: Revoke every session of the caller, optionally keeping the current one (02.3.2-T2)
+      description: >-
+        Pre-tenant, session-cookie only (`x-permission: none`, `x-auth: user_session`), with the antiforgery
+        pair required (AC5) and no `Idempotency-Key` (revocation is naturally idempotent — see
+        `contracts/README.md`). `keep_current` defaults to `true`, the "all but this one" case of the story:
+        every other live row of the account is revoked and the answering session survives. With
+        `keep_current: false` the current row is revoked too, exactly like `POST /auth/logout`, and the answer
+        expires the session and antiforgery cookies so the browser cannot replay them. The acting user comes from
+        the cookie's HMAC inside the definer (`session_revoke_others`), never from the body. Every response
+        carries `Cache-Control: no-store`.
+      x-permission: none
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeAllSessionsRequest'
+      responses:
+        '204':
+          description: The other sessions (and the current one, when `keep_current` is false) are revoked.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              description: >-
+                Present only with `keep_current: false`: the expiry (`Max-Age=0`) of
+                `__Host-evidgate_session` and of the antiforgery pair cookies, with the same attributes they were
+                written with (`Path=/; Secure; HttpOnly; SameSite=Lax`, no `Domain`). Absent when the current
+                session is kept.
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [identity]
+      summary: Log the calling session out and expire its cookies (02.3.2-T2)
+      description: >-
+        Pre-tenant, session-cookie only (`x-permission: none`, `x-auth: user_session`), with the antiforgery
+        pair required (AC5) and no `Idempotency-Key` (see `contracts/README.md`). Revokes the row the presented
+        cookie proves — resolved from the cookie's HMAC inside the definer (`session_revoke_current`), never from
+        a parameter — so the revocation is a row state and the very next request with the old cookie answers 401
+        `session_revoked` (D9, AC4, AC8). The answer expires `__Host-evidgate_session` and the antiforgery pair
+        cookies with `Max-Age=0` and the attributes they were written with, so a browser drops them; a client
+        that keeps a copy still gets the 401. Every response carries `Cache-Control: no-store`.
+      x-permission: none
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: The current session is revoked and its cookies are expired.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              description: >-
+                `__Host-evidgate_session=; Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax` and the same
+                expiry for the antiforgery pair cookies, so no client-held copy is honoured by a browser.
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/manifests:
     post:
       operationId: createManifest
@@ -6162,6 +6334,30 @@ components:
       schema:
         type: string
         enum: [google, github]
+    SessionId:
+      name: s
+      in: path
+      required: true
+      description: >-
+        The `session.id` of a row the caller may revoke (02.3.2-T2.1). An id that is unknown, another account's,
+        outside the org named in `X-Evidgate-Org`, or already revoked or expired answers the same 404
+        `not_found`, so a caller learns nothing about other accounts' sessions.
+      schema:
+        type: string
+        format: uuid
+    OrgHeader:
+      name: X-Evidgate-Org
+      in: header
+      required: false
+      description: >-
+        Names the org in which the caller claims `membership:write` (02.3.2-T2.1). Absent, only the session's
+        owner may be revoked; present, the caller must hold an active membership in this org with
+        `membership:write` AND the target session's user an active membership in the same org, otherwise the
+        answer is the same 404 an unknown id gets. The org is never taken from the path or the body of a
+        pre-tenant route.
+      schema:
+        type: string
+        format: uuid
     LoginReturnUrl:
       name: returnUrl
       in: query
@@ -9009,6 +9205,71 @@ components:
             `linked` — a new identity row; `already_linked` — this account already held it (the
             answer a retry after a failed audit converges on); `moved` — it was taken from an
             account that is no longer in use, and `auth.link_move` records where from.
+    SessionView:
+      type: object
+      description: >-
+        One live session of the caller (02.3.2-T2.1), body of `GET /v1/auth/sessions`. Owner-visible personal data
+        only: the row's id is the handle `DELETE /v1/auth/sessions/{s}` takes, and no cookie value, HMAC, pepper
+        version or other secret is ever a member.
+      required: [id, current, created_at, last_seen_at, expires_at, absolute_expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The session row's id (the handle of the revoke route).
+        current:
+          type: boolean
+          description: True for the session that answered the list request.
+        created_at:
+          type: string
+          format: date-time
+          description: When the session was minted (login or rotation).
+        last_seen_at:
+          type: string
+          format: date-time
+          description: >-
+            The last activity the slide wrote. Because the slide is throttled to one update per 60 seconds, this
+            can trail the true last request by up to a minute (AC2 trade-off).
+        expires_at:
+          type: string
+          format: date-time
+          description: The idle deadline; activity slides it but never past `absolute_expires_at`.
+        absolute_expires_at:
+          type: string
+          format: date-time
+          description: The hard deadline no activity extends.
+        ip:
+          type: [string, 'null']
+          description: >-
+            The client address the session was minted from, as PostgreSQL's `inet` renders it; `null` when the
+            deployment did not record one.
+        user_agent:
+          type: [string, 'null']
+          maxLength: 512
+          description: The bounded (≤ 512 characters) user-agent string the session was minted with, or `null`.
+    SessionListResponse:
+      type: object
+      description: >-
+        Body of `GET /v1/auth/sessions` (02.3.2-T2.1): the caller's live sessions, newest first. Bounded by the
+        account itself, so there is no cursor (the `GET /v1/orgs` form rather than a `CursorList`).
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionView'
+    RevokeAllSessionsRequest:
+      type: object
+      description: >-
+        Optional body of `POST /v1/auth/sessions/revoke-all` (02.3.2-T2.1). An absent or empty body is the
+        default: `keep_current: true`.
+      properties:
+        keep_current:
+          type: boolean
+          default: true
+          description: >-
+            `true` (default) revokes every other session and keeps the caller's; `false` revokes the current row
+            too and the answer expires the session and antiforgery cookies, exactly like `POST /v1/auth/logout`.
     AuthoringVersionListItemDto:
       type: object
       description: >-

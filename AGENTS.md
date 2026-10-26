@@ -6,12 +6,12 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 
 **Current state (2026-10-27).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next, §6 blocked), not here.
 
-- Landed on `develop`: 171 of 655 planned tasks = 178.25 of 702.75 raw person-days (≈26 % of tasks, ≈25 % of effort); 484 tasks / 524.5 d remain.
-- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 127 / 140.25 of 281.25 · G2 38 / 32 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
-- Landed by area plan (tasks / planned): 01 45/53 · 02 28/48 · 03 8/40 · 04 22/53 · 05 16/53 · 06 11/36 · 07 6/42 · 08 0/69 · 09 20/72 · 10 4/54 · 11 5/51 · 12 1/30 · 13 5/54.
+- Landed on `develop`: 172 of 655 planned tasks = 178.75 of 702.75 raw person-days (≈26 % of tasks, ≈25 % of effort); 483 tasks / 524.0 d remain (includes S102 pending PR #TBD merge).
+- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 128 / 140.75 of 281.25 · G2 38 / 32 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
+- Landed by area plan (tasks / planned): 01 45/53 · 02 29/48 · 03 8/40 · 04 22/53 · 05 16/53 · 06 11/36 · 07 6/42 · 08 0/69 · 09 20/72 · 10 4/54 · 11 5/51 · 12 1/30 · 13 5/54.
 - Delivered substrate: M1 foundation (toolchain pins, contracts pipeline + generated SDK drift gate, CI running `scripts/verify.sh`, dev stack, licence/SBOM/action-pin gates) and the Stage A waves (FORCE-RLS tenancy, orgs/projects/memberships, permissions, audit chain, CI tokens).
-- Delivered modules: catalog case/suite identity and revisions (03.1.1/03.1.3/03.2.1), runs manifest upload (05.1.1), 05.3.2-T1 only, evidence upload + safe parsing (06.1/06.3.1–06.3.2), policy revisions and waiver/quarantine lifecycles (07.1.1/07.3.1), and the Angular 22 web app with scaffold, app shell, shared state components and generated-SDK data layer (09.1.1-T1/T3/T4/T5/T7/T8/T9/T10/T12).
-- Migrations `0001`–`0047` are contiguous; highest is `0047_usage_rollup.sql`, the next free number is `0048`.
+- Delivered modules: catalog case/suite identity and revisions (03.1.1/03.1.3/03.2.1), runs manifest upload (05.1.1), 05.3.2-T1 only, evidence upload + safe parsing (06.1/06.3.1–06.3.2), policy revisions and waiver/quarantine lifecycles (07.1.1/07.3.1), sessions with list/revoke/revoke-all/logout and the cleanup sweep (02.3.2-T1/T2), and the Angular 22 web app with scaffold, app shell, shared state components and generated-SDK data layer (09.1.1-T1/T3/T4/T5/T7/T8/T9/T10/T12).
+- Migrations `0001`–`0048` are contiguous; highest is `0048_identity_session_routes.sql`, the next free number is `0049` (0048 is pending PR #TBD merge).
 - Not yet started: plan 08 (safe healing/learning) has no landed task at all; plan 12 (pilot/commercial) has only 12.3.1-T1 (the usage ledger).
 - Not yet inside started areas: 07 evaluator and its decisions (07.2), waiver/quarantine effects + expiry (07.3.2), flaky detection (07.4), late evidence + release decisions (07.5), CI delivery + webhooks (07.6); 06 sensitivity/redaction/secret masking (06.2) and the isolated viewer (06.3.3–06.3.4); most web product screens; real `platform_operator` auth (02.8.1).
 - Local gate: `scripts/verify.sh` (`--stage` for partial runs); estimates, buffer and roll-up: `plans/00-overview.md` §14.
