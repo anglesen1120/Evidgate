@@ -64,10 +64,13 @@ internal sealed class CiAuthOptions
     public int MaxSkewSeconds { get; init; } = 60;
 
     /// <summary>
-    /// Comma-separated GitHub <c>event_name</c> values refused at the exchange. <c>pull_request_target</c> runs in the base
-    /// repository's context while it may execute untrusted fork code, so its token must not mint evidence credentials.
+    /// Comma-separated GitHub <c>event_name</c> values refused at the exchange. <c>pull_request_target</c> and <c>workflow_run</c>
+    /// run in the base repository's context (a <c>workflow_run</c> of the allowed workflow on the default branch passes the ref and
+    /// workflow allowlists) while they may be driven by untrusted fork code, so their tokens must not mint evidence credentials.
+    /// An explicit value replaces this default: removing <c>workflow_run</c> from an override re-opens the risk. The claim itself
+    /// is required; comparison is ordinal and case-exact.
     /// </summary>
-    public string DeniedEventNames { get; init; } = "pull_request_target";
+    public string DeniedEventNames { get; init; } = "pull_request_target,workflow_run";
 
     /// <summary>Exchange attempts allowed per key within <see cref="ExchangeWindowSeconds"/> (AC8).</summary>
     [Range(1, 10000)]
