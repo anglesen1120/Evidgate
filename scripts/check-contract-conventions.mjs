@@ -68,6 +68,10 @@ const EXPECTED = [
   ['/policies/{id}', 'get', 'policy:read', 'v1'],
   ['/policies/{id}/revisions', 'get', 'policy:read', 'v1'],
   ['/projects/{p}/policy-activation', 'post', 'policy:write', 'v1'],
+  // 07.1.1 F18 (S116): the two additive reads of the policy surface. 00 §9.3
+  // carries them in the policy-read row that follows the activation row.
+  ['/projects/{p}/policy-activation', 'get', 'policy:read', 'v1'],
+  ['/projects/{p}/policies/head', 'get', 'policy:read', 'v1'],
   ['/runs/{r}/reports/{report_id}/comparison', 'get', 'run:read', 'v1'],
   ['/runs/{r}/reprocess', 'post', 'run:create', 'v1'],
   ['/projects/{p}/releases', 'post', 'run:create', 'v1'],

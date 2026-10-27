@@ -131,7 +131,7 @@ JWKS hardening, all verified in `GitHubOidc.cs`: document capped at 256 KiB with
 
 ## 4. Single return of the minted token (00 §9.3)
 
-The contract is "plaintext returned once; list shows prefix and status only" (`plans/00-overview.md:374`).
+The contract is "plaintext returned once; list shows prefix and status only" (`plans/00-overview.md:375`).
 
 | Assertion | Evidence |
 |---|---|
