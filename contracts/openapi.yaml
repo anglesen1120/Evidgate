@@ -1795,6 +1795,49 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: getPolicyActivation
+      tags: [policies]
+      summary: The project's stored policy activation, or 404 when there is none
+      description: >-
+        Reads the project's policy pointer (07.1.1 F18, additive). `200` returns
+        the project's activation — `project_id`, `policy_revision_id`, `mode`,
+        `activated_by` and `activated_at` from the `policy_activation` row, plus
+        `hash`, the hash of the revision it points at (joined from
+        `policy_revision` on the same project) — and nothing else: migration
+        `0033` stores no `previous_policy_revision_id` and no `changed`, so the
+        read uses `PolicyActivationStateDto` while the `POST` route and its
+        `PolicyActivationDto` are unchanged. `404` is one undifferentiated
+        answer (00 §9.2): a project that has never been activated, an unknown
+        id, a soft-deleted project and another tenant's project are
+        indistinguishable, and an activation row that points at another
+        project's revision reads nothing. A project-scoped (service) credential
+        holds no `policy:read` and gets `403 forbidden`. A read, so no
+        `Idempotency-Key`.
+      x-permission: policy:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: The project's stored policy activation
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyActivationStateDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 
   /projects/{p}/policies:
     post:
@@ -1869,6 +1912,48 @@ paths:
           $ref: '#/components/responses/TooLarge'
         '422':
           $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/policies/head:
+    get:
+      operationId: getPolicyHead
+      tags: [policies]
+      summary: The project's head policy revision — the highest `revision_no`
+      description: >-
+        The project's head policy revision (07.1.1 F18, additive), without its
+        body (`PolicyRevisionSummaryDto`). `head` is the revision with the
+        highest `revision_no` regardless of its state — `draft`, `active` or
+        `retired` — the same row the optional `If-Match` of
+        `POST /v1/projects/{p}/policies` compares against (D-S116-Q1). `ETag` is
+        the revision id, quoted, exactly as `GET /v1/policies/{id}` issues it.
+        `404` is one undifferentiated answer (00 §9.2): a project with no
+        revision, an unknown id, a soft-deleted project and another tenant's
+        project are indistinguishable. A project-scoped (service) credential
+        holds no `policy:read` and gets `403 forbidden`. A read, so no `Idempotency-Key`.
+      x-permission: policy:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: The project's head revision, without its body
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyRevisionSummaryDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -7011,7 +7096,7 @@ components:
       schema:
         type: string
     ETag:
-      description: The row's `version`, quoted; send it back in `If-Match` (00 §9.1).
+      description: Endpoint-specific quoted validator — row version, revision id or number, content or revision hash; send it back in `If-Match` (00 §9.1).
       schema:
         type: string
     NoStore:
@@ -7972,6 +8057,25 @@ components:
         activated_at: { type: string, format: date-time }
         previous_policy_revision_id: { type: [string, 'null'], format: uuid }
         changed: { type: boolean }
+    PolicyActivationStateDto:
+      type: object
+      description: >-
+        The project's stored policy activation, read by
+        `GET /v1/projects/{p}/policy-activation` (07.1.1 F18). Migration `0033`
+        stores `policy_revision_id`, `mode`, `activated_by` and `activated_at`
+        only — there is no `previous_policy_revision_id` and no `changed` on a
+        read — and `hash` is the activated revision's hash, joined from
+        `policy_revision` for the same project; this schema is therefore
+        separate from `PolicyActivationDto`, which stays the `POST` route's
+        answer, unchanged.
+      required: [project_id, policy_revision_id, hash, mode, activated_by, activated_at]
+      properties:
+        project_id: { type: string, format: uuid }
+        policy_revision_id: { type: string, format: uuid }
+        hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        mode: { type: string, enum: [advisory, enforcing] }
+        activated_by: { type: string, format: uuid }
+        activated_at: { type: string, format: date-time }
     PolicyRevisionSummaryDto:
       type: object
       description: A policy revision without its body (07.1.1-T3 list rows).

@@ -707,6 +707,13 @@ public static class IsolationRouteCases
         // 07.1.1-T4: the probe sends an unknown revision id, so every cross-tenant attempt is the same 404
         // (the route is project-scoped; the isolation suite asserts the 404, not the happy path).
         ProjectCase("POST", "/v1/projects/{p}/policy-activation", p => new(HttpMethod.Post, $"/v1/projects/{p}/policy-activation", Activation(Guid.CreateVersion7()))),
+        // F18's two reads. Both hide a project the caller cannot read behind the same 404, so a foreign project is
+        // never an existence oracle. Neither takes an own positive control: the world seeds a policy revision (so the
+        // head route answers 200 there, which the sibling-project probe covers) but no `policy_activation` row, so an
+        // own-project control on the activation read would assert a 200 the seed cannot produce — its own-project
+        // answer is the same never-activated 404 the foreign probes expect.
+        ProjectCase("GET", "/v1/projects/{p}/policy-activation", p => new(HttpMethod.Get, $"/v1/projects/{p}/policy-activation")),
+        ProjectCase("GET", "/v1/projects/{p}/policies/head", p => new(HttpMethod.Get, $"/v1/projects/{p}/policies/head"), ownControl: true),
         ObjectCase("GET", "/v1/policies/{id}", p => [("policy revision", p.PolicyRevisionId)], id =>
             new(HttpMethod.Get, $"/v1/policies/{id}"), ownControl: true),
         ObjectCase("GET", "/v1/policies/{id}/revisions", p => [("policy revision", p.PolicyRevisionId)], id =>

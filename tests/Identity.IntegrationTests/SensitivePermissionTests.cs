@@ -347,6 +347,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ("/v1/environment-revisions/{id}", seeded.EnvironmentRevisionId),
             ("/v1/policies/{id}", seeded.PolicyRevisionId),
             ("/v1/policies/{id}/revisions", seeded.PolicyRevisionId),
+            ("/v1/projects/{p}/policies/head", seeded.PolicyRevisionId),
+            ("/v1/projects/{p}/policy-activation", seeded.PolicyRevisionId),
             ("/v1/runs/{r}", seeded.RunId),
         ];
 
@@ -456,6 +458,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/environment-revisions/{id}"] = $"/v1/environment-revisions/{seeded.EnvironmentRevisionId}",
             ["/v1/policies/{id}"] = $"/v1/policies/{seeded.PolicyRevisionId}",
             ["/v1/policies/{id}/revisions"] = $"/v1/policies/{seeded.PolicyRevisionId}/revisions",
+            // F18's two policy reads: the seeded revision is both the project's head and the pointer's target, so
+            // both answer 200 on a project this suite prepared (the activation row is seeded with the revision).
+            ["/v1/projects/{p}/policies/head"] = $"/v1/projects/{project}/policies/head",
+            ["/v1/projects/{p}/policy-activation"] = $"/v1/projects/{project}/policy-activation",
             ["/v1/runs/{r}"] = $"/v1/runs/{seeded.RunId}",
         };
 
@@ -675,7 +681,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     /// <c>tenant_admin</c>, so the row is arranged like the policy suites arrange it.
     /// The stored <c>hash</c> is the real content address of the body
     /// (<see cref="CanonicalHash"/>, the same digest the module's hasher computes), or
-    /// the read route would refuse the row as corrupted.
+    /// the read route would refuse the row as corrupted. The activation pointer (F18)
+    /// is arranged here too: the served activation route needs the same
+    /// <c>policy:write</c>, and without a pointer <c>GET …/policy-activation</c> would
+    /// answer <c>404</c> and the scan would skip it.
     /// </summary>
     private async Task<Guid> SeedPolicyRevisionAsync(Guid org, Guid project)
     {
@@ -685,7 +694,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         await Fixture.SeedAsync(
             """
             insert into public.policy_revision (id, org_id, project_id, revision_no, hash, body, created_by)
-            values (@id, @org_id, @project_id, 1, @hash, @body::jsonb, @created_by)
+            values (@id, @org_id, @project_id, 1, @hash, @body::jsonb, @created_by);
+
+            insert into public.policy_activation (id, org_id, project_id, policy_revision_id, activated_by)
+            values (@activation_id, @org_id, @project_id, @id, @created_by)
             """,
             [
                 ("id", id),
@@ -694,6 +706,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
                 ("hash", CanonicalHash.Compute(Body)),
                 ("body", Body),
                 ("created_by", Guid.CreateVersion7()),
+                ("activation_id", Guid.CreateVersion7()),
             ],
             Token);
 
