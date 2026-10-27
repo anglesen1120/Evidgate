@@ -78,7 +78,7 @@ public static class WorkerHost
         builder.Services.AddCatalogModule();
         builder.Services.AddOrchestratorModule();
         // 06.1.1-T1: the evidence module, so every handler the Api composes resolves here too.
-        builder.Services.AddEvidenceModule();
+        builder.Services.AddEvidenceModule(builder.Configuration);
         // 07.1.1-T1: the policy module, so every handler the Api composes resolves here too.
         builder.Services.AddPolicyModule();
         // 02.2.1-T1.2: both entry points compose the same module set (00 §5.1 A1).

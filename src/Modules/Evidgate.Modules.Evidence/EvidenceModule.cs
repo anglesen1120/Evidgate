@@ -4,9 +4,11 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
 using FluentValidation;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -19,9 +21,18 @@ namespace Evidgate.Modules.Evidence;
 internal static class EvidenceModule
 {
     /// <summary>Registers the module's services in the calling host.</summary>
-    public static IServiceCollection AddEvidenceModule(this IServiceCollection services)
+    /// <param name="services">The host's service collection.</param>
+    /// <param name="configuration">
+    /// The host's configuration, read only for the switches that decide <em>what</em> is registered
+    /// (<c>EVIDGATE__PARSE__OUTOFPROCESS</c>); every other module setting is bound lazily through
+    /// <c>BindConfiguration</c>, like <c>EVIDGATE__OBJECT__*</c>.
+    /// </param>
+    public static IServiceCollection AddEvidenceModule(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
 
         // 06.1.1-T1: the EF write model of artifacts and their kind policies (00 §5.5 C4).
         services.AddEvidgateDbContext<EvidenceDbContext>(typeof(EvidenceDbContext).Assembly);
@@ -60,6 +71,19 @@ internal static class EvidenceModule
         // hash. Scoped like every other module service; it takes the ambient scope through ITenantDb and never opens
         // a connection or a transaction of its own (00 §5.5 C3/C7).
         services.TryAddScoped<IEvidenceFreeze, EvidenceFreeze>();
+
+        // 06.3.6-T1.3: the out-of-process parse runner (06.3.6 §7), behind EVIDGATE__PARSE__OUTOFPROCESS. The flag
+        // decides registration, not a runtime branch: with it off nothing is registered and the in-process IParsing
+        // path above is the only one — the rollback 06.3.6 §11 names. Nothing resolves IParseRunner before
+        // 06.3.6-T1.4 wires the parse task handler, and the Worker is the only host that will run it.
+        services.AddOptions<ParseRunnerOptions>().BindConfiguration(ParseRunnerOptions.SectionName);
+
+        if (configuration.GetValue(
+            $"{ParseRunnerOptions.SectionName}:{nameof(ParseRunnerOptions.OutOfProcess)}",
+            defaultValue: false))
+        {
+            services.TryAddSingleton<IParseRunner, ChildProcessParseRunner>();
+        }
 
         return services;
     }

@@ -13,6 +13,21 @@
 # (13.1.1-T2, D-S55-Q1). Otherwise the two entry points differ only in the
 # project they publish, the exposed port and the assembly they start.
 #
+# 06.3.6-T1.3: this image publishes TWO processes — the Worker at /app and its
+# parse child (`Evidgate.Parser`, the only process that touches untrusted bytes)
+# at /app/parser, which the parent runner starts as
+# `dotnet /app/parser/Evidgate.Parser.dll`. The child gets its own output
+# directory on purpose: both publishes emit the SharedKernel and Evidence
+# contracts assemblies plus their own runtimeconfig.json/deps.json, so a shared
+# --output would have one publish overwrite the other's dependency files and the
+# loser would fail at run time with no build error. The child is a short-lived
+# process, so it is published without `PublishReadyToRun` for the reason
+# Dockerfile.migrator states: 00 §5.7 P7 names the long-lived Api/Worker
+# processes for crossgen, and a process that starts per parse only pays those
+# bytes. It stays on the same plain chiseled base, because
+# `Directory.Build.props` puts `Evidgate.Parser` in the Worker's
+# InvariantGlobalization group (06.3.6-T1.2).
+#
 # Carried by 08.4.1-T3.3 (ruling T36): the pinned Node runtime that
 # packages/healing-validator needs. That package does not exist yet, so this
 # image deliberately carries no Node layer — a layer with no consumer could not
@@ -35,6 +50,13 @@ COPY src/ ./src/
 COPY contracts/ ./contracts/
 COPY migrations/ ./migrations/
 RUN dotnet restore --locked-mode -p:PublishReadyToRun=true src/Evidgate.Worker/Evidgate.Worker.csproj
+# The parse child is restored WITHOUT that flag because it is published without
+# it (header: 00 §5.7 P7 names the long-lived Api/Worker processes, the same rule
+# Dockerfile.migrator states for its one-shot tool), and a plain restore keeps the
+# restore inputs identical to the R2R-free publish. Not because locked mode would
+# reject the flag: no lock file in this repository carries a crossgen pack — the
+# Worker is restored with it against exactly such a lock.
+RUN dotnet restore --locked-mode src/Evidgate.Parser/Evidgate.Parser.csproj
 
 RUN set -eux; \
     case "$TARGETARCH" in \
@@ -48,12 +70,21 @@ RUN set -eux; \
       --runtime "linux-$rid" \
       --self-contained false \
       -p:PublishReadyToRun=true \
-      --output /app
+      --output /app; \
+    dotnet publish src/Evidgate.Parser/Evidgate.Parser.csproj \
+      --configuration Release \
+      --no-restore \
+      --runtime "linux-$rid" \
+      --self-contained false \
+      --output /app/parser
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS runtime
 
 USER $APP_UID
 WORKDIR /app
+# One COPY: /app/parser (the parse child's dll, runtimeconfig.json and deps.json)
+# travels with the Worker output and is owned by the same $APP_UID, so the
+# runtime user can launch the child without any extra permission.
 COPY --from=build --chown=$APP_UID:$APP_UID /app ./
 
 # 01.1.2-T1.1: the Worker's readiness surface is its own HTTP listener on

@@ -1734,6 +1734,166 @@
       "note": "milliseconds between readiness polls while the consumer waits for the database; default 1000."
     },
     {
+      "key": "EVIDGATE__PARSE__OUTOFPROCESS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "boolean",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "registers the out-of-process parse runner (06.3.6-T1.3, IParseRunner over the Evidgate.Parser child) in place of nothing at all: with it off no IParseRunner exists and the in-process IParsing path is the only one, which is the 06.3.6 §11 rollback. Option default false, because no call site resolves the runner before 06.3.6-T1.4; §11 roll-out turns it on in staging and, at M2 exit, in prod."
+    },
+    {
+      "key": "EVIDGATE__PARSE__CHILDPATH",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "the parse child's assembly, relative to the host's base directory (option default parser/Evidgate.Parser.dll): the worker image publishes the child to /app/parser/ and the runner starts it as `dotnet <absolute path>` (06.3.6 §7). An absolute value is used as it stands; no environment sets it, because the image layout is the contract."
+    },
+    {
+      "key": "EVIDGATE__PARSE__CPUSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "RLIMIT_CPU seconds the child applies to itself before it reads a byte (06.3.6 AC2; passed as --cpu-seconds); option default 20, and a non-positive value reads as the default. This is the ceiling that survives a dead parent, so the child cannot burn a shared-core budget after the worker is gone."
+    },
+    {
+      "key": "EVIDGATE__PARSE__WALLCLOCKSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "wall clock the parent enforces by tree-killing the child; option default 30, the same bound the in-process profile allows (06.3.1 AC2, 06.3.6 AC2), and a non-positive value reads as the default. It is the only bound on the emit pass, because the profile's own timeout is cooperative."
+    },
+    {
+      "key": "EVIDGATE__PARSE__MEMORYLIMITBYTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "the child's heap ceiling, handed over as DOTNET_GCHeapHardLimit in hexadecimal (06.3.6 AC2); option default 536870912 (512 MiB), sized from the measured RSS amplification of the dense-JSON and huge-attribute shapes, and a non-positive value reads as the default. Exhausting it is an unhandled OutOfMemoryException and exit 3, which 06.3.6-T1.4 maps."
+    },
+    {
+      "key": "EVIDGATE__PARSE__MAXOUTPUTBYTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "the most stdout bytes one child run may write before the run ends as a breach (06.3.6-T1.3; a breach is a rejected result, never a truncated success). Option default 0 derives it from the run's --max-bytes as max(8 MiB, 24 x max-bytes), never above 256 MiB: 24x clears the measured 18.6x amplification, and 256 MiB is the most the parent buffers for one run."
+    },
+    {
+      "key": "EVIDGATE__PARSE__MAXOUTPUTRECORDS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "the most records one child run may write before the run ends as a breach; the marker counts as a line, the option bounds the buffer. Option default 0 derives it from the run's --max-bytes as max(4096, max-bytes / 8), never above 1000000: the measured hostile shape (about 10M records from a 16 MiB input) is refused rather than buffered."
+    },
+    {
+      "key": "EVIDGATE__PARSE__TEMPROOT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "the directory each run's private 0700 temp directory is created under, removed recursively on every path (06.3.6-T1.3); option default empty, which means the OS temp directory. No environment sets it: the worker's chiseled image has one writable temp directory (env TMPDIR), and a per-environment root would only be a second place to forget to clean."
+    },
+    {
       "key": "EVIDGATE_APP_PASSWORD",
       "scope": "dev-stack",
       "consumers": ["dev-stack"],

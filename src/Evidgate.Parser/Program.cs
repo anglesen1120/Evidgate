@@ -12,21 +12,21 @@ namespace Evidgate.Parser;
 /// 06.3.1 parser profile over them and writes the NDJSON entry stream with a final
 /// <c>{"done":true,"count":n}</c> marker. It is the one process that touches untrusted bytes, so it reads only
 /// stdin, writes only stdout/stderr, opens no file, reads no environment variable and has no network code at all
-/// (06.3.6 AC1, AC4). It applies no limit itself: the parent runner (T1.3) passes <c>DOTNET_GCHeapHardLimit</c> in
-/// this process's environment, kills it on the wall clock and applies or arranges the CPU and address-space
-/// rlimits around it.
+/// (06.3.6 AC1, AC4). The launcher owns the memory ceiling (<c>DOTNET_GCHeapHardLimit</c> in this process's
+/// environment) and the wall clock; the child applies the CPU, file-size and core-dump rlimits the launcher asks
+/// for through <see cref="ResourceLimits"/>, before it reads a byte of stdin (06.3.6 §7, AC2).
 /// <para>
 /// The profile is not re-implemented here: the child links the profile sources, so the DTD scan, the depth cap,
 /// the byte cap, the 30 s timeout and the zip-slip rules are the same code the in-process caller runs. This file
-/// only chooses the arm, caps the stdin read, streams what the profile produced and owns the exit-code contract:
-/// 0 for a streamed result or rejection, 2 for a usage error, 3 for an unexpected internal error — with fixed
-/// words on stderr and never an artifact byte, a name or an exception message (00 §5.7 S3).
+/// only applies the limits, chooses the arm, caps the stdin read, streams what the profile produced and owns the
+/// exit-code contract: 0 for a streamed result or rejection, 2 for a usage error, 3 for an unexpected internal
+/// error — with fixed words on stderr and never an artifact byte, a name or an exception message (00 §5.7 S3).
 /// </para>
 /// <para>
 /// The marker's <c>count</c> is the number of records written before it, and a <c>rejected</c> record is counted
 /// like any other: an empty stdin emits one rejection and then <c>{"done":true,"count":1}</c>. A run that cannot
-/// finish the stream — a closed stdout, an exception — writes no marker at all and exits 3, which is exactly how
-/// the parent tells "the child judged the artifact" from "the child died" (AC3).
+/// finish the stream — a closed stdout, an exception, a limit that cannot be applied — writes no marker at all and
+/// exits 3, which is exactly how the parent tells "the child judged the artifact" from "the child died" (AC3).
 /// </para>
 /// </summary>
 internal static class Program
@@ -42,10 +42,17 @@ internal static class Program
 
     /// <summary>The one usage line; a fixed string, so it can never echo an argument.</summary>
     private const string UsageText =
-        "evidgate-parser: usage: Evidgate.Parser --profile xml|json|archive --max-bytes <bytes> [--media-type <type>]";
+        "evidgate-parser: usage: Evidgate.Parser --profile xml|json|archive --max-bytes <bytes> "
+        + "[--media-type <type>] [--cpu-seconds <seconds>] [--max-file-bytes <bytes>]";
 
     /// <summary>The one internal-error line; a fixed string, so it can never echo an exception.</summary>
     private const string InternalText = "evidgate-parser: internal error";
+
+    /// <summary>
+    /// The one line for a requested OS limit that could not be applied. A fixed word like the other two: it says
+    /// that a limit was refused, never which one or why, so a hostile launcher learns nothing it did not pass in.
+    /// </summary>
+    private const string LimitText = "evidgate-parser: limits";
 
     /// <summary>
     /// The artifact failure code recorded when the leading bytes contradict the declared media type
@@ -73,6 +80,16 @@ internal static class Program
             Console.Error.WriteLine(UsageText);
 
             return ExitUsage;
+        }
+
+        // Before the runtime touches stdin and before any artifact byte exists in this process: a limit the
+        // launcher asked for is part of the run's contract, so a failure here is a refusal (exit 3, no marker),
+        // never a run that silently proceeds unlimited.
+        if (!ResourceLimits.TryApply(options))
+        {
+            Console.Error.WriteLine(LimitText);
+
+            return ExitInternal;
         }
 
         try

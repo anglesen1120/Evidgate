@@ -1,0 +1,81 @@
+namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
+
+/// <summary>
+/// Why a child run ended without a usable record stream (06.3.6 AC2, AC8). The set is closed on purpose: 06.3.6-T1.4
+/// maps each member to exactly one <c>rejected</c> reason, so adding a member here is a mapping decision that must
+/// be made there.
+/// </summary>
+internal enum ParseRunFailureKind
+{
+    /// <summary>The child process could not be started at all (missing host or child assembly, OS refusal).</summary>
+    SpawnFailed,
+
+    /// <summary>The wall-clock limit expired; the child tree was killed.</summary>
+    WallClockExceeded,
+
+    /// <summary>The child wrote more stdout than the byte cap allows (a single oversized record line counts).</summary>
+    OutputBytesExceeded,
+
+    /// <summary>The child wrote more record lines than the record cap allows.</summary>
+    OutputRecordsExceeded,
+
+    /// <summary>
+    /// The stdout stream was not the protocol: a blank or non-object line, a marker that is missing, duplicated,
+    /// not last, miscounted or not <c>true</c>, a record after the marker, or a line without its final newline.
+    /// </summary>
+    MalformedOutput,
+
+    /// <summary>
+    /// The child exited non-zero. On Unix a signal death is reported as 128 + the signal number, so a killed child
+    /// (<c>SIGKILL</c>) is 137. A valid marker does not overrule this: the exit code is the contract.
+    /// </summary>
+    ExitedAbnormally,
+}
+
+/// <summary>
+/// One record of the child's NDJSON stream: the raw UTF-8 line without its terminating <c>\n</c>. The bytes are
+/// kept, not a decoded string, so buffering the stream costs one copy of what the child wrote and not a second
+/// UTF-16 copy (<see cref="ParseRunnerOptions"/> bounds that copy in bytes and records). Parsing a record is the
+/// caller's step; the runner never interprets a record's content beyond the terminal marker.
+/// </summary>
+/// <param name="Utf8Json">The record's JSON object, exactly as the child wrote it.</param>
+internal readonly record struct ParseRecord(ReadOnlyMemory<byte> Utf8Json);
+
+/// <summary>
+/// The outcome of one child run. Two shapes only: <see cref="ParseRunSucceeded"/> carries the records the child
+/// streamed before its marker, <see cref="ParseRunFailed"/> carries the one failure kind and the child's exit code
+/// (<see langword="null"/> when the child never started).
+/// <para>
+/// The result never carries the child's stderr. The runner drains that pipe into a fixed-size buffer so a child
+/// cannot block on it, and drops the bytes: 06.3.6-T1.4 owns the stderr capture and its redaction, and a capture
+/// that reached this type would be a second, unredacted path to the same text.
+/// </para>
+/// </summary>
+/// <param name="ExitCode">The child's exit code, or <see langword="null"/> when no process existed.</param>
+/// <param name="OutputBytes">How many stdout bytes the child wrote before the run ended.</param>
+/// <param name="OutputRecords">How many record lines the runner accepted (the marker is not a record).</param>
+internal abstract record ParseRunResult(int? ExitCode, long OutputBytes, int OutputRecords);
+
+/// <summary>A run that streamed a complete, well-framed record set and exited 0.</summary>
+/// <param name="Records">Every record before the marker, in stream order.</param>
+/// <param name="ChildExitCode">The child's exit code, always 0 on this shape.</param>
+/// <param name="OutputBytes">How many stdout bytes the child wrote, marker included.</param>
+/// <param name="OutputRecords">How many record lines were accepted; the marker is not counted.</param>
+internal sealed record ParseRunSucceeded(
+    IReadOnlyList<ParseRecord> Records,
+    int ChildExitCode,
+    long OutputBytes,
+    int OutputRecords)
+    : ParseRunResult(ChildExitCode, OutputBytes, OutputRecords);
+
+/// <summary>A run that ended without a usable record stream.</summary>
+/// <param name="Failure">Which failure ended the run.</param>
+/// <param name="ChildExitCode">The child's exit code, or <see langword="null"/> when it never started.</param>
+/// <param name="OutputBytes">How many stdout bytes the child wrote before the run ended.</param>
+/// <param name="OutputRecords">How many complete record lines the runner had accepted by then.</param>
+internal sealed record ParseRunFailed(
+    ParseRunFailureKind Failure,
+    int? ChildExitCode,
+    long OutputBytes,
+    int OutputRecords)
+    : ParseRunResult(ChildExitCode, OutputBytes, OutputRecords);

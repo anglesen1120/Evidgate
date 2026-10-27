@@ -12,6 +12,10 @@
          process and assert what crosses its pipes. The reference exists only so a build of this project always
          builds the child first (ChildRunner locates the built dll next to its runtimeconfig.json). -->
     <ProjectReference Include="..\..\src\Evidgate.Parser\Evidgate.Parser.csproj" ReferenceOutputAssembly="false" />
+    <!-- 06.3.6-T1.3: the parent runner under test — IParseRunner, the options and the module registration the
+         hosts compose. Referenced as an assembly (the runner is invoked in-process); the child above stays a
+         process. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Evidence\Evidgate.Modules.Evidence.csproj" />
   </ItemGroup>
   <!-- No TestData copy: the corpus (fixtures/reports/junit/**, fixtures/hostile/**) is read from the
        repository through RepoPaths, the same way the canonicalization vectors are, so one fixture serves every

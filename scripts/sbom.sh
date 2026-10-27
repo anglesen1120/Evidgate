@@ -24,6 +24,16 @@
 # so the NuGet graph of the published project is what a reviewer has to compare
 # with the lock files.
 #
+# 06.3.6-T1.3: the Worker image publishes TWO processes — the Worker and its parse
+# child (`Evidgate.Parser`, src/Evidgate.Parser) — and the two have different
+# dependency graphs (the child links profile sources instead of referencing the
+# Evidence module), so the child gets its own document,
+# `images/evidgate-worker-parser.cdx.json`: an `Application` component named
+# `Evidgate.Parser`, because no image is built from it and it ships inside
+# evidgate-worker. One document per published entry point is what the consistency
+# check needs — it compares a document against the lock-file closure of exactly one
+# entry project.
+#
 # usage: scripts/sbom.sh [--out <dir>] [--spec-version <1.5|1.6|1.7>]
 #                        [--image-version <version>] [-h|--help]
 #
@@ -48,11 +58,13 @@ usage: scripts/sbom.sh [--out <dir>] [--spec-version <1.5|1.6|1.7>]
 
 Generates CycloneDX JSON SBOMs: <out>/npm.cdx.json (cyclonedx-npm over the npm
 workspace lockfile tree), <out>/dotnet.cdx.json (dotnet-CycloneDX over
-Evidgate.slnx, test projects excluded) and one <out>/images/evidgate-<name>.cdx.json
-per deployable image, each checked against the committed packages.lock.json by
-scripts/check-image-sbom-lock.py (10.2.1-T1.3, AC3). Exit 2 when a generator
-fails, the output fails the CycloneDX shape check, or an image SBOM disagrees
-with the lock files.
+Evidgate.slnx, test projects excluded) and one
+<out>/images/evidgate-<image>[-<role>].cdx.json per published entry point — the
+Worker image ships two processes, so it also produces
+images/evidgate-worker-parser.cdx.json (06.3.6-T1.3) — each checked against the
+committed packages.lock.json by scripts/check-image-sbom-lock.py (10.2.1-T1.3,
+AC3). Exit 2 when a generator fails, the output fails the CycloneDX shape check,
+or an image SBOM disagrees with the lock files.
 EOF
 }
 
@@ -134,35 +146,43 @@ fi
 check_bom "$DOTNET_BOM"
 
 # --- per-image SBOMs (10.2.1-T1.3, AC3) --------------------------------------
-# One CycloneDX document per deployable image, generated from that image's
-# entry-point project: the image adds nothing but the digest-pinned chiseled
+# One CycloneDX document per published entry point, generated from that entry
+# point's project: the image adds nothing but the digest-pinned chiseled
 # aspnet runtime (pinned in infra/docker/Dockerfile.*; the Api pins the `-extra`
 # variant, whose ICU + tzdata are OS packages CycloneDX does not list), so the
 # published project's NuGet graph is what a reviewer compares with the lock files. `-st Container`
 # marks the metadata component as the image, `-rs` walks the ProjectReferences,
 # `-dpr` consumes the graph `dotnet restore --locked-mode` produced (header), and
 # `-ns` keeps the document deterministic.
+#
+# 06.3.6-T1.3: the Worker image ships a second process (its parse child), so it
+# gets a second document. Columns: document stem, metadata component name,
+# metadata component type, entry project. The child's document takes the image
+# name plus its role in the stem (`evidgate-worker-parser`) and describes the
+# component as an `Application` named `Evidgate.Parser`, because no image is
+# built from the child — it is published into /app/parser of evidgate-worker.
 IMAGE_DIR="$OUT_DIR/images"
 mkdir -p "$IMAGE_DIR"
-while read -r name project; do
-  [[ -n "$name" ]] || continue
-  bom="$IMAGE_DIR/evidgate-$name.cdx.json"
-  echo "== sbom: $name image ($project)"
-  if ! dotnet dotnet-CycloneDX "$project" -o "$IMAGE_DIR" -fn "evidgate-$name.cdx.json" \
+while read -r stem component type project; do
+  [[ -n "$stem" ]] || continue
+  bom="$IMAGE_DIR/$stem.cdx.json"
+  echo "== sbom: $stem ($type component '$component', $project)"
+  if ! dotnet dotnet-CycloneDX "$project" -o "$IMAGE_DIR" -fn "$stem.cdx.json" \
       --output-format Json --spec-version "$SPEC" -ns -rs -dpr \
-      -st Container -sn "evidgate-$name" -sv "$IMAGE_VERSION"; then
+      -st "$type" -sn "$component" -sv "$IMAGE_VERSION"; then
     echo "sbom: dotnet-CycloneDX failed for $project" >&2
     exit 2
   fi
   check_bom "$bom"
   if ! python3 "$ROOT/scripts/check-image-sbom-lock.py" --project "$project" --sbom "$bom"; then
-    echo "sbom: the SBOM for the $name image disagrees with the committed lock files (AC3)" >&2
+    echo "sbom: the SBOM for $stem disagrees with the committed lock files (AC3)" >&2
     exit 2
   fi
 done <<'IMAGE_SBOMS'
-api src/Evidgate.Api/Evidgate.Api.csproj
-worker src/Evidgate.Worker/Evidgate.Worker.csproj
-migrator src/Evidgate.Migrator/Evidgate.Migrator.csproj
+evidgate-api           evidgate-api       Container   src/Evidgate.Api/Evidgate.Api.csproj
+evidgate-worker        evidgate-worker    Container   src/Evidgate.Worker/Evidgate.Worker.csproj
+evidgate-migrator      evidgate-migrator  Container   src/Evidgate.Migrator/Evidgate.Migrator.csproj
+evidgate-worker-parser Evidgate.Parser    Application src/Evidgate.Parser/Evidgate.Parser.csproj
 IMAGE_SBOMS
 
 echo "sbom: artifacts in $OUT_DIR"
