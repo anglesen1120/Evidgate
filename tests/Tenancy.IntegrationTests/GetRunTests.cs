@@ -21,6 +21,9 @@ public sealed class GetRunTests
 {
     private readonly PostgresTenancyFixture _fixture;
 
+    /// <summary>A well-formed manifest hash for the revisions the pointer test inserts (00 §7 RFC 8785 address).</summary>
+    private static readonly string ManifestHash = "sha256:" + new string('e', 64);
+
     public GetRunTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
     /// <summary>AC7: the body carries run id, state, evidence pointer, version and purpose, and matches the stored row.</summary>
@@ -126,6 +129,57 @@ public sealed class GetRunTests
 
         answer.Status.ShouldBe(HttpStatusCode.Forbidden);
         answer.ErrorCode.ShouldBe("forbidden");
+    }
+
+    /// <summary>
+    /// T5.2 through the read route: the pointer the body reports is the column 05.3.2's reconciler moves, so
+    /// after two revisions are appended and the pointer moved to the newest one, <c>GET /v1/runs/{r}</c> answers
+    /// the second revision's id — not the first, and not NULL.
+    /// </summary>
+    [Fact]
+    public async Task GetRun_AfterPointerMove_ReturnsLatestRevisionId()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var runId = await CreateRunAsync(world);
+        var first = Guid.CreateVersion7();
+        var second = Guid.CreateVersion7();
+
+        const string InsertRevision =
+            """
+            insert into public.evidence_revision
+              (id, org_id, run_id, revision_no, completeness, missing, outcome, event_watermark, manifest_hash)
+            values (@id, @org_id, @run_id, @revision_no, 'complete', '{}', 'all_passed', 0, @manifest_hash)
+            """;
+
+        // The reconciler's own order (D-S115-Q1): both revisions and the pointer move in one app-role
+        // transaction, so the pointer names the latest revision of the run when it commits.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            foreach (var (id, revisionNo) in new[] { (first, 1), (second, 2) })
+            {
+                (await scope.ExecuteAsync(
+                    InsertRevision,
+                    ("id", id),
+                    ("org_id", world.Org),
+                    ("run_id", runId),
+                    ("revision_no", revisionNo),
+                    ("manifest_hash", ManifestHash))).ShouldBe(1);
+            }
+
+            (await scope.ExecuteAsync(
+                "update public.run set current_evidence_revision_id = @revision_id where org_id = @org_id and id = @run_id",
+                ("revision_id", second),
+                ("org_id", world.Org),
+                ("run_id", runId))).ShouldBe(1);
+            await scope.CommitAsync();
+        }
+
+        var answer = await GetAsync(world, runId);
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        var reported = answer.Body.GetProperty("current_evidence_revision_id").GetGuid();
+        reported.ShouldBe(second, "the body reports the row's pointer, which names revision 2");
+        reported.ShouldNotBe(first, "a stale revision 1 would be the wrong answer");
     }
 
     /// <summary>Creates one run of the world's manifest through the served route; returns its id.</summary>
