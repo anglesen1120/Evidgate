@@ -923,10 +923,35 @@ internal sealed class RecordingAuditWriter : IIdentityAuditWriter
         return ValueTask.CompletedTask;
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Recorded separately from <see cref="Writes"/>: the login suites assert on the login/link rows, and a session
+    /// revoke is a different call with different parameters (F48).
+    /// </remarks>
+    public ValueTask WriteSessionRevokedAsync(
+        Guid actorUserId,
+        Guid orgId,
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        SessionRevokes.Add(new RecordedSessionRevoke(actorUserId, orgId, sessionId));
+
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Every administrative session-revoke call, in order.</summary>
+    internal List<RecordedSessionRevoke> SessionRevokes { get; } = [];
+
     /// <summary>One recorded write: the event and the orgs it was addressed to.</summary>
     /// <param name="AuditEvent">The action, user and provider.</param>
     /// <param name="OrgIds">The orgs the login resolved for the row.</param>
     internal sealed record RecordedWrite(IdentityAuditEvent AuditEvent, IReadOnlyList<Guid> OrgIds);
+
+    /// <summary>One recorded administrative session revoke (F48): its actor, its org and the revoked session.</summary>
+    /// <param name="ActorUserId">The admin the handler resolved from the cookie.</param>
+    /// <param name="OrgId">The org named by the header.</param>
+    /// <param name="SessionId">The revoked session row.</param>
+    internal sealed record RecordedSessionRevoke(Guid ActorUserId, Guid OrgId, Guid SessionId);
 }
 
 /// <summary>
@@ -948,6 +973,19 @@ internal sealed class FaultingAuditWriter : IIdentityAuditWriter
     public ValueTask WriteAsync(
         IdentityAuditEvent auditEvent,
         IReadOnlyCollection<Guid> orgIds,
+        CancellationToken cancellationToken)
+    {
+        Calls++;
+
+        throw _fault;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>Fails like <see cref="WriteAsync"/>: the double exists to prove a fail-closed caller.</remarks>
+    public ValueTask WriteSessionRevokedAsync(
+        Guid actorUserId,
+        Guid orgId,
+        Guid sessionId,
         CancellationToken cancellationToken)
     {
         Calls++;
