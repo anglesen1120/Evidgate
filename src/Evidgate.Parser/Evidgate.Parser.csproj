@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 06.3.6-T1.2 (06.3.6 §5, §7): the parse child — a small console process that runs the 06.3.1 parser
+       profile on one artifact's bytes and writes the NDJSON entry stream on stdout. It is a plain console
+       project, not a module: it references only the artifact contracts (the failure codes and reasons it
+       reports) and the shared kernel (the profile's Result arm), so no EF Core, no persistence, no ASP.NET
+       Core and no System.Net code is reachable from a process that has no network (06.3.6 AC1, AC4). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Evidgate.Parser</RootNamespace>
+    <AssemblyName>Evidgate.Parser</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Evidence.Contracts\Evidgate.Modules.Evidence.Contracts.csproj" />
+  </ItemGroup>
+  <!-- 06.3.6 AC1 (D-06.3.6-1): the child runs the profile by LINKING its sources, not by copying them and
+       not by project-referencing the Evidence module. One implementation of the caps, the DTD scan, the
+       depth guard and the zip-slip rules decides both the in-process and the child path, so the two can
+       never drift; the linked files compile into this assembly and see ParsedXmlReport's internal
+       constructor through Evidence.Contracts' InternalsVisibleTo. -->
+  <ItemGroup>
+    <Compile Include="..\Modules\Evidgate.Modules.Evidence\Infrastructure\Parsing\*.cs" LinkBase="Profile" />
+  </ItemGroup>
+</Project>

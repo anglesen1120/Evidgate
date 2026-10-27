@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 06.3.6-T1.2: the parser child's protocol tests (06.3.6 §9). Named Parser.Tests rather than
+       Evidgate.Parser.Tests (like Canonicalization.UnitTests) so the Architecture.Tests reflection scan never
+       picks it up. OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio and Shouldly come
+       from tests/Directory.Build.props (01.6.1-T1.1), together with the no-network guard that a *.unittests
+       project gets — this project deliberately does not take it, because its subject is a process it starts. -->
+  <PropertyGroup>
+    <RootNamespace>Parser.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The child's output is never referenced as an assembly: the tests launch Evidgate.Parser.dll as a real
+         process and assert what crosses its pipes. The reference exists only so a build of this project always
+         builds the child first (ChildRunner locates the built dll next to its runtimeconfig.json). -->
+    <ProjectReference Include="..\..\src\Evidgate.Parser\Evidgate.Parser.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <!-- No TestData copy: the corpus (fixtures/reports/junit/**, fixtures/hostile/**) is read from the
+       repository through RepoPaths, the same way the canonicalization vectors are, so one fixture serves every
+       runtime that asserts it. -->
+</Project>

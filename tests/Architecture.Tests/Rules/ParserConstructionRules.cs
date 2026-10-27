@@ -9,7 +9,10 @@ namespace Architecture.Tests.Rules;
 /// Two scopes, because the two families have different reach: the untrusted XML and archive readers
 /// (<c>XmlReader</c>, <c>XmlDictionaryReader</c>, <c>XDocument</c>, <c>XElement</c>, <c>XPathDocument</c>,
 /// <c>XmlSerializer</c>, <c>ZipArchive</c>, <c>TarReader</c>, and the profile's own report handle) parse
-/// nothing in this repository today, so the rule forbids them everywhere outside the profile;
+/// nothing in this repository today, so the rule forbids them everywhere outside the profile and the parser child's
+/// entry point (<c>src/Evidgate.Parser/Program.cs</c>, 06.3.6 AC1: the console process that runs the profile on
+/// untrusted bytes, which links the profile sources instead of copying them) — the entry point and not the whole
+/// directory, so a second file added to that project cannot become a second parse path unannounced;
 /// <c>JsonDocument.Parse</c> (and the other <c>JsonDocument</c>/<c>JsonNode</c>/<c>JsonSerializer</c>/
 /// <c>Utf8JsonReader</c> entry points) is also the normal way to read a request body or a stored row
 /// (Policy, Orchestrator, Catalog, Contracts.Validation all do it), so the rule scopes it to the module
@@ -18,13 +21,39 @@ namespace Architecture.Tests.Rules;
 /// </summary>
 public static class ParserConstructionRules
 {
-    /// <summary>The one directory allowed to construct a reader for untrusted artifact bytes.</summary>
+    /// <summary>The profile directory allowed to construct a reader for untrusted artifact bytes (06.3.1).</summary>
     public const string ProfileDirectory = "src/Modules/Evidgate.Modules.Evidence/Infrastructure/Parsing/";
+
+    /// <summary>
+    /// The second allowed place (06.3.6 AC1): the console child's entry point, the one file that runs the profile on
+    /// untrusted bytes. It links the profile sources rather than copying them, so a reader constructed there is still
+    /// the profile's reader. Deliberately one named file and not <c>src/Evidgate.Parser/</c>: the rest of that project
+    /// only chooses the arm, caps the stdin read and streams the result, so a second file there that constructs a
+    /// reader is a second parse path and must fail the rule.
+    /// </summary>
+    public const string ParserChildEntryPoint = "src/Evidgate.Parser/Program.cs";
+
+    /// <summary>
+    /// Constructs that are forbidden even in that entry point: the profile's report handle (<c>ParsedXmlReport</c>) is
+    /// built by the profile's own closed reader factory and handed to the caller (06.3.1-T1), so the child receives
+    /// it and never constructs one — a <c>new ParsedXmlReport(</c> there would be a second factory outside the profile,
+    /// which is exactly what the internal constructor exists to prevent.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ParserChildEntryPointConstructs =
+    [
+        "new ParsedXmlReport(",
+    ];
 
     /// <summary>The module that owns artifacts: inside it, the JSON reader is the profile's too.</summary>
     public const string ArtifactModuleDirectory = "src/Modules/Evidgate.Modules.Evidence/";
 
-    /// <summary>Constructs forbidden everywhere outside the profile: the untrusted XML and archive readers.</summary>
+    /// <summary>
+    /// The only tree that is scanned: a test may build its own reader to prove the profile's behaviour, and no test
+    /// is shipped, so a path outside <c>src/</c> is not a production parse path at all.
+    /// </summary>
+    public const string SourceRoot = "src/";
+
+    /// <summary>Constructs forbidden everywhere outside the profile and the child's entry point: the untrusted XML and archive readers.</summary>
     public static readonly IReadOnlyList<string> RepositoryWideConstructs =
     [
         "XmlReader.Create(",
@@ -177,12 +206,42 @@ public static class ParserConstructionRules
     /// index, so a scan of it can slice the original's positions). It is what lets the exemption above see a
     /// constructor's arguments rather than a neighbour's: a <c>// ZipArchiveMode.Create</c> or a
     /// <c>"ZipArchiveMode.Create"</c> is trivia, not an argument.
+    /// <para>
+    /// An interpolation hole is code, not text. In <c>$"{File.ReadAllText(path)}"</c> the hole
+    /// <c>{File.ReadAllText(path)}</c> stays in the copy, because blanking it would let a real file read — or a real
+    /// <c>XmlReader.Create</c>, or a bare <c>HttpClient</c> — pass as a string. Only the literal segments are blanked:
+    /// the prefix and the quotes, the text between the holes, an escaped <c>{{</c>/<c>}}</c>, and, inside a hole, the
+    /// strings, character literals and comments the expression itself contains, which the same scan finds one level
+    /// down (<c>$"{(flag ? "x" : "y")}"</c> keeps the ternary and blanks its two strings). A raw literal
+    /// (<c>$"""…"""</c>) works the same way. A hole's own braces are text like the text around them, while the braces
+    /// the expression itself contains stay and are balanced — the scan stops on the <c>}</c> at depth zero — so
+    /// <see cref="Arguments"/> still splits an argument list at the right commas.
+    /// </para>
     /// </summary>
     /// <param name="text">The source text.</param>
-    private static string StripTrivia(string text)
+    internal static string StripTrivia(string text)
     {
         var stripped = text.ToCharArray();
         var index = 0;
+
+        ScanCode(text, stripped, ref index, inHole: false);
+
+        return new string(stripped);
+    }
+
+    /// <summary>
+    /// Blanks the trivia of the code starting at <paramref name="index"/>: comments, character literals and string
+    /// literals. Outside a hole the scan runs to the end of the file; inside one it returns with
+    /// <paramref name="index"/> on the <c>}</c> that closes the hole (the brace at depth zero), so the literal scan
+    /// that called it blanks that brace and carries on with the literal text.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    /// <param name="stripped">The blanked copy.</param>
+    /// <param name="index">The index to start at; on return, where the scan stopped.</param>
+    /// <param name="inHole">True when scanning the expression inside an interpolation hole.</param>
+    private static void ScanCode(string text, char[] stripped, ref int index, bool inHole)
+    {
+        var depth = 0;
 
         while (index < text.Length)
         {
@@ -221,20 +280,32 @@ public static class ParserConstructionRules
                 continue;
             }
 
-            if (TryOpenLiteral(text, index, out var verbatim, out var quoteAt, out var quotes))
+            if (TryOpenLiteral(text, index, out var literal))
             {
-                // The prefix characters ($, @) are blanked with the literal: they are part of it, not of the code.
-                index = quotes >= 3
-                    ? CloseRawLiteral(text, stripped, index, quoteAt, quotes)
-                    : CloseQuotedLiteral(text, stripped, index, quoteAt, verbatim);
+                index = CloseLiteral(text, stripped, index, literal);
 
                 continue;
             }
 
+            if (inHole)
+            {
+                if (text[index] == '{')
+                {
+                    depth++;
+                }
+                else if (text[index] == '}')
+                {
+                    if (depth == 0)
+                    {
+                        return;
+                    }
+
+                    depth--;
+                }
+            }
+
             index++;
         }
-
-        return new string(stripped);
     }
 
     /// <summary>Blanks one <c>'x'</c> literal, escapes included.</summary>
@@ -262,132 +333,259 @@ public static class ParserConstructionRules
     }
 
     /// <summary>
-    /// True when a <c>$</c>/<c>@</c> prefix run at <paramref name="index"/> opens a string literal, answering where its
-    /// opening run of quotes starts and how long that run is (three or more quotes is a raw literal).
+    /// One string literal's shape: where it starts, how many quotes open it, and whether it interpolates.
+    /// </summary>
+    /// <param name="Start">The index of the literal's first character (its prefix, if any).</param>
+    /// <param name="QuoteAt">The index of the first of the opening quotes.</param>
+    /// <param name="Quotes">The number of quotes in the opening run (three or more is a raw literal).</param>
+    /// <param name="Dollars">The number of <c>$</c> prefixes; a hole opens with exactly this many braces.</param>
+    /// <param name="Verbatim">True for an <c>@"…"</c> literal.</param>
+    private readonly record struct Literal(int Start, int QuoteAt, int Quotes, int Dollars, bool Verbatim)
+    {
+        /// <summary>True when the literal has holes, whose expressions are code and not text.</summary>
+        public bool Interpolated => Dollars > 0;
+    }
+
+    /// <summary>
+    /// True when a <c>$</c>/<c>@</c> prefix run at <paramref name="index"/> opens a string literal, answering where it
+    /// starts and what shape it has: three or more quotes is a raw literal, and one or more <c>$</c> makes it
+    /// interpolated.
     /// </summary>
     /// <param name="text">The source.</param>
     /// <param name="index">The index to test.</param>
-    /// <param name="verbatim">True for an <c>@"…"</c> literal.</param>
-    /// <param name="quoteAt">The index of the first of the opening quotes.</param>
-    /// <param name="quotes">The number of quotes in the opening run.</param>
-    private static bool TryOpenLiteral(string text, int index, out bool verbatim, out int quoteAt, out int quotes)
+    /// <param name="literal">The literal's shape when this returns true.</param>
+    private static bool TryOpenLiteral(string text, int index, out Literal literal)
     {
-        verbatim = false;
-        quoteAt = index;
-        quotes = 0;
+        var verbatim = false;
+        var dollars = 0;
 
         var at = index;
         while (at < text.Length && (text[at] == '$' || text[at] == '@'))
         {
             verbatim |= text[at] == '@';
+
+            if (text[at] == '$')
+            {
+                dollars++;
+            }
+
             at++;
         }
 
         // Only a prefix that is immediately followed by the quote opens a literal; `@this` and a bare `$` are code.
         if (at >= text.Length || text[at] != '"')
         {
+            literal = default;
+
             return false;
         }
 
-        quoteAt = at;
-
-        while (quoteAt + quotes < text.Length && text[quoteAt + quotes] == '"')
+        var quotes = 0;
+        while (at + quotes < text.Length && text[at + quotes] == '"')
         {
             quotes++;
         }
 
+        literal = new Literal(index, at, quotes, dollars, verbatim);
+
         return true;
     }
 
-    /// <summary>Blanks one quoted literal (normal or verbatim), escapes and doubled quotes included.</summary>
+    /// <summary>Blanks one string literal, dispatching on the quote run: three or more quotes is a raw literal.</summary>
     /// <param name="text">The source.</param>
     /// <param name="stripped">The blanked copy.</param>
     /// <param name="start">The index of the literal's first character (its prefix, if any).</param>
-    /// <param name="quoteAt">The index of the opening quote.</param>
-    /// <param name="verbatim">True for a verbatim literal (<c>""</c> escapes a quote, a backslash is literal).</param>
+    /// <param name="literal">The literal's shape.</param>
+    /// <returns>The index just past the literal.</returns>
+    private static int CloseLiteral(string text, char[] stripped, int start, Literal literal) =>
+        literal.Quotes >= 3
+            ? CloseRawLiteral(text, stripped, start, literal)
+            : CloseQuotedLiteral(text, stripped, start, literal);
+
+    /// <summary>
+    /// Blanks one quoted literal (normal or verbatim), escapes and doubled quotes included, and every literal segment
+    /// of an interpolated one; the code inside its holes is left as it is.
+    /// </summary>
+    /// <param name="text">The source.</param>
+    /// <param name="stripped">The blanked copy.</param>
+    /// <param name="start">The index of the literal's first character (its prefix, if any).</param>
+    /// <param name="literal">The literal's shape.</param>
     /// <returns>The index just past the closing quote.</returns>
-    private static int CloseQuotedLiteral(string text, char[] stripped, int start, int quoteAt, bool verbatim)
+    private static int CloseQuotedLiteral(string text, char[] stripped, int start, Literal literal)
     {
-        var at = quoteAt + 1;
+        // The prefix characters ($, @) and the opening quote are part of the literal, not of the code.
+        Blank(stripped, start, literal.QuoteAt);
+
+        var at = literal.QuoteAt + 1;
 
         while (at < text.Length)
         {
-            if (verbatim && text[at] == '"')
+            var character = text[at];
+
+            if (literal.Verbatim && character == '"')
             {
                 if (at + 1 < text.Length && text[at + 1] == '"')
                 {
+                    Blank(stripped, at);
+                    Blank(stripped, at + 1);
                     at += 2;
 
                     continue;
                 }
 
-                Blank(stripped, start, at);
+                Blank(stripped, at);
 
                 return at + 1;
             }
 
-            if (!verbatim)
+            if (!literal.Verbatim && character == '\\')
             {
-                if (text[at] == '\\')
-                {
-                    at += 2;
+                Blank(stripped, at);
+                Blank(stripped, at + 1);
+                at += 2;
 
-                    continue;
-                }
-
-                if (text[at] == '"')
-                {
-                    Blank(stripped, start, at);
-
-                    return at + 1;
-                }
+                continue;
             }
 
+            if (!literal.Verbatim && character == '"')
+            {
+                Blank(stripped, at);
+
+                return at + 1;
+            }
+
+            if (literal.Interpolated && (character == '{' || character == '}'))
+            {
+                at = SkipBraces(text, stripped, at, literal);
+
+                continue;
+            }
+
+            Blank(stripped, at);
             at++;
         }
-
-        Blank(stripped, start, text.Length - 1);
 
         return text.Length;
     }
 
-    /// <summary>Blanks one raw string literal (<c>"""…"""</c>, three or more quotes on each side).</summary>
+    /// <summary>
+    /// Blanks one raw string literal (<c>"""…"""</c>, three or more quotes on each side) and every literal segment of
+    /// an interpolated one; the code inside its holes is left as it is.
+    /// </summary>
     /// <param name="text">The source.</param>
     /// <param name="stripped">The blanked copy.</param>
     /// <param name="start">The index of the literal's first character (its prefix, if any).</param>
-    /// <param name="quoteAt">The index of the opening run of quotes.</param>
-    /// <param name="run">The number of quotes in the opening run.</param>
+    /// <param name="literal">The literal's shape.</param>
     /// <returns>The index just past the closing run.</returns>
-    private static int CloseRawLiteral(string text, char[] stripped, int start, int quoteAt, int run)
+    private static int CloseRawLiteral(string text, char[] stripped, int start, Literal literal)
     {
-        var at = quoteAt + run;
+        Blank(stripped, start, literal.QuoteAt + literal.Quotes - 1);
 
-        while (at + run <= text.Length)
+        var at = literal.QuoteAt + literal.Quotes;
+
+        while (at + literal.Quotes <= text.Length)
         {
-            var closes = true;
-            for (var offset = 0; offset < run; offset++)
+            if (StartsQuoteRun(text, at, literal.Quotes))
             {
-                if (text[at + offset] != '"')
-                {
-                    closes = false;
+                Blank(stripped, at, at + literal.Quotes - 1);
 
-                    break;
-                }
+                return at + literal.Quotes;
             }
 
-            if (closes)
+            if (literal.Interpolated && (text[at] == '{' || text[at] == '}'))
             {
-                Blank(stripped, start, at + run - 1);
+                at = SkipBraces(text, stripped, at, literal);
 
-                return at + run;
+                continue;
             }
 
+            Blank(stripped, at);
             at++;
         }
 
-        Blank(stripped, start, text.Length - 1);
+        Blank(stripped, at, text.Length - 1);
 
         return text.Length;
+    }
+
+    /// <summary>
+    /// Handles one brace run of an interpolated literal: whether it opens a hole depends on the literal's kind, not
+    /// on the run being exactly <see cref="Literal.Dollars"/> long.
+    /// <para>
+    /// In a quoted literal the <c>$</c> count is always one, so an opening run is read left to right in escaped pairs:
+    /// an even run is nothing but escaped braces (<c>$"{{x}}"</c> is the text <c>{x}</c>) and an odd run ends in one
+    /// hole opener (<c>$"{{{x}}}"</c> is the text <c>{</c>, the value of <c>x</c>, then <c>}</c>). In a raw literal the
+    /// <c>$</c> count is the hole width: a run shorter than that count is text (<c>$$"""{x}"""</c> is <c>{x}</c>),
+    /// while a longer run keeps its leading braces as text and ends in one hole (<c>$$"""{{{x}}}"""</c> is <c>{</c>,
+    /// the value, then <c>}</c>). A closing run never opens anything: the hole's own scan already stopped on its
+    /// first <c>}</c>, so the whole run is text again.
+    /// </para>
+    /// </summary>
+    /// <param name="text">The source.</param>
+    /// <param name="stripped">The blanked copy.</param>
+    /// <param name="at">The index of the brace.</param>
+    /// <param name="literal">The literal's shape.</param>
+    /// <returns>The index just past the brace run (and past the hole, when the run opened one).</returns>
+    private static int SkipBraces(string text, char[] stripped, int at, Literal literal)
+    {
+        var brace = text[at];
+        var run = BraceRun(text, at, brace);
+        var opens = brace == '{'
+            && (literal.Quotes >= 3 ? run >= literal.Dollars : run % 2 == 1);
+
+        Blank(stripped, at, at + run - 1);
+
+        if (!opens)
+        {
+            return at + run;
+        }
+
+        at += run;
+        ScanCode(text, stripped, ref at, inHole: true);
+
+        if (at < text.Length)
+        {
+            // The hole's closing braces are literal text again. A hole that never closes takes the rest of the file.
+            var close = BraceRun(text, at, '}');
+
+            Blank(stripped, at, at + close - 1);
+            at += close;
+        }
+
+        return at;
+    }
+
+    /// <summary>The number of consecutive <paramref name="brace"/> characters starting at <paramref name="at"/>.</summary>
+    /// <param name="text">The source.</param>
+    /// <param name="at">The first index.</param>
+    /// <param name="brace">The brace character.</param>
+    private static int BraceRun(string text, int at, char brace)
+    {
+        var run = 0;
+
+        while (at + run < text.Length && text[at + run] == brace)
+        {
+            run++;
+        }
+
+        return run;
+    }
+
+    /// <summary>True when <paramref name="run"/> quotation marks start at <paramref name="at"/>.</summary>
+    /// <param name="text">The source.</param>
+    /// <param name="at">The first index.</param>
+    /// <param name="run">How many quotation marks the run must hold.</param>
+    private static bool StartsQuoteRun(string text, int at, int run)
+    {
+        for (var offset = 0; offset < run; offset++)
+        {
+            if (at + offset >= text.Length || text[at + offset] != '"')
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>Replaces one character of the copy with a space (never a newline, so line positions stay readable).</summary>
@@ -414,8 +612,8 @@ public static class ParserConstructionRules
     }
 
     /// <summary>
-    /// One violation per construct found outside the profile, naming the file and the construct. Paths are
-    /// repository-relative with '/'.
+    /// One violation per construct found outside the profile and the parser child's entry point, naming the file and
+    /// the construct. Paths are repository-relative with '/'; anything outside <see cref="SourceRoot"/> is not scanned.
     /// </summary>
     /// <param name="files">The source files to scan (path + text).</param>
     /// <param name="profileDirectory">The directory allowed to construct a reader.</param>
@@ -424,15 +622,67 @@ public static class ParserConstructionRules
     public static IReadOnlyList<string> FindViolations(
         IEnumerable<(string Path, string Text)> files,
         string profileDirectory,
-        string artifactModuleDirectory)
+        string artifactModuleDirectory) =>
+        FindViolations(files, profileDirectory, artifactModuleDirectory, ParserChildEntryPoint);
+
+    /// <summary>
+    /// One violation per construct found outside <paramref name="profileDirectory"/> and
+    /// <paramref name="parserChildEntryPoint"/>, naming the file and the construct. Paths are repository-relative with
+    /// '/'; anything outside <see cref="SourceRoot"/> is not scanned. The two allowed places are parameters so the
+    /// synthetic cases can prove an exemption without the real tree, and an empty child entry point means "no child".
+    /// </summary>
+    /// <param name="files">The source files to scan (path + text).</param>
+    /// <param name="profileDirectory">The profile directory allowed to construct a reader.</param>
+    /// <param name="artifactModuleDirectory">The directory whose JSON reads must use the profile.</param>
+    /// <param name="parserChildEntryPoint">
+    /// The child's one allowed file (<c>src/Evidgate.Parser/Program.cs</c>), matched exactly: a second file in that
+    /// project is not exempt.
+    /// </param>
+    /// <returns>The violations, ordered by path.</returns>
+    public static IReadOnlyList<string> FindViolations(
+        IEnumerable<(string Path, string Text)> files,
+        string profileDirectory,
+        string artifactModuleDirectory,
+        string parserChildEntryPoint)
     {
         var violations = new List<string>();
+        var child = parserChildEntryPoint;
 
         foreach (var (path, text) in files.OrderBy(file => file.Path, StringComparer.Ordinal))
         {
+            // Only shipped sources are scanned: a test project may build its own reader (06.3.6 §9 scans
+            // src/**/*.cs only), so a path outside src/ is not a production parse path.
+            if (!path.StartsWith(SourceRoot, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             var inProfile = path.StartsWith(profileDirectory, StringComparison.Ordinal);
             if (inProfile)
             {
+                continue;
+            }
+
+            // 06.3.6 AC1: the child's entry point is the profile's other hand — it links the profile sources and must
+            // construct the reader to feed them, so it is the second named allowed place. Only that one file is: the
+            // child's other files choose the arm and stream the result, so a reader built in one of them is a second
+            // parse path. The report handle is constructed by the profile's factory and never here, not even in the
+            // entry point (06.3.1-T1).
+            if (!string.IsNullOrEmpty(child) && string.Equals(path, child, StringComparison.Ordinal))
+            {
+                var entry = StripTrivia(text);
+
+                foreach (var construct in ParserChildEntryPointConstructs)
+                {
+                    if (entry.Contains(construct, StringComparison.Ordinal))
+                    {
+                        violations.Add(
+                            $"{path} constructs {construct}: the profile in {profileDirectory} builds the report "
+                            + "handle and hands it to its caller, so the parser child never constructs one "
+                            + "(06.3.1 §11, 06.3.6 AC1)");
+                    }
+                }
+
                 continue;
             }
 
@@ -441,8 +691,9 @@ public static class ParserConstructionRules
                 if (ContainsParse(text, construct))
                 {
                     violations.Add(
-                        $"{path} constructs {construct}: the untrusted-parser profile in {profileDirectory} is the "
-                        + "only place an XML or archive reader may be constructed (06.3.1 §11, 00 §5.7 S4/S5)");
+                        $"{path} constructs {construct}: the untrusted-parser profile in {profileDirectory} and the "
+                        + $"parser child's entry point {child} are the only places an XML or archive reader may be "
+                        + "constructed (06.3.1 §11, 06.3.6 AC1, 00 §5.7 S4/S5)");
                 }
             }
 

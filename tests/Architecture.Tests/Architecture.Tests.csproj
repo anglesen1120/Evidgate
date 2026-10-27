@@ -22,6 +22,11 @@
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
     <ProjectReference Include="..\..\src\Evidgate.Worker\Evidgate.Worker.csproj" />
     <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+    <!-- 06.3.6-T1.2: the parse child is a production project in Evidgate.slnx, and
+         ParserChildIsolationRules reads its csproj and its sources; referencing it keeps
+         Test_Project_References_All_Slnx_Projects green and puts the assembly in reach of
+         the reflection scan. -->
+    <ProjectReference Include="..\..\src\Evidgate.Parser\Evidgate.Parser.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />

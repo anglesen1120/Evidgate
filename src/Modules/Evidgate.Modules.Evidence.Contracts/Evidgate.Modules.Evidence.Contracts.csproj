@@ -11,8 +11,10 @@
   </ItemGroup>
   <!-- 06.3.1-T1: ParsedXmlReport's constructor is internal — only the parser profile may construct one
        (the factory must be the profile's own closed reader factory) — so the Evidence module's
-       Infrastructure/Parsing profile sees it through InternalsVisibleTo. -->
+       Infrastructure/Parsing profile sees it through InternalsVisibleTo. 06.3.6-T1.2: the child links those same
+       profile sources, so its assembly constructs the report too. -->
   <ItemGroup>
     <InternalsVisibleTo Include="Evidgate.Modules.Evidence" />
+    <InternalsVisibleTo Include="Evidgate.Parser" />
   </ItemGroup>
 </Project>
