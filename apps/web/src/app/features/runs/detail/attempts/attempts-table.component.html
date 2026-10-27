@@ -1,0 +1,106 @@
+<section class="attempts-panel" [attr.aria-label]="copy.title">
+  <h2>{{ copy.title }}</h2>
+  @if (attempts() === null) {
+    <p data-attempts-unavailable><app-status-pill [tone]="'neutral'" [label]="''" /></p>
+  } @else if (attempts()?.length === 0) {
+    <app-empty-pattern [title]="copy.empty" />
+  } @else {
+    <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="copy.title">
+      <table>
+        <caption>
+          {{
+            copy.title
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ copy.execution }}</th>
+            <th scope="col">{{ copy.raw }}</th>
+            <th scope="col">{{ copy.normalised }}</th>
+            <th scope="col">{{ copy.duration }}</th>
+            <th scope="col">{{ copy.artifacts }}</th>
+          </tr>
+        </thead>
+        @for (group of visibleGroups(); track group.executionKey) {
+          <tbody>
+            @for (attempt of group.attempts; track $index) {
+              <tr
+                data-attempt-row
+                [attr.data-pre-healing]="attempt === group.preHealingFailure ? '' : null"
+              >
+                <th scope="row">
+                  <bdi class="identifier">{{ display(attempt.executionKey) }}</bdi>
+                  <span class="attempt-number">{{ copy.attempt }} {{ attempt.attemptNo }}</span>
+                  @if (attempt === group.preHealingFailure) {
+                    <div class="pre-healing-block">
+                      <strong>{{ copy.preHealing }}</strong>
+                    </div>
+                  }
+                  @if (attempt.healingCandidate; as candidate) {
+                    <div class="candidate-block" data-healing-candidate>
+                      <strong>{{ copy.candidate }}</strong>
+                      <bdi class="identifier">{{ display(candidate.candidateHash) }}</bdi>
+                      <span>{{ candidate.mode === 'shadow' ? copy.shadow : copy.official }}</span>
+                    </div>
+                  }
+                </th>
+                <td data-attempt-raw>
+                  <bdi>{{ display(attempt.rawStatus) }}</bdi>
+                </td>
+                <td data-attempt-normalised>
+                  @if (knownStatus(attempt.normalisedStatus)) {
+                    <bdi
+                      ><app-status-pill
+                        [tone]="tone(attempt.normalisedStatus)"
+                        [label]="display(attempt.normalisedStatus)"
+                    /></bdi>
+                  } @else {
+                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                    <bdi>{{ display(attempt.normalisedStatus) }}</bdi>
+                  }
+                </td>
+                <td class="numeric" data-attempt-duration>
+                  @if (duration(attempt.durationMs); as value) {
+                    {{ value }}
+                  } @else {
+                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                  }
+                </td>
+                <td class="numeric" data-attempt-artifacts>
+                  @if (attempt.artifactCount !== null) {
+                    {{ attempt.artifactCount }}
+                  } @else {
+                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        }
+      </table>
+    </div>
+    @if (pages().length > 1) {
+      <nav class="pagination" [attr.aria-label]="copy.title">
+        <button
+          type="button"
+          data-attempts-previous
+          [disabled]="page() === 0"
+          (click)="turnPage(-1)"
+        >
+          {{ copy.previous }}
+        </button>
+        <p role="status" [attr.aria-live]="'polite'">
+          {{ copy.page }} {{ page() + 1 }} / {{ pages().length }}
+        </p>
+        <button
+          type="button"
+          data-attempts-next
+          [disabled]="page() + 1 === pages().length"
+          (click)="turnPage(1)"
+        >
+          {{ copy.next }}
+        </button>
+      </nav>
+    }
+  }
+</section>

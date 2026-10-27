@@ -11,5 +11,6 @@
   @if (store.run(); as run) {
     <app-run-header [run]="run" />
     <app-manifest-panel [summary]="store.manifest()" />
+    <app-attempts-table [attempts]="store.attempts()" />
   }
 </app-request-state>
