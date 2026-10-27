@@ -203,6 +203,7 @@ public sealed class TestJwks
             ["sha"] = new string('a', 40),
             ["run_id"] = "9001",
             ["run_attempt"] = "1",
+            ["event_name"] = "push",
             ["job_workflow_ref"] = "acme/web/.github/workflows/ci.yml@refs/heads/main",
         };
         tweak?.Invoke(claims, options);

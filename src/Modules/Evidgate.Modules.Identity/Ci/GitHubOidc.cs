@@ -130,8 +130,9 @@ internal sealed class GitHubOidcValidator(IOptions<CiAuthOptions> options, IGitH
             return OidcResult.Fail(OidcFailure.Invalid);
         }
 
-        if (jwt.TryGetPayloadValue<string>("event_name", out var eventName)
-            && _denied.Contains(eventName))
+        // event_name is required (a token without it cannot skip the deny check) and is compared ordinally, as GitHub sends it.
+        if (!Text(jwt, "event_name", out var eventName)
+            || _denied.Contains(eventName))
         {
             return OidcResult.Fail(OidcFailure.Invalid);
         }
