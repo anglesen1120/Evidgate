@@ -2664,6 +2664,23 @@
       <trans-unit id="runs.detail.copy-hash" datatype="html"><source>Copy full manifest hash</source><target>Sao chép toàn bộ mã băm bản kê</target></trans-unit>
       <trans-unit id="runs.detail.copied" datatype="html"><source>Manifest hash copied</source><target>Đã sao chép mã băm bản kê</target></trans-unit>
       <trans-unit id="runs.detail.copy-failed" datatype="html"><source>Copy failed. Select and copy the full hash shown above.</source><target>Không thể sao chép. Hãy chọn và sao chép toàn bộ mã băm ở trên.</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.title" datatype="html"><source>Attempts</source><target>Các lần thử</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.scroll-region" datatype="html"><source>Attempts table</source><target>Bảng các lần thử</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.pagination" datatype="html"><source>Attempts pagination</source><target>Phân trang các lần thử</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.execution" datatype="html"><source>Execution</source><target>Lượt thực thi</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.attempt" datatype="html"><source>Attempt</source><target>Lần thử</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.raw" datatype="html"><source>Raw status</source><target>Trạng thái gốc</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.normalised" datatype="html"><source>Normalised status</source><target>Trạng thái chuẩn hóa</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.duration" datatype="html"><source>Duration</source><target>Thời lượng</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.artifacts" datatype="html"><source>Artifacts</source><target>Hiện vật</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.empty" datatype="html"><source>No attempts recorded</source><target>Chưa ghi nhận lần thử nào</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.pre-healing" datatype="html"><source>Pre-healing failure</source><target>Lỗi trước khi tự sửa</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.candidate" datatype="html"><source>Healing candidate</source><target>Ứng viên tự sửa</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.shadow" datatype="html"><source>Shadow evaluation</source><target>Đánh giá đối chứng</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.official" datatype="html"><source>Official evaluation</source><target>Đánh giá chính thức</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page</source><target>Trang</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.previous" datatype="html"><source>Previous page</source><target>Trang trước</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.next" datatype="html"><source>Next page</source><target>Trang sau</target></trans-unit>
     </body>
   </file>
 </xliff>

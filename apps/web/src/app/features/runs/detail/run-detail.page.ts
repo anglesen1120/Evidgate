@@ -9,13 +9,20 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { AttemptsTableComponent } from './attempts/attempts-table.component';
 import { ManifestPanelComponent } from './manifest-panel.component';
 import { RunHeaderComponent } from './run-header.component';
 import { RunDetailStore } from './run-detail.store';
 
 @Component({
   selector: 'app-run-detail-page',
-  imports: [RouterLink, RequestStateComponent, RunHeaderComponent, ManifestPanelComponent],
+  imports: [
+    RouterLink,
+    RequestStateComponent,
+    RunHeaderComponent,
+    ManifestPanelComponent,
+    AttemptsTableComponent,
+  ],
   providers: [RunDetailStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-detail.page.html',

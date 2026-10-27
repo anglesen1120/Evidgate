@@ -1,0 +1,126 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.attempts-panel {
+  padding: var(--eg-space-4);
+  margin-block-end: var(--eg-space-5);
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-md);
+  color: var(--eg-text);
+  background: var(--eg-surface);
+  font-family: var(--eg-font-body);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+}
+h2 {
+  margin: 0 0 var(--eg-space-4);
+  font-size: var(--eg-text-md);
+  line-height: var(--eg-leading-md);
+}
+p {
+  margin: 0;
+}
+.table-scroll {
+  max-width: 100%;
+  overflow: auto;
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-md);
+}
+table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+caption {
+  text-align: start;
+  color: var(--eg-text-muted);
+  padding: var(--eg-space-3);
+}
+th,
+td {
+  padding: var(--eg-space-3);
+  text-align: start;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  border-bottom: var(--eg-border-width) solid var(--eg-border);
+}
+thead th {
+  background: var(--eg-surface-raised);
+  font-weight: var(--eg-weight-semibold);
+}
+tbody th {
+  font-weight: var(--eg-weight-regular);
+}
+tbody + tbody tr:first-child > * {
+  border-top: var(--eg-border-width) solid var(--eg-border-control);
+}
+bdi,
+.attempt-number {
+  display: block;
+}
+.identifier {
+  font-family: var(--eg-font-mono);
+}
+.attempt-number {
+  color: var(--eg-text-muted);
+}
+.numeric {
+  font-variant-numeric: tabular-nums;
+}
+.pre-healing-block,
+.candidate-block {
+  display: grid;
+  gap: var(--eg-space-2);
+  margin-block-start: var(--eg-space-3);
+  padding: var(--eg-space-2);
+  border-inline-start: var(--eg-border-width) solid var(--eg-border-control);
+}
+.pre-healing-block {
+  background: var(--eg-warning-bg);
+  color: var(--eg-warning-fg);
+}
+.candidate-block {
+  background: var(--eg-surface-raised);
+}
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eg-space-3);
+  margin-block-start: var(--eg-space-4);
+}
+button {
+  min-height: var(--eg-control-touch);
+  min-width: var(--eg-control-touch);
+  padding: var(--eg-space-2) var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-sm);
+  color: var(--eg-text);
+  background: var(--eg-surface);
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: var(--eg-surface-raised);
+  border-color: var(--eg-accent);
+}
+button:active:not(:disabled) {
+  box-shadow: inset 0 0 0 var(--eg-border-width) currentColor;
+}
+button:disabled {
+  color: var(--eg-text-muted);
+  background: var(--eg-neutral-bg);
+  cursor: not-allowed;
+}
+button:focus-visible,
+.table-scroll:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+@media (max-width: 767px) {
+  table {
+    min-width: calc(var(--eg-rail-width) * 3);
+  }
+}

@@ -56,6 +56,15 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
   });
+  it('renders attempts as unavailable when the read contract supplies no attempt data', async () => {
+    const { root } = await open();
+    const attempts = root.querySelector('app-attempts-table');
+    expect(
+      attempts?.querySelector('[data-attempts-unavailable] app-status-pill')?.textContent,
+    ).toContain('Status unavailable');
+    expect(attempts?.querySelector('table')).toBeNull();
+    expect(attempts?.querySelector('app-empty-pattern')).toBeNull();
+  });
   it.each([
     [true, 'Yes'],
     [false, 'No'],

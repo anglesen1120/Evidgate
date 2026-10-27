@@ -1,9 +1,10 @@
-import { inject } from '@angular/core';
-import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
+import { computed, inject } from '@angular/core';
+import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
 import type { RunStateDto } from '@evidgate/sdk';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { UNAVAILABLE_MANIFEST, type ManifestSummary } from './manifest-summary';
+import type { AttemptRow } from './attempts/attempt-summary';
 
 export type RunDetailStatus = 'idle' | 'loading' | 'ready' | 'not-found' | 'forbidden' | 'error';
 interface RunDetailState {
@@ -21,6 +22,8 @@ export const RunDetailStore = signalStore(
     status: 'idle',
     loadError: null,
   }),
+  // D-S111-Q1 / D-S103-Q1: no attempts read exists on the wire; never infer rows from run state.
+  withComputed(() => ({ attempts: computed<AttemptRow[] | null>(() => null) })),
   withMethods((store) => {
     const data = inject(RunsDataService);
     let generation = 0;
@@ -36,7 +39,7 @@ export const RunDetailStore = signalStore(
         try {
           const run = await data.get(runId);
           if (read !== generation) return;
-          // PANEL-CHOICE A / D-S103-Q1: absence on the wire is unavailable, never inferred.
+          // D-S111-Q1 / D-S103-Q1: absence on the wire is unavailable, never inferred.
           patchState(store, { run, manifest: UNAVAILABLE_MANIFEST, status: 'ready' });
         } catch (failure: unknown) {
           if (read !== generation) return;
