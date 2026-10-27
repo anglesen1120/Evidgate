@@ -5,11 +5,11 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 ## 1. Snapshot
 
 ### Resume here
-- Develop: `aa42d7a` (PR #224, S107 11.1.1-T3 + T4, merged 2026-10-27); 218 first-parent PR merges into develop. Migration lane free (S94 12.3.1-T1 merged in #198/#204); S102 migration `0048_identity_session_routes.sql` is pending PR #TBD; next free migration `0049`.
+- Develop: `aa42d7a` (PR #224, S107 11.1.1-T3 + T4, merged 2026-10-27); 218 first-parent PR merges into develop. Migration lane free (S94 12.3.1-T1 merged in #198/#204); S102 migration `0048_identity_session_routes.sql` is pending PR #228; next free migration `0049`.
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
-- Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is delivered on this branch, PR #TBD.
-- Fully landed plus S102 pending PR #TBD: 176/655 tasks; 182.25/702.75 raw person-days; remaining 479 tasks / 520.5 d. PR-delivery figure including S102 pending merge: 149 tasks / 157.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is delivered on this branch, PR #228.
+- Fully landed plus S102 pending PR #228: 176/655 tasks; 182.25/702.75 raw person-days; remaining 479 tasks / 520.5 d. PR-delivery figure including S102 pending merge: 149 tasks / 157.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
 - By phase including S102 pending merge (done tasks / raw d): G1 132 / 144.25; G2 38 / 32; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in this S100 docs pass on `b0be589`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1 with the same 10 missing 13.x feature plans (queue F37, §6 row), unchanged.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
@@ -24,7 +24,7 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed plus S102 pending PR #TBD | 176 | 182.25 |
+| Fully landed plus S102 pending PR #228 | 176 | 182.25 |
 | Via merged PRs plus S102 pending | 149 | 157.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
 | Remaining | 479 | 520.5 |
@@ -172,7 +172,7 @@ Five partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 
 | 13.1.1 | 13.1.1-T3 | merged (#176, c185810) | Authoring timeline/version reads and restore with sibling locking, preconditions and route contracts. |
 | 13.1.1 | 13.1.1-T5 | merged (#186, 5cfcf9c) | CSV/XLSX/JSON import/export with bounded parser profile, dry-run, atomic apply, allocator batching and idempotent re-import. |
 | 02.3.2 | 02.3.2-T1 | merged (#190, 88fc00f) | Real session authentication, rotation/revocation, throttled sliding expiry, pepper rotation and enforcing XSRF (0045). |
-| 02.3.2 | 02.3.2-T2 | open PR #TBD | Session list, self/admin revoke, revoke-all and logout routes plus bounded leaf-first cleanup and expiry stamping via migration 0048. |
+| 02.3.2 | 02.3.2-T2 | open PR #228 | Session list, self/admin revoke, revoke-all and logout routes plus bounded leaf-first cleanup and expiry stamping via migration 0048. |
 | 13.2.2 | plan change (docs only, no task built) | merged (#194, c866fdc) | Role-profile/prompt-library story and feature plan only; eight planned tasks are unbuilt. |
 | 13.x / all | status and consistency sync (docs only, no task built) | merged (#196, b6cace6) | STATUS.md rebuilt against merged work (163/655 tasks, 169.25/702.75 d), AGENTS.md, plan 00 §14/§15, plan 13 §4.4, features README and open-items made consistent; no task credit. |
 | 13.2.2 | 13.2.2-T1 | merged (#199, 0114df0) | GitHub review of per-role prompts: `docs/research/role-prompts-github-review.md` (46 repos, licence ledger, gap matrix, ideas not copied; copy nothing for the first seed set `[INFERENCE]`). Docs only; the Done-when test `MemoAndLicenceLedgerComplete` is not built (§6 row "Role-prompt memo check"). |
@@ -336,7 +336,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 |---|---|---|---|---|---|---|---|
 | 01.8.1-T3 | M (rem T3.2) | Partial: T3.1 seed-dev shipped (`db209e4`, `SeedDevTests`); T3.2 still needs a clean-checkout `up.sh` run and a second-developer review of `docs/dev-setup.md`. | yes | no | no | n/a | yes — files exist; rem = clean-checkout `scripts/dev/up.sh` run (AC1/AC4) + second-dev review of `docs/dev-setup.md` |
 | 02.3.1-T3 | S | `GET /v1/me` profile + `PATCH /v1/me {preferred_locale}` | yes | yes (0048+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | n/a | yes |
-| 02.1.2-T3 | S | Membership lifecycle (deactivation/removal semantics; may switch to revoke-all, STATUS.md:678). Ready once S102 02.3.2-T2 merges (PR #TBD). | yes | no | no | n/a | yes — deps 02.1.2-T1 landed, 02.3.2-T2 in this PR |
+| 02.1.2-T3 | S | Membership lifecycle (deactivation/removal semantics; may switch to revoke-all, STATUS.md:678). Ready once S102 02.3.2-T2 merges (PR #228). | yes | no | no | n/a | yes — deps 02.1.2-T1 landed, 02.3.2-T2 in this PR |
 | 03.1.4-T1 | S | Decision + contract: optional `requirement_ref`. Partial: decision half landed as D-A6 (`DECISIONS.md:164`, `a4c546c`); the contract half is open — `requirement_ref` and the sidecar `requirement` key appear nowhere under `contracts/`. | yes | yes (0048+) | no | n/a | yes |
 | 03.1.4-T2 | S | `platform`, `level`, `purpose` on suite/template | yes | yes (0048+) | S97: Catalog suite create/list endpoint code + tests; `contracts/openapi.yaml`, generated SDK | n/a | yes |
 | 03.4.1-T1 | L | GitHub App registration + installation binding + `git_repo_binding`; typed `HttpClient` + RS256 app JWT | yes | yes (0048+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | T1.1-T1.2 ; T1.3-T1.4 | yes (App registration itself needs GitHub org/admin credentials) |
