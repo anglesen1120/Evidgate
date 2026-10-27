@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 
 namespace Evidgate.Parser;
 
@@ -21,9 +22,10 @@ internal enum ParseProfile
 /// <c>Evidgate.Parser --profile xml|json|archive --max-bytes &lt;bytes&gt; [--media-type &lt;declared type&gt;]</c>.
 /// <para>
 /// Parsing is strict and total: the profile, the byte cap and an optional declared media type are the whole
-/// contract, so an unknown switch, a repeated switch, a missing value or a non-positive cap is a usage error
-/// and never a silently different run. The launcher hands the caps in as arguments — the child reads no
-/// environment variable and no file (06.3.6 AC1).
+/// contract, so an unknown switch, a repeated switch, a missing value (including a switch where a value belongs)
+/// or a non-positive cap is a usage error and never a silently different run. The launcher hands the caps in as
+/// arguments — the child reads no environment variable and no file (06.3.6 AC1); a cap above the profile's own
+/// ceiling is clamped rather than refused, so an enormous value still yields a bounded run.
 /// </para>
 /// </summary>
 internal sealed class ChildOptions
@@ -42,7 +44,10 @@ internal sealed class ChildOptions
     /// <summary>Which arm of the profile this run applies.</summary>
     public ParseProfile Profile { get; }
 
-    /// <summary>The per-kind byte cap from <c>artifact_kind_policy.max_bytes</c> (always positive).</summary>
+    /// <summary>
+    /// The per-kind byte cap from <c>artifact_kind_policy.max_bytes</c> (always positive), clamped to the largest
+    /// cap the profile can honour (<see cref="BoundedContent.EffectiveCap"/>).
+    /// </summary>
     public long MaxBytes { get; }
 
     /// <summary>
@@ -125,15 +130,24 @@ internal sealed class ChildOptions
 
     private static bool TryTakeValue(string[] args, ref int index, out string value)
     {
+        value = string.Empty;
+
         if (index + 1 >= args.Length)
         {
-            value = string.Empty;
+            return false;
+        }
 
+        var candidate = args[index + 1];
+        if (candidate.StartsWith("--", StringComparison.Ordinal))
+        {
+            // A switch where a value belongs is a missing value, not a value that happens to look like one:
+            // `--media-type --media-type text/xml` must not consume the second switch as the declared type and
+            // leave the real type as a positional argument (which would report the wrong reason).
             return false;
         }
 
         index++;
-        value = args[index];
+        value = candidate;
 
         return true;
     }
@@ -170,8 +184,21 @@ internal sealed class ChildOptions
         // the invariant parse reads the same digits as the same number on every host culture.
         maxBytes = 0;
 
-        return value.Length > 0
-            && long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out maxBytes)
-            && maxBytes > 0;
+        if (value.Length == 0
+            || !long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
+            || parsed <= 0)
+        {
+            return false;
+        }
+
+        // Clamped, not refused: the profile cannot honour a cap above its own contiguous-read ceiling
+        // (`BoundedContent.EffectiveCap` is Array.MaxLength - 1, one byte below the largest array so the extra
+        // byte that proves an over-cap stream still fits), so a larger --max-bytes would make this child buffer
+        // toward the heap limit before the profile ever applied its clamp. Clamping keeps the run bounded and
+        // changes no verdict: an object above the clamp is refused as size_exceeded either way. The media sniff's
+        // 4 KiB prefix is a separate array (ParsingLimits.SniffPrefixBytes), so it costs the cap nothing.
+        maxBytes = BoundedContent.EffectiveCap(parsed);
+
+        return true;
     }
 }

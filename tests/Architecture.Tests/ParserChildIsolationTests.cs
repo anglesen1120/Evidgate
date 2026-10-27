@@ -182,8 +182,12 @@ public class ParserChildIsolationTests
     [InlineData("var note = \"System.Net.Http is not reachable from this process\";")]
     [InlineData("/* HttpClient would need a network\r\n   Socket, TcpClient, Dns. */")]
     [InlineData("var note = \"\"\"\r\n  using Microsoft.AspNetCore.Http;\r\n  \"\"\";")]
+    [InlineData("var note = \"pre{System.Net.Http}post\";")]
+    [InlineData("var note = \"\"\"\r\n  {\"System.Net.Http\"}\r\n  \"\"\";")]
     public void Synthetic_Forbidden_Api_Only_Named_In_Trivia_Is_Not_A_Use(string text)
     {
+        // The last two cases are the negative side of the interpolation rule: braces are a hole only with a `$`
+        // prefix, so a plain literal that happens to contain braces stays text.
         var files = new (string Path, string Text)[]
         {
             ("src/Evidgate.Parser/Program.cs", text),
@@ -224,11 +228,86 @@ public class ParserChildIsolationTests
     [Theory]
     [InlineData("var bytes = File.ReadAllBytes(path);", "File.")]
     [InlineData("Directory.CreateDirectory(root);", "Directory.")]
-    [InlineData("var stream = new FileStream(path, FileMode.Open);", "FileStream")]
+    [InlineData("var stream = new FileStream(path, FileMode.Open);", "FileMode.")]
+    [InlineData("var stream = new FileStream(path, new FileStreamOptions());", "FileStreamOptions")]
+    [InlineData("var info = new FileInfo(path);", "FileInfo")]
+    [InlineData("var info = new DirectoryInfo(root);", "DirectoryInfo")]
+    [InlineData("using var reader = new StreamReader(path);", "StreamReader(")]
+    [InlineData("using var writer = new StreamWriter(path);", "StreamWriter(")]
+    [InlineData("var temp = Path.GetTempPath();", "Path.GetTemp")]
+    [InlineData("var temp = Path.GetTempFileName();", "Path.GetTemp")]
+    [InlineData("using var archive = ZipFile.OpenRead(path);", "ZipFile.")]
     [InlineData("Process.Start(info);", "Process.")]
+    [InlineData("var child = new Process();", "new Process")]
+    [InlineData("var info = new ProcessStartInfo(\"dotnet\");", "ProcessStartInfo")]
     [InlineData("var cap = Environment.GetEnvironmentVariable(\"EVIDGATE__PARSE__MAX_BYTES\");", "Environment.GetEnvironmentVariable")]
+    [InlineData("var path = Environment.ExpandEnvironmentVariables(\"%TEMP%\");", "Environment.ExpandEnvironmentVariables")]
+    [InlineData("var cwd = Environment.CurrentDirectory;", "Environment.CurrentDirectory")]
+    [InlineData("using static System.IO.File;\nvar bytes = ReadAllBytes(path);", "System.IO")]
+    [InlineData("using F = System.IO.File;\nvar bytes = F.ReadAllBytes(path);", "System.IO")]
+    [InlineData("using System.IO.Pipes;\nvar server = new AnonymousPipeServerStream();", "System.IO")]
+    [InlineData("var path = System.IO.Path.Combine(root, name);", "System.IO")]
     public void Synthetic_Child_File_Using_File_Process_Or_Environment_Is_Detected(string text, string api)
     {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/Program.cs", text),
+        };
+
+        var violations = ParserChildIsolationRules.ChildIoViolations(files);
+
+        // The tokens overlap on purpose (`new Process` covers `new ProcessStartInfo`, `System.IO` covers an alias), so
+        // the count is not the assertion: the rule must name this API for this file.
+        violations.ShouldNotBeEmpty();
+        string.Join(Environment.NewLine, violations).ShouldContain(api);
+    }
+
+    [Theory]
+    [InlineData("var stdout = new FileStream(new SafeFileHandle((nint)1, ownsHandle: false), FileAccess.Write, bufferSize: 0);")]
+    [InlineData("using var stdin = Console.OpenStandardInput();")]
+    public void Synthetic_Descriptor_Stream_Over_Stdout_Is_Not_A_File(string text)
+    {
+        // The child's one `FileStream` is the standard-output descriptor, not a path: the console stream swallows a
+        // broken pipe on Unix, so the descriptor stream is what reports it (06.3.6 §7 AC3). Every path constructor of
+        // FileStream names FileMode or FileStreamOptions, and those two are what the rule bans.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/Program.cs", text),
+        };
+
+        ParserChildIsolationRules.ChildIoViolations(files).ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("var shell = GridFile.Open();")]
+    [InlineData("using var stdout = new BufferedStream(Console.OpenStandardOutput(), 64 * 1024);")]
+    [InlineData("var name = \"File.ReadAllBytes\";")]
+    [InlineData("// File.ReadAllBytes would need a file: the child reads stdin only")]
+    [InlineData("var count = DirectorySeparator();")]
+    public void Synthetic_Child_Transport_And_Complete_File_Names_Are_Not_A_Violation(string text)
+    {
+        // The match needs a boundary and blanked trivia: `File.` inside `GridFile.Open` is a longer identifier, a
+        // message or a comment naming a file API is text, and `BufferedStream` is the stdout transport — the child
+        // streams stdin and stdout and touches no path.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/Program.cs", text),
+        };
+
+        ParserChildIsolationRules.ChildIoViolations(files).ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("var note = $\"{File.ReadAllText(path)}\";", "File.")]
+    [InlineData("var note = $\"{(flag ? File.ReadAllText(a) : File.ReadAllText(b))}\";", "File.")]
+    [InlineData("var note = $\"size={new FileInfo(path).Length}\";", "FileInfo")]
+    [InlineData("var note = $\"cap={Environment.GetEnvironmentVariable(\"CAP\")}\";", "Environment.GetEnvironmentVariable")]
+    [InlineData("var note = $\"\"\"\n  {File.ReadAllText(path)}\n  \"\"\";", "File.")]
+    [InlineData("var note = @$\"{File.ReadAllText(path)}\";", "File.")]
+    public void Synthetic_Child_Code_In_An_Interpolation_Hole_Is_A_Use(string text, string api)
+    {
+        // An interpolation hole is code, not string text: blanking it the way the literal segments are blanked would
+        // let a real file read pass as a message.
         var files = new (string Path, string Text)[]
         {
             ("src/Evidgate.Parser/Program.cs", text),
@@ -238,20 +317,82 @@ public class ParserChildIsolationTests
     }
 
     [Theory]
-    [InlineData("var buffer = Console.OpenStandardInput();")]
-    [InlineData("Console.Error.WriteLine(\"parse child: usage error\");")]
-    [InlineData("var exitCode = 3;")]
-    [InlineData("var name = \"File.ReadAllBytes\";")]
-    [InlineData("var archive = ZipFile.OpenRead(path);")]
-    public void Synthetic_Child_Transport_And_Complete_File_Names_Are_Not_A_Violation(string text)
+    [InlineData("var note = $\"{(flag ? \"x\" : \"y\")}\";")]
+    [InlineData("var note = $\"File.ReadAllText is not reachable from this process\";")]
+    [InlineData("var note = $\"{{File.ReadAllText}} is an escaped brace\";")]
+    [InlineData("var note = $\"{prefix}{count} bytes\";")]
+    [InlineData("var note = $\"\"\"\n  File.ReadAllText is not reachable\n  \"\"\";")]
+    [InlineData("var note = $\"\"\"\n  {(flag ? \"x\" : \"y\")}\n  \"\"\";")]
+    public void Synthetic_Literal_Text_Of_An_Interpolated_String_Is_Not_A_Use(string text)
     {
-        // `ZipFile.OpenRead` is not `File.` — the match needs a boundary, or every complete-file type would trip it.
+        // The literal segments stay text — including the escaped braces and the strings nested inside a hole, which
+        // the scan blanks one level down — so only the hole's own code can be a use.
         var files = new (string Path, string Text)[]
         {
             ("src/Evidgate.Parser/Program.cs", text),
         };
 
         ParserChildIsolationRules.ChildIoViolations(files).ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("await $\"{new HttpClient().GetStringAsync(url)}\";")]
+    [InlineData("var client = $\"\"\"\n  {new HttpClient()}\n  \"\"\";")]
+    [InlineData("var note = $\"{(socket ?? HttpClient())}\";")]
+    public void Synthetic_Network_Api_In_An_Interpolation_Hole_Is_Detected(string text)
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/Program.cs", text),
+        };
+
+        ParserChildIsolationRules.ForbiddenApiViolations(files).ShouldHaveSingleItem().ShouldContain("Program.cs");
+    }
+
+    [Theory]
+    [InlineData("HttpRequestMessage request = null;")]
+    [InlineData("var response = new HttpResponseMessage();")]
+    [InlineData("var handler = new HttpMessageHandler();")]
+    [InlineData("var content = new StringContent(\"{}\");")]
+    public void Synthetic_Implicit_Network_Type_In_A_Child_File_Is_Detected(string text)
+    {
+        // `ImplicitUsings` is on for every project, so the child compiles with `global using System.Net.Http;`: these
+        // types are in scope with no using line at all, and the rule has to catch them by name.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/Program.cs", text),
+        };
+
+        ParserChildIsolationRules.ForbiddenApiViolations(files).ShouldHaveSingleItem().ShouldContain("Program.cs");
+    }
+
+    [Theory]
+    [InlineData("var entries = SafeZipArchive.Extract(content, cap, options, token);")]
+    [InlineData("using var handle = new ArchiveExtraction(root, entries);")]
+    [InlineData("var walk = Walk(content, cap, options, extract: true, token);")]
+    [InlineData("ZipFile.ExtractToDirectory(archivePath, destination);")]
+    public void Synthetic_Child_File_Naming_The_File_Creating_Archive_Arm_Is_Detected(string text)
+    {
+        // The profile's file-creating arm is linked into the child, so nothing but this rule stops a later edit from
+        // calling it: the child reports archive entries through the non-extracting walk.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/Program.cs", text),
+        };
+
+        ParserChildIsolationRules.ChildExtractionCodeViolations(files).ShouldHaveSingleItem().ShouldContain("Program.cs");
+    }
+
+    [Fact]
+    public void Synthetic_Child_File_Reporting_Archive_Entries_Is_Not_The_Extracting_Arm()
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/Program.cs", "var result = parsing.EnumerateArchive(content, cap, CancellationToken.None);"),
+            ("src/Evidgate.Parser/Program.cs", "var size = info.CompressedBytes + info.ExpandedBytes;"),
+        };
+
+        ParserChildIsolationRules.ChildExtractionCodeViolations(files).ShouldBeEmpty();
     }
 
     [Fact]
@@ -324,6 +465,84 @@ public class ParserChildIsolationTests
             .ShouldContain("Evidgate.Modules.Evidence.Contracts");
     }
 
+    [Theory]
+    [InlineData("Npgsql", "Npgsql")]
+    [InlineData("Microsoft.AspNetCore.Http.Abstractions", "Microsoft.AspNetCore")]
+    [InlineData("System.Net.Http.WinHttpHandler", "System.Net")]
+    [InlineData("Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore")]
+    [InlineData("Dapper", "Dapper")]
+    [InlineData("AWSSDK.S3", "AWSSDK")]
+    [InlineData("Serilog", "Serilog")]
+    public void Synthetic_Forbidden_Package_In_The_Lock_File_Is_Detected(string package, string named)
+    {
+        // The lock file is the resolved graph — transitive packages included — so a package the csproj never names
+        // still lands in the child. The allow-list is exact, and the message names the family too.
+        var violation = ParserChildIsolationRules.LockedPackageViolations(
+                LockJson(package),
+                ParserChildIsolationRules.ProjectName,
+                ParserChildIsolationRules.AllowedLockedPackages)
+            .ShouldHaveSingleItem();
+
+        violation.ShouldContain(package);
+        violation.ShouldContain(named);
+    }
+
+    [Fact]
+    public void Synthetic_Lock_File_With_Only_Allowed_Dependencies_Is_Clean()
+    {
+        var lockJson = LockJson(
+            "Microsoft.VisualStudio.Threading.Analyzers",
+            "evidgate.buildingblocks.sharedkernel",
+            "evidgate.modules.evidence.contracts");
+
+        // Non-vacuous: the names are read out of the JSON, case-insensitively matched against the allow-list.
+        ParserChildIsolationRules.LockedPackageNames(lockJson).Count.ShouldBe(3);
+
+        ParserChildIsolationRules.LockedPackageViolations(
+                lockJson,
+                ParserChildIsolationRules.ProjectName,
+                ParserChildIsolationRules.AllowedLockedPackages)
+            .ShouldBeEmpty();
+
+        // A lock file with no dependency target at all fails the allow-list rather than passing silently: the real
+        // test asserts the two project entries are seen, so an unreadable file cannot pass there either.
+        ParserChildIsolationRules.LockedPackageNames("{\"version\":2}").ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Evidgate.Worker")]
+    [InlineData("Evidgate.Modules.Evidence.Application")]
+    [InlineData("Evidgate.Api")]
+    public void Synthetic_Third_Friend_Assembly_Is_Detected(string friend)
+    {
+        var project = ProjectXml($"    <InternalsVisibleTo Include=\"{friend}\" />");
+
+        ParserChildIsolationRules.FriendAssemblyViolations(
+                project,
+                "Evidgate.Modules.Evidence.Contracts",
+                ParserChildIsolationRules.AllowedFriendAssemblies)
+            .ShouldHaveSingleItem()
+            .ShouldContain(friend);
+    }
+
+    [Fact]
+    public void Synthetic_Friend_Assemblies_On_The_Allow_List_Are_Not_A_Violation()
+    {
+        var project = ProjectXml(
+            "    <InternalsVisibleTo Include=\"Evidgate.Modules.Evidence\" />\n"
+            + "    <InternalsVisibleTo Include=\"Evidgate.Parser\" />");
+
+        // Non-vacuous: both entries are read out of the XML, so the rule is consulting them, not returning empty.
+        string.Join(",", ParserChildIsolationRules.FriendAssemblyNames(project))
+            .ShouldBe("Evidgate.Modules.Evidence,Evidgate.Parser");
+
+        ParserChildIsolationRules.FriendAssemblyViolations(
+                project,
+                "Evidgate.Modules.Evidence.Contracts",
+                ParserChildIsolationRules.AllowedFriendAssemblies)
+            .ShouldBeEmpty();
+    }
+
     [Fact]
     public void Real_Parser_References_Only_The_Contracts_And_The_Shared_Kernel()
     {
@@ -385,10 +604,104 @@ public class ParserChildIsolationTests
         var apiViolations = ParserChildIsolationRules.ForbiddenApiViolations(all);
         apiViolations.ShouldBeEmpty(string.Join(Environment.NewLine, apiViolations));
 
-        // The transport half is the child's own files only: the archive arm of the profile materialises entries into
-        // the temp directory the launcher owns, so `File.`/`FileStream` are legitimate there and not here.
-        var ioViolations = ParserChildIsolationRules.ChildIoViolations(ParserChildIsolationRules.ReadSources(own));
+        // The transport half is the child's own files only: the profile's Extract arm really does create files under
+        // a temporary root it owns (Path.GetTempPath, Directory.CreateDirectory, new FileStream(FileMode.CreateNew)),
+        // and that code is linked into this project — so `File.`/`FileStream` are legitimate in the profile files and
+        // not in the child's. What keeps that arm away from the child is not the linker (a linked method is
+        // callable) but the extraction rule below: no child file names Extract, ArchiveExtraction or `extract:`.
+        var ownSources = ParserChildIsolationRules.ReadSources(own);
+
+        var ioViolations = ParserChildIsolationRules.ChildIoViolations(ownSources);
         ioViolations.ShouldBeEmpty(string.Join(Environment.NewLine, ioViolations));
+
+        var extractionViolations = ParserChildIsolationRules.ChildExtractionCodeViolations(ownSources);
+        extractionViolations.ShouldBeEmpty(string.Join(Environment.NewLine, extractionViolations));
+
+        // Non-vacuous: the linked profile really is the file-creating code this rule reasons about, so a rule that
+        // read the wrong files (or no files) would pass here for the wrong reason.
+        linked.ShouldContain(path => path.EndsWith("/SafeZipArchive.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Real_Parser_Lock_File_Resolves_Only_The_Allowed_Dependencies()
+    {
+        var lockPath = Path.Combine(SolutionLayout.RepoRoot, ParserChildIsolationRules.LockFile);
+
+        File.Exists(lockPath).ShouldBeTrue($"{ParserChildIsolationRules.LockFile} does not exist");
+
+        var lockJson = File.ReadAllText(lockPath);
+        var names = ParserChildIsolationRules.LockedPackageNames(lockJson);
+
+        // Non-vacuous: the parse saw the two project entries and the analyzer the SDK adds, so an empty or unread
+        // lock file would fail here instead of passing.
+        names.ShouldContain("evidgate.modules.evidence.contracts");
+        names.ShouldContain("Microsoft.VisualStudio.Threading.Analyzers");
+
+        var violations = ParserChildIsolationRules.LockedPackageViolations(
+            lockJson,
+            ParserChildIsolationRules.ProjectName,
+            ParserChildIsolationRules.AllowedLockedPackages);
+
+        violations.ShouldBeEmpty(string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Real_Contracts_Expose_Their_Internals_To_The_Profile_And_The_Child_Only()
+    {
+        var path = Path.Combine(SolutionLayout.RepoRoot, ParserChildIsolationRules.ContractsProjectFile);
+
+        File.Exists(path).ShouldBeTrue($"{ParserChildIsolationRules.ContractsProjectFile} does not exist");
+
+        var project = File.ReadAllText(path);
+        var friends = ParserChildIsolationRules.FriendAssemblyNames(project);
+
+        // Non-vacuous and exact: the set is the two assemblies, so a missing entry (the child could not construct the
+        // report through the profile's factory) and an extra one (a third assembly could) both fail.
+        friends.ShouldBe(
+            ParserChildIsolationRules.AllowedFriendAssemblies,
+            ignoreOrder: true,
+            string.Join(Environment.NewLine, friends));
+
+        var violations = ParserChildIsolationRules.FriendAssemblyViolations(
+            project,
+            "Evidgate.Modules.Evidence.Contracts",
+            ParserChildIsolationRules.AllowedFriendAssemblies);
+
+        violations.ShouldBeEmpty(string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Real_Parser_Sources_Stay_Clean_Under_The_Implicit_Usings_The_Repository_Sets()
+    {
+        // Decision for the ImplicitUsings question (06.3.6 review, S7): `Directory.Build.props` enables
+        // ImplicitUsings for every project, so a `Microsoft.NET.Sdk` console project compiles with
+        // `global using System.IO;` and `global using System.Net.Http;` — a bare `File.ReadAllText`, `new
+        // StreamReader(path)` or `new HttpClient()` needs no using line, and requiring
+        // `<ImplicitUsings>disable</ImplicitUsings>` in the child's csproj would mean an explicit using in each of its
+        // four files while still being undone by any `global using` added to a props file later. The rule therefore
+        // keeps the implicit usings and denies what they put in scope by name: the file types in
+        // ForbiddenChildApis and the System.Net.Http types in the network list, both scanned here. This test pins the
+        // premise — if ImplicitUsings is ever switched off, the name lists are what a reader re-checks.
+        var propsPath = Path.Combine(SolutionLayout.RepoRoot, "Directory.Build.props");
+
+        File.Exists(propsPath).ShouldBeTrue("Directory.Build.props does not exist");
+        File.ReadAllText(propsPath).ShouldContain("<ImplicitUsings>enable</ImplicitUsings>");
+
+        var project = RealProjectXml();
+        var directory = RealProjectDirectory();
+        var own = ParserChildIsolationRules.ProjectSources(directory);
+        var linked = ParserChildIsolationRules.ResolveLinkedSources(
+            directory,
+            ParserChildIsolationRules.CompileIncludes(project));
+        var all = ParserChildIsolationRules.ReadSources(own.Concat(linked));
+
+        all.ShouldNotBeEmpty();
+
+        var violations = ParserChildIsolationRules.ForbiddenApiViolations(all)
+            .Concat(ParserChildIsolationRules.ChildIoViolations(ParserChildIsolationRules.ReadSources(own)))
+            .ToList();
+
+        violations.ShouldBeEmpty(string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -427,4 +740,15 @@ public class ParserChildIsolationTests
 
     private static string ProjectXml(string items) =>
         "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n" + items + "\n  </ItemGroup>\n</Project>\n";
+
+    /// <summary>A minimal <c>packages.lock.json</c> whose single <c>net10.0</c> target declares these dependencies.</summary>
+    /// <param name="packages">The dependency ids.</param>
+    private static string LockJson(params string[] packages)
+    {
+        var entries = string.Join(
+            ",\n",
+            packages.Select(package => $"      \"{package}\": {{ \"type\": \"Direct\" }}"));
+
+        return "{\n  \"version\": 2,\n  \"dependencies\": {\n    \"net10.0\": {\n" + entries + "\n    }\n  }\n}\n";
+    }
 }

@@ -13,8 +13,10 @@ namespace Evidgate.Parser;
 /// <see cref="ParsingLimits.SniffPrefixBytes"/> bytes, and the profile reads the whole object again through
 /// <see cref="OpenStream"/>. The profile bounds its own copy a second time, so a stream that over-reports its
 /// length cannot widen either cap. Nothing is spooled to a file (06.3.6 AC1: the child touches no file), which
-/// means one run holds the content twice — the input copy here plus the profile's own chunks; the launcher's
-/// memory limit is what bounds that, and the output cap is a later task's concern (06.3.6-T1.4).
+/// means one run holds the content twice — the input copy here plus the profile's own chunks; the parent runner
+/// (06.3.6-T1.3) sets <c>DOTNET_GCHeapHardLimit</c> in this process's environment and that heap ceiling is what
+/// bounds the two copies, while this child applies no limit itself. <see cref="Release"/> drops the input copy as
+/// soon as the profile pass is over.
 /// </para>
 /// </summary>
 internal sealed class StdinBuffer
@@ -40,7 +42,7 @@ internal sealed class StdinBuffer
 
     /// <summary>
     /// Reads stdin under a hard cap. Blocking reads are not interrupted: the profile's own 30 s cap is
-    /// cooperative, so a producer that stalls mid-object is the launcher's wall-clock limit to enforce
+    /// cooperative, so a producer that stalls mid-object is the parent runner's wall-clock kill to enforce
     /// (06.3.6 AC2, T1.3), not something this reader can decide.
     /// </summary>
     /// <param name="stdin">The standard input stream; the caller keeps ownership.</param>
@@ -59,13 +61,34 @@ internal sealed class StdinBuffer
             while (buffer.Length < maxBytes)
             {
                 var want = (int)Math.Min(scratch.Length, maxBytes - buffer.Length);
-                var read = stdin.Read(scratch, 0, want);
-                if (read <= 0)
+                var filled = 0;
+
+                // Coalesce: keep reading until this block is full, the source ends or the block is all the cap
+                // still leaves, so a producer that writes tiny blocks costs one array per block instead of one
+                // array per read — the copy that matters is the chunk, not the syscall boundary.
+                while (filled < want)
+                {
+                    var read = stdin.Read(scratch, filled, want - filled);
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    filled += read;
+                }
+
+                if (filled == 0)
                 {
                     break;
                 }
 
-                buffer.Append(scratch.AsSpan(0, read));
+                buffer.Append(scratch.AsSpan(0, filled));
+
+                if (filled < want)
+                {
+                    // The source ended inside the block, so the next read would only see EOF.
+                    break;
+                }
             }
 
             if (buffer.Length == maxBytes && stdin.Read(scratch, 0, 1) > 0)
@@ -85,6 +108,14 @@ internal sealed class StdinBuffer
     /// <summary>A fresh forward-only read stream over the bounded content, for one profile pass.</summary>
     /// <returns>The content stream; the caller keeps ownership.</returns>
     public Stream OpenStream() => BoundedContent.ToStream(chunks);
+
+    /// <summary>
+    /// Drops the content chunks once the profile pass is done, so the run does not hold a dead copy of the
+    /// artifact while it writes the marker: the heap ceiling the parent sets covers one copy of the input, not
+    /// two. The media-sniff prefix is a separate array and survives, so <see cref="Prefix"/> stays readable; any
+    /// stream that <see cref="OpenStream"/> handed out must already be disposed (it reads this list).
+    /// </summary>
+    public void Release() => chunks.Clear();
 
     private void Append(ReadOnlySpan<byte> bytes)
     {

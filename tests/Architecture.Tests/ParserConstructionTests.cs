@@ -188,8 +188,12 @@ public class ParserConstructionTests
     [InlineData("// new ZipArchive(stream, ZipArchiveMode.Read);")]
     [InlineData("/* new ZipArchive(stream, ZipArchiveMode.Read); */")]
     [InlineData("var note = \"\"\"\n  new ZipArchive(stream, ZipArchiveMode.Read);\n  \"\"\";")]
+    [InlineData("var note = \"pre{new ZipArchive(stream, ZipArchiveMode.Read)}post\";")]
+    [InlineData("var note = \"\"\"\n  new ZipArchive({ NoMode = \"ZipArchiveMode.Read\" })\n  \"\"\";")]
     public void A_Mention_Inside_Trivia_Is_Not_A_Construction(string text)
     {
+        // The last two cases pin the other half of the interpolation rule: braces without a `$` prefix are text, so a
+        // scanner that keyed off `{` instead of the prefix would report them.
         var files = new (string Path, string Text)[]
         {
             ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),
@@ -203,7 +207,67 @@ public class ParserConstructionTests
     }
 
     [Theory]
-    [InlineData("using var archive = new ZipArchive(new MemoryStream(), ZipArchiveMode.Create, leaveOpen: true);")]
+    [InlineData("var note = $\"{(new ZipArchive(stream, ZipArchiveMode.Read)).Entries.Count}\";")]
+    [InlineData("var note = $\"{(flag ? new ZipArchive(a, ZipArchiveMode.Read) : null)}\";")]
+    [InlineData("var note = $\"{XmlReader.Create(stream).Read()}\";")]
+    [InlineData("var note = $\"\"\"\n  {new ZipArchive(stream, ZipArchiveMode.Read)}\n  \"\"\";")]
+    public void A_Construct_Inside_An_Interpolation_Hole_Is_A_Construction(string text)
+    {
+        // An interpolation hole is code: its expression is compiled, so a reader built there builds one, and blanking
+        // the hole the way the literal text is blanked would let it pass as a message.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),
+        };
+
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldHaveSingleItem()
+            .ShouldContain("XlsxWriter.cs");
+    }
+
+    [Theory]
+    [InlineData("var note = $\"a{(flag ? \"x\" : \"y\")}\";")]
+    [InlineData("var note = $\"new ZipArchive(stream, ZipArchiveMode.Read);\";")]
+    [InlineData("var note = $\"{{new ZipArchive(stream, ZipArchiveMode.Read)}}\";")]
+    [InlineData("var note = $\"\"\"\n  new ZipArchive(stream, ZipArchiveMode.Read);\n  \"\"\";")]
+    [InlineData("var note = $\"{entries.Count} entries in {name}\";")]
+    public void A_Construct_Only_In_The_Literal_Text_Is_Not_A_Construction(string text)
+    {
+        // The literal segments stay text — the plain text, the escaped braces and a hole that holds nothing but
+        // expressions — so a message describing a reader is still a message.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),
+        };
+
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void The_Write_Mode_Exemption_Reads_The_Hole_Of_An_Interpolated_Argument()
+    {
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", "using var archive = new ZipArchive($\"{Sized(output, 4096)}\", ZipArchiveMode.Create, leaveOpen: true);"),
+        };
+
+        // The hole's braces are balanced in the blanked copy, so the argument list still splits on the right commas
+        // and the mode is still argument two of this constructor.
+        ParserConstructionRules.FindViolations(
+                files,
+                ParserConstructionRules.ProfileDirectory,
+                ParserConstructionRules.ArtifactModuleDirectory)
+            .ShouldBeEmpty();
+    }
+
+    [Theory]
     [InlineData("using var archive = new ZipArchive(Sized(output, 4096), ZipArchiveMode.Create);")]
     [InlineData("using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: false);")]
     public void The_Write_Mode_Exemption_Covers_A_Nested_First_Argument(string text)
@@ -239,10 +303,11 @@ public class ParserConstructionTests
 
     /// <summary>
     /// 06.3.6 AC1: the only two places that construct an XML or archive reader are the profile
-    /// (<c>…/Evidence/Infrastructure/Parsing/</c>) and the parser child entry point (<c>src/Evidgate.Parser/</c>). The
-    /// child links the profile sources, so it must build the reader it feeds; a worker, an application service or any
-    /// other shipped file that builds one bypasses the limits the profile enforces. A file under <c>tests/</c> is not
-    /// scanned at all — a test may build its own reader to prove the profile's behaviour.
+    /// (<c>…/Evidence/Infrastructure/Parsing/</c>) and the parser child's entry point (<c>src/Evidgate.Parser/Program.cs</c>).
+    /// The child links the profile sources, so it must build the reader it feeds; a worker, an application service, a
+    /// second file in the child project or any other shipped file that builds one bypasses the limits the profile
+    /// enforces. The entry point itself may not construct the report handle — the profile's factory builds it. A file
+    /// under <c>tests/</c> is not scanned at all — a test may build its own reader to prove the profile's behaviour.
     /// </summary>
     [Fact]
     public void UntrustedParsing_OnlyInsideParserChildAndInfrastructure()
@@ -251,7 +316,12 @@ public class ParserConstructionTests
         {
             ("src/Evidgate.Worker/Infrastructure/ParseChild.cs", "using var archive = new ZipArchive(stream, ZipArchiveMode.Read);"),
             ("src/Modules/Evidgate.Modules.Evidence/Application/ArtifactCompletionVerifier.cs", "var reader = XmlReader.Create(stream);"),
+            // A second file in the child project is not the entry point: the exemption is one named file.
             ("src/Evidgate.Parser/ProfileSelection.cs", "var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };"),
+            // The entry point may construct the reader …
+            ("src/Evidgate.Parser/Program.cs", "var reader = XmlReader.Create(stream, settings);"),
+            // … but not the profile's report handle, which the profile's factory owns.
+            ("src/Evidgate.Parser/Program.cs", "return new ParsedXmlReport(() => OpenReader(chunks));"),
             ("src/Modules/Evidgate.Modules.Evidence/Infrastructure/Parsing/SafeXml.cs", "XmlReader.Create(stream, CreateSettings(maxBytes));"),
             ("tests/Parser.Tests/ParserChildHostileInputTests.cs", "var reader = XmlReader.Create(stream);"),
         };
@@ -261,13 +331,22 @@ public class ParserConstructionTests
             ParserConstructionRules.ProfileDirectory,
             ParserConstructionRules.ArtifactModuleDirectory);
 
-        violations.Count.ShouldBe(2, string.Join(Environment.NewLine, violations));
+        violations.Count.ShouldBe(4, string.Join(Environment.NewLine, violations));
         violations.ShouldContain(v => v.Contains("src/Evidgate.Worker/Infrastructure/ParseChild.cs", StringComparison.Ordinal));
         violations.ShouldContain(v => v.Contains("Evidence/Application/ArtifactCompletionVerifier.cs", StringComparison.Ordinal));
+        violations.ShouldContain(v => v.Contains("src/Evidgate.Parser/ProfileSelection.cs", StringComparison.Ordinal));
+        violations.ShouldContain(v => v.Contains("src/Evidgate.Parser/Program.cs", StringComparison.Ordinal)
+            && v.Contains("new ParsedXmlReport(", StringComparison.Ordinal));
 
-        // The real solution: the child's own files are allowed, everything else stays clean.
+        // The real solution: the child's entry point is allowed, everything else stays clean.
         var files = SourceFiles();
-        files.Count.ShouldBeGreaterThanOrEqualTo(MinimumScannedFiles);
+        var scanned = files.Count(
+            file => file.Path.StartsWith(ParserConstructionRules.SourceRoot, StringComparison.Ordinal));
+
+        scanned.ShouldBeGreaterThanOrEqualTo(
+            MinimumScannedFiles,
+            $"only {scanned} of {files.Count} source files were under {ParserConstructionRules.SourceRoot}; the "
+            + "generated-file filter or the repo root is hiding the tree");
 
         var realViolations = ParserConstructionRules.FindViolations(
             files,
@@ -281,10 +360,15 @@ public class ParserConstructionTests
     public void Real_Solution_Constructs_Untrusted_Parsers_Only_In_The_Profile()
     {
         var files = SourceFiles();
+        var scanned = files.Count(
+            file => file.Path.StartsWith(ParserConstructionRules.SourceRoot, StringComparison.Ordinal));
 
-        files.Count.ShouldBeGreaterThanOrEqualTo(
+        // Non-vacuity is measured on what the rule actually scans — the paths under src/ — not on the size of the list
+        // the reader handed in: a path outside src/ is skipped, so counting it would hide a filter that ate the tree.
+        scanned.ShouldBeGreaterThanOrEqualTo(
             MinimumScannedFiles,
-            $"only {files.Count} src/**/*.cs files were scanned; the generated-file filter is hiding the tree");
+            $"only {scanned} of {files.Count} source files were under {ParserConstructionRules.SourceRoot}; the "
+            + "generated-file filter or the repo root is hiding the tree");
 
         var violations = ParserConstructionRules.FindViolations(
             files,

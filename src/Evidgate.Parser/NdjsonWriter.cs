@@ -13,8 +13,17 @@ namespace Evidgate.Parser;
 /// so a quote, a backslash, a control character, a line separator (U+2028/U+2029) or any non-ASCII character in
 /// an artifact — an element name, an attribute value, a text node, a zip entry name — leaves as a JSON escape. No
 /// artifact byte can therefore end a line, forge a record or imitate the marker: the framing is the writer's, not
-/// the input's. The count is the number of records before the marker, so a consumer that finds the marker missing,
-/// repeated, not last, or counting a different number of lines treats the run as a crash (06.3.6 AC3).
+/// the input's. The count is the number of records before the marker — a <c>rejected</c> record is counted like
+/// any other, so empty stdin emits one rejection and a marker with <c>count</c> 1 — so a consumer that finds the
+/// marker missing, repeated, not last, or counting a different number of lines treats the run as a crash
+/// (06.3.6 AC3).
+/// </para>
+/// <para>
+/// A record is buffered in full before one byte reaches the stream (see <see cref="WriteBuffer"/>), so a record
+/// the writer cannot represent is dropped without leaving a partial line behind: <see cref="TryWriteJson"/>
+/// reports that case and the caller writes a rejection instead. Names travel as the document spells them —
+/// <see cref="WriteStartElement"/> takes the qualified name, exactly as the attributes do — so a prefixed element
+/// keeps its prefix and two elements that differ only by prefix stay distinct.
 /// </para>
 /// </summary>
 internal sealed class NdjsonWriter : IDisposable
@@ -72,15 +81,19 @@ internal sealed class NdjsonWriter : IDisposable
     public int Count { get; private set; }
 
     /// <summary>One XML start-element record with its attributes, in document order.</summary>
-    /// <param name="localName">The element's local name (the contract's <c>n</c>).</param>
+    /// <param name="name">
+    /// The element's qualified name as the document spells it (the contract's <c>n</c>): a prefixed element keeps
+    /// its prefix, exactly as the attributes below do, so nothing in the record loses information the document
+    /// carried. A consumer that needs the namespace URI re-reads the artifact.
+    /// </param>
     /// <param name="attributes">The element's attributes as written, qualified name and value.</param>
-    public void WriteStartElement(string localName, List<KeyValuePair<string, string>> attributes)
+    public void WriteStartElement(string name, List<KeyValuePair<string, string>> attributes)
     {
         ArgumentNullException.ThrowIfNull(attributes);
 
         var writer = BeginRecord(XmlKind);
         writer.WriteString(EventProperty, StartEvent);
-        writer.WriteString(NameProperty, localName);
+        writer.WriteString(NameProperty, name);
         writer.WriteStartArray(AttributesProperty);
 
         foreach (var attribute in attributes)
@@ -113,14 +126,40 @@ internal sealed class NdjsonWriter : IDisposable
         EndRecord(writer);
     }
 
-    /// <summary>One JSON document record: the profile-validated root, compact.</summary>
+    /// <summary>
+    /// One JSON document record: the profile-validated root, compact, or <see langword="false"/> when the writer
+    /// cannot represent a value the profile accepted.
+    /// </summary>
     /// <param name="root">The document's root element; the caller keeps ownership of its document.</param>
-    public void WriteJson(JsonElement root)
+    /// <returns>
+    /// True when the record was written; false when a string in the document could not be written, in which case
+    /// nothing of the record reached the stream and no record was counted, so the caller is free to emit a
+    /// rejection in its place.
+    /// </returns>
+    public bool TryWriteJson(JsonElement root)
     {
         var writer = BeginRecord(JsonKind);
-        writer.WritePropertyName(ValueProperty);
-        root.WriteTo(writer);
+
+        try
+        {
+            writer.WritePropertyName(ValueProperty);
+            root.WriteTo(writer);
+        }
+        catch (InvalidOperationException)
+        {
+            // JsonElement.WriteTo reads each string value through JsonElement.GetString(), which refuses a lone
+            // UTF-16 surrogate ("Cannot read incomplete UTF-16 JSON text as string with missing low surrogate")
+            // even though JSON itself accepts the escape \ud800 and the profile's UTF-8 check passes it. The
+            // record is still only in this writer's buffer, so it is abandoned whole: no partial line, no count,
+            // and the caller reports malformed content instead of letting the run die with exit 3.
+            AbandonRecord(writer);
+
+            return false;
+        }
+
         EndRecord(writer);
+
+        return true;
     }
 
     /// <summary>One archive-entry record: the normalized name and the sizes the walk measured.</summary>
@@ -150,7 +189,11 @@ internal sealed class NdjsonWriter : IDisposable
         WriteRejected(error.Code, ReasonOf(error));
     }
 
-    /// <summary>The rejection record for a decision the child made itself (an over-cap stdin, a sniffed mismatch).</summary>
+    /// <summary>
+    /// The rejection record for a decision the child made itself: an over-cap stdin, a sniffed mismatch, or a
+    /// document holding a string the writer cannot carry (a lone UTF-16 surrogate, which the profile accepts as a
+    /// JSON escape and a .NET string cannot hold).
+    /// </summary>
     /// <param name="code">The failure code: <c>artifact_invalid</c> or <c>payload_too_large</c>.</param>
     /// <param name="reason">The fixed reason word from the profile's closed set.</param>
     public void WriteRejected(string code, string reason)
@@ -218,6 +261,17 @@ internal sealed class NdjsonWriter : IDisposable
 
         WriteBuffer();
         Count++;
+    }
+
+    /// <summary>
+    /// Drops a record that could not be built: the writer's pending bytes go into the buffer and the buffer is
+    /// cleared, so the next record starts on a clean buffer and the failed one is never counted. Nothing reached
+    /// the stream, because <see cref="WriteBuffer"/> is the only method that writes.
+    /// </summary>
+    private void AbandonRecord(Utf8JsonWriter writer)
+    {
+        writer.Dispose();
+        buffer.Clear();
     }
 
     /// <summary>

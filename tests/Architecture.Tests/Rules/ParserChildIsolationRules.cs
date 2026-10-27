@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Xml.Linq;
 
 namespace Architecture.Tests.Rules;
@@ -8,10 +9,11 @@ namespace Architecture.Tests.Rules;
 /// profile sources rather than copying them, so the profile's limits and the child's transport are one implementation.
 /// <para>
 /// Those are structural facts about one project, so every rule here reads the real <c>.csproj</c> text and the real
-/// source files instead of resolved types: the reference set, the (empty) package allow-list, the framework
-/// references, the transitive project-reference closure from <c>Evidgate.slnx</c>, and the source text of the child's
-/// own files plus every file its <c>&lt;Compile Include&gt;</c> globs link. Each rule takes its inputs explicitly, so a
-/// synthetic <c>.csproj</c> or source text proves the rule, and the same function then runs over the real project.
+/// source files instead of resolved types: the reference set, the (empty) package allow-list plus the resolved
+/// <c>packages.lock.json</c>, the framework references, the contracts project's friend-assembly set, the transitive
+/// project-reference closure from <c>Evidgate.slnx</c>, and the source text of the child's own files plus every file
+/// its <c>&lt;Compile Include&gt;</c> globs link. Each rule takes its inputs explicitly, so a synthetic <c>.csproj</c>
+/// or source text proves the rule, and the same function then runs over the real project.
 /// </para>
 /// </summary>
 public static class ParserChildIsolationRules
@@ -24,6 +26,54 @@ public static class ParserChildIsolationRules
 
     /// <summary>The child project's directory, repo-relative with '/'.</summary>
     public const string ProjectDirectory = "src/Evidgate.Parser/";
+
+    /// <summary>The child's restore graph, repo-relative with '/': what the build actually resolves, not what the
+    /// project file asks for.</summary>
+    public const string LockFile = "src/Evidgate.Parser/packages.lock.json";
+
+    /// <summary>The contracts project whose internals the profile and the child construct the report handle with.</summary>
+    public const string ContractsProjectFile =
+        "src/Modules/Evidgate.Modules.Evidence.Contracts/Evidgate.Modules.Evidence.Contracts.csproj";
+
+    /// <summary>
+    /// The child's complete restore allow-list: the two projects its project file references (the artifact contracts
+    /// and the shared kernel), plus the analyzer package the build adds to every project. Anything else in
+    /// <c>packages.lock.json</c> — a transitive dependency included — is code the no-network child would run.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AllowedLockedPackages =
+    [
+        "Evidgate.BuildingBlocks.SharedKernel",
+        EvidenceContractsProject,
+        "Microsoft.VisualStudio.Threading.Analyzers",
+    ];
+
+    /// <summary>
+    /// <c>Evidgate.Modules.Evidence.Contracts</c>' complete friend-assembly set: the module that owns the profile and
+    /// the parser child that links it, because both construct <c>ParsedXmlReport</c> through the profile's factory
+    /// (06.3.1-T1: its constructor is internal for exactly that reason, 06.3.6 AC1). A third friend would let another
+    /// assembly build the report handle outside the profile.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AllowedFriendAssemblies =
+    [
+        "Evidgate.Modules.Evidence",
+        ProjectName,
+    ];
+
+    /// <summary>
+    /// Package families a lock file must never resolve for the child: the web stack, <c>System.Net</c>, the database
+    /// drivers and the ORM/micro-ORM, and the cloud SDKs — reachable code in a process that has no network and no
+    /// connection string.
+    /// </summary>
+    private static readonly string[] DeniedLockedPackagePrefixes =
+    [
+        "Microsoft.AspNetCore",
+        "System.Net",
+        "Npgsql",
+        "Microsoft.EntityFrameworkCore",
+        "EntityFrameworkCore",
+        "Dapper",
+        "AWSSDK",
+    ];
 
     /// <summary>The profile directory the child links (06.3.1): the only other place a reader is constructed.</summary>
     public const string ProfileDirectory = ParserConstructionRules.ProfileDirectory;
@@ -90,6 +140,32 @@ public static class ParserChildIsolationRules
     ];
 
     /// <summary>
+    /// The <c>System.Net.Http</c> types a bare implicit using puts in scope, denied by name. <c>ImplicitUsings</c> is
+    /// enabled repo-wide (<c>Directory.Build.props</c>), so every file of a <c>Microsoft.NET.Sdk</c> project compiles
+    /// with <c>global using System.Net.Http;</c>: <c>var client = new HttpClient();</c> needs no
+    /// <c>using System.Net;</c> line for the namespace match above to catch. The alternative — requiring
+    /// <c>&lt;ImplicitUsings&gt;disable&lt;/ImplicitUsings&gt;</c> in the child's project — would mean an explicit
+    /// <c>using</c> in each of its four files and would still be undone by a <c>global using</c> in a props file, so
+    /// the rule takes the other route: the implicit usings stay, and the type names they expose are denied here, so
+    /// an unqualified use is a violation with no namespace text to match. <c>SocketsHttpHandler</c> and
+    /// <c>HttpClientHandler</c> need no entry of their own: the <c>Socket</c> and <c>HttpClient</c> tokens in
+    /// <see cref="ForbiddenApis"/> match them at a boundary.
+    /// </summary>
+    private static readonly string[] ImplicitNetworkApis =
+    [
+        "HttpRequestMessage",
+        "HttpResponseMessage",
+        "HttpMethod",
+        "HttpContent",
+        "StringContent",
+        "FormUrlEncodedContent",
+        "ByteArrayContent",
+        "MultipartFormDataContent",
+        "HttpMessageHandler",
+        "HttpRequestException",
+    ];
+
+    /// <summary>
     /// The only module namespaces the child may name: the artifact contracts it reports through, and the profile's own
     /// namespace (the linked sources declare it, so the child's entry point uses it).
     /// </summary>
@@ -100,18 +176,64 @@ public static class ParserChildIsolationRules
     ];
 
     /// <summary>
-    /// Member accesses the child's <em>own</em> files must not use: it reads stdin and writes stdout/stderr, so it
-    /// opens no file, starts no process and reads no environment variable (the launcher applies the limits and hands
-    /// the caps in as arguments). The linked profile files are exempt: the archive arm materialises entries into the
-    /// temp directory the caller owns.
+    /// Member accesses and types the child's <em>own</em> files must not use: it reads stdin and writes stdout/stderr,
+    /// so it opens no file, starts no process, reads no environment variable and resolves no path. The linked profile
+    /// files are deliberately not scanned here — the profile owns the archive's file creation for the callers that
+    /// extract (see <see cref="ChildExtractionCodeViolations"/> for the rule that keeps that arm out of the child).
+    /// <para>
+    /// <c>FileStream</c> itself is not banned, and <c>FileMode.</c>/<c>FileStreamOptions</c> are: the child wraps its
+    /// standard output in <c>new FileStream(new SafeFileHandle((nint)1, ownsHandle: false), FileAccess.Write,
+    /// bufferSize: 0)</c> because the .NET console stream swallows a broken pipe on Unix and the child has to report it
+    /// (06.3.6 §7 AC3) — no path and no file is opened by that constructor. Every <em>path</em> constructor of
+    /// <c>FileStream</c> names <c>FileMode</c> or <c>FileStreamOptions</c> (there is no <c>FileStream(string, …)</c>
+    /// overload without one), so banning those two tokens keeps the "opens no file" guarantee exact without forbidding
+    /// the descriptor stream.
+    /// </para>
+    /// <para>
+    /// <c>ImplicitUsings</c> is enabled repo-wide (<c>Directory.Build.props</c>), so these files also compile with
+    /// <c>global using System.IO;</c>: an unqualified <c>File.ReadAllBytes</c> or <c>new StreamReader(path)</c> needs
+    /// no using line, which is why the list holds these type and member names rather than a namespace, and why
+    /// <c>System.IO</c> is denied as text too — that one token covers a qualified use, a <c>using static System.IO</c>,
+    /// an <c>using F = System.IO.File</c> alias and <c>System.IO.Pipes</c> at once.
+    /// </para>
     /// </summary>
     private static readonly string[] ForbiddenChildApis =
     [
         "File.",
         "Directory.",
-        "FileStream",
+        "FileMode.",
+        "FileStreamOptions",
+        "FileInfo",
+        "DirectoryInfo",
+        "StreamReader(",
+        "StreamWriter(",
+        "Path.GetTemp",
+        "System.IO",
+        "ZipFile.",
         "Process.",
+        "new Process",
+        "ProcessStartInfo",
         "Environment.GetEnvironmentVariable",
+        "Environment.ExpandEnvironmentVariables",
+        "Environment.CurrentDirectory",
+    ];
+
+    /// <summary>
+    /// The profile's <em>file-creating</em> archive arm, which the child's own files must never name:
+    /// <c>SafeZipArchive.Extract</c> (the entry point), <c>ArchiveExtraction</c> (the handle that owns the temp root),
+    /// and the <c>extract:</c> argument that turns the walk into the writing one. The code is linked into the child
+    /// (one implementation of the caps, 06.3.6 D-06.3.6-1), so "the child cannot reach it" is a fact this rule asserts
+    /// rather than one the linker provides: the child reports archive entries through the non-extracting
+    /// <c>SafeZipArchive.Enumerate</c>, and a later edit that reached for the writing arm would fail the build.
+    /// <c>Extract</c> matches every longer spelling at a boundary too (<c>ExtractToDirectory</c>, <c>ExtractAsync</c>),
+    /// so one token covers the family; <c>ArchiveExtraction</c> needs its own because <c>Extract</c> sits inside that
+    /// identifier and cannot match there.
+    /// </summary>
+    private static readonly string[] ForbiddenChildExtractionApis =
+    [
+        "Extract",
+        "ArchiveExtraction",
+        "extract:",
     ];
 
     /// <summary>
@@ -332,6 +454,19 @@ public static class ParserChildIsolationRules
                 }
             }
 
+            // The implicit `global using System.Net.Http;` (Directory.Build.props enables ImplicitUsings for every
+            // project) makes these types reachable without a using line, so each one is denied by name.
+            foreach (var api in ImplicitNetworkApis)
+            {
+                if (Mentions(code, api))
+                {
+                    violations.Add(
+                        $"{path} mentions {api}: `ImplicitUsings` puts System.Net.Http in scope for every file of the "
+                        + "child, so the network types are denied by name — the parser child runs with no network "
+                        + "(06.3.6 §8 AC4)");
+                }
+            }
+
             foreach (var name in ModuleNamespaces(code))
             {
                 if (AllowedModulePrefixes.Any(prefix => IsWithin(name, prefix)))
@@ -349,9 +484,11 @@ public static class ParserChildIsolationRules
     }
 
     /// <summary>
-    /// AC1(d), the transport half: the child's own files open no file, start no process and read no environment
-    /// variable — the launcher applies the limits and the caps arrive as arguments, so the child reads stdin and
-    /// writes stdout/stderr only. The linked profile files are deliberately not passed here.
+    /// AC1(d), the transport half: the child's own files open no file, start no process, read no environment variable
+    /// and resolve no temp path — the launcher applies the limits and the caps arrive as arguments, so the child reads
+    /// stdin and writes stdout/stderr only. The linked profile files are deliberately not passed here: the profile's
+    /// extraction arm legitimately creates files for the callers that own a temp root (and
+    /// <see cref="ChildExtractionCodeViolations"/> is what keeps that arm out of the child).
     /// </summary>
     /// <param name="ownFiles">The child's own files (path + text).</param>
     /// <returns>The violations, ordered by path.</returns>
@@ -369,7 +506,42 @@ public static class ParserChildIsolationRules
                 {
                     violations.Add(
                         $"{path} uses {api}: the parser child reads stdin and writes stdout/stderr only — no file, "
-                        + "no process, no environment variable (06.3.6 §7, AC1)");
+                        + "no process, no environment variable, no temp path (06.3.6 §7, AC1)");
+                }
+            }
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// AC1(d), the archive half: the child's own files never name the profile's <em>file-creating</em> archive arm. The
+    /// profile links <c>SafeZipArchive.Extract</c>, which writes every accepted entry under a temporary root with
+    /// <c>Path.GetTempPath</c>/<c>Directory.CreateDirectory</c>/<c>new FileStream(…, FileMode.CreateNew)</c>; that code
+    /// is linked into the child because the profile's caps must be one implementation, but the child's transport is
+    /// stdin/stdout, so the archive it reports comes from the non-extracting <c>Enumerate</c> walk. Nothing else stops
+    /// a later edit from calling the writing arm — the linker cannot, since the code is in the assembly — so the rule
+    /// does: no child file may name the entry point, the extraction handle or the <c>extract:</c> flag.
+    /// </summary>
+    /// <param name="ownFiles">The child's own files (path + text).</param>
+    /// <returns>The violations, ordered by path.</returns>
+    public static IReadOnlyList<string> ChildExtractionCodeViolations(
+        IEnumerable<(string Path, string Text)> ownFiles)
+    {
+        var violations = new List<string>();
+
+        foreach (var (path, text) in ownFiles.OrderBy(file => file.Path, StringComparer.Ordinal))
+        {
+            var code = ParserConstructionRules.StripTrivia(text);
+
+            foreach (var api in ForbiddenChildExtractionApis)
+            {
+                if (Mentions(code, api))
+                {
+                    violations.Add(
+                        $"{path} names {api}: the parser child reports archive entries through the profile's "
+                        + "non-extracting walk, so the linked file-creating arm (SafeZipArchive.Extract, "
+                        + "ArchiveExtraction) is unreachable from it (06.3.6 §8, AC1)");
                 }
             }
         }
@@ -453,6 +625,107 @@ public static class ParserChildIsolationRules
 
         return $"only {Names(AllowedClosureProjects)} may be part of the child's closure";
     }
+
+    /// <summary>
+    /// AC1(b), the restore half: every dependency in the child's <c>packages.lock.json</c> — which is the graph the
+    /// build resolves, transitive packages included, not the short list the project file asks for — is on
+    /// <paramref name="allowed"/>. One violation per other package; a package from a denied family is named as such.
+    /// </summary>
+    /// <param name="lockJson">The lock file's JSON text.</param>
+    /// <param name="projectName">The project's name, used in the message.</param>
+    /// <param name="allowed">The allowed dependency names, compared without case (the lock file lowercases ids).</param>
+    /// <returns>The violations, ordered by package name.</returns>
+    public static IReadOnlyList<string> LockedPackageViolations(
+        string lockJson,
+        string projectName,
+        IReadOnlyList<string> allowed)
+    {
+        var violations = new List<string>();
+
+        foreach (var package in LockedPackageNames(lockJson))
+        {
+            if (allowed.Contains(package, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var denied = DeniedLockedPackagePrefixes.FirstOrDefault(
+                prefix => package.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+            violations.Add(denied is null
+                ? $"{projectName} restores {package}: the parser child carries {Allowance(allowed)} "
+                    + "(06.3.6 AC1, §8)"
+                : $"{projectName} restores {package}: {denied}* is a web-stack, network, database, ORM or cloud-SDK "
+                    + "package, and the parser child runs without a network or a connection string "
+                    + "(06.3.6 AC1, §8 AC4)");
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// Every dependency name in a <c>packages.lock.json</c>, across all of its targets, deduplicated and sorted: the
+    /// package ids as the lock file spells them plus the two project entries.
+    /// </summary>
+    /// <param name="lockJson">The lock file's JSON text.</param>
+    /// <returns>The dependency names, in ordinal order.</returns>
+    public static IReadOnlyList<string> LockedPackageNames(string lockJson)
+    {
+        var names = new SortedSet<string>(StringComparer.Ordinal);
+
+        using var document = JsonDocument.Parse(lockJson);
+
+        if (!document.RootElement.TryGetProperty("dependencies", out var targets)
+            || targets.ValueKind != JsonValueKind.Object)
+        {
+            return [];
+        }
+
+        foreach (var target in targets.EnumerateObject())
+        {
+            if (target.Value.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            foreach (var package in target.Value.EnumerateObject())
+            {
+                names.Add(package.Name);
+            }
+        }
+
+        return names.ToList();
+    }
+
+    /// <summary>
+    /// 06.3.1-T1 / 06.3.6 AC1: the contracts project's <c>InternalsVisibleTo</c> set is exactly
+    /// <paramref name="allowed"/>. Both entries are needed — the module that owns the profile and the child that links
+    /// it construct the report handle — and a third friend would be an assembly building it outside the profile.
+    /// </summary>
+    /// <param name="projectXml">The contracts project's XML text.</param>
+    /// <param name="projectName">The project's name, used in the message.</param>
+    /// <param name="allowed">The allowed friend assembly names.</param>
+    /// <returns>The violations, in document order.</returns>
+    public static IReadOnlyList<string> FriendAssemblyViolations(
+        string projectXml,
+        string projectName,
+        IReadOnlyList<string> allowed) =>
+        FriendAssemblyNames(projectXml)
+            .Where(friend => !allowed.Contains(friend, StringComparer.Ordinal))
+            .Select(friend =>
+                $"{projectName} exposes its internals to {friend}: only {Names(allowed)} construct the profile's "
+                + "report handle, so no other assembly may see its internals (06.3.1-T1, 06.3.6 AC1)")
+            .ToList();
+
+    /// <summary>The <c>InternalsVisibleTo</c> assembly names of a project file, in document order, public-key part
+    /// removed.</summary>
+    /// <param name="projectXml">The project file XML text.</param>
+    /// <returns>The friend assembly names.</returns>
+    public static IReadOnlyList<string> FriendAssemblyNames(string projectXml) =>
+        ElementAttributes(projectXml, "InternalsVisibleTo", "Include")
+            .Select(include => include.Split(',')[0].Trim())
+            .Where(name => name.Length > 0)
+            .ToList();
 
     private static List<string> ElementAttributes(string projectXml, string element, string attribute) =>
         XDocument.Parse(projectXml, LoadOptions.None)

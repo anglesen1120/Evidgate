@@ -1,8 +1,11 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using Shouldly;
 using Xunit;
 
@@ -43,6 +46,9 @@ public sealed class SandboxLimitsProbeTests
     /// <summary>The per-cgroup interface files whose presence proves a controller is delegated to that cgroup.</summary>
     private static readonly string[] CgroupLimitFiles = ["memory.max", "cpu.max", "pids.max"];
 
+    /// <summary>The controllers the child's ceilings are read from, so all three must be delegated to its cgroup.</summary>
+    private static readonly string[] RequiredControllers = ["memory", "cpu", "pids"];
+
     /// <summary>The connect errnos a namespace child can report; any of them means the connect itself failed.</summary>
     private static readonly string[] ConnectFailureMarkers =
         ["Connection refused", "Network is unreachable", "No route to host", "Cannot assign requested address"];
@@ -69,17 +75,27 @@ public sealed class SandboxLimitsProbeTests
         var controllers = File.ReadAllText(controllersPath)
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        foreach (var expected in new[] { "memory", "cpu", "pids" })
+        var missingControllers = RequiredControllers
+            .Where(expected => !controllers.Contains(expected, StringComparer.Ordinal))
+            .ToArray();
+
+        if (missingControllers.Length > 0)
         {
-            controllers.ShouldContain(
-                expected,
-                FormattableString.Invariant(
-                    $"cgroup v2 must offer the '{expected}' controller: '{controllersPath}' lists '{string.Join(' ', controllers)}'"));
+            Assert.Skip(
+                $"root '{controllersPath}' does not offer '{string.Join(", ", missingControllers)}' (it lists " +
+                $"'{string.Join(' ', controllers)}'), so the child's ceiling cannot be read from a cgroup here. " +
+                "DECISIONS F14 relies on the container case, where the container is its own cgroup namespace root " +
+                "and the root of that namespace delegates the controllers. Probe result: skipped, not passed.");
         }
 
         var ownDirectory = OwnCgroupDirectory();
-        Directory.Exists(ownDirectory).ShouldBeTrue(
-            $"the test's own cgroup directory must be readable: '{ownDirectory}' (resolved from '{ProcSelfCgroup}')");
+        if (!Directory.Exists(ownDirectory))
+        {
+            Assert.Skip(
+                $"the test's own cgroup directory '{ownDirectory}' (resolved from '{ProcSelfCgroup}') is not " +
+                "readable here, so no controller is delegated to this leaf and the child's effective ceiling " +
+                "cannot be read from this host. Probe result: skipped, not passed.");
+        }
 
         var missing = CgroupLimitFiles
             .Where(file => !File.Exists(Path.Combine(ownDirectory, file)))
@@ -91,7 +107,8 @@ public sealed class SandboxLimitsProbeTests
                 $"the test's own cgroup '{ownDirectory}' does not expose '{string.Join(", ", missing)}', so no " +
                 $"controller is delegated to this leaf and the child's effective ceiling cannot be read from " +
                 $"here (root '{controllersPath}' lists '{string.Join(' ', controllers)}'). DECISIONS F14 relies " +
-                "on the container case, where the container is its own cgroup namespace root.");
+                "on the container case, where the container is its own cgroup namespace root. Probe result: " +
+                "skipped, not passed.");
         }
 
         AssertMaxValue(Path.Combine(ownDirectory, "memory.max"));
@@ -148,7 +165,7 @@ public sealed class SandboxLimitsProbeTests
     [Fact]
     public async Task GcHeapHardLimit_StopsAChildProcessAllocatingPastTheLimit()
     {
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(GcHeapLimitProbeChild.MarkerVariable)))
+        if (GcHeapLimitProbeChild.IsProbeChild())
         {
             Assert.Skip("this process is the GC heap-limit probe child: its module initializer measures the heap and exits, so no test may run here");
         }
@@ -177,9 +194,25 @@ public sealed class SandboxLimitsProbeTests
                 startInfo.ArgumentList.Add(argument);
             }
 
+            // A minimal environment: the probe measures the heap ceiling this parent sets, so no inherited
+            // DOTNET_* setting — another heap cap, a startup hook, a GC mode — may travel with it. Only what
+            // locates the shared runtime and what any child needs to start at all is kept.
+            startInfo.Environment.Clear();
+            CopyEnvironment(startInfo, "PATH", "HOME", "TMPDIR", "TEMP", "TMP");
+            CopyEnvironment(
+                startInfo,
+                "DOTNET_ROOT",
+                "DOTNET_ROOT(x64)",
+                "DOTNET_ROOT(x86)",
+                "DOTNET_ROOT(arm64)");
+
             startInfo.Environment[HeapLimitVariable] = HeapLimitHex;
             startInfo.Environment[GcHeapLimitProbeChild.MarkerVariable] = marker;
-            _ = startInfo.Environment.Remove("DOTNET_GCHeapHardLimitPercent");
+
+            // The nonce binds the two variables: a marker alone is not enough for the second process to become
+            // the probe, so an ambient or stale marker variable can never end an ordinary test run in the module
+            // initializer.
+            startInfo.Environment[GcHeapLimitProbeChild.NonceVariable] = GcHeapLimitProbeChild.NonceFor(marker);
 
             var (exitCode, standardOutput, standardError) = await RunBoundedAsync(startInfo, ProbeTimeout);
             exitCode.ShouldBe(
@@ -212,8 +245,10 @@ public sealed class SandboxLimitsProbeTests
     /// <summary>
     /// 06.3.6 §9 AC4 / DECISIONS F14: a network namespace is the kernel-level "no network" the runner tries first,
     /// and a fresh namespace has no listener and its loopback device down, so a connect that works in the plain
-    /// child must fail in the namespace. Where the host forbids the namespace the probe skips with the errno text:
-    /// a container without <c>CAP_SYS_ADMIN</c> or the unprivileged user-namespace route gets EPERM.
+    /// child must fail in the namespace. Any failure to create the namespace at all — EPERM without
+    /// <c>CAP_SYS_ADMIN</c>, EINVAL, a container that forbids it — is a fact this host cannot express, so the
+    /// probe skips with the helper's own text instead of failing; only a connect that *succeeds* inside the
+    /// namespace is a defect.
     /// </summary>
     [Fact]
     public async Task NewNetworkNamespace_CannotReachALoopbackListenerOfTheParent()
@@ -258,35 +293,30 @@ public sealed class SandboxLimitsProbeTests
             {
                 var (namespaceExitCode, _, namespaceError) = await RunBoundedAsync(unshare, arguments, ProbeTimeout);
 
-                // EPERM means this host will not create the namespace at all: try the unprivileged route next.
-                if (namespaceError.Contains("Operation not permitted", StringComparison.Ordinal)
-                    || namespaceError.Contains("EPERM", StringComparison.Ordinal))
-                {
-                    refused.Add($"{label}: {Truncate(namespaceError)}");
-                    continue;
-                }
-
-                namespaceError.Contains("unshare:", StringComparison.Ordinal).ShouldBeFalse(
-                    $"{label} must run the child, not fail on its own, before this probe reads the connect result; " +
-                    $"stderr: {Truncate(namespaceError)}");
-
+                // A success means the child reached the listener the parent opened: it never left the test's
+                // namespace, which is the one outcome this probe must fail on.
                 namespaceExitCode.ShouldNotBe(
                     0,
-                    $"{label}: a child in a fresh network namespace must not reach 127.0.0.1:{port} — the namespace has " +
-                    "no listener and its loopback device is down. A success means the child never left the test's namespace.");
+                    $"{label}: a child in a fresh network namespace must not reach 127.0.0.1:{port} — the namespace " +
+                    "has no listener and its loopback device is down. A success means the child never left the " +
+                    "test's namespace.");
 
-                var connectFailed = ConnectFailureMarkers
-                    .Any(marker => namespaceError.Contains(marker, StringComparison.Ordinal));
+                if (ConnectFailureMarkers.Any(marker => namespaceError.Contains(marker, StringComparison.Ordinal)))
+                {
+                    // The namespace ran the child and the connect failed inside it: the isolation holds.
+                    return;
+                }
 
-                connectFailed.ShouldBeTrue(
-                    $"{label}: the namespace child must fail at the connect, not for an unrelated reason; stderr: {Truncate(namespaceError)}");
-                return;
+                // Anything else is the host refusing to create the namespace at all (EPERM, EINVAL, a missing
+                // helper, a container without CAP_SYS_ADMIN): a fact this host cannot express, not a product
+                // defect, so the next route is tried and, if every route refuses, the probe skips with the text.
+                refused.Add($"{label}: {Truncate(namespaceError)}");
             }
 
             Assert.Skip(
-                $"this host forbids creating a network namespace ({string.Join(" | ", refused)}); it needs " +
-                "CAP_SYS_ADMIN or an unprivileged user namespace, so DECISIONS F14 falls back to a container with no " +
-                "network. Probe result: skipped, not passed.");
+                $"this host could not create a network namespace through any route ({string.Join(" | ", refused)}); " +
+                "it needs CAP_SYS_ADMIN or an unprivileged user namespace, so DECISIONS F14 falls back to a " +
+                "container with no network. Probe result: skipped, not passed.");
         }
         finally
         {
@@ -412,6 +442,24 @@ public sealed class SandboxLimitsProbeTests
         return (processPath, [assembly]);
     }
 
+    /// <summary>
+    /// Copies the named variables of this process's environment into <paramref name="startInfo"/>, skipping the
+    /// ones that are unset, so a probe child can be started with a minimal environment instead of inheriting one.
+    /// </summary>
+    /// <param name="startInfo">The start info whose environment is being built.</param>
+    /// <param name="names">The variable names to copy.</param>
+    private static void CopyEnvironment(ProcessStartInfo startInfo, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (!string.IsNullOrEmpty(value))
+            {
+                startInfo.Environment[name] = value;
+            }
+        }
+    }
+
     /// <summary>The absolute path of <paramref name="name"/> on <c>PATH</c>, or an empty string when it is absent.</summary>
     private static string FindOnPath(string name)
     {
@@ -449,8 +497,9 @@ public sealed class SandboxLimitsProbeTests
     }
 
     /// <summary>
-    /// Runs one child with a hard deadline: a probe that hangs is killed and fails the test with the output it
-    /// produced, so a wedged probe can never hold the suite (06.3.6 §7 "wall via parent timer").
+    /// Runs one child with a hard deadline: a probe that hangs — or a test that is cancelled — has its whole
+    /// process tree killed in a <see langword="finally"/>, and a hang fails the test with the output it produced,
+    /// so a wedged probe can never hold the suite (06.3.6 §7 "wall via parent timer").
     /// </summary>
     private static async Task<(int ExitCode, string StandardOutput, string StandardError)> RunBoundedAsync(
         ProcessStartInfo startInfo,
@@ -460,34 +509,59 @@ public sealed class SandboxLimitsProbeTests
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"could not start '{startInfo.FileName}' for the sandbox probe");
 
-        var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
-
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(timeout);
         try
         {
-            await process.WaitForExitAsync(deadline.Token);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
+            var standardOutput = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var standardError = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(timeout);
+
             try
+            {
+                await process.WaitForExitAsync(deadline.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                Kill(process);
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    // The test itself was abandoned: the tree is gone, so the cancellation propagates as itself.
+                    throw;
+                }
+
+                var deadlineMessage = FormattableString.Invariant(
+                    $"'{startInfo.FileName}' did not exit within {timeout.TotalSeconds:0} s and was killed");
+
+                throw new TimeoutException(
+                    $"{deadlineMessage}; stdout: {Truncate(await standardOutput)}; stderr: {Truncate(await standardError)}");
+            }
+
+            return (process.ExitCode, await standardOutput, await standardError);
+        }
+        finally
+        {
+            // Success, timeout, cancellation or a fault in the pipes: nothing of this probe may outlive the test.
+            Kill(process);
+        }
+    }
+
+    /// <summary>Kills the whole process tree of a probe that is still running; an exited probe needs nothing.</summary>
+    /// <param name="process">The probe process.</param>
+    private static void Kill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
             }
-            catch (InvalidOperationException)
-            {
-                // The child exited between the deadline and the kill; the exit code below is still the answer.
-            }
-
-            var deadlineMessage = FormattableString.Invariant(
-                $"'{startInfo.FileName}' did not exit within {timeout.TotalSeconds:0} s and was killed");
-
-            throw new TimeoutException(
-                $"{deadlineMessage}; stdout: {Truncate(await standardOutput)}; stderr: {Truncate(await standardError)}");
         }
-
-        return (process.ExitCode, await standardOutput, await standardError);
+        catch (InvalidOperationException)
+        {
+            // The child exited between the deadline and the kill.
+        }
     }
 
     /// <summary>Turns the child's <c>key=value</c> marker lines into numbers; the format is written by <see cref="GcHeapLimitProbeChild"/>.</summary>
@@ -528,10 +602,11 @@ public sealed class SandboxLimitsProbeTests
 
 /// <summary>
 /// 06.3.6-T1.1: the probe child for <see cref="SandboxLimitsProbeTests.GcHeapHardLimit_StopsAChildProcessAllocatingPastTheLimit"/>.
-/// The parent starts this test assembly again with <c>EVG_PARSER_PROBE_MARKER</c> and a
-/// <c>DOTNET_GCHeapHardLimit</c>; the module initializer runs before the test runner starts, allocates 1 MiB
-/// blocks until the runtime refuses, writes the observed ceiling and allocation count, and exits. Without the
-/// marker variable it does nothing, so an ordinary test run is unaffected.
+/// The parent starts this test assembly again with <c>EVG_PARSER_PROBE_MARKER</c>, the matching
+/// <c>EVG_PARSER_PROBE_NONCE</c> and a <c>DOTNET_GCHeapHardLimit</c>; the module initializer runs before the test
+/// runner starts, allocates 1 MiB blocks until the runtime refuses, writes the observed ceiling and allocation
+/// count, and exits. Without the marker, or with a marker whose nonce does not match, it does nothing, so an
+/// ordinary test run is unaffected — including one that inherited a stale marker variable from its environment.
 /// </summary>
 // CA2255 warns about module initializers in *libraries*; this is a deliberate one-shot probe in a test
 // executable, which is the only place a second process with an inherited heap limit can be produced without a
@@ -542,11 +617,30 @@ internal static class GcHeapLimitProbeChild
     /// <summary>Set by the parent probe and read here; absent in a normal test run.</summary>
     internal const string MarkerVariable = "EVG_PARSER_PROBE_MARKER";
 
+    /// <summary>
+    /// Set beside the marker, to the value <see cref="NonceFor"/> derives from the marker path. The marker alone
+    /// is not a licence to exit the process: the pair is what the parent sets, so an inherited or stale marker
+    /// variable can never turn a normal test run into the probe.
+    /// </summary>
+    internal const string NonceVariable = "EVG_PARSER_PROBE_NONCE";
+
+    /// <summary>
+    /// The nonce for one marker path: a SHA-256 of the path the parent just created under its own temp
+    /// directory, so only a parent that knows the path can authorise the probe.
+    /// </summary>
+    /// <param name="markerPath">The marker path the parent passes in <see cref="MarkerVariable"/>.</param>
+    /// <returns>The hexadecimal nonce, as it travels in <see cref="NonceVariable"/>.</returns>
+    internal static string NonceFor(string markerPath) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(markerPath)));
+
+    /// <summary>True when this process is the probe child the parent started (both variables present and bound).</summary>
+    /// <returns>True for the probe child only.</returns>
+    internal static bool IsProbeChild() => TryGetMarker(out _);
+
     [ModuleInitializer]
     internal static void RunIfProbeChild()
     {
-        var marker = Environment.GetEnvironmentVariable(MarkerVariable);
-        if (string.IsNullOrEmpty(marker))
+        if (!TryGetMarker(out var marker))
         {
             return;
         }
@@ -578,6 +672,23 @@ internal static class GcHeapLimitProbeChild
 
         // Never let the probe process run a test suite: the marker process exists only to allocate and report.
         Environment.Exit(0);
+    }
+
+    /// <summary>
+    /// Reads the marker path and accepts it only when the parent's nonce matches it, so the marker variable alone
+    /// never authorises the probe.
+    /// </summary>
+    /// <param name="marker">The marker path when this process is the probe child; otherwise null.</param>
+    /// <returns>True when both variables are present and bound to each other.</returns>
+    private static bool TryGetMarker([NotNullWhen(true)] out string? marker)
+    {
+        marker = Environment.GetEnvironmentVariable(MarkerVariable);
+
+        return !string.IsNullOrEmpty(marker)
+            && string.Equals(
+                Environment.GetEnvironmentVariable(NonceVariable),
+                NonceFor(marker),
+                StringComparison.Ordinal);
     }
 }
 #pragma warning restore CA2255

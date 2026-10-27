@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Xunit;
 
 namespace Parser.Tests;
 
@@ -24,6 +25,11 @@ internal sealed record ChildRun(int ExitCode, byte[] StdoutBytes, string Stderr)
 /// Launches the built <c>Evidgate.Parser</c> child as a real process — <c>dotnet exec --runtimeconfig … dll …</c>,
 /// the same way the Migrator tests start a host — and captures both pipes. The child is located from this project's
 /// own output directory, so the configuration (Debug or Release) always matches the one the test build used.
+/// <para>
+/// Every run is bounded: the deadline, or the test's own cancellation, ends in
+/// <see cref="Process.Kill(bool)"/> of the whole tree in a <see langword="finally"/>, so a wedged or cancelled
+/// child can never outlive the suite holding its pipes open.
+/// </para>
 /// </summary>
 internal static class ChildRunner
 {
@@ -36,11 +42,36 @@ internal static class ChildRunner
 
     private static readonly string ChildRuntimeConfig = LocateChildFile("Evidgate.Parser.runtimeconfig.json");
 
-    /// <summary>Runs the child over <paramref name="stdin"/> with the given arguments.</summary>
+    /// <summary>Runs the child over <paramref name="stdin"/> with the given arguments, writing stdin in one block.</summary>
     /// <param name="stdin">The bytes the child reads as its artifact.</param>
     /// <param name="arguments">The child's argument vector.</param>
     /// <returns>The finished run: exit code and both streams.</returns>
-    public static async Task<ChildRun> RunAsync(byte[] stdin, params string[] arguments)
+    public static Task<ChildRun> RunAsync(byte[] stdin, params string[] arguments) =>
+        RunCoreAsync(stdin, 0, arguments);
+
+    /// <summary>
+    /// Runs the child over <paramref name="stdin"/> written in blocks of <paramref name="chunkBytes"/> bytes, one
+    /// flush per block — the shape a parent pipe produces when it dribbles an object out, and the one the child's
+    /// read must coalesce.
+    /// </summary>
+    /// <param name="chunkBytes">How many bytes each stdin write carries (positive).</param>
+    /// <param name="stdin">The bytes the child reads as its artifact.</param>
+    /// <param name="arguments">The child's argument vector.</param>
+    /// <returns>The finished run: exit code and both streams.</returns>
+    public static Task<ChildRun> RunFragmentedAsync(int chunkBytes, byte[] stdin, params string[] arguments)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(chunkBytes);
+
+        return RunCoreAsync(stdin, chunkBytes, arguments);
+    }
+
+    /// <summary>
+    /// The command line that starts the built child with all three pipes redirected. A test that has to drive the
+    /// process itself (to close a pipe mid-run) uses this, so the child's location never gets a second copy.
+    /// </summary>
+    /// <param name="arguments">The child's argument vector.</param>
+    /// <returns>The start info, ready for <see cref="Process.Start(ProcessStartInfo)"/>.</returns>
+    internal static ProcessStartInfo CreateStartInfo(params string[] arguments)
     {
         var startInfo = new ProcessStartInfo("dotnet")
         {
@@ -60,33 +91,83 @@ internal static class ChildRunner
             startInfo.ArgumentList.Add(argument);
         }
 
-        using var process = Process.Start(startInfo)
+        return startInfo;
+    }
+
+    private static async Task<ChildRun> RunCoreAsync(byte[] stdin, int chunkBytes, string[] arguments)
+    {
+        using var process = Process.Start(CreateStartInfo(arguments))
             ?? throw new InvalidOperationException("could not start the parser child process");
         using var stdout = new MemoryStream();
         using var stderr = new MemoryStream();
-        using var timeout = new CancellationTokenSource(RunTimeout);
-
-        // Both pipes are drained before stdin is written: a child that writes while the test writes could
-        // otherwise fill a pipe buffer and deadlock.
-        var stdoutTask = process.StandardOutput.BaseStream.CopyToAsync(stdout, timeout.Token);
-        var stderrTask = process.StandardError.BaseStream.CopyToAsync(stderr, timeout.Token);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(RunTimeout);
 
         try
         {
-            await process.StandardInput.BaseStream.WriteAsync(stdin, timeout.Token);
-            await process.StandardInput.BaseStream.FlushAsync(timeout.Token);
-            process.StandardInput.Close();
+            // Both pipes are drained before stdin is written: a child that writes while the test writes could
+            // otherwise fill a pipe buffer and deadlock.
+            var stdoutTask = process.StandardOutput.BaseStream.CopyToAsync(stdout, timeout.Token);
+            var stderrTask = process.StandardError.BaseStream.CopyToAsync(stderr, timeout.Token);
+
+            try
+            {
+                await WriteStdinAsync(process.StandardInput.BaseStream, stdin, chunkBytes, timeout.Token);
+                process.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                // The child may stop reading before the last byte — a usage error never reads stdin, and a size
+                // rejection stops at the cap — so a broken pipe here is the child's verdict, not a test failure.
+            }
+
+            await process.WaitForExitAsync(timeout.Token);
+            await Task.WhenAll(stdoutTask, stderrTask);
+
+            return new ChildRun(process.ExitCode, stdout.ToArray(), Encoding.UTF8.GetString(stderr.ToArray()));
         }
-        catch (IOException)
+        finally
         {
-            // The child may stop reading before the last byte — a usage error never reads stdin, and a size
-            // rejection stops at the cap — so a broken pipe here is the child's verdict, not a test failure.
+            // The deadline, a cancelled test, or an exception above: nothing of this child may survive the run.
+            Kill(process);
+        }
+    }
+
+    private static async Task WriteStdinAsync(Stream input, byte[] content, int chunkBytes, CancellationToken cancellationToken)
+    {
+        if (chunkBytes == 0)
+        {
+            await input.WriteAsync(content, cancellationToken);
+            await input.FlushAsync(cancellationToken);
+
+            return;
         }
 
-        await process.WaitForExitAsync(timeout.Token);
-        await Task.WhenAll(stdoutTask, stderrTask);
+        for (var offset = 0; offset < content.Length; offset += chunkBytes)
+        {
+            var length = Math.Min(chunkBytes, content.Length - offset);
+            await input.WriteAsync(content.AsMemory(offset, length), cancellationToken);
 
-        return new ChildRun(process.ExitCode, stdout.ToArray(), Encoding.UTF8.GetString(stderr.ToArray()));
+            // One flush per block: the child must see each block as its own read, which is what makes the
+            // coalescing in StdinBuffer observable.
+            await input.FlushAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>Kills the process tree of a child that is still running; a child that already exited needs nothing.</summary>
+    private static void Kill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // The child exited between the check and the kill.
+        }
     }
 
     private static string LocateChildFile(string fileName)
