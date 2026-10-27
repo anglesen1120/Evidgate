@@ -5,12 +5,12 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 ## 1. Snapshot
 
 ### Resume here
-- Develop: `787f592` (PR #228, S102 02.3.2-T2, merged); 220 first-parent PR merges into develop. Migration `0048_identity_session_routes.sql` is merged in #228; migration lane free, next free migration `0049`.
+- Develop: `787f592` (PR #228, S102 02.3.2-T2, merged); 220 first-parent PR merges into develop. Migration `0048_identity_session_routes.sql` is merged in #228. S115 (05.3.2-T5) is in review with `0049_orchestration_evidence_revision.sql` (PR number in the delivery row below); the migration lane is held by S115 until it merges, next free migration `0050`.
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop: 178/655 tasks; 183.25/702.75 raw person-days; remaining 477 tasks / 519.5 d. Via merged PRs: 151 tasks / 158.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- Landed by phase (done tasks / raw d): G1 132 / 144.25; G2 40 / 33; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop (counting S115 05.3.2-T5 once merged): 179/655 tasks; 184.25/702.75 raw person-days; remaining 476 tasks / 518.5 d. Via merged PRs: 152 tasks / 159.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 132 / 144.25; G2 41 / 34; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -24,10 +24,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 178 | 183.25 |
-| Via merged PRs | 151 | 158.25 |
+| Fully landed on develop | 179 | 184.25 |
+| Via merged PRs | 152 | 159.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 477 | 519.5 |
+| Remaining | 476 | 518.5 |
 | Plan total | 655 | 702.75 |
 
 Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 09.2.1-T5 (T5.2 reload acceptance awaits the `apps/web` wire-up of the S116 activation read), 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764) and whose remainder is the T2.2 acceptance plus T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -40,7 +40,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 02 | 29 | 0 | 8 | 18 | 3 | 0 | 28 |
 | 03 | 8 | 0 | 3 | 4 | 1 | 0 | 7.5 |
 | 04 | 22 | 0 | 7 | 12 | 3 | 0 | 21.5 |
-| 05 | 17 | 0 | 5 | 8 | 4 | 0 | 18.5 |
+| 05 | 18 | 0 | 5 | 9 | 4 | 0 | 19.5 |
 | 06 | 12 | 0 | 4 | 8 | 0 | 0 | 10 |
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
 | 08 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -49,17 +49,17 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 11 | 9 | 1 | 3 | 4 | 1 | 0 | 7.75 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 178 | 3 | 49 | 95 | 30 | 1 | 183.25 |
+| TOTAL | 179 | 3 | 49 | 96 | 30 | 1 | 184.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
 | G1 | 132 | 3 | 29 | 72 | 27 | 1 | 144.25 |
-| G2 | 40 | 0 | 18 | 20 | 2 | 0 | 33 |
+| G2 | 41 | 0 | 18 | 21 | 2 | 0 | 34 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 178 | 3 | 49 | 95 | 30 | 1 | 183.25 |
+| TOTAL | 179 | 3 | 49 | 96 | 30 | 1 | 184.25 |
 
 ### Landed task groups
 
@@ -188,6 +188,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 11.2.1 | 11.2.1-T3 (T3.1 + T3.2) | merged (#225, f4c7de8) | `docs/security/ingest-token-review.md`: shipped ingest/CI token design reviewed against code at 96e0f17 (scope, TTL, OIDC claim validation, revocation, replay, T5 storage, single return, pepper custody and rotation, 17-row abuse table, five new gaps T3-G1..G5). Docs-only, tier T0. Whole task: counts +1 task / +1.0 d (M); nothing else in §5 was unblocked (04.9.1-T2, 08.4.3-T2, 11.2.1-T4 and 11.2.1-T5 wait on 11.2.1-T6/T4, 05.9.2-T1 on all of 11.2.1). |
 | 06.4.6 | 06.4.6-T1 (T1.1 + T1.2) | merged (#234, 7bad46a) | `docs/adr/0009-event-table-partitioning.md` (proposed, owner confirmation pending): option C, monthly partitions by `run_created_at`, widened dedupe key, `DEFAULT` partition + plain `DETACH` with `lock_timeout` ≤ 5 s (D-S113-Q1; PostgreSQL 18 forbids `DETACH CONCURRENTLY` with a default partition), retention table, 90-day cap proposal; CR proposals logged `[OPEN]` as OI-06-17. Docs-only, tier T0. Whole task: counts +1 task / +0.5 d (S); 06.4.6-T2 and T3 remain. |
 | 05.5.2 | 05.5.2-T1 (T1.1 + T1.2) | merged (#236, 148bc06) | CI re-run contract change (docs only, tier T0, proposed, owner confirmation pending): 00 §8.1 gains `rerun_scope = ci_attempt` and the attempt rule (triple identity, new run per higher attempt with parent = highest stored lower attempt, `stale_attempt`, partial-attempt label), §9.4 binds the whole triple; 00 §15 row, plan 05 FR-05-7/§4/producer-binding line, DECISIONS §6 F10–F13 (GitHub facts ✅, one ⚠️ kept), OI-05-05 reworded, OI-05-16 added. No claim, wire field, code or contract file changed. |
+| 05.3.2 | 05.3.2-T5 (T5.1 + T5.2) | in review (S115, PR #239) | `migrations/0049_orchestration_evidence_revision.sql`: append-only `evidence_revision` (app role SELECT + INSERT, FORCE RLS, closed `missing[]` codes incl. `setup_error`, gap-free `revision_no` trigger), `evidence_revision_run_idx`, composite pointer FK `run_current_evidence_revision_fk`, `update (current_evidence_revision_id)` grant and `run_evidence_pointer_guard` (latest revision of the same run only, never null). `GetRun` unchanged. D-S115-Q1 (proposed): lock order run row first, then insert, then pointer. |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -401,7 +402,6 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 04.6.1-T1 | L | Fixture layout `fixtures/<producer>/<case>/` + diff harness (expected events vs produced) | yes | no | no | T1.1+T1.2 \| T1.3+T1.4 | yes |
 | 05.2.1-T3 | M | Server-side `execution_key` + uniqueness. Partial: key layout, unique index and the 422 conflict ship (`ExecutionKey.cs:20`, `0031:174`); the golden vectors and the reporter real key (all-zero `PLACEHOLDER_EXECUTION_KEY`) remain. | yes | yes (0049+) | no — `packages/adapter-playwright/src/identity.ts` is CLI-side, no lane owns it | n/a | yes — remainder only |
 | 05.2.2-T3 | M | Fork-PR behaviour: labelled, advisory-only, never bound or gating | yes | no | S91: `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` (T3.4 adds a counter name to that file) | n/a | yes |
-| 05.3.2-T5 | M | `evidence_revision` table, owned by 05 | yes | yes (0049+) | no | n/a | yes |
 | 05.4.1-T1 | S | Cancel request row + `POST /v1/runs/{r}/cancel` + permission `run:cancel` | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`run:cancel`) | n/a | yes |
 | 05.6.1-T1 | M | `release`/`release_component`/`release_run` tables + create API | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
 | 05.7.1-T1 | L | JobSpec schema + immutability + `job_spec_hash` | yes | yes (0049+) | S97: `contracts/openapi.yaml` (`jobspec_invalid`), `packages/sdk`; `contracts/jobspec.schema.json` is a new file | T1.1+T1.2 \| T1.3+T1.4 | yes |
@@ -553,7 +553,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Threat-model rows to flip to `[implemented]` (11.1.1-T1 hand-over, from S23) | Every `[planned]` control row (count: `scripts/check-threat-model.sh --summary`) is flipped by its owning task, which adds the repo path in the same PR; T77 replay-refusal heuristics (OI-11-20, RR-2) are measured in 11.2.1-T6. Event taxonomy rows feed 11.5.1-T3/T5 and 10.3.1-T5 through 11.1.1-T4 (M2) | receiver: 11.2.1-T6, 11.1.1-T4; hand-over Notes: `plans/features/11-security-compliance/11.2.1-a-fork-pull-request-cannot-reach.md:130` |
 | run.purpose replay grant reader (05.2.1-T5 hand-over, from S36) | 05.2.1-T5 refuses every `purpose: replay` run-create with 422 `replay_grant_invalid` until 08.4.3 issues grants (05.2.1 plan §10 T5 Notes, 08.4.3 plan §10 Notes). 08.4.3 must replace the unconditional refusal with a grant reader exported through `Evidgate.Modules.Healing.Contracts` (valid, unexpired, bound to org + project; `IReplayGrantValidator` from 08.4.3-T1.3, `replay_grant_id` minted only by `EnqueueReplay`), keep the order release-first (`replay` + `release` stays 422 `replay_release_not_allowed`), and write `replay_grant_id` on the run insert. 08.4.3 must either resolve the candidate from the grant or change the validator signature (the run-create request carries no candidate_id) [OPEN] | receiver: 08.4.3-T1.3; hand-over Notes: `plans/features/05-runs-orchestration/05.2.1-one-transaction-run-creation.md:228` |
 | run.purpose regression-count exclusion label (05.2.1-T5 hand-over, from S36; narrowed by 05.3.1-T1, S41) | 05.3.1-T1 exposes `purpose` on `GET /v1/runs/{r}` (the label a regression-count reader filters on) and never grants UPDATE on `run.purpose`/`run.replay_grant_id`. No regression-count reader exists on develop, so the exclusion itself stays with the first task that counts regressions; it must filter `run.purpose = 'regular'`. Recorded in the 05.3.1 plan §10 Notes | receiver: queue row F40; recorded owner: first regression-count reader (no task yet); hand-over Notes: `plans/features/05-runs-orchestration/05.2.1-one-transaction-run-creation.md:228` |
-| run.current_evidence_revision_id composite FK (05.3.1-T1 hand-over, from S41) | The nullable evidence pointer has no composite FK until evidence_revision is created. Keep the FK with that schema-owning task; do not call the state-machine parent incomplete. | receiver: 05.3.2-T5; hand-over Notes: `plans/features/05-runs-orchestration/05.3.1-run-state-machine.md:125` |
+| run.current_evidence_revision_id composite FK (05.3.1-T1 hand-over, from S41) | Closed by PR #239 (S115, 05.3.2-T5): composite FK `run_current_evidence_revision_fk` and the pointer guards are in `migrations/0049_orchestration_evidence_revision.sql`; proved by `RunPointer_MovesToTheLatestRevision_AndGetRunReportsIt` and `RunPointer_RefusesStaleCrossRunCrossOrgAndNull` (`tests/Tenancy.IntegrationTests/EvidenceRevisionSchemaTests.cs:256`, `:288`). Row stays in place only so STATUS line cites stay valid. | receiver: none, closed by this PR; `plans/features/05-runs-orchestration/05.3.1-run-state-machine.md:125` |
 | Finalize repeat with different declared values (05.3.2-T1, D-S51-Q1) | Decided A by the coordinator (owner rule 2026-10-23: panel choices take the recommended option); recorded for owner phase review as `D-S51-Q1` (docs/phase-review.md, open), non-blocking. 202, first declaration wins; option B (409 with a new 00 §9.2 code) is a contract change. Recorded in plan 05.3.2 Notes and 00 §15 | receiver: queue row F40; recorded owner: Owner (phase review, non-blocking); hand-over Notes: `plans/features/05-runs-orchestration/05.3.2-finalize-and-reconciliation.md:178` |
 | `ReconcileRunTask` consumer (05.3.2-T1 hand-over, S51) | The outbox row `orchestrator.run.reconcile` is written per newly closed slot with no consumer: it stays `queued` until 05.3.2-T2 registers a handler for `RunReconcileContract.OutboxTaskType`; T2 also reports a shard whose slot never closed as the missing shard (AC3's "missing reason recorded" half). The trigger is not evidence that a run is collectable: a finalize on a `complete`, `incomplete` or `canceled` run still enqueues the row (T12 accept-and-mark) while an event batch on such a run answers `409 run_closed`, so the T2 consumer MUST ignore a trigger for a terminal or canceled run and never append an `evidence_revision` after the run completed. Plan 05.3.2 Notes (05.3.2-T1, S51) | receiver: 05.3.2-T2; hand-over Notes: `plans/features/05-runs-orchestration/05.3.2-finalize-and-reconciliation.md:178` |
 | Cancel handler contract for `IRunStateTransition` (05.3.1-T1 review hand-over, from S41) | 05.4.1 passes `TransitionActor.Caller`, resolves the run through the project-scoped read first (the command has no project-scope check) and describes its own audit entry after the transition returns (one pending audit slot). A Notes line in the 05.4.1 plan is blocked by check-dor-security: "plans/features/05-runs-orchestration/05.4.1-durable-cancel.md: §8 does not answer the DoR question 'authorization'" (also 'retention/deletion', 'telemetry', 'failure path'), so the hand-over lives in this row and in the 05.3.1 plan §10 Notes | receiver: 05.4.1-T1, 05.4.1-T2; hand-over Notes: `plans/features/05-runs-orchestration/05.3.1-run-state-machine.md:127` |
@@ -792,3 +792,4 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Audit row records only the new mode, so a mode change leaves no "from" value (07.1.1 F18, S116) — source #244 merged (a3a1a65); receiver open | A re-activation of the already-active revision that only changes the mode answers `200 changed=false` and is still audited, but the single `policy.activate` row carries `outcome = unchanged`, an empty `previous_id` and `metadata.mode` = the newly stored value; the mode it replaced is stored nowhere (`policy_activation` has one `mode` column), so no "advisory → enforcing" record exists. Not reachable through the API today: `enforcing` is refused `422 not_yet_available` until 07.7.1 (`ActivatePolicy.cs:90`, `:219`; `changed` at `PolicyActivationStore.cs:140`), so the S116 read test seeds a stored `enforcing` by SQL | receiver: 07.7.1-T2 (enforcing flip/rollback with audit); hand-over Notes: `plans/features/07-policy-decisions/07.1.1-revision-record-hash-activation-and-pinning.md:218` |
 | F18 QA lows G6/G7 (07.1.1 F18, S116, #244) — source #244 merged (a3a1a65); receiver open | G6 (human member without `policy:read`) is not constructible: every member role holds `policy:read` (00 §2, T59) and the service-credential refusal is tested; G7 (`Idempotency-Key` / `If-Match` sent on the two GETs) is ignored by the routes and has no pinned test | receiver: queue F54; 07.1.1 (this plan's F18 Notes block, line 220: no test needed unless a header is ever honoured on these reads); web call sites 09.2.1-T5.2 / 09.7.1-T4 send neither header |
 | Merge debt (#244) | S116 F18 (07.1.1 policy activation read + head revision read) merged as `a3a1a65` under coordinator-review 6c after one send-back (D-S116-M1, `docs/phase-review.md`); reviewed code sha 301b2260, fix round 9ed45f29 (head SQL lateral, tests G1-G3, 403 wording), send-back commits 0657060e and 8587794c docs-only (F18FinalDelta-2 closed); full gate on c872501e: phase 1 exit 0, phase 2 exit 2 (only pre-existing `Sidecar_BillionLaughs`, STATUS.md:503), smoke exit 2 (pre-existing 25 FixtureLoaderTests); jev r2 0.91/0.89/0.81/0.49 is report-only; CI refused for billing (owner treats as pass). F18 has no §2 task row: no task or person-day credit, counts unchanged. Open hand-over rows: STATUS.md:789 (default policy on project create, queue F18 addendum 2), :790 (web consumption, 09.2.1-T5.2 / 09.7.1-T4), :791 (fixtures, 09.7.1), :792 (audit "from" mode, 07.7.1-T2), :793 (QA lows G6/G7, queue F54). Owner-review decision ids: D-S116-Q1, D-S116-M1. |
+| Web test flake under load: DataTableComponent R6 (S115, observed in 3 of 4 full-gate vitest runs, passes alone) | `apps/web/src/app/shared/ui/data-table/data-table.component.spec.ts:204` expects `aria-rowindex` 402 after `viewport.setRenderedRange` and gets 2 when the machine is loaded (other lanes' Docker gates); no apps/web change in S115. Unowned; the 09.1.1 data-table owner should await a rendered-range change instead of one `whenStable`. | receiver: coordinator queue F56 (09.1.1 shared-ui owner picks it up) |
