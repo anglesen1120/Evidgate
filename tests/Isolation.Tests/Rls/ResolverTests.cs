@@ -45,6 +45,14 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate_resolve.session_rotate"] = ["session_id", "expires_at", "absolute_expires_at", "status"],
         ["evidgate_resolve.session_revoke_all_for_user"] = ["revoked_count"],
         ["evidgate_resolve.session_require_rotation"] = ["marked_count"],
+        ["evidgate_resolve.session_list"] =
+        [
+            "session_id", "is_current", "created_at", "last_seen_at", "expires_at", "absolute_expires_at",
+            "ip", "user_agent", "status",
+        ],
+        ["evidgate_resolve.session_revoke_current"] = ["status"],
+        ["evidgate_resolve.session_revoke_one"] = ["status"],
+        ["evidgate_resolve.session_revoke_others"] = ["status", "revoked_count"],
         ["evidgate_resolve.login_link_identity"] = ["outcome", "moved_from_user_id"],
     };
 
@@ -54,8 +62,12 @@ public sealed class ResolverTests : HarnessTest
     /// org, and the session lifecycle (02.3.2-T1.1) writes the credential of a person, so the tenant-tuple rule
     /// of 00 §5.4.8 does not apply to their first column — a session status, a rotation result or a row count is
     /// not a tenant tuple, and the two revocation writes run inside a caller's tenant transaction precisely
-    /// because they are NOT a lookup. Their documented tuple above is still pinned exactly, and every other
-    /// resolver keeps the rule.
+    /// because they are NOT a lookup. The session routes (02.3.2-T2.1, migration 0048) are the same shape: the
+    /// actor comes from the presented cookie hash, so <c>session_list</c> projects the caller's own sign-in
+    /// history (its first column is the session id, never a tenant) and the three route writes answer a status —
+    /// the one cross-tenant act, an admin ending a member's session, is authorized INSIDE
+    /// <c>session_revoke_one</c> against <c>p_org_id</c> and still answers a status, not a tenant tuple. Their
+    /// documented tuple above is still pinned exactly, and every other resolver keeps the rule.
     /// </summary>
     private static readonly HashSet<string> PlatformScopeResolvers = new(StringComparer.Ordinal)
     {
@@ -65,6 +77,10 @@ public sealed class ResolverTests : HarnessTest
         "evidgate_resolve.session_rotate",
         "evidgate_resolve.session_revoke_all_for_user",
         "evidgate_resolve.session_require_rotation",
+        "evidgate_resolve.session_list",
+        "evidgate_resolve.session_revoke_current",
+        "evidgate_resolve.session_revoke_one",
+        "evidgate_resolve.session_revoke_others",
         "evidgate_resolve.login_link_identity",
     };
 
@@ -82,6 +98,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate.purge_expired_ci_token_issue"] =
             "0017_identity_ci_token_issue.sql:67 (redefined 0019_identity_ci_review_fixes.sql:8)",
         ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:177",
+        ["evidgate.session_cleanup"] = "0048_identity_session_routes.sql:479",
     };
 
     /// <summary>

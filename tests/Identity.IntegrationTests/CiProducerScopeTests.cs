@@ -75,6 +75,14 @@ public sealed class CiProducerScopeTests(DatabaseFixture fixture) : CatalogueTes
                 "x-permission is 'none' (discarding the caller's own staged link, 02.3.1-T2: no catalogue permission exists for it)",
             [("POST", "/v1/auth/link/confirm")] =
                 "x-permission is 'none' (confirming the caller's own staged link, 02.3.1-T2: it writes no tenant row and holds no catalogue permission)",
+            [("GET", "/v1/auth/sessions")] =
+                "x-permission is 'none' (the caller's own live sessions, resolved from the session cookie, 02.3.2-T2: no catalogue permission exists for a pre-tenant read)",
+            [("DELETE", "/v1/auth/sessions/{s}")] =
+                "x-permission is 'none' (revoking a session acts on the caller's own credential; the admin path needs membership:write, checked inside the definer, 02.3.2-T2)",
+            [("POST", "/v1/auth/sessions/revoke-all")] =
+                "x-permission is 'none' (revoking the caller's own sessions, 02.3.2-T2: no catalogue permission exists for it)",
+            [("POST", "/v1/auth/logout")] =
+                "x-permission is 'none' (logout revokes the caller's own session row, 02.3.2-T2: no catalogue permission exists for it)",
             [("POST", "/v1/slice/run")] =
                 "01.1.2 run-only slice dev surface, absent from the spec (ServedRouteTable.ServedNotInSpec)",
         };

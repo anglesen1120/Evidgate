@@ -30,6 +30,15 @@ public sealed class MigrationTests : SessionHardeningTestBase
         "login_link_identity",
     ];
 
+    /// <summary>0048's four route definers, which the app role and only the app role may call.</summary>
+    private static readonly string[] SessionRouteWriters =
+    [
+        "session_list",
+        "session_revoke_current",
+        "session_revoke_one",
+        "session_revoke_others",
+    ];
+
     public MigrationTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -171,9 +180,10 @@ public sealed class MigrationTests : SessionHardeningTestBase
             """
             select count(*)
               from pg_catalog.pg_proc p
-              cross join lateral aclexplode(p.proacl) a
+              cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
               join pg_catalog.pg_namespace n on n.oid = p.pronamespace
              where n.nspname = 'evidgate_resolve' and p.proname = any(@names) and a.grantee = 0
+               and a.privilege_type = 'EXECUTE'
             """,
             ("names", SessionWriters))).ShouldBe(0, "PUBLIC holds no EXECUTE on a session writer");
     }
@@ -206,5 +216,151 @@ public sealed class MigrationTests : SessionHardeningTestBase
               from pg_catalog.pg_class
              where oid = 'public.session'::regclass
             """)).ShouldBeTrue("0041's owner-only policy is still forced, which is what lets the definers work");
+    }
+
+    /// <summary>
+    /// 02.3.2-T2.1's five definers keep 0045's hygiene, and EXECUTE is scoped per function: the app role for
+    /// the four routes, <c>evidgate_worker_sched</c> alone for the sweep (TL T80). None of them takes a
+    /// caller-supplied user id — the acting user comes from the presented cookie hash inside the definer —
+    /// and none returns a credential column (plan §8: the list is metadata only).
+    /// </summary>
+    [Fact]
+    public async Task The_Session_Route_Definers_Are_Hardened_And_Granted_To_The_Role_That_Needs_Them()
+    {
+        foreach (var name in SessionRouteWriters)
+        {
+            (await DefinerSignatureAsync("evidgate_resolve", name))
+                .ShouldBe("true|evidgate_owner|search_path=\"\"", $"{name} keeps the definer hygiene");
+
+            (await HasExecuteAsync("evidgate_app", "evidgate_resolve", name))
+                .ShouldBeTrue($"evidgate_app calls {name}");
+
+            foreach (var role in new[] { "evidgate_operator", "evidgate_worker_sched" })
+            {
+                (await HasExecuteAsync(role, "evidgate_resolve", name))
+                    .ShouldBeFalse($"{role} must not run {name}");
+            }
+        }
+
+        // The sweep is the one function the app role may not run: an owner-defined bulk delete belongs to the
+        // task mechanism's role, exactly like `evidgate.expire_pending_invites` (0043:208-211). It lives in
+        // schema `evidgate`, not `evidgate_resolve`, because schema USAGE is the precondition of EXECUTE:
+        // 0002:24 grants `evidgate` to the sweep role, 0002:57 grants `evidgate_resolve` to the app role alone.
+        (await DefinerSignatureAsync("evidgate", "session_cleanup"))
+            .ShouldBe("true|evidgate_owner|search_path=\"\"", "the sweep keeps the definer hygiene");
+
+        (await HasExecuteAsync("evidgate_worker_sched", "evidgate", "session_cleanup"))
+            .ShouldBeTrue("the session-cleanup task runs as the sweep role");
+
+        foreach (var role in new[] { "evidgate_app", "evidgate_operator" })
+        {
+            (await HasExecuteAsync(role, "evidgate", "session_cleanup"))
+                .ShouldBeFalse($"{role} must not run a bulk delete (TL T80)");
+        }
+
+        (await OwnerScalarAsync<long>(
+            $"""
+            select count(*)
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where ({SessionDefiners})
+            """)).ShouldBe(5, "0048 defines exactly these five functions");
+
+        (await OwnerScalarAsync<long>(
+            $"""
+            select count(*)
+              from pg_catalog.pg_proc p
+              cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where ({SessionDefiners})
+               and a.grantee = 0
+               and a.privilege_type = 'EXECUTE'
+            """)).ShouldBe(0, "PUBLIC holds no EXECUTE on a session definer");
+
+        var results = await OwnerScalarAsync<string>(
+            $"""
+            select string_agg(pg_catalog.pg_get_function_result(p.oid), E'\n' order by p.proname)
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where ({SessionDefiners})
+            """);
+
+        results.ShouldNotContain("cookie", Case.Sensitive, "no function may return the cookie value or its hash");
+        results.ShouldNotContain("pepper", Case.Sensitive, "the pepper version is not part of the wire contract either");
+
+        (await OwnerScalarAsync<string>(
+            $"""
+            select string_agg(coalesce(array_to_string(p.proargnames, ','), ''), E'\n')
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where ({SessionDefiners})
+            """)).ShouldNotContain("user_id", Case.Sensitive, "the acting user is never an argument (D-S85-D8)");
+    }
+
+    /// <summary>
+    /// The five definers 0048 adds, as one SQL predicate over <c>pg_proc p</c> / <c>pg_namespace n</c>. It has a
+    /// top-level <c>or</c>, so every place that ANDs another condition onto it must wrap it in parentheses —
+    /// `where {SessionDefiners} and a.grantee = 0` would bind the <c>and</c> to the second branch alone and count
+    /// every ACL item of the four route functions (8 instead of 0).
+    /// </summary>
+    private const string SessionDefiners = """
+        (n.nspname = 'evidgate_resolve'
+         and p.proname in ('session_list', 'session_revoke_current', 'session_revoke_one', 'session_revoke_others'))
+        or (n.nspname = 'evidgate' and p.proname = 'session_cleanup')
+        """;
+
+    /// <summary>One function's security posture: security-definer flag, owner, configured search path.</summary>
+    /// <param name="schema">The schema the function lives in.</param>
+    /// <param name="name">The function name.</param>
+    private Task<string> DefinerSignatureAsync(string schema, string name) =>
+        OwnerScalarAsync<string>(
+            """
+            select p.prosecdef::text || '|' || pg_catalog.pg_get_userbyid(p.proowner) || '|'
+                   || coalesce(array_to_string(p.proconfig, ','), '')
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = @schema and p.proname = @name
+            """,
+            ("schema", schema),
+            ("name", name));
+
+    /// <summary>Whether a role holds EXECUTE on one function.</summary>
+    /// <param name="role">The role name.</param>
+    /// <param name="schema">The schema the function lives in.</param>
+    /// <param name="name">The function name.</param>
+    private Task<bool> HasExecuteAsync(string role, string schema, string name) =>
+        OwnerScalarAsync<bool>(
+            """
+            select pg_catalog.has_function_privilege(@role, p.oid, 'execute')
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = @schema and p.proname = @name
+            """,
+            ("role", role),
+            ("schema", schema),
+            ("name", name));
+
+    /// <summary>
+    /// 0048's stamp is derived reporting state: nullable, defaultless, unbackfilled, and in no index —
+    /// the sweep is a bounded scan of a table that only holds live sessions and 30 days of dead ones,
+    /// while an index on a deadline column would be rewritten by every slide or stamp.
+    /// </summary>
+    [Fact]
+    public async Task Expired_At_Is_A_Nullable_Stamp_And_No_Index_Carries_It()
+    {
+        (await OwnerScalarAsync<string>(
+            """
+            select is_nullable || '|' || coalesce(column_default, '~') || '|' || data_type
+              from information_schema.columns
+             where table_schema = 'public' and table_name = 'session' and column_name = 'expired_at'
+            """)).ShouldBe("YES|~|timestamp with time zone", "nullable and defaultless: expiry stays derived");
+
+        (await OwnerScalarAsync<long>(
+            """
+            select count(*)
+              from pg_catalog.pg_indexes
+             where schemaname = 'public' and tablename = 'session'
+               and indexdef like '%expired_at%'
+            """)).ShouldBe(0, "the sweep is bounded; a stamp index would move its cost onto every slide");
     }
 }

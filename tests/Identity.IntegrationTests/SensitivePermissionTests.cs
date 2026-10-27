@@ -77,6 +77,12 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // and carries no body a member could read. Its refusals are asserted in
         // Login/Linking/IdentityLinkingTests.
         "/v1/auth/link/pending",
+
+        // 02.3.2-T2's session list is the caller's own credential state, not a resource a service token can read:
+        // it authenticates as the `__Host-evidgate_session` cookie and never as a bearer, so a service-token GET
+        // answers 401 `unauthenticated` with no body. Its refusals and its own body are asserted in
+        // Sessions/Http/SessionListTests.
+        "/v1/auth/sessions",
     ];
 
     /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>

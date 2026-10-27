@@ -90,9 +90,16 @@ The playbook for changing a table without breaking the running version is
   `revoke update, delete` for the app role, the SQL half of C6/AC3), and `0047` is 12.3.1-T1.2's
   `usage_rollup` — the per-`(org, project, period, metric)` aggregate whose coalesce-project unique
   index is the idempotent recompute's upsert target (AC6, NFR-12-1), created `with (fillfactor =
-80)` and granted a column-scoped app-role UPDATE; the
+80` and granted a column-scoped app-role UPDATE, and `0048` is
+  02.3.2-T2.1's session ROUTES — `session.expired_at` plus the `SECURITY DEFINER`
+  `evidgate_resolve.session_list` / `session_revoke_current` / `session_revoke_one` /
+  `session_revoke_others` functions the four `/v1/auth` session endpoints call and the
+  bounded `evidgate.session_cleanup` sweep the `session-cleanup` task loops (the
+  acting user resolved from the presented cookie hash INSIDE every definer, and EXECUTE
+  on the sweep granted to `evidgate_worker_sched` alone);
+  the
   next
-  free number is `0048`;
+  free number is `0049`;
   a gap means two branches
   invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
@@ -247,6 +254,37 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   ordinary ledger row), so AC8's "unavailable, never 0" is a read-path decision
   of the summary query (12.3.1-T6 / 09.7.1), not something this schema can
   express.
+
+## Notes on the session routes (02.3.2-T2, `0048`)
+
+- `session.expired_at` is the reporting half of the `active → revoked | expired` machine
+  (00 §8.9) and nothing reads it on the request path: expiry stays DERIVED from
+  `expires_at`/`absolute_expires_at` (`0045:381`), so the column is nullable with no
+  default and no backfill, and a revoked row keeps it null. `session-cleanup` stamps it
+  once per dead row and never re-stamps.
+- The sweep deletes LEAF FIRST, and that is a data rule: `session.rotated_from` is the
+  self-FK of `0041:146` with no `on delete` action, so a row a remaining row still
+  references cannot be deleted at all. The delete skips any row with a referrer, which
+  unwinds a rotation chain from its tip across calls instead of failing; the task loops
+  bounded batches until a call comes back EMPTY (a short batch is not the stop signal,
+  because one chain layer per call is normal), and `MaxBatchesPerFire` still bounds the fire.
+- `session_cleanup` clamps its `p_now` to `clock_timestamp()`, so a caller can look back but
+  never ahead: a future instant cannot stamp or delete a live row, and only moves the
+  30-day cutoff forward.
+- EXECUTE is scoped per function: `evidgate_app` for the four route statements,
+  `evidgate_worker_sched` alone for `session_cleanup` (the `0043:208-211`
+  `expire_pending_invites` posture). `SessionRoutesStore.CleanupAsync` therefore takes
+  `IWorkerSchedDataSource`, not the app-role data source, and `AddSessions` registers that
+  building block so a host without the task mechanism (the Api) can still resolve the
+  store — there it is the fail-closed placeholder, and no Api path calls the sweep.
+- No new index was added; `0048`'s header records the measurement reasoning (a partial
+  index on a deadline, or on the nullable `expired_at`, would be rewritten by every idle
+  slide or stamp, moving cost from a bounded sweep onto every authenticated request).
+- Per-call audit rows for the routes are deferred to 02.7.1-T2.2 with the other definers
+  (`0048`'s `lint: audit-deferred` line, D-S75-Q4): `audit_log` is org-scoped and its writer
+  extends a hash chain, which a definer cannot do. The route-level row an actor's request
+  can carry is the application's `IIdentityAuditWriter`, the `LinkEndpoints.ConfirmAsync`
+  precedent.
 
 ## Tests and fixtures
 

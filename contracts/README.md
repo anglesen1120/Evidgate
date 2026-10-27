@@ -147,6 +147,12 @@ otherwise the envelope filter's default `60` (00 §9.2).
   confirmation and is deleted on every terminal outcome, so a replay cannot
   write a second identity; the store itself converges on `already_linked`
   (02.3.1-T2 Q4, AC6).
+- `DELETE /v1/auth/sessions/{s}`, `POST /v1/auth/sessions/revoke-all`,
+  `POST /v1/auth/logout` — revocation is a row state: the first call sets
+  `revoked_at`, a repeat of the delete answers the same `404 not_found` on the
+  dead row, a repeat of `revoke-all` the same `204`, and a replay of a logged-out
+  cookie is `401 session_revoked` — so a key could change nothing the second time
+  (02.3.2-T2.1 §5, AC4/AC8).
 
 ## Validation corpus (`fixtures/contracts/`, 01.3.2-T2)
 

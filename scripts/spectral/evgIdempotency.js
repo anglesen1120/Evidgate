@@ -28,6 +28,12 @@ var IDEMPOTENCY_EXEMPT = {
     'DELETE is idempotent by contract: the answer is 204 whether or not a staged link existed (02.3.1-T2 Q4)',
   'post /auth/link/confirm':
     'one staged-link cookie buys one confirmation and is deleted on every terminal outcome, so a replay cannot write a second identity; the store converges on already_linked (02.3.1-T2 Q4, AC6)',
+  'delete /auth/sessions/{s}':
+    'revocation is a row state: the first call sets revoked_at and every repeat answers the same 404 not_found on a dead row, so no key could change the answer (02.3.2-T2.1 §5)',
+  'post /auth/sessions/revoke-all':
+    'naturally idempotent: revoking an already revoked row changes nothing and the answer is the same 204 (02.3.2-T2.1 §5)',
+  'post /auth/logout':
+    'naturally idempotent: the session row is revoked once and replaying the old cookie is 401 session_revoked, so a key could not change the outcome (02.3.2-T2.1 §5, AC8)',
 };
 
 module.exports = function evgIdempotency(targetVal, opts, ctx) {

@@ -88,6 +88,36 @@ internal static class SessionCookieWriter
     }
 
     /// <summary>
+    /// Expires the session cookie and the antiforgery pair on this response (02.3.2-T2: logout,
+    /// <c>revoke-all</c> with <c>keep_current: false</c>, and a <c>DELETE /sessions/{s}</c> whose id is the
+    /// caller's own session).
+    /// </summary>
+    /// <param name="http">The request whose response carries the expiries.</param>
+    /// <remarks>
+    /// <para>
+    /// <b>Same attributes as the issue.</b> A browser only drops a cookie whose name, path, transport and site
+    /// rules match the one it stored — and the <c>__Host-</c> prefix makes that a hard rule — so every
+    /// attribute here is the one <see cref="WriteSessionCookie"/> and <see cref="SessionAntiforgeryDataProvider"/>
+    /// issued: <c>Secure</c>, <c>Path=/</c>, no <c>Domain</c>, the same <c>SameSite</c> per cookie, and only the
+    /// two script-readable/HttpOnly flags the pair differs by.
+    /// </para>
+    /// <para>
+    /// <b>Empty value, zero lifetime.</b> The cookie is written with an empty value and <c>Max-Age=0</c> (plus
+    /// the matching <c>Expires</c> for older clients), which is the documented sign-out shape; no secret is
+    /// carried out of the response. Called ONLY after the row was revoked, so a failed write leaves the
+    /// credential the browser holds exactly as it was.
+    /// </para>
+    /// </remarks>
+    internal static void Expire(HttpContext http)
+    {
+        ArgumentNullException.ThrowIfNull(http);
+
+        ExpireCookie(http, SessionCookieNames.Session, httpOnly: true, SameSiteMode.Lax);
+        ExpireCookie(http, SessionCookieNames.Antiforgery, httpOnly: true, SameSiteMode.Strict);
+        ExpireCookie(http, SessionCookieNames.Xsrf, httpOnly: false, SameSiteMode.Lax);
+    }
+
+    /// <summary>
     /// The <c>__Host-evidgate_session</c> cookie, with exactly the attribute set the <c>__Host-</c> prefix
     /// requires and the lifetime of the row behind it.
     /// </summary>
@@ -119,4 +149,27 @@ internal static class SessionCookieWriter
                 Expires = expiresAt,
             });
     }
+
+    /// <summary>
+    /// Writes one cookie as an expiry: empty value, <c>Max-Age=0</c> and an <c>Expires</c> in the past, with the
+    /// attributes the issuing writer used (see <see cref="Expire"/>).
+    /// </summary>
+    /// <param name="http">The request whose response carries the cookie.</param>
+    /// <param name="name">The cookie's name.</param>
+    /// <param name="httpOnly">Whether the issued cookie was <c>HttpOnly</c>.</param>
+    /// <param name="sameSite">The <c>SameSite</c> mode the issued cookie carried.</param>
+    private static void ExpireCookie(HttpContext http, string name, bool httpOnly, SameSiteMode sameSite) =>
+        http.Response.Cookies.Append(
+            name,
+            string.Empty,
+            new CookieOptions
+            {
+                HttpOnly = httpOnly,
+                Secure = true,
+                SameSite = sameSite,
+                Path = SessionCookieNames.HostCookiePath,
+                IsEssential = true,
+                MaxAge = TimeSpan.Zero,
+                Expires = DateTimeOffset.UnixEpoch,
+            });
 }

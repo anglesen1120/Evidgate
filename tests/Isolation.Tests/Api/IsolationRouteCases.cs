@@ -609,6 +609,52 @@ public static class IsolationRouteCases
                 UnauthenticatedCode)),
         ]),
 
+        // 02.3.2-T2.1's session surface (02.3.2 §5): the caller IS the session the presented cookie proves, resolved
+        // inside the definer from its HMAC, so org B's member headers cannot select a tenant on any of the four
+        // routes. With no session cookie the request authenticator answers 401 `unauthenticated` before the handler
+        // infers a tenant, and the antiforgery middleware does not even apply without a session cookie
+        // (SessionXsrfPolicy.IsInScope requires one), so the three mutations reach the same 401 as the read.
+        Case("GET", "/v1/auth/sessions", (route, w) =>
+        [
+            new(route, "session list stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "session list stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Get, "/v1/auth/sessions"),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
+        ]),
+        Case("DELETE", "/v1/auth/sessions/{s}", (route, w) =>
+        [
+            new(route, "session revoke stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "session revoke stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Delete, $"/v1/auth/sessions/{Guid.CreateVersion7()}"),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
+        ]),
+        Case("POST", "/v1/auth/sessions/revoke-all", (route, w) =>
+        [
+            new(route, "revoke-all stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "revoke-all stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Post, "/v1/auth/sessions/revoke-all"),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
+        ]),
+        Case("POST", "/v1/auth/logout", (route, w) =>
+        [
+            new(route, "logout stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "logout stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Post, "/v1/auth/logout"),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
+        ]),
+
         // ---- Catalog (CatalogEndpoints.cs:39-83) ---------------------------------------------------------------
         ProjectCase("GET", "/v1/projects/{p}/cases", p => new(HttpMethod.Get, $"/v1/projects/{p}/cases"), list: true),
         ObjectCase("GET", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}"), ownControl: true),
@@ -2044,9 +2090,10 @@ public sealed class RouteProbeRunner
         PreTenantAnswerAsync(route, name, world, new ProbeRequest(HttpMethod.Get, url), expectedStatus, expectedCode);
 
     /// <summary>
-    /// A pre-tenant route of 02.3.1-T2 (<c>POST /v1/auth/invite-token</c> and the four
-    /// <c>/v1/auth/link</c> routes): one exact answer for an anonymous caller and for org B's member headers, the
-    /// same body shape, and no org-A id — the headers cannot select a tenant on a route that resolves none.
+    /// A pre-tenant route of 02.3.1-T2 / 02.3.2-T2 (<c>POST /v1/auth/invite-token</c>, the four
+    /// <c>/v1/auth/link</c> routes and the four <c>/v1/auth/sessions</c> + <c>/v1/auth/logout</c> routes): one exact
+    /// answer for an anonymous caller and for org B's member headers, the same body shape, and no org-A id — the
+    /// headers cannot select a tenant on a route that resolves none.
     /// </summary>
     /// <remarks>
     /// <paramref name="expectedCode"/> is null for the bodiless 204 of the invite staging route: there is no

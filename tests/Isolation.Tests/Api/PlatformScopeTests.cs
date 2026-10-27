@@ -16,7 +16,8 @@ namespace Isolation.Tests.Api;
 /// </summary>
 /// <remarks>
 /// The world seeds no <c>session</c> row (02.3.2 is not merged, see <see cref="IsolationWorld.NotYetBuildable"/>),
-/// so the session half of AC5 is carried by check 1: a session route appearing in the spec or on the host fails
+/// so the session half of AC5 is carried by check 1: the only session-segment routes are the four caller-owned
+/// routes of 02.3.2-T2.1 on the allowlist above with their reasons, and any other route naming a session fails
 /// here. The member addresses deliberately collide between the two orgs (the same local text, 02 §7), so check 3
 /// scans for org-A addresses org B does not also own: org A's own pending invite
 /// (<c>invitee-a@example.test</c>, seeded by <see cref="IsolationWorld"/>) is the live org-A-only address, and
@@ -34,10 +35,23 @@ public sealed class PlatformScopeTests(ApiIsolationFixture fixture)
         ["user", "users", "user-identity", "user-identities", "identity", "identities", "session", "sessions", "me"];
 
     /// <summary>
-    /// Served routes that legitimately carry a platform-scope segment, each a recorded decision. Empty today:
-    /// <c>contracts/openapi.yaml</c> declares no user, session or identity path (02.3.2 is not merged).
+    /// Served routes that legitimately carry a platform-scope segment, each a recorded decision. The four session
+    /// routes of 02.3.2-T2.1 are the caller's OWN rows only: the acting user is resolved inside the definer from
+    /// the presented cookie's HMAC, no route value or body ever names a user or a session of another account, and
+    /// the admin path of the revoke route needs an active <c>membership:write</c> in the org named by
+    /// <c>X-Evidgate-Org</c> (02 §4.2, 02.3.2 §5) — so they are self-service, not tenant scope.
     /// </summary>
-    private static readonly Dictionary<ApiRoute, string> PlatformScopeRoutes = new();
+    private static readonly Dictionary<ApiRoute, string> PlatformScopeRoutes = new()
+    {
+        [new ApiRoute("GET", "/v1/auth/sessions")] =
+            "the caller's own live sessions, resolved from the presented cookie inside the definer",
+        [new ApiRoute("DELETE", "/v1/auth/sessions/{s}")] =
+            "the caller's own row, or a member's under an active membership:write in the named org; every other id answers the same 404",
+        [new ApiRoute("POST", "/v1/auth/sessions/revoke-all")] =
+            "every live session of the caller only, the acting user resolved from the cookie",
+        [new ApiRoute("POST", "/v1/auth/logout")] =
+            "the one row the presented cookie proves",
+    };
 
     /// <summary>AC5: no tenant API reaches a user, user_identity or session row.</summary>
     [Fact]

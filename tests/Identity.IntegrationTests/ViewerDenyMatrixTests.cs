@@ -63,6 +63,12 @@ public sealed class ViewerDenyMatrixTests(DatabaseFixture fixture) : CatalogueTe
                 "x-permission is 'none' (discarding the caller's own staged link, 02.3.1-T2)",
             [("POST", "/v1/auth/link/confirm")] =
                 "x-permission is 'none' (confirming the caller's own staged link, 02.3.1-T2)",
+            [("DELETE", "/v1/auth/sessions/{s}")] =
+                "x-permission is 'none' (revoking a session acts on the caller's own credential; the admin path needs membership:write inside the definer, 02.3.2-T2)",
+            [("POST", "/v1/auth/sessions/revoke-all")] =
+                "x-permission is 'none' (revoking the caller's own sessions, 02.3.2-T2)",
+            [("POST", "/v1/auth/logout")] =
+                "x-permission is 'none' (logout revokes the caller's own session row, 02.3.2-T2)",
             [("POST", "/v1/slice/run")] =
                 "01.1.2 run-only slice dev surface, absent from the spec (ServedRouteTable.ServedNotInSpec)",
         };

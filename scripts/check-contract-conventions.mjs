@@ -44,6 +44,13 @@ const EXPECTED = [
   ['/auth/link/pending', 'get', 'none', 'v1'],
   ['/auth/link/pending', 'delete', 'none', 'v1'],
   ['/auth/link/confirm', 'post', 'none', 'v1'],
+  // 02.3.2-T2.1's session surface (02 §5, 02.3.2 §5): the same pre-tenant browser form — the caller is the
+  // session the cookie proves, resolved inside the definer, so no catalogue permission is carried (the admin
+  // path of the revoke route checks `membership:write` inside the definer, never as a route permission).
+  ['/auth/sessions', 'get', 'none', 'v1'],
+  ['/auth/sessions/{s}', 'delete', 'none', 'v1'],
+  ['/auth/sessions/revoke-all', 'post', 'none', 'v1'],
+  ['/auth/logout', 'post', 'none', 'v1'],
   ['/projects/{p}/manifests', 'post', 'run:create', 'v1'],
   ['/projects/{p}/runs', 'post', 'run:create', 'v1'],
   ['/runs/{r}', 'get', 'run:read', 'v1'],
@@ -235,7 +242,9 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // response carries a one-time secret, and the replay store persists response bodies,
 // so they are never replayed (02.4.1, 02.4.2, 00 §5.7 S3); the auth routes of 02.3.1-T2 =
 // the invite staging writes only a short-lived cookie (no resource), and the link surface is
-// driven by one staged-link cookie that one confirmation spends, so a replay cannot write twice.
+// driven by one staged-link cookie that one confirmation spends, so a replay cannot write twice; the session
+// routes of 02.3.2-T2 = revocation is a row state (`revoked_at` set once) and every answer is the same on a
+// repeat, so a key could change nothing the second time.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ci-bindings',
@@ -250,6 +259,9 @@ const IDEM_EXEMPT = new Set([
   'post /auth/link/{provider}',
   'delete /auth/link/pending',
   'post /auth/link/confirm',
+  'delete /auth/sessions/{s}',
+  'post /auth/sessions/revoke-all',
+  'post /auth/logout',
 ]);
 for (const { path, method, op } of ops) {
   for (const prm of op.parameters ?? []) {

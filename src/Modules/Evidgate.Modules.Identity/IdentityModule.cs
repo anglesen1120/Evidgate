@@ -12,6 +12,7 @@ using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Login.GitHub;
 using Evidgate.Modules.Identity.Login.Google;
 using Evidgate.Modules.Identity.Options;
+using Evidgate.Modules.Identity.Sessions;
 using Evidgate.Modules.Identity.Sessions.Http;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
@@ -143,6 +144,12 @@ internal static class IdentityModule
         // piece; only the Worker runs a consumer and a schedule runner.
         services.AddTaskHandler<CiTokenIssuePurgePayload, CiTokenIssuePurgeTaskHandler>();
         services.AddTaskSchedule(CiTokenIssueSweeps.Purge);
+
+        // 02.3.2-T2.1 (§7): the daily session sweeper — the `expired_at` stamp for reporting and the 30-day hard
+        // delete of rows past their last deadline, both inside the owner-owned definers of 0048 that the store
+        // calls; a platform task, so it takes no tenant scope.
+        services.AddTaskHandler<SessionCleanupPayload, SessionCleanupTaskHandler>();
+        services.AddTaskSchedule(SessionCleanupSweeps.Cleanup);
 
         return services;
     }
