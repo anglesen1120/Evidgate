@@ -169,7 +169,7 @@ public sealed class ReconcileComparerUnitTests
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
         reason.Detail.ShouldBe(
-            "declared_count=3;observed=3;declared_last_sequence=3;beyond=0;max_sequence=2;min_sequence=0;contiguous_count=4");
+            "declared_count=3;observed=3;declared_last_sequence=3;beyond=0;max_sequence=2;min_sequence=0;sequence_span=3");
         result.EventsMatch.ShouldBeFalse();
     }
 
@@ -184,7 +184,19 @@ public sealed class ReconcileComparerUnitTests
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
         reason.Detail.ShouldBe(
-            "declared_count=5;observed=5;declared_last_sequence=5;beyond=0;min_sequence=0;contiguous_count=6");
+            "declared_count=5;observed=5;declared_last_sequence=5;beyond=0;min_sequence=0;sequence_span=5");
+    }
+
+    [Fact]
+    public void A_Huge_Declared_Last_Sequence_Cannot_Wrap_The_Gap_Check()
+    {
+        // Declared two events ending at long.MaxValue, stored 0 and long.MaxValue: not contiguous, and a `last - min + 1`
+        // would wrap to long.MinValue and skip the hole check.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: long.MaxValue, declaredCount: 2)],
+            [Observed("producer-1", upTo: 2, min: 0, max: long.MaxValue)]);
+
+        result.Missing.ShouldHaveSingleItem().Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
     }
 
     [Fact]
@@ -322,7 +334,7 @@ public sealed class ReconcileComparerUnitTests
         result.Missing.Select(missing => missing.Code).ShouldBe(
             [ReconcileMissingCodes.CountMismatch, ReconcileMissingCodes.UnknownStatus]);
         result.Missing[0].Detail.ShouldBe(
-            "declared_count=3;observed=2;declared_last_sequence=2;beyond=0;max_sequence=1;min_sequence=0;contiguous_count=3");
+            "declared_count=3;observed=2;declared_last_sequence=2;beyond=0;max_sequence=1;min_sequence=0;sequence_span=2");
         result.Missing[1].Detail.ShouldBe("null_status=2;unfinished=1");
     }
 

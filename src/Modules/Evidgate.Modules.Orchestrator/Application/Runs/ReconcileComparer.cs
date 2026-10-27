@@ -121,10 +121,10 @@ internal static class ReconcileComparer
     /// sequence must be the declared high-water mark (a count cannot see where the stored range ends).
     /// </description></item>
     /// <item><description>
-    /// <c>min_sequence</c>, <c>contiguous_count</c> — the contiguity bound, checked for a declaration of at least one
+    /// <c>min_sequence</c>, <c>sequence_span</c> — the contiguity bound, checked for a declaration of at least one
     /// event: the gap rule of <c>contracts/events/ordering.md</c> §3, where the sequences in
-    /// <c>[min stored sequence, declared_last_sequence]</c> must all be stored, so their number is
-    /// <c>declared_last_sequence - min_sequence + 1</c>. A range that is empty or inverted (the producer started above
+    /// <c>[min stored sequence, declared_last_sequence]</c> must all be stored, so the stored count minus one equals
+    /// <c>sequence_span = declared_last_sequence - min_sequence</c> (no <c>+ 1</c>, which would wrap at long.MaxValue). A range that is empty or inverted (the producer started above
     /// its declared last sequence) has no hole to report and is the count bound's business alone.
     /// </description></item>
     /// </list>
@@ -158,12 +158,13 @@ internal static class ReconcileComparer
 
             if (seen.MinSequence is { } minSequence)
             {
-                var contiguousCount = declaredLastSequence - minSequence + 1;
-                if (contiguousCount > 0 && seen.CountUpToDeclared != contiguousCount)
+                // span = last - min cannot overflow (both are >= 0); comparing it with count - 1 avoids the `+ 1` that wraps at long.MaxValue.
+                var span = declaredLastSequence - minSequence;
+                if (span >= 0 && seen.CountUpToDeclared - 1 != span)
                 {
                     detail = string.Create(
                         CultureInfo.InvariantCulture,
-                        $"{detail};min_sequence={minSequence};contiguous_count={contiguousCount}");
+                        $"{detail};min_sequence={minSequence};sequence_span={span}");
                     violated = true;
                 }
             }
