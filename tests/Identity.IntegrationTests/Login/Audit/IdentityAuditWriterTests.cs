@@ -126,6 +126,50 @@ public sealed class IdentityAuditWriterTests : HarnessTest
         (await VerifyAsync(orgB)).ShouldBeNull();
     }
 
+    /// <summary>
+    /// F48: the administrative session-revoke write appends ONE row to the org's chain — actor the admin, object the
+    /// revoked <c>session</c> row, no metadata — and a second write extends that same chain instead of rewriting it.
+    /// </summary>
+    [Fact]
+    public async Task WriteSessionRevoked_AppendsOneAdminRowWithTheSessionObject()
+    {
+        var orgId = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var adminId = Guid.CreateVersion7();
+        var sessionId = Guid.CreateVersion7();
+        var writer = CreateWriter();
+
+        await writer.WriteSessionRevokedAsync(adminId, orgId, sessionId, Token);
+
+        var rows = await RowsAsync(orgId);
+        var row = rows.ShouldHaveSingleItem();
+
+        row.Seq.ShouldBe(1L);
+        row.Action.ShouldBe("auth.session_revoke_admin");
+        row.ActorType.ShouldBe("user");
+        row.ActorId.ShouldBe(adminId.ToString("D"));
+        row.ObjectType.ShouldBe("session");
+        row.ObjectId.ShouldBe(sessionId.ToString("D"));
+
+        // No metadata: the row says who ended which session where, and nothing else (the target user is not known
+        // here — the definer answers a status only; F55 returns it).
+        row.MetadataJson.ShouldBe("{}");
+        row.PrevHash.ShouldAllBe(value => value == 0);
+        (await VerifyAsync(orgId)).ShouldBeNull();
+
+        // A second revoke row extends the chain from the first: same writer, same advisory-locked append path.
+        var secondSessionId = Guid.CreateVersion7();
+        await writer.WriteSessionRevokedAsync(adminId, orgId, secondSessionId, Token);
+
+        var chain = await RowsAsync(orgId);
+        chain.Count.ShouldBe(2);
+        chain[1].Seq.ShouldBe(2L);
+        chain[1].Action.ShouldBe("auth.session_revoke_admin");
+        chain[1].ObjectId.ShouldBe(secondSessionId.ToString("D"));
+        chain[1].PrevHash.SequenceEqual(chain[0].EntryHash).ShouldBeTrue(
+            "the new action participates in the same hash chain as every other audited action");
+        (await VerifyAsync(orgId)).ShouldBeNull();
+    }
+
     [Fact]
     public async Task Write_EmptyOrgList_WritesNothing()
     {

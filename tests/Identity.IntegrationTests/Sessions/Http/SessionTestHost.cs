@@ -99,6 +99,7 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
     private readonly string _connectionString;
     private readonly FakeLoginProvider[] _providers;
     private readonly ILoggerProvider? _logProvider;
+    private readonly Action<IServiceCollection>? _overrides;
 
     private SessionTestHost(
         string connectionString,
@@ -107,11 +108,13 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
         int idleSeconds,
         int absoluteSeconds,
         ILoggerProvider? logProvider,
+        Action<IServiceCollection>? overrides,
         FakeLoginProvider[] providers)
     {
         _connectionString = connectionString;
         _providers = providers;
         _logProvider = logProvider;
+        _overrides = overrides;
         Clock = clock;
         Pepper = pepper;
         IdleSeconds = idleSeconds;
@@ -154,11 +157,16 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
     /// <param name="idleSeconds">The sliding lifetime to bind, or null for <see cref="DefaultIdleSeconds"/>.</param>
     /// <param name="absoluteSeconds">The hard lifetime to bind, or null for <see cref="DefaultAbsoluteSeconds"/>.</param>
     /// <param name="logProvider">A capturing provider when the case asserts on what the deployment logs.</param>
+    /// <param name="overrides">
+    /// A last-word container rewrite, applied after every other registration (the <c>LinkTestHost</c> seam): a case
+    /// that swaps a seam — the identity audit writer, for the F48 failure cases — does it here.
+    /// </param>
     internal static SessionTestHost Start(
         DatabaseFixture fixture,
         int? idleSeconds = null,
         int? absoluteSeconds = null,
-        ILoggerProvider? logProvider = null)
+        ILoggerProvider? logProvider = null,
+        Action<IServiceCollection>? overrides = null)
     {
         ArgumentNullException.ThrowIfNull(fixture);
 
@@ -171,6 +179,7 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
             idleSeconds ?? DefaultIdleSeconds,
             absoluteSeconds ?? DefaultAbsoluteSeconds,
             logProvider,
+            overrides,
             [new FakeLoginProvider(Google), new FakeLoginProvider(GitHub)])
         {
             Fixture = fixture,
@@ -366,6 +375,55 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
         VerifyIdentity(provider, resolvedSubject, resolvedEmail);
 
         return new SeededMember(orgId, userId, provider, resolvedSubject, resolvedEmail);
+    }
+
+    /// <summary>
+    /// Seeds one more account of an EXISTING org, optionally grants it a built-in role, and signs it in: the
+    /// arrangement the administrative cases need, because the actor and the victim must share an org while each
+    /// signs in through the real login routes.
+    /// </summary>
+    /// <param name="client">A client of this host.</param>
+    /// <param name="orgId">The org both accounts belong to.</param>
+    /// <param name="roleCode">The built-in role to hold, or null for a membership with no role.</param>
+    internal async Task<SignedInMember> SignInMemberInOrgAsync(HttpClient client, Guid orgId, string? roleCode)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+
+        var subject = "subject-" + Guid.CreateVersion7().ToString("N");
+        var email = subject + "@example.test";
+
+        var userId = await SeedUserAsync(email).ConfigureAwait(false);
+
+        await ArrangeAsync(
+            """
+            insert into public.user_identity (id, user_id, provider, subject, email_at_provider)
+            values (@id, @user_id, @provider, @subject, @email)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("user_id", userId),
+            ("provider", Google),
+            ("subject", subject),
+            ("email", email)).ConfigureAwait(false);
+
+        await SeedMembershipAsync(orgId, userId).ConfigureAwait(false);
+
+        if (roleCode is not null)
+        {
+            // The same two helpers every other identity suite uses (IdentityTestData): the built-in role of the
+            // catalogue and the grant row, so a suite never hand-writes the shapes the commands produce.
+            var roleId = await IdentityTestData.RoleIdAsync(Fixture, orgId, roleCode).ConfigureAwait(false);
+            await IdentityTestData.GrantRoleToMemberAsync(Fixture, orgId, userId, roleId).ConfigureAwait(false);
+        }
+
+        VerifyIdentity(Google, subject, email);
+
+        using var response = await SignInAsync(client, Google).ConfigureAwait(false);
+        response.StatusCode.ShouldBe(HttpStatusCode.Found, "the account's sign-in completes with the 302");
+
+        var cookie = SessionCookieValue(response)
+            ?? throw new InvalidOperationException("the sign-in set no " + SessionCookieName + " cookie");
+
+        return new SignedInMember(orgId, userId, email, cookie, XsrfPair.From(response));
     }
 
     /// <summary>
@@ -684,6 +742,10 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
                 .Build());
 
             services.AddSingleton<IStartupFilter>(new RecorderStartupFilter(Recorder));
+
+            // Last word, so a case can replace a seam the composition registered (the identity audit writer for
+            // the F48 failure cases) without depending on registration order.
+            _overrides?.Invoke(services);
         });
     }
 

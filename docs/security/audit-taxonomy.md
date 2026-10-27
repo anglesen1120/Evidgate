@@ -294,3 +294,11 @@ Each gap has a receiver and a row in [STATUS](../../STATUS.md) §6 (added by the
 - Codebase-memory was used to locate the writer, the verifier, the actor resolver and the attribute (`search_graph`, `search_code`). `check_index_coverage` reports `src/Modules/**` as `not_tracked`, so the module emitters, their attributes and their `Describe` lines were enumerated with `grep` on the worktree and then read line by line; `migrations/0015` and `migrations/0001` are `parse_partial` in the index and every line cited from them was read from the file.
 - Every emit site in §3 was read at its cited line: 59 rows (60 sites, `artifact.mint` twice) are attribute-driven, so the cited line carries `[AuditedAction]` and its literal; the 5 direct-path rows (three write paths: `IdentityAuditWriter`, `MembershipBinder`, `TransitionRunStateCommand`; `IdentityAuditWriter` alone covers `auth.login`, `auth.link`, `auth.link_move`) were read as ranged code, because the deciding value is a constant or a variable a line or two away — that is why those rows cite a range or the constant's own line as well as the emit line. `artifact.mint`'s second site is `RequestArtifactUploadUrl.cs:122`.
 - No build, test, lint or formatter was run for this page; it is a documentation artefact. The statements about runtime behaviour are statements about the code at `4d1a7aa`, and §6.6 names the one measurement that is still missing.
+
+## Additions after the `4d1a7aa` snapshot
+
+The counts above are the snapshot's. Rows added later are listed here so no cite above shifts.
+
+| # | Action | Emit site | Module | Command / handler | Actor | Object (`type` / `id`) | Hash |
+|---|---|---|---|---|---|---|---|
+| 65 | `auth.session_revoke_admin` | `src/Modules/Evidgate.Modules.Identity/Login/Audit/IdentityAuditWriter.cs` (`WriteSessionRevokedAsync`) | Identity | no command — `SessionEndpoints.RevokeOneAsync` after `session_revoke_one` returned success, admin path only (F48, S118) | user (the admin) | `session` / the revoked session id; no metadata, no target user (queue F55) | — |

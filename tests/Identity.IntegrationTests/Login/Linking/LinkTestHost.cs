@@ -783,6 +783,18 @@ internal sealed class FaultingAuditWriter : IIdentityAuditWriter
 
         return _inner.WriteAsync(auditEvent, orgIds, cancellationToken);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Forwarded without the fault switch: the linking suites never revoke a session, and their fault budget is
+    /// armed per login/link action. A suite that needs this call to fail uses the session suites' own double.
+    /// </remarks>
+    public ValueTask WriteSessionRevokedAsync(
+        Guid actorUserId,
+        Guid orgId,
+        Guid sessionId,
+        CancellationToken cancellationToken) =>
+        _inner.WriteSessionRevokedAsync(actorUserId, orgId, sessionId, cancellationToken);
 }
 
 /// <summary>

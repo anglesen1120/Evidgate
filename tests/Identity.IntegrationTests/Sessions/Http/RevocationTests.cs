@@ -319,7 +319,7 @@ public sealed class RevocationTests : HarnessTest
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
         var memberSessionId = await host.SessionIdOfAsync(member.SessionCookie);
-        var admin = await SignInMemberInOrgAsync(host, client, member.OrgId, "tenant_admin");
+        var admin = await host.SignInMemberInOrgAsync(client, member.OrgId, "tenant_admin");
 
         using (var revoked = await SessionTestHost.SendAsync(
             client,
@@ -358,7 +358,7 @@ public sealed class RevocationTests : HarnessTest
         var memberSessionId = await host.SessionIdOfAsync(member.SessionCookie);
 
         // A member of the SAME org with no role at all: a membership is not the permission.
-        var plain = await SignInMemberInOrgAsync(host, client, member.OrgId, roleCode: null);
+        var plain = await host.SignInMemberInOrgAsync(client, member.OrgId, roleCode: null);
 
         using (var refused = await SessionTestHost.SendAsync(
             client,
@@ -377,7 +377,7 @@ public sealed class RevocationTests : HarnessTest
         // An admin of that org naming ANOTHER org: the definer must find the actor's membership:write in the org
         // it was handed, and there is none.
         var otherOrg = await host.SeedOrganizationAsync();
-        var admin = await SignInMemberInOrgAsync(host, client, member.OrgId, "tenant_admin");
+        var admin = await host.SignInMemberInOrgAsync(client, member.OrgId, "tenant_admin");
 
         using (var refused = await SessionTestHost.SendAsync(
             client,
@@ -818,58 +818,6 @@ public sealed class RevocationTests : HarnessTest
         {
             SessionTestHost.Cookies(response, cookieName).ShouldBeEmpty($"{cookieName}: {because}");
         }
-    }
-
-    /// <summary>
-    /// Seeds one more account of an EXISTING org, optionally grants it a built-in role, and signs it in: the
-    /// arrangement the administrative cases need, because the victim and the admin must share an org while each
-    /// signs in through the real login routes.
-    /// </summary>
-    /// <param name="host">The host.</param>
-    /// <param name="client">A client of the host.</param>
-    /// <param name="orgId">The org both accounts belong to.</param>
-    /// <param name="roleCode">The built-in role to hold, or null for a membership with no role.</param>
-    private async Task<SignedInMember> SignInMemberInOrgAsync(
-        SessionTestHost host,
-        HttpClient client,
-        Guid orgId,
-        string? roleCode)
-    {
-        var subject = "subject-" + Guid.CreateVersion7().ToString("N");
-        var email = subject + "@example.test";
-
-        var userId = await host.SeedUserAsync(email);
-
-        await host.ArrangeAsync(
-            """
-            insert into public.user_identity (id, user_id, provider, subject, email_at_provider)
-            values (@id, @user_id, @provider, @subject, @email)
-            """,
-            ("id", Guid.CreateVersion7()),
-            ("user_id", userId),
-            ("provider", SessionTestHost.Google),
-            ("subject", subject),
-            ("email", email));
-
-        await host.SeedMembershipAsync(orgId, userId);
-
-        if (roleCode is not null)
-        {
-            // The same two helpers every other identity suite uses (IdentityTestData): the built-in role of the
-            // catalogue and the grant row, so this suite never hand-writes the shapes the commands produce.
-            var roleId = await IdentityTestData.RoleIdAsync(Fixture, orgId, roleCode);
-            await IdentityTestData.GrantRoleToMemberAsync(Fixture, orgId, userId, roleId);
-        }
-
-        host.VerifyIdentity(SessionTestHost.Google, subject, email);
-
-        using var response = await host.SignInAsync(client, SessionTestHost.Google);
-        response.StatusCode.ShouldBe(HttpStatusCode.Found, "the account's sign-in completes with the 302");
-
-        var cookie = SessionTestHost.SessionCookieValue(response)
-            ?? throw new InvalidOperationException("the sign-in set no session cookie");
-
-        return new SignedInMember(orgId, userId, email, cookie, XsrfPair.From(response));
     }
 
     /// <summary>The 00 §9.2 <c>error.code</c> and <c>error.message</c> of a response.</summary>
