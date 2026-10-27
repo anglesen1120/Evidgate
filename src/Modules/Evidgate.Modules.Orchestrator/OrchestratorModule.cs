@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Orchestrator.Application.Attempts;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
@@ -58,6 +59,17 @@ internal static class OrchestratorModule
         // 05.3.2's reconciler (running -> collecting, collecting -> complete|incomplete) and 05.4.1's cancel
         // (* -> canceled) call inside their own tenant transaction, through Orchestrator.Contracts only.
         services.TryAddScoped<IRunStateTransition, TransitionRunStateCommandHandler>();
+
+        // 05.3.2-T2.1/T2.2: the reconciler behind the orchestrator.run.reconcile task — the run row locked FOR NO KEY
+        // UPDATE, the shard plan, then one grouped aggregate of the acknowledged events. Scoped like every other module
+        // service: it takes the ambient scope through ITenantDb/ITenantScopeAccessor, never a connection of its own, and
+        // it never changes the run (T2.4 owns the transition and the evidence_revision insert).
+        services.TryAddScoped<IRunReconciler, RunReconciler>();
+
+        // 05.3.2-T2.1: the consumer of the type 05.3.2-T1's finalize enqueues. Registered in both hosts like every
+        // module piece; only the Worker runs a queue consumer, and a task_type is claimed exactly while a handler
+        // registers it (01.5.1 §11), so this line is what makes the rows finalize already queued claimable.
+        services.AddTaskHandler<RunReconcilePayload, ReconcileRunTaskHandler>();
 
         return services;
     }

@@ -1,0 +1,93 @@
+using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Orchestrator.Contracts;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+namespace Evidgate.Modules.Orchestrator.Application.Runs;
+
+/// <summary>
+/// Consumes one <c>orchestrator.run.reconcile</c> row (05.3.2 §5/§7, <c>ReconcileRunTask</c>): the trigger a finalize
+/// enqueues when it newly closes a producer slot (<see cref="RunReconcileContract"/>). Tenant-bound, so the consumer
+/// opens the row's tenant transaction around it and commits it only when the attempt returns. The handler resolves and
+/// decides nothing itself: it hands the run id to <see cref="IRunReconciler"/> and lets the reconciler's outcome
+/// decide, which is why a run that is gone or not <c>collecting</c> is a normal completion — the task row is the record
+/// of what ran, and nothing changed.
+/// <para>
+/// <see cref="IServiceScopeFactory"/> is the plumbing that reaches the scoped <see cref="IRunReconciler"/>: the task
+/// queue registers every handler as a singleton (<c>AddTaskHandler</c>), and a scoped service must not be captured by a
+/// singleton. The DI scope is not the tenant scope — that one is ambient (<see cref="ITenantDb"/> reads it from
+/// <see cref="ITenantScopeAccessor"/>) and stays the consumer's, including its commit.
+/// </para>
+/// </summary>
+/// <param name="scopeFactory">Creates the per-attempt scope the reconciler is resolved from.</param>
+/// <param name="logger">The logger of the one structured line per attempt.</param>
+internal sealed partial class ReconcileRunTaskHandler(
+    IServiceScopeFactory scopeFactory,
+    ILogger<ReconcileRunTaskHandler> logger) : ITaskHandler<RunReconcilePayload>
+{
+    /// <inheritdoc />
+    public string TaskType => RunReconcileContract.OutboxTaskType;
+
+    /// <inheritdoc />
+    public bool RequiresTenant => true;
+
+    /// <inheritdoc />
+    public async ValueTask HandleAsync(
+        RunReconcilePayload payload,
+        ITenantScope? scope,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        if (scope is null)
+        {
+            throw new InvalidOperationException(
+                "orchestrator.run.reconcile is tenant-bound: a claimed row without an org_id is dead-lettered as missing_tenant, never run unscoped");
+        }
+
+        await using var attemptScope = scopeFactory.CreateAsyncScope();
+
+        var reconciler = attemptScope.ServiceProvider.GetRequiredService<IRunReconciler>();
+        var outcome = await reconciler.ReconcileAsync(payload.RunId, cancellationToken).ConfigureAwait(false);
+
+        // The four values are taken first so the log call's arguments stay locals (CA1873: no work behind a disabled
+        // log level). They are numbers and one interned token; the payload is never among them.
+        var comparison = outcome.Comparison;
+        var disposition = DispositionName(outcome.Disposition);
+        var shardsPlanned = comparison?.ShardsPlanned ?? 0;
+        var shardsClosed = comparison?.ShardsClosed ?? 0;
+        var missingCount = comparison?.Missing.Count ?? 0;
+
+        LogReconciled(logger, payload.RunId, disposition, shardsPlanned, shardsClosed, missingCount);
+    }
+
+    /// <summary>
+    /// The disposition as the stable lower-case token the log line carries (a string rather than a boxed enum, so the
+    /// line stays greppable whatever the sink does with enums).
+    /// </summary>
+    /// <param name="disposition">The attempt's outcome.</param>
+    private static string DispositionName(ReconcileDisposition disposition) => disposition switch
+    {
+        ReconcileDisposition.RunNotFound => "run_not_found",
+        ReconcileDisposition.NotCollectable => "not_collectable",
+        ReconcileDisposition.Compared => "compared",
+        _ => "unknown",
+    };
+
+    /// <summary>
+    /// The one line per attempt: the run, what the attempt did and the three counts. Never the payload (no producer id,
+    /// no declared pair) and never an event value (00 §5.7 S3).
+    /// </summary>
+    [LoggerMessage(
+        EventId = 2422,
+        Level = LogLevel.Information,
+        Message = "reconciled run {RunId}: {Disposition}, {ShardsPlanned} shard(s) planned, {ShardsClosed} closed, {MissingCount} missing reason(s)")]
+    private static partial void LogReconciled(
+        ILogger logger,
+        Guid runId,
+        string disposition,
+        int shardsPlanned,
+        int shardsClosed,
+        int missingCount);
+}
