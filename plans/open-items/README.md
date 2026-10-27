@@ -5,11 +5,11 @@
 | File | Areas | Rows | Stage A rows (open / total) |
 |---|---|---|---|
 | [`01-core-identity.md`](01-core-identity.md) | DECISIONS, RECOMMENDATIONS, 00, 01, 02 | 60 | 3 / 7 |
-| [`02-catalog-ingest-runs-evidence.md`](02-catalog-ingest-runs-evidence.md) | 03, 04, 05, 06 | 58 | 6 / 16 |
+| [`02-catalog-ingest-runs-evidence.md`](02-catalog-ingest-runs-evidence.md) | 03, 04, 05, 06 | 60 | 6 / 16 |
 | [`03-policy-healing-web.md`](03-policy-healing-web.md) | 07, 08, 09 | 58 | 1 / 2 |
 | [`04-ops-security-commercial.md`](04-ops-security-commercial.md) | 10, 11, 12, O1 pilot profile (includes the **counsel brief**) | 51 | 2 / 3 |
 | [`05-product-phases-g1.md`](05-product-phases-g1.md) | 13.1.1, 13.1.2, 13.2.1 (CR-D-2 G1 authoring, S52, 2026-10-23), 13.2.2 (role profiles, S92, 2026-10-26), 13.3.1 + 13.4.1 (S112, 2026-10-27) | 62 | 0 / 0 |
-| **Total** | | **289** | **12 / 28** |
+| **Total** | | **291** | **12 / 28** |
 
 Rows counted 2026-10-27 over every `| OI-` row of the five files; the Stage A column counts only the §2 rows, and a Stage A row is open until it carries a closing marker (`Closed`, `DECIDED`, `Resolved`, `delivered`) or is a `hand-over`. No folder-wide open/handed/closed totals are published here: per-row state is recorded in the row itself, and a row whose blocking task has landed but which records no decision stays open (the owner decides it, the merge does not — e.g. OI-02-08, OI-02-09, OI-05-15, OI-13-132, and the role-profile rows OI-13-301…308, whose plan calls their defaults `[INFERENCE]` and not owner decisions). Each row's own `Resolve before` and source cite stay authoritative over this summary.
 
