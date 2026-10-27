@@ -794,8 +794,10 @@ paths:
         antiforgery cookies (`Set-Cookie`, `Max-Age=0`), exactly like `POST /auth/logout`; revoking any other row
         leaves the caller's own cookies untouched, because the caller stays signed in on both paths. The call is
         idempotent by contract (`Idempotency-Key` not required; see `contracts/README.md`): a repeat on a dead row
-        still answers 404, and the first successful call already wrote the state. Every response carries
-        `Cache-Control: no-store`.
+        still answers 404, and the first successful call already wrote the state. A 503 `unavailable` means the call
+        aborted and nothing was written — no session pepper, a database fault, or the admin path's audit row failing
+        to write in the same definer transaction — so the target session is still live and the retry is safe. Every
+        response carries `Cache-Control: no-store`.
       x-permission: none
       x-auth: user_session
       x-version: v1

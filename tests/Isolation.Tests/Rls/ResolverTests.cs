@@ -360,4 +360,81 @@ public sealed class ResolverTests : HarnessTest
             $"the resolver surface is not the only path across the tenant boundary:{Environment.NewLine}"
             + string.Join(Environment.NewLine, failures));
     }
+
+    /// <summary>
+    /// F55 (0050): the one resolver that ends ANOTHER member's session is also the one that records it,
+    /// inside its own transaction — the <c>definer_audit</c> rule of <c>scripts/check-rls.py</c> is now a
+    /// property of the live catalogue, not only of the file. The append uses the application writer's own
+    /// advisory lock key (<c>AuditSql.AdvisoryLock</c>), and the bounded wait is a FUNCTION setting
+    /// (<c>set lock_timeout = '2000'</c> in the header beside the pinned <c>search_path</c>), so it covers the
+    /// session row lock as well as the advisory lock and is restored when the call returns. Only the app role
+    /// holds EXECUTE beyond the owner, and only the admin branch writes: a self revoke records nothing.
+    /// </summary>
+    [Fact]
+    public async Task The_Admin_Revoke_Resolver_Carries_Its_Own_Audit_Row()
+    {
+        await using var connection = await Fixture.AppDataSource.OpenConnectionAsync(Token);
+        await using var command = connection.CreateCommand();
+
+        // One catalogue read: the body, the function's configured settings, and every EXECUTE grantee that
+        // is neither the owner nor PUBLIC. proconfig and the ACL are the deployed facts; the body text alone
+        // cannot prove that the bounded wait is in force for the whole call (S120 review S1).
+        command.CommandText =
+            """
+            select p.prosrc,
+                   coalesce(array_to_string(p.proconfig, ','), ''),
+                   coalesce((select string_agg(
+                                      case when a.grantee = 0 then 'PUBLIC'
+                                           else pg_catalog.pg_get_userbyid(a.grantee) end
+                                      || ':' || a.privilege_type, ',' order by a.grantee)
+                               from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                              where a.privilege_type = 'EXECUTE'
+                                and a.grantee <> p.proowner), '')
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """;
+
+        string body;
+        string configuration;
+        string grantees;
+        await using (var reader = await command.ExecuteReaderAsync(Token))
+        {
+            (await reader.ReadAsync(Token)).ShouldBeTrue("evidgate_resolve.session_revoke_one is in the catalogue");
+            body = reader.GetString(0);
+            configuration = reader.GetString(1);
+            grantees = reader.GetString(2);
+        }
+
+        body.ShouldContain("insert into public.audit_log", Case.Sensitive,
+            "the row must be written inside the definer, so it commits or rolls back with the revoke");
+        body.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive,
+            "the action 0048's handler wrote from a second transaction");
+        body.ShouldContain("pg_advisory_xact_lock(hashtext('audit:' || p_org_id::text))", Case.Sensitive,
+            "the same chain lock the application writer takes (AuditTrail.cs AuditSql.AdvisoryLock)");
+        body.ShouldContain("v_target_user <> v_actor", Case.Sensitive,
+            "the row is the administrative act only: a self revoke writes nothing");
+
+        // proconfig spells a numeric value as the catalogue likes (`2000` or `"2000"`), so the values are
+        // compared quote-stripped: what the assertions pin is the SETTING and its value, not its spelling.
+        var settings = configuration
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(entry => entry.Split('=', 2))
+            .Select(parts => (Name: parts[0], Value: parts.Length > 1 ? parts[1].Trim('"', '\'') : string.Empty))
+            .ToDictionary(setting => setting.Name, setting => setting.Value, StringComparer.Ordinal);
+
+        settings.ShouldContainKey("search_path", "every definer keeps the pinned empty search path (TL T80)");
+        settings["search_path"].ShouldBeEmpty("`search_path` is pinned to the empty string (TL T80)");
+        settings.ShouldContainKey("lock_timeout",
+            "the writer's bounded wait (AuditTrail.cs AuditSql.LockTimeout, 2000 ms) is a function setting, so it "
+            + "bounds the session row lock and the advisory lock alike and cannot leak into the caller's transaction");
+        settings["lock_timeout"].ShouldBe("2000",
+            "the same 2000 ms bound the application writer takes (S120 review S1: 2000 ms here, not a bare statement)");
+        body.ShouldNotContain("set_config('lock_timeout'", Case.Sensitive,
+            "the bound belongs to the function header: a statement-local set_config would run after the update and "
+            + "persist in the caller's transaction (S120 review S1)");
+
+        grantees.ShouldBe("evidgate_app:EXECUTE",
+            "EXECUTE is held by evidgate_app alone among non-owner roles — never PUBLIC, never the operator or sweep role");
+    }
 }

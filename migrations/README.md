@@ -106,8 +106,15 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   `update (current_evidence_revision_id)` column grant on `run`, the `run_evidence_pointer_guard`
   trigger that only lets the pointer move to the latest revision of the same run (an owner-only clear
   for erasure), and the `run_evidence_pointer_insert_guard` trigger that keeps a fresh run's pointer
-  NULL;
-  the next free number is `0050`;
+  NULL, and `0050` is F55's administrative session-revoke audit — `evidgate_resolve.session_revoke_one`
+  re-created with the same signature so that the revoke and its `audit_log` row (actor the admin,
+  action `auth.session_revoke_admin`, object the revoked `session`, metadata `target_user_id`,
+  `org_id = p_org_id`) commit or roll back in ONE transaction, the row chained in SQL under the
+  application writer's `hashtext('audit:' || org)` advisory lock and 2000 ms `lock_timeout`, while a
+  self revoke and every refusal write nothing (the rows carry `request_id`/`trace_id` as NULL — a
+  declared, non-blocking loss: a definition cannot see the caller's `Activity`, so correlating the row
+  to its HTTP request needs an argument the signature cannot gain; receiver, queue row `F58`);
+  the next free number is `0051`;
   a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
@@ -287,11 +294,16 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
 - No new index was added; `0048`'s header records the measurement reasoning (a partial
   index on a deadline, or on the nullable `expired_at`, would be rewritten by every idle
   slide or stamp, moving cost from a bounded sweep onto every authenticated request).
-- Per-call audit rows for the routes are deferred to 02.7.1-T2.2 with the other definers
-  (`0048`'s `lint: audit-deferred` line, D-S75-Q4): `audit_log` is org-scoped and its writer
-  extends a hash chain, which a definer cannot do. The route-level row an actor's request
-  can carry is the application's `IIdentityAuditWriter`, the `LinkEndpoints.ConfirmAsync`
-  precedent.
+- Per-call audit rows for the other three routes (`session_list`, `session_revoke_current`,
+  `session_revoke_others`) are deferred to 02.7.1-T2.2 with the other definers (`0048`'s
+  `lint: audit-deferred` line, D-S75-Q4). The ADMIN revoke is no longer deferred: `0050` has
+  `session_revoke_one` append its own `auth.session_revoke_admin` row inside the same
+  transaction, so the revocation and its record commit or roll back together. The "a definer
+  cannot extend a hash chain" reasoning of `0048`'s header and of its `lint: audit-deferred`
+  entry holds only where the RFC 8785 canonical fields cannot be reproduced in SQL; `0050`'s
+  header names the three C# sources it mirrors (`AuditHashing.CanonicalFields`,
+  `JsonCanonicalizer`, `AuditSql.AdvisoryLock`/`LockTimeout`) and is verified by the existing
+  `AuditChainVerifier`, never by a second hashing implementation.
 
 ## Notes on `evidence_revision` (05.3.2-T5, `0049`)
 
