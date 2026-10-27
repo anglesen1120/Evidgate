@@ -1,6 +1,6 @@
-// 05.3.1-T1.1/T1.3: migration 0036 through a real PostgreSQL — the nullable evidence pointer without its
-// foreign key (05.2.1's `run` predates `evidence_revision`) and the app role's single guarded UPDATE grant
-// on `run.state` that the transition needs.
+// 05.3.1-T1.1/T1.3: migration 0036 through a real PostgreSQL — the nullable evidence pointer and the app
+// role's guarded UPDATE grant on `run.state` that the transition needs. 05.3.2-T5's 0049 adds the pointer's
+// composite FK and its own column grant, so the assertions below read the schema at head.
 using Shouldly;
 using Xunit;
 
@@ -8,14 +8,17 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// 05.3.1-T1.1 (0036) through a real PostgreSQL: the two statements the story's migration adds to
-/// <c>run</c> — <c>current_evidence_revision_id</c> (a nullable pointer, deliberately without the composite
-/// FK 05.3.2-T5 owns) and <c>grant update (state) on public.run to evidgate_app</c> (0031 revoked table-level
-/// UPDATE and granted <c>SELECT, INSERT</c> only; 0034 granted <c>updated_at</c> for the T91 row lock).
+/// <c>run</c> — <c>current_evidence_revision_id</c> (a nullable pointer) and
+/// <c>grant update (state) on public.run to evidgate_app</c> (0031 revoked table-level UPDATE and granted
+/// <c>SELECT, INSERT</c> only; 0034 granted <c>updated_at</c> for the T91 row lock).
 /// </summary>
 /// <remarks>
-/// The FK assertion is 0036's shape: when 05.3.2-T5 adds the composite
-/// <c>(org_id, current_evidence_revision_id) -&gt; evidence_revision (org_id, id)</c> key, that story updates
-/// this file the way 0035 updated 04.1.2's assertions.
+/// 0036 deliberately landed the pointer without its composite FK. 05.3.2-T5's 0049 adds
+/// <c>(org_id, current_evidence_revision_id) -&gt; evidence_revision (org_id, id)</c> and grants the app
+/// role <c>update (current_evidence_revision_id)</c>, so the assertions below are 0036's shape as 0049
+/// completes it: the pointer is the third writable column and the FK is the only constraint naming it. The
+/// pointer's own behaviour — latest revision of the same run only, never cleared — is 0049's and is covered
+/// by <see cref="EvidenceRevisionSchemaTests"/>.
 /// </remarks>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
@@ -31,12 +34,13 @@ public sealed class RunStateTransitionSchemaTests
     // ------------------------------------------------------------------ (a) the migration's shape
 
     /// <summary>
-    /// 0036 adds <c>current_evidence_revision_id</c> as a nullable <c>uuid</c> and adds no foreign key for it:
-    /// the composite target (<c>evidence_revision</c>) is created by 05.3.2-T5, so a FK here would not deploy
-    /// ([DECISION] coordinator, 2026-10-13).
+    /// 0036 adds <c>current_evidence_revision_id</c> as a nullable <c>uuid</c>; 05.3.2-T5's 0049 adds the
+    /// composite FK 0036 deferred, so at head the only constraint naming the column is
+    /// <c>run_current_evidence_revision_fk (org_id, current_evidence_revision_id) -&gt; evidence_revision
+    /// (org_id, id)</c>. NULL stays legal (MATCH SIMPLE, a run without a frozen revision).
     /// </summary>
     [Fact]
-    public async Task Migration0036_AddsTheNullablePointer_WithoutAForeignKey()
+    public async Task Migration0036_AddsTheNullablePointer_WithThe0049CompositeForeignKey()
     {
         var database = await _fixture.CreateDatabaseAsync();
 
@@ -51,24 +55,23 @@ public sealed class RunStateTransitionSchemaTests
             """))
             .ShouldBeTrue("the pointer column is a nullable uuid");
 
-        // No constraint of `run` — FK or otherwise — names the new column in this lane's head.
-        (await _fixture.ColumnAsync<string>(
-            database,
-            """
-            select con.conname || ':' || pg_get_constraintdef(con.oid)
-              from pg_catalog.pg_constraint con
-             where con.conrelid = 'public.run'::regclass
-             order by con.conname
-            """))
-            .ShouldNotContain(constraint => constraint.Contains("current_evidence_revision_id", StringComparison.Ordinal));
+        // One constraint of `run` names the pointer, and it is 0049's FK onto evidence_revision's tenant key.
+        var pointerConstraint = (await _fixture.ConstraintsAsync(database, "run"))
+            .Where(constraint => constraint.Contains("current_evidence_revision_id", StringComparison.Ordinal))
+            .ToArray()
+            .ShouldHaveSingleItem();
+
+        pointerConstraint.ShouldStartWith("f:run_current_evidence_revision_fk:");
+        pointerConstraint.ShouldContain("FOREIGN KEY (org_id, current_evidence_revision_id)");
+        pointerConstraint.ShouldContain("REFERENCES evidence_revision(org_id, id)");
     }
 
     /// <summary>
     /// The app role's UPDATE grants on <c>run</c> are exactly the columns the module's writes name:
-    /// <c>updated_at</c> (0034's T91 row lock, assigned by the shared version trigger) and <c>state</c> (0036,
-    /// 05.3.1's guarded transition). <c>purpose</c>, <c>replay_grant_id</c>,
-    /// <c>current_evidence_revision_id</c>, <c>version</c> and <c>ci_run_ref</c> stay outside — a column
-    /// grant is not a table grant, so table-level UPDATE and DELETE stay revoked.
+    /// <c>updated_at</c> (0034's T91 row lock, assigned by the shared version trigger), <c>state</c> (0036,
+    /// 05.3.1's guarded transition) and <c>current_evidence_revision_id</c> (0049, 05.3.2-T5's guarded
+    /// pointer move). <c>purpose</c>, <c>replay_grant_id</c>, <c>version</c> and <c>ci_run_ref</c> stay
+    /// outside — a column grant is not a table grant, so table-level UPDATE and DELETE stay revoked.
     /// </summary>
     [Fact]
     public async Task Migration0036_GrantsUpdateOnTheStateColumnOnly()
@@ -84,7 +87,7 @@ public sealed class RunStateTransitionSchemaTests
                and has_column_privilege('evidgate_app', 'public.run', column_name, 'UPDATE')
              order by column_name
             """))
-            .ShouldBe(["state", "updated_at"]);
+            .ShouldBe(["current_evidence_revision_id", "state", "updated_at"]);
 
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "run", "update")).ShouldBeFalse("a column grant is not a table grant");
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "run", "delete")).ShouldBeFalse();
@@ -100,8 +103,9 @@ public sealed class RunStateTransitionSchemaTests
     }
 
     /// <summary>
-    /// The grant in behaviour: the app role can move <c>state</c> on its own tenant's run, and every column
-    /// outside the grant is still 42501 — the state is the only thing the app role can change on a run.
+    /// The grants in behaviour: the app role can move <c>state</c> on its own tenant's run, and every column
+    /// outside the three grants is still 42501 — 0049's pointer is writable since 05.3.2-T5, but only through
+    /// its own guard (covered by <see cref="EvidenceRevisionSchemaTests"/>).
     /// </summary>
     [Fact]
     public async Task AppRole_MovesState_AndNothingElseOnRun()
@@ -123,7 +127,6 @@ public sealed class RunStateTransitionSchemaTests
                      "purpose = 'replay'",
                      "replay_grant_id = null",
                      "version = 9",
-                     $"current_evidence_revision_id = '{Guid.CreateVersion7()}'",
                      "ci_run_ref = '{}'::jsonb",
                  })
         {

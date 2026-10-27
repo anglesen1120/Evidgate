@@ -5,12 +5,12 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 ## 1. Snapshot
 
 ### Resume here
-- Develop: `787f592` (PR #228, S102 02.3.2-T2, merged); 220 first-parent PR merges into develop. Migration `0048_identity_session_routes.sql` is merged in #228; migration lane free, next free migration `0049`.
+- Develop: `787f592` (PR #228, S102 02.3.2-T2, merged); 220 first-parent PR merges into develop. Migration `0048_identity_session_routes.sql` is merged in #228. S115 (05.3.2-T5) is in review with `0049_orchestration_evidence_revision.sql` (PR number in the delivery row below); the migration lane is held by S115 until it merges, next free migration `0050`.
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop: 178/655 tasks; 183.25/702.75 raw person-days; remaining 477 tasks / 519.5 d. Via merged PRs: 151 tasks / 158.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- Landed by phase (done tasks / raw d): G1 132 / 144.25; G2 40 / 33; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop (counting S115 05.3.2-T5 once merged): 179/655 tasks; 184.25/702.75 raw person-days; remaining 476 tasks / 518.5 d. Via merged PRs: 152 tasks / 159.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 132 / 144.25; G2 41 / 34; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1 with the same 10 missing 13.x feature plans (queue F37, §6 row), unchanged.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -24,10 +24,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 178 | 183.25 |
-| Via merged PRs | 151 | 158.25 |
+| Fully landed on develop | 179 | 184.25 |
+| Via merged PRs | 152 | 159.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 477 | 519.5 |
+| Remaining | 476 | 518.5 |
 | Plan total | 655 | 702.75 |
 
 Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 09.2.1-T5 (T5.2 reload acceptance awaits F18), 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764) and whose remainder is the T2.2 acceptance plus T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -40,7 +40,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 02 | 29 | 0 | 8 | 18 | 3 | 0 | 28 |
 | 03 | 8 | 0 | 3 | 4 | 1 | 0 | 7.5 |
 | 04 | 22 | 0 | 7 | 12 | 3 | 0 | 21.5 |
-| 05 | 17 | 0 | 5 | 8 | 4 | 0 | 18.5 |
+| 05 | 18 | 0 | 5 | 9 | 4 | 0 | 19.5 |
 | 06 | 12 | 0 | 4 | 8 | 0 | 0 | 10 |
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
 | 08 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -49,17 +49,17 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 11 | 9 | 1 | 3 | 4 | 1 | 0 | 7.75 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 178 | 3 | 49 | 95 | 30 | 1 | 183.25 |
+| TOTAL | 179 | 3 | 49 | 96 | 30 | 1 | 184.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
 | G1 | 132 | 3 | 29 | 72 | 27 | 1 | 144.25 |
-| G2 | 40 | 0 | 18 | 20 | 2 | 0 | 33 |
+| G2 | 41 | 0 | 18 | 21 | 2 | 0 | 34 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 178 | 3 | 49 | 95 | 30 | 1 | 183.25 |
+| TOTAL | 179 | 3 | 49 | 96 | 30 | 1 | 184.25 |
 
 ### Landed task groups
 
@@ -188,6 +188,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 11.2.1 | 11.2.1-T3 (T3.1 + T3.2) | merged (#225, f4c7de8) | `docs/security/ingest-token-review.md`: shipped ingest/CI token design reviewed against code at 96e0f17 (scope, TTL, OIDC claim validation, revocation, replay, T5 storage, single return, pepper custody and rotation, 17-row abuse table, five new gaps T3-G1..G5). Docs-only, tier T0. Whole task: counts +1 task / +1.0 d (M); nothing else in §5 was unblocked (04.9.1-T2, 08.4.3-T2, 11.2.1-T4 and 11.2.1-T5 wait on 11.2.1-T6/T4, 05.9.2-T1 on all of 11.2.1). |
 | 06.4.6 | 06.4.6-T1 (T1.1 + T1.2) | merged (#234, 7bad46a) | `docs/adr/0009-event-table-partitioning.md` (proposed, owner confirmation pending): option C, monthly partitions by `run_created_at`, widened dedupe key, `DEFAULT` partition + plain `DETACH` with `lock_timeout` ≤ 5 s (D-S113-Q1; PostgreSQL 18 forbids `DETACH CONCURRENTLY` with a default partition), retention table, 90-day cap proposal; CR proposals logged `[OPEN]` as OI-06-17. Docs-only, tier T0. Whole task: counts +1 task / +0.5 d (S); 06.4.6-T2 and T3 remain. |
 | 05.5.2 | 05.5.2-T1 (T1.1 + T1.2) | merged (#236, 148bc06) | CI re-run contract change (docs only, tier T0, proposed, owner confirmation pending): 00 §8.1 gains `rerun_scope = ci_attempt` and the attempt rule (triple identity, new run per higher attempt with parent = highest stored lower attempt, `stale_attempt`, partial-attempt label), §9.4 binds the whole triple; 00 §15 row, plan 05 FR-05-7/§4/producer-binding line, DECISIONS §6 F10–F13 (GitHub facts ✅, one ⚠️ kept), OI-05-05 reworded, OI-05-16 added. No claim, wire field, code or contract file changed. |
+| 05.3.2 | 05.3.2-T5 (T5.1 + T5.2) | in review (S115, PR #PRNUM) | `migrations/0049_orchestration_evidence_revision.sql`: append-only `evidence_revision` (app role SELECT + INSERT, FORCE RLS, closed `missing[]` codes incl. `setup_error`, gap-free `revision_no` trigger), `evidence_revision_run_idx`, composite pointer FK `run_current_evidence_revision_fk`, `update (current_evidence_revision_id)` grant and `run_evidence_pointer_guard` (latest revision of the same run only, never null). `GetRun` unchanged. D-S115-Q1 (proposed): lock order run row first, then insert, then pointer. |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -401,7 +402,6 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 04.6.1-T1 | L | Fixture layout `fixtures/<producer>/<case>/` + diff harness (expected events vs produced) | yes | no | no | T1.1+T1.2 \| T1.3+T1.4 | yes |
 | 05.2.1-T3 | M | Server-side `execution_key` + uniqueness. Partial: key layout, unique index and the 422 conflict ship (`ExecutionKey.cs:20`, `0031:174`); the golden vectors and the reporter real key (all-zero `PLACEHOLDER_EXECUTION_KEY`) remain. | yes | yes (0049+) | no — `packages/adapter-playwright/src/identity.ts` is CLI-side, no lane owns it | n/a | yes — remainder only |
 | 05.2.2-T3 | M | Fork-PR behaviour: labelled, advisory-only, never bound or gating | yes | no | S91: `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` (T3.4 adds a counter name to that file) | n/a | yes |
-| 05.3.2-T5 | M | `evidence_revision` table, owned by 05 | yes | yes (0049+) | no | n/a | yes |
 | 05.4.1-T1 | S | Cancel request row + `POST /v1/runs/{r}/cancel` + permission `run:cancel` | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`run:cancel`) | n/a | yes |
 | 05.6.1-T1 | M | `release`/`release_component`/`release_run` tables + create API | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
 | 05.7.1-T1 | L | JobSpec schema + immutability + `job_spec_hash` | yes | yes (0049+) | S97: `contracts/openapi.yaml` (`jobspec_invalid`), `packages/sdk`; `contracts/jobspec.schema.json` is a new file | T1.1+T1.2 \| T1.3+T1.4 | yes |

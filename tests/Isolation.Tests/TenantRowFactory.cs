@@ -466,6 +466,16 @@ internal sealed class TenantRowFactory
             // corrupt row never trips the dedupe key before the composite FK under test.
             ("public.usage_ledger_entry" or "public.usage_rollup", "metric") => "results",
             ("public.usage_ledger_entry" or "public.usage_rollup", "period") => "2026-10",
+            // evidence_revision (0049) closes `completeness` to the 00 §8.5 pair, so the generic text
+            // candidate is rejected there; `manifest_hash` is generic on purpose (13 characters is
+            // inside the 1-200 CHECK) and `missing` keeps its '{}' default, which is what the
+            // "complete has no missing codes" CHECK requires. `revision_no` is pinned to 1 because the
+            // table's BEFORE INSERT trigger refuses anything but the run's max + 1: every generated
+            // revision row is the first revision of a run this factory created for the same org, so a
+            // shared counter (environment_revision above) would hand a fresh run revision 2 and the
+            // trigger would answer 23514 before the composite FK under test is reached.
+            ("public.evidence_revision", "completeness") => "complete",
+            ("public.evidence_revision", "revision_no") => 1,
             // planned_execution's execution_key is the 00 §7 sha256 hex and its unique key is
             // (org_id, run_id, execution_key), so a constant would collide with the valid row the
             // corrupt attempt inserts just before it: a fresh 64-hex value per generated row.

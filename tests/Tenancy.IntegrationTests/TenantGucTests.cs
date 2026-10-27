@@ -553,6 +553,18 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("project_id", projectId));
+        // The 05.3.2-T5 table (migration 0049): revision 1 of the run seeded above — the insert
+        // trigger refuses any number but the run's max + 1. `missing` keeps its '{}' default, which
+        // is what the "complete has no missing codes" CHECK requires.
+        await scope.ExecuteAsync(
+            """
+            insert into public.evidence_revision
+                (id, org_id, run_id, revision_no, completeness, event_watermark, manifest_hash)
+            values (@id, @org_id, @run_id, 1, 'complete', 0, 'sha256:probe')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("run_id", runId));
 
         await scope.CommitAsync();
     }
