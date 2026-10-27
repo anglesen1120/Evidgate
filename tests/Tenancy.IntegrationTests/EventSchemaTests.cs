@@ -457,9 +457,10 @@ public sealed class EventSchemaTests
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world, world.Org);
 
-        // 0034 granted `updated_at` (the T91 row lock) and 05.3.1's 0036 granted `state` (the guarded
-        // transition), so those two are the app role's only UPDATE columns on `run`; every other column —
-        // here `purpose` and the 0036 evidence pointer — stays outside the grant.
+        // 0034 granted `updated_at` (the T91 row lock), 05.3.1's 0036 granted `state` (the guarded
+        // transition) and 05.3.2-T5's 0049 granted `current_evidence_revision_id` (its own guarded move,
+        // covered by EvidenceRevisionSchemaTests), so an un-granted column of `run` stays 42501 — `purpose`
+        // is the example here.
         (await _fixture.ScalarAsync<bool>(
             world.Database,
             "select has_column_privilege('evidgate_app', 'public.run', 'updated_at', 'update')")).ShouldBeTrue();
@@ -468,8 +469,6 @@ public sealed class EventSchemaTests
             "select has_column_privilege('evidgate_app', 'public.run', 'state', 'update')")).ShouldBeTrue();
 
         (await CaptureAppErrorAsync(world, world.Org, $"update public.run set purpose = 'replay' where id = '{runId}'"))
-            .SqlState.ShouldBe("42501");
-        (await CaptureAppErrorAsync(world, world.Org, $"update public.run set current_evidence_revision_id = '{Guid.CreateVersion7()}' where id = '{runId}'"))
             .SqlState.ShouldBe("42501");
     }
 
