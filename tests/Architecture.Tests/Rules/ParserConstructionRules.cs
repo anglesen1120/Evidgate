@@ -509,10 +509,17 @@ public static class ParserConstructionRules
     }
 
     /// <summary>
-    /// Handles one brace of an interpolated literal: a run of exactly <see cref="Literal.Dollars"/> <c>{</c> opens a
-    /// hole, whose expression is scanned as code (and whose closing brace run — <c>N</c> of them — is text again);
-    /// every other brace is literal text, which is what an escaped <c>{{</c>/<c>}}</c> is and what a shorter or longer
-    /// run means in the language too.
+    /// Handles one brace run of an interpolated literal: whether it opens a hole depends on the literal's kind, not
+    /// on the run being exactly <see cref="Literal.Dollars"/> long.
+    /// <para>
+    /// In a quoted literal the <c>$</c> count is always one, so an opening run is read left to right in escaped pairs:
+    /// an even run is nothing but escaped braces (<c>$"{{x}}"</c> is the text <c>{x}</c>) and an odd run ends in one
+    /// hole opener (<c>$"{{{x}}}"</c> is the text <c>{</c>, the value of <c>x</c>, then <c>}</c>). In a raw literal the
+    /// <c>$</c> count is the hole width: a run shorter than that count is text (<c>$$"""{x}"""</c> is <c>{x}</c>),
+    /// while a longer run keeps its leading braces as text and ends in one hole (<c>$$"""{{{x}}}"""</c> is <c>{</c>,
+    /// the value, then <c>}</c>). A closing run never opens anything: the hole's own scan already stopped on its
+    /// first <c>}</c>, so the whole run is text again.
+    /// </para>
     /// </summary>
     /// <param name="text">The source.</param>
     /// <param name="stripped">The blanked copy.</param>
@@ -523,15 +530,16 @@ public static class ParserConstructionRules
     {
         var brace = text[at];
         var run = BraceRun(text, at, brace);
+        var opens = brace == '{'
+            && (literal.Quotes >= 3 ? run >= literal.Dollars : run % 2 == 1);
 
-        if (brace != '{' || run != literal.Dollars)
+        Blank(stripped, at, at + run - 1);
+
+        if (!opens)
         {
-            Blank(stripped, at, at + run - 1);
-
             return at + run;
         }
 
-        Blank(stripped, at, at + run - 1);
         at += run;
         ScanCode(text, stripped, ref at, inHole: true);
 

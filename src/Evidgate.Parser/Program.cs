@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Xml;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Microsoft.Win32.SafeHandles;
@@ -128,29 +129,45 @@ internal static class Program
 
     private static void Emit(IParsing parsing, ChildOptions options, StdinBuffer content, NdjsonWriter writer)
     {
+        switch (options.Profile)
+        {
+            case ParseProfile.Xml:
+                EmitXml(parsing, content, options.MaxBytes, writer);
+                break;
+
+            case ParseProfile.Json:
+                EmitJson(parsing, content, options.MaxBytes, writer);
+                break;
+
+            default:
+                EmitArchive(parsing, content, options.MaxBytes, writer);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Runs the profile's one pass over the child's bounded stdin copy and, on every path — a streamed result, a
+    /// rejection or a fault — disposes that read stream and drops the copy before returning.
+    /// <see cref="StdinBuffer.Release"/> clears the chunks the stream reads, so the two belong together, and both
+    /// happen before the emit walk starts: every arm's result keeps the profile's own copy of the bytes
+    /// (<c>SafeXml</c> its chunks, <c>SafeJson</c> its contiguous buffer, <c>SafeZipArchive</c> its buffer) and
+    /// reads nothing from this stream after the pass returns, so the walk and the marker run with one copy of the
+    /// input live, not two (the parent's heap hard limit is sized on that).
+    /// </summary>
+    /// <typeparam name="TReport">What the profile materialised from the bytes.</typeparam>
+    /// <param name="content">The child's bounded stdin copy; released when this returns.</param>
+    /// <param name="pass">The profile pass, run over a fresh read stream of the content.</param>
+    /// <returns>The profile's outcome, no longer tied to the input copy.</returns>
+    private static Result<TReport> Parse<TReport>(StdinBuffer content, Func<Stream, Result<TReport>> pass)
+    {
         try
         {
             using var stream = content.OpenStream();
 
-            switch (options.Profile)
-            {
-                case ParseProfile.Xml:
-                    EmitXml(parsing, stream, options.MaxBytes, writer);
-                    break;
-
-                case ParseProfile.Json:
-                    EmitJson(parsing, stream, options.MaxBytes, writer);
-                    break;
-
-                default:
-                    EmitArchive(parsing, stream, options.MaxBytes, writer);
-                    break;
-            }
+            return pass(stream);
         }
         finally
         {
-            // The profile has consumed the content: drop the child's own copy, so the marker is written with one
-            // copy of the input live rather than two (the parent's heap hard limit is sized on that).
             content.Release();
         }
     }
@@ -189,11 +206,11 @@ internal static class Program
     /// and wrote nothing, as a lone surrogate in a JSON string reaches <c>JsonElement.WriteTo</c>.
     /// </para>
     /// </summary>
-    private static void EmitXml(IParsing parsing, Stream content, long maxBytes, NdjsonWriter writer)
+    private static void EmitXml(IParsing parsing, StdinBuffer content, long maxBytes, NdjsonWriter writer)
     {
         // The profile's own ParsingLimits.ParseTimeout is the only timer: a second one here would race it and
         // could report `timeout` for a parse that finished.
-        var result = parsing.ParseXmlReport(content, maxBytes, CancellationToken.None);
+        var result = Parse(content, stream => parsing.ParseXmlReport(stream, maxBytes, CancellationToken.None));
 
         if (!result.IsSuccess)
         {
@@ -251,9 +268,9 @@ internal static class Program
     /// the profile's strict UTF-8 check passes, but a .NET string cannot hold — becomes a malformed rejection
     /// instead of an exit-3 crash: the record is abandoned before any byte of it reaches stdout.
     /// </summary>
-    private static void EmitJson(IParsing parsing, Stream content, long maxBytes, NdjsonWriter writer)
+    private static void EmitJson(IParsing parsing, StdinBuffer content, long maxBytes, NdjsonWriter writer)
     {
-        var result = parsing.ParseJson(content, maxBytes, CancellationToken.None);
+        var result = Parse(content, stream => parsing.ParseJson(stream, maxBytes, CancellationToken.None));
 
         if (!result.IsSuccess)
         {
@@ -275,9 +292,9 @@ internal static class Program
     /// archive — declared count, every normalized name, duplicate names, symbolic links, the expanded budget and
     /// each entry's ratio — so a rejected archive produces no entry record at all.
     /// </summary>
-    private static void EmitArchive(IParsing parsing, Stream content, long maxBytes, NdjsonWriter writer)
+    private static void EmitArchive(IParsing parsing, StdinBuffer content, long maxBytes, NdjsonWriter writer)
     {
-        var result = parsing.EnumerateArchive(content, maxBytes, CancellationToken.None);
+        var result = Parse(content, stream => parsing.EnumerateArchive(stream, maxBytes, CancellationToken.None));
 
         if (!result.IsSuccess)
         {

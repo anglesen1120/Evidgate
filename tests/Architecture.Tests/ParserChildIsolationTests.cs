@@ -184,10 +184,14 @@ public class ParserChildIsolationTests
     [InlineData("var note = \"\"\"\r\n  using Microsoft.AspNetCore.Http;\r\n  \"\"\";")]
     [InlineData("var note = \"pre{System.Net.Http}post\";")]
     [InlineData("var note = \"\"\"\r\n  {\"System.Net.Http\"}\r\n  \"\"\";")]
+    [InlineData("var note = $\"{{{{new HttpClient()}}}}\";")]
+    [InlineData("var note = $$$\"\"\"\r\n  {new HttpClient()}\r\n  \"\"\";")]
     public void Synthetic_Forbidden_Api_Only_Named_In_Trivia_Is_Not_A_Use(string text)
     {
         // The last two cases are the negative side of the interpolation rule: braces are a hole only with a `$`
-        // prefix, so a plain literal that happens to contain braces stays text.
+        // prefix, so a plain literal that happens to contain braces stays text. The final two pin the runs that
+        // never open a hole in an interpolated literal either — an even run of four is two escaped braces, and a raw
+        // run shorter than the dollar count is text — so a `new HttpClient()` written between them is not code.
         var files = new (string Path, string Text)[]
         {
             ("src/Evidgate.Parser/Program.cs", text),
@@ -237,10 +241,18 @@ public class ParserChildIsolationTests
     [InlineData("var temp = Path.GetTempPath();", "Path.GetTemp")]
     [InlineData("var temp = Path.GetTempFileName();", "Path.GetTemp")]
     [InlineData("using var archive = ZipFile.OpenRead(path);", "ZipFile.")]
-    [InlineData("Process.Start(info);", "Process.")]
-    [InlineData("var child = new Process();", "new Process")]
+    [InlineData("Process.Start(info);", "Process")]
+    [InlineData("var child = new Process();", "Process")]
+    [InlineData("Process child = new();", "Process")]
+    [InlineData("var current = System.Diagnostics.Process.GetCurrentProcess();", "System.Diagnostics.Process")]
     [InlineData("var info = new ProcessStartInfo(\"dotnet\");", "ProcessStartInfo")]
+    [InlineData("[DllImport(\"libc\", EntryPoint = \"setrlimit\")] private static extern int SetRlimit(int resource, ref Limit limit);", "DllImport")]
+    [InlineData("[LibraryImport(\"libc\", EntryPoint = \"setrlimit\")] private static partial int SetRlimit(int resource, ref Limit limit);", "LibraryImport")]
+    [InlineData("var libc = NativeLibrary.Load(\"libc\");", "NativeLibrary")]
+    [InlineData("var buffer = Marshal.AllocHGlobal(size);", "Marshal.")]
     [InlineData("var cap = Environment.GetEnvironmentVariable(\"EVIDGATE__PARSE__MAX_BYTES\");", "Environment.GetEnvironmentVariable")]
+    [InlineData("Environment.SetEnvironmentVariable(\"EVIDGATE__PARSE__MAX_BYTES\", cap);", "Environment.SetEnvironmentVariable")]
+    [InlineData("var root = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);", "Environment.GetFolderPath")]
     [InlineData("var path = Environment.ExpandEnvironmentVariables(\"%TEMP%\");", "Environment.ExpandEnvironmentVariables")]
     [InlineData("var cwd = Environment.CurrentDirectory;", "Environment.CurrentDirectory")]
     [InlineData("using static System.IO.File;\nvar bytes = ReadAllBytes(path);", "System.IO")]
@@ -256,8 +268,9 @@ public class ParserChildIsolationTests
 
         var violations = ParserChildIsolationRules.ChildIoViolations(files);
 
-        // The tokens overlap on purpose (`new Process` covers `new ProcessStartInfo`, `System.IO` covers an alias), so
-        // the count is not the assertion: the rule must name this API for this file.
+        // The tokens overlap on purpose (`System.IO` covers a `using static` alias, a qualified use and
+        // `System.IO.Pipes` at once, and the bare `Process` identifier is skipped when a token already named the
+        // same use), so the count is not the assertion: the rule must name this API for this file.
         violations.ShouldNotBeEmpty();
         string.Join(Environment.NewLine, violations).ShouldContain(api);
     }
@@ -284,11 +297,16 @@ public class ParserChildIsolationTests
     [InlineData("var name = \"File.ReadAllBytes\";")]
     [InlineData("// File.ReadAllBytes would need a file: the child reads stdin only")]
     [InlineData("var count = DirectorySeparator();")]
+    [InlineData("var processed = Grid.Processed(count);")]
+    [InlineData("var order = PlatformProcessing(count);")]
+    [InlineData("var name = \"[DllImport] and Marshal.AllocHGlobal are not reachable from this process\";")]
     public void Synthetic_Child_Transport_And_Complete_File_Names_Are_Not_A_Violation(string text)
     {
         // The match needs a boundary and blanked trivia: `File.` inside `GridFile.Open` is a longer identifier, a
         // message or a comment naming a file API is text, and `BufferedStream` is the stdout transport — the child
-        // streams stdin and stdout and touches no path.
+        // streams stdin and stdout and touches no path. The identifier rule needs the same care on both sides: the
+        // `Process` inside `Processed` and `PlatformProcessing` is part of a longer name, so it is not a use of the
+        // denied type.
         var files = new (string Path, string Text)[]
         {
             ("src/Evidgate.Parser/Program.cs", text),
@@ -304,10 +322,15 @@ public class ParserChildIsolationTests
     [InlineData("var note = $\"cap={Environment.GetEnvironmentVariable(\"CAP\")}\";", "Environment.GetEnvironmentVariable")]
     [InlineData("var note = $\"\"\"\n  {File.ReadAllText(path)}\n  \"\"\";", "File.")]
     [InlineData("var note = @$\"{File.ReadAllText(path)}\";", "File.")]
+    [InlineData("var note = $\"{{{File.ReadAllText(path)}}}\";", "File.")]
+    [InlineData("var note = $$\"\"\"\n  {{{File.ReadAllText(path)}}}\n  \"\"\";", "File.")]
     public void Synthetic_Child_Code_In_An_Interpolation_Hole_Is_A_Use(string text, string api)
     {
         // An interpolation hole is code, not string text: blanking it the way the literal segments are blanked would
-        // let a real file read pass as a message.
+        // let a real file read pass as a message. The last two cases are the mixed run: in `$"{{{…}}}"` an escaped
+        // `{{` is followed by the hole's `{`, and in `$$"""{{{…}}}"""` the hole is the last two of three braces with
+        // one literal brace in front of it, so a rule that keys the hole off the run's exact length reads both as
+        // text and hides the read.
         var files = new (string Path, string Text)[]
         {
             ("src/Evidgate.Parser/Program.cs", text),
@@ -320,13 +343,16 @@ public class ParserChildIsolationTests
     [InlineData("var note = $\"{(flag ? \"x\" : \"y\")}\";")]
     [InlineData("var note = $\"File.ReadAllText is not reachable from this process\";")]
     [InlineData("var note = $\"{{File.ReadAllText}} is an escaped brace\";")]
+    [InlineData("var note = $\"{{{{File.ReadAllText(path)}}}}\";")]
     [InlineData("var note = $\"{prefix}{count} bytes\";")]
+    [InlineData("var note = $$$\"\"\"\n  {File.ReadAllText(path)}\n  \"\"\";")]
     [InlineData("var note = $\"\"\"\n  File.ReadAllText is not reachable\n  \"\"\";")]
     [InlineData("var note = $\"\"\"\n  {(flag ? \"x\" : \"y\")}\n  \"\"\";")]
     public void Synthetic_Literal_Text_Of_An_Interpolated_String_Is_Not_A_Use(string text)
     {
         // The literal segments stay text — including the escaped braces and the strings nested inside a hole, which
-        // the scan blanks one level down — so only the hole's own code can be a use.
+        // the scan blanks one level down — so only the hole's own code can be a use. A run of four is two escaped
+        // braces and no hole, and a raw run shorter than the dollar count is text, so both keep the read as text.
         var files = new (string Path, string Text)[]
         {
             ("src/Evidgate.Parser/Program.cs", text),
@@ -339,6 +365,8 @@ public class ParserChildIsolationTests
     [InlineData("await $\"{new HttpClient().GetStringAsync(url)}\";")]
     [InlineData("var client = $\"\"\"\n  {new HttpClient()}\n  \"\"\";")]
     [InlineData("var note = $\"{(socket ?? HttpClient())}\";")]
+    [InlineData("var note = $\"{{{new HttpClient().GetStringAsync(url)}}}\";")]
+    [InlineData("var client = $$\"\"\"\n  {{{new HttpClient()}}}\n  \"\"\";")]
     public void Synthetic_Network_Api_In_An_Interpolation_Hole_Is_Detected(string text)
     {
         var files = new (string Path, string Text)[]

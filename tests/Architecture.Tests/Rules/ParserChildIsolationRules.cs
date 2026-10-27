@@ -177,7 +177,8 @@ public static class ParserChildIsolationRules
 
     /// <summary>
     /// Member accesses and types the child's <em>own</em> files must not use: it reads stdin and writes stdout/stderr,
-    /// so it opens no file, starts no process, reads no environment variable and resolves no path. The linked profile
+    /// so it opens no file, starts no process, reads no environment variable, resolves no path and loads no native
+    /// library. The linked profile
     /// files are deliberately not scanned here — the profile owns the archive's file creation for the callers that
     /// extract (see <see cref="ChildExtractionCodeViolations"/> for the rule that keeps that arm out of the child).
     /// <para>
@@ -196,6 +197,22 @@ public static class ParserChildIsolationRules
     /// <c>System.IO</c> is denied as text too — that one token covers a qualified use, a <c>using static System.IO</c>,
     /// an <c>using F = System.IO.File</c> alias and <c>System.IO.Pipes</c> at once.
     /// </para>
+    /// <para>
+    /// Native code and the launcher's own environment are denied the same way: <c>DllImport</c>, <c>LibraryImport</c>,
+    /// <c>NativeLibrary</c> and <c>Marshal.</c> keep the child inside the runtime the launcher started — a
+    /// <c>setrlimit</c>-style call from inside the child would set limits on a process it does not own, and the limits
+    /// arrive from the launcher as arguments — and <c>Environment.SetEnvironmentVariable</c>/
+    /// <c>Environment.GetFolderPath</c> complete the environment rule: the child neither reads nor writes one.
+    /// <c>System.Diagnostics.Process</c> is listed for its message; the name itself is denied as an identifier by
+    /// <see cref="ForbiddenChildIdentifiers"/>, because a parameter type (<c>Process p</c>) or a target-typed
+    /// <c>new()</c> carries no <c>.</c> or constructor text for a token to match.
+    /// </para>
+    /// <para>
+    /// A later task that needs one of these tokens needs it exactly once and recognisably: 06.3.6-T1.3 calls
+    /// <c>setrlimit</c> through the platform's <c>libc</c>, so the entry it adds belongs beside this list as an exact
+    /// allow entry (the import attribute and entry point it names), not as a removed token — every other import, and
+    /// any second one, keeps failing the rule.
+    /// </para>
     /// </summary>
     private static readonly string[] ForbiddenChildApis =
     [
@@ -210,12 +227,29 @@ public static class ParserChildIsolationRules
         "Path.GetTemp",
         "System.IO",
         "ZipFile.",
-        "Process.",
-        "new Process",
+        "System.Diagnostics.Process",
         "ProcessStartInfo",
+        "DllImport",
+        "LibraryImport",
+        "NativeLibrary",
+        "Marshal.",
         "Environment.GetEnvironmentVariable",
+        "Environment.SetEnvironmentVariable",
+        "Environment.GetFolderPath",
         "Environment.ExpandEnvironmentVariables",
         "Environment.CurrentDirectory",
+    ];
+
+    /// <summary>
+    /// Identifiers the child's own files must not use as a name at all, whatever qualifies them. The token list above
+    /// matches spellings that carry a member access or a constructor; a type used as a name carries neither, so
+    /// <c>Process p = …;</c> and <c>Process p = new();</c> — a target-typed construction, which no token can see —
+    /// need the identifier itself. The child starts no process (the launcher does, once, and hands it stdin), so the
+    /// name has no legitimate use; a use is reported once per file, by the more specific entry when one matched it.
+    /// </summary>
+    private static readonly string[] ForbiddenChildIdentifiers =
+    [
+        "Process",
     ];
 
     /// <summary>
@@ -484,11 +518,11 @@ public static class ParserChildIsolationRules
     }
 
     /// <summary>
-    /// AC1(d), the transport half: the child's own files open no file, start no process, read no environment variable
-    /// and resolve no temp path — the launcher applies the limits and the caps arrive as arguments, so the child reads
-    /// stdin and writes stdout/stderr only. The linked profile files are deliberately not passed here: the profile's
-    /// extraction arm legitimately creates files for the callers that own a temp root (and
-    /// <see cref="ChildExtractionCodeViolations"/> is what keeps that arm out of the child).
+    /// AC1(d), the transport half: the child's own files open no file, start no process, read no environment variable,
+    /// resolve no temp path and load no native library — the launcher applies the limits and the caps arrive as
+    /// arguments, so the child reads stdin and writes stdout/stderr only. The linked profile files are deliberately
+    /// not passed here: the profile's extraction arm legitimately creates files for the callers that own a temp root
+    /// (and <see cref="ChildExtractionCodeViolations"/> is what keeps that arm out of the child).
     /// </summary>
     /// <param name="ownFiles">The child's own files (path + text).</param>
     /// <returns>The violations, ordered by path.</returns>
@@ -499,19 +533,76 @@ public static class ParserChildIsolationRules
         foreach (var (path, text) in ownFiles.OrderBy(file => file.Path, StringComparer.Ordinal))
         {
             var code = ParserConstructionRules.StripTrivia(text);
+            var matched = ForbiddenChildApis.Where(api => Mentions(code, api)).ToList();
 
-            foreach (var api in ForbiddenChildApis)
+            foreach (var api in matched)
             {
-                if (Mentions(code, api))
+                violations.Add(ChildIoViolation(path, api));
+            }
+
+            // A bare identifier is the last net, for the spellings no token matches (a parameter type, a target-typed
+            // `new()`). One use is reported once: when an entry above already named `Process`
+            // (`System.Diagnostics.Process`), that entry's message is the one.
+            foreach (var identifier in ForbiddenChildIdentifiers)
+            {
+                if (matched.Any(api => NamesSameIdentifier(api, identifier))
+                    || !MentionsIdentifier(code, identifier))
                 {
-                    violations.Add(
-                        $"{path} uses {api}: the parser child reads stdin and writes stdout/stderr only — no file, "
-                        + "no process, no environment variable, no temp path (06.3.6 §7, AC1)");
+                    continue;
                 }
+
+                violations.Add(ChildIoViolation(path, identifier));
             }
         }
 
         return violations;
+    }
+
+    private static string ChildIoViolation(string path, string api) =>
+        $"{path} uses {api}: the parser child reads stdin and writes stdout/stderr only — no file, no process, "
+        + "no environment variable, no temp path, no native library (06.3.6 §7, AC1)";
+
+    /// <summary>
+    /// True when <paramref name="api"/> is a spelling of <paramref name="identifier"/> itself — the name, or a
+    /// namespace-qualified form of it — so a use matched by a token entry is not reported a second time by the
+    /// identifier entry.
+    /// </summary>
+    /// <param name="api">A token that matched.</param>
+    /// <param name="identifier">The bare identifier.</param>
+    private static bool NamesSameIdentifier(string api, string identifier) =>
+        api == identifier
+        || api.EndsWith("." + identifier, StringComparison.Ordinal);
+
+    /// <summary>
+    /// True when <paramref name="identifier"/> occurs in <paramref name="code"/> as a whole identifier: the character
+    /// before it is not part of one (so the <c>Process</c> inside <c>MyProcess</c> is not a use) and the character
+    /// after it is not either (so <c>ProcessStartInfo</c> stays with its own entry).
+    /// </summary>
+    /// <param name="code">The source with comments and literals blanked.</param>
+    /// <param name="identifier">The identifier to find.</param>
+    private static bool MentionsIdentifier(string code, string identifier)
+    {
+        var from = 0;
+
+        while (true)
+        {
+            var at = code.IndexOf(identifier, from, StringComparison.Ordinal);
+            if (at < 0)
+            {
+                return false;
+            }
+
+            var before = at == 0 || !IsIdentifier(code[at - 1]);
+            var end = at + identifier.Length;
+            var after = end >= code.Length || !IsIdentifier(code[end]);
+
+            if (before && after)
+            {
+                return true;
+            }
+
+            from = at + 1;
+        }
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -52,6 +53,10 @@ public sealed class SandboxLimitsProbeTests
     /// <summary>The connect errnos a namespace child can report; any of them means the connect itself failed.</summary>
     private static readonly string[] ConnectFailureMarkers =
         ["Connection refused", "Network is unreachable", "No route to host", "Cannot assign requested address"];
+
+    /// <summary>The texts with which a host refuses to create a network namespace at all (unshare(2) EPERM/EINVAL).</summary>
+    private static readonly string[] NamespaceRefusalMarkers =
+        ["Operation not permitted", "Invalid argument", "unshare failed"];
 
     /// <summary>
     /// 06.3.6 §9 AC2 / DECISIONS F14: the parse child's own memory, CPU and PID ceilings come from the cgroup it
@@ -204,14 +209,16 @@ public sealed class SandboxLimitsProbeTests
                 "DOTNET_ROOT",
                 "DOTNET_ROOT(x64)",
                 "DOTNET_ROOT(x86)",
-                "DOTNET_ROOT(arm64)");
+                "DOTNET_ROOT(arm64)",
+                "DOTNET_ROOT_X64",
+                "DOTNET_ROOT_ARM64");
 
             startInfo.Environment[HeapLimitVariable] = HeapLimitHex;
             startInfo.Environment[GcHeapLimitProbeChild.MarkerVariable] = marker;
 
-            // The nonce binds the two variables: a marker alone is not enough for the second process to become
-            // the probe, so an ambient or stale marker variable can never end an ordinary test run in the module
-            // initializer.
+            // The nonce binds the two variables, and the child accepts the marker only inside its temp directory:
+            // a marker alone is not enough for the second process to become the probe, so an ambient or stale
+            // marker variable can never end an ordinary test run in the module initializer.
             startInfo.Environment[GcHeapLimitProbeChild.NonceVariable] = GcHeapLimitProbeChild.NonceFor(marker);
 
             var (exitCode, standardOutput, standardError) = await RunBoundedAsync(startInfo, ProbeTimeout);
@@ -307,9 +314,12 @@ public sealed class SandboxLimitsProbeTests
                     return;
                 }
 
-                // Anything else is the host refusing to create the namespace at all (EPERM, EINVAL, a missing
-                // helper, a container without CAP_SYS_ADMIN): a fact this host cannot express, not a product
-                // defect, so the next route is tried and, if every route refuses, the probe skips with the text.
+                // A refusal to create the namespace (EPERM, EINVAL, a container without CAP_SYS_ADMIN) is a fact this
+                // host cannot express, not a product defect: the next route is tried and, if every route refuses, the
+                // probe skips with the text. Any other failure (a missing helper, a child that died before it tried to
+                // connect) is not a refusal and fails the probe instead of hiding as a skip.
+                NamespaceRefusalMarkers.Any(marker => namespaceError.Contains(marker, StringComparison.Ordinal))
+                    .ShouldBeTrue($"{label}: the child failed without a namespace refusal or a connect error: {Truncate(namespaceError)}");
                 refused.Add($"{label}: {Truncate(namespaceError)}");
             }
 
@@ -558,9 +568,11 @@ public sealed class SandboxLimitsProbeTests
                 process.Kill(entireProcessTree: true);
             }
         }
-        catch (InvalidOperationException)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or AggregateException)
         {
-            // The child exited between the deadline and the kill.
+            // The child exited between the deadline and the kill (InvalidOperationException), the OS refused a kill
+            // for a process that is already gone (Win32Exception), or a tree kill lost a descendant mid-walk
+            // (AggregateException): nothing is left to kill on any of these paths.
         }
     }
 
@@ -605,8 +617,9 @@ public sealed class SandboxLimitsProbeTests
 /// The parent starts this test assembly again with <c>EVG_PARSER_PROBE_MARKER</c>, the matching
 /// <c>EVG_PARSER_PROBE_NONCE</c> and a <c>DOTNET_GCHeapHardLimit</c>; the module initializer runs before the test
 /// runner starts, allocates 1 MiB blocks until the runtime refuses, writes the observed ceiling and allocation
-/// count, and exits. Without the marker, or with a marker whose nonce does not match, it does nothing, so an
-/// ordinary test run is unaffected — including one that inherited a stale marker variable from its environment.
+/// count, and exits. Without the marker, or with one the nonce does not bind or that lies outside this process's
+/// temp directory, it does nothing, so an ordinary test run is unaffected — including one that inherited a stale
+/// marker variable from its environment.
 /// </summary>
 // CA2255 warns about module initializers in *libraries*; this is a deliberate one-shot probe in a test
 // executable, which is the only place a second process with an inherited heap limit can be produced without a
@@ -618,22 +631,27 @@ internal static class GcHeapLimitProbeChild
     internal const string MarkerVariable = "EVG_PARSER_PROBE_MARKER";
 
     /// <summary>
-    /// Set beside the marker, to the value <see cref="NonceFor"/> derives from the marker path. The marker alone
-    /// is not a licence to exit the process: the pair is what the parent sets, so an inherited or stale marker
-    /// variable can never turn a normal test run into the probe.
+    /// Set beside the marker, to the value <see cref="NonceFor"/> derives from the marker path. The pair is what the
+    /// parent sets, so an inherited or stale marker variable cannot turn an ordinary test run into the probe — but
+    /// the nonce is not a secret and authorises nothing on its own: it only binds the two variables, while the
+    /// marker path being inside this process's temp directory is what bounds where the probe may write.
     /// </summary>
     internal const string NonceVariable = "EVG_PARSER_PROBE_NONCE";
 
     /// <summary>
-    /// The nonce for one marker path: a SHA-256 of the path the parent just created under its own temp
-    /// directory, so only a parent that knows the path can authorise the probe.
+    /// The nonce for one marker path: a SHA-256 of that path, which binds the marker and nonce variables to each
+    /// other so one cannot be inherited without the other. Anyone who knows the path can compute it, so it proves
+    /// no authority; the temp-directory check in <see cref="TryGetMarker"/> is the bound that matters.
     /// </summary>
     /// <param name="markerPath">The marker path the parent passes in <see cref="MarkerVariable"/>.</param>
     /// <returns>The hexadecimal nonce, as it travels in <see cref="NonceVariable"/>.</returns>
     internal static string NonceFor(string markerPath) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(markerPath)));
 
-    /// <summary>True when this process is the probe child the parent started (both variables present and bound).</summary>
+    /// <summary>
+    /// True when this process is the probe child the parent started: both variables present, bound to each other,
+    /// and the marker path inside this process's temp directory.
+    /// </summary>
     /// <returns>True for the probe child only.</returns>
     internal static bool IsProbeChild() => TryGetMarker(out _);
 
@@ -675,20 +693,58 @@ internal static class GcHeapLimitProbeChild
     }
 
     /// <summary>
-    /// Reads the marker path and accepts it only when the parent's nonce matches it, so the marker variable alone
-    /// never authorises the probe.
+    /// Reads the marker path and accepts it only when it is one the parent can have written: the nonce must match
+    /// and the path must be a file inside this process's temp directory, where the parent creates it. The nonce
+    /// keeps an accidental ambient trigger away — an inherited or stale variable pair never turns an ordinary test
+    /// run into the probe — and it is not a secret: it is the marker path's own hash, so a deliberate forger can
+    /// compute it, which is why the temp-directory check is what bounds where the probe may write.
     /// </summary>
     /// <param name="marker">The marker path when this process is the probe child; otherwise null.</param>
-    /// <returns>True when both variables are present and bound to each other.</returns>
+    /// <returns>True when both variables are present and bound to each other, and the path is under the temp directory.</returns>
     private static bool TryGetMarker([NotNullWhen(true)] out string? marker)
     {
         marker = Environment.GetEnvironmentVariable(MarkerVariable);
 
         return !string.IsNullOrEmpty(marker)
+            && IsUnderTempDirectory(marker)
             && string.Equals(
                 Environment.GetEnvironmentVariable(NonceVariable),
                 NonceFor(marker),
                 StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// True when <paramref name="markerPath"/> is a path inside this process's temp directory (the directory the
+    /// parent's <c>Directory.CreateTempSubdirectory</c> sits in). Both sides are normalized first, and the temp
+    /// root is compared with its own trailing separator, so a sibling such as <c>/tmp-other</c> is not accepted
+    /// for <c>/tmp</c>.
+    /// </summary>
+    /// <param name="markerPath">The path from <see cref="MarkerVariable"/>.</param>
+    /// <returns>True when the path resolves to an entry strictly inside the temp directory.</returns>
+    private static bool IsUnderTempDirectory(string markerPath)
+    {
+        string full;
+        string temporary;
+
+        try
+        {
+            full = Path.GetFullPath(markerPath);
+            temporary = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath()));
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // A path the platform cannot normalize is not one the parent wrote: refuse it instead of probing.
+            return false;
+        }
+
+        if (!temporary.EndsWith(Path.DirectorySeparatorChar))
+        {
+            temporary += Path.DirectorySeparatorChar;
+        }
+
+        return full.StartsWith(
+            temporary,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 }
 #pragma warning restore CA2255

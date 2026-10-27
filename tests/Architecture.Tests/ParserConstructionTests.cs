@@ -211,10 +211,14 @@ public class ParserConstructionTests
     [InlineData("var note = $\"{(flag ? new ZipArchive(a, ZipArchiveMode.Read) : null)}\";")]
     [InlineData("var note = $\"{XmlReader.Create(stream).Read()}\";")]
     [InlineData("var note = $\"\"\"\n  {new ZipArchive(stream, ZipArchiveMode.Read)}\n  \"\"\";")]
+    [InlineData("var note = $\"{{{new ZipArchive(stream, ZipArchiveMode.Read)}}}\";")]
+    [InlineData("var note = $$\"\"\"\n  {{{new ZipArchive(stream, ZipArchiveMode.Read)}}}\n  \"\"\";")]
     public void A_Construct_Inside_An_Interpolation_Hole_Is_A_Construction(string text)
     {
         // An interpolation hole is code: its expression is compiled, so a reader built there builds one, and blanking
-        // the hole the way the literal text is blanked would let it pass as a message.
+        // the hole the way the literal text is blanked would let it pass as a message. The last two cases are the
+        // mixed run, where the hole does not start at the first brace: `$"{{{…}}}"` is an escaped `{{` followed by the
+        // hole's `{`, and `$$"""{{{…}}}"""` opens on the last two of three braces with one literal brace in front.
         var files = new (string Path, string Text)[]
         {
             ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),
@@ -232,12 +236,15 @@ public class ParserConstructionTests
     [InlineData("var note = $\"a{(flag ? \"x\" : \"y\")}\";")]
     [InlineData("var note = $\"new ZipArchive(stream, ZipArchiveMode.Read);\";")]
     [InlineData("var note = $\"{{new ZipArchive(stream, ZipArchiveMode.Read)}}\";")]
+    [InlineData("var note = $\"{{{{new ZipArchive(stream, ZipArchiveMode.Read)}}}}\";")]
+    [InlineData("var note = $$$\"\"\"\n  {new ZipArchive(stream, ZipArchiveMode.Read)}\n  \"\"\";")]
     [InlineData("var note = $\"\"\"\n  new ZipArchive(stream, ZipArchiveMode.Read);\n  \"\"\";")]
     [InlineData("var note = $\"{entries.Count} entries in {name}\";")]
     public void A_Construct_Only_In_The_Literal_Text_Is_Not_A_Construction(string text)
     {
         // The literal segments stay text — the plain text, the escaped braces and a hole that holds nothing but
-        // expressions — so a message describing a reader is still a message.
+        // expressions — so a message describing a reader is still a message. A run of four is two escaped braces and
+        // no hole, and a raw run shorter than the dollar count is text, so the construct between them is text too.
         var files = new (string Path, string Text)[]
         {
             ("src/Modules/Evidgate.Modules.Authoring/Application/Import/Formats/XlsxWriter.cs", text),

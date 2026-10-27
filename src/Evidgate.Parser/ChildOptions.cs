@@ -25,7 +25,9 @@ internal enum ParseProfile
 /// contract, so an unknown switch, a repeated switch, a missing value (including a switch where a value belongs)
 /// or a non-positive cap is a usage error and never a silently different run. The launcher hands the caps in as
 /// arguments — the child reads no environment variable and no file (06.3.6 AC1); a cap above the profile's own
-/// ceiling is clamped rather than refused, so an enormous value still yields a bounded run.
+/// ceiling and up to <see cref="long.MaxValue"/> is clamped rather than refused, so an enormous value still
+/// yields a bounded run, while a digit string beyond <see cref="long.MaxValue"/> is not a number the child can
+/// carry and is refused as a usage error (exit 2) like any other value the contract cannot honour.
 /// </para>
 /// </summary>
 internal sealed class ChildOptions

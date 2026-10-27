@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using Xunit;
@@ -164,9 +165,11 @@ internal static class ChildRunner
                 process.Kill(entireProcessTree: true);
             }
         }
-        catch (InvalidOperationException)
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or AggregateException)
         {
-            // The child exited between the check and the kill.
+            // The child exited between the check and the kill (InvalidOperationException), the OS refused a kill
+            // for a process that is already gone (Win32Exception), or a tree kill lost a descendant mid-walk
+            // (AggregateException): nothing is left to kill on any of these paths.
         }
     }
 
