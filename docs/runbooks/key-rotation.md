@@ -11,7 +11,7 @@ This runbook covers the six key classes in 10.7.1-T4.1 and the T5 pepper procedu
 - Never put secret values in this runbook, logs, tickets, terminal history, drill evidence, or screenshots. Use the environment's secret delivery mechanism; do not print responses containing one-time credentials. Record only non-secret identifiers and outcomes.
 - Never perform ad-hoc `psql` writes. Use the supported tenant API for token and binding mutations; use the environment's authorized database administration and secret-delivery procedures for credentials. Do not invent an `/internal/operator/*` rotation endpoint: operational routes are absent from the contract (`contracts/openapi.yaml:15-17`), and no audited operator rotation path exists. [OPEN O-E]
 - For platform secrets, the V1 solo platform environment owner changes the secret store/deployment environment and restarts the affected processes; managed-store choice remains open. For tenant ingest tokens, the caller needs `ingest_token:write` (`src/Modules/Evidgate.Modules.Identity/Application/Commands/IngestTokenCommands.cs:138,231`). Binding administration uses its own authorized tenant API. Separate duties and operator authorization are receivers of O-E.
-- [environments](environments.md) owns how a value is changed, and its §2 hands ingest-token, DB-credential, JWT-key and HMAC-pepper rotation to this runbook (`docs/runbooks/environments.md:165-170`). The [GitHub App private-key custody stub](github-app-key-custody.md) is not an implemented rotation path or proof of deployed webhook secrets.
+- [environments](environments.md) owns how a value is changed, and its §2 hands ingest-token, DB-credential, JWT-key and HMAC-pepper rotation to this runbook (`docs/runbooks/environments.md:165-170`). The [GitHub App private-key custody stub](github-app-key-custody.md) holds the App key procedure documented in §2.6: that is the stub's documented procedure, not yet drilled, and it is not proof of deployed webhook secrets.
 
 ## 2. Key classes
 
@@ -112,15 +112,35 @@ This runbook covers the six key classes in 10.7.1-T4.1 and the T5 pepper procedu
 | Object store | `EVIDGATE__OBJECT__ACCESSKEY`, `EVIDGATE__OBJECT__SECRETKEY` (`infra/config-matrix.json:1125,1145`); `src/BuildingBlocks/ObjectStorage/ObjectStorageOptionsSecretPostConfigure.cs:13-25`. |
 | Human login | `EVIDGATE__OIDC__GOOGLE__CLIENTSECRET`, `EVIDGATE__OAUTH__GITHUB__CLIENTSECRET` (`infra/config-matrix.json:472,707`); `src/Modules/Evidgate.Modules.Identity/Login/Google/GoogleLoginSecrets.cs:13-24` and `src/Modules/Evidgate.Modules.Identity/Login/GitHub/GitHubLoginSecrets.cs:13-24`. |
 | Session and invite | `EVIDGATE__SESSION__PEPPER`, `EVIDGATE__SESSION__PREVIOUSPEPPER`, `EVIDGATE__INVITE__PEPPER` (`infra/config-matrix.json:833,919,959`); `src/Modules/Evidgate.Modules.Identity/Sessions/SessionSecrets.cs:115-130` and `src/Modules/Evidgate.Modules.Identity/Invites/InviteSecrets.cs:95-108`. See §3. |
-| GitHub App private key | See the [custody stub](github-app-key-custody.md); it is not a registered `SecretNames.All` key or a completed procedure. |
+| GitHub App private key / client secret | Not a registered `SecretNames.All` key; the [custody stub](github-app-key-custody.md) documents the procedure, summarised below. |
 
-**Who may rotate.** The platform environment owner controls environment secret delivery; the external provider's authorized administrator controls its credentials. GitHub App custodian is open in the linked stub.
+**GitHub App private key / client secret.** This class is not registered in `SecretNames.All`; the
+[custody stub](github-app-key-custody.md) owns it, and the bullets below summarise its documented
+procedure instead of copying it. That is the stub's documented procedure, not yet drilled [OPEN O-H].
+
+- **Where and who.** The key and the client secret are versioned secret-store names
+  (`github_app_private_key_vN`, `github_app_client_secret_vN`) resolved only through
+  `ISecretProvider` (stub §1 and §3); the custodian role is defined there and in ADR-0007, while
+  who holds it and the second organization owner stay open (stub §2; DECISIONS §8 O11).
+- **Steps.** Follow custody stub §4 steps 1-8 (`docs/runbooks/github-app-key-custody.md:113-128`);
+  the client secret follows the same shape (stub `:130-132`).
+- **Verify.** An installation-token mint must succeed and
+  `github_token_mint_total{result="error"}` must stay flat (stub §4 step 4 and §6,
+  `docs/runbooks/github-app-key-custody.md:117-118,180`).
+- **Rollback.** Keep the old key at GitHub and the superseded secret version in the store until
+  that mint verifies: the deletions are stub §4 steps 6-7 (`:123-127`), and GitHub refuses to
+  delete an App's only key — "you must regenerate a new key before you can delete the existing
+  key" (stub `:123-126`).
+- **Audit event.** None emitted today [OPEN O-G]; the stub §7 log is an operator record, not an
+  Evidgate audit event (stub `:186-190`).
+
+**Who may rotate.** The platform environment owner controls environment secret delivery; the external provider's authorized administrator controls its credentials. GitHub App private-key custodian and rotation cadence are open [OPEN O-H] (§2.6).
 
 **Steps.**
 
 1. For object-store or Google/GitHub login client credentials, coordinate replacement with the relevant provider using its authorized administration path. No provider-specific overlap is established here.
 2. Set the corresponding new values in secret delivery and restart affected processes. Object and login secrets are resolved into options (`ObjectStorageOptionsSecretPostConfigure.cs:20-25`, `GoogleLoginSecrets.cs:19-24`, `GitHubLoginSecrets.cs:19-24`); do not assume live reload or zero downtime.
-3. Handle CI, session, invite and database keys only by their class-specific procedures above or in §3. The GitHub App stub is not a completed implementation.
+3. Handle CI, session, invite and database keys only by their class-specific procedures above or in §3. For the GitHub App key and client secret, follow the custody stub's documented procedure at §2.6; it has not been drilled yet.
 
 **Verify.** Check a normal object-store operation or the corresponding authorized login flow, without recording credentials; use the readiness route `/internal/health/ready` (`docs/runbooks/environments.md:266-269`). Provider registry tests are in `tests/Architecture.Tests/SecretProviderTests.cs:78-87`.
 
@@ -144,7 +164,7 @@ T5 [DECISION] requires new tokens to use the new pepper version while older vers
 
 ### 3.2 Session pepper
 
-Session cookies are opaque and use a separate HMAC pepper (`migrations/0042_identity_login_resolvers.sql:6-13`). Follow the three-step session pepper procedure in [environments](environments.md) §2, at `docs/runbooks/environments.md:128-145`, which sits just above its `### Changing a value` heading: retain the old pepper and version as the previous pair, set a new pepper and bumped version, and retire the previous pair only after the oldest affected session's absolute expiry. The session validator rejects an incomplete previous pair, equal versions or equal peppers (`src/Modules/Evidgate.Modules.Identity/Sessions/SessionSecrets.cs:189-242`). A request matching the previous pepper re-hashes the session to the current pepper (`migrations/0045_identity_session_hardening.sql:43-46,425-433`). Restart to apply the configuration. If rolling back, retain every pepper version still needed by sessions; do not discard a newly used version blindly. No session-pepper rotation audit event is emitted today [OPEN O-G].
+Session cookies are opaque and use a separate HMAC pepper (`migrations/0042_identity_login_resolvers.sql:6-13`). Follow the three-step session pepper procedure in [environments](environments.md) §2, at `docs/runbooks/environments.md:139-145`: retain the old pepper and version as the previous pair, set a new pepper and bumped version, and retire the previous pair only after the oldest affected session's absolute expiry. The session validator rejects an incomplete previous pair, equal versions or equal peppers (`src/Modules/Evidgate.Modules.Identity/Sessions/SessionSecrets.cs:189-242`). A request matching the previous pepper re-hashes the session to the current pepper (`migrations/0045_identity_session_hardening.sql:43-46,425-433`). Restart to apply the configuration. If rolling back, retain every pepper version still needed by sessions; do not discard a newly used version blindly. No session-pepper rotation audit event is emitted today [OPEN O-G].
 
 ### 3.3 Invite pepper
 
@@ -161,10 +181,11 @@ Session cookies are opaque and use a separate HMAC pepper (`migrations/0042_iden
 | O-E | [OPEN] `/internal/operator/*` is absent from OpenAPI and no audited operator rotation path exists. Current platform actor is the environment owner; tenant token mutation requires `ingest_token:write`. Receiver: 02.8.1. |
 | O-F | [OPEN] Staging does not exist; staging drill and non-author execution have not happened. Receivers: 10.7.1-T4.2 (remains open), 10.1.1-T3 (staging provisioning). |
 | O-G | [OPEN] No audit action is emitted today for signing-key, DB credential, pepper or secret-store rotation. Existing token/binding actions are not rotation audit for those secrets. Receiver: 11.5.1. |
+| O-H | [OPEN] GitHub App private-key custodian (DECISIONS §8 O11: the role is defined in ADR-0007 and the custody stub, while the holder and the second organization owner are open) and the rotation cadence (stub :109: a proposal of every 12 months or on a custodian change, not decided). Drill and non-author execution: 10.7.1-T4.2. Receiver: 02.4.3. |
 
 ## 5. Staging drill — not executed
 
-[OPEN O-F] AC5 requires each class below to rotate in staging with no downtime and no lost acknowledged event, and old pepper versions to verify until their last token expires (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:22,26,113-114`). Staging does not exist; neither this drill nor a non-author execution has been performed. The gaps in §4, especially O-A through O-D, must be resolved before claiming AC5. Do not treat the following checklist as results.
+[OPEN O-F] AC5 requires each class below to rotate in staging with no downtime and no lost acknowledged event, and old pepper versions to verify until their last token expires (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:22,26,113-114`). Staging does not exist; neither this drill nor a non-author execution has been performed. The gaps in §4, especially O-A through O-D and O-H, must be resolved before claiming AC5. Do not treat the following checklist as results.
 
 - [ ] Provision staging through 10.1.1-T3; arrange a non-author executor and synthetic tenant identifiers only.
 - [ ] Establish a continuous-ingest probe, record acknowledged event identifiers and timestamps without credentials, and compare acknowledgements with durable outcomes throughout each rotation; show no probe gap and no lost acknowledged event.
@@ -173,6 +194,6 @@ Session cookies are opaque and use a separate HMAC pepper (`migrations/0042_iden
 - [ ] Rotate the CI producer signing key only after O-A supplies a safe overlap mechanism; check old and new tokens without losing acknowledged events.
 - [ ] Rotate inbound and outbound webhook secrets only after O-B delivers the respective implemented paths and overlap; exercise delivery and verification.
 - [ ] Rotate each applicable database role credential after O-C provisioning and a safe cutover mechanism exist; verify app, sweep and migrator roles as applicable.
-- [ ] Rotate applicable object-store and login provider keys via the provider seam; exercise the corresponding ordinary operation. The GitHub App key remains governed by its custody stub.
+- [ ] Rotate applicable object-store and login provider keys via the provider seam; exercise the corresponding ordinary operation. The GitHub App key follows the custody stub's documented procedure (§2.6), which this drill must exercise; it has not been drilled yet.
 - [ ] Rotate the CI/ingest pepper: prove new tokens use the new version, old tokens verify throughout their required lifetime, rotate affected tokens and retire the previous pepper only after they are accounted for. Exercise session and invite pepper procedures separately, including the invite failure boundary.
 - [ ] Record non-secret evidence and executor corrections in this runbook; only then evaluate AC1 and AC5. A successful probe cannot by itself prove unexercised consumers safe.
