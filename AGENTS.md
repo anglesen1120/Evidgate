@@ -6,9 +6,9 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 
 **Current state (2026-10-27).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next, §6 blocked), not here.
 
-- Landed on `develop`: 172 of 655 planned tasks = 179.25 of 702.75 raw person-days (≈26 % of tasks, ≈25 % of effort); 483 tasks / 523.5 d remain.
-- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 128 / 141.25 of 281.25 · G2 38 / 32 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
-- Landed by area plan (tasks / planned): 01 45/53 · 02 28/48 · 03 8/40 · 04 22/53 · 05 16/53 · 06 11/36 · 07 6/42 · 08 0/69 · 09 20/72 · 10 4/54 · 11 6/51 · 12 1/30 · 13 5/54.
+- Landed on `develop`: 173 of 655 planned tasks = 180.25 of 702.75 raw person-days (≈26 % of tasks, ≈26 % of effort); 482 tasks / 522.5 d remain.
+- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 129 / 142.25 of 281.25 · G2 38 / 32 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
+- Landed by area plan (tasks / planned): 01 45/53 · 02 28/48 · 03 8/40 · 04 22/53 · 05 16/53 · 06 11/36 · 07 6/42 · 08 0/69 · 09 20/72 · 10 4/54 · 11 7/51 · 12 1/30 · 13 5/54.
 - Delivered substrate: M1 foundation (toolchain pins, contracts pipeline + generated SDK drift gate, CI running `scripts/verify.sh`, dev stack, licence/SBOM/action-pin gates) and the Stage A waves (FORCE-RLS tenancy, orgs/projects/memberships, permissions, audit chain, CI tokens).
 - Delivered modules: catalog case/suite identity and revisions (03.1.1/03.1.3/03.2.1), runs manifest upload (05.1.1), 05.3.2-T1 only, evidence upload + safe parsing (06.1/06.3.1–06.3.2), policy revisions and waiver/quarantine lifecycles (07.1.1/07.3.1), and the Angular 22 web app with scaffold, app shell, shared state components and generated-SDK data layer (09.1.1-T1/T3/T4/T5/T7/T8/T9/T10/T12).
 - Migrations `0001`–`0047` are contiguous; highest is `0047_usage_rollup.sql`, the next free number is `0048`.
