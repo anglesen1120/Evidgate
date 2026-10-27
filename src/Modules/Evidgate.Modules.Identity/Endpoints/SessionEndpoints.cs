@@ -1,15 +1,12 @@
-using System.Data.Common;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
-using Evidgate.Modules.Identity.Login.Audit;
 using Evidgate.Modules.Identity.Sessions;
 using Evidgate.Modules.Identity.Sessions.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Evidgate.Modules.Identity.Endpoints;
 
@@ -68,20 +65,17 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// (revocation is naturally idempotent: revoking a revoked row changes nothing).
 /// </para>
 /// <para>
-/// <b>An admin revoke is audited; an owner revoke is not (F48).</b> <c>DELETE /sessions/{s}</c> with an
-/// <see cref="OrgHeader"/> writes ONE <c>auth.session_revoke_admin</c> row to that org's chain
-/// (<see cref="IIdentityAuditWriter"/>) after the definer answered <c>revoked</c> — actor the admin, object the
-/// revoked session. A self revoke (current row or a second device, header or not), a <c>logout</c>, a
-/// <c>revoke-all</c> and every refusal write nothing: those are the account acting on its own sessions. The
-/// writer opens its own org transaction, so the row is not atomic with the revoke; if it faults the route
-/// answers 503 and logs the fault's type (and SQLSTATE) with the ids that identify the committed revoke, never a
-/// cookie, a hash, the pepper or the writer's message text. That write is deliberately detached from the request's
-/// abort token and bounded by its own deadline (see <see cref="RevokeOneAsync"/> and
-/// <see cref="IIdentityAuditWriter.WriteSessionRevokedAsync"/> for the exact failure window and for why the row
-/// omits the target user — F55 closes both).
+/// <b>An admin revoke is audited; an owner revoke is not (F48, F55).</b> <c>DELETE /sessions/{s}</c> hands the
+/// <see cref="OrgHeader"/>'s org to the definer, which writes ONE <c>auth.session_revoke_admin</c> row into that
+/// org's chain INSIDE its own transaction, and only when the addressed row belongs to ANOTHER member the caller
+/// administers: actor the admin, object the revoked session, metadata its target user. The revoke and its row
+/// therefore commit or roll back together — a client that walks away cannot drop the record of a committed
+/// revoke, and a fault aborts the whole call (this route then answers 503 <c>unavailable</c> and the target
+/// session stays live). A self revoke (the current row or a second device, header or not), a <c>logout</c>, a
+/// <c>revoke-all</c> and every refusal write nothing: those are the account acting on its own sessions.
 /// </para>
 /// </remarks>
-internal static partial class SessionEndpoints
+internal static class SessionEndpoints
 {
     /// <summary>Every route's cache policy: a session answer is never reusable by a shared cache.</summary>
     private const string NoStore = "no-store";
@@ -91,13 +85,6 @@ internal static partial class SessionEndpoints
     /// client error (413), never a reason to buffer something unbounded (SEC3).
     /// </summary>
     internal const int MaxBodyBytes = 1024;
-
-    /// <summary>
-    /// The bound on the post-commit audit write of an administrative revoke (F48): long enough for the org's chain
-    /// lock to clear, short enough that a hung writer cannot hold a response the revoke already earned. The write
-    /// is deliberately NOT bound to the request token — see <see cref="AuditAdminRevokeAsync"/>.
-    /// </summary>
-    private const int AuditWriteTimeoutSeconds = 10;
 
     /// <summary>
     /// The header a member may use to name the org of an administrative revoke (02.6.2 §5). Mirrors
@@ -159,7 +146,7 @@ internal static partial class SessionEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        var (proof, _, _, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
+        var (proof, _, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         if (refusal is not null)
         {
             return Result.Failure(refusal);
@@ -212,25 +199,20 @@ internal static partial class SessionEndpoints
     /// caller's pair keeps authenticating.
     /// </para>
     /// <para>
-    /// <b>Own or administered, decided before the write (F48).</b> The definer answers a status only, so it cannot
-    /// tell the handler whether the addressed row was the caller's own: when an <see cref="OrgHeader"/> is present
-    /// this handler lists the caller's live sessions first (the same <see cref="ISessionRoutesStore.ListAsync"/>
-    /// the read route uses) and treats the id as its own when that list contains it. A list that is not
-    /// <see cref="SessionRouteStatus.Done"/> is answered exactly as the list route answers it (401
-    /// <c>unauthenticated</c>, otherwise 503) and no revoke is attempted. Only the OTHER-member branch — a named
-    /// org AND an id that is not in the caller's own list — records <c>auth.session_revoke_admin</c>, so a self
-    /// revoke of the current row or of a second device writes no admin row even with a header present.
+    /// <b>Own or administered, and audited, all inside the definer (F48, F55).</b> The handler names the org and
+    /// nothing else: <c>evidgate_resolve.session_revoke_one</c> resolves the acting user from the proof, checks
+    /// <c>membership:write</c> and the target's membership in that same org, decides whether the addressed row is
+    /// the caller's own, and — only when it is another member's — appends the <c>auth.session_revoke_admin</c> row
+    /// in the same transaction. A self revoke of the current row or of a second device therefore writes no admin
+    /// row even with a header present, and this handler cannot get that decision wrong because it never makes it.
     /// </para>
     /// <para>
-    /// <b>The audit row is written after the revoke committed, in the writer's own transaction (F48).</b> A row
-    /// the writer could not commit is answered 503 <c>unavailable</c> (the revocation itself stays committed; the
-    /// retry answers 404 and writes nothing, and the row omits the target user because the definer does not return
-    /// it — F55 closes both with a definer that returns <c>target_user_id</c> and writes the row in its own
-    /// transaction). That failure logs <see cref="LogAuditFailed"/> with the actor, the org and the fault's type (and
-    /// SQLSTATE) and nothing else: the session id is a credential value under 02.3.2 D9 and never reaches a log line,
-    /// so reconciliation of the committed revoke uses the actor, the org and the operator's own record of the
-    /// request. The write runs on its own bounded token, never on <c>RequestAborted</c>: the revoke has committed, so
-    /// a caller that disconnects must not cancel the only record of it (F48 S1).
+    /// <b>The revoke and its row commit or roll back together (F55).</b> Any fault inside the definer — the org's
+    /// busy chain, a lock timeout, an <c>audit_log</c> refusal — aborts the whole call, so the addressed session
+    /// stays live: there is no committed-but-unrecorded revoke, and a caller that disconnects after the write
+    /// cannot drop the record of it. The database fault is answered 503 <c>unavailable</c> — the module's own
+    /// mapping, as the session stores already answer an outage — and nothing here logs: the session id is a
+    /// credential value under 02.3.2 D9, and with the revoke rolled back there is no committed action to reconcile.
     /// </para>
     /// </remarks>
     private static async Task<Result> RevokeOneAsync(
@@ -238,20 +220,15 @@ internal static partial class SessionEndpoints
         string s,
         ISessionRequestAuthenticator authenticator,
         ISessionRoutesStore store,
-        IIdentityAuditWriter audit,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(authenticator);
         ArgumentNullException.ThrowIfNull(store);
-        ArgumentNullException.ThrowIfNull(audit);
 
         context.Response.Headers.CacheControl = NoStore;
 
-        var (proof, actorUserId, currentSessionId, refusal) = await SessionProofAsync(
-                context,
-                authenticator,
-                cancellationToken)
+        var (proof, currentSessionId, refusal) = await SessionProofAsync(context, authenticator, cancellationToken)
             .ConfigureAwait(false);
         if (refusal is not null)
         {
@@ -265,63 +242,24 @@ internal static partial class SessionEndpoints
             return Result.Failure(SessionNotFound);
         }
 
-        var orgId = OrgOf(context);
-
-        // Whether the addressed row is the caller's own decides everything below: the admin branch audits, the
-        // owner branch does not. Only the admin branch needs the answer, and only it pays for the extra list.
-        Guid? adminActorUserId = null;
-        var isOwn = false;
-        if (orgId is not null)
+        SessionRouteStatus status;
+        try
         {
-            // A live outcome always names its user; a build that does not is a composition bug, never a 401.
-            if (actorUserId is not { } actor)
-            {
-                return Result.Failure(SessionErrors.Unavailable);
-            }
-
-            var (listStatus, items) = await store.ListAsync(proof, cancellationToken).ConfigureAwait(false);
-
-            // The list route's mapping, verbatim: a dead session between the two statements is 401, and any other
-            // code is a composition bug answered 503 — never an invented answer about a session.
-            if (listStatus is not SessionRouteStatus.Done)
-            {
-                return listStatus is SessionRouteStatus.Unauthenticated
-                    ? Result.Failure(SessionErrors.Unauthenticated)
-                    : Result.Failure(SessionErrors.Unavailable);
-            }
-
-            adminActorUserId = actor;
-            isOwn = items.Any(item => item.Id == sessionId);
+            // The named org (or null) travels to the definer, which authorises the admin path and writes its row.
+            status = await store
+                .RevokeOneAsync(proof, sessionId, OrgOf(context), cancellationToken)
+                .ConfigureAwait(false);
         }
-
-        var status = await store
-            .RevokeOneAsync(proof, sessionId, orgId, cancellationToken)
-            .ConfigureAwait(false);
+        catch (NpgsqlException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The definer aborted: the row is still live and, on the admin path, no audit row exists either. There
+            // is nothing committed to reconcile, so the fault is the module's usual 503 and takes no log line.
+            return Result.Failure(SessionErrors.Unavailable);
+        }
 
         switch (status)
         {
             case SessionRouteStatus.Done:
-                // The revoke committed. Only the administered case (a named org and a row that is not the caller's
-                // own) is recorded: a self revoke is the account acting on its own session, not an admin action.
-                if (orgId is { } auditedOrg && adminActorUserId is { } actor && !isOwn)
-                {
-                    // Resolved here, not bound as a handler parameter: `ILogger` itself is not a registered
-                    // service (only `ILogger<T>` and the factory are), and this branch is the only one that logs.
-                    var logger = context.RequestServices
-                        .GetRequiredService<ILoggerFactory>()
-                        .CreateLogger(typeof(SessionEndpoints));
-
-                    // Written on its own bounded token, never `cancellationToken`: the definer has already committed,
-                    // so a client that walks away must not cancel the only record of the revoke (F48 S1).
-                    if (!await AuditAdminRevokeAsync(audit, logger, actor, auditedOrg, sessionId)
-                        .ConfigureAwait(false))
-                    {
-                        // The row is revoked and the record of it is not: the caller is told the request did not
-                        // complete (503), never signed out, and the ids the log carries reconcile the two.
-                        return Result.Failure(SessionErrors.Unavailable);
-                    }
-                }
-
                 // The row that was revoked IS the request's own row: nothing the browser holds names a live session
                 // any more, so the pair is expired like a logout (after the write, never before it).
                 if (sessionId == currentSessionId)
@@ -343,81 +281,6 @@ internal static partial class SessionEndpoints
     }
 
     /// <summary>
-    /// The one audit row of an administrative revoke (F48), written after the definer answered <c>revoked</c>.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>What the row says.</b> The actor is the admin whose session made the call, the chain is the org the admin
-    /// named, and the object is the revoked <c>session</c> row. The target user is deliberately absent:
-    /// <c>evidgate_resolve.session_revoke_one</c> returns a status only, and obtaining the member's id needs a
-    /// migration. F55 returns <c>target_user_id</c> from the definer and writes this row inside the definer's
-    /// transaction; until then F48 is a partial record, not a complete one.
-    /// </para>
-    /// <para>
-    /// <b>The failure window.</b> The writer opens its own org scope and transaction — it cannot share the
-    /// definer's, which has already committed. A fault therefore leaves the revoke committed and its row missing;
-    /// the route answers 503, and a retry finds the session dead, answers 404 and writes nothing, so that one
-    /// revoke stays unrecorded. Only the F55 retrofit (one transaction across the revoke and the row) closes it.
-    /// </para>
-    /// <para>
-    /// <b>Why this write does not take the request token.</b> The revoke has committed by the time this is called,
-    /// so a caller that aborts its request must not cancel the only record of it: the write runs on its own source
-    /// bounded by <see cref="AuditWriteTimeoutSeconds"/>. The bound is a writer fault like any other — a write that
-    /// outlives it is cancelled here and the route answers 503 <c>unavailable</c>, never a 500 and never a
-    /// silent 204.
-    /// </para>
-    /// </remarks>
-    /// <param name="audit">The identity audit writer.</param>
-    /// <param name="logger">The route's logger: the failure is an Error, with the ids that identify the revoke.</param>
-    /// <param name="actorUserId">The admin whose session performed the revoke.</param>
-    /// <param name="orgId">The org whose chain receives the row.</param>
-    /// <param name="sessionId">The revoked session row.</param>
-    /// <returns>True when the row committed; false when the writer faulted (the route answers 503).</returns>
-    private static async ValueTask<bool> AuditAdminRevokeAsync(
-        IIdentityAuditWriter audit,
-        ILogger logger,
-        Guid actorUserId,
-        Guid orgId,
-        Guid sessionId)
-    {
-        // Deliberately its own source: `HttpContext.RequestAborted` is the client leaving, and the row is the
-        // record of a revoke that already committed. The deadline keeps a hung writer from holding the response.
-        using var writeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(AuditWriteTimeoutSeconds));
-
-        try
-        {
-            await audit
-                .WriteSessionRevokedAsync(actorUserId, orgId, sessionId, writeTimeout.Token)
-                .ConfigureAwait(false);
-
-            return true;
-        }
-        catch (Exception exception)
-        {
-            // Every writer fault is the same answer: NpgsqlException, TimeoutException, the chain's
-            // AuditBusyException, this write's own timeout surfaced as cancellation, and a defect nobody predicted.
-            // The caller is answered 503 (the revoke stays committed), and only the fault's type — plus a database
-            // SQLSTATE, which is a code and not a value — enters the log line; `exception.Message` never does.
-            LogAuditFailed(logger, actorUserId, orgId, DescribeAuditFault(exception));
-
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// The writer's fault as a log may render it: the exception's type name and, for a database fault, its
-    /// SQLSTATE (a code, as <c>ReadinessProbe</c> and <c>IsolationSelfCheck</c> already log it). Never
-    /// <c>exception.ToString()</c>, <c>exception.Message</c> or its data: an Npgsql message echoes the failing
-    /// statement and its parameters, and 02.3.2 D9 keeps every session value out of a log line.
-    /// </summary>
-    /// <param name="exception">The writer's own fault.</param>
-    /// <returns>The type name, with the SQLSTATE appended for a database fault that carries one.</returns>
-    private static string DescribeAuditFault(Exception exception) =>
-        exception is DbException { SqlState: { Length: > 0 } sqlState }
-            ? string.Concat(exception.GetType().Name, " (SQLSTATE ", sqlState, ")")
-            : exception.GetType().Name;
-
-    /// <summary>
     /// <c>POST /v1/auth/sessions/revoke-all</c>: 204 (idempotent) after revoking every live session of the
     /// caller, keeping the current one unless <c>keep_current</c> is false; with <c>false</c> the response also
     /// expires the session and antiforgery cookies, exactly like <c>logout</c>.
@@ -434,7 +297,7 @@ internal static partial class SessionEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        var (proof, _, _, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
+        var (proof, _, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         if (refusal is not null)
         {
             return Result.Failure(refusal);
@@ -490,7 +353,7 @@ internal static partial class SessionEndpoints
 
         context.Response.Headers.CacheControl = NoStore;
 
-        var (proof, _, _, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
+        var (proof, _, refusal) = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         if (refusal is not null)
         {
             return Result.Failure(refusal);
@@ -523,11 +386,10 @@ internal static partial class SessionEndpoints
     /// <param name="authenticator">The deployment's authenticator.</param>
     /// <param name="cancellationToken">Request abort.</param>
     /// <returns>
-    /// The stored HMAC of the live cookie value, the acting user id (the audit row's actor, and the one identity the
-    /// database resolved from the cookie itself), the id of the row that answered (the caller's CURRENT session, so a
+    /// The stored HMAC of the live cookie value, the id of the row that answered (the caller's CURRENT session, so a
     /// route can tell "I just revoked my own credential" from "I revoked another row"), and the error to answer.
     /// </returns>
-    private static async Task<(byte[] Proof, Guid? UserId, Guid? SessionId, Error? Refusal)> SessionProofAsync(
+    private static async Task<(byte[] Proof, Guid? SessionId, Error? Refusal)> SessionProofAsync(
         HttpContext context,
         ISessionRequestAuthenticator authenticator,
         CancellationToken cancellationToken)
@@ -536,12 +398,12 @@ internal static partial class SessionEndpoints
 
         if (outcome.Refusal is { } refusal)
         {
-            return ([], null, null, refusal);
+            return ([], null, refusal);
         }
 
         return outcome.GetSessionProof() is { } proof
-            ? (proof, outcome.UserId, outcome.SessionId, null)
-            : ([], null, null, SessionErrors.Unavailable);
+            ? (proof, outcome.SessionId, null)
+            : ([], null, SessionErrors.Unavailable);
     }
 
     /// <summary>The org the caller names for an administrative revoke, or null when it names none (or not a uuid).</summary>
@@ -624,32 +486,6 @@ internal static partial class SessionEndpoints
         StatusCodes.Status413PayloadTooLarge);
 
     private static Error Invalid(string message) => Error.Invalid(message, [new ErrorDetail("body", "invalid")]);
-
-    /// <summary>
-    /// The single Error line of a failed administrative audit (F48): the revoke committed, its row did not. The actor,
-    /// the org and the writer fault's type (with its SQLSTATE when it is a database fault) are the whole line — the row
-    /// id is a credential value under 02.3.2 D9 and never reaches a log line, so the org's chain and the operator's own
-    /// record of the request are what reconcile the two — and no credential, hash, pepper value or exception text is
-    /// ever a parameter here, while the caller's response says only <c>unavailable</c>.
-    /// </summary>
-    /// <remarks>
-    /// The writer's fault enters as <see cref="DescribeAuditFault"/>'s text — its type name, plus the SQLSTATE of a
-    /// database fault — never as the exception object: the logger's own formatter would append
-    /// <c>exception.ToString()</c>, whose message can echo the failing statement and its parameter values.
-    /// </remarks>
-    /// <param name="logger">The route's logger (the module logs through source-generated delegates).</param>
-    /// <param name="actorUserId">The admin whose session performed the revoke.</param>
-    /// <param name="orgId">The org whose chain should have received the row.</param>
-    /// <param name="writerFault">The fault's type, and its SQLSTATE when it is a database fault.</param>
-    [LoggerMessage(
-        EventId = 2413,
-        Level = LogLevel.Error,
-        Message = "An administrative session revoke committed but its audit row did not (actor {ActorUserId}, org {OrgId}, writer fault {WriterFault}); the caller is answered unavailable and the revoke stays committed")]
-    private static partial void LogAuditFailed(
-        ILogger logger,
-        Guid actorUserId,
-        Guid orgId,
-        string writerFault);
 
     /// <summary>
     /// The one 404 of <c>DELETE /sessions/{s}</c> (AC6): foreign, unknown, other-org and already-dead ids all

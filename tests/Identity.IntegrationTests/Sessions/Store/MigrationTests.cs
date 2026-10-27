@@ -309,6 +309,81 @@ public sealed class MigrationTests : SessionHardeningTestBase
         or (n.nspname = 'evidgate' and p.proname = 'session_cleanup')
         """;
 
+    /// <summary>
+    /// F55 (0050): the administrative revoke's audit row is appended inside the definer, and the
+    /// SIGNATURE is unchanged — same arguments, same `table (status text)` — so 0048's owner and grants
+    /// still apply. The file is additive and idempotent (`create or replace` plus re-stated grants), so
+    /// applying it again is a no-op, and what the append depends on is still in force: `audit_log` keeps
+    /// FORCE row level security (the owner INSERT policy of 0015 is what lets the definer append),
+    /// PUBLIC holds no EXECUTE, and the body carries the audit statement itself.
+    /// </summary>
+    [Fact]
+    public async Task The_Revoke_Audit_Definer_Keeps_Its_Grant_And_Reapplies_As_A_NoOp()
+    {
+        (await DefinerSignatureAsync("evidgate_resolve", "session_revoke_one"))
+            .ShouldBe("true|evidgate_owner|search_path=\"\"", "0050 re-creates the same function, not a new one");
+
+        (await HasExecuteAsync("evidgate_app", "evidgate_resolve", "session_revoke_one"))
+            .ShouldBeTrue("the app role calls the route");
+
+        foreach (var role in new[] { "evidgate_operator", "evidgate_worker_sched" })
+        {
+            (await HasExecuteAsync(role, "evidgate_resolve", "session_revoke_one"))
+                .ShouldBeFalse($"{role} must not revoke a session");
+        }
+
+        (await OwnerScalarAsync<long>(
+            """
+            select count(*)
+              from pg_catalog.pg_proc p
+              cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+               and a.grantee = 0
+               and a.privilege_type = 'EXECUTE'
+            """)).ShouldBe(0, "PUBLIC holds no EXECUTE on the revoke");
+
+        (await OwnerScalarAsync<string>(
+            """
+            select pg_catalog.pg_get_function_result(p.oid)
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """)).ShouldBe("TABLE(status text)", "the route's wire contract did not change");
+
+        (await OwnerScalarAsync<bool>(
+            """
+            select relrowsecurity and relforcerowsecurity
+              from pg_catalog.pg_class
+             where oid = 'public.audit_log'::regclass
+            """)).ShouldBeTrue("the definer appends under FORCE row level security");
+
+        var body = await OwnerScalarAsync<string>(
+            """
+            select p.prosrc
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """);
+
+        body.ShouldContain("insert into public.audit_log", Case.Sensitive);
+        body.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive);
+        body.ShouldContain("pg_advisory_xact_lock(hashtext('audit:' || p_org_id::text))", Case.Sensitive);
+
+        var migration = await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, MigrationFile), Token);
+
+        await Fixture.SeedAsync(migration, [], Token);
+        await Fixture.SeedAsync(migration, [], Token);
+
+        (await DefinerSignatureAsync("evidgate_resolve", "session_revoke_one"))
+            .ShouldBe("true|evidgate_owner|search_path=\"\"", "a re-apply keeps the definer hygiene");
+        (await HasExecuteAsync("evidgate_app", "evidgate_resolve", "session_revoke_one"))
+            .ShouldBeTrue("the re-stated grant still names the app role");
+    }
+
+    /// <summary>0050, the file this case re-applies; it is the additive half of F55.</summary>
+    private const string MigrationFile = "0050_identity_session_revoke_audit.sql";
+
     /// <summary>One function's security posture: security-definer flag, owner, configured search path.</summary>
     /// <param name="schema">The schema the function lives in.</param>
     /// <param name="name">The function name.</param>

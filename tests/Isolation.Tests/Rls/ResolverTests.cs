@@ -360,4 +360,38 @@ public sealed class ResolverTests : HarnessTest
             $"the resolver surface is not the only path across the tenant boundary:{Environment.NewLine}"
             + string.Join(Environment.NewLine, failures));
     }
+
+    /// <summary>
+    /// F55 (0050): the one resolver that ends ANOTHER member's session is also the one that records it,
+    /// inside its own transaction — the <c>definer_audit</c> rule of <c>scripts/check-rls.py</c> is now a
+    /// property of the live catalogue, not only of the file. The append uses the application writer's own
+    /// advisory lock key (<c>AuditSql.AdvisoryLock</c>) and its bounded wait, so a SQL row and a C# row
+    /// serialise on one chain, and only the admin branch writes: a self revoke records nothing.
+    /// </summary>
+    [Fact]
+    public async Task The_Admin_Revoke_Resolver_Carries_Its_Own_Audit_Row()
+    {
+        await using var connection = await Fixture.AppDataSource.OpenConnectionAsync(Token);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            select p.prosrc
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """;
+
+        var body = (string)(await command.ExecuteScalarAsync(Token))!;
+
+        body.ShouldContain("insert into public.audit_log", Case.Sensitive,
+            "the row must be written inside the definer, so it commits or rolls back with the revoke");
+        body.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive,
+            "the action 0048's handler wrote from a second transaction");
+        body.ShouldContain("pg_advisory_xact_lock(hashtext('audit:' || p_org_id::text))", Case.Sensitive,
+            "the same chain lock the application writer takes (AuditTrail.cs AuditSql.AdvisoryLock)");
+        body.ShouldContain("set_config('lock_timeout', '2000'", Case.Sensitive,
+            "the writer's bounded wait, so a busy org answers 55P03 instead of parking a pooled connection");
+        body.ShouldContain("v_target_user <> v_actor", Case.Sensitive,
+            "the row is the administrative act only: a self revoke writes nothing");
+    }
 }
