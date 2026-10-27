@@ -95,8 +95,16 @@ public sealed class AuditUnitTests
         Should.Throw<ArgumentException>(() =>
             AuditMetadata.Validate(new Dictionary<string, string> { ["reason"] = new string('a', AuditMetadata.MaxValueLength + 1) }));
 
-        var many = AuditMetadata.AllowedKeys.ToDictionary(key => key, _ => "v");
-        many.Count.ShouldBeLessThanOrEqualTo(AuditMetadata.MaxKeys);
+        // The allowlist may carry MORE keys than one row may use (F55 added `target_user_id` to the
+        // seventeen-entry list), so the cap is proven on an entry that takes one allowlisted key too
+        // many: every key is valid, the count alone is what refuses it.
+        AuditMetadata.AllowedKeys.Count.ShouldBeGreaterThan(AuditMetadata.MaxKeys);
+
+        var tooMany = AuditMetadata.AllowedKeys
+            .Take(AuditMetadata.MaxKeys + 1)
+            .ToDictionary(key => key, _ => "v");
+
+        Should.Throw<ArgumentException>(() => AuditMetadata.Validate(tooMany));
     }
 }
 

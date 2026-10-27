@@ -4,7 +4,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 namespace Evidgate.Modules.Identity.Login.Audit;
 
 /// <summary>
-/// The production <see cref="IIdentityAuditWriter"/> (02.3.1-T2.2, Q5; F48): one tenant scope, one
+/// The production <see cref="IIdentityAuditWriter"/> (02.3.1-T2.2, Q5): one tenant scope, one
 /// <see cref="IAuditTrail"/> unit and one commit per org, in ascending <see cref="Guid"/> order.
 /// </summary>
 /// <remarks>
@@ -32,12 +32,6 @@ internal sealed class IdentityAuditWriter : IIdentityAuditWriter
 {
     /// <summary>The object type of every row: the user the entry is about.</summary>
     private const string ObjectType = "user";
-
-    /// <summary>
-    /// The object type of the administrative session-revoke row (F48): the revoked <c>session</c> row, never its
-    /// user — the definer does not return which member the session belonged to (F55 will).
-    /// </summary>
-    private const string SessionObjectType = "session";
 
     /// <summary>The metadata key that carries the provider name (on <see cref="AuditMetadata"/>'s allowlist).</summary>
     internal const string ProviderMetadataKey = "provider";
@@ -98,51 +92,6 @@ internal sealed class IdentityAuditWriter : IIdentityAuditWriter
 
             await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
-    }
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// <para>
-    /// <b>The org's chain, one row, no metadata.</b> The admin's row says "this administrator ended this session
-    /// in this org": the actor is the admin, the object is the <c>session</c> row, and there is nothing else worth
-    /// recording — the target user is not known here (the definer answers a status only; F55 returns it), and the
-    /// allowlisted metadata keys all describe a login or a link.
-    /// </para>
-    /// <para>
-    /// <b>One transaction of its own, after the revoke committed.</b> The definer has already committed by the time
-    /// the handler calls this, so the row cannot share its transaction and a fault here leaves the revocation
-    /// committed without its record — the caller answers 503, and a retry answers 404 and writes nothing. Closing
-    /// that window is the F55 retrofit (a definer that returns <c>target_user_id</c> and writes the row inside its
-    /// own transaction), not a second write added here.
-    /// </para>
-    /// <para>
-    /// The order is the other method's: scope, unit, describe, record, flush (which takes the chain's advisory
-    /// lock for the inserts only), commit. The exception propagates.
-    /// </para>
-    /// </remarks>
-    public async ValueTask WriteSessionRevokedAsync(
-        Guid actorUserId,
-        Guid orgId,
-        Guid sessionId,
-        CancellationToken cancellationToken)
-    {
-        // The actor is the administrator whose credential made the call; the object is the row it ended. Built
-        // once: AuditObject is immutable and the buffer keeps it for the single Record of the org.
-        var actor = new AuditActor(AuditActorTypes.User, actorUserId.ToString("D"));
-        var subject = new AuditObject(SessionObjectType, sessionId.ToString("D"));
-
-        await using var scope = await _scopes
-            .BeginAsync(orgId, projectId: null, readOnlyTransaction: false, cancellationToken)
-            .ConfigureAwait(false);
-
-        using var unit = _audit.BeginUnit();
-
-        _audit.Describe(subject);
-        _audit.Record(IdentityAuditActions.SessionRevokeByAdmin, actor);
-
-        await _audit.FlushAsync(orgId, _db, cancellationToken).ConfigureAwait(false);
-
-        await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

@@ -99,7 +99,6 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
     private readonly string _connectionString;
     private readonly FakeLoginProvider[] _providers;
     private readonly ILoggerProvider? _logProvider;
-    private readonly Action<IServiceCollection>? _overrides;
 
     private SessionTestHost(
         string connectionString,
@@ -108,13 +107,11 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
         int idleSeconds,
         int absoluteSeconds,
         ILoggerProvider? logProvider,
-        Action<IServiceCollection>? overrides,
         FakeLoginProvider[] providers)
     {
         _connectionString = connectionString;
         _providers = providers;
         _logProvider = logProvider;
-        _overrides = overrides;
         Clock = clock;
         Pepper = pepper;
         IdleSeconds = idleSeconds;
@@ -157,16 +154,11 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
     /// <param name="idleSeconds">The sliding lifetime to bind, or null for <see cref="DefaultIdleSeconds"/>.</param>
     /// <param name="absoluteSeconds">The hard lifetime to bind, or null for <see cref="DefaultAbsoluteSeconds"/>.</param>
     /// <param name="logProvider">A capturing provider when the case asserts on what the deployment logs.</param>
-    /// <param name="overrides">
-    /// A last-word container rewrite, applied after every other registration (the <c>LinkTestHost</c> seam): a case
-    /// that swaps a seam — the identity audit writer, for the F48 failure cases — does it here.
-    /// </param>
     internal static SessionTestHost Start(
         DatabaseFixture fixture,
         int? idleSeconds = null,
         int? absoluteSeconds = null,
-        ILoggerProvider? logProvider = null,
-        Action<IServiceCollection>? overrides = null)
+        ILoggerProvider? logProvider = null)
     {
         ArgumentNullException.ThrowIfNull(fixture);
 
@@ -179,7 +171,6 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
             idleSeconds ?? DefaultIdleSeconds,
             absoluteSeconds ?? DefaultAbsoluteSeconds,
             logProvider,
-            overrides,
             [new FakeLoginProvider(Google), new FakeLoginProvider(GitHub)])
         {
             Fixture = fixture,
@@ -564,6 +555,10 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
     /// The <c>X-Evidgate-Org</c> value to send, or null for none. The administrative session revoke names the org
     /// it acts in here (02.3.2-T2); without it only the owner path applies.
     /// </param>
+    /// <param name="cancellationToken">
+    /// The request's own token, or null for the suite's. A case that passes one can leave mid-flight, which is what
+    /// ASP.NET Core binds to <c>HttpContext.RequestAborted</c> (F55's abort case).
+    /// </param>
     internal static async Task<HttpResponseMessage> SendAsync(
         HttpClient client,
         HttpMethod method,
@@ -572,7 +567,8 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
         string? xsrfToken = null,
         string? authorization = null,
         string? jsonBody = null,
-        string? orgHeader = null)
+        string? orgHeader = null,
+        CancellationToken? cancellationToken = null)
     {
         ArgumentNullException.ThrowIfNull(client);
 
@@ -605,7 +601,7 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
 
         // Awaited inside the using scope: the request (and its content) must outlive the send, or a bodied request
         // reaches the server truncated.
-        return await client.SendAsync(request, Token).ConfigureAwait(false);
+        return await client.SendAsync(request, cancellationToken ?? Token).ConfigureAwait(false);
     }
 
     /// <summary>A <c>Cookie</c> header value for one session cookie, optionally with its antiforgery pair.</summary>
@@ -742,10 +738,6 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
                 .Build());
 
             services.AddSingleton<IStartupFilter>(new RecorderStartupFilter(Recorder));
-
-            // Last word, so a case can replace a seam the composition registered (the identity audit writer for
-            // the F48 failure cases) without depending on registration order.
-            _overrides?.Invoke(services);
         });
     }
 
