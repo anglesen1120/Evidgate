@@ -738,6 +738,9 @@ internal static class RouteRequests
         Add("GET", "/v1/policies/{id}/revisions", ctx => new(HttpMethod.Get, $"/v1/policies/{ctx.PolicyRevisionId}/revisions"));
         Add("POST", "/v1/projects/{p}/policy-activation", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/policy-activation",
             new JsonObject { ["policy_revision_id"] = ctx.PolicyRevisionId.ToString("D") }, IdempotencyKey: Key()));
+        // F18's two reads: no body, no Idempotency-Key and no If-Match (a denied caller never reaches a lookup).
+        Add("GET", "/v1/projects/{p}/policy-activation", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/policy-activation"));
+        Add("GET", "/v1/projects/{p}/policies/head", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/policies/head"));
 
         // ---- Waivers -----------------------------------------------------------------------------------------
         Add("POST", "/v1/waivers", ctx => new(HttpMethod.Post, "/v1/waivers", Waiver(ctx), IdempotencyKey: Key()));

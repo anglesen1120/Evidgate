@@ -533,6 +533,18 @@ export type PolicyActivationDto = {
 };
 
 /**
+ * The project's stored policy activation, read by `GET /v1/projects/{p}/policy-activation` (07.1.1 F18). Migration `0033` stores `policy_revision_id`, `mode`, `activated_by` and `activated_at` only — there is no `previous_policy_revision_id` and no `changed` on a read — and `hash` is the activated revision's hash, joined from `policy_revision` for the same project; this schema is therefore separate from `PolicyActivationDto`, which stays the `POST` route's answer, unchanged.
+ */
+export type PolicyActivationStateDto = {
+    project_id: string;
+    policy_revision_id: string;
+    hash: string;
+    mode: 'advisory' | 'enforcing';
+    activated_by: string;
+    activated_at: string;
+};
+
+/**
  * A policy revision without its body (07.1.1-T3 list rows).
  */
 export type PolicyRevisionSummaryDto = {
@@ -3601,6 +3613,49 @@ export type GetEnvironmentRevisionResponses = {
 
 export type GetEnvironmentRevisionResponse = GetEnvironmentRevisionResponses[keyof GetEnvironmentRevisionResponses];
 
+export type GetPolicyActivationData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/policy-activation';
+};
+
+export type GetPolicyActivationErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetPolicyActivationError = GetPolicyActivationErrors[keyof GetPolicyActivationErrors];
+
+export type GetPolicyActivationResponses = {
+    /**
+     * The project's stored policy activation
+     */
+    200: PolicyActivationStateDto;
+};
+
+export type GetPolicyActivationResponse = GetPolicyActivationResponses[keyof GetPolicyActivationResponses];
+
 export type ActivatePolicyRevisionData = {
     body: {
         policy_revision_id: string;
@@ -3737,6 +3792,49 @@ export type CreatePolicyRevisionResponses = {
 };
 
 export type CreatePolicyRevisionResponse = CreatePolicyRevisionResponses[keyof CreatePolicyRevisionResponses];
+
+export type GetPolicyHeadData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/policies/head';
+};
+
+export type GetPolicyHeadErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetPolicyHeadError = GetPolicyHeadErrors[keyof GetPolicyHeadErrors];
+
+export type GetPolicyHeadResponses = {
+    /**
+     * The project's head revision, without its body
+     */
+    200: PolicyRevisionSummaryDto;
+};
+
+export type GetPolicyHeadResponse = GetPolicyHeadResponses[keyof GetPolicyHeadResponses];
 
 export type GetPolicyRevisionData = {
     body?: never;
