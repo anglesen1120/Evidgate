@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -73,9 +74,11 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// revoked session. A self revoke (current row or a second device, header or not), a <c>logout</c>, a
 /// <c>revoke-all</c> and every refusal write nothing: those are the account acting on its own sessions. The
 /// writer opens its own org transaction, so the row is not atomic with the revoke; if it faults the route
-/// answers 503 and logs the ids that identify the committed revoke, never a cookie, a hash or the pepper. See
-/// <see cref="RevokeOneAsync"/> and <see cref="IIdentityAuditWriter.WriteSessionRevokedAsync"/> for the exact
-/// failure window and for why the row omits the target user (F55 closes both).
+/// answers 503 and logs the fault's type (and SQLSTATE) with the ids that identify the committed revoke, never a
+/// cookie, a hash, the pepper or the writer's message text. That write is deliberately detached from the request's
+/// abort token and bounded by its own deadline (see <see cref="RevokeOneAsync"/> and
+/// <see cref="IIdentityAuditWriter.WriteSessionRevokedAsync"/> for the exact failure window and for why the row
+/// omits the target user — F55 closes both).
 /// </para>
 /// </remarks>
 internal static partial class SessionEndpoints
@@ -88,6 +91,13 @@ internal static partial class SessionEndpoints
     /// client error (413), never a reason to buffer something unbounded (SEC3).
     /// </summary>
     internal const int MaxBodyBytes = 1024;
+
+    /// <summary>
+    /// The bound on the post-commit audit write of an administrative revoke (F48): long enough for the org's chain
+    /// lock to clear, short enough that a hung writer cannot hold a response the revoke already earned. The write
+    /// is deliberately NOT bound to the request token — see <see cref="AuditAdminRevokeAsync"/>.
+    /// </summary>
+    private const int AuditWriteTimeoutSeconds = 10;
 
     /// <summary>
     /// The header a member may use to name the org of an administrative revoke (02.6.2 §5). Mirrors
@@ -216,9 +226,11 @@ internal static partial class SessionEndpoints
     /// the writer could not commit is answered 503 <c>unavailable</c> (the revocation itself stays committed; the
     /// retry answers 404 and writes nothing, and the row omits the target user because the definer does not return
     /// it — F55 closes both with a definer that returns <c>target_user_id</c> and writes the row in its own
-    /// transaction). That failure logs <see cref="LogAuditFailed"/> with the actor and the org and nothing else:
-    /// the session id is a credential value under 02.3.2 D9 and never reaches a log line, so reconciliation of the
-    /// committed revoke uses the actor, the org and the operator's own record of the request.
+    /// transaction). That failure logs <see cref="LogAuditFailed"/> with the actor, the org and the fault's type (and
+    /// SQLSTATE) and nothing else: the session id is a credential value under 02.3.2 D9 and never reaches a log line,
+    /// so reconciliation of the committed revoke uses the actor, the org and the operator's own record of the
+    /// request. The write runs on its own bounded token, never on <c>RequestAborted</c>: the revoke has committed, so
+    /// a caller that disconnects must not cancel the only record of it (F48 S1).
     /// </para>
     /// </remarks>
     private static async Task<Result> RevokeOneAsync(
@@ -299,7 +311,9 @@ internal static partial class SessionEndpoints
                         .GetRequiredService<ILoggerFactory>()
                         .CreateLogger(typeof(SessionEndpoints));
 
-                    if (!await AuditAdminRevokeAsync(audit, logger, actor, auditedOrg, sessionId, cancellationToken)
+                    // Written on its own bounded token, never `cancellationToken`: the definer has already committed,
+                    // so a client that walks away must not cancel the only record of the revoke (F48 S1).
+                    if (!await AuditAdminRevokeAsync(audit, logger, actor, auditedOrg, sessionId)
                         .ConfigureAwait(false))
                     {
                         // The row is revoked and the record of it is not: the caller is told the request did not
@@ -345,42 +359,63 @@ internal static partial class SessionEndpoints
     /// the route answers 503, and a retry finds the session dead, answers 404 and writes nothing, so that one
     /// revoke stays unrecorded. Only the F55 retrofit (one transaction across the revoke and the row) closes it.
     /// </para>
+    /// <para>
+    /// <b>Why this write does not take the request token.</b> The revoke has committed by the time this is called,
+    /// so a caller that aborts its request must not cancel the only record of it: the write runs on its own source
+    /// bounded by <see cref="AuditWriteTimeoutSeconds"/>. The bound is a writer fault like any other — a write that
+    /// outlives it is cancelled here and the route answers 503 <c>unavailable</c>, never a 500 and never a
+    /// silent 204.
+    /// </para>
     /// </remarks>
     /// <param name="audit">The identity audit writer.</param>
     /// <param name="logger">The route's logger: the failure is an Error, with the ids that identify the revoke.</param>
     /// <param name="actorUserId">The admin whose session performed the revoke.</param>
     /// <param name="orgId">The org whose chain receives the row.</param>
     /// <param name="sessionId">The revoked session row.</param>
-    /// <param name="cancellationToken">Request abort.</param>
     /// <returns>True when the row committed; false when the writer faulted (the route answers 503).</returns>
     private static async ValueTask<bool> AuditAdminRevokeAsync(
         IIdentityAuditWriter audit,
         ILogger logger,
         Guid actorUserId,
         Guid orgId,
-        Guid sessionId,
-        CancellationToken cancellationToken)
+        Guid sessionId)
     {
+        // Deliberately its own source: `HttpContext.RequestAborted` is the client leaving, and the row is the
+        // record of a revoke that already committed. The deadline keeps a hung writer from holding the response.
+        using var writeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(AuditWriteTimeoutSeconds));
+
         try
         {
             await audit
-                .WriteSessionRevokedAsync(actorUserId, orgId, sessionId, cancellationToken)
+                .WriteSessionRevokedAsync(actorUserId, orgId, sessionId, writeTimeout.Token)
                 .ConfigureAwait(false);
 
             return true;
         }
-        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        catch (Exception exception)
         {
-            // Any writer fault, not a closed list: the interface promises the caller a 503 for a writer that throws,
-            // and the four shapes seen in practice (NpgsqlException, TimeoutException, the chain's AuditBusyException
-            // and a database timeout surfaced as cancellation) are instances of that contract. Only the caller
-            // leaving is excluded — there is no response left to answer — and an uncaught throw here would otherwise
-            // reach the envelope middleware as 500 internal_error with no id in any log line.
-            LogAuditFailed(logger, actorUserId, orgId, exception);
+            // Every writer fault is the same answer: NpgsqlException, TimeoutException, the chain's
+            // AuditBusyException, this write's own timeout surfaced as cancellation, and a defect nobody predicted.
+            // The caller is answered 503 (the revoke stays committed), and only the fault's type — plus a database
+            // SQLSTATE, which is a code and not a value — enters the log line; `exception.Message` never does.
+            LogAuditFailed(logger, actorUserId, orgId, DescribeAuditFault(exception));
 
             return false;
         }
     }
+
+    /// <summary>
+    /// The writer's fault as a log may render it: the exception's type name and, for a database fault, its
+    /// SQLSTATE (a code, as <c>ReadinessProbe</c> and <c>IsolationSelfCheck</c> already log it). Never
+    /// <c>exception.ToString()</c>, <c>exception.Message</c> or its data: an Npgsql message echoes the failing
+    /// statement and its parameters, and 02.3.2 D9 keeps every session value out of a log line.
+    /// </summary>
+    /// <param name="exception">The writer's own fault.</param>
+    /// <returns>The type name, with the SQLSTATE appended for a database fault that carries one.</returns>
+    private static string DescribeAuditFault(Exception exception) =>
+        exception is DbException { SqlState: { Length: > 0 } sqlState }
+            ? string.Concat(exception.GetType().Name, " (SQLSTATE ", sqlState, ")")
+            : exception.GetType().Name;
 
     /// <summary>
     /// <c>POST /v1/auth/sessions/revoke-all</c>: 204 (idempotent) after revoking every live session of the
@@ -591,24 +626,30 @@ internal static partial class SessionEndpoints
     private static Error Invalid(string message) => Error.Invalid(message, [new ErrorDetail("body", "invalid")]);
 
     /// <summary>
-    /// The single Error line of a failed administrative audit (F48): the revoke committed, its row did not. The actor
-    /// and the org are the whole line — the row id is a credential value under 02.3.2 D9 and never reaches a log line,
-    /// so the org's chain and the operator's own record of the request are what reconcile the two — and no credential,
-    /// hash or pepper value is ever a parameter here, while the caller's response says only <c>unavailable</c>.
+    /// The single Error line of a failed administrative audit (F48): the revoke committed, its row did not. The actor,
+    /// the org and the writer fault's type (with its SQLSTATE when it is a database fault) are the whole line — the row
+    /// id is a credential value under 02.3.2 D9 and never reaches a log line, so the org's chain and the operator's own
+    /// record of the request are what reconcile the two — and no credential, hash, pepper value or exception text is
+    /// ever a parameter here, while the caller's response says only <c>unavailable</c>.
     /// </summary>
+    /// <remarks>
+    /// The writer's fault enters as <see cref="DescribeAuditFault"/>'s text — its type name, plus the SQLSTATE of a
+    /// database fault — never as the exception object: the logger's own formatter would append
+    /// <c>exception.ToString()</c>, whose message can echo the failing statement and its parameter values.
+    /// </remarks>
     /// <param name="logger">The route's logger (the module logs through source-generated delegates).</param>
     /// <param name="actorUserId">The admin whose session performed the revoke.</param>
     /// <param name="orgId">The org whose chain should have received the row.</param>
-    /// <param name="exception">The writer's own fault.</param>
+    /// <param name="writerFault">The fault's type, and its SQLSTATE when it is a database fault.</param>
     [LoggerMessage(
         EventId = 2413,
         Level = LogLevel.Error,
-        Message = "An administrative session revoke committed but its audit row did not (actor {ActorUserId}, org {OrgId}); the caller is answered unavailable and the revoke stays committed")]
+        Message = "An administrative session revoke committed but its audit row did not (actor {ActorUserId}, org {OrgId}, writer fault {WriterFault}); the caller is answered unavailable and the revoke stays committed")]
     private static partial void LogAuditFailed(
         ILogger logger,
         Guid actorUserId,
         Guid orgId,
-        Exception exception);
+        string writerFault);
 
     /// <summary>
     /// The one 404 of <c>DELETE /sessions/{s}</c> (AC6): foreign, unknown, other-org and already-dead ids all

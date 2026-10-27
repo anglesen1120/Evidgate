@@ -5,6 +5,9 @@ using Evidgate.Modules.Identity.Endpoints;
 using Evidgate.Modules.Identity.Login.Audit;
 using Evidgate.Testing;
 using Identity.IntegrationTests.Login.Linking;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -35,9 +38,15 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// <para>
 /// <b>The failure case is the honest one.</b> The writer opens its own transaction after the definer committed, so
 /// a fault leaves the revoke in place and the row missing: the route answers 503, the response touches no cookie,
-/// one Error line names the actor and the org and never the session id (and nothing else), and the retry answers 404
-/// without reaching the writer — the window F55 closes with a definer that returns <c>target_user_id</c> and writes the
-/// row in its own transaction.
+/// one Error line names the actor, the org and the fault's type (with the SQLSTATE of a database fault) and never
+/// the session id, the writer's own message text or a credential, and the retry answers 404 without reaching the
+/// writer — the window F55 closes with a definer that returns <c>target_user_id</c> and writes the row in its own
+/// transaction.
+/// </para>
+/// <para>
+/// <b>The committed revoke is recorded even when the caller leaves.</b> The audit write runs on its own bounded
+/// token, never on <c>HttpContext.RequestAborted</c>: a request aborted after the definer answered still writes its
+/// one row (F48 S1).
 /// </para>
 /// </remarks>
 [Collection(HarnessSuite.Name)]
@@ -55,6 +64,12 @@ public sealed class AdminRevokeAuditTests : HarnessTest
 
     /// <summary>The cookie-independent part of every row assertion: <c>audit_log</c> speaks uuid text.</summary>
     private const string UuidText = "D";
+
+    /// <summary>
+    /// Text planted in every fault the failure writer raises. A line renders the fault's type only, so this string
+    /// reaching a log line means the exception object (or its message) was handed to the logger (F48 S3).
+    /// </summary>
+    private const string FaultCanary = "f48-writer-fault-canary";
 
     public AdminRevokeAuditTests(DatabaseFixture fixture)
         : base(fixture)
@@ -320,15 +335,17 @@ public sealed class AdminRevokeAuditTests : HarnessTest
     }
 
     /// <summary>
-    /// The failure case, in the three fault shapes seen in practice — a database error, the org's busy chain and an
-    /// unexpected writer defect: any writer throw makes the route answer 503
-    /// <c>unavailable</c> with no cookie touched and no row written, leaves the revoke committed, logs one Error line
-    /// that names the actor and the org but not the session id (and no credential), and the retry answers 404 without
-    /// reaching the writer.
+    /// The failure case, in the four fault shapes seen in practice — a database error, the org's busy chain, a
+    /// deadlock reported as a <see cref="PostgresException"/> carrying a SQLSTATE, and an unexpected writer defect:
+    /// any writer throw makes the route answer 503 <c>unavailable</c> with no cookie touched and no row written,
+    /// leaves the revoke committed, logs one Error line that names the actor, the org and the fault's type (with the
+    /// SQLSTATE of a database fault) but never the session id, the writer's own message text or a credential, and
+    /// the retry answers 404 without reaching the writer.
     /// </summary>
     [Theory]
     [InlineData("database")]
     [InlineData("busy-chain")]
+    [InlineData("deadlock")]
     [InlineData("unexpected")]
     public async Task A_Failed_Audit_Answers_503_Leaves_The_Revoke_Committed_And_Logs_Only_Ids(string fault)
     {
@@ -347,9 +364,10 @@ public sealed class AdminRevokeAuditTests : HarnessTest
                         AuditWriterFactory.Create(provider),
                         fault switch
                         {
-                            "busy-chain" => () => new AuditBusyException(new NpgsqlException("lock not available (injected)")),
-                            "unexpected" => () => new InvalidOperationException("injected writer defect (F48 test)"),
-                            _ => () => new NpgsqlException("injected audit fault (F48 test)"),
+                            "busy-chain" => () => new AuditBusyException(new NpgsqlException(FaultCanary + " lock not available (injected)")),
+                            "deadlock" => () => new PostgresException(FaultCanary + " deadlock detected (injected)", "ERROR", "ERROR", "40P01"),
+                            "unexpected" => () => new InvalidOperationException(FaultCanary + " (injected writer defect)"),
+                            _ => () => new NpgsqlException(FaultCanary + " (injected audit fault)"),
                         }));
             });
         using var client = host.CreateSessionClient();
@@ -388,6 +406,18 @@ public sealed class AdminRevokeAuditTests : HarnessTest
         error.Message.ShouldNotContain(victimSessionId.ToString("N"), Case.Sensitive);
         AssertCarriesNoCredential(error.Message, host, victim.SessionCookie);
 
+        // F48 S3: the line renders the fault's TYPE, and its SQLSTATE when the database reported one — never the
+        // exception object, whose text (Npgsql's included) can echo the failing statement and its parameters.
+        var expectedFault = fault switch
+        {
+            "busy-chain" => nameof(AuditBusyException),
+            "deadlock" => nameof(PostgresException) + " (SQLSTATE 40P01)",
+            "unexpected" => nameof(InvalidOperationException),
+            _ => nameof(NpgsqlException),
+        };
+        error.Message.ShouldContain(expectedFault);
+        error.Message.ShouldNotContain(FaultCanary, Case.Sensitive, "the writer's own text is never rendered");
+
         // The documented retry: the session is dead, so the answer is 404 and the writer is never asked again.
         using (var retry = await RevokeAsync(client, admin, victimSessionId, victim.OrgId.ToString()))
         {
@@ -396,6 +426,75 @@ public sealed class AdminRevokeAuditTests : HarnessTest
 
         (await AuditSnapshotAsync(victim.OrgId)).ShouldBe(before);
         writer.Calls.ShouldBe(1, "the retry never reaches the writer");
+    }
+
+    /// <summary>
+    /// The committed revoke is recorded even when the caller has gone: the audit write runs on its own bounded
+    /// token, never on <c>HttpContext.RequestAborted</c>, so a request aborted after the definer answered still
+    /// writes the ONE <c>auth.session_revoke_admin</c> row and answers 204 (F48 S1).
+    /// </summary>
+    /// <remarks>
+    /// The host cannot cancel a TestServer request mid-flight, so the probe's token stands in for the connection's:
+    /// the middleware installs it as <c>RequestAborted</c>, and the writer reads that same property back through
+    /// <see cref="IHttpContextAccessor"/> — proving the abort reached the request the handler is bound to, not just
+    /// a probe — then aborts it once the definer has committed (the row does not exist yet at that instant) and
+    /// records what the route handed it.
+    /// </remarks>
+    [Fact]
+    public async Task An_Aborted_Request_Does_Not_Cancel_The_Committed_Audit_Row()
+    {
+        using var probe = new RequestAbortProbe();
+        AbortAwareRecordingAuditWriter? writer = null;
+        using var host = SessionTestHost.Start(
+            Fixture,
+            overrides: services =>
+            {
+                services.AddHttpContextAccessor();
+                services.RemoveAll<IIdentityAuditWriter>();
+                services.AddSingleton<IIdentityAuditWriter>(provider =>
+                    writer = new AbortAwareRecordingAuditWriter(
+                        AuditWriterFactory.Create(provider),
+                        probe,
+                        provider.GetRequiredService<IHttpContextAccessor>()));
+                services.AddSingleton<IStartupFilter>(new RequestAbortProbeStartupFilter(probe));
+            });
+        using var client = host.CreateSessionClient();
+        var victim = await host.SignInMemberAsync(client);
+        var victimSessionId = await host.SessionIdOfAsync(victim.SessionCookie);
+        var admin = await host.SignInMemberInOrgAsync(client, victim.OrgId, "tenant_admin");
+        writer.ShouldNotBeNull("the admin's revoke resolves the writer from the container");
+
+        var before = await AuditSnapshotAsync(victim.OrgId);
+
+        using (var revoked = await RevokeAsync(client, admin, victimSessionId, victim.OrgId.ToString()))
+        {
+            revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        writer!.Calls.ShouldBe(1);
+        writer.RequestAbortedAtWrite.ShouldNotBeNull(
+            "the writer runs inside the request, so the accessor must see the handler's HttpContext");
+        writer.RequestAbortedAtWrite!.Value.ShouldBe(
+            probe.RequestToken,
+            "the handler was bound to the probe's token, so this case really exercises a client abort");
+        writer.RequestAbortedAtWrite.Value.IsCancellationRequested.ShouldBeTrue(
+            "the case aborts once the definer has answered `revoked` and before the row exists");
+        writer.WriteToken.ShouldNotBe(
+            probe.RequestToken,
+            "the audit write must run on its own source, not on the request's abort token");
+        writer.WriteToken.IsCancellationRequested.ShouldBeFalse(
+            "a caller leaving cannot cancel the only record of a committed revoke");
+        writer.WriteToken.CanBeCanceled.ShouldBeTrue("the detached write is still bounded by its own deadline");
+
+        var after = await AuditSnapshotAsync(victim.OrgId);
+        after.Rows.ShouldBe(before.Rows + 1, "the aborted request still records its one committed revoke");
+        after.MaxSeq.ShouldBe(before.MaxSeq + 1);
+
+        var row = await NewestAuditRowAsync(victim.OrgId);
+        row.Action.ShouldBe(IdentityAuditActions.SessionRevokeByAdmin);
+        row.ActorId.ShouldBe(admin.UserId.ToString(UuidText));
+        row.ObjectId.ShouldBe(victimSessionId.ToString(UuidText));
+        (await host.SessionRowAsync(victimSessionId)).RevokedAt.ShouldNotBeNull();
     }
 
     /// <summary>One <c>DELETE /sessions/{s}</c> as <paramref name="caller"/>'s browser sends it.</summary>
@@ -541,8 +640,9 @@ public sealed class AdminRevokeAuditTests : HarnessTest
 /// </summary>
 /// <param name="inner">The writer every other call reaches unchanged.</param>
 /// <param name="fault">
-/// The fault the revoke call raises: a database error (<see cref="NpgsqlException"/>) or the org's busy chain
-/// (<see cref="AuditBusyException"/>), the two shapes the handler must answer and log the same way.
+/// The fault the revoke call raises: a database error (<see cref="NpgsqlException"/>), a deadlock carrying a
+/// SQLSTATE (<see cref="PostgresException"/>) or the org's busy chain (<see cref="AuditBusyException"/>) — the
+/// shapes the handler must answer and log the same way.
 /// </param>
 internal sealed class FailingSessionRevokeAuditWriter(IIdentityAuditWriter inner, Func<Exception> fault) : IIdentityAuditWriter
 {
@@ -567,5 +667,99 @@ internal sealed class FailingSessionRevokeAuditWriter(IIdentityAuditWriter inner
         Calls++;
 
         throw fault();
+    }
+}
+
+/// <summary>
+/// The connection's abort token as a case can control it: a middleware installs <see cref="RequestToken"/> as
+/// <c>HttpContext.RequestAborted</c>, so "the client leaves" can happen at an exact point of the request (F48 S1).
+/// </summary>
+internal sealed class RequestAbortProbe : IDisposable
+{
+    private readonly CancellationTokenSource _source = new();
+
+    /// <summary>The token every request of the host runs on, which a case aborts when it wants the caller gone.</summary>
+    internal CancellationToken RequestToken => _source.Token;
+
+    /// <summary>Stands in for the client closing its connection.</summary>
+    internal void Abort() => _source.Cancel();
+
+    /// <inheritdoc />
+    public void Dispose() => _source.Dispose();
+}
+
+/// <summary>
+/// Installs a <see cref="RequestAbortProbe"/>'s token as <c>HttpContext.RequestAborted</c> for every request, so a
+/// case can abort after the definer committed. TestServer's own request token cannot be cancelled mid-flight.
+/// </summary>
+/// <param name="probe">The case's abort probe.</param>
+internal sealed class RequestAbortProbeStartupFilter(RequestAbortProbe probe) : IStartupFilter
+{
+    /// <inheritdoc />
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+
+        return app =>
+        {
+            app.Use(async (context, nextMiddleware) =>
+            {
+                context.RequestAborted = probe.RequestToken;
+
+                await nextMiddleware().ConfigureAwait(false);
+            });
+
+            next(app);
+        };
+    }
+}
+
+/// <summary>
+/// The real identity audit writer, recording what the revoke route hands it and aborting the request exactly when the
+/// definer has committed and the row does not exist yet (F48 S1): the row must still be written, on a token of its
+/// own.
+/// </summary>
+/// <param name="inner">The production writer, which commits the row.</param>
+/// <param name="probe">The case's abort probe, cancelled before the row is written.</param>
+/// <param name="httpContextAccessor">The current request, read for the token it is really bound to.</param>
+internal sealed class AbortAwareRecordingAuditWriter(
+    IIdentityAuditWriter inner,
+    RequestAbortProbe probe,
+    IHttpContextAccessor httpContextAccessor) : IIdentityAuditWriter
+{
+    /// <summary>How many times the revoke route reached the writer.</summary>
+    internal int Calls { get; private set; }
+
+    /// <summary>The token the route passed with the revoked-session row.</summary>
+    internal CancellationToken WriteToken { get; private set; }
+
+    /// <summary>
+    /// <c>HttpContext.RequestAborted</c> of the request being served — the token ASP.NET Core binds a handler's
+    /// <see cref="CancellationToken"/> from, so the case can prove the abort reached the handler and not just a probe.
+    /// </summary>
+    internal CancellationToken? RequestAbortedAtWrite { get; private set; }
+
+    /// <inheritdoc />
+    public ValueTask WriteAsync(
+        IdentityAuditEvent auditEvent,
+        IReadOnlyCollection<Guid> orgIds,
+        CancellationToken cancellationToken) =>
+        inner.WriteAsync(auditEvent, orgIds, cancellationToken);
+
+    /// <inheritdoc />
+    public ValueTask WriteSessionRevokedAsync(
+        Guid actorUserId,
+        Guid orgId,
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        Calls++;
+        WriteToken = cancellationToken;
+        RequestAbortedAtWrite = httpContextAccessor.HttpContext?.RequestAborted;
+
+        // The caller leaves here: the definer has committed the revoke, the audit row has not been written.
+        probe.Abort();
+
+        return inner.WriteSessionRevokedAsync(actorUserId, orgId, sessionId, cancellationToken);
     }
 }
