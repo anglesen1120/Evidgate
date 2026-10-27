@@ -1,7 +1,7 @@
 // 05.3.2-T5.1/T5.2: migration 0049 through a real PostgreSQL — the append-only `evidence_revision`, the
 // gap-free `revision_no` allocation, the closed `missing[]` code list, the composite pointer FK that 0036
-// deferred to this story and the guard that keeps `run.current_evidence_revision_id` on the latest revision
-// of its own run.
+// deferred to this story and the guards that keep `run.current_evidence_revision_id` on the latest revision
+// of its own run (NULL on insert, forward only, and cleared by the migration role's erasure step alone).
 using System.Net;
 using Npgsql;
 using Shouldly;
@@ -14,13 +14,16 @@ namespace Tenancy.IntegrationTests;
 /// 05.3.2-T5 (0049) through a real PostgreSQL: AC9's append-only revision table, AC4's completeness rule,
 /// the 00 §8.5 reason codes (T14's <c>setup_error</c> included) and T5.2's pointer wiring —
 /// <c>evidence_revision_run_idx</c> for the current-revision lookup, the composite
-/// <c>(org_id, current_evidence_revision_id) -&gt; evidence_revision (org_id, id)</c> key on <c>run</c> and
-/// the guard that only lets the pointer name the latest revision of that same run.
+/// <c>(org_id, current_evidence_revision_id) -&gt; evidence_revision (org_id, id)</c> key on <c>run</c>, and
+/// the three guards: <c>guard_evidence_revision_insert</c> (gap-free numbers, serialised on the run row),
+/// <c>guard_run_evidence_pointer</c> (forward to the latest revision only, and only the migration role's
+/// erasure sweep may clear it) and <c>guard_run_evidence_pointer_insert</c> (a fresh run starts NULL).
 /// <para>
 /// The fixture is this suite's own <see cref="PostgresTenancyFixture"/> — one digest-pinned PostgreSQL 18
 /// container per assembly, a fresh database per test brought to head by the real <c>Evidgate.Migrator</c>.
 /// Every write runs as <c>evidgate_app</c> inside a tenant-scoped transaction (00 §5.5 C3) unless a case
-/// deliberately speaks as the owner (the migration role, for a re-run or the row lock order).
+/// deliberately speaks as the owner (the migration role, for a re-run, the row lock order or the erasure
+/// step that clears the pointer).
 /// </para>
 /// <para>
 /// Lock order [DECISION D-S115-Q1]: every writer of a run's evidence takes the <c>run</c> row first
@@ -206,9 +209,9 @@ public sealed class EvidenceRevisionSchemaTests
 
     /// <summary>
     /// T2/T3: <c>FORCE RLS</c> plus the tenant policy on <c>evidence_revision</c> — a second org sees none of
-    /// the first org's revisions, cannot write a row that claims the first org (the policy's
-    /// <c>WITH CHECK</c> answers 42501: 0049:120-123) and cannot name the first org's run from a row of its
-    /// own tenant (the composite <c>evidence_revision_run_fk</c> answers 23503: 0049:74).
+    /// the first org's revisions, cannot write a row that claims the first org (the <c>WITH CHECK</c> of
+    /// policy <c>evidence_revision_tenant</c> answers 42501) and cannot name the first org's run from a row
+    /// of its own tenant (the composite <c>evidence_revision_run_fk</c> answers 23503).
     /// </summary>
     [Fact]
     public async Task EvidenceRevision_CrossTenant_IsInvisibleAndRefused()
@@ -276,9 +279,10 @@ public sealed class EvidenceRevisionSchemaTests
     }
 
     /// <summary>
-    /// T5.2's guard, every refusal case in one place: a stale revision, another run's revision of the same
-    /// org, another org's revision and a clear-back-to-NULL are all 23514; the un-granted columns of
-    /// <c>run</c> stay 42501.
+    /// T5.2's guard, every app-role refusal case in one place: a stale revision, another run's revision of the
+    /// same org and another org's revision are all 23514, the un-granted columns of <c>run</c> stay 42501, and
+    /// the app role can never clear a set pointer (the migration role's erasure sweep is the one exception —
+    /// <see cref="RunPointer_ClearingIsTheOwnerErasureStep"/>).
     /// </summary>
     [Fact]
     public async Task RunPointer_RefusesStaleCrossRunCrossOrgAndNull()
@@ -319,7 +323,7 @@ public sealed class EvidenceRevisionSchemaTests
                         StringComparison.Ordinal),
                 "the pointer FK is composite on both sides");
 
-        // A pointer that never was set moves once and can never be cleared again.
+        // A pointer that never was set moves once, and the app role can never clear it again.
         (await MovePointerAsync(world, world.Org, runId, second)).ShouldBe(1);
         (await MovePointerErrorAsync(world, world.Org, runId, null)).SqlState.ShouldBe("23514");
 
@@ -330,6 +334,158 @@ public sealed class EvidenceRevisionSchemaTests
             world.Database,
             $"select current_evidence_revision_id from public.run where id = '{runId}'"))
             .ShouldBe(second);
+    }
+
+    /// <summary>
+    /// D-S115-Q1 inside the database: two writers of one run serialise on the run row, not on the unique key.
+    /// Writer A inserts revision 1 and, with no explicit lock of its own, holds the row lock
+    /// <c>guard_evidence_revision_insert</c> took <c>FOR NO KEY UPDATE</c> until it commits. Writer B's own
+    /// insert of revision 1 is then observed in <c>pg_stat_activity</c> waiting on a lock held by A's pid (not
+    /// slept on), and once A commits B is refused 23514 by the guard — a duplicate number, which
+    /// <c>evidence_revision_run_revision_key</c> would answer 23505 — so both the wait and the refusal are
+    /// the trigger's, before any unique index check.
+    /// </summary>
+    [Fact]
+    public async Task EvidenceRevision_InsertGuard_SerialisesTwoWritersOfOneRun()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var runId = await CreateRunAsync(world);
+
+        await using var holding = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        var holderPid = await holding.ScalarAsync<int>("select pg_backend_pid()");
+        var first = RevisionInsert(Guid.CreateVersion7(), world.Org, runId, revisionNo: 1);
+        (await holding.ExecuteAsync(first.Sql, first.Parameters)).ShouldBe(1);
+
+        await using var competing = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        var blockedPid = await competing.ScalarAsync<int>("select pg_backend_pid()");
+        var second = RevisionInsert(Guid.CreateVersion7(), world.Org, runId, revisionNo: 1);
+        var attempt = competing.ExecuteAsync(second.Sql, second.Parameters);
+
+        (await WaitForLockWaitAsync(world.Database, blockedPid, holderPid))
+            .ShouldBeTrue($"writer B (pid {blockedPid}) never showed a lock wait on writer A (pid {holderPid})");
+        attempt.IsCompleted.ShouldBeFalse("the second insert waits inside the trigger, before the unique key is reached");
+
+        await holding.CommitAsync();
+
+        var refusal = await Should.ThrowAsync<PostgresException>(
+            async () => await attempt.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+        refusal.SqlState.ShouldBe("23514", "the guard refuses it; the unique key would answer 23505");
+        refusal.MessageText.ShouldContain("revision_no must be");
+
+        (await _fixture.ColumnAsync<int>(
+            world.Database,
+            $"select revision_no from public.evidence_revision where org_id = '{world.Org}' and run_id = '{runId}'"))
+            .ShouldHaveSingleItem().ShouldBe(1, "the refused insert left nothing behind");
+    }
+
+    /// <summary>
+    /// The CHECK boundaries around the reason list and the watermark: a negative <c>event_watermark</c> is
+    /// 23514, a <c>missing</c> array holding a NULL element is 23514, a two-dimensional <c>missing</c> array is
+    /// 23514 (the column holds a flat list) and a repeated code is accepted — the reason list is a set, not a
+    /// ranking. Every case runs on an <c>incomplete</c> row and names its constraint, so no refusal can pass
+    /// on <c>evidence_revision_complete_has_no_missing_check</c> instead.
+    /// </summary>
+    [Fact]
+    public async Task EvidenceRevision_MissingArrayAndWatermark_Boundaries()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var runId = await CreateRunAsync(world);
+
+        var negativeWatermark = await CaptureInsertErrorAsync(
+            world, world.Org, runId, revisionNo: 1, completeness: "incomplete", eventWatermark: -1);
+        negativeWatermark.SqlState.ShouldBe("23514");
+        negativeWatermark.ConstraintName.ShouldBe("evidence_revision_watermark_check");
+
+        var nullElement = await CaptureInsertErrorAsync(
+            world, world.Org, runId, revisionNo: 1, completeness: "incomplete", missing: "{NULL}");
+        nullElement.SqlState.ShouldBe("23514");
+        nullElement.ConstraintName.ShouldBe("evidence_revision_missing_check");
+
+        var nested = await CaptureInsertErrorAsync(
+            world,
+            world.Org,
+            runId,
+            revisionNo: 1,
+            completeness: "incomplete",
+            missingExpression: "array[array['setup_error', 'setup_error']]::text[]");
+        nested.SqlState.ShouldBe("23514");
+        nested.ConstraintName.ShouldBe("evidence_revision_missing_check");
+
+        await AppendRevisionAsync(
+            world,
+            world.Org,
+            runId,
+            revisionNo: 1,
+            completeness: "incomplete",
+            missing: "{setup_error,setup_error}",
+            outcome: null);
+
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.evidence_revision where org_id = '{world.Org}' and run_id = '{runId}' "
+            + "and missing = '{setup_error,setup_error}'::text[]"))
+            .ShouldBe(1, "a repeated code is the same set, and the row exists");
+    }
+
+    /// <summary>
+    /// A fresh run has no revisions, so its pointer starts NULL: an INSERT that already names one is refused
+    /// 23514 by <c>run_evidence_pointer_insert_guard</c>, while <c>run_current_evidence_revision_fk</c> alone
+    /// would accept any revision of the same org. The same copy with a NULL pointer is accepted, so the
+    /// refusal is the pointer and not the shape of the row.
+    /// </summary>
+    [Fact]
+    public async Task RunPointer_InsertWithAPointer_IsRefused()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var template = await CreateRunAsync(world);
+        var revision = await AppendRevisionAsync(world, world.Org, template, revisionNo: 1);
+
+        var clean = Guid.CreateVersion7();
+        (await InsertRunCopyAsync(world, clean, template, null))
+            .ShouldBe(1, "without a pointer the same INSERT is legal");
+
+        var refusedId = Guid.CreateVersion7();
+        var refusal = await InsertRunCopyErrorAsync(world, refusedId, template, revision);
+        refusal.SqlState.ShouldBe("23514");
+        refusal.MessageText.ShouldContain("must be null on insert");
+
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.run where id in ('{clean:D}', '{refusedId:D}')"))
+            .ShouldBe(1, "only the pointer-less copy exists");
+    }
+
+    /// <summary>
+    /// The one clearing path: the app role may move the pointer forward but never back to NULL (23514, the
+    /// same guard as <see cref="RunPointer_RefusesStaleCrossRunCrossOrgAndNull"/>), while the migration role —
+    /// the erasure sweep — may clear it, because the <c>run</c> ↔ <c>evidence_revision</c> foreign-key cycle
+    /// has no <c>ON DELETE</c> action.
+    /// </summary>
+    [Fact]
+    public async Task RunPointer_ClearingIsTheOwnerErasureStep()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var runId = await CreateRunAsync(world);
+        var revision = await AppendRevisionAsync(world, world.Org, runId, revisionNo: 1);
+        (await MovePointerAsync(world, world.Org, runId, revision)).ShouldBe(1);
+
+        var appClearing = await MovePointerErrorAsync(world, world.Org, runId, null);
+        appClearing.SqlState.ShouldBe("23514");
+        appClearing.MessageText.ShouldContain("cannot be cleared");
+
+        await using var erasure = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
+        (await erasure.ExecuteAsync(
+            "update public.run set current_evidence_revision_id = null where org_id = @org_id and id = @run_id",
+            ("org_id", world.Org),
+            ("run_id", runId))).ShouldBe(1);
+        await erasure.CommitAsync();
+
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            $"select current_evidence_revision_id is null from public.run where id = '{runId:D}'"))
+            .ShouldBeTrue("the owner's erasure step clears the pointer");
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.evidence_revision"))
+            .ShouldBe(1, "clearing the pointer never touches the append-only revision row");
     }
 
     // ------------------------------------------------------------------ (f) 00 §5.7 P4: the lookup index
@@ -409,9 +565,14 @@ public sealed class EvidenceRevisionSchemaTests
             world.Database,
             "select has_column_privilege('evidgate_app', 'public.run', 'current_evidence_revision_id', 'update')"))
             .ShouldBeTrue();
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            "select has_function_privilege('evidgate_app', 'public.guard_run_evidence_pointer_insert()', 'execute')"))
+            .ShouldBeTrue("the app role fires the insert guard of 0049");
         (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", "evidence_revision", "update")).ShouldBeFalse();
         (await TriggerCountAsync(world.Database, "public.evidence_revision", "evidence_revision_guard_insert")).ShouldBe(1);
         (await TriggerCountAsync(world.Database, "public.run", "run_evidence_pointer_guard")).ShouldBe(1);
+        (await TriggerCountAsync(world.Database, "public.run", "run_evidence_pointer_insert_guard")).ShouldBe(1);
         (await _fixture.IndexesAsync(world.Database, "evidence_revision"))
             .Count(index => index.StartsWith("evidence_revision_run_idx:", StringComparison.Ordinal))
             .ShouldBe(1, "create index if not exists is a no-op on the re-run");
@@ -537,6 +698,79 @@ public sealed class EvidenceRevisionSchemaTests
     }
 
     /// <summary>
+    /// Polls <c>pg_stat_activity</c> until the backend <paramref name="blockedPid"/> waits on a lock held by
+    /// <paramref name="holderPid"/> (<c>pg_blocking_pids</c> resolves the transaction-id wait a row lock shows
+    /// as), so a test observes the block instead of sleeping and hoping. Returns false on timeout; the caller
+    /// asserts on that.
+    /// </summary>
+    private async Task<bool> WaitForLockWaitAsync(string database, int blockedPid, int holderPid)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < deadline)
+        {
+            var waiting = await _fixture.ScalarAsync<long>(
+                database,
+                "select count(*) from pg_stat_activity "
+                + $"where pid = {blockedPid} and wait_event_type = 'Lock' "
+                + $"and array_position(pg_blocking_pids(pid), {holderPid}) is not null");
+            if (waiting == 1)
+            {
+                return true;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20), TestContext.Current.CancellationToken);
+        }
+
+        return false;
+    }
+
+    /// <summary>One run row of the same org, copied from an existing run through the app role; the pointer is overridable.</summary>
+    private const string RunCopyInsert =
+        """
+        insert into public.run
+          (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
+           collection_deadline_at, late_window_minutes, current_evidence_revision_id)
+        select @id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id,
+               collection_deadline_at, late_window_minutes, @revision_id::uuid
+          from public.run
+         where org_id = @org_id and id = @template_run_id
+        """;
+
+    /// <summary>Writes one copy of <paramref name="template"/> as the app role and returns the affected row count.</summary>
+    private async Task<int> InsertRunCopyAsync(
+        RunCreationTests.World world,
+        Guid id,
+        Guid template,
+        Guid? revision)
+    {
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        var affected = await scope.ExecuteAsync(RunCopyInsert, RunCopyParameters(id, world.Org, template, revision));
+        await scope.CommitAsync();
+
+        return affected;
+    }
+
+    /// <summary>Writes one copy of <paramref name="template"/> as the app role and returns the server error.</summary>
+    private async Task<PostgresException> InsertRunCopyErrorAsync(
+        RunCreationTests.World world,
+        Guid id,
+        Guid template,
+        Guid? revision)
+    {
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+
+        return await scope.CaptureErrorAsync(RunCopyInsert, RunCopyParameters(id, world.Org, template, revision));
+    }
+
+    private static (string Name, object Value)[] RunCopyParameters(Guid id, Guid org, Guid template, Guid? revision) =>
+    [
+        ("id", id),
+        ("org_id", org),
+        ("template_run_id", template),
+        ("revision_id", revision is { } value ? (object)value : DBNull.Value),
+    ];
+
+    /// <summary>
     /// Runs one INSERT as the app role in a fresh transaction and returns the server error.
     /// <paramref name="rowOrg"/> defaults to the scope's org; a different value writes a row that claims
     /// another tenant.
@@ -548,9 +782,19 @@ public sealed class EvidenceRevisionSchemaTests
         int revisionNo,
         string completeness = "complete",
         string missing = "{}",
-        Guid? rowOrg = null)
+        Guid? rowOrg = null,
+        long eventWatermark = 0,
+        string? missingExpression = null)
     {
-        var insert = RevisionInsert(Guid.CreateVersion7(), rowOrg ?? org, runId, revisionNo, completeness, missing);
+        var insert = RevisionInsert(
+            Guid.CreateVersion7(),
+            rowOrg ?? org,
+            runId,
+            revisionNo,
+            completeness,
+            missing,
+            eventWatermark: eventWatermark,
+            missingExpression: missingExpression);
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), org);
 
         return await scope.CaptureErrorAsync(insert.Sql, insert.Parameters);
@@ -581,7 +825,11 @@ public sealed class EvidenceRevisionSchemaTests
             database,
             $"select count(*) from pg_catalog.pg_trigger where tgrelid = '{table}'::regclass and tgname = '{trigger}' and not tgisinternal");
 
-    /// <summary>One raw INSERT of an <c>evidence_revision</c> row as the app role; the bounded columns are overridable.</summary>
+    /// <summary>
+    /// One raw INSERT of an <c>evidence_revision</c> row as the app role; the bounded columns are overridable.
+    /// <paramref name="missingExpression"/> replaces the quoted array literal (a nested array needs the
+    /// <c>array[…]</c> constructor, which no literal expresses).
+    /// </summary>
     private static (string Sql, (string Name, object Value)[] Parameters) RevisionInsert(
         Guid id,
         Guid org,
@@ -589,13 +837,16 @@ public sealed class EvidenceRevisionSchemaTests
         int revisionNo,
         string completeness = "complete",
         string missing = "{}",
-        string? outcome = "all_passed")
+        string? outcome = "all_passed",
+        long eventWatermark = 0,
+        string? missingExpression = null)
     {
+        var missingSql = missingExpression ?? $"'{missing}'::text[]";
         var sql =
-            $$"""
+            $"""
             insert into public.evidence_revision
               (id, org_id, run_id, revision_no, completeness, missing, outcome, event_watermark, manifest_hash)
-            values (@id, @org_id, @run_id, @revision_no, @completeness, '{{missing}}'::text[], @outcome, 0, @manifest_hash)
+            values (@id, @org_id, @run_id, @revision_no, @completeness, {missingSql}, @outcome, @event_watermark, @manifest_hash)
             """;
 
         return (sql,
@@ -606,6 +857,7 @@ public sealed class EvidenceRevisionSchemaTests
             ("revision_no", revisionNo),
             ("completeness", completeness),
             ("outcome", (object?)outcome ?? DBNull.Value),
+            ("event_watermark", eventWatermark),
             ("manifest_hash", ManifestHash),
         ]);
     }

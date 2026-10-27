@@ -103,8 +103,10 @@ The playbook for changing a table without breaking the running version is
   C6/AC9), a BEFORE INSERT trigger that makes `revision_no` gap-free by taking the run row first, and
   the pointer wiring 0036 deferred — the composite FK `run_current_evidence_revision_fk`
   (`(org_id, current_evidence_revision_id) → evidence_revision (org_id, id)`), the
-  `update (current_evidence_revision_id)` column grant on `run` and the `run_evidence_pointer_guard`
-  trigger that only lets the pointer move to the latest revision of the same run;
+  `update (current_evidence_revision_id)` column grant on `run`, the `run_evidence_pointer_guard`
+  trigger that only lets the pointer move to the latest revision of the same run (an owner-only clear
+  for erasure), and the `run_evidence_pointer_insert_guard` trigger that keeps a fresh run's pointer
+  NULL;
   the next free number is `0050`;
   a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
@@ -304,29 +306,53 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   refuses any value other than `max + 1` (1 for the first) with `23514`, so
   two concurrent inserts of one run serialise on the run row instead of
   racing into a unique violation.
-- Lock order is run first: every writer takes the `run` row, THEN inserts
-  the `evidence_revision` row, then moves the pointer, all in one
-  transaction. That atomicity is the writer's rule, not the trigger's: the
-  guard only checks the value it is given (an insert never touches `run`), so
-  a pointer written in a later transaction would still pass, and a crash
-  between the two leaves the pointer on the previous revision — stale, never
-  dangling, because the FK resolves whatever it names. The insert trigger
-  re-takes the same run lock (a no-op for the holder), so an inserter cannot
-  deadlock against 05.3.1's transition, which also locks `run` first; the
-  05.3.2-T2/T3/T4 reconciler must not lock an `evidence_revision` row before
-  the run.
-- The pointer is three pieces: `run_current_evidence_revision_fk` (the
+- Lock order is run first, in the blocking mode: every writer takes the `run`
+  row `for no key update`, THEN inserts the `evidence_revision` row, then
+  moves the pointer, all in one transaction. The insert trigger re-takes that
+  same lock, which is a no-op only for a holder already in that mode: a caller
+  holding `for share` alone is upgraded, and two such callers can deadlock
+  (`40P01`), so the 05.3.2-T2/T3/T4 reconciler and `LateEvidenceRevisionTask`
+  must take `for no key update` on the run before any other read of it.
+  `FinalizeShardCommand` (`OrchestratorSql.ShareLockRunForFinalize`) and
+  `RunEventScopeReader` read the run `for share` today and must not be chained
+  with an evidence insert in one transaction. With the run taken first, an
+  inserter cannot deadlock against 05.3.1's transition, which also locks `run`
+  first; the reconciler must not lock an `evidence_revision` row before the
+  run.
+- The pointer is four pieces: `run_current_evidence_revision_fk` (the
   composite FK `0036` deferred — NULL stays legal, MATCH SIMPLE, so another
   tenant's revision is structurally impossible), the
   `update (current_evidence_revision_id)` column grant so the reconciler can
-  move it, and `run_evidence_pointer_guard`, which accepts only the LATEST
-  revision of the SAME run and never a clear back to NULL (`23514`). The
-  guard runs with invoker rights, so its reads go through the caller's RLS
-  scope; `GetRun` already selects the column and needs no change.
+  move it, `run_evidence_pointer_guard`, which accepts only the LATEST
+  revision of the SAME run, and `run_evidence_pointer_insert_guard`, which
+  refuses a non-NULL pointer on INSERT that resolves to a revision visible in
+  the caller's org (`23514`: a fresh run has no revisions, and the composite FK
+  alone would accept another run's revision of the same org). A pointer that
+  resolves to nothing visible (a missing id or another org's revision, hidden
+  by RLS) is left to the composite FK's `23503`, which is the structural
+  backstop for the cross-org case. Clearing a set pointer is refused (`23514`)
+  except for `current_user = 'evidgate_owner'`: the erasure sweep must clear
+  the pointer, then delete the revisions, then delete the runs, because the
+  `run` <-> `evidence_revision` FK cycle has no ON DELETE action. Both guards
+  run with invoker rights, so their reads go through the caller's RLS scope;
+  `GetRun` already selects the column and needs no change.
+- The pointer is the latest revision only WHEN IT IS MOVED. The guards check
+  the value they are given, so a writer that commits the insert and the
+  pointer move in two transactions leaves the pointer one revision behind in
+  between, and indefinitely if the second transaction never runs. Keeping both
+  in one transaction closes that window: they commit or roll back together, so
+  a crash leaves neither a revision without its pointer move nor a stale
+  pointer behind.
 - `missing[]`'s code list is a CHECK over the closed 00 §8.5 list (`<@`,
   `setup_error` included), so a new reason code is a migration, not a code
-  change; `completeness = 'complete'` requires `missing = '{}'` (AC4), while
-  the converse is the reconciler's rule.
+  change; a multi-dimensional array is refused (`array_ndims(missing) is null
+  or 1`, wrapped in a `CASE` because `array_position` raises `0A000` on a
+  nested array and CHECK term order is not guaranteed; duplicates are
+  tolerated); `completeness = 'complete'` requires
+  `missing = '{}'` (AC4), while the converse is the reconciler's rule. An
+  incomplete row may carry an empty `missing[]`, and `outcome` is not tied to
+  `completeness` (only its value set is constrained), so a reader keys on
+  `completeness` alone and never infers it from `missing` or `outcome`.
 - Idempotent like `0025`/`0027`/`0028`/`0046`: `if not exists` / `drop … if
   exists` and a catalog check around the FK add, so a re-run is a no-op; one
   file runs in one transaction.

@@ -17,7 +17,7 @@ namespace Tenancy.IntegrationTests;
 /// <c>(org_id, current_evidence_revision_id) -&gt; evidence_revision (org_id, id)</c> and grants the app
 /// role <c>update (current_evidence_revision_id)</c>, so the assertions below are 0036's shape as 0049
 /// completes it: the pointer is the third writable column and the FK is the only constraint naming it. The
-/// pointer's own behaviour — latest revision of the same run only, never cleared — is 0049's and is covered
+/// pointer's own behaviour — latest revision of the same run only, never cleared by the app role (the migration role erasure sweep is the exception) — is 0049's and is covered
 /// by <see cref="EvidenceRevisionSchemaTests"/>.
 /// </remarks>
 [Collection(TenancySuite.Name)]
