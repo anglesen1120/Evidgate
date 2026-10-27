@@ -9,7 +9,9 @@ namespace Architecture.Tests.Rules;
 /// Two scopes, because the two families have different reach: the untrusted XML and archive readers
 /// (<c>XmlReader</c>, <c>XmlDictionaryReader</c>, <c>XDocument</c>, <c>XElement</c>, <c>XPathDocument</c>,
 /// <c>XmlSerializer</c>, <c>ZipArchive</c>, <c>TarReader</c>, and the profile's own report handle) parse
-/// nothing in this repository today, so the rule forbids them everywhere outside the profile;
+/// nothing in this repository today, so the rule forbids them everywhere outside the profile and the parser child
+/// (<c>src/Evidgate.Parser/</c>, 06.3.6 AC1: the console process that runs the profile on untrusted bytes, which links
+/// the profile sources instead of copying them);
 /// <c>JsonDocument.Parse</c> (and the other <c>JsonDocument</c>/<c>JsonNode</c>/<c>JsonSerializer</c>/
 /// <c>Utf8JsonReader</c> entry points) is also the normal way to read a request body or a stored row
 /// (Policy, Orchestrator, Catalog, Contracts.Validation all do it), so the rule scopes it to the module
@@ -18,13 +20,26 @@ namespace Architecture.Tests.Rules;
 /// </summary>
 public static class ParserConstructionRules
 {
-    /// <summary>The one directory allowed to construct a reader for untrusted artifact bytes.</summary>
+    /// <summary>The profile directory allowed to construct a reader for untrusted artifact bytes (06.3.1).</summary>
     public const string ProfileDirectory = "src/Modules/Evidgate.Modules.Evidence/Infrastructure/Parsing/";
+
+    /// <summary>
+    /// The second allowed place (06.3.6 AC1): the console child that runs the profile on untrusted bytes. It links the
+    /// profile sources rather than copying them, so a reader constructed there is still the profile's reader — the
+    /// child's own files only choose the arm, cap the stdin read and stream the result.
+    /// </summary>
+    public const string ParserChildDirectory = "src/Evidgate.Parser/";
 
     /// <summary>The module that owns artifacts: inside it, the JSON reader is the profile's too.</summary>
     public const string ArtifactModuleDirectory = "src/Modules/Evidgate.Modules.Evidence/";
 
-    /// <summary>Constructs forbidden everywhere outside the profile: the untrusted XML and archive readers.</summary>
+    /// <summary>
+    /// The only tree that is scanned: a test may build its own reader to prove the profile's behaviour, and no test
+    /// is shipped, so a path outside <c>src/</c> is not a production parse path at all.
+    /// </summary>
+    public const string SourceRoot = "src/";
+
+    /// <summary>Constructs forbidden everywhere outside the profile and the parser child: the untrusted XML and archive readers.</summary>
     public static readonly IReadOnlyList<string> RepositoryWideConstructs =
     [
         "XmlReader.Create(",
@@ -179,7 +194,7 @@ public static class ParserConstructionRules
     /// <c>"ZipArchiveMode.Create"</c> is trivia, not an argument.
     /// </summary>
     /// <param name="text">The source text.</param>
-    private static string StripTrivia(string text)
+    internal static string StripTrivia(string text)
     {
         var stripped = text.ToCharArray();
         var index = 0;
@@ -414,8 +429,8 @@ public static class ParserConstructionRules
     }
 
     /// <summary>
-    /// One violation per construct found outside the profile, naming the file and the construct. Paths are
-    /// repository-relative with '/'.
+    /// One violation per construct found outside the profile and the parser child, naming the file and the construct.
+    /// Paths are repository-relative with '/'; anything outside <see cref="SourceRoot"/> is not scanned.
     /// </summary>
     /// <param name="files">The source files to scan (path + text).</param>
     /// <param name="profileDirectory">The directory allowed to construct a reader.</param>
@@ -424,14 +439,47 @@ public static class ParserConstructionRules
     public static IReadOnlyList<string> FindViolations(
         IEnumerable<(string Path, string Text)> files,
         string profileDirectory,
-        string artifactModuleDirectory)
+        string artifactModuleDirectory) =>
+        FindViolations(files, profileDirectory, artifactModuleDirectory, ParserChildDirectory);
+
+    /// <summary>
+    /// One violation per construct found outside <paramref name="profileDirectory"/> and
+    /// <paramref name="parserChildDirectory"/>, naming the file and the construct. Paths are repository-relative with
+    /// '/'; anything outside <see cref="SourceRoot"/> is not scanned. The two allowed directories are parameters so the
+    /// synthetic cases can prove an exemption without the real tree, and an empty child directory means "no child".
+    /// </summary>
+    /// <param name="files">The source files to scan (path + text).</param>
+    /// <param name="profileDirectory">The profile directory allowed to construct a reader.</param>
+    /// <param name="artifactModuleDirectory">The directory whose JSON reads must use the profile.</param>
+    /// <param name="parserChildDirectory">The parser child's directory, also allowed to construct a reader.</param>
+    /// <returns>The violations, ordered by path.</returns>
+    public static IReadOnlyList<string> FindViolations(
+        IEnumerable<(string Path, string Text)> files,
+        string profileDirectory,
+        string artifactModuleDirectory,
+        string parserChildDirectory)
     {
         var violations = new List<string>();
+        var child = parserChildDirectory;
 
         foreach (var (path, text) in files.OrderBy(file => file.Path, StringComparer.Ordinal))
         {
+            // Only shipped sources are scanned: a test project may build its own reader (06.3.6 §9 scans
+            // src/**/*.cs only), so a path outside src/ is not a production parse path.
+            if (!path.StartsWith(SourceRoot, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             var inProfile = path.StartsWith(profileDirectory, StringComparison.Ordinal);
             if (inProfile)
+            {
+                continue;
+            }
+
+            // 06.3.6 AC1: the child entry point is the profile's other hand — it links the profile sources and must
+            // construct the reader to feed them, so it is the second named allowed place and nothing else is.
+            if (!string.IsNullOrEmpty(child) && path.StartsWith(child, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -441,8 +489,9 @@ public static class ParserConstructionRules
                 if (ContainsParse(text, construct))
                 {
                     violations.Add(
-                        $"{path} constructs {construct}: the untrusted-parser profile in {profileDirectory} is the "
-                        + "only place an XML or archive reader may be constructed (06.3.1 §11, 00 §5.7 S4/S5)");
+                        $"{path} constructs {construct}: the untrusted-parser profile in {profileDirectory} and the "
+                        + $"parser child in {child} are the only places an XML or archive reader may be constructed "
+                        + "(06.3.1 §11, 06.3.6 AC1, 00 §5.7 S4/S5)");
                 }
             }
 

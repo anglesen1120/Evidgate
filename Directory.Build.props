@@ -19,14 +19,18 @@
        therefore runs on the `-extra` chiseled base that ships ICU
        (infra/docker/Dockerfile.api), and the explicit `false` keeps the intent in the
        generated runtimeconfig.json — where scripts/build-images.sh asserts it per
-       image — instead of leaving the setting to whatever base image is picked. -->
+       image — instead of leaving the setting to whatever base image is picked.
+       06.3.6-T1.2: `Evidgate.Parser` joins the Worker group because it is the Worker's
+       parse child and ships in the same ICU-less chiseled image; the profile sources it
+       links compare and upper-case ASCII byte-wise (MediaSniffer, SafeZipArchive) and use
+       no culture-sensitive formatting, so invariant mode changes nothing it parses. -->
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Api' or '$(MSBuildProjectName)' == 'Evidgate.Worker'">
     <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Api'">
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Worker'">
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Evidgate.Worker' or '$(MSBuildProjectName)' == 'Evidgate.Parser'">
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <!-- 10.2.1-T1.1 + 00 §11 (server runtime: Linux x64 + arm64): every shipped

@@ -237,6 +237,46 @@ public class ParserConstructionTests
             .ShouldHaveSingleItem();
     }
 
+    /// <summary>
+    /// 06.3.6 AC1: the only two places that construct an XML or archive reader are the profile
+    /// (<c>…/Evidence/Infrastructure/Parsing/</c>) and the parser child entry point (<c>src/Evidgate.Parser/</c>). The
+    /// child links the profile sources, so it must build the reader it feeds; a worker, an application service or any
+    /// other shipped file that builds one bypasses the limits the profile enforces. A file under <c>tests/</c> is not
+    /// scanned at all — a test may build its own reader to prove the profile's behaviour.
+    /// </summary>
+    [Fact]
+    public void UntrustedParsing_OnlyInsideParserChildAndInfrastructure()
+    {
+        var synthetic = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Worker/Infrastructure/ParseChild.cs", "using var archive = new ZipArchive(stream, ZipArchiveMode.Read);"),
+            ("src/Modules/Evidgate.Modules.Evidence/Application/ArtifactCompletionVerifier.cs", "var reader = XmlReader.Create(stream);"),
+            ("src/Evidgate.Parser/ProfileSelection.cs", "var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };"),
+            ("src/Modules/Evidgate.Modules.Evidence/Infrastructure/Parsing/SafeXml.cs", "XmlReader.Create(stream, CreateSettings(maxBytes));"),
+            ("tests/Parser.Tests/ParserChildHostileInputTests.cs", "var reader = XmlReader.Create(stream);"),
+        };
+
+        var violations = ParserConstructionRules.FindViolations(
+            synthetic,
+            ParserConstructionRules.ProfileDirectory,
+            ParserConstructionRules.ArtifactModuleDirectory);
+
+        violations.Count.ShouldBe(2, string.Join(Environment.NewLine, violations));
+        violations.ShouldContain(v => v.Contains("src/Evidgate.Worker/Infrastructure/ParseChild.cs", StringComparison.Ordinal));
+        violations.ShouldContain(v => v.Contains("Evidence/Application/ArtifactCompletionVerifier.cs", StringComparison.Ordinal));
+
+        // The real solution: the child's own files are allowed, everything else stays clean.
+        var files = SourceFiles();
+        files.Count.ShouldBeGreaterThanOrEqualTo(MinimumScannedFiles);
+
+        var realViolations = ParserConstructionRules.FindViolations(
+            files,
+            ParserConstructionRules.ProfileDirectory,
+            ParserConstructionRules.ArtifactModuleDirectory);
+
+        realViolations.ShouldBeEmpty(string.Join(Environment.NewLine, realViolations));
+    }
+
     [Fact]
     public void Real_Solution_Constructs_Untrusted_Parsers_Only_In_The_Profile()
     {
