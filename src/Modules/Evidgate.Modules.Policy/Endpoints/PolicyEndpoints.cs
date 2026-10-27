@@ -51,6 +51,10 @@ public static class PolicyEndpoints
             .Produces<PolicyActivationDto>(StatusCodes.Status200OK)
             .WithSummary("Activate a policy revision for the project; runs created afterwards pin it (07.1.1)");
 
+        group.MapGet("/projects/{p}/policy-activation", GetPolicyActivationAsync)
+            .Produces<PolicyActivationStateDto>(StatusCodes.Status200OK)
+            .WithSummary("The project's policy activation; 404 when it has never been activated (F18)");
+
         group.MapGet("/policies/{id}", GetPolicyRevisionAsync)
             .Produces<PolicyRevisionDto>(StatusCodes.Status200OK)
             .WithSummary("One policy revision; ETag is its id (07.1.1)");
@@ -58,6 +62,10 @@ public static class PolicyEndpoints
         group.MapGet("/policies/{id}/revisions", ListPolicyRevisionsAsync)
             .Produces<PolicyRevisionListResponse>(StatusCodes.Status200OK)
             .WithSummary("Cursor page of a project's policy revisions, append-only order (07.1.1)");
+
+        group.MapGet("/projects/{p}/policies/head", GetPolicyHeadAsync)
+            .Produces<PolicyRevisionSummaryDto>(StatusCodes.Status200OK)
+            .WithSummary("The project's newest policy revision; ETag is its id (F18)");
 
         return group;
     }
@@ -115,6 +123,16 @@ public static class PolicyEndpoints
         return await mediator.Send(new ActivatePolicyCommand(p, bytes, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
     }
 
+    private static async Task<Result<PolicyActivationStateDto>> GetPolicyActivationAsync(
+        Guid p,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        // The handler reads the pointer; the 404 (never activated, unknown, soft-deleted or another tenant's
+        // project) and the 403 scope refusal are its answers, not this edge's.
+        return await mediator.Send(new GetPolicyActivationQuery(p), cancellationToken).ConfigureAwait(false);
+    }
+
     private static async Task<Result<PolicyRevisionDto>> GetPolicyRevisionAsync(
         Guid id,
         HttpContext context,
@@ -157,6 +175,23 @@ public static class PolicyEndpoints
         }
 
         return Result.Success(result.Value.Response);
+    }
+
+    private static async Task<Result<PolicyRevisionSummaryDto>> GetPolicyHeadAsync(
+        Guid p,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(new GetPolicyHeadQuery(p), cancellationToken).ConfigureAwait(false);
+        if (!result.IsSuccess)
+        {
+            return result;
+        }
+
+        // The same ETag GET /v1/policies/{id} issues: the head's own revision id.
+        context.Response.Headers.ETag = $"\"{result.Value.Id}\"";
+        return result;
     }
 
     private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);

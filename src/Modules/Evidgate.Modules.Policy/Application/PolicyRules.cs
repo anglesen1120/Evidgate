@@ -14,6 +14,19 @@ internal static class PolicyErrors
     /// <summary>404: no revision with that id is visible to this tenant (another tenant's id included, 00 §9.2).</summary>
     internal static Error RevisionNotFound => Error.NotFound("no policy revision with that id is visible to this tenant");
 
+    /// <summary>
+    /// 404: the project has no policy activation this tenant may read (F18). Deliberately one error for a project
+    /// that was never activated, an unknown, soft-deleted or other-tenant project, and a pointer naming another
+    /// project's revision: the read must not tell them apart.
+    /// </summary>
+    internal static Error ActivationNotFound => Error.NotFound("no policy activation is visible for that project");
+
+    /// <summary>
+    /// 404: the project has no policy revision this tenant may read (F18) — one error for a project with no
+    /// revisions yet and an unknown, soft-deleted or other-tenant project.
+    /// </summary>
+    internal static Error RevisionHeadNotFound => Error.NotFound("no policy revision is visible for that project");
+
     /// <summary>403: the credential is scoped to another project than the route names (00 §9.1).</summary>
     internal static Error ProjectScopeMismatch => Error.Denied(
         ApiErrorCode.ProjectScopeMismatch,
