@@ -1,5 +1,11 @@
+using System.Globalization;
+using Evidgate.BuildingBlocks.Persistence.Audit;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Identity.Contracts;
+using Evidgate.Modules.Identity.Login.Audit;
+using Evidgate.Modules.Identity.Sessions;
 using Evidgate.Testing;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
@@ -38,6 +44,9 @@ public sealed class MigrationTests : SessionHardeningTestBase
         "session_revoke_one",
         "session_revoke_others",
     ];
+
+    /// <summary>The spellings the catalogue may keep for the writer's 2000 ms bounded wait.</summary>
+    private static readonly string[] BoundedWaitSettings = ["2000", "2000ms", "2s"];
 
     public MigrationTests(DatabaseFixture fixture)
         : base(fixture)
@@ -229,8 +238,11 @@ public sealed class MigrationTests : SessionHardeningTestBase
     {
         foreach (var name in SessionRouteWriters)
         {
-            (await DefinerSignatureAsync("evidgate_resolve", name))
-                .ShouldBe("true|evidgate_owner|search_path=\"\"", $"{name} keeps the definer hygiene");
+            if (!string.Equals(name, "session_revoke_one", StringComparison.Ordinal))
+            {
+                (await DefinerSignatureAsync("evidgate_resolve", name))
+                    .ShouldBe("true|evidgate_owner|search_path=\"\"", $"{name} keeps the definer hygiene");
+            }
 
             (await HasExecuteAsync("evidgate_app", "evidgate_resolve", name))
                 .ShouldBeTrue($"evidgate_app calls {name}");
@@ -241,6 +253,12 @@ public sealed class MigrationTests : SessionHardeningTestBase
                     .ShouldBeFalse($"{role} must not run {name}");
             }
         }
+
+        // 0050 bounds the revoke's waits for the WHOLE call: `set lock_timeout = '2000'` in the header beside
+        // the pinned `search_path`, the same 2000 ms as AuditTrail.cs AuditSql.LockTimeout, so the session
+        // row lock and the org chain's advisory lock share one bound that PostgreSQL restores on return (S120
+        // review S1). The other three routes take no lock of their own and keep the plain pinned path.
+        await AssertRevokeDefinerAsync("the revoke keeps 0048's posture and adds the writer's bounded wait");
 
         // The sweep is the one function the app role may not run: an owner-defined bulk delete belongs to the
         // task mechanism's role, exactly like `evidgate.expire_pending_invites` (0043:208-211). It lives in
@@ -320,8 +338,7 @@ public sealed class MigrationTests : SessionHardeningTestBase
     [Fact]
     public async Task The_Revoke_Audit_Definer_Keeps_Its_Grant_And_Reapplies_As_A_NoOp()
     {
-        (await DefinerSignatureAsync("evidgate_resolve", "session_revoke_one"))
-            .ShouldBe("true|evidgate_owner|search_path=\"\"", "0050 re-creates the same function, not a new one");
+        await AssertRevokeDefinerAsync("0050 re-creates the same function, not a new one");
 
         (await HasExecuteAsync("evidgate_app", "evidgate_resolve", "session_revoke_one"))
             .ShouldBeTrue("the app role calls the route");
@@ -358,13 +375,7 @@ public sealed class MigrationTests : SessionHardeningTestBase
              where oid = 'public.audit_log'::regclass
             """)).ShouldBeTrue("the definer appends under FORCE row level security");
 
-        var body = await OwnerScalarAsync<string>(
-            """
-            select p.prosrc
-              from pg_catalog.pg_proc p
-              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
-            """);
+        var body = await OwnerScalarAsync<string>(RevokeBodySql);
 
         body.ShouldContain("insert into public.audit_log", Case.Sensitive);
         body.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive);
@@ -375,14 +386,231 @@ public sealed class MigrationTests : SessionHardeningTestBase
         await Fixture.SeedAsync(migration, [], Token);
         await Fixture.SeedAsync(migration, [], Token);
 
-        (await DefinerSignatureAsync("evidgate_resolve", "session_revoke_one"))
-            .ShouldBe("true|evidgate_owner|search_path=\"\"", "a re-apply keeps the definer hygiene");
+        await AssertRevokeDefinerAsync("a re-apply keeps the definer hygiene and its bounded wait");
         (await HasExecuteAsync("evidgate_app", "evidgate_resolve", "session_revoke_one"))
             .ShouldBeTrue("the re-stated grant still names the app role");
     }
 
+    /// <summary>
+    /// QA-F3: the upgrade PATH, not only the file. A database that sat at 0049 already holds the org's
+    /// application-written chain, so 0050 has to be a pure definition change over it: 0048's body (what a 0049
+    /// database runs, re-stated from the shipped file because the harness migrates straight to head) is
+    /// replaced, no privilege moves, every existing row still verifies, and the next admin revoke continues
+    /// the SAME chain at <c>tip + 1</c>.
+    /// </summary>
+    [Fact]
+    public async Task The_Upgrade_Over_A_Populated_Chain_Keeps_It_Verifying_And_Appends_At_The_Tip()
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "tenant_admin", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var memberTicket = await CreateSessionAsync(member, clock);
+
+        // 1. The chain the APPLICATION wrote before the upgrade, through the real writer.
+        var writer = CreateWriter();
+        await writer.WriteAsync(new IdentityAuditEvent(IdentityAuditActions.Login, member, "google"), [org], Token);
+        await writer.WriteAsync(new IdentityAuditEvent(IdentityAuditActions.Link, member, "github"), [org], Token);
+
+        (await VerifyAsync(org)).ShouldBeNull("the application chain is whole before the upgrade");
+
+        var before = await ChainAsync(org);
+        before.Select(row => row.Seq).ShouldBe([1L, 2L], "two application rows are the pre-upgrade chain");
+
+        // 2. 0049's state: the revoke definer still carries 0048's body, which appends nothing.
+        await Fixture.SeedAsync(PredecessorRevokeBody(), [], Token);
+
+        (await OwnerScalarAsync<string>(RevokeBodySql))
+            .ShouldNotContain("insert into public.audit_log", Case.Sensitive,
+                "the predecessor body re-stated above is what a database migrated to 0049 runs");
+
+        var grantsAt0049 = await RevokeGrantsAsync();
+
+        // 3. The upgrade itself, over the populated chain.
+        await Fixture.SeedAsync(
+            await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, MigrationFile), Token),
+            [],
+            Token);
+
+        (await RevokeGrantsAsync()).ShouldBe(grantsAt0049,
+            "0050 re-states 0048's grants, so the upgrade moves no privilege");
+        await AssertRevokeDefinerAsync("the upgraded definer carries 0050's posture");
+
+        (await ChainAsync(org)).ShouldBe(before, "the upgrade touches no row");
+        (await VerifyAsync(org)).ShouldBeNull("the chain written before the upgrade still verifies after it");
+
+        // 4. The first admin revoke on the upgraded definer extends the SAME chain.
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+            .ShouldBe(SessionRouteStatus.Done);
+
+        var after = await ChainAsync(org);
+
+        after.Select(row => row.Seq).ShouldBe([1L, 2L, 3L], "seq = tip + 1: the upgrade did not restart the chain");
+        after[2].Action.ShouldBe("auth.session_revoke_admin", "the appended row is the administrative act");
+        after[2].PrevHash.ShouldBe(after[1].EntryHash, "the new row links onto the tip the application wrote");
+        (await VerifyAsync(org)).ShouldBeNull("the definer's row verifies with the production verifier");
+    }
+
+    /// <summary>
+    /// 0050's posture of the revoke definer, in one place: still a <c>SECURITY DEFINER</c> owned by
+    /// <c>evidgate_owner</c>, still pinned to the empty <c>search_path</c> (TL T80), plus exactly one more
+    /// function setting — the writer's bounded wait (<c>AuditTrail.cs</c> <c>AuditSql.LockTimeout</c>, 2000 ms).
+    /// The values come from <c>pg_proc.proconfig</c> and are compared quote-stripped, because PostgreSQL may
+    /// spell a numeric value as <c>"2000"</c>.
+    /// </summary>
+    /// <param name="because">The failure message, phrased for the case that asserts the posture.</param>
+    private async Task AssertRevokeDefinerAsync(string because)
+    {
+        (await DefinerSignatureAsync("evidgate_resolve", "session_revoke_one"))
+            .ShouldStartWith("true|evidgate_owner|", Case.Sensitive, because);
+
+        var settings = await RevokeSettingsAsync();
+
+        settings.Select(setting => setting.Name).ShouldBe(["search_path", "lock_timeout"],
+            $"{because}: the revoke carries the pinned search path and the bounded wait, and nothing else");
+        settings[0].Value.ShouldBeEmpty($"{because}: `search_path` is pinned to the empty string");
+        BoundedWaitSettings.ShouldContain(settings[1].Value,
+            $"{because}: the writer's 2000 ms bound (AuditTrail.cs AuditSql.LockTimeout), whatever unit the "
+            + "catalogue kept, so a busy org answers 55P03");
+    }
+
+    /// <summary>The revoke definer's configured settings, as name/value pairs read from <c>pg_proc.proconfig</c>.</summary>
+    private async Task<IReadOnlyList<(string Name, string Value)>> RevokeSettingsAsync()
+    {
+        var configuration = await OwnerScalarAsync<string>(
+            """
+            select array_to_string(p.proconfig, ',')
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """);
+
+        return configuration
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(entry => entry.Split('=', 2))
+            .Select(parts => (parts[0], parts.Length > 1 ? parts[1].Trim('"', '\'') : string.Empty))
+            .ToArray();
+    }
+
     /// <summary>0050, the file this case re-applies; it is the additive half of F55.</summary>
     private const string MigrationFile = "0050_identity_session_revoke_audit.sql";
+
+    /// <summary>The migration 0050 supersedes for this one function: the body a database at 0049 runs.</summary>
+    private const string PredecessorMigrationFile = "0048_identity_session_routes.sql";
+
+    /// <summary>The revoke definer's stored source, as the upgrade cases read it.</summary>
+    private const string RevokeBodySql = """
+        select p.prosrc
+          from pg_catalog.pg_proc p
+          join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+        """;
+
+    /// <summary>
+    /// The text of 0048's <c>session_revoke_one</c>, extracted from the shipped migration file so the "before"
+    /// side of the upgrade is the real definition and not a hand-kept copy. The harness migrates straight to
+    /// head, so re-stating this body is how a case reaches the state a 0049 database is in; 0050 then replaces
+    /// it exactly as the upgrade does.
+    /// </summary>
+    private static string PredecessorRevokeBody()
+    {
+        const string begin = "create or replace function evidgate_resolve.session_revoke_one(";
+        var sql = File.ReadAllText(Path.Combine(DatabaseFixture.MigrationsPath, PredecessorMigrationFile));
+
+        var start = sql.IndexOf(begin, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            throw new InvalidOperationException($"{PredecessorMigrationFile} no longer creates `{begin}`");
+        }
+
+        var bodyStart = sql.IndexOf("as $$", start, StringComparison.Ordinal) + "as $$".Length;
+        var close = sql.IndexOf("$$;", bodyStart, StringComparison.Ordinal);
+        if (bodyStart < "as $$".Length || close < 0)
+        {
+            throw new InvalidOperationException($"{PredecessorMigrationFile}: `{begin}` has no `$$;` terminator");
+        }
+
+        return sql[start..(close + "$$;".Length)];
+    }
+
+    /// <summary>
+    /// Every EXECUTE grantee of the revoke definer as <c>role:privilege</c>, owner and PUBLIC included, so an
+    /// upgrade that moves a privilege is caught by comparing the text before and after.
+    /// </summary>
+    private Task<string> RevokeGrantsAsync() =>
+        OwnerScalarAsync<string>(
+            """
+            select coalesce(string_agg(
+                     case when a.grantee = 0 then 'PUBLIC'
+                          else pg_catalog.pg_get_userbyid(a.grantee) end
+                     || ':' || a.privilege_type, ',' order by a.grantee, a.privilege_type), '')
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+              cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """);
+
+    /// <summary>One org's audit chain, oldest first: <c>seq</c>, the two hashes as hex, and the action.</summary>
+    /// <param name="orgId">The org whose chain is read.</param>
+    private async Task<IReadOnlyList<(long Seq, string PrevHash, string EntryHash, string Action)>> ChainAsync(Guid orgId)
+    {
+        var rows = await OwnerScalarAsync<string>(
+            """
+            select coalesce(string_agg(
+                     a.seq || '|' || encode(a.prev_hash, 'hex') || '|' || encode(a.entry_hash, 'hex')
+                     || '|' || a.action, E'\n' order by a.seq), '')
+              from public.audit_log a
+             where a.org_id = @org_id
+            """,
+            ("org_id", orgId));
+
+        if (rows.Length == 0)
+        {
+            return Array.Empty<(long Seq, string PrevHash, string EntryHash, string Action)>();
+        }
+
+        return rows.Split('\n')
+            .Select(line =>
+            {
+                var parts = line.Split('|');
+                return (long.Parse(parts[0], CultureInfo.InvariantCulture), parts[1], parts[2], parts[3]);
+            })
+            .ToArray();
+    }
+
+    /// <summary>Recomputes the org's chain with the production verifier, inside that org's scope.</summary>
+    /// <param name="orgId">The org whose chain is verified.</param>
+    private async Task<AuditChainFinding?> VerifyAsync(Guid orgId)
+    {
+        await using var scope = await Fixture.BeginTenantScopeAsync(orgId, readOnlyTransaction: true, cancellationToken: Token);
+
+        return await new AuditChainVerifier(scope.Db).VerifyAsync(orgId, Token);
+    }
+
+    /// <summary>The production identity writer over the harness's real scope factory and a fresh audit buffer.</summary>
+    private IdentityAuditWriter CreateWriter() =>
+        new(Fixture.Scopes, Fixture.Db, new AuditTrail());
+
+    /// <summary>A store over the app-role data source; the route statements never open the sweep connection.</summary>
+    /// <param name="clock">The clock the statements' <c>p_now</c> comes from.</param>
+    private SessionRoutesStore CreateRoutes(TimeProvider clock) =>
+        new(AppDataSource, new UnusedSweep(), clock);
+
+    /// <summary>The proof a route passes: the HMAC of the live cookie value under the current pepper.</summary>
+    /// <param name="ticket">The session the store minted.</param>
+    private static byte[] ProofOf(SessionTicket ticket) => HmacOf(Pepper, ticket.CookieValue);
+
+    /// <summary>
+    /// The sweep connection the four route statements never open: reaching it means the store called the wrong
+    /// role for a route, which is a defect and not a fallback.
+    /// </summary>
+    private sealed class UnusedSweep : IWorkerSchedDataSource
+    {
+        public ValueTask<NpgsqlConnection> OpenAsync(CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("a route statement must never open the sweep connection");
+    }
 
     /// <summary>One function's security posture: security-definer flag, owner, configured search path.</summary>
     /// <param name="schema">The schema the function lives in.</param>

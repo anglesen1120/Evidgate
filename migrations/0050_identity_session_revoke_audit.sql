@@ -58,10 +58,17 @@
 --   `new { org = orgId.ToString("D") }` (same file, :131);
 --   `hashtext('audit:' || p_org_id::text)` below is that expression: PostgreSQL renders a
 --   `uuid` as the lowercase hyphenated "D" form, so both sides hash the same text.
--- The bounded wait is the writer's too: `AuditSql.LockTimeout` (:243, `lock_timeout` 2000 ms)
--- is re-stated here, so a busy org answers `55P03` (lock_not_available) instead of parking a
--- pooled connection — and because the exception aborts this statement, the revoke rolls back
--- with it (the design's fail-closed rule: no revocation without its record).
+-- The bounded wait is the writer's too, and it is a property of the FUNCTION, not of a
+-- statement: `set lock_timeout = '2000'` sits in the header beside `set search_path = ''`,
+-- the same bound as `AuditSql.LockTimeout` (:243). A function-level GUC covers BOTH waits
+-- this body takes — the row lock of the session `update` and the org chain's advisory lock —
+-- and PostgreSQL restores the caller's value when the function exits, so it can neither leak
+-- into the caller's transaction nor depend on a statement running first (S120 review S1: a
+-- `set_config(..., true)` after the update would have left the revoke's own row-lock wait
+-- unbounded and the setting parked on the caller's transaction). A busy org therefore answers
+-- `55P03` (lock_not_available) instead of parking a pooled connection — and because the
+-- exception aborts this statement, the revoke rolls back with it (the design's fail-closed
+-- rule: no revocation without its record).
 -- The tip is read AFTER the lock and in the same transaction, so `seq = tip + 1`,
 -- `prev_hash = tip.entry_hash` and `created_at >= tip.created_at` hold against every other
 -- writer of this org. `created_at` is `clock_timestamp()` (microsecond precision, what
@@ -108,6 +115,7 @@ language plpgsql
 volatile
 security definer
 set search_path = ''
+set lock_timeout = '2000'
 as $$
 declare
   v_actor uuid;
@@ -222,10 +230,10 @@ begin
   end if;
 
   if v_admin_revoke then
-    -- The org chain is extended under the application writer's own lock and with the same
-    -- bounded wait (`AuditSql.LockTimeout` / `AuditSql.AdvisoryLock`, AuditTrail.cs:243-245).
+    -- The org chain is extended under the application writer's own lock (`AuditSql.AdvisoryLock`,
+    -- AuditTrail.cs:245), with the wait bound the header's `lock_timeout` sets for this whole call
+    -- (the same 2000 ms as `AuditSql.LockTimeout`, :243).
     -- A timeout is 55P03 and aborts this statement, so the revoke above rolls back with it.
-    perform set_config('lock_timeout', '2000', true);
     perform pg_advisory_xact_lock(hashtext('audit:' || p_org_id::text));
 
     select a.seq, a.entry_hash, a.created_at

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
@@ -312,7 +314,9 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
     /// Atomicity, bounded wait: while another transaction holds the org's audit advisory lock, the
     /// definer's append waits at most 2000 ms (<c>AuditSql.LockTimeout</c>) and then fails as
     /// <c>55P03</c>, which rolls the revoke back — a busy org refuses the administrative act instead
-    /// of ending a session it cannot record.
+    /// of ending a session it cannot record. The bound is measured, not assumed: a call that
+    /// returned <c>55P03</c> immediately (a wrong lock, a stale <c>lock_timeout</c>) or one that
+    /// parked far past the budget would both be defects of the bounded wait.
     /// </summary>
     [Fact]
     public async Task A_Held_Chain_Lock_Times_Out_And_Leaves_The_Session_Live()
@@ -325,8 +329,9 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         var adminTicket = await CreateSessionAsync(admin, clock);
         var memberTicket = await CreateSessionAsync(member, clock);
 
-        // The holder is the owner connection of the harness; the key is the writer's own
-        // (`hashtext('audit:' || <org in "D" format>)`).
+        // The holder is the owner connection of the harness; the statement and the key it hashes are
+        // the application writer's own (read out of AuditSql, not copied), so this case cannot pass
+        // against a lock the production writer does not take.
         await using var holder = new NpgsqlConnection(Fixture.OwnerConnectionString);
         await holder.OpenAsync(Token);
         await using var held = await holder.BeginTransactionAsync(Token);
@@ -334,17 +339,28 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         await using (var lockCommand = holder.CreateCommand())
         {
             lockCommand.Transaction = held;
-            lockCommand.CommandText = "select pg_advisory_xact_lock(hashtext('audit:' || @org))";
+            lockCommand.CommandText = ProductionAdvisoryLockSql();
             lockCommand.Parameters.AddWithValue("org", org.ToString("D"));
             await lockCommand.ExecuteNonQueryAsync(Token);
         }
 
         try
         {
+            var elapsed = Stopwatch.StartNew();
             var refusal = await Should.ThrowAsync<PostgresException>(
                 () => CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token).AsTask());
+            elapsed.Stop();
 
             refusal.SqlState.ShouldBe(PostgresErrorCodes.LockNotAvailable, "lock_timeout is 2000 ms, as the writer's is");
+
+            // The wait really happened, and it really was bounded: not an immediate refusal on some
+            // other condition, not a parked connection.
+            elapsed.Elapsed.TotalSeconds.ShouldBeGreaterThanOrEqualTo(
+                1.5,
+                $"the append must wait out most of its 2000 ms budget before refusing (waited {elapsed.Elapsed})");
+            elapsed.Elapsed.TotalSeconds.ShouldBeLessThanOrEqualTo(
+                8,
+                $"the append must refuse inside its bounded wait, not park (waited {elapsed.Elapsed})");
         }
         finally
         {
@@ -359,11 +375,16 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
     }
 
     /// <summary>
-    /// The two writers of one org serialise on the same advisory lock: a definer append (SQL) and an
-    /// application append (C#) started together both commit, and the chain is dense and linked.
+    /// The two writers of one org serialise on the same advisory lock, and the case PROVES the
+    /// serialisation instead of assuming it: a holder transaction takes the org's key, both writers
+    /// are started, and the test waits until both of their backends are queued on that same key
+    /// (<c>pg_locks</c>, bounded poll) before releasing it. Both then commit, the chain is dense and
+    /// linked, and the verifier accepts it — so neither writer can have read a tip the other was
+    /// about to change. A version that only started them together (the F55 round-1 shape) could
+    /// pass on a lucky interleaving; this one cannot pass unless both really waited.
     /// </summary>
     [Fact]
-    public async Task A_Definer_Append_And_An_Application_Append_In_One_Org_Both_Commit()
+    public async Task Both_Writers_Queue_On_The_Org_Lock_And_Then_Both_Commit()
     {
         var clock = ClockAt();
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
@@ -376,6 +397,26 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         var secondTicket = await CreateSessionAsync(second, clock);
 
         var routes = CreateRoutes(clock);
+
+        // The holder: the organisation's chain lock, taken with the writer's own statement and key
+        // (ProductionAdvisoryLockSql), held open for as long as this test needs it.
+        await using var holder = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await holder.OpenAsync(Token);
+        await using var held = await holder.BeginTransactionAsync(Token);
+
+        await using (var lockCommand = holder.CreateCommand())
+        {
+            lockCommand.Transaction = held;
+            lockCommand.CommandText = ProductionAdvisoryLockSql();
+            lockCommand.Parameters.AddWithValue("org", org.ToString("D"));
+            await lockCommand.ExecuteNonQueryAsync(Token);
+        }
+
+        // The probe connection is opened BEFORE the writers start, so its connect time cannot eat into
+        // their 2000 ms lock budget while the test is watching for them.
+        await using var probe = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await probe.OpenAsync(Token);
+
         var revoke = Task.Run(
             () => routes.RevokeOneAsync(ProofOf(adminTicket), firstTicket.SessionId, org, Token).AsTask());
 
@@ -402,9 +443,38 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
             },
             Token);
 
+        var queued = 0L;
+        var revokeDone = false;
+        var appendDone = false;
+        var bothBlocked = false;
+
+        try
+        {
+            // Both writers must be queued on the org's key before anything is let through. The budget
+            // stays under the writers' own 2000 ms lock_timeout: a writer that is not waiting by then
+            // is a writer that failed, not a slow one.
+            queued = await QueuedAdvisoryWaitersAsync(probe, org, expected: 2);
+
+            revokeDone = revoke.IsCompleted;
+            appendDone = append.IsCompleted;
+            bothBlocked = queued >= 2 && !revokeDone && !appendDone;
+        }
+        finally
+        {
+            // Released whatever the probe reported, so neither writer is left parked on this test.
+            await held.RollbackAsync(Token);
+        }
+
+        // Both writers were started against a HELD lock, so their outcome is only meaningful in
+        // sequence: let them finish, then judge what the probe saw and what they wrote.
         await Task.WhenAll(revoke, append);
 
-        (await revoke).ShouldBe(SessionRouteStatus.Done, "the definer's revoke committed");
+        bothBlocked.ShouldBeTrue(
+            "both writers must be queued on the org's audit lock before it is released; "
+            + $"observed {queued} queued backend(s), revoke finished at the probe: {revokeDone}, "
+            + $"append finished at the probe: {appendDone}");
+
+        (await revoke).ShouldBe(SessionRouteStatus.Done, "the definer's revoke committed once the lock was free");
 
         var chain = await RowsAsync(org);
 
@@ -419,6 +489,50 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         (await VerifyAsync(org)).ShouldBeNull("concurrent writers left one unbroken chain");
     }
 
+    /// <summary>
+    /// The monotone floor, against a skewed writer: another node's append can leave the org's tip a
+    /// day ahead of THIS database's clock (the writer keeps the floor, AuditTrail.cs:144-156). The
+    /// definer must do the same thing the writer does — <c>greatest(clock_timestamp(), tip)</c> — and
+    /// not stamp the row with its own earlier clock: the chain guard refuses a row that moves the
+    /// chain back in time, so a definer that ignored the floor would fail the whole revoke, and one
+    /// that wrote the level instant would publish a row the verifier hashes differently.
+    /// </summary>
+    [Fact]
+    public async Task A_Tip_Ahead_Of_The_Clock_Still_Takes_The_Revoke_And_Sets_The_Floor()
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "tenant_admin", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var memberTicket = await CreateSessionAsync(member, clock);
+
+        // One application row, hashed by AuditHashing and chained off the genesis hash, stamped one day
+        // ahead of this database's clock: exactly the tip a writer on a fast node leaves behind.
+        var skewed = AuditHashing.Truncate(DateTimeOffset.UtcNow.AddDays(1));
+        await SeedApplicationRowAsync(org, admin, skewed);
+
+        (await RowsAsync(org)).ShouldHaveSingleItem().CreatedAt.ShouldBe(
+            skewed,
+            "the arrangement put the tip one day ahead of the clock");
+
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+            .ShouldBe(SessionRouteStatus.Done, "a skewed tip is a floor to raise, not a reason to refuse");
+
+        var chain = await RowsAsync(org);
+
+        chain.Select(row => row.Seq).ShouldBe([1L, 2L], "the definer appended the next row of the chain");
+        chain[1].CreatedAt.ShouldBe(
+            chain[0].CreatedAt,
+            "the new row takes the tip's instant (the greatest), not this database's clock");
+        chain[1].CreatedAt.ShouldBeGreaterThan(
+            DateTimeOffset.UtcNow,
+            "keeping the floor is what proves the value came from the tip");
+
+        (await VerifyAsync(org)).ShouldBeNull("the verifier accepts the row stamped at the tip's instant");
+    }
+
     /// <summary>A store over the app-role data source; the route statements never open the sweep connection.</summary>
     /// <param name="clock">The clock the statements' <c>p_now</c> comes from.</param>
     private SessionRoutesStore CreateRoutes(TimeProvider clock) =>
@@ -427,6 +541,136 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
     /// <summary>The production identity writer over the harness's real scope factory and a fresh audit buffer.</summary>
     private IdentityAuditWriter CreateWriter() =>
         new(Fixture.Scopes, Fixture.Db, new AuditTrail());
+
+    /// <summary>
+    /// The application writer's OWN advisory-lock statement, read out of <c>AuditSql</c>
+    /// (<c>AuditTrail.cs:241-245</c>, used by <c>AuditTrail.FlushAsync</c> with
+    /// <c>new { org = orgId.ToString("D") }</c>). The type is internal to the persistence assembly and
+    /// no test assembly holds an <c>InternalsVisibleTo</c> for it, so it is read by reflection instead
+    /// of copied: a holder that took a key the production writer does not take would prove nothing.
+    /// </summary>
+    private static string ProductionAdvisoryLockSql()
+    {
+        var auditSql = typeof(AuditTrail).Assembly
+            .GetType("Evidgate.BuildingBlocks.Persistence.Audit.AuditSql", throwOnError: true)!;
+
+        var field = auditSql.GetField("AdvisoryLock", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException(
+                "AuditSql.AdvisoryLock is gone: this case must hold the application writer's own chain key, "
+                + "so re-point it at the statement the writer takes now (AuditTrail.FlushAsync)");
+
+        var statement = (string)field.GetValue(null)!;
+
+        statement.ShouldContain("pg_advisory_xact_lock", Case.Sensitive, "the field is the writer's chain lock");
+        statement.ShouldContain("@org", Case.Sensitive, "the writer binds the org as a text parameter named `org`");
+
+        return statement;
+    }
+
+    /// <summary>
+    /// Polls, on a bounded budget, for the backends of THIS test database that are queued on the org's
+    /// audit key, and returns the highest count it saw (the caller decides what the count means) — an
+    /// explicit ordering signal, never a sleep. The probe is <c>pg_locks</c> and not
+    /// <c>pg_stat_activity.wait_event</c>: another role's wait event is hidden from the harness owner
+    /// (no <c>pg_read_all_stats</c>; the reason <c>ProducerSlotQaTests</c> keys on <c>pg_locks</c>
+    /// too), while an ungranted lock row is visible.
+    /// </summary>
+    /// <param name="connection">The caller's already-open probe connection.</param>
+    /// <param name="orgId">The org whose chain lock the writers contend for.</param>
+    /// <param name="expected">How many queued backends the poll waits for.</param>
+    private static async Task<long> QueuedAdvisoryWaitersAsync(NpgsqlConnection connection, Guid orgId, int expected)
+    {
+        await using var command = connection.CreateCommand();
+
+        // The key halves: a one-argument advisory lock stores the low 32 bits of its bigint key in
+        // `objid`, with `objsubid` 1, and `hashtext` is the expression both writers hash.
+        command.CommandText =
+            """
+            select count(*)
+              from pg_locks l
+              join pg_stat_activity a on a.pid = l.pid
+             where not l.granted
+               and a.datname = current_database()
+               and l.locktype = 'advisory'
+               and l.objsubid = 1
+               and l.objid::bigint = (hashtext('audit:' || @org)::bigint & 4294967295)
+            """;
+        command.Parameters.AddWithValue("org", orgId.ToString("D"));
+
+        // Under the writers' own 2000 ms lock_timeout (AuditSql.LockTimeout) on purpose: once that
+        // budget is spent they fail instead of waiting, so a longer poll could only ever watch a run in
+        // which nobody waited.
+        var budget = TimeSpan.FromMilliseconds(1800);
+        var elapsed = Stopwatch.StartNew();
+        var highest = 0L;
+
+        while (elapsed.Elapsed < budget)
+        {
+            var waiting = (long)(await command.ExecuteScalarAsync(Token))!;
+            highest = Math.Max(highest, waiting);
+            if (highest >= expected)
+            {
+                return highest;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(15), Token);
+        }
+
+        return highest;
+    }
+
+    /// <summary>
+    /// One row written the way the application writer writes it — <see cref="AuditHashing.EntryHash"/>
+    /// over the fourteen canonical fields, <c>seq</c> 1 off the genesis hash — but inserted through the
+    /// owner seam at an EXPLICIT instant, so a chain whose tip runs ahead of this database's clock can
+    /// be arranged without touching either clock.
+    /// </summary>
+    /// <param name="orgId">The org whose chain gains the row.</param>
+    /// <param name="actorId">The actor the row names.</param>
+    /// <param name="createdAt">The instant to stamp, already at microsecond precision.</param>
+    private async Task SeedApplicationRowAsync(Guid orgId, Guid actorId, DateTimeOffset createdAt)
+    {
+        var row = new AuditRow(
+            Guid.CreateVersion7(),
+            orgId,
+            1,
+            AuditActorTypes.User,
+            actorId.ToString("D"),
+            IdentityAuditActions.Login,
+            ObjectType: "provider",
+            ObjectId: "google",
+            BeforeHash: null,
+            AfterHash: null,
+            RequestId: null,
+            TraceId: null,
+            Metadata: new Dictionary<string, string> { ["status"] = "ok" },
+            PrevHash: AuditHashing.Genesis,
+            EntryHash: [],
+            CreatedAt: createdAt);
+
+        var entryHash = AuditHashing.EntryHash(row.PrevHash, row);
+
+        await OwnerExecuteAsync(
+            """
+            insert into public.audit_log (id, org_id, seq, actor_type, actor_id, action, object_type, object_id,
+                                          before_hash, after_hash, request_id, trace_id, metadata,
+                                          prev_hash, entry_hash, created_at)
+            values (@id, @org_id, @seq, @actor_type, @actor_id, @action, @object_type, @object_id,
+                    null, null, null, null, @metadata::jsonb, @prev_hash, @entry_hash, @created_at)
+            """,
+            ("id", row.Id),
+            ("org_id", row.OrgId),
+            ("seq", row.Seq),
+            ("actor_type", row.ActorType),
+            ("actor_id", row.ActorId),
+            ("action", row.Action),
+            ("object_type", (object)row.ObjectType!),
+            ("object_id", (object)row.ObjectId!),
+            ("metadata", JsonSerializer.Serialize(row.Metadata)),
+            ("prev_hash", row.PrevHash),
+            ("entry_hash", entryHash),
+            ("created_at", row.CreatedAt));
+    }
 
     /// <summary>The <c>target_user_id</c> of a stored row's metadata, parsed the way the verifier parses it.</summary>
     /// <param name="metadataJson">The row's metadata as JSON text.</param>
@@ -459,6 +703,7 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
                  , coalesce(metadata, '{}'::jsonb)::text as "MetadataJson"
                  , prev_hash as "PrevHash"
                  , entry_hash as "EntryHash"
+                 , created_at as "CreatedAt"
               from public.audit_log
              where org_id = @org_id
              order by seq
@@ -545,6 +790,7 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
     /// <param name="MetadataJson">The stored metadata, as JSON text.</param>
     /// <param name="PrevHash">The previous row's entry hash.</param>
     /// <param name="EntryHash">This row's entry hash.</param>
+    /// <param name="CreatedAt">The instant the row is stamped with (part of the hash).</param>
     private sealed record StoredRow(
         long Seq,
         Guid OrgId,
@@ -555,5 +801,6 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         string? ObjectId,
         string MetadataJson,
         byte[] PrevHash,
-        byte[] EntryHash);
+        byte[] EntryHash,
+        DateTimeOffset CreatedAt);
 }

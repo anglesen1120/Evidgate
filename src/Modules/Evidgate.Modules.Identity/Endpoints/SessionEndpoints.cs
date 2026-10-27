@@ -208,11 +208,17 @@ internal static class SessionEndpoints
     /// </para>
     /// <para>
     /// <b>The revoke and its row commit or roll back together (F55).</b> Any fault inside the definer — the org's
-    /// busy chain, a lock timeout, an <c>audit_log</c> refusal — aborts the whole call, so the addressed session
-    /// stays live: there is no committed-but-unrecorded revoke, and a caller that disconnects after the write
-    /// cannot drop the record of it. The database fault is answered 503 <c>unavailable</c> — the module's own
-    /// mapping, as the session stores already answer an outage — and nothing here logs: the session id is a
-    /// credential value under 02.3.2 D9, and with the revoke rolled back there is no committed action to reconcile.
+    /// busy chain, a lock timeout (<c>55P03</c>), a deadlock (<c>40P01</c>), an <c>audit_log</c> refusal — aborts the
+    /// whole call, so the addressed session stays live: there is no committed-but-unrecorded revoke, and a caller
+    /// that disconnects after the write cannot drop the record of it. The fault reaches this handler as an
+    /// <see cref="NpgsqlException"/> and, when the request itself was not cancelled, the handler's own catch answers
+    /// 503 <c>unavailable</c>: <c>SessionRoutesStore</c> — the store behind the revoke statement — catches nothing,
+    /// so this catch is that statement's mapping (the authenticator's store already maps the faults of its own
+    /// statement, before this code runs); a fault on a request the caller abandoned keeps propagating, because a
+    /// caller that hung up is not an outage. Nothing here logs: 02.3.2 D-S85-D9 keeps the session id out of every log
+    /// line, and the id is not itself a credential (the row this call writes stores it as its <c>object_id</c>, a
+    /// reference to the revoked session, while the value the browser proved — the cookie — stays out of the row and
+    /// the logs alike); with the revoke rolled back there is also no committed action to reconcile.
     /// </para>
     /// </remarks>
     private static async Task<Result> RevokeOneAsync(
@@ -252,8 +258,10 @@ internal static class SessionEndpoints
         }
         catch (NpgsqlException) when (!cancellationToken.IsCancellationRequested)
         {
-            // The definer aborted: the row is still live and, on the admin path, no audit row exists either. There
-            // is nothing committed to reconcile, so the fault is the module's usual 503 and takes no log line.
+            // The definer aborted: a lock timeout (55P03), a deadlock (40P01) or the audit insert's own refusal.
+            // The row is still live and, on the admin path, no audit row exists either. There is nothing committed
+            // to reconcile, so this catch is what answers 503 — SessionRoutesStore maps nothing — and it takes no
+            // log line.
             return Result.Failure(SessionErrors.Unavailable);
         }
 
