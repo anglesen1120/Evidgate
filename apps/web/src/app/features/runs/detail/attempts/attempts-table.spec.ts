@@ -1,8 +1,10 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { groupAttempts, paginateAttemptGroups } from './attempt-groups';
-import type { AttemptRow, AttemptStatus } from './attempt-summary';
+import type { AttemptRow } from './attempt-summary';
 import { AttemptsTableComponent } from './attempts-table.component';
+
+type AttemptStatus = 'passed' | 'failed' | 'skipped' | 'timed_out' | 'error' | 'blocked';
 
 /** Presentation fixtures only, not wire responses: attempts have no current OpenAPI read. */
 function row(overrides: Partial<AttemptRow> = {}): AttemptRow {
@@ -167,14 +169,21 @@ describe('AttemptsTableComponent', () => {
       expect(root.querySelector('[data-attempt-duration]')?.textContent?.trim()).toBe(formatted);
     },
   );
-  it('distinguishes unavailable artifacts from known zero', async () => {
-    const { root } = await render([
-      row({ artifactCount: null }),
-      row({ attemptNo: 2, artifactCount: 0 }),
-    ]);
-    const cells = root.querySelectorAll('[data-attempt-artifacts]');
-    expect(cells[0]?.textContent?.trim()).toBe('Status unavailable');
-    expect(cells[1]?.textContent?.trim()).toBe('0');
+  it.each([null, undefined, NaN, -3, Infinity, 1.5])(
+    'renders unavailable artifacts for invalid count %s, distinct from known zero',
+    async (artifactCount) => {
+      const attempt = { ...row(), artifactCount } as AttemptRow;
+      const { root } = await render([attempt, row({ attemptNo: 2, artifactCount: 0 })]);
+      const cells = root.querySelectorAll('[data-attempt-artifacts]');
+      expect(cells[0]?.textContent?.trim()).toBe('Status unavailable');
+      expect(cells[1]?.textContent?.trim()).toBe('0');
+    },
+  );
+  it('renders a known positive artifact count without an unavailable pill', async () => {
+    const { root } = await render([row({ artifactCount: 2 })]);
+    const cell = root.querySelector('[data-attempt-artifacts]')!;
+    expect(cell.textContent?.trim()).toBe('2');
+    expect(cell.querySelector('app-status-pill')).toBeNull();
   });
 
   it('shows fail then pass in attempt order despite out-of-order input, with no healing pin', async () => {
@@ -263,6 +272,12 @@ describe('AttemptsTableComponent', () => {
     expect(root.querySelectorAll('thead th[scope="col"]')).toHaveLength(5);
     expect(root.querySelectorAll('tbody th[scope="row"]')).toHaveLength(1);
     expect(root.querySelector('.table-scroll')?.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe('attempts-title');
+    expect(root.querySelector('#attempts-title')?.textContent).toBe('Attempts');
+    expect(root.querySelector('section')?.hasAttribute('aria-label')).toBe(false);
+    expect(root.querySelector('[role="region"]')?.getAttribute('aria-label')).toBe(
+      'Attempts table',
+    );
   });
 
   it('bounds 120 execution groups to 50 rows, pages both ways and resets on new input', async () => {
@@ -273,6 +288,8 @@ describe('AttemptsTableComponent', () => {
     const next = () => root.querySelector<HTMLButtonElement>('[data-attempts-next]')!;
     const previous = () => root.querySelector<HTMLButtonElement>('[data-attempts-previous]')!;
     expect(rows(root)).toHaveLength(50);
+    expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe('Attempts pagination');
+    expect(root.querySelector('[role="status"]')?.hasAttribute('aria-live')).toBe(false);
     expect(previous().disabled).toBe(true);
     next().click();
     await fixture.whenStable();
@@ -290,6 +307,31 @@ describe('AttemptsTableComponent', () => {
     await fixture.whenStable();
     expect(rows(root)[0]?.textContent).toContain('execution-0');
     expect(previous().disabled).toBe(true);
+  });
+  it('resets synchronously when a later page shrinks to fewer pages or a single row', async () => {
+    const input = Array.from({ length: 120 }, (_, index) =>
+      row({ executionKey: `execution-${index}` }),
+    );
+    const { root, fixture } = await render(input);
+    for (let page = 0; page < 2; page++) {
+      root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
+      await fixture.whenStable();
+    }
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 3 / 3');
+
+    fixture.componentRef.setInput('attempts', input.slice(0, 51));
+    fixture.detectChanges();
+    expect(rows(root)).toHaveLength(50);
+    expect(rows(root)[0]?.textContent).toContain('execution-0');
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 1 / 2');
+
+    root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
+    await fixture.whenStable();
+    fixture.componentRef.setInput('attempts', input.slice(0, 1));
+    fixture.detectChanges();
+    expect(rows(root)).toHaveLength(1);
+    expect(rows(root)[0]?.textContent).toContain('execution-0');
+    expect(root.querySelector('nav')).toBeNull();
   });
   it('bounds a 5000-attempt healing chain and keeps the original failure pinned on continuation', async () => {
     const input = Array.from({ length: 5000 }, (_, index) =>

@@ -1,6 +1,4 @@
 /** Presentation input only; RunStateDto does not expose attempts on the current wire contract. */
-export type AttemptStatus = 'passed' | 'failed' | 'skipped' | 'timed_out' | 'error' | 'blocked';
-
 export interface AttemptRow {
   executionKey: string;
   attemptNo: number;

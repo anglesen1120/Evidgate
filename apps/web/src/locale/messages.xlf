@@ -2670,6 +2670,8 @@
       <trans-unit id="runs.detail.copied" datatype="html"><source>Manifest hash copied</source></trans-unit>
       <trans-unit id="runs.detail.copy-failed" datatype="html"><source>Copy failed. Select and copy the full hash shown above.</source></trans-unit>
       <trans-unit id="runs.detail.attempts.title" datatype="html"><source>Attempts</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.scroll-region" datatype="html"><source>Attempts table</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.pagination" datatype="html"><source>Attempts pagination</source></trans-unit>
       <trans-unit id="runs.detail.attempts.execution" datatype="html"><source>Execution</source></trans-unit>
       <trans-unit id="runs.detail.attempts.attempt" datatype="html"><source>Attempt</source></trans-unit>
       <trans-unit id="runs.detail.attempts.raw" datatype="html"><source>Raw status</source></trans-unit>

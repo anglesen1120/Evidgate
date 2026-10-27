@@ -22,7 +22,7 @@ export const RunDetailStore = signalStore(
     status: 'idle',
     loadError: null,
   }),
-  // PANEL-CHOICE A: no attempts read exists on the wire; never infer rows from run state.
+  // D-S111-Q1 / D-S103-Q1: no attempts read exists on the wire; never infer rows from run state.
   withComputed(() => ({ attempts: computed<AttemptRow[] | null>(() => null) })),
   withMethods((store) => {
     const data = inject(RunsDataService);
@@ -39,7 +39,7 @@ export const RunDetailStore = signalStore(
         try {
           const run = await data.get(runId);
           if (read !== generation) return;
-          // PANEL-CHOICE A / D-S103-Q1: absence on the wire is unavailable, never inferred.
+          // D-S111-Q1 / D-S103-Q1: absence on the wire is unavailable, never inferred.
           patchState(store, { run, manifest: UNAVAILABLE_MANIFEST, status: 'ready' });
         } catch (failure: unknown) {
           if (read !== generation) return;

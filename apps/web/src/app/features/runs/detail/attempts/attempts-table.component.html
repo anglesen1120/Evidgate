@@ -1,11 +1,11 @@
-<section class="attempts-panel" [attr.aria-label]="copy.title">
-  <h2>{{ copy.title }}</h2>
+<section class="attempts-panel" aria-labelledby="attempts-title">
+  <h2 id="attempts-title">{{ copy.title }}</h2>
   @if (attempts() === null) {
     <p data-attempts-unavailable><app-status-pill [tone]="'neutral'" [label]="''" /></p>
   } @else if (attempts()?.length === 0) {
     <app-empty-pattern [title]="copy.empty" />
   } @else {
-    <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="copy.title">
+    <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="copy.scrollRegion">
       <table>
         <caption>
           {{
@@ -67,7 +67,7 @@
                   }
                 </td>
                 <td class="numeric" data-attempt-artifacts>
-                  @if (attempt.artifactCount !== null) {
+                  @if (knownArtifactCount(attempt.artifactCount)) {
                     {{ attempt.artifactCount }}
                   } @else {
                     <app-status-pill [tone]="'neutral'" [label]="''" />
@@ -80,7 +80,7 @@
       </table>
     </div>
     @if (pages().length > 1) {
-      <nav class="pagination" [attr.aria-label]="copy.title">
+      <nav class="pagination" [attr.aria-label]="copy.pagination">
         <button
           type="button"
           data-attempts-previous
@@ -89,9 +89,7 @@
         >
           {{ copy.previous }}
         </button>
-        <p role="status" [attr.aria-live]="'polite'">
-          {{ copy.page }} {{ page() + 1 }} / {{ pages().length }}
-        </p>
+        <p role="status">{{ copy.page }} {{ page() + 1 }} / {{ pages().length }}</p>
         <button
           type="button"
           data-attempts-next

@@ -2665,6 +2665,8 @@
       <trans-unit id="runs.detail.copied" datatype="html"><source>Manifest hash copied</source><target>Đã sao chép mã băm bản kê</target></trans-unit>
       <trans-unit id="runs.detail.copy-failed" datatype="html"><source>Copy failed. Select and copy the full hash shown above.</source><target>Không thể sao chép. Hãy chọn và sao chép toàn bộ mã băm ở trên.</target></trans-unit>
       <trans-unit id="runs.detail.attempts.title" datatype="html"><source>Attempts</source><target>Các lần thử</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.scroll-region" datatype="html"><source>Attempts table</source><target>Bảng các lần thử</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.pagination" datatype="html"><source>Attempts pagination</source><target>Phân trang các lần thử</target></trans-unit>
       <trans-unit id="runs.detail.attempts.execution" datatype="html"><source>Execution</source><target>Lượt thực thi</target></trans-unit>
       <trans-unit id="runs.detail.attempts.attempt" datatype="html"><source>Attempt</source><target>Lần thử</target></trans-unit>
       <trans-unit id="runs.detail.attempts.raw" datatype="html"><source>Raw status</source><target>Trạng thái gốc</target></trans-unit>

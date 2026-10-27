@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
 import {
   StatusPillComponent,
   type StatusTone,
@@ -21,10 +21,12 @@ export class AttemptsTableComponent {
   protected readonly pages = computed(() =>
     paginateAttemptGroups(groupAttempts(this.attempts() ?? [])),
   );
-  protected readonly page = signal(0);
+  protected readonly page = linkedSignal({ source: this.attempts, computation: () => 0 });
   protected readonly visibleGroups = computed(() => this.pages()[this.page()] ?? []);
   protected readonly copy = {
     title: $localize`:@@runs.detail.attempts.title:Attempts`,
+    scrollRegion: $localize`:@@runs.detail.attempts.scroll-region:Attempts table`,
+    pagination: $localize`:@@runs.detail.attempts.pagination:Attempts pagination`,
     execution: $localize`:@@runs.detail.attempts.execution:Execution`,
     attempt: $localize`:@@runs.detail.attempts.attempt:Attempt`,
     raw: $localize`:@@runs.detail.attempts.raw:Raw status`,
@@ -40,13 +42,6 @@ export class AttemptsTableComponent {
     previous: $localize`:@@runs.detail.attempts.previous:Previous page`,
     next: $localize`:@@runs.detail.attempts.next:Next page`,
   };
-
-  constructor() {
-    effect(() => {
-      this.attempts();
-      this.page.set(0);
-    });
-  }
 
   protected tone(status: string): StatusTone {
     switch (status) {
@@ -65,6 +60,10 @@ export class AttemptsTableComponent {
 
   protected knownStatus(status: string): boolean {
     return ['passed', 'failed', 'skipped', 'timed_out', 'error', 'blocked'].includes(status);
+  }
+
+  protected knownArtifactCount(count: number | null | undefined): boolean {
+    return typeof count === 'number' && Number.isInteger(count) && count >= 0;
   }
 
   protected duration(milliseconds: number | null | undefined): string | null {
