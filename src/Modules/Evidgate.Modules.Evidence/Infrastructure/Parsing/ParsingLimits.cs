@@ -1,7 +1,6 @@
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Contracts;
-using Microsoft.AspNetCore.Http;
 
 namespace Evidgate.Modules.Evidence.Infrastructure.Parsing;
 
@@ -69,6 +68,14 @@ internal static class ParsingLimits
 /// </summary>
 internal static class ParsingFailure
 {
+    /// <summary>
+    /// 413 <c>payload_too_large</c>'s status, as the literal the 00 §9.2 envelope carries. It is not
+    /// <c>Microsoft.AspNetCore.Http.StatusCodes.Status413PayloadTooLarge</c> because this file is also compiled
+    /// into the <c>Evidgate.Parser</c> child (06.3.6-T1.2), which links the profile sources and must not reference
+    /// the ASP.NET Core stack at all (06.3.6 AC1).
+    /// </summary>
+    private const int PayloadTooLargeStatus = 413;
+
     /// <summary>The failure for one reason: 422 <c>artifact_invalid</c>, or 413 <c>payload_too_large</c> for the size cap.</summary>
     /// <param name="reason">One of <see cref="ParsingFailureReason"/>.</param>
     /// <returns>The 00 §9.2 failure the endpoint filter renders.</returns>
@@ -77,7 +84,7 @@ internal static class ParsingFailure
             ? new Error(
                 ParsingErrorCode.PayloadTooLarge,
                 Message(reason),
-                StatusCodes.Status413PayloadTooLarge,
+                PayloadTooLargeStatus,
                 Retryable: false,
                 Details: [new ErrorDetail("content", reason)])
             : Error.Unprocessable(
