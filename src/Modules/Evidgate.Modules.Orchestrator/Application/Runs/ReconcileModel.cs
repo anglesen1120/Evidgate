@@ -10,7 +10,12 @@ internal static class ReconcileMissingCodes
     /// <summary>A planned shard whose producer slot is not closed (it never finalized).</summary>
     public const string MissingShard = "missing_shard";
 
-    /// <summary>A closed shard whose acknowledged events disagree with its declared <c>(last_sequence, count)</c>.</summary>
+    /// <summary>
+    /// A closed shard whose acknowledged events disagree with its declared <c>(last_sequence, count)</c>: a count other
+    /// than the declared one, an event past the declared high-water mark, a highest stored sequence other than the
+    /// declared last sequence, or a hole in <c>[min stored sequence, declared last sequence]</c>
+    /// (<c>contracts/events/ordering.md</c> §3). One entry per shard however many of those bounds it breaks.
+    /// </summary>
     public const string CountMismatch = "count_mismatch";
 
     /// <summary>In a closed shard: a <c>test.finished</c> with a null <c>normalized_status</c>, or a <c>test.started</c> attempt with no <c>test.finished</c>.</summary>
@@ -35,16 +40,21 @@ internal sealed record PlannedShard(
 /// round trip). Every stored event counts as acknowledged, whatever its <c>late</c>/<c>after_cancel</c>/<c>stale</c> flag.
 /// </summary>
 /// <param name="ProducerId">The producer id.</param>
-/// <param name="TotalCount">All stored events of the producer for the run.</param>
 /// <param name="CountUpToDeclared">Events with <c>sequence &lt;= declared_last_sequence</c> (0 for an open shard).</param>
 /// <param name="CountBeyondDeclared">Events with <c>sequence &gt; declared_last_sequence</c> (all events for an open shard).</param>
-/// <param name="MinSequence">Lowest stored sequence; null when the producer has no event.</param>
-/// <param name="MaxSequence">Highest stored sequence; null when the producer has no event.</param>
+/// <param name="MinSequence">
+/// Lowest stored sequence; null when the producer has no event. Together with the declared high-water mark it is the
+/// base of the gap rule: the sequences in <c>[MinSequence, declared_last_sequence]</c> must all be stored
+/// (<c>contracts/events/ordering.md</c> §3), and a hole below it is an unwritten prefix that is never reported.
+/// </param>
+/// <param name="MaxSequence">
+/// Highest stored sequence; null when the producer has no event. A closed shard that declared at least one event must
+/// end exactly on its declared high-water mark, so this is compared too (a count alone cannot see where it ends).
+/// </param>
 /// <param name="UnknownStatusCount"><c>test.finished</c> events with a null <c>normalized_status</c>.</param>
-/// <param name="UnfinishedStartedCount">Distinct <c>(execution_key, attempt_no)</c> of the producer that have a <c>test.started</c> event and no <c>test.finished</c> event: a status that was never reported (COORDINATOR-DECISION S119, case b of <c>unknown_status</c>).</param>
+/// <param name="UnfinishedStartedCount">Distinct <c>(execution_key, attempt_no)</c> of the producer that have a <c>test.started</c> event and no <c>test.finished</c> event from any producer of the run: a status that was never reported (COORDINATOR-DECISION S119, case b of <c>unknown_status</c>).</param>
 internal sealed record ObservedShard(
     string ProducerId,
-    long TotalCount,
     long CountUpToDeclared,
     long CountBeyondDeclared,
     long? MinSequence,

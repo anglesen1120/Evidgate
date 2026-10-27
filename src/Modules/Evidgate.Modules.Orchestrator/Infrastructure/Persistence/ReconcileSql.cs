@@ -54,60 +54,65 @@ internal static class ReconcileSql
         """;
 
     /// <summary>
-    /// The observed evidence, in <b>one</b> statement: the run's <c>event</c> rows are read once (the
-    /// <c>event_run_producer_sequence_key</c> index covers <c>org_id, run_id</c> as its leading columns) and then
-    /// aggregated two ways over that one materialised set — counts per producer, and per-<c>(execution_key, attempt_no)</c>
-    /// attempt flags for the <c>unknown_status</c> evidence. Every stored event counts as acknowledged, whatever its
-    /// <c>late</c>/<c>after_cancel</c>/<c>stale</c> flag; no payload column is read.
+    /// The observed evidence, in <b>one</b> statement and with no raw copy of the run's rows: the per-producer counts and
+    /// sequence bounds are aggregated straight from <c>public.event</c> joined to the run's slots (both branches served
+    /// by <c>event_run_producer_sequence_key</c>, whose leading columns are <c>org_id, run_id</c>), and the unfinished
+    /// attempts are aggregated from the run's <c>test.started</c> rows alone. Every stored event counts as
+    /// acknowledged, whatever its <c>late</c>/<c>after_cancel</c>/<c>stale</c> flag; no payload column is read and no
+    /// <c>org_id</c> predicate is left implicit.
     /// <para>
-    /// The aggregate starts from the run's slots and joins the events to them, so every slot answers exactly one row
-    /// (a producer that stored no event answers zeros and NULL min/max, which the comparer treats like an absent row).
-    /// <c>count_up_to_declared</c> is 0 for an open slot because its declaration is NULL; <c>count_beyond_declared</c> is
-    /// every event for an open slot, matching <see cref="Application.Runs.ObservedShard"/>. <c>unfinished_started_count</c>
-    /// counts the distinct attempts that have a <c>test.started</c> and no <c>test.finished</c> event — a status that was
-    /// never reported (COORDINATOR-DECISION S119, case b of <c>unknown_status</c>).
+    /// The aggregate starts from the run's slots, so every slot answers exactly one row (a producer that stored no event
+    /// answers zeros and NULL min/max, which the comparer reads like an absent row). <c>count_up_to_declared</c> is 0
+    /// for an open slot because its declaration is NULL; <c>count_beyond_declared</c> is every event for an open slot,
+    /// matching <see cref="Application.Runs.ObservedShard"/>.
+    /// </para>
+    /// <para>
+    /// <c>unfinished_started_count</c> counts the distinct <c>(execution_key, attempt_no)</c> attempts that have a
+    /// <c>test.started</c> row and no <c>test.finished</c> row — a status that was never reported (COORDINATOR-DECISION
+    /// S119, case b of <c>unknown_status</c>). The finish is looked up across <b>all</b> producers of the org and run, so
+    /// a finish another producer reported clears the attempt (the status is the run's, not the shard's), while the count
+    /// is attributed to the producer of the started row. Only <c>type = 'test.started'</c> rows are candidates: an
+    /// unrelated type never becomes an unfinished attempt.
     /// </para>
     /// </summary>
     internal const string ObservedEvents = """
-        with run_events as materialized (
-            select e.producer_id as producer_id,
-                   e.sequence as sequence,
-                   e.type as type,
-                   e.normalized_status as normalized_status,
-                   e.execution_key as execution_key,
-                   e.attempt_no as attempt_no
-              from public.event e
-             where e.org_id = @org_id and e.run_id = @run_id
-        ),
-        attempts as (
-            select r.producer_id as producer_id,
-                   r.execution_key as execution_key,
-                   r.attempt_no as attempt_no,
-                   bool_or(r.type = 'test.started') as started,
-                   bool_or(r.type = 'test.finished') as finished
-              from run_events r
-             group by r.producer_id, r.execution_key, r.attempt_no
+        with grouped as (
+            select s.producer_id as producer_id,
+                   count(e.sequence) filter (where e.sequence <= s.declared_last_sequence) as count_up_to_declared,
+                   count(e.sequence) filter (where s.declared_last_sequence is null or e.sequence > s.declared_last_sequence)
+                       as count_beyond_declared,
+                   min(e.sequence) as min_sequence,
+                   max(e.sequence) as max_sequence,
+                   count(e.sequence) filter (where e.type = 'test.finished' and e.normalized_status is null)
+                       as unknown_status_count
+              from public.producer_slot s
+              left join public.event e
+                     on e.org_id = @org_id and e.run_id = @run_id and e.producer_id = s.producer_id
+             where s.org_id = @org_id and s.run_id = @run_id
+             group by s.producer_id, s.declared_last_sequence
         ),
         unfinished as (
-            select a.producer_id as producer_id,
-                   count(*) as unfinished_started
-              from attempts a
-             where a.started and not a.finished
-             group by a.producer_id
+            select st.producer_id as producer_id,
+                   count(distinct (st.execution_key, st.attempt_no)) as unfinished_started_count
+              from public.event st
+             where st.org_id = @org_id and st.run_id = @run_id and st.type = 'test.started'
+               and not exists (
+                   select 1
+                     from public.event f
+                    where f.org_id = @org_id and f.run_id = @run_id
+                      and f.type = 'test.finished'
+                      and f.execution_key = st.execution_key
+                      and f.attempt_no = st.attempt_no)
+             group by st.producer_id
         )
-        select s.producer_id as producer_id,
-               count(e.sequence) as total_count,
-               count(e.sequence) filter (where e.sequence <= s.declared_last_sequence) as count_up_to_declared,
-               count(e.sequence) filter (where s.declared_last_sequence is null or e.sequence > s.declared_last_sequence)
-                   as count_beyond_declared,
-               min(e.sequence) as min_sequence,
-               max(e.sequence) as max_sequence,
-               count(*) filter (where e.type = 'test.finished' and e.normalized_status is null) as unknown_status_count,
-               coalesce(u.unfinished_started, 0) as unfinished_started_count
-          from public.producer_slot s
-          left join run_events e on e.producer_id = s.producer_id
-          left join unfinished u on u.producer_id = s.producer_id
-         where s.org_id = @org_id and s.run_id = @run_id
-         group by s.producer_id, s.declared_last_sequence, u.unfinished_started
+        select g.producer_id as producer_id,
+               g.count_up_to_declared as count_up_to_declared,
+               g.count_beyond_declared as count_beyond_declared,
+               g.min_sequence as min_sequence,
+               g.max_sequence as max_sequence,
+               g.unknown_status_count as unknown_status_count,
+               coalesce(u.unfinished_started_count, 0) as unfinished_started_count
+          from grouped g
+          left join unfinished u on u.producer_id = g.producer_id
         """;
 }

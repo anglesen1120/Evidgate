@@ -64,7 +64,6 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             var row = observed[index];
             seen[index] = new ObservedShard(
                 row.ProducerId,
-                row.TotalCount,
                 row.CountUpToDeclared,
                 row.CountBeyondDeclared,
                 row.MinSequence,
@@ -98,8 +97,6 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
     private sealed class ObservedEventRow
     {
         public string ProducerId { get; set; } = string.Empty;
-
-        public long TotalCount { get; set; }
 
         public long CountUpToDeclared { get; set; }
 

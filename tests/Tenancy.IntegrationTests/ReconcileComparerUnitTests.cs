@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Shouldly;
 using Xunit;
@@ -6,9 +7,11 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// 05.3.2-T2.2 without a database: the pure declared-versus-observed comparer — every 00 §8.5 code it can name from
-/// event evidence, the open-shard short circuit, the fail-closed missing declaration, the ordinal reason order and the
-/// planned/closed shard counts. The database half (the one grouped aggregate, the run lock) is exercised by the
-/// reconcile integration suite.
+/// event evidence, the open-shard short circuit, the fail-closed missing declaration, the three bounds a closed shard's
+/// declaration is checked against (count, end and the contiguity rule of <c>contracts/events/ordering.md</c> §3), the
+/// ordinal reason order and the planned/closed shard counts — plus the pin that the three literals are the event-evidence
+/// subset of the closed list <c>migrations/0049</c> enforces. The database half (the one grouped aggregate, the run lock)
+/// is exercised by the reconcile integration suite.
 /// </summary>
 public sealed class ReconcileComparerUnitTests
 {
@@ -23,7 +26,7 @@ public sealed class ReconcileComparerUnitTests
                 Planned("producer-2", shardIndex: 2, declaredLastSequence: 3, declaredCount: 4),
             ],
             [
-                Observed("producer-2", total: 4, upTo: 4, max: 3),
+                Observed("producer-2", upTo: 4, max: 3),
                 Observed("producer-1"),
             ]);
 
@@ -56,15 +59,17 @@ public sealed class ReconcileComparerUnitTests
     }
 
     [Fact]
-    public void TotalCount_Alone_Is_Not_Compared()
+    public void A_Zero_Declaration_With_A_Stored_Event_Is_CountMismatch()
     {
-        // CountUpToDeclared + CountBeyondDeclared == TotalCount by construction of the aggregate, so the comparer reads
-        // the two declared boundaries only and never trusts the total on its own.
+        // A declaration of zero events matches only when nothing at all was stored, so one stored event — even the
+        // shard's own sequence 0 — is a disagreement.
         var result = ReconcileComparer.Compare(
-            [Planned("producer-1", declaredLastSequence: 0, declaredCount: 1)],
-            [Observed("producer-1", total: 99, upTo: 1)]);
+            [Planned("producer-1", declaredLastSequence: 0, declaredCount: 0)],
+            [Observed("producer-1", upTo: 1, min: 0, max: 0)]);
 
-        result.Missing.ShouldBeEmpty();
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
+        reason.Detail.ShouldBe("declared_count=0;observed=1;declared_last_sequence=0;beyond=0");
     }
 
     // ---- missing shard --------------------------------------------------------------------
@@ -74,7 +79,7 @@ public sealed class ReconcileComparerUnitTests
     {
         var result = ReconcileComparer.Compare(
             [Planned("producer-1", shardIndex: 2, closed: false, declaredLastSequence: null, declaredCount: null)],
-            [Observed("producer-1", total: 5, upTo: 5, beyond: 5, unknown: 3, unfinished: 2)]);
+            [Observed("producer-1", upTo: 5, beyond: 5, unknown: 3, unfinished: 2)]);
 
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.MissingShard);
@@ -100,9 +105,11 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Count_Short_Of_The_Declaration_Is_CountMismatch()
     {
+        // Two contiguous events (1, 2) end exactly on the declared high-water mark: the range is clean, only the count
+        // is one short of the declared three.
         var result = ReconcileComparer.Compare(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
-            [Observed("producer-1", total: 2, upTo: 2, max: 1)]);
+            [Observed("producer-1", upTo: 2, min: 1, max: 2)]);
 
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
@@ -113,10 +120,11 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Count_Over_The_Declaration_Is_CountMismatch()
     {
-        // Sequences 0, 1 and 2 fit under the declared high-water mark 5 while only 2 events were declared.
+        // Sequences 3, 4 and 5 are contiguous and end on the declared high-water mark 5, while only 2 events were
+        // declared: the declaration undercounts its own clean range.
         var result = ReconcileComparer.Compare(
             [Planned("producer-1", declaredLastSequence: 5, declaredCount: 2)],
-            [Observed("producer-1", total: 3, upTo: 3, max: 2)]);
+            [Observed("producer-1", upTo: 3, min: 3, max: 5)]);
 
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
@@ -128,11 +136,11 @@ public sealed class ReconcileComparerUnitTests
     {
         var result = ReconcileComparer.Compare(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
-            [Observed("producer-1", total: 4, upTo: 3, beyond: 1, max: 3)]);
+            [Observed("producer-1", upTo: 3, beyond: 1, max: 3)]);
 
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
-        reason.Detail.ShouldBe("declared_count=3;observed=3;declared_last_sequence=2;beyond=1");
+        reason.Detail.ShouldBe("declared_count=3;observed=3;declared_last_sequence=2;beyond=1;max_sequence=3");
     }
 
     [Fact]
@@ -145,6 +153,88 @@ public sealed class ReconcileComparerUnitTests
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
         reason.Detail.ShouldBe("declared_count=2;observed=0;declared_last_sequence=1;beyond=0");
+    }
+
+    // ---- the bounds a count cannot see (contracts/events/ordering.md §3) ------------------
+
+    [Fact]
+    public void A_Sequence_Gap_With_An_Equal_Count_Is_CountMismatch()
+    {
+        // Declared three events ending at sequence 3, stored 0, 1 and 2: the count agrees and the range still has a
+        // hole where 3 should be — the case a count-only comparison could not see.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 3, declaredCount: 3)],
+            [Observed("producer-1", upTo: 3, min: 0, max: 2)]);
+
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
+        reason.Detail.ShouldBe(
+            "declared_count=3;observed=3;declared_last_sequence=3;beyond=0;max_sequence=2;min_sequence=0;contiguous_count=4");
+        result.EventsMatch.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_Sequence_Gap_Below_The_Declared_Last_Is_CountMismatch()
+    {
+        // Declared five events ending at 5, stored 0, 1, 2, 3 and 5: the count and the end agree, but 4 was never stored.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 5, declaredCount: 5)],
+            [Observed("producer-1", upTo: 5, min: 0, max: 5)]);
+
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
+        reason.Detail.ShouldBe(
+            "declared_count=5;observed=5;declared_last_sequence=5;beyond=0;min_sequence=0;contiguous_count=6");
+    }
+
+    [Fact]
+    public void A_Zero_Based_Contiguous_Shard_Matches()
+    {
+        // The envelope allows sequence >= 0, so a shard that starts at 0 is contiguous when its count is the declared one.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
+            [Observed("producer-1", upTo: 3, min: 0, max: 2)]);
+
+        result.Missing.ShouldBeEmpty();
+        result.EventsMatch.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_One_Based_Contiguous_Shard_Matches()
+    {
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 5, declaredCount: 5)],
+            [Observed("producer-1", upTo: 5, min: 1, max: 5)]);
+
+        result.Missing.ShouldBeEmpty();
+        result.EventsMatch.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void An_Unwritten_Prefix_Is_Not_A_Gap()
+    {
+        // The producer simply started at 3: a hole below the lowest stored sequence is not detectable from these columns
+        // and is never reported (ordering.md §3).
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 5, declaredCount: 3)],
+            [Observed("producer-1", upTo: 3, min: 3, max: 5)]);
+
+        result.Missing.ShouldBeEmpty();
+        result.EventsMatch.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Events_Above_The_Declared_Last_Are_Not_A_Contiguity_Gap()
+    {
+        // Every stored event is past the declared high-water mark, so the range [min stored, declared last] is empty: the
+        // count bound and the end bound name the disagreement, and the contiguity bound adds nothing.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 2, declaredCount: 1)],
+            [Observed("producer-1", upTo: 0, beyond: 1, min: 5, max: 5)]);
+
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.CountMismatch);
+        reason.Detail.ShouldBe("declared_count=1;observed=0;declared_last_sequence=2;beyond=1;max_sequence=5");
     }
 
     [Fact]
@@ -188,7 +278,7 @@ public sealed class ReconcileComparerUnitTests
     {
         var result = ReconcileComparer.Compare(
             [Planned("producer-1", declaredLastSequence: 1, declaredCount: 2)],
-            [Observed("producer-1", total: 2, upTo: 2, unknown: 1, max: 1)]);
+            [Observed("producer-1", upTo: 2, unknown: 1, max: 1)]);
 
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.UnknownStatus);
@@ -213,7 +303,7 @@ public sealed class ReconcileComparerUnitTests
     {
         var result = ReconcileComparer.Compare(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
-            [Observed("producer-1", total: 3, upTo: 3, unknown: 2, unfinished: 3, max: 2)]);
+            [Observed("producer-1", upTo: 3, unknown: 2, unfinished: 3, max: 2)]);
 
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.UnknownStatus);
@@ -227,11 +317,12 @@ public sealed class ReconcileComparerUnitTests
     {
         var result = ReconcileComparer.Compare(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
-            [Observed("producer-1", total: 2, upTo: 2, unknown: 2, unfinished: 1, max: 1)]);
+            [Observed("producer-1", upTo: 2, unknown: 2, unfinished: 1, max: 1)]);
 
         result.Missing.Select(missing => missing.Code).ShouldBe(
             [ReconcileMissingCodes.CountMismatch, ReconcileMissingCodes.UnknownStatus]);
-        result.Missing[0].Detail.ShouldBe("declared_count=3;observed=2;declared_last_sequence=2;beyond=0");
+        result.Missing[0].Detail.ShouldBe(
+            "declared_count=3;observed=2;declared_last_sequence=2;beyond=0;max_sequence=1;min_sequence=0;contiguous_count=3");
         result.Missing[1].Detail.ShouldBe("null_status=2;unfinished=1");
     }
 
@@ -248,7 +339,7 @@ public sealed class ReconcileComparerUnitTests
         {
             Observed("a2", upTo: 1),
             Observed("b", unknown: 1),
-            Observed("A", total: 4, upTo: 4, beyond: 4),
+            Observed("A", upTo: 4, beyond: 4),
         };
 
         var result = ReconcileComparer.Compare(planned, observed);
@@ -276,7 +367,7 @@ public sealed class ReconcileComparerUnitTests
         var observed = new[]
         {
             Observed("b", unknown: 1),
-            Observed("c", total: 1, upTo: 1),
+            Observed("c", upTo: 1),
             Observed("a"),
         };
 
@@ -318,7 +409,7 @@ public sealed class ReconcileComparerUnitTests
             [Planned("producer-1")],
             [
                 Observed("producer-1"),
-                Observed("producer-9", total: 6, upTo: 6, beyond: 6, unknown: 6, unfinished: 6),
+                Observed("producer-9", upTo: 6, beyond: 6, unknown: 6, unfinished: 6),
             ]);
 
         result.Missing.ShouldBeEmpty();
@@ -343,17 +434,40 @@ public sealed class ReconcileComparerUnitTests
             [ReconcileMissingCodes.CountMismatch, ReconcileMissingCodes.MissingShard]);
     }
 
-    // ---- every code means incomplete evidence --------------------------------------------
+    // ---- every code is a 0049 literal and means incomplete evidence ------------------------
 
     [Fact]
-    public void Every_Code_Makes_The_Evidence_Incomplete()
+    public void Every_Code_Is_A_0049_Literal_And_Makes_The_Evidence_Incomplete()
     {
-        // The three codes this comparer can name from event evidence; each must leave Missing non-empty so the
-        // reconciler can never report matching evidence (EventsMatch) while a shard is incomplete.
+        // The migration's closed list is the one authority for these strings: T2.4 persists the comparison into
+        // evidence_revision, whose CHECK refuses a code outside it. This comparer names the event-evidence subset only
+        // (T2.3/T2.4 own artifact_missing, setup_error and stale_epoch), and each of its literals must be one of the
+        // migration's, verbatim.
+        var migrationCodes = MigrationMissingCodes();
+        migrationCodes.ShouldBe(
+            ["missing_shard", "count_mismatch", "artifact_missing", "build_mismatch", "unknown_status", "setup_error", "stale_epoch"],
+            "the 0049 CHECK's closed code list");
+
+        string[] codeLiterals =
+        [
+            ReconcileMissingCodes.MissingShard,
+            ReconcileMissingCodes.CountMismatch,
+            ReconcileMissingCodes.UnknownStatus,
+        ];
+
+        // Each literal is a migration literal, and together they are exactly the event-evidence subset.
+        codeLiterals.Where(code => !migrationCodes.Contains(code, StringComparer.Ordinal)).ShouldBeEmpty(
+            "every comparer code must be a 0049 literal");
+        codeLiterals.Order(StringComparer.Ordinal).ToArray().ShouldBe(
+            ["count_mismatch", "missing_shard", "unknown_status"],
+            "the event-evidence codes of 05.3.2-T2.2");
+
+        // Each code leaves Missing non-empty, so the reconciler can never report matching evidence (EventsMatch) while
+        // a shard is incomplete.
         (string Code, PlannedShard[] Planned, ObservedShard[] Observed)[] cases =
         [
             (ReconcileMissingCodes.MissingShard, [Planned("producer-1", closed: false)], []),
-            (ReconcileMissingCodes.CountMismatch, [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)], [Observed("producer-1", total: 2, upTo: 2, max: 1)]),
+            (ReconcileMissingCodes.CountMismatch, [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)], [Observed("producer-1", upTo: 2, min: 1, max: 2)]),
             (ReconcileMissingCodes.UnknownStatus, [Planned("producer-1")], [Observed("producer-1", unknown: 1)]),
         ];
 
@@ -382,8 +496,8 @@ public sealed class ReconcileComparerUnitTests
                 Planned("producer-3", shardIndex: 3, declaredLastSequence: 1, declaredCount: 2),
             ],
             [
-                Observed("producer-2", total: 1, upTo: 1, max: 0),
-                Observed("producer-3", total: 2, upTo: 2, unknown: 1, max: 1),
+                Observed("producer-2", upTo: 1, max: 0),
+                Observed("producer-3", upTo: 2, unknown: 1, max: 1),
             ]);
 
         result.Missing.Select(missing => $"{missing.ProducerId}|{missing.Code}").ShouldBe(
@@ -417,12 +531,50 @@ public sealed class ReconcileComparerUnitTests
 
     private static ObservedShard Observed(
         string producerId,
-        long total = 1,
         long upTo = 1,
         long beyond = 0,
         long unknown = 0,
         long unfinished = 0,
         long? min = 0,
         long? max = 0) =>
-        new(producerId, total, upTo, beyond, min, max, unknown, unfinished);
+        new(producerId, upTo, beyond, min, max, unknown, unfinished);
+
+    /// <summary>
+    /// The closed code list of <c>migrations/0049_orchestration_evidence_revision.sql</c>, read from the
+    /// <c>missing &lt;@ array[...]</c> term of <c>evidence_revision_missing_check</c> — the pin that this comparer's
+    /// literals and the persisted CHECK cannot drift apart.
+    /// </summary>
+    private static string[] MigrationMissingCodes()
+    {
+        var path = Path.Combine(RepositoryRoot(), "migrations", "0049_orchestration_evidence_revision.sql");
+        File.Exists(path).ShouldBeTrue($"the evidence_revision migration must be committed at {path}");
+
+        var sql = File.ReadAllText(path);
+        var start = sql.IndexOf("missing <@ array[", StringComparison.Ordinal);
+        start.ShouldBeGreaterThan(-1, "0049 must list the codes with 'missing <@ array['");
+
+        var end = sql.IndexOf("]::text[]", start, StringComparison.Ordinal);
+        end.ShouldBeGreaterThan(start, "the 0049 code list must close with ']::text[]'");
+
+        return Regex.Matches(sql[start..end], "'([a-z_]+)'")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+    }
+
+    /// <summary>The repository root: the directory holding <c>Evidgate.slnx</c> above the test binary.</summary>
+    private static string RepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Evidgate.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException($"Evidgate.slnx not found above {AppContext.BaseDirectory}");
+    }
 }

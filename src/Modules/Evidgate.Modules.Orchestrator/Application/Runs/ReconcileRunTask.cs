@@ -55,6 +55,15 @@ internal sealed partial class ReconcileRunTaskHandler(
         // log level). They are numbers and one interned token; the payload is never among them.
         var comparison = outcome.Comparison;
         var disposition = DispositionName(outcome.Disposition);
+
+        // A trigger naming a run this tenant cannot see is the one outcome an operator must notice: it is logged at
+        // Warning with the run and the disposition only, so a lost or misfiled task is greppable without reading rows.
+        if (outcome.Disposition == ReconcileDisposition.RunNotFound)
+        {
+            LogRunNotFound(logger, payload.RunId, disposition);
+            return;
+        }
+
         var shardsPlanned = comparison?.ShardsPlanned ?? 0;
         var shardsClosed = comparison?.ShardsClosed ?? 0;
         var missingCount = comparison?.Missing.Count ?? 0;
@@ -90,4 +99,18 @@ internal sealed partial class ReconcileRunTaskHandler(
         int shardsPlanned,
         int shardsClosed,
         int missingCount);
+
+    /// <summary>
+    /// The run of this trigger is not visible in the caller's tenant: the attempt compared nothing and changed nothing,
+    /// but a row naming an invisible run is evidence worth a Warning rather than a routine completion. Fields: the run
+    /// and the disposition, never the payload (00 §5.7 S3).
+    /// </summary>
+    [LoggerMessage(
+        EventId = 2423,
+        Level = LogLevel.Warning,
+        Message = "reconcile found no run {RunId} in this tenant: {Disposition}, nothing compared")]
+    private static partial void LogRunNotFound(
+        ILogger logger,
+        Guid runId,
+        string disposition);
 }

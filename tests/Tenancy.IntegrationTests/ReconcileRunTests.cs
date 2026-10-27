@@ -4,10 +4,12 @@
 // and reports the declared-versus-observed comparison. Nothing here changes the run: T2.1/T2.2 only report, so every
 // case asserts the run row and the (absent) evidence_revision row stay untouched.
 //
-// The comparison itself (every 00 §8.5 code from event evidence, the ordinal reason order, the open-shard short circuit)
-// is ReconcileComparerUnitTests.cs; this file is the database half. Test-name anchors come from 05.3.2 §9/§10
+// The comparison itself (every 00 §8.5 code from event evidence, the ordinal reason order, the open-shard short circuit,
+// the count/end/contiguity bounds contracts/events/ordering.md §3 derives from the aggregate's min and max) is
+// ReconcileComparerUnitTests.cs; this file is the database half. Test-name anchors come from 05.3.2 §9/§10
 // (T2.1: ReconcileRunTask_ClaimedOnceUnderSkipLocked; T2.2: Reconcile_EachMissingReason_IncompleteWithCode) and the
-// coordinator's S119 contract update (a test.started attempt with no test.finished is unknown_status).
+// coordinator's S119 contract update (a test.started attempt with no test.finished, from any producer of the run, is
+// unknown_status).
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -19,6 +21,7 @@ using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -32,6 +35,9 @@ public sealed class ReconcileRunTests
     /// <summary>The producer id of the seeded shard (05.2.1 registers <c>shard-N</c> per manifest shard).</summary>
     private const string Producer = "shard-1";
 
+    /// <summary>The second seeded shard, for the cases whose evidence spans producers.</summary>
+    private const string SecondProducer = "shard-2";
+
     /// <summary>One stored, acknowledged event of the run (the columns the aggregate reads).</summary>
     /// <param name="ProducerId">The producer (shard) that sent it.</param>
     /// <param name="Sequence">The producer's sequence; unique per <c>(org, run, producer)</c>.</param>
@@ -39,13 +45,15 @@ public sealed class ReconcileRunTests
     /// <param name="NormalizedStatus">The normalized status, or null for "the producer reported none".</param>
     /// <param name="ExecutionKey">The attempt's <c>execution_key</c> (<c>^[0-9a-f]{64}$</c>); derived when null.</param>
     /// <param name="AttemptNo">The attempt number (1-based).</param>
+    /// <param name="Stale">The owner's-flag column (00 §9.4): set on the stale-evidence case, never read differently by the aggregate.</param>
     private sealed record StoredEvent(
         string ProducerId,
         long Sequence,
         string Type,
         string? NormalizedStatus,
         string? ExecutionKey = null,
-        int AttemptNo = 1);
+        int AttemptNo = 1,
+        bool Stale = false);
 
     private readonly PostgresTenancyFixture _fixture;
 
@@ -62,13 +70,49 @@ public sealed class ReconcileRunTests
     /// <summary>
     /// The consumer tests need the host to carry the queue mechanism too: the production
     /// <c>AddEvidgateTasks</c> over the host's own app-role data source, with no hosted service, so nothing claims a row
-    /// before the test drives the poll (the composition <c>IngestTraceCorrelationTests</c> uses).
+    /// before the test drives the poll (the composition <c>IngestTraceCorrelationTests</c> uses). The reconciler is
+    /// wrapped in <see cref="CountingRunReconciler"/> so a case can prove the handler body ran, not only that the task
+    /// row ended <c>done</c>.
     /// </summary>
     private Task<IngestTestWorld> StartWithQueueAsync() =>
         IngestTestWorld.StartAsync(
             _fixture,
             IngestTestWorld.Writer(),
-            services: services => services.AddEvidgateTasks(new ConfigurationBuilder().Build()));
+            services: services =>
+            {
+                services.AddEvidgateTasks(new ConfigurationBuilder().Build());
+                services.AddSingleton<ReconcileCallCounter>();
+                services.RemoveAll<IRunReconciler>();
+                services.AddScoped<IRunReconciler>(provider => new CountingRunReconciler(
+                    new RunReconciler(
+                        provider.GetRequiredService<ITenantDb>(),
+                        provider.GetRequiredService<ITenantScopeAccessor>()),
+                    provider.GetRequiredService<ReconcileCallCounter>()));
+            });
+
+    /// <summary>Counts how often a reconcile attempt really ran inside the host: the claim case's witness.</summary>
+    private sealed class ReconcileCallCounter
+    {
+        private int _calls;
+
+        public int Calls => Volatile.Read(ref _calls);
+
+        public void Record() => Interlocked.Increment(ref _calls);
+    }
+
+    /// <summary>
+    /// The production reconciler behind a call counter. A task row that ends <c>done</c> with one attempt says the
+    /// consumer completed it; only the counter says the handler body — and so the reconcile — ran exactly once.
+    /// </summary>
+    private sealed class CountingRunReconciler(IRunReconciler inner, ReconcileCallCounter counter) : IRunReconciler
+    {
+        public async ValueTask<ReconcileOutcome> ReconcileAsync(Guid runId, CancellationToken cancellationToken)
+        {
+            counter.Record();
+
+            return await inner.ReconcileAsync(runId, cancellationToken).ConfigureAwait(false);
+        }
+    }
 
     /// <summary>Moves a run to <paramref name="state"/> (the migration role: a case seeds states the routes cannot reach).</summary>
     private Task SetRunStateAsync(IngestTestWorld world, Guid runId, string state) =>
@@ -111,9 +155,9 @@ public sealed class ReconcileRunTests
                 """
                 insert into public.event
                   (id, org_id, run_id, event_id, producer_id, sequence, execution_key, attempt_no, type,
-                   normalized_status, payload_hash)
+                   normalized_status, payload_hash, stale)
                 values (@id, @org_id, @run_id, @event_id, @producer_id, @sequence, @execution_key, @attempt_no, @type,
-                        @normalized_status, @payload_hash)
+                        @normalized_status, @payload_hash, @stale)
                 """,
                 ("id", Guid.CreateVersion7()),
                 ("org_id", world.Org),
@@ -125,7 +169,8 @@ public sealed class ReconcileRunTests
                 ("attempt_no", stored.AttemptNo),
                 ("type", stored.Type),
                 ("normalized_status", (object?)stored.NormalizedStatus ?? DBNull.Value),
-                ("payload_hash", "sha256:" + new string('b', 64)))).ShouldBe(1);
+                ("payload_hash", "sha256:" + new string('b', 64)),
+                ("stale", stored.Stale))).ShouldBe(1);
         }
 
         await scope.CommitAsync();
@@ -232,15 +277,113 @@ public sealed class ReconcileRunTests
         (await RevisionCountAsync(world)).ShouldBe(0, "T2.2 reports, T2.4 persists");
     }
 
+    // ------------------------------------------------------------------ T2.2: the bounds a count cannot see
+
+    /// <summary>
+    /// A zero-based shard whose stored sequences are the contiguous range 0..2 agrees with a declaration of three events
+    /// ending at sequence 2: <c>contracts/schemas/event-envelope.v1.json</c> allows <c>sequence >= 0</c>, so a shard that
+    /// starts at 0 is contiguous, not a gap.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_ZeroBasedContiguousShard_NoMissing()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 3);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 0, "test.finished", "passed"),
+            new StoredEvent(Producer, 1, "test.finished", "failed"),
+            new StoredEvent(Producer, 2, "test.finished", "skipped"));
+
+        var outcome = await ReconcileAsync(world, runId);
+
+        var comparison = outcome.Comparison.ShouldNotBeNull();
+        comparison.Missing.ShouldBeEmpty(Describe(outcome));
+        comparison.EventsMatch.ShouldBeTrue();
+    }
+
+    /// <summary>A one-based shard whose stored sequences are the contiguous range 1..5 agrees with a declaration of five events ending at 5.</summary>
+    [Fact]
+    public async Task Reconcile_OneBasedContiguousShard_NoMissing()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 5, declaredCount: 5);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.finished", "passed"),
+            new StoredEvent(Producer, 2, "test.finished", "passed"),
+            new StoredEvent(Producer, 3, "test.finished", "passed"),
+            new StoredEvent(Producer, 4, "test.finished", "passed"),
+            new StoredEvent(Producer, 5, "test.finished", "passed"));
+
+        var outcome = await ReconcileAsync(world, runId);
+
+        var comparison = outcome.Comparison.ShouldNotBeNull();
+        comparison.Missing.ShouldBeEmpty(Describe(outcome));
+        comparison.EventsMatch.ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// A closed slot that declared zero events matches exactly when nothing was stored: the count bound and the absence
+    /// of any event agree, and an empty range has no end or contiguity to break.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_ZeroDeclarationNoEvents_NoMissing()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 0, declaredCount: 0);
+
+        var outcome = await ReconcileAsync(world, runId);
+
+        var comparison = outcome.Comparison.ShouldNotBeNull();
+        comparison.Missing.ShouldBeEmpty(Describe(outcome));
+        comparison.EventsMatch.ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// An in-range event the owner's seed flagged <c>stale = true</c> is still an acknowledged event: every stored event
+    /// counts toward the shard's declaration, so the shard matches. What a stale flag means as evidence
+    /// (<c>stale_epoch</c>, 00 §8.5) is a later task's concern (05.3.2-T2.3) — T2.2 only counts what was stored.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_StaleEvent_StillAcknowledged()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.finished", "passed", Stale: true),
+            new StoredEvent(Producer, 2, "test.finished", "failed"));
+
+        var outcome = await ReconcileAsync(world, runId);
+
+        var comparison = outcome.Comparison.ShouldNotBeNull();
+        comparison.Missing.ShouldBeEmpty(Describe(outcome));
+        comparison.EventsMatch.ShouldBeTrue();
+    }
+
     // ------------------------------------------------------------------ T2.2: every reason the events support
 
     /// <summary>
     /// One case per event-evidence reason of 00 §8.5 with the code as the anchor: a shard whose slot never closed
-    /// (<c>missing_shard</c>), a closed shard whose stored events disagree with its declared pair in each of the four
-    /// ways the aggregate can see it — too few, a lower declared count than the events up to the high-water mark, events
-    /// past the declared high-water mark, a gap, and storage out of sequence order (the comparison is order-insensitive,
-    /// so a gap is a count disagreement, never a sequence walk) — and a closed shard with a status the producer never
-    /// normalized (<c>unknown_status</c>). Each case is incomplete evidence with exactly that reason for that producer.
+    /// (<c>missing_shard</c>); a closed shard whose stored events disagree with its declared pair in each of the ways the
+    /// aggregate can see it — too few, a lower declared count than the events up to the high-water mark, events past the
+    /// declared high-water mark, a hole with an equal count (declared three ending at 3, stored 0, 1, 2), a hole with the
+    /// declared last sequence stored (declared five, stored 0, 1, 2, 3, 5), a gap the declared count also misses, and
+    /// storage out of sequence order (the aggregate is order-insensitive, so only the bounds it carries decide); and a
+    /// closed shard with a status the producer never normalized (<c>unknown_status</c>). Each case is incomplete evidence
+    /// with exactly that reason for that producer.
     /// </summary>
     /// <param name="code">The 00 §8.5 code the evidence must name.</param>
     /// <param name="scenario">Which shape of evidence <see cref="ArrangeEventEvidenceAsync"/> seeds.</param>
@@ -249,6 +392,8 @@ public sealed class ReconcileRunTests
     [InlineData(ReconcileMissingCodes.CountMismatch, "short")]
     [InlineData(ReconcileMissingCodes.CountMismatch, "over")]
     [InlineData(ReconcileMissingCodes.CountMismatch, "beyond_declared")]
+    [InlineData(ReconcileMissingCodes.CountMismatch, "gap_equal_count")]
+    [InlineData(ReconcileMissingCodes.CountMismatch, "gap_below_last")]
     [InlineData(ReconcileMissingCodes.CountMismatch, "gap")]
     [InlineData(ReconcileMissingCodes.CountMismatch, "out_of_order")]
     [InlineData(ReconcileMissingCodes.UnknownStatus, "null_status")]
@@ -269,32 +414,6 @@ public sealed class ReconcileRunTests
         comparison.Missing[0].ProducerId.ShouldBe(Producer);
         (await StateAsync(world, runId)).ShouldBe("collecting");
         (await RevisionCountAsync(world)).ShouldBe(0);
-    }
-
-    /// <summary>
-    /// The S119 rule: every code the event evidence can name leaves the comparison incomplete, so no reason can be
-    /// mistaken for a completeness verdict (T2.3/T2.4 decide completeness, never an empty <c>missing[]</c> alone).
-    /// </summary>
-    /// <param name="code">The code the case must produce.</param>
-    /// <param name="scenario">Which shape of evidence <see cref="ArrangeEventEvidenceAsync"/> seeds.</param>
-    [Theory]
-    [InlineData(ReconcileMissingCodes.MissingShard, "open_shard")]
-    [InlineData(ReconcileMissingCodes.CountMismatch, "short")]
-    [InlineData(ReconcileMissingCodes.UnknownStatus, "null_status")]
-    public async Task Reconcile_EveryCodeMeansIncomplete(string code, string scenario)
-    {
-        await using var world = await StartAsync();
-        var runId = world.RunId;
-        await SetRunStateAsync(world, runId, "collecting");
-        await ArrangeEventEvidenceAsync(world, runId, scenario);
-
-        var outcome = await ReconcileAsync(world, runId);
-
-        var comparison = outcome.Comparison.ShouldNotBeNull();
-        comparison.EventsMatch.ShouldBeFalse(Describe(outcome));
-        comparison.Missing.ShouldNotBeEmpty();
-        comparison.Missing.ShouldAllBe(reason => !string.IsNullOrWhiteSpace(reason.Code));
-        comparison.Missing.Select(reason => reason.Code).ShouldContain(code, Describe(outcome));
     }
 
     // ------------------------------------------------------------------ S119: unfinished started attempts
@@ -391,6 +510,64 @@ public sealed class ReconcileRunTests
         comparison.ShardsClosed.ShouldBe(0);
     }
 
+    /// <summary>
+    /// A <c>test.finished</c> reported by <b>another</b> producer of the same run clears the attempt: the status is the
+    /// run's, not the shard's, so a started attempt that finished anywhere in the run reported its status and no
+    /// <c>unknown_status</c> is named. The aggregate therefore looks the finish up across every producer of the
+    /// <c>(org, run)</c>, not just the started row's own.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_CrossProducerFinish_ClearsUnfinished()
+    {
+        await using var world = await StartAsync(slots: 2);
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        var executionKey = Digest("shared-attempt", 1);
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 1, declaredCount: 1);
+        await CloseSlotAsync(world, runId, SecondProducer, declaredLastSequence: 1, declaredCount: 1);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.started", null, ExecutionKey: executionKey),
+            new StoredEvent(SecondProducer, 1, "test.finished", "passed", ExecutionKey: executionKey));
+
+        var outcome = await ReconcileAsync(world, runId);
+
+        var comparison = outcome.Comparison.ShouldNotBeNull();
+        comparison.Missing.ShouldBeEmpty(Describe(outcome));
+        comparison.EventsMatch.ShouldBeTrue();
+        comparison.ShardsPlanned.ShouldBe(2);
+        comparison.ShardsClosed.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// Only <c>test.started</c> rows are unfinished-attempt candidates: an event of another type never becomes one, and a
+    /// <c>test.finished</c> without its own started row is a reported status (no pairing required). One started attempt
+    /// with no finish anywhere is counted exactly once — the detail's <c>unfinished=1</c> pins the aggregate's number,
+    /// not just the presence of <c>unknown_status</c>.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_UnfinishedStarted_CountsStartedRowsOnly()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 3, declaredCount: 3);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.started", null, ExecutionKey: Digest("open", 1)),
+            new StoredEvent(Producer, 2, "test.finished", "passed", ExecutionKey: Digest("closed", 2)),
+            new StoredEvent(Producer, 3, "test.progress", null, ExecutionKey: Digest("other", 3)));
+
+        var outcome = await ReconcileAsync(world, runId);
+
+        var comparison = outcome.Comparison.ShouldNotBeNull();
+        comparison.Missing.Count.ShouldBe(1, Describe(outcome));
+        comparison.Missing[0].Code.ShouldBe(ReconcileMissingCodes.UnknownStatus, Describe(outcome));
+        comparison.Missing[0].Detail.ShouldBe("null_status=0;unfinished=1");
+    }
+
     /// <summary>The evidence shape of each theory row above, seeded into one run.</summary>
     /// <param name="world">The world whose run and slot are seeded.</param>
     /// <param name="runId">The run to seed for.</param>
@@ -436,6 +613,31 @@ public sealed class ReconcileRunTests
                     new StoredEvent(Producer, 2, "test.finished", "passed"),
                     new StoredEvent(Producer, 3, "test.finished", "passed"),
                     new StoredEvent(Producer, 4, "test.finished", "passed"));
+                break;
+
+            // Declared three events ending at 3, stored 0, 1 and 2: the count agrees and the hole where 3 belongs makes
+            // the shard disagree, which a count-only comparison could not see.
+            case "gap_equal_count":
+                await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 3, declaredCount: 3);
+                await StoreEventsAsync(
+                    world,
+                    runId,
+                    new StoredEvent(Producer, 0, "test.finished", "passed"),
+                    new StoredEvent(Producer, 1, "test.finished", "passed"),
+                    new StoredEvent(Producer, 2, "test.finished", "passed"));
+                break;
+
+            // Declared five events ending at 5, stored 0, 1, 2, 3 and 5: the count and the end agree, 4 was never stored.
+            case "gap_below_last":
+                await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 5, declaredCount: 5);
+                await StoreEventsAsync(
+                    world,
+                    runId,
+                    new StoredEvent(Producer, 0, "test.finished", "passed"),
+                    new StoredEvent(Producer, 1, "test.finished", "passed"),
+                    new StoredEvent(Producer, 2, "test.finished", "passed"),
+                    new StoredEvent(Producer, 3, "test.finished", "passed"),
+                    new StoredEvent(Producer, 5, "test.finished", "passed"));
                 break;
 
             // Sequence 3 was never stored: a gap of one is a count disagreement.
@@ -709,8 +911,9 @@ public sealed class ReconcileRunTests
     /// cref="RunReconcileContract.PayloadJson"/> and <see cref="RunReconcileContract.IdempotencyKey"/>, the row a real
     /// finalize commits), and the handler the consumer resolves is 05.3.2-T2's real one: it is registered by
     /// <c>OrchestratorModule</c>, which the Api host composes, so <see cref="ITaskHandlerRegistry.TaskTypes"/> carries
-    /// the type. Its reconcile leaves no row behind (T2.2 reports only), which is why the assertion is the task row's own
-    /// state and attempt count.
+    /// the type. Its reconcile leaves no row behind (T2.2 reports only), so the case asserts two things: the task row's
+    /// own state and attempt count, and — through the <see cref="CountingRunReconciler"/> the queue host registers — that
+    /// the handler body really ran once instead of a completion nobody executed.
     /// </para>
     /// </summary>
     [Fact]
@@ -764,6 +967,11 @@ public sealed class ReconcileRunTests
             .ShouldBe(1);
         (await consumer.PollOnceAsync(ReconcileQueue, Token)).ShouldBe(0, "a done row is never claimed again");
         (await RevisionCountAsync(world)).ShouldBe(0, "T2.2 persists no revision, however often the row is claimed");
+
+        // The row's own state says the consumer completed it once; the counter says the handler body — the reconcile —
+        // really ran once, so a claim that never reached the handler cannot pass this case.
+        world.Host.Services.GetRequiredService<ReconcileCallCounter>().Calls
+            .ShouldBe(1, "the reconcile handler ran exactly once under the four concurrent claims");
     }
 
     // ------------------------------------------------------------------ T2.1: the aggregate uses the run's index
