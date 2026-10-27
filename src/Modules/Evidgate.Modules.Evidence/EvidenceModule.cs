@@ -4,7 +4,6 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
-using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
 using FluentValidation;
@@ -23,8 +22,10 @@ internal static class EvidenceModule
     /// <summary>Registers the module's services in the calling host.</summary>
     /// <param name="services">The host's service collection.</param>
     /// <param name="configuration">
-    /// The host's configuration, read only for the switches that decide <em>what</em> is registered
-    /// (<c>EVIDGATE__PARSE__OUTOFPROCESS</c>); every other module setting is bound lazily through
+    /// The host's configuration. Nothing in this shared registration is decided by it today: the one switch that used
+    /// to be read here (<c>EVIDGATE__PARSE__OUTOFPROCESS</c>) now lives in the Worker-only
+    /// <c>ParseRunnerServiceCollectionExtensions.AddParseRunner</c>, because that registration is a process-spawn
+    /// capability the Api must not hold. Every other module setting is bound lazily through
     /// <c>BindConfiguration</c>, like <c>EVIDGATE__OBJECT__*</c>.
     /// </param>
     public static IServiceCollection AddEvidenceModule(
@@ -72,18 +73,10 @@ internal static class EvidenceModule
         // a connection or a transaction of its own (00 §5.5 C3/C7).
         services.TryAddScoped<IEvidenceFreeze, EvidenceFreeze>();
 
-        // 06.3.6-T1.3: the out-of-process parse runner (06.3.6 §7), behind EVIDGATE__PARSE__OUTOFPROCESS. The flag
-        // decides registration, not a runtime branch: with it off nothing is registered and the in-process IParsing
-        // path above is the only one — the rollback 06.3.6 §11 names. Nothing resolves IParseRunner before
-        // 06.3.6-T1.4 wires the parse task handler, and the Worker is the only host that will run it.
-        services.AddOptions<ParseRunnerOptions>().BindConfiguration(ParseRunnerOptions.SectionName);
-
-        if (configuration.GetValue(
-            $"{ParseRunnerOptions.SectionName}:{nameof(ParseRunnerOptions.OutOfProcess)}",
-            defaultValue: false))
-        {
-            services.TryAddSingleton<IParseRunner, ChildProcessParseRunner>();
-        }
+        // 06.3.6-T1.3: the out-of-process parse runner is deliberately NOT registered here. It spawns processes, so
+        // only the Worker composes it, through ParseRunnerServiceCollectionExtensions.AddParseRunner (06.3.6 review:
+        // the Api process must not hold a process-spawn capability). This shared registration is what both hosts call,
+        // so a runner registered here would be resolvable from the Api again.
 
         return services;
     }

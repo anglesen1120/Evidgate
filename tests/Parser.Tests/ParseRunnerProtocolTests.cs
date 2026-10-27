@@ -96,6 +96,72 @@ public sealed class ParseRunnerProtocolTests
         Encoding.UTF8.GetString(success.Records[1].Utf8Json.Span).ShouldBe("""{"count":5}""");
     }
 
+    /// <summary>
+    /// Behaviour 3: a record carrying a deeply nested document is a record. The child wraps a validated document in
+    /// one object, so the reader's depth cap is the profile's depth plus that wrapper; a cap below it would refuse a
+    /// document the profile itself accepted. This record nests 63 arrays, one level under the profile's own cap.
+    /// </summary>
+    [Fact]
+    public async Task A_Record_Carrying_A_Deep_Json_Document_Is_A_Record()
+    {
+        ParseRunnerHarness.RequirePosixShell("a scripted child");
+        using var harness = new ParseRunnerHarness();
+        using var runner = harness.Script(
+            "printf '%s\\n' '{\"kind\":\"json\",\"value\":" + NestedArrays(63) + "}' '{\"done\":true,\"count\":1}'");
+
+        var result = await ParseRunnerHarness.RunAsync(runner, ParseRunnerProfile.Json, 1024 * 1024, [1], cancellationToken: TestContext.Current.CancellationToken);
+
+        var success = result.ShouldBeOfType<ParseRunSucceeded>();
+
+        success.Records.Count.ShouldBe(1);
+        Encoding.UTF8.GetString(success.Records[0].Utf8Json.Span).ShouldContain(NestedArrays(63));
+    }
+
+    /// <summary>
+    /// Behaviour 3: a record nested deeper than the profile's depth plus the wrappers is not something the child can
+    /// write from an accepted document, so it is malformed output and never data.
+    /// </summary>
+    [Fact]
+    public async Task A_Record_Deeper_Than_The_Record_Cap_Is_A_Malformed_Failure()
+    {
+        ParseRunnerHarness.RequirePosixShell("a scripted child");
+        using var harness = new ParseRunnerHarness();
+        using var runner = harness.Script(
+            "printf '%s\\n' '{\"kind\":\"json\",\"value\":" + NestedArrays(200) + "}' '{\"done\":true,\"count\":1}'");
+
+        var result = await ParseRunnerHarness.RunAsync(runner, ParseRunnerProfile.Json, 1024 * 1024, [1], cancellationToken: TestContext.Current.CancellationToken);
+
+        result.ShouldBeOfType<ParseRunFailed>().Failure.ShouldBe(ParseRunFailureKind.MalformedOutput);
+    }
+
+    /// <summary>
+    /// Behaviour 3: a record must be valid UTF-8. The child's writer escapes everything outside ASCII, so bytes no
+    /// writer produces are not records the protocol carries — and a record is kept as the child's bytes, so nothing
+    /// downstream could repair it.
+    /// </summary>
+    public static TheoryData<string> InvalidUtf8Records => new()
+    {
+        // A raw 0xFF: not a UTF-8 lead byte at all.
+        "printf '{\"kind\":\"json\",\"value\":\"\\377\"}\\n{\"done\":true,\"count\":1}\\n'",
+
+        // An encoded lone surrogate (ED A0 80): ill-formed UTF-8 that a JSON reader accepts inside a string, which is
+        // why the protocol validates the line itself — the same case SafeJson guards before JsonDocument.Parse.
+        "printf '{\"kind\":\"json\",\"value\":\"\\355\\240\\200\"}\\n{\"done\":true,\"count\":1}\\n'",
+    };
+
+    [Theory]
+    [MemberData(nameof(InvalidUtf8Records))]
+    public async Task A_Record_Holding_Invalid_Utf8_Is_A_Malformed_Failure(string script)
+    {
+        ParseRunnerHarness.RequirePosixShell("a scripted child that writes a raw byte");
+        using var harness = new ParseRunnerHarness();
+        using var runner = harness.Script(script);
+
+        var result = await ParseRunnerHarness.RunAsync(runner, ParseRunnerProfile.Json, 1024 * 1024, [1], cancellationToken: TestContext.Current.CancellationToken);
+
+        result.ShouldBeOfType<ParseRunFailed>().Failure.ShouldBe(ParseRunFailureKind.MalformedOutput);
+    }
+
     [Fact]
     public async Task Output_Byte_Cap_Ends_As_A_Breach_And_Kills_The_Child_At_Once()
     {
@@ -208,4 +274,9 @@ public sealed class ParseRunnerProtocolTests
 
         result.ShouldBeOfType<ParseRunSucceeded>();
     }
+
+    /// <summary>A document that is <paramref name="depth"/> arrays nested one inside the next.</summary>
+    /// <param name="depth">How many <c>[</c>/<c>]</c> pairs to write.</param>
+    /// <returns>The document text.</returns>
+    private static string NestedArrays(int depth) => new string('[', depth) + new string(']', depth);
 }

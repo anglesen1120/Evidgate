@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Unicode;
 
 namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 
@@ -36,9 +37,11 @@ internal sealed record ChildOutputCapture(
 /// <para>
 /// Nothing is buffered past the caps: a stream over <c>maxBytes</c> stops the read, a single line longer than
 /// <c>maxRecordBytes</c> stops the read (a legit record can carry a whole text node escaped at about 3x, so that
-/// cap is derived from the input cap too), and the record list is capped at <c>maxRecords</c>. Each stop invokes
-/// the caller's failure hook so the runner can kill the child at once instead of waiting for the wall clock while
-/// it blocks on a full pipe.
+/// cap is derived from the input cap too), and the record list is capped at <c>maxRecords</c>. A line must also be
+/// valid UTF-8 and nest no deeper than <see cref="MaxLineDepth"/> — the profile's document depth plus the record
+/// wrapper — so a record the child could not have written from an accepted document is malformed, not data. Each
+/// stop invokes the caller's failure hook so the runner can kill the child at once instead of waiting for the wall
+/// clock while it blocks on a full pipe.
 /// </para>
 /// </summary>
 internal sealed class ChildOutputProtocol
@@ -49,8 +52,13 @@ internal sealed class ChildOutputProtocol
     /// <summary>The line buffer a record starts with; it grows toward the per-line cap only while a line needs it.</summary>
     private const int InitialLineBytes = 4096;
 
-    /// <summary>How deep a record may nest: the protocol has no shape deeper than a few levels.</summary>
-    private const int MaxLineDepth = 16;
+    /// <summary>
+    /// How deep a record may nest: the profile's own document cap (<see cref="ParsingLimits.MaxDepth"/>) plus the
+    /// wrapper the child writes around a document — one record object and its value property — and headroom. A JSON
+    /// record carries the whole validated document, so a cap below the profile's depth refuses a document the
+    /// profile itself accepted; a record deeper than this is not something the child can emit, so it is malformed.
+    /// </summary>
+    private const int MaxLineDepth = ParsingLimits.MaxDepth + 4;
 
     /// <summary>The marker's two keys (06.3.6 §7).</summary>
     private const string DoneProperty = "done";
@@ -84,25 +92,17 @@ internal sealed class ChildOutputProtocol
         this.maxRecordBytes = maxRecordBytes;
     }
 
-    /// <summary>Reads stdout until the stream ends or a cap or a protocol violation stops the read.</summary>
-    /// <param name="stdout">The child's stdout; the caller keeps ownership.</param>
-    /// <param name="onProtocolFailure">
-    /// Invoked once when the read stops early (a cap breach or a framing violation), so the caller can kill the
-    /// child before it blocks on a pipe nobody reads any more.
-    /// </param>
-    /// <returns>What the stream yielded.</returns>
     /// <summary>
-    /// The stdout never ended, because a descendant of the child inherited the write end: no marker can arrive, so
-    /// the run is malformed and is never read as a success.
+    /// The capture to return for a stream the parent had to abandon. The stdout never ended because a descendant of
+    /// the child inherited the write end: no marker can arrive, so the run is malformed and is never read as a
+    /// success. The counters are zero — what the abandoned reader had seen is inside that reader — because the
+    /// verdict is the stream's absence, not its byte count.
     /// </summary>
-    /// <returns>
-    /// The capture to return for a stream the parent had to abandon. Its counters are zero: what the abandoned reader
-    /// had seen is inside that reader, and the verdict is the stream's absence, not its byte count.
-    /// </returns>
+    /// <returns>The capture to return for a stream the parent had to abandon.</returns>
     public ChildOutputCapture Abandoned() => new Accumulator(maxBytes, maxRecords, maxRecordBytes).FailedAtTransport();
 
-    /// <summary>Reads the child's stdout until the stream ends, enforcing the protocol.</summary>
-    /// <param name="stdout">The child's stdout pipe.</param>
+    /// <summary>Reads the child's stdout until the stream ends or a cap or a protocol violation stops the read.</summary>
+    /// <param name="stdout">The child's stdout pipe; the caller keeps ownership.</param>
     /// <param name="onProtocolFailure">Called once when the stream must be abandoned because it is unusable.</param>
     /// <returns>The capture the verdict is read from.</returns>
     public async Task<ChildOutputCapture> ReadAsync(Stream stdout, Action onProtocolFailure)
@@ -387,6 +387,14 @@ internal sealed class ChildOutputProtocol
             var text = line.AsSpan(0, lineLength);
 
             if (text.IsEmpty)
+            {
+                return Failed(ParseRunFailureKind.MalformedOutput);
+            }
+
+            // Invalid UTF-8 is not a record. The reader below scans strings without decoding them, so a byte the
+            // child's own writer cannot emit would otherwise reach a consumer as a record it cannot decode; and a
+            // record is kept as the child's bytes, so nothing downstream could repair it.
+            if (!Utf8.IsValid(text))
             {
                 return Failed(ParseRunFailureKind.MalformedOutput);
             }

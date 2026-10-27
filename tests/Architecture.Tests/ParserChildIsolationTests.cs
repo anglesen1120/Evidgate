@@ -401,6 +401,145 @@ public class ParserChildIsolationTests
     }
 
     [Theory]
+    [InlineData("var child = Process.Start(\"/app/Evidgate.Parser\", args);", "Process.Start")]
+    [InlineData("var startInfo = new ProcessStartInfo(path);", "ProcessStartInfo")]
+    [InlineData("var type = typeof(System.Diagnostics.Process);", "System.Diagnostics.Process")]
+    [InlineData("var instance = Activator.CreateInstance(runnerType);", "Activator.")]
+    [InlineData("var assembly = Assembly.Load(assemblyName);", "Assembly.Load")]
+    [InlineData("var type = Type.GetType(runnerName);", "Type.GetType")]
+    [InlineData("var domain = AppDomain.CurrentDomain;", "AppDomain")]
+    [InlineData("var handle = Interop.Libc.Fork();", "Interop.")]
+    [InlineData("var handle = NativeLibrary.Load(\"libc\");", "NativeLibrary")]
+    [InlineData("var pointer = Marshal.AllocHGlobal(64);", "Marshal.")]
+    public void Synthetic_Spawn_Api_In_Any_Scanned_File_Is_Detected(string text, string api)
+    {
+        // Every route out of the child into a second process is denied in each file that runs in it: a launch API, the
+        // reflection routes that could resolve one by name, and the native-binding routes that could bind fork
+        // without a declaration.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/Program.cs", text),
+        };
+
+        var violations = ParserChildIsolationRules.ChildNeverForksViolations(files);
+
+        violations.ShouldHaveSingleItem().ShouldContain(api);
+    }
+
+    [Theory]
+    [InlineData("fork")]
+    [InlineData("vfork")]
+    [InlineData("clone")]
+    [InlineData("execve")]
+    [InlineData("execv")]
+    [InlineData("execvp")]
+    [InlineData("posix_spawn")]
+    [InlineData("system")]
+    [InlineData("popen")]
+    public void Synthetic_Process_Creation_Entry_Point_Is_Detected(string name)
+    {
+        // The one-import rule already rejects every declaration but libc's setrlimit; this named check makes the
+        // process-creating entry points fail with their own message, in a linked profile file as much as in the
+        // child's own, because both compile into the same assembly.
+        var files = new (string Path, string Text)[]
+        {
+            (
+                "src/Modules/Evidgate.Modules.Evidence/Infrastructure/Parsing/SafeXml.cs",
+                $"[DllImport(\"libc\", EntryPoint = \"{name}\", SetLastError = true)]\n"
+                + "private static extern int Run(int a);"),
+        };
+
+        // The linked profile file also trips the "no native import outside the child's own project" shape, so the
+        // assertion looks for the named message rather than a single violation.
+        ParserChildIsolationRules.ChildNeverForksViolations(files)
+            .ShouldContain(
+                violation => violation.Contains(name, StringComparison.Ordinal)
+                    && violation.Contains("declares a native import of", StringComparison.Ordinal),
+                string.Join(Environment.NewLine, ParserChildIsolationRules.ChildNeverForksViolations(files)));
+    }
+
+    [Theory]
+    [InlineData(
+        "src/Modules/Evidgate.Modules.Evidence/Infrastructure/Parsing/SafeXml.cs",
+        "[DllImport(\"libc\", EntryPoint = \"getpid\", SetLastError = true)]\nprivate static extern int GetPid();")]
+    [InlineData(
+        "src/BuildingBlocks/SharedKernel/Results/Result.cs",
+        "[LibraryImport(\"libc\")]\nprivate static partial int Sysconf();")]
+    public void Synthetic_Native_Import_Outside_The_Childs_Project_Is_Detected(string path, string text)
+    {
+        // The one licensed declaration is libc's setrlimit in the child's own project: a linked profile file or one of
+        // the two loaded projects binding any native symbol at all is code the child's contract does not have, whether
+        // or not the symbol creates a process.
+        var files = new (string Path, string Text)[]
+        {
+            (path, text),
+        };
+
+        ParserChildIsolationRules.ChildNeverForksViolations(files)
+            .ShouldContain(
+                violation => violation.Contains(path, StringComparison.Ordinal)
+                    && violation.Contains("only native import is libc's setrlimit", StringComparison.Ordinal),
+                string.Join(Environment.NewLine, ParserChildIsolationRules.ChildNeverForksViolations(files)));
+    }
+
+    [Fact]
+    public void Synthetic_Process_Identifier_In_A_Referenced_Project_Is_Detected()
+    {
+        // `Process p = new();` carries no member access and no constructor argument, so only the bare identifier sees
+        // it — and a helper in the contracts project runs in the child's own process.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Modules/Evidgate.Modules.Evidence.Contracts/IEvidence.cs", "Process p = new();"),
+        };
+
+        ParserChildIsolationRules.ChildNeverForksViolations(files).ShouldHaveSingleItem().ShouldContain("Process");
+    }
+
+    [Fact]
+    public void Synthetic_Extern_Method_Name_Is_The_Entry_Point_When_None_Is_Named()
+    {
+        // `[DllImport("libc")] extern int fork(...)` binds the method's own name, so leaving EntryPoint out is not a
+        // way around the named check.
+        var files = new (string Path, string Text)[]
+        {
+            (
+                "src/Evidgate.Parser/Program.cs",
+                "[DllImport(\"libc\")] private static extern int fork(int a);"),
+        };
+
+        ParserChildIsolationRules.ChildNeverForksViolations(files).ShouldHaveSingleItem().ShouldContain("fork");
+    }
+
+    [Theory]
+    [InlineData("// the child never calls Process.Start or fork\r\nvar buffer = Console.OpenStandardInput();")]
+    [InlineData("/* posix_spawn, execve and Activator.CreateInstance are unreachable here */")]
+    [InlineData("var note = \"the child never forks or launches a process\";")]
+    [InlineData("var msg = $\"Process.Start is not reachable ({name})\";")]
+    public void Synthetic_Spawn_Wording_In_Trivia_Is_Not_A_Use(string text)
+    {
+        // Comments and literals are blanked before the scan, so prose that names a process API is text, the same way
+        // the network and file rules treat it.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/Program.cs", text),
+        };
+
+        ParserChildIsolationRules.ChildNeverForksViolations(files).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Synthetic_Allowed_Native_Import_Is_Not_A_Process_Launch()
+    {
+        // The licensed declaration binds setrlimit, not a process-creating symbol, so the new rule leaves it clean.
+        var files = new (string Path, string Text)[]
+        {
+            ("src/Evidgate.Parser/ResourceLimits.cs", AllowedNativeImport),
+        };
+
+        ParserChildIsolationRules.ChildNeverForksViolations(files).ShouldBeEmpty();
+    }
+
+    [Theory]
     [InlineData(
         "[DllImport(\"libc\", EntryPoint = \"system\")] /* EntryPoint=\"setrlimit\" SetLastError = true */ private static extern int X(int a, ref int b);",
         "DllImport")]
@@ -771,6 +910,37 @@ public class ParserChildIsolationTests
         // Non-vacuous: the linked profile really is the file-creating code this rule reasons about, so a rule that
         // read the wrong files (or no files) would pass here for the wrong reason.
         linked.ShouldContain(path => path.EndsWith("/SafeZipArchive.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Real_Parser_And_Every_Assembly_It_Loads_Never_Fork_Or_Launch_A_Process()
+    {
+        var project = RealProjectXml();
+        var directory = RealProjectDirectory();
+        var own = ParserChildIsolationRules.ProjectSources(directory);
+        var linked = ParserChildIsolationRules.ResolveLinkedSources(
+            directory,
+            ParserChildIsolationRules.CompileIncludes(project));
+
+        // The two projects the child references are loaded into the same process, so their sources are scanned too:
+        // a helper there that starts a process is exactly as reachable as one in the child's own files.
+        var referenced = ParserChildIsolationRules.ProjectSources(
+                Path.Combine(SolutionLayout.RepoRoot, ParserChildIsolationRules.ContractsProjectDirectory))
+            .Concat(
+                ParserChildIsolationRules.ProjectSources(
+                    Path.Combine(SolutionLayout.RepoRoot, ParserChildIsolationRules.SharedKernelProjectDirectory)))
+            .ToList();
+
+        referenced.ShouldNotBeEmpty();
+        referenced.ShouldContain(path => path.EndsWith("/IEvidence.cs", StringComparison.Ordinal));
+        referenced.ShouldContain(path => path.EndsWith("/SharedKernelModule.cs", StringComparison.Ordinal)
+            || path.EndsWith("/Results/Result.cs", StringComparison.Ordinal));
+
+        var all = ParserChildIsolationRules.ReadSources(own.Concat(linked).Concat(referenced));
+        all.Count.ShouldBeGreaterThanOrEqualTo(MinimumScannedFiles + referenced.Count);
+
+        var violations = ParserChildIsolationRules.ChildNeverForksViolations(all);
+        violations.ShouldBeEmpty(string.Join(Environment.NewLine, violations));
     }
 
     [Fact]

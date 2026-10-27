@@ -58,14 +58,24 @@ internal sealed class ParseRunnerHarness : IDisposable
     /// <summary>A runner whose child is the given shell script.</summary>
     /// <param name="script">The script body, run as <c>/bin/sh -c script</c>.</param>
     /// <param name="configure">An optional mutation of the options.</param>
+    /// <param name="childStarted">
+    /// An optional hook the runner calls between the child's start and its registration, so a test can aim a dispose
+    /// at that exact window.
+    /// </param>
     /// <returns>The runner; the caller disposes it.</returns>
-    public ChildProcessParseRunner Script(string script, Action<ParseRunnerOptions>? configure = null)
+    public ChildProcessParseRunner Script(
+        string script,
+        Action<ParseRunnerOptions>? configure = null,
+        Action? childStarted = null)
     {
         RequirePosixShell("a scripted child");
 
         return new ChildProcessParseRunner(
             Options(configure),
-            _ => new ChildCommand(PosixShell, ["-c", script], string.Empty));
+            _ => new ChildCommand(PosixShell, ["-c", script], string.Empty))
+        {
+            ChildStarted = childStarted,
+        };
     }
 
     /// <summary>A runner whose child is an arbitrary command, for the paths a shell script cannot express.</summary>
@@ -153,17 +163,52 @@ internal sealed class ParseRunnerHarness : IDisposable
     /// <summary>Reads a pid a scripted child wrote to a side file.</summary>
     /// <param name="name">The side file's name.</param>
     /// <returns>The pid.</returns>
-    public int ReadPid(string name) =>
-        int.Parse((ReadSide(name) ?? string.Empty).Trim(), CultureInfo.InvariantCulture);
+    public int ReadPid(string name)
+    {
+        // The shell's redirect creates the file before the child writes the number into it, so an existing side file
+        // can still be empty for a moment: the read waits for content rather than failing on that window.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
 
-    /// <summary>Whether a process is still running (a zombie counts as gone once it is reaped).</summary>
+        while (true)
+        {
+            var text = (ReadSide(name) ?? string.Empty).Trim();
+
+            if (text.Length > 0)
+            {
+                return int.Parse(text, CultureInfo.InvariantCulture);
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new InvalidOperationException($"{name} never carried a pid");
+            }
+
+            Thread.Sleep(10);
+        }
+    }
+
+    /// <summary>
+    /// Whether a process is still running. A zombie is dead — the OS keeps its entry only until its parent reaps it,
+    /// and a test that stopped at <see cref="Process.HasExited"/> would call an unreaped child alive — so on Unix the
+    /// state word comes from <c>ps</c> and a <c>Z</c> answers false.
+    /// </summary>
     /// <param name="pid">The process id.</param>
-    /// <returns>True when the process exists and has not exited.</returns>
+    /// <returns>True when the process exists, has not exited and is not a zombie.</returns>
     public static bool IsAlive(int pid)
     {
         if (pid <= 0)
         {
             return false;
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            var state = StateOf(pid);
+
+            if (state.Length > 0)
+            {
+                return !state.StartsWith('Z');
+            }
         }
 
         try
@@ -180,6 +225,63 @@ internal sealed class ParseRunnerHarness : IDisposable
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// The <c>ps</c> state word of a process — <c>S</c>, <c>R+</c>, <c>Z</c> for a zombie — or an empty string when
+    /// the pid no longer exists. Unix only: Windows has no equivalent state word, so the answer is always empty.
+    /// </summary>
+    /// <param name="pid">The process id.</param>
+    /// <returns>The trimmed state word, or an empty string.</returns>
+    public static string StateOf(int pid)
+    {
+        if (pid <= 0 || OperatingSystem.IsWindows())
+        {
+            return string.Empty;
+        }
+
+        var startInfo = new ProcessStartInfo("/bin/ps")
+        {
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+
+        startInfo.ArgumentList.Add("-o");
+        startInfo.ArgumentList.Add("stat=");
+        startInfo.ArgumentList.Add("-p");
+        startInfo.ArgumentList.Add(pid.ToString(CultureInfo.InvariantCulture));
+
+        using var ps = Process.Start(startInfo);
+
+        if (ps is null)
+        {
+            return string.Empty;
+        }
+
+        var state = ps.StandardOutput.ReadToEnd();
+        ps.WaitForExit(5000);
+
+        return state.Trim();
+    }
+
+    /// <summary>
+    /// Waits until this test process has a child whose command line carries <paramref name="argumentMarker"/>, and
+    /// returns its pid. The marker identifies the run exactly: a command line carries the run's arguments, so a value
+    /// only one test uses finds that test's child even while the suite runs other children in parallel.
+    /// </summary>
+    /// <param name="argumentMarker">A substring of the child's argument vector, unique to the calling test.</param>
+    /// <param name="timeout">How long to wait.</param>
+    /// <returns>The child's pid; the test fails when no such child appears.</returns>
+    public static async Task<int> WaitForChildProcessAsync(string argumentMarker, TimeSpan timeout)
+    {
+        var pid = 0;
+
+        await WaitUntilAsync(
+            () => (pid = LiveChildProcess(argumentMarker)) != 0,
+            timeout,
+            $"no child of this test process ran with {argumentMarker}");
+
+        return pid;
     }
 
     /// <summary>Waits until a condition holds, or fails the test naming what never happened.</summary>
@@ -218,6 +320,64 @@ internal sealed class ParseRunnerHarness : IDisposable
     /// <summary>The side-file prefix a script uses for its own directory's parent.</summary>
     /// <returns><c>../</c>, spelled for the script.</returns>
     public static string SidePrefix => "../";
+
+    /// <summary>The first child of this process whose command line carries the marker, or 0 when there is none.</summary>
+    /// <param name="argumentMarker">A substring of the child's argument vector.</param>
+    /// <returns>The pid, or 0.</returns>
+    public static int LiveChildProcess(string argumentMarker)
+    {
+        var startInfo = new ProcessStartInfo("/bin/ps")
+        {
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+
+        startInfo.ArgumentList.Add("-axww");
+        startInfo.ArgumentList.Add("-o");
+        startInfo.ArgumentList.Add("pid=,ppid=,command=");
+
+        using var ps = Process.Start(startInfo);
+
+        if (ps is null)
+        {
+            return 0;
+        }
+
+        var self = Environment.ProcessId;
+
+        while (ps.StandardOutput.ReadLine() is { } line)
+        {
+            var text = line.AsSpan().TrimStart();
+            var firstSpace = text.IndexOf(' ');
+
+            if (firstSpace <= 0)
+            {
+                continue;
+            }
+
+            var remainder = text[(firstSpace + 1)..].TrimStart();
+            var secondSpace = remainder.IndexOf(' ');
+
+            if (secondSpace <= 0)
+            {
+                continue;
+            }
+
+            if (!int.TryParse(text[..firstSpace], NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid)
+                || !int.TryParse(remainder[..secondSpace], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parent)
+                || parent != self
+                || !remainder[(secondSpace + 1)..].Contains(argumentMarker, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return pid;
+        }
+
+        ps.WaitForExit(5000);
+
+        return 0;
+    }
 
     /// <inheritdoc />
     public void Dispose() => ParseRunTempDirectory.Delete(TempRoot);

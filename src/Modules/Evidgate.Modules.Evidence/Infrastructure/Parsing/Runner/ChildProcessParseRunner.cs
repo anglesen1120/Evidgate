@@ -46,7 +46,11 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
     /// </summary>
     private const int StderrDrainBytes = 4096;
 
-    /// <summary>How long the runner waits for a killed child to be reaped before it stops waiting.</summary>
+    /// <summary>
+    /// The one grace a run gets once its child is gone (or being killed): the post-kill exit wait and all three
+    /// pipe pumps share this single budget, so a descendant that leaked a pipe costs the run one grace and not one
+    /// per step. Every wait of the teardown is taken against the same deadline.
+    /// </summary>
     private static readonly TimeSpan ExitAfterKillWait = TimeSpan.FromSeconds(10);
 
     private readonly ParseRunnerOptions options;
@@ -54,6 +58,12 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
     private readonly ConcurrentDictionary<Process, byte> running = new();
 
     private volatile bool disposed;
+
+    /// <summary>
+    /// The test seam at the one instant a dispose cannot otherwise be aimed at: between the child's start and the
+    /// moment the running table holds it. Invoked synchronously on the run's own thread; null in production.
+    /// </summary>
+    internal Action? ChildStarted { get; init; }
 
     /// <summary>Creates the runner for the host's bound options.</summary>
     /// <param name="options">The bound <c>EVIDGATE__PARSE__*</c> options.</param>
@@ -149,8 +159,16 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
     /// <param name="stdin">The child's stdin; closed when this returns, on every path.</param>
     /// <param name="input">The artifact's bytes; the caller keeps ownership.</param>
     /// <param name="maxBytes">The run's cap; the child needs to see the cap broken to reject the object.</param>
-    /// <returns>Nothing: a stdin fault is never a verdict by itself.</returns>
-    private static async Task WriteStdinAsync(Stream stdin, Stream input, long maxBytes)
+    /// <param name="stop">
+    /// Stops the copy once nothing reads the pipe any more — the child exited, or the run is being cancelled. The
+    /// stream belongs to the caller, so the run must not keep reading it after it returned.
+    /// </param>
+    /// <returns>Nothing: a stdin fault never is a verdict by itself.</returns>
+    private static async Task WriteStdinAsync(
+        Stream stdin,
+        Stream input,
+        long maxBytes,
+        CancellationToken stop)
     {
         var buffer = new byte[StdinBlockBytes];
 
@@ -162,22 +180,26 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
             while (written < budget)
             {
                 var want = (int)Math.Min(buffer.Length, budget - written);
-                var read = await input.ReadAsync(buffer.AsMemory(0, want)).ConfigureAwait(false);
+                var read = await input.ReadAsync(buffer.AsMemory(0, want), stop).ConfigureAwait(false);
 
                 if (read == 0)
                 {
                     break;
                 }
 
-                await stdin.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
+                await stdin.WriteAsync(buffer.AsMemory(0, read), stop).ConfigureAwait(false);
                 written += read;
             }
 
-            await stdin.FlushAsync().ConfigureAwait(false);
+            await stdin.FlushAsync(stop).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException)
         {
             // EPIPE after the marker, or after the child exited: the child's verdict stands.
+        }
+        catch (OperationCanceledException)
+        {
+            // The child is gone, so the copy stops here instead of waiting the grace for a stream the caller owns.
         }
         finally
         {
@@ -224,15 +246,18 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
             process.Kill(entireProcessTree: true);
         }
         catch (Exception exception) when (exception is
-            InvalidOperationException or Win32Exception or NotSupportedException or AggregateException)
+            InvalidOperationException or ObjectDisposedException or Win32Exception or NotSupportedException
+            or AggregateException)
         {
-            // Exited between the check and the kill, refused by the OS for a gone process, or a tree walk that lost
-            // a descendant mid-way: the whole-process kill is the fallback and either way nothing is left to do.
+            // Exited between the check and the kill, already disposed by the caller's own teardown, refused by the
+            // OS for a gone process, or a tree walk that lost a descendant mid-way: the whole-process kill is the
+            // fallback and either way nothing is left to do.
             try
             {
                 process.Kill();
             }
-            catch (Exception fallback) when (fallback is InvalidOperationException or Win32Exception)
+            catch (Exception fallback) when (fallback is
+                InvalidOperationException or ObjectDisposedException or Win32Exception)
             {
                 // Already gone.
             }
@@ -241,43 +266,50 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
     /// <summary>Waits for the stdout pump, yielding null after the grace when a leaked pipe holds it open.</summary>
     /// <param name="stdout">The pump.</param>
+    /// <param name="budget">The run's single teardown deadline, shared with the other two pumps.</param>
     /// <returns>The capture, or null when the pump was abandoned.</returns>
-    private static async Task<ChildOutputCapture?> WithinDrainBoundAsync(Task<ChildOutputCapture> stdout)
+    private static async Task<ChildOutputCapture?> WithinDrainBoundAsync(
+        Task<ChildOutputCapture> stdout,
+        CancellationToken budget)
     {
         try
         {
-            return await stdout.WaitAsync(ExitAfterKillWait, CancellationToken.None).ConfigureAwait(false);
+            return await stdout.WaitAsync(budget).ConfigureAwait(false);
         }
-        catch (TimeoutException)
+        catch (OperationCanceledException)
         {
             return null;
         }
     }
 
-    /// <summary>Waits for a pipe pump, giving up after the normal exit grace so a leaked pipe cannot hang a run.</summary>
+    /// <summary>Waits for a pipe pump against the same teardown budget the other pumps use.</summary>
     /// <param name="task">The pump.</param>
-    /// <returns>Nothing; a pump still running after the grace is abandoned with its stream.</returns>
-    private static async Task WithinDrainBoundAsync(Task task)
+    /// <param name="budget">The run's single teardown deadline, shared with the other two pumps.</param>
+    /// <returns>Nothing; a pump still running when the budget is spent is abandoned with its stream.</returns>
+    private static async Task WithinDrainBoundAsync(Task task, CancellationToken budget)
     {
         try
         {
-            await task.WaitAsync(ExitAfterKillWait, CancellationToken.None).ConfigureAwait(false);
+            await task.WaitAsync(budget).ConfigureAwait(false);
         }
-        catch (TimeoutException)
+        catch (OperationCanceledException)
         {
             // A descendant holds the pipe: the stream belongs to a process the caller is about to dispose.
         }
     }
 
-    private static async Task WaitForExitQuietlyAsync(Process process)
+    /// <summary>Waits for a killed child to be reaped, against the run's teardown budget.</summary>
+    /// <param name="process">The child.</param>
+    /// <param name="budget">The run's single teardown deadline.</param>
+    /// <returns>Nothing; a child that cannot be reaped is the OS's leftover, not a verdict.</returns>
+    private static async Task WaitForExitQuietlyAsync(Process process, CancellationToken budget)
     {
         try
         {
-            using var timeout = new CancellationTokenSource(ExitAfterKillWait);
-
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(budget).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is OperationCanceledException or InvalidOperationException)
+        catch (Exception exception) when (exception is
+            OperationCanceledException or InvalidOperationException or ObjectDisposedException)
         {
             // The kill was issued either way; a child that cannot be reaped is the OS's leftover, not a verdict.
         }
@@ -317,10 +349,26 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
             return SpawnFailed();
         }
 
+        ChildStarted?.Invoke();
+
         running[process] = 0;
 
         try
         {
+            // A Dispose that ran between the entry check and the registration above iterated a table that did not
+            // hold this child yet, so nothing killed it: the run ends here, as the abnormal exit a dispose causes,
+            // instead of starting a child no one is tracking.
+            if (disposed)
+            {
+                KillTree(process);
+
+                using var settle = new CancellationTokenSource(ExitAfterKillWait);
+
+                await WaitForExitQuietlyAsync(process, settle.Token).ConfigureAwait(false);
+
+                return new ParseRunFailed(ParseRunFailureKind.ExitedAbnormally, ExitCodeOf(process), 0, 0);
+            }
+
             return await RunStartedAsync(process, request, limits, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -329,7 +377,10 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
             // Every path, including a cancellation that is about to propagate: no child outlives its run.
             KillTree(process);
-            await WaitForExitQuietlyAsync(process).ConfigureAwait(false);
+
+            using var settle = new CancellationTokenSource(ExitAfterKillWait);
+
+            await WaitForExitQuietlyAsync(process, settle.Token).ConfigureAwait(false);
         }
     }
 
@@ -340,14 +391,32 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
         CancellationToken cancellationToken)
     {
         var protocol = new ChildOutputProtocol(limits.MaxOutputBytes, limits.MaxOutputRecords, limits.MaxRecordBytes);
+        var streamStop = new StreamStop();
+
+        // The stdin copy stops on its own token: nothing reads the pipe once the child is gone, so the run must not
+        // keep reading the caller's stream past its return.
+        using var stdinCopy = new CancellationTokenSource();
 
         // The three pipes are served concurrently: a child that writes more than one pipe buffer must never be
         // blocked by the parent, and the parent must never block on stdin while the child answers (behaviour 2).
-        var stdoutTask = protocol.ReadAsync(process.StandardOutput.BaseStream, () => KillTree(process));
+        var stdoutTask = protocol.ReadAsync(
+            process.StandardOutput.BaseStream,
+            () =>
+            {
+                // The parent is the author of this death: the exit code that follows is its consequence, so the
+                // verdict must be the kind that caused the kill and never 128+signal.
+                streamStop.RecordProtocolKill();
+                KillTree(process);
+            });
         var stderrTask = DrainStderrAsync(process.StandardError.BaseStream);
-        var stdinTask = WriteStdinAsync(process.StandardInput.BaseStream, request.Input, request.MaxBytes);
+        var stdinTask = WriteStdinAsync(
+            process.StandardInput.BaseStream,
+            request.Input,
+            request.MaxBytes,
+            stdinCopy.Token);
 
         var wallClockExceeded = false;
+        var callerCancelled = false;
 
         using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
         {
@@ -355,36 +424,64 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
             try
             {
-                // Completes when the child exited and both output pipes reached EOF; a descendant that keeps a
-                // pipe open is exactly what the deadline (and then the tree kill) is for.
+                // Completes on the child's own exit and nothing else: the runtime's WaitForExitAsync does not wait
+                // for redirected pipes, which is why the drains below are bounded — a descendant that inherited a
+                // pipe keeps it open past the child, and an unbounded drain would hang the run.
                 await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
-                wallClockExceeded = true;
-                KillTree(process);
-                await WaitForExitQuietlyAsync(process).ConfigureAwait(false);
+                // Two cancellations end the wait: the caller's and the run's own wall clock.
+                callerCancelled = cancellationToken.IsCancellationRequested;
+                wallClockExceeded = !callerCancelled;
             }
         }
 
-        // Every drain is bounded. A descendant that inherited one of the child's pipes keeps it open past the child's
-        // death, so an unbounded await would hang the run forever (the kill in the caller's finally comes after this
-        // point). An abandoned drain leaves no credible stream: the run ends malformed, never as a success.
-        var stdoutBound = WithinDrainBoundAsync(stdoutTask);
-        var stderrBound = WithinDrainBoundAsync(stderrTask);
-        var stdinBound = WithinDrainBoundAsync(stdinTask);
+        if (callerCancelled || wallClockExceeded)
+        {
+            KillTree(process);
+        }
 
-        // One grace for all three pumps, together: a leaked pipe must cost the run one grace, not one per pipe.
+        // One budget for the whole teardown: the post-kill exit wait and all three pumps are taken against the same
+        // deadline, so a leaked pipe costs the run one grace instead of one grace per step. An abandoned drain
+        // leaves no credible stream: the run then ends malformed, never as a success.
+        using var budget = new CancellationTokenSource(ExitAfterKillWait);
+
+        if (callerCancelled || wallClockExceeded)
+        {
+            await WaitForExitQuietlyAsync(process, budget.Token).ConfigureAwait(false);
+        }
+
+        // The child has exited (or is being killed): nothing reads its stdin any more, so the copy is stopped
+        // rather than given the grace to notice a broken pipe.
+        await stdinCopy.CancelAsync().ConfigureAwait(false);
+
+        var stdoutBound = WithinDrainBoundAsync(stdoutTask, budget.Token);
+        var stderrBound = WithinDrainBoundAsync(stderrTask, budget.Token);
+        var stdinBound = WithinDrainBoundAsync(stdinTask, budget.Token);
+
         await Task.WhenAll(stdoutBound, stderrBound, stdinBound).ConfigureAwait(false);
 
         var capture = await stdoutBound.ConfigureAwait(false) ?? protocol.Abandoned();
 
+        // A caller cancellation is not a parse verdict, and the pumps above are already finished: no pipe is still
+        // read once this throws, so the Process is never killed through a handle its caller already disposed.
+        if (callerCancelled)
+        {
+            throw new OperationCanceledException(
+                "The caller cancelled the parse run; the child was killed and its pipes drained.",
+                cancellationToken);
+        }
+
         var exitCode = ExitCodeOf(process);
 
         // The verdict order is deliberate. A cap breach is the parent's own decision (it killed the child, so the
-        // exit code is a consequence, not evidence); the wall clock is likewise the parent's; the child's exit code
-        // then outranks a bad stream, so a signal death reads as ExitedAbnormally with 128+signal rather than as a
-        // framing problem; and only a child that exited 0 with an unusable stream is MalformedOutput.
+        // exit code is a consequence, not evidence), and the wall clock is likewise the parent's. A stream the
+        // parent killed because it was not the protocol is the parent's decision too: reporting the 137 that kill
+        // produced would make a framing violation a race between the kill and the child's own exit. Only after
+        // those three does the child's exit code decide, so a signal death of nobody's making reads as
+        // ExitedAbnormally with 128+signal rather than as a framing problem; and a child that exited 0 with an
+        // unusable stream — or whose stream never closed — is MalformedOutput.
         if (capture.Failure is { } failure && failure != ParseRunFailureKind.MalformedOutput)
         {
             return new ParseRunFailed(failure, exitCode, capture.OutputBytes, capture.RecordCount);
@@ -394,6 +491,15 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
         {
             return new ParseRunFailed(
                 ParseRunFailureKind.WallClockExceeded,
+                exitCode,
+                capture.OutputBytes,
+                capture.RecordCount);
+        }
+
+        if (capture.Failure == ParseRunFailureKind.MalformedOutput && streamStop.ProtocolKillRecorded)
+        {
+            return new ParseRunFailed(
+                ParseRunFailureKind.MalformedOutput,
                 exitCode,
                 capture.OutputBytes,
                 capture.RecordCount);
@@ -484,6 +590,23 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
         }
 
         return startInfo;
+    }
+
+    /// <summary>
+    /// Whether the parent itself killed the child because its stdout was not the protocol. The stdout pump's failure
+    /// hook writes it before the kill, and the verdict reads it once that pump is finished or abandoned, so the two
+    /// sides meet through a volatile field rather than through an implicit happens-before the abandoned path does
+    /// not have.
+    /// </summary>
+    private sealed class StreamStop
+    {
+        private int protocolKillRecorded;
+
+        /// <summary>True once the stdout reader asked the runner to kill the child for a framing violation.</summary>
+        public bool ProtocolKillRecorded => Volatile.Read(ref protocolKillRecorded) == 1;
+
+        /// <summary>Records the parent's own kill of the child for a stream that is not the protocol.</summary>
+        public void RecordProtocolKill() => Volatile.Write(ref protocolKillRecorded, 1);
     }
 
     /// <summary>One run's effective output caps, resolved once so a config change cannot move them mid-stream.</summary>

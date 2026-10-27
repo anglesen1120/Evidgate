@@ -83,6 +83,61 @@ public sealed class ParseRunnerTests
     }
 
     /// <summary>
+    /// 06.3.6-T1.3 behaviour 3, plan Notes :146: the child wraps a whole validated document in one record, so the
+    /// reader's depth cap has to admit the profile's own depth plus that wrapper. A document nested 60 levels is
+    /// well inside <c>ParsingLimits.MaxDepth</c> and must come back as a record, not as malformed output.
+    /// </summary>
+    [Fact]
+    public async Task A_Deeply_Nested_Json_Document_Streams_As_One_Record()
+    {
+        using var harness = new ParseRunnerHarness();
+        using var runner = harness.RealChild();
+        var document = Encoding.UTF8.GetBytes(new string('[', 60) + new string(']', 60));
+
+        var result = await ParseRunnerHarness.RunAsync(
+            runner,
+            ParseRunnerProfile.Json,
+            OneMebibyte,
+            document,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var success = result.ShouldBeOfType<ParseRunSucceeded>();
+
+        success.ChildExitCode.ShouldBe(0);
+        success.Records.Count.ShouldBe(1);
+        Encoding.UTF8.GetString(success.Records[0].Utf8Json.Span)
+            .ShouldContain(new string('[', 60) + new string(']', 60));
+    }
+
+    /// <summary>
+    /// 06.3.6-T1.3 behaviour 3, plan Notes :146: one JSON record carries the whole document, so the per-line cap is
+    /// six times the input cap above the 1 MiB floor. A ~2 MiB document under a 4 MiB input cap — the shape the
+    /// floor-only derivation refused — has to stream as one record.
+    /// </summary>
+    [Fact]
+    public async Task A_Two_Mebibyte_Json_Record_Passes_A_Four_Mebibyte_Input_Cap()
+    {
+        using var harness = new ParseRunnerHarness();
+        using var runner = harness.RealChild();
+
+        // The document is 2 MiB to the byte: the prefix, the filler and the closing quote and brace.
+        var document = Encoding.UTF8.GetBytes($"{{\"a\":\"{new string('x', (2 * 1024 * 1024) - 8)}\"}}");
+
+        var result = await ParseRunnerHarness.RunAsync(
+            runner,
+            ParseRunnerProfile.Json,
+            4 * OneMebibyte,
+            document,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var success = result.ShouldBeOfType<ParseRunSucceeded>();
+
+        success.ChildExitCode.ShouldBe(0);
+        success.Records.Count.ShouldBe(1);
+        success.OutputBytes.ShouldBeGreaterThan(2 * OneMebibyte);
+    }
+
+    /// <summary>
     /// 06.3.6-T1.3 behaviour 2 / plan Notes S117 <em>Stdin overflow</em>: the child rejects the first byte past the
     /// cap, writes its rejection and the marker, and exits without draining stdin. The parent's stdin write ends in
     /// EPIPE, which is normal completion: the verdict is the marker, and the result is a successful run carrying one
@@ -145,27 +200,34 @@ public sealed class ParseRunnerTests
 
         var environment = harness.ReadEnvironmentDump("env.txt");
 
-        // The allow-list, and only the three variables /bin/sh adds for itself before it runs `env`: this child is a
-        // shell script, so what the runner set and what the shell added are the whole environment it can dump.
-        environment.Keys.Order(StringComparer.Ordinal).ToArray().ShouldBe(
-        [
-            ChildEnvironment.HeapLimitVariable,
-            ChildEnvironment.InvariantGlobalizationVariable,
-            "PWD",
-            "SHLVL",
-            ChildEnvironment.TempDirectoryVariable,
-            "_",
-        ]);
-
-        // 512 MiB as the runtime parses it (hexadecimal bytes), spelled out here rather than round-tripped through
-        // the runner's own formatter.
+        // The allow-list and the values the runner computes: the heap ceiling in the runtime's hexadecimal form, the
+        // globalization switch a scripted child needs (its command is a shell, so it declares no runtimeconfig) and
+        // this run's private temp directory. The shell adds PWD, SHLVL and _ for itself before it runs `env`, and
+        // which of those appear differs per shell, so the dump is never asserted key for key.
         environment[ChildEnvironment.HeapLimitVariable].ShouldBe("0x20000000");
         environment[ChildEnvironment.InvariantGlobalizationVariable].ShouldBe("1");
         environment[ChildEnvironment.TempDirectoryVariable].ShouldStartWith(harness.TempRoot);
         environment[ChildEnvironment.TempDirectoryVariable].ShouldNotBe(harness.TempRoot);
 
-        // The scrubbing is not vacuous: the test host does have a PATH, and the child does not.
-        Environment.GetEnvironmentVariable("PATH").ShouldNotBeNullOrEmpty();
+        // Nothing else travels: no DOTNET_* beyond the allow-list (DOTNET_STARTUP_HOOKS, the gc family), nothing
+        // COMPlus_* or LD_*, and neither HOME nor PATH — the host has all of them, the child gets none.
+        string[] allowList =
+        [
+            ChildEnvironment.HeapLimitVariable,
+            ChildEnvironment.InvariantGlobalizationVariable,
+            ChildEnvironment.TempDirectoryVariable,
+        ];
+
+        environment.Keys
+            .Where(key => !allowList.Contains(key, StringComparer.Ordinal))
+            .Where(key => key.StartsWith("DOTNET_", StringComparison.Ordinal)
+                || key.StartsWith("COMPlus_", StringComparison.Ordinal)
+                || key.StartsWith("LD_", StringComparison.Ordinal)
+                || key is "HOME" or "PATH")
+            .ShouldBeEmpty();
+
+        environment.ShouldNotContainKey("HOME");
+        environment.ShouldNotContainKey("PATH");
     }
 
     /// <summary>
@@ -185,7 +247,6 @@ public sealed class ParseRunnerTests
 
         // A non-positive value never widens a limit: the documented default applies instead, and the child still
         // sees the heap ceiling as an environment value rather than inheriting the host's.
-        harness.ReadEnvironmentDump("env.txt").ShouldContainKey(ChildEnvironment.HeapLimitVariable);
         using var fallback = harness.Script(DumpScript, options => options.MemoryLimitBytes = -1);
 
         await ParseRunnerHarness.RunAsync(fallback, ParseRunnerProfile.Xml, maxBytes: 4096, input: [], cancellationToken: TestContext.Current.CancellationToken);
@@ -221,22 +282,35 @@ public sealed class ParseRunnerTests
         var options = new ParseRunnerOptions();
 
         // Byte cap: floor for a tiny input, the measured-amplification factor in the middle, the ceiling at any size.
+        // The derivation reaches the ceiling at 256 MiB / 24 input bytes, and at the measured 18.6x amplification a
+        // stream passes that ceiling from 256 MiB / 18.6 (~13.8 MiB) of input, so above that cutoff the run ends as a
+        // breach by design, not as a wider buffer.
         options.EffectiveMaxOutputBytes(1024).ShouldBe(ParseRunnerOptions.OutputBytesFloor);
         options.EffectiveMaxOutputBytes(1024 * 1024).ShouldBe(24L * 1024 * 1024);
         options.EffectiveMaxOutputBytes(long.MaxValue).ShouldBe(ParseRunnerOptions.OutputBytesCeiling);
 
-        // Record cap: floor, linear at the measured density, ceiling — and the ceiling admits the ~10M records a
-        // 16 MiB token-dense input measured in the plan Notes, so a real dense artifact is never a false breach.
-        options.EffectiveMaxOutputRecords(1024).ShouldBe(ParseRunnerOptions.RecordCountFloor);
-        options.EffectiveMaxOutputRecords(1024 * 1024)
-            .ShouldBe((int)(1024L * 1024 * ParseRunnerOptions.RecordsPerThousandInputBytes / 1000));
-        options.EffectiveMaxOutputRecords(16L * 1024 * 1024).ShouldBe(ParseRunnerOptions.RecordCountCeiling);
-        options.EffectiveMaxOutputRecords(16L * 1024 * 1024).ShouldBeGreaterThan(10_000_000);
+        var ceilingKnee = ParseRunnerOptions.OutputBytesCeiling / ParseRunnerOptions.OutputAmplificationFactor;
 
-        // Per-line cap: four times the input cap below the knee, the line floor from there on, never above the byte
-        // cap. A 1 KiB input cannot honestly claim a 1 MiB line, so the floor starts only once the input is large.
-        options.EffectiveMaxRecordBytes(1024).ShouldBe((int)(ParseRunnerOptions.RecordLineFactor * 1024));
-        options.EffectiveMaxRecordBytes(4L * 1024 * 1024).ShouldBe((int)ParseRunnerOptions.RecordLineFloor);
+        // The switch is the integer quotient, one byte under the exact 256 MiB / 24 break-even, so the last input
+        // that still multiplies is one byte below it; the difference stays well inside the factor's headroom.
+        options.EffectiveMaxOutputBytes(ceilingKnee - 1)
+            .ShouldBe(ParseRunnerOptions.OutputAmplificationFactor * (ceilingKnee - 1));
+        options.EffectiveMaxOutputBytes(ceilingKnee).ShouldBe(ParseRunnerOptions.OutputBytesCeiling);
+
+        // Record cap: floor, one record per eight input bytes, ceiling — and the ceiling sits below the ~10M records
+        // the measured 16 MiB token-dense input produced, so that shape is refused instead of buffered.
+        options.EffectiveMaxOutputRecords(1024).ShouldBe(ParseRunnerOptions.RecordCountFloor);
+        options.EffectiveMaxOutputRecords(1024 * 1024).ShouldBe(1024 * 1024 / ParseRunnerOptions.InputBytesPerRecord);
+        options.EffectiveMaxOutputRecords(16L * 1024 * 1024).ShouldBe(ParseRunnerOptions.RecordCountCeiling);
+        options.EffectiveMaxOutputRecords(16L * 1024 * 1024).ShouldBeLessThan(10_000_000);
+        options.EffectiveMaxOutputRecords(long.MaxValue).ShouldBe(ParseRunnerOptions.RecordCountCeiling);
+
+        // Per-line cap: the 1 MiB floor for a small input, then six times the input cap, never above the byte cap. A
+        // 2 MiB record line (a whole JSON document) has to pass a 4 MiB input cap, which the floor alone refused.
+        options.EffectiveMaxRecordBytes(1024).ShouldBe((int)ParseRunnerOptions.RecordLineFloor);
+        options.EffectiveMaxRecordBytes(4L * 1024 * 1024)
+            .ShouldBe((int)(ParseRunnerOptions.RecordLineFactor * 4L * 1024 * 1024));
+        options.EffectiveMaxRecordBytes(1024L * 1024 * 1024).ShouldBe((int)ParseRunnerOptions.OutputBytesCeiling);
 
         var configured = new ParseRunnerOptions { MaxOutputBytes = 4096, MaxOutputRecords = 7 };
 
@@ -375,9 +449,11 @@ public sealed class ParseRunnerTests
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         var services = new ServiceCollection();
 
-        // The hosts register the configuration in DI; the module's BindConfiguration resolves it from there.
+        // The hosts register the configuration in DI; the module's BindConfiguration resolves it from there. The
+        // runner itself is registered by the Worker-only seam, because spawning processes is a Worker capability.
         services.AddSingleton<IConfiguration>(configuration);
         services.AddEvidenceModule(configuration);
+        services.AddParseRunner(configuration);
 
         return services.BuildServiceProvider();
     }

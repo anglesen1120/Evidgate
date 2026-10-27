@@ -18,14 +18,21 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 /// failure, never a truncated success. Both caps default to a derivation from the run's <c>--max-bytes</c>:
 /// <list type="bullet">
 /// <item>bytes: <c>max(8 MiB, 24 x max-bytes)</c>, never above 256 MiB;</item>
-/// <item>records: <c>max(4 096, max-bytes / 8)</c>, never above 1 000 000;</item>
-/// <item>one record line: <c>min(byte cap, max(1 MiB, 4 x max-bytes))</c>, because a single text record may
-/// legitimately carry a whole attribute value escaped to about 3x its bytes.</item>
+/// <item>records: <c>max(4 096, max-bytes / 8)</c>, never above 2 000 000;</item>
+/// <item>one record line: <c>min(byte cap, max(1 MiB, 6 x max-bytes))</c>, because one JSON record carries the
+/// whole document, escaped at about 3x for non-ASCII values, so 6x still admits a document that fills the
+/// input cap.</item>
 /// </list>
-/// The 24x factor clears the measured legit ceiling (18.6x) and the hard ceilings bound the parent's own heap:
-/// the buffered stream costs one copy of the child's stdout, so 256 MiB of stdout is the most one run can hold.
-/// An artifact whose legit stream exceeds the derived cap ends as a breach; raising the two options is the tuning
-/// knob, and two processes parsing 100 MiB artifacts at once are a capacity decision, not a config one.
+/// The 24x factor is headroom in the derivation, not a promise about streams: the derived cap stops growing at
+/// <c>256 MiB / 24</c> (~10.7 MiB of input), and at the measured 18.6x amplification a stream only passes the
+/// 256 MiB ceiling from <c>256 MiB / 18.6</c> (~13.8 MiB of input) upward — an input between the two knees still
+/// succeeds. Above that cutoff the run ends as an output-bytes breach by design: 256 MiB is what bounds the
+/// parent's own heap, since the buffered stream costs one copy of the child's stdout, and the accepted records cost
+/// their payload plus about 56 bytes of array overhead each — at the 2 000 000 record ceiling that overhead alone is
+/// about 112 MiB. The record ceiling is set below the ~10M records the measured hostile 16 MiB input produced, so
+/// that shape is refused rather than buffered. An artifact whose legit stream exceeds either derived cap ends as a
+/// breach; raising the two options is the tuning knob, and two processes parsing 100 MiB artifacts at once are a
+/// capacity decision, not a config one.
 /// </para>
 /// </summary>
 internal sealed class ParseRunnerOptions
@@ -58,23 +65,28 @@ internal sealed class ParseRunnerOptions
     internal const int RecordCountFloor = 4_096;
 
     /// <summary>
-    /// The largest record count the parent buffers for one run. Set above the 16 MiB input that measured about 10M
-    /// records (plan Notes :146), so a record-dense artifact that the child streamed legitimately is never called a
-    /// breach; the byte cap stays the first wall for anything that streams real payload.
+    /// The largest record count the parent buffers for one run. Deliberately below the ~10M records a 16 MiB
+    /// token-dense input measured (plan Notes :146): that shape is refused as a breach instead of buffered, because
+    /// the accepted records are the parent's memory — each one costs its payload plus about 56 bytes of array
+    /// overhead, so 2 000 000 records are about 112 MiB of overhead before any payload.
     /// </summary>
-    internal const int RecordCountCeiling = 12_000_000;
+    internal const int RecordCountCeiling = 2_000_000;
 
     /// <summary>
-    /// Records a run may emit per thousand input bytes: three quarters of one, from the ~10M records a 16 MiB
-    /// token-dense input produced (plan Notes :146) — 0.6 per byte measured, rounded up for headroom.
+    /// Input bytes per allowed record: one record per eight bytes of the run's cap. The derivation reads the cap, not
+    /// a measurement, so a record-dense stream is bounded by the input it came from rather than by a density the
+    /// child controls.
     /// </summary>
-    internal const int RecordsPerThousandInputBytes = 750;
+    internal const int InputBytesPerRecord = 8;
 
     /// <summary>The smallest per-record line cap.</summary>
     internal const long RecordLineFloor = 1L * 1024 * 1024;
 
-    /// <summary>How much one record may grow over its input contribution (a whole text node, escaped).</summary>
-    internal const long RecordLineFactor = 4;
+    /// <summary>
+    /// How much one record may grow over the input cap: a JSON record carries the whole document, and a non-ASCII
+    /// value escapes to about 3x, so 6x admits a document that fills the cap with the wrapper's own bytes on top.
+    /// </summary>
+    internal const long RecordLineFactor = 6;
 
     /// <summary>Whether the out-of-process runner is registered; off means the in-process path is the only one.</summary>
     public bool OutOfProcess { get; set; }
@@ -128,7 +140,12 @@ internal sealed class ParseRunnerOptions
 
     /// <summary>The stdout byte cap for a run whose input cap is <paramref name="maxBytes"/>.</summary>
     /// <param name="maxBytes">The run's <c>--max-bytes</c> (positive).</param>
-    /// <returns>The configured cap, or the derived one clamped to the floor and the ceiling.</returns>
+    /// <returns>
+    /// The configured cap, or the derived one clamped to the floor and the ceiling. The derivation reaches the
+    /// ceiling at <c>256 MiB / 24</c> (~10.7 MiB of input) and the cap then stops growing; at the measured 18.6x
+    /// amplification a stream passes 256 MiB only from <c>256 MiB / 18.6</c> (~13.8 MiB of input), so an input above
+    /// that cutoff ends as a breach by design rather than widening the parent's buffer.
+    /// </returns>
     internal long EffectiveMaxOutputBytes(long maxBytes)
     {
         if (MaxOutputBytes > 0)
@@ -147,7 +164,9 @@ internal sealed class ParseRunnerOptions
 
     /// <summary>The record cap for a run whose input cap is <paramref name="maxBytes"/>.</summary>
     /// <param name="maxBytes">The run's <c>--max-bytes</c> (positive).</param>
-    /// <returns>The configured cap, or the derived one clamped to the floor and the ceiling.</returns>
+    /// <returns>
+    /// The configured cap, or <c>min(2 000 000, max(4 096, max-bytes / 8))</c>, clamped to the floor and the ceiling.
+    /// </returns>
     internal int EffectiveMaxOutputRecords(long maxBytes)
     {
         if (MaxOutputRecords > 0)
@@ -155,26 +174,23 @@ internal sealed class ParseRunnerOptions
             return MaxOutputRecords;
         }
 
-        // A comparison before the multiplication, so an enormous input cap cannot overflow into a small derived cap.
-        var scaled = maxBytes >= (long)RecordCountCeiling * 1000 / RecordsPerThousandInputBytes
-            ? RecordCountCeiling
-            : maxBytes * RecordsPerThousandInputBytes / 1000;
-
-        return (int)Math.Clamp(scaled, RecordCountFloor, RecordCountCeiling);
+        return (int)Math.Clamp(maxBytes / InputBytesPerRecord, RecordCountFloor, RecordCountCeiling);
     }
 
     /// <summary>The longest single record line the runner accepts for a run whose input cap is <paramref name="maxBytes"/>.</summary>
     /// <param name="maxBytes">The run's <c>--max-bytes</c> (positive).</param>
     /// <returns>
-    /// The per-line cap: four times the input cap while that stays under the line floor, the floor above it, and
-    /// never more than the run's byte cap.
+    /// The per-line cap: <c>min(byte cap, max(1 MiB, 6 x max-bytes))</c>. The floor keeps a small input from
+    /// refusing a record that a large document legitimately produces, the factor covers the escaping of a whole
+    /// document carried in one record, and the run's byte cap still bounds the line.
     /// </returns>
     internal int EffectiveMaxRecordBytes(long maxBytes)
     {
-        var line = maxBytes >= RecordLineFloor / RecordLineFactor
-            ? RecordLineFloor
-            : RecordLineFactor * maxBytes;
+        // A comparison before the multiplication, so an enormous input cap cannot overflow into a small line cap.
+        var grown = maxBytes >= int.MaxValue / RecordLineFactor ? int.MaxValue : RecordLineFactor * maxBytes;
+        var line = Math.Max(RecordLineFloor, grown);
 
+        // The result is bounded by the line, which is at most int.MaxValue, so the cast cannot truncate.
         return (int)Math.Min(EffectiveMaxOutputBytes(maxBytes), line);
     }
 }

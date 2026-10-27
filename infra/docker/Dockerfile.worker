@@ -80,12 +80,20 @@ RUN set -eux; \
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS runtime
 
-USER $APP_UID
+USER root
 WORKDIR /app
-# One COPY: /app/parser (the parse child's dll, runtimeconfig.json and deps.json)
-# travels with the Worker output and is owned by the same $APP_UID, so the
-# runtime user can launch the child without any extra permission.
-COPY --from=build --chown=$APP_UID:$APP_UID /app ./
+# One COPY: /app/parser (the parse child's dll, runtimeconfig.json and deps.json) travels with the Worker output.
+# Deliberately NO `--chown`, and the directory is created as root before the USER switch: the tree stays
+# root-owned (a publish writes 0644 files and 0755 directories) and only world-readable, so the non-root runtime
+# can read and start both processes but cannot unlink or replace an assembly. Both halves matter — a root-owned
+# file inside a directory the app uid owns can be unlinked and replaced by that uid, and BuildKit creates a missing
+# WORKDIR with the ownership of whichever USER is active.
+# The parse child is the one process that touches untrusted bytes: a compromised child runs as $APP_UID, and a
+# writable /app would let it swap the Worker's own binaries for the next start or a sibling process (06.3.6 review,
+# security finding). Nothing in the Worker writes under its base directory — temp input for a parse run goes to
+# ParseRunnerOptions.TempRoot (/tmp by default) — so root ownership costs nothing.
+COPY --from=build /app ./
+USER $APP_UID
 
 # 01.1.2-T1.1: the Worker's readiness surface is its own HTTP listener on
 # EVIDGATE__WORKER__HEALTHPORT (default 8081) serving /internal/health/live and

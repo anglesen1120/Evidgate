@@ -1851,7 +1851,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "the most stdout bytes one child run may write before the run ends as a breach (06.3.6-T1.3; a breach is a rejected result, never a truncated success). Option default 0 derives it from the run's --max-bytes as max(8 MiB, 24 x max-bytes), never above 256 MiB: 24x clears the measured 18.6x amplification, and 256 MiB is the most the parent buffers for one run."
+      "note": "the most stdout bytes one child run may write before the run ends as a breach (06.3.6-T1.3; a breach is a rejected result, never a truncated success). Option default 0 derives it from the run's --max-bytes as max(8 MiB, 24 x max-bytes), never above 256 MiB: 24x is the derivation's headroom over the measured 18.6x amplification, and 256 MiB is the most the parent buffers for one run, so the derivation reaches the ceiling at 256 MiB / 24 (~10.7 MiB of input) and stops growing. At the measured 18.6x a stream passes 256 MiB only from 256 MiB / 18.6 (~13.8 MiB of input); an input between the two still succeeds, and anything above that cutoff ends as an OutputBytesExceeded breach by design rather than widening the parent's buffer. Raising this option is the tuning knob that admits it."
     },
     {
       "key": "EVIDGATE__PARSE__MAXOUTPUTRECORDS",
@@ -1871,7 +1871,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "the most records one child run may write before the run ends as a breach; the marker counts as a line, the option bounds the buffer. Option default 0 derives it from the run's --max-bytes as max(4096, max-bytes / 8), never above 1000000: the measured hostile shape (about 10M records from a 16 MiB input) is refused rather than buffered."
+      "note": "the most records one child run may write before the run ends as a breach; the marker counts as a line, the option bounds the buffer. Option default 0 derives it from the run's --max-bytes as max(4096, max-bytes / 8), never above 2000000: the measured hostile shape (about 10M records from a 16 MiB input) is refused rather than buffered, because each accepted record costs its payload plus about 56 bytes of array overhead, so the ceiling is about 112 MiB of overhead before any payload."
     },
     {
       "key": "EVIDGATE__PARSE__TEMPROOT",

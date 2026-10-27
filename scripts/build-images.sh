@@ -29,6 +29,11 @@
 #        child's usage contract — the fixed usage line on stderr, exit 2 — as the
 #        image's own non-root user, so a Worker image that ships no runnable child
 #        fails here and not at the first parse in production;
+#   06.3.6 the Worker image's /app tree is root-owned (uid 0) with no group/other
+#        write bit and 0755 on /app and /app/parser, so the non-root runtime can
+#        read and start both processes but cannot unlink or replace an assembly —
+#        the child is the one process that runs untrusted bytes; ownership is read
+#        from the exported image filesystem because the chiseled base has no shell;
 #   AC5  the Migrator image is its own image on the same pins and
 #        `docker run <image> --help` still prints the CLI contract;
 #   AC1/AC5 with --with-db: a throwaway PostgreSQL 18 (the pinned compose.dev.yml
@@ -601,6 +606,68 @@ check_parse_child_runs() {
   echo "   parse child entry point: 'dotnet $path' exits 2 with the usage line, as Config.User runs it"
 }
 
+# 06.3.6 review (security finding): the Worker image's /app tree is not writable by the non-root runtime. The parse
+# child is the one process that touches untrusted bytes and it runs as $APP_UID; a /app the app uid can write would
+# let a compromised child unlink and replace the Worker's (or its own) assemblies for the next start or a sibling
+# process. So every entry of the tree must be root-owned, carry no group/other write bit, and /app and /app/parser
+# must be 0755 so the runtime can still read and launch. Both halves are asserted: a root-owned file in a directory
+# the app uid owns is just as replaceable — which is why the Dockerfile creates the WORKDIR as root (BuildKit gives a
+# missing WORKDIR the ownership of the active USER). The chiseled base has no shell and no coreutils, so the modes
+# are read from `docker export` here instead of from inside a container.
+check_app_tree_ownership() {
+  local reference="$1" name assembly worker_assembly archive container
+  name="$(prefix "$2")"
+  assembly="$(child_assembly_of "$name")"
+  worker_assembly="$(assembly_of "$name")"
+  [[ -n "$assembly" ]] || die "$name has no parse child: check_app_tree_ownership is called for the wrong image"
+  archive="$(mktemp)"
+  container="$(docker create --platform "$CHECK_PLATFORM" "$reference")"
+  docker export --output "$archive" "$container" >/dev/null
+  docker rm -f "$container" >/dev/null
+  python3 - "$archive" "app/$worker_assembly" "app/$(child_directory_of "$name")/$assembly" <<'PYEOF'
+import sys, tarfile
+
+archive, worker_assembly, child_assembly = sys.argv[1], sys.argv[2], sys.argv[3]
+required_dirs = {"app": 0o755, "app/parser": 0o755}
+members = {}
+directories = {}
+problems = []
+with tarfile.open(archive) as tar:
+    for member in tar:
+        name = member.name
+        while name.startswith("./"):
+            name = name[2:]
+        name = name.rstrip("/")
+        if name != "app" and not name.startswith("app/"):
+            continue
+        members[name] = member
+        if member.isdir():
+            directories[name] = member
+        if member.uid != 0 or member.gid != 0:
+            problems.append("%s is owned by %d:%d, not root" % (name, member.uid, member.gid))
+        if member.mode & 0o022:
+            problems.append("%s has mode %04o: a non-root writer can change it" % (name, member.mode))
+for directory, mode in required_dirs.items():
+    member = directories.get(directory)
+    if member is None:
+        problems.append("%s is missing from the image" % directory)
+    elif member.mode != mode:
+        problems.append("%s has mode %04o, expected %04o" % (directory, member.mode, mode))
+for assembly in (worker_assembly, child_assembly):
+    if assembly not in members:
+        problems.append("%s is missing from the image" % assembly)
+if not members:
+    problems.append("/app is missing from the image")
+if problems:
+    sys.exit("build-images: the image's /app tree is not root-owned and read-only to the app uid "
+             "(06.3.6 review): %s" % "; ".join(problems))
+print("   app tree: %d entries under /app, root-owned, no group/other write "
+      "(/app and /app/parser at 0755), incl. %s and %s"
+      % (len(members), worker_assembly, child_assembly))
+PYEOF
+  rm -f "$archive"
+}
+
 # 01.1.2-T1.3: BuildingBlocks.Persistence globs migrations/*.sql at build time and
 # bakes the greatest file name into assembly metadata as the expected journal head.
 # A build context without migrations/ does not fail — it bakes the "(none)"
@@ -777,6 +844,7 @@ for platform in $PLATFORMS; do
       if [[ "$image" == "worker" ]]; then
         check_parse_child "$reference" "$image"
         check_parse_child_runs "$reference" "$image"
+        check_app_tree_ownership "$reference" "$image"
       fi
       if [[ "$image" == "api" ]]; then built_api="$reference"; else built_worker="$reference"; fi
     fi
