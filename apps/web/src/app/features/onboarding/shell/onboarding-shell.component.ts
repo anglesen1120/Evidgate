@@ -21,6 +21,7 @@ import type { StepNumber } from '../data/step-derivation';
 import { OnboardingStore } from '../onboarding.store';
 import { CreateProjectPage } from '../steps/create-project.page';
 import { ConnectCiPage } from '../steps/connect-ci.page';
+import { EnableCollectionPage } from '../steps/enable-collection.page';
 import { EvidencePanelComponent } from './evidence-panel.component';
 import { StepPendingComponent } from './step-pending.component';
 
@@ -29,6 +30,7 @@ import { StepPendingComponent } from './step-pending.component';
   imports: [
     CreateProjectPage,
     ConnectCiPage,
+    EnableCollectionPage,
     EvidencePanelComponent,
     StepPendingComponent,
     ErrorPatternComponent,

@@ -91,7 +91,7 @@ test.describe('step 2 renders the connect page (plan §10 T2)', () => {
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 2);
 
-    // The page T2 ships, not the placeholder steps 3–5 still render while T3…T5 own them.
+    // The page T2 ships, not the placeholder steps 3–4 still render while T3/T4 own them.
     await expect(connectCiPage(page)).toBeVisible();
     await expect(page.locator('[data-testid="onboarding-step-pending"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="connect-oidc-panel"]')).toBeVisible();
@@ -329,7 +329,8 @@ test.describe('a session without the write grants cannot connect (AC2, §8)', ()
     page,
   }) => {
     // `permissions-list-onboarding-no-writes`: the wizard's own catalogue minus `ci_binding:write`
-    // and `ingest_token:write`, keeping `project:create` so the route itself still opens.
+    // and `ingest_token:write` (and, since 09.2.1-T5, plus `policy:write`), keeping
+    // `project:create` so the route itself still opens.
     await page.goto(
       withVariant(
         onboardingPath('en'),

@@ -1,0 +1,166 @@
+<section class="enable" data-testid="enable-collection" [attr.aria-busy]="busy()">
+  <p>{{ intro }}</p>
+
+  <section
+    class="panel"
+    aria-labelledby="enable-preview-heading"
+    data-testid="enable-collection-policy-preview"
+  >
+    <h3 id="enable-preview-heading">{{ previewHeading }}</h3>
+    <p class="advisory" data-testid="enable-collection-not-gating">{{ notGatingCopy }}</p>
+    <!-- F1: the confirm is a REPLACE command, so the hazard is stated before the press, not after.
+         It also anchors the confirm's `aria-describedby` while the acknowledgement is open. -->
+    <p
+      class="replaces-active"
+      id="enable-replaces-warning"
+      data-testid="enable-collection-replaces-active"
+    >
+      {{ replacesActiveCopy }}
+    </p>
+    <dl class="metadata">
+      <div>
+        <dt>{{ lateWindowLabel }}</dt>
+        <dd>
+          @if (preview.lateWindowMinutes !== null) {
+            {{ preview.lateWindowMinutes }} {{ minutesSuffix }}
+          } @else {
+            {{ notSetLabel }}
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ requiredSuitesLabel }}</dt>
+        <dd>{{ preview.requiredSuites.join(', ') || noneLabel }}</dd>
+      </div>
+      <div>
+        <dt>{{ requiredCasesLabel }}</dt>
+        <dd>{{ preview.requiredCases.join(', ') || noneLabel }}</dd>
+      </div>
+      <div>
+        <dt>{{ gatedBranchLabel }}</dt>
+        <dd>{{ preview.gatesDefaultBranch ? yesLabel : noLabel }}</dd>
+      </div>
+    </dl>
+  </section>
+
+  <!-- QA-01: the busy line is a live region by `role="status"` alone; a second `aria-live` on the
+       same node is redundant (and the terminal panel below relies on `role="status"` too). -->
+  <p class="busy-status" role="status">
+    @if (busy()) {
+      {{ confirmingLabel }}
+    }
+  </p>
+
+  @if (enabled() === null) {
+    <form (ngSubmit)="confirm()">
+      @if (!permitted()) {
+        <p id="enable-permission" data-testid="enable-collection-ask-approver">{{ askApprover }}</p>
+      }
+      <!-- D-S104-Q2: the acknowledgement is required for every confirm, not only when a policy is
+           known to be active — until activation is readable (F18) the page cannot prove there is
+           none. It starts unchecked and is reset when the step moves or the grant goes away. -->
+      <div class="acknowledge">
+        <input
+          id="enable-acknowledge"
+          data-testid="enable-collection-acknowledge"
+          type="checkbox"
+          [checked]="acknowledged()"
+          [disabled]="!permitted() || busy()"
+          (change)="setAcknowledged($event)"
+        />
+        <label for="enable-acknowledge">{{ acknowledgeLabel }}</label>
+      </div>
+      <button
+        class="state-panel__action primary"
+        data-testid="enable-collection-confirm"
+        type="submit"
+        [disabled]="confirmDisabled()"
+        [attr.aria-describedby]="confirmDescribedBy()"
+      >
+        {{ busy() ? confirmingLabel : confirmLabel }}
+      </button>
+    </form>
+  }
+
+  @if (failureView(); as error) {
+    <section data-testid="enable-collection-error">
+      <app-error-pattern
+        [error]="error"
+        [headingLevel]="3"
+        [retryDisabled]="!retryEligible() || busy()"
+        (retry)="retry()"
+      />
+      @if (responseUncertain()) {
+        <p class="notice" data-testid="enable-collection-response-uncertain">
+          {{ uncertainLabel }}
+        </p>
+      }
+      @for (detail of error.details; track $index) {
+        <!-- R3: the shared error pattern renders `message`/`code` itself; these rows are the page's
+             own, so the page sanitises them before they reach the DOM. -->
+        <p class="validation">{{ clean(detail.path) }} {{ clean(detail.reason) }}</p>
+      }
+    </section>
+  }
+
+  @if (enabled(); as activation) {
+    @if (advisoryMode()) {
+      <section
+        class="panel panel--done"
+        role="status"
+        aria-labelledby="enable-enabled-heading"
+        data-testid="enable-collection-enabled"
+      >
+        <h3 id="enable-enabled-heading" tabindex="-1" #enabledHeadingTarget>
+          {{ enabledHeading }}
+        </h3>
+        <p>{{ activation.changed ? changedCopy : unchangedCopy }}</p>
+        <p class="advisory">{{ notGatingCopy }}</p>
+        <dl class="metadata">
+          <div>
+            <dt>{{ modeLabel }}</dt>
+            <dd>{{ modeText(activation.mode) }}</dd>
+          </div>
+          @if (enabledRevisionNo(); as revisionNo) {
+            <div>
+              <dt>{{ revisionLabel }}</dt>
+              <dd>{{ revisionNo }}</dd>
+            </div>
+          }
+          @if (enabledPreviousRevision(); as replaced) {
+            <div>
+              <dt>{{ previousRevisionLabel }}</dt>
+              <dd>
+                <code
+                  ><bdi>{{ replaced }}</bdi></code
+                >
+              </dd>
+            </div>
+          }
+          <div>
+            <dt>{{ hashLabel }}</dt>
+            <dd>
+              @if (enabledHash(); as hash) {
+                <code
+                  ><bdi>{{ hash }}</bdi></code
+                >
+              } @else {
+                {{ unavailableLabel }}
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>{{ activatedAtLabel }}</dt>
+            <dd>
+              @if (enabledInstant(); as instant) {
+                <time [attr.datetime]="instant">{{ instant | date: 'medium' : '+0000' }}</time>
+              } @else {
+                {{ unavailableLabel }}
+              }
+            </dd>
+          </div>
+        </dl>
+      </section>
+    }
+  }
+</section>

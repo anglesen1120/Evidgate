@@ -36,15 +36,6 @@
         "tenant_assignable": true
       },
       {
-        "code": "policy:write",
-        "resource": "policy",
-        "action": "write",
-        "description": "Create or activate a policy revision and create/approve/revoke a waiver (00 §2, 07).",
-        "sensitive": false,
-        "reserved": false,
-        "tenant_assignable": true
-      },
-      {
         "code": "project:create",
         "resource": "project",
         "action": "create",
