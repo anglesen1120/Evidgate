@@ -82,13 +82,19 @@ DEFINER_AUDIT_EXEMPT = {
         "an act inside an org"
     ),
     "evidgate_resolve.session_revoke_all_for_user": (
-        "created 0045_identity_session_hardening.sql:548 (uuid, timestamptz): no per-call audit row by owner decision "
-        "D-S102-Q3 — revoke-all is the user's own logout everywhere, and self logout / self revoke / revoke-all emit "
-        "security_event instead (11.5.1-T5)"
+        "created 0045_identity_session_hardening.sql:548 (uuid, timestamptz): the membership-lifecycle seam "
+        "`ISessionRevocation` (src/Modules/Evidgate.Modules.Identity.Contracts/ISessionRevocation.cs:3-20) ends "
+        "ANOTHER member's live sessions when an org-scoped membership command removes or disables them, so the "
+        "calling command's own audit row — `[AuditedAction]` membership.remove / membership.update — covers the "
+        "effect (Sessions/SessionRevocationStore.cs:30-42); there is no C# caller yet (RemoveMember.cs:131-134 "
+        "records the call as 02.1.2-T3's and deliberately does not make it), hence no per-call row of its own"
     ),
     "evidgate_resolve.session_require_rotation": (
-        "created 0045_identity_session_hardening.sql:572 (uuid, timestamptz): pre-tenant, no org chain to write into "
-        "— marking every session of a user for rotation is a platform identity act with no org to attribute it to"
+        "created 0045_identity_session_hardening.sql:572 (uuid, timestamptz): a side effect of a membership or role "
+        "change, run inside the org-scoped command's own transaction through `ISessionPrivilegeChange` "
+        "(Sessions/SessionRevocationStore.cs:45-53), called from RemoveMember.cs:137, UpdateMembership.cs:160, "
+        "RevokeRole.cs:146 and GrantRole.cs:170 — the calling command's own `[AuditedAction]` row "
+        "(membership.remove / membership.update / membership.role_revoke / membership.role_grant) covers the effect"
     ),
     "evidgate_resolve.session_list": (
         "created 0048_identity_session_routes.sql:138 (bytea[], timestamptz): pre-tenant and read-only, no org chain "
@@ -96,13 +102,13 @@ DEFINER_AUDIT_EXEMPT = {
     ),
     "evidgate_resolve.session_revoke_current": (
         "created 0048_identity_session_routes.sql:206 (bytea[], timestamptz): no per-call audit row by owner decision "
-        "D-S102-Q3 — a self revoke is every caller's own logout, and logout / self revoke / revoke-all emit "
-        "security_event instead (11.5.1-T5)"
+        "D-S102-Q3 — a self revoke is every caller's own logout, and logout / self revoke / revoke-all will emit a "
+        "security_event once 11.5.1-T5 lands (open receiver)"
     ),
     "evidgate_resolve.session_revoke_others": (
         "created 0048_identity_session_routes.sql:398 (bytea[], boolean, timestamptz): no per-call audit row by owner "
-        "decision D-S102-Q3 — a self-service revoke of one's own other sessions, never an act on another member; "
-        "security_event covers it (11.5.1-T5)"
+        "decision D-S102-Q3 — a self-service revoke of one's own other sessions, never an act on another member; a "
+        "security_event will cover it once 11.5.1-T5 lands (open receiver)"
     ),
     "evidgate.session_cleanup": (
         "created 0048_identity_session_routes.sql:479 (timestamptz, integer): T80 sweep — a bounded bulk delete of "

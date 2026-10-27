@@ -305,9 +305,13 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   pending deferral: `0048` deferred them to 02.7.1-T2.2 with the other definers (its
   `lint: audit-deferred` line, D-S75-Q4), that receiver task is merged, and S122/F58 re-pointed
   the whole session family into `scripts/check-rls.py`'s `DEFINER_AUDIT_EXEMPT` — one exact
-  qualified name each, with its reason (pre-tenant `auth.login`/`auth.link` written by
-  `IdentityAuditWriter`, `security_event` for self-service revokes under D-S102-Q3, or a T80
-  sweep observed via the task row). The ADMIN revoke is not exempt: `0050` has
+  qualified name each, with its reason: pre-tenant `auth.login`/`auth.link` written by
+  `IdentityAuditWriter`; the lifecycle and privilege-change definers (`session_revoke_all_for_user`,
+  `session_require_rotation`) because the calling org-scoped command's own `[AuditedAction]` row
+  (`membership.remove`, `membership.update` or a role change) already covers the effect they
+  cause; a `security_event` for self-service revokes under D-S102-Q3, which will be emitted once
+  11.5.1-T5 lands (open receiver); or a T80 sweep observed via the task row). The ADMIN revoke is
+  not exempt: `0050` has
   `session_revoke_one` append its own `auth.session_revoke_admin` row inside the same
   transaction, so the revocation and its record commit or roll back together, and `0051` keeps
   that while adding the ids. The "a definer

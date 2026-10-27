@@ -73,6 +73,24 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         (SampleRequestId, SampleTraceId.ToUpperInvariant(), SampleRequestId, null),
         (SampleRequestId, SampleTraceId[..31], SampleRequestId, null),
         (SampleRequestId, new string('0', 32), SampleRequestId, null),
+        ("req-with-del\u007f", SampleTraceId, null, SampleTraceId),
+        ("req-with-\u00e9", SampleTraceId, null, SampleTraceId),
+    ];
+
+    /// <summary>
+    /// The accepted side of the same boundary: request ids the validator KEEPS, so the stored value must equal
+    /// the argument — one character, exactly 128 characters (the cap, not the cap plus one), the two endpoints of
+    /// visible ASCII <c>!</c> (0x21) and <c>~</c> (0x7E), and one id that pairs the two characters RFC 8785 must
+    /// escape (<c>"</c> and <c>\</c>) with json-sensitive punctuation that must NOT be escaped
+    /// (<c>&lt; &gt; &amp; ' + /</c>).
+    /// </summary>
+    private static readonly string[] AcceptedRequestIds =
+    [
+        "a",
+        new string('a', 128),
+        "!",
+        "~",
+        "req-\"q\"-\\\\-<&>'+/",
     ];
 
     public SessionRevokeAuditDefinerTests(DatabaseFixture fixture)
@@ -605,10 +623,11 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
 
     /// <summary>
     /// 0051's refusals of malformed input, one case each: an over-long request id, a control character, a
-    /// space, an empty request id, an uppercase trace id, a short trace id and the W3C-invalid all-zero trace
-    /// id. Every one is NULLED — never an error, never a refusal — the VALID member of the pair is still
-    /// stored, the revoke answers <c>revoked</c>, and every row verifies: an attacker cannot block a
-    /// revocation or steer the chain by sending a malformed correlation id.
+    /// space, a DEL (0x7F, one past the last visible ASCII character), a non-ASCII character, an empty request
+    /// id, an uppercase trace id, a short trace id and the W3C-invalid all-zero trace id. Every one is NULLED —
+    /// never an error, never a refusal — the VALID member of the pair is still stored, the revoke answers
+    /// <c>revoked</c>, and every row verifies: an attacker cannot block a revocation or steer the chain by
+    /// sending a malformed correlation id.
     /// </summary>
     [Fact]
     public async Task Malformed_Correlation_Ids_Are_Nulled_And_The_Revoke_Still_Revokes()
@@ -673,6 +692,51 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
 
         (await VerifyAsync(org)).ShouldBeNull(
             "the recomputed hash uses the RFC 8785 escaped string, so SQL and C# canonicalise this id identically");
+    }
+
+    /// <summary>
+    /// The accepted side of the same validator, one case each (`AcceptedRequestIds`): a single character, exactly
+    /// 128 characters — the cap, where 129 is refused — the two endpoints of visible ASCII, <c>!</c> (0x21) and
+    /// <c>~</c> (0x7E), and an id that pairs the two characters RFC 8785 escapes (<c>"</c> and <c>\</c>) with
+    /// punctuation that must stay literal (<c>&lt; &gt; &amp; ' + /</c>). Every one is stored RAW — not nulled,
+    /// not rewritten — and the chain still verifies, so the SQL canonicalisation holds for the whole visible
+    /// ASCII range and not only for the letters a minted id happens to use.
+    /// </summary>
+    [Fact]
+    public async Task Accepted_Request_Id_Boundaries_Are_Stored_Raw_And_The_Chain_Verifies()
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "tenant_admin", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var routes = CreateRoutes(clock);
+
+        foreach (var requestId in AcceptedRequestIds)
+        {
+            var memberTicket = await CreateSessionAsync(member, clock);
+
+            (await routes.RevokeOneAsync(
+                    ProofOf(adminTicket), memberTicket.SessionId, org, requestId, SampleTraceId, Token))
+                .ShouldBe(SessionRouteStatus.Done, $"an accepted request id must not block a revoke ({requestId})");
+        }
+
+        var rows = await RowsAsync(org);
+
+        rows.Count.ShouldBe(AcceptedRequestIds.Length, "one row per revocation, none suppressed");
+
+        for (var index = 0; index < AcceptedRequestIds.Length; index++)
+        {
+            var requestId = AcceptedRequestIds[index];
+
+            rows[index].RequestId.ShouldBe(
+                requestId, $"case {index} is a valid id, so it is stored raw and never nulled or rewritten");
+            rows[index].TraceId.ShouldBe(SampleTraceId, $"case {index} keeps the valid member of the pair");
+        }
+
+        (await VerifyAsync(org)).ShouldBeNull(
+            "each row's hash is recomputed from the same raw text, so every accepted boundary belongs to the chain");
     }
 
     /// <summary>
