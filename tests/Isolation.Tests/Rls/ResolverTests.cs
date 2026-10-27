@@ -376,9 +376,10 @@ public sealed class ResolverTests : HarnessTest
         await using var connection = await Fixture.AppDataSource.OpenConnectionAsync(Token);
         await using var command = connection.CreateCommand();
 
-        // One catalogue read: the body, the function's configured settings, and every EXECUTE grantee that
-        // is neither the owner nor PUBLIC. proconfig and the ACL are the deployed facts; the body text alone
-        // cannot prove that the bounded wait is in force for the whole call (S120 review S1).
+        // One catalogue read: the body, the function's configured settings, every EXECUTE grantee that is
+        // neither the owner nor PUBLIC, and the signature (0051's two defaulted correlation ids). proconfig and
+        // the ACL are the deployed facts; the body text alone cannot prove that the bounded wait is in force
+        // for the whole call (S120 review S1).
         command.CommandText =
             """
             select p.prosrc,
@@ -389,7 +390,8 @@ public sealed class ResolverTests : HarnessTest
                                       || ':' || a.privilege_type, ',' order by a.grantee)
                                from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                               where a.privilege_type = 'EXECUTE'
-                                and a.grantee <> p.proowner), '')
+                                and a.grantee <> p.proowner), ''),
+                   pg_catalog.pg_get_function_identity_arguments(p.oid) || '|' || p.pronargdefaults::text
               from pg_catalog.pg_proc p
               join pg_catalog.pg_namespace n on n.oid = p.pronamespace
              where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
@@ -398,13 +400,21 @@ public sealed class ResolverTests : HarnessTest
         string body;
         string configuration;
         string grantees;
+        string signature;
         await using (var reader = await command.ExecuteReaderAsync(Token))
         {
             (await reader.ReadAsync(Token)).ShouldBeTrue("evidgate_resolve.session_revoke_one is in the catalogue");
             body = reader.GetString(0);
             configuration = reader.GetString(1);
             grantees = reader.GetString(2);
+            signature = reader.GetString(3);
         }
+
+        signature.ShouldBe(
+            "p_cookie_hmacs bytea[], p_session_id uuid, p_org_id uuid, p_now timestamp with time zone, "
+            + "p_request_id text, p_trace_id text|2",
+            "0051's signature: 0050's four named arguments plus the two defaulted correlation ids, so a "
+            + "four-argument caller still binds");
 
         body.ShouldContain("insert into public.audit_log", Case.Sensitive,
             "the row must be written inside the definer, so it commits or rolls back with the revoke");
@@ -436,5 +446,28 @@ public sealed class ResolverTests : HarnessTest
 
         grantees.ShouldBe("evidgate_app:EXECUTE",
             "EXECUTE is held by evidgate_app alone among non-owner roles — never PUBLIC, never the operator or sweep role");
+
+        // The ids are validated and HASHED, not merely stored: the deployed body carries the two accepted
+        // shapes and builds the canonical spelling from the VALIDATED values (F58, migration 0051).
+        body.ShouldContain("p_request_id ~ '^[!-~]{1,128}$'", Case.Sensitive,
+            "the request id is accepted only in CorrelationNames.IsSafeRequestId's shape");
+        body.ShouldContain("p_trace_id ~ '^[0-9a-f]{32}$'", Case.Sensitive,
+            "the trace id is accepted only as the 32 lowercase hex digits Activity.TraceId.ToString() yields");
+        body.ShouldContain("coalesce(to_jsonb(v_request_id)::text, 'null')", Case.Sensitive,
+            "the canonical field is the escaped JSON string, or `null`, exactly what AuditHashing hashes");
+        body.ShouldContain("v_request_id, v_trace_id", Case.Sensitive,
+            "the row stores the validated ids in request_id/trace_id");
+
+        await using var count = connection.CreateCommand();
+        count.CommandText =
+            """
+            select count(*)
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """;
+
+        ((long)(await count.ExecuteScalarAsync(Token))!).ShouldBe(1L,
+            "0051 replaced the four-argument definition; two overloads would leave an ungranted copy behind");
     }
 }

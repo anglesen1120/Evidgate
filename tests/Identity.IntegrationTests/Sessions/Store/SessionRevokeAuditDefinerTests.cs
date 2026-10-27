@@ -8,14 +8,16 @@ using Evidgate.Modules.Identity.Login.Audit;
 using Evidgate.Modules.Identity.Sessions;
 using Evidgate.Testing;
 using Npgsql;
+using NpgsqlTypes;
 using Shouldly;
 using Xunit;
 
 namespace Identity.IntegrationTests.Sessions.Store;
 
 /// <summary>
-/// F55 (02.3.2-T2.1 AC6, completing coordinator row F48): the administrative session revoke and its
-/// <c>audit_log</c> row are ONE transaction, written by the definer itself (migration 0050).
+/// F55 (02.3.2-T2.1 AC6, completing coordinator row F48) and F58: the administrative session revoke and its
+/// <c>audit_log</c> row are ONE transaction, written by the definer itself (migration 0050), and since 0051 the
+/// row carries the caller's request and trace ids so it joins the HTTP request that caused it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -40,6 +42,39 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
     /// <summary>The action string the definer writes; it lives in SQL after F55, so the literal is pinned here.</summary>
     private const string AdminRevokeAction = "auth.session_revoke_admin";
 
+    /// <summary>
+    /// A request id the edge accepts (<c>CorrelationNames.IsSafeRequestId</c>: visible ASCII, 1..128), of the
+    /// shape <c>RequestIdMiddleware</c> mints and <c>AuditTrail.Record</c> reads back off the baggage.
+    /// </summary>
+    private const string SampleRequestId = "req-4f1a2b3c-S122";
+
+    /// <summary>A W3C trace id: 32 lowercase hex digits, and not the all-zero value the standard refuses.</summary>
+    private const string SampleTraceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+
+    /// <summary>
+    /// A request id with the two characters RFC 8785 escaping must handle, and nothing else: `"` and `\`. It is
+    /// a legal id (both are visible ASCII), so the stored value is the raw string while the HASHED value is the
+    /// escaped JSON string — the pair the C# writer produces for the same input.
+    /// </summary>
+    private const string QuotedRequestId = "req-\"quoted\"-back\\slash";
+
+    /// <summary>
+    /// The boundary cases of 0051's validation: what a caller may pass, and what the definer must store
+    /// instead — (request id, trace id, expected stored request id, expected stored trace id). Every pair has
+    /// at least one malformed member, and the valid member must survive: nulling the whole pair would hide a
+    /// validator that gives up on one bad value.
+    /// </summary>
+    private static readonly (string? Request, string? Trace, string? ExpectedRequest, string? ExpectedTrace)[] MalformedIds =
+    [
+        (new string('a', 129), SampleTraceId, null, SampleTraceId),
+        ("req-with-cr\r\n", SampleTraceId, null, SampleTraceId),
+        ("req with space", SampleTraceId, null, SampleTraceId),
+        (string.Empty, SampleTraceId, null, SampleTraceId),
+        (SampleRequestId, SampleTraceId.ToUpperInvariant(), SampleRequestId, null),
+        (SampleRequestId, SampleTraceId[..31], SampleRequestId, null),
+        (SampleRequestId, new string('0', 32), SampleRequestId, null),
+    ];
+
     public SessionRevokeAuditDefinerTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -61,7 +96,7 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         var adminTicket = await CreateSessionAsync(admin, clock);
         var memberTicket = await CreateSessionAsync(member, clock);
 
-        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, null, null, Token))
             .ShouldBe(SessionRouteStatus.Done);
 
         var row = (await RowsAsync(org)).ShouldHaveSingleItem();
@@ -126,8 +161,10 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
             [org],
             Token);
 
-        // 2. The administratrix ends the member's session: the definer's own row.
-        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        // 2. The administratrix ends the member's session: the definer's own row, carrying the correlation
+        // ids the route passes (0051) exactly as the application writer would stamp them.
+        (await CreateRoutes(clock).RevokeOneAsync(
+                ProofOf(adminTicket), memberTicket.SessionId, org, SampleRequestId, SampleTraceId, Token))
             .ShouldBe(SessionRouteStatus.Done);
 
         // 3. A second application row, which must link onto the hash SQL computed.
@@ -140,6 +177,9 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
 
         chain.Select(row => row.Seq).ShouldBe([1L, 2L, 3L], "seq stays dense across both writers");
         chain[1].Action.ShouldBe(AdminRevokeAction, "the middle row is the definer's");
+        chain[1].RequestId.ShouldBe(SampleRequestId,
+            "the definer stamped the request id the route passed, as the application writer does");
+        chain[1].TraceId.ShouldBe(SampleTraceId, "and the trace id, so the row joins the HTTP request that caused it");
         chain[2].PrevHash.SequenceEqual(chain[1].EntryHash)
             .ShouldBeTrue("the application writer chains onto the hash SQL computed");
         chain[1].PrevHash.SequenceEqual(chain[0].EntryHash).ShouldBeTrue();
@@ -169,7 +209,7 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         var user = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
         var ticket = await CreateSessionAsync(user, clock);
 
-        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(ticket), ticket.SessionId, orgId: null, Token))
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(ticket), ticket.SessionId, orgId: null, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.Done, "the owner path still answers `revoked`");
 
         (await OwnerScalarAsync<bool>(
@@ -197,13 +237,13 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         var memberTicket = await CreateSessionAsync(member, clock);
         var routes = CreateRoutes(clock);
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), Guid.CreateVersion7(), org, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), Guid.CreateVersion7(), org, null, null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "an unknown session id");
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, orgId: null, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, orgId: null, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "another member's session needs the org header");
 
-        (await routes.RevokeOneAsync(ProofOf(plainTicket), memberTicket.SessionId, org, Token))
+        (await routes.RevokeOneAsync(ProofOf(plainTicket), memberTicket.SessionId, org, null, null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "a viewer holds no membership:write");
 
         (await OwnerScalarAsync<bool>(
@@ -229,10 +269,10 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         var memberTicket = await CreateSessionAsync(member, clock);
         var routes = CreateRoutes(clock);
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, null, null, Token))
             .ShouldBe(SessionRouteStatus.Done);
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, null, null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "the target is dead; the actor is still live");
 
         var rows = await RowsAsync(org);
@@ -258,10 +298,10 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         var foreignTicket = await CreateSessionAsync(foreignMember, clock);
         var routes = CreateRoutes(clock);
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), foreignTicket.SessionId, adminOrg, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), foreignTicket.SessionId, adminOrg, null, null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "the target is not a member of the admin's org");
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), foreignTicket.SessionId, otherOrg, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), foreignTicket.SessionId, otherOrg, null, null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "the admin holds no membership in the target's org");
 
         (await RowsAsync(adminOrg)).ShouldBeEmpty("the admin's own chain gains nothing");
@@ -293,7 +333,7 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         try
         {
             var refusal = await Should.ThrowAsync<PostgresException>(
-                () => CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token).AsTask());
+                () => CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, null, null, Token).AsTask());
 
             refusal.SqlState.ShouldBe(PostgresErrorCodes.RaiseException, "the append aborted the whole statement");
         }
@@ -348,7 +388,7 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         {
             var elapsed = Stopwatch.StartNew();
             var refusal = await Should.ThrowAsync<PostgresException>(
-                () => CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token).AsTask());
+                () => CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, null, null, Token).AsTask());
             elapsed.Stop();
 
             refusal.SqlState.ShouldBe(PostgresErrorCodes.LockNotAvailable, "lock_timeout is 2000 ms, as the writer's is");
@@ -418,7 +458,7 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         await probe.OpenAsync(Token);
 
         var revoke = Task.Run(
-            () => routes.RevokeOneAsync(ProofOf(adminTicket), firstTicket.SessionId, org, Token).AsTask());
+            () => routes.RevokeOneAsync(ProofOf(adminTicket), firstTicket.SessionId, org, null, null, Token).AsTask());
 
         // The application's own append, through the real buffer and tenant scope the pipeline uses:
         // the same action, object type and metadata the definer writes, so the rows differ in nothing
@@ -517,7 +557,7 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
             skewed,
             "the arrangement put the tip one day ahead of the clock");
 
-        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, null, null, Token))
             .ShouldBe(SessionRouteStatus.Done, "a skewed tip is a floor to raise, not a reason to refuse");
 
         var chain = await RowsAsync(org);
@@ -531,6 +571,227 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
             "keeping the floor is what proves the value came from the tip");
 
         (await VerifyAsync(org)).ShouldBeNull("the verifier accepts the row stamped at the tip's instant");
+    }
+
+    /// <summary>
+    /// 0051: the correlation ids the route passed reach the row, and the row still verifies. The ids are NOT
+    /// decoration — they are part of the canonical field set (`AuditHashing.CanonicalFields` hashes
+    /// <c>request_id</c>/<c>trace_id</c>), so a definer that stored them but hashed the old literal <c>null</c>
+    /// would produce a row this verifier rejects.
+    /// </summary>
+    [Fact]
+    public async Task Admin_Revoke_Stores_The_Request_And_Trace_Ids_And_Still_Verifies()
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "tenant_admin", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var memberTicket = await CreateSessionAsync(member, clock);
+
+        (await CreateRoutes(clock).RevokeOneAsync(
+                ProofOf(adminTicket), memberTicket.SessionId, org, SampleRequestId, SampleTraceId, Token))
+            .ShouldBe(SessionRouteStatus.Done);
+
+        var row = (await RowsAsync(org)).ShouldHaveSingleItem();
+
+        row.RequestId.ShouldBe(SampleRequestId, "the request id is stored verbatim, not escaped and not truncated");
+        row.TraceId.ShouldBe(SampleTraceId, "the trace id is stored verbatim");
+
+        (await VerifyAsync(org)).ShouldBeNull(
+            "the existing verifier hashes the ids exactly as the C# writer would, so the row belongs to the chain");
+    }
+
+    /// <summary>
+    /// 0051's refusals of malformed input, one case each: an over-long request id, a control character, a
+    /// space, an empty request id, an uppercase trace id, a short trace id and the W3C-invalid all-zero trace
+    /// id. Every one is NULLED — never an error, never a refusal — the VALID member of the pair is still
+    /// stored, the revoke answers <c>revoked</c>, and every row verifies: an attacker cannot block a
+    /// revocation or steer the chain by sending a malformed correlation id.
+    /// </summary>
+    [Fact]
+    public async Task Malformed_Correlation_Ids_Are_Nulled_And_The_Revoke_Still_Revokes()
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "tenant_admin", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var routes = CreateRoutes(clock);
+
+        foreach (var (requestId, traceId, _, _) in MalformedIds)
+        {
+            var memberTicket = await CreateSessionAsync(member, clock);
+
+            (await routes.RevokeOneAsync(
+                    ProofOf(adminTicket), memberTicket.SessionId, org, requestId, traceId, Token))
+                .ShouldBe(SessionRouteStatus.Done, $"a malformed correlation id must never block a revoke ({requestId})");
+        }
+
+        var rows = await RowsAsync(org);
+
+        rows.Count.ShouldBe(MalformedIds.Length, "one row per revocation, none suppressed");
+
+        for (var index = 0; index < MalformedIds.Length; index++)
+        {
+            var (requestId, traceId, expectedRequest, expectedTrace) = MalformedIds[index];
+
+            rows[index].RequestId.ShouldBe(expectedRequest, $"request id {requestId} of case {index} is nulled as it stands");
+            rows[index].TraceId.ShouldBe(expectedTrace, $"trace id {traceId} of case {index} is nulled as it stands");
+        }
+
+        (await VerifyAsync(org)).ShouldBeNull("nulled ids are hashed as `null`, which is exactly what the rows hold");
+    }
+
+    /// <summary>
+    /// The escaping edge: `"` and `\` are legal in a request id, so the value is stored RAW and hashed as the
+    /// escaped JSON string. A definer that stored the escaped text, or hashed the raw one, would fail here —
+    /// the row's hash would not recompute — so this case is what proves the SQL canonicalisation matches
+    /// <c>JsonCanonicalizer</c> for the only two characters visible ASCII allows to need an escape.
+    /// </summary>
+    [Fact]
+    public async Task A_Request_Id_With_A_Quote_And_A_Backslash_Is_Stored_Raw_And_Hashed_Escaped()
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "tenant_admin", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var memberTicket = await CreateSessionAsync(member, clock);
+
+        (await CreateRoutes(clock).RevokeOneAsync(
+                ProofOf(adminTicket), memberTicket.SessionId, org, QuotedRequestId, SampleTraceId, Token))
+            .ShouldBe(SessionRouteStatus.Done);
+
+        var row = (await RowsAsync(org)).ShouldHaveSingleItem();
+
+        row.RequestId.ShouldBe(QuotedRequestId, "the column holds the raw id: escaping belongs to the canonical bytes only");
+        row.TraceId.ShouldBe(SampleTraceId);
+
+        (await VerifyAsync(org)).ShouldBeNull(
+            "the recomputed hash uses the RFC 8785 escaped string, so SQL and C# canonicalise this id identically");
+    }
+
+    /// <summary>
+    /// Deploy safety, the expand direction: a caller that still binds FOUR arguments — the build that ran
+    /// before 0051 — keeps working, because the two new arguments are defaulted. Its row is a normal
+    /// administrative row with both ids absent, so the pre-0051 application behaves exactly as it did and no
+    /// revoke is lost while the fleet rolls.
+    /// </summary>
+    [Fact]
+    public async Task The_Previous_Four_Argument_Call_Still_Binds_Through_The_Defaults()
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "tenant_admin", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var memberTicket = await CreateSessionAsync(member, clock);
+
+        // The exact text the pre-0051 store issued: four arguments, no correlation ids. The owner seam is the
+        // caller here because the C# surface has already moved to six; what is under test is the SQL binding of
+        // the old shape. The proof is bound as an explicit `bytea[]`, the way the store binds it
+        // (SessionRoutesStore.ProofParameter).
+        string? status;
+        await using (var connection = new NpgsqlConnection(Fixture.OwnerConnectionString))
+        {
+            await connection.OpenAsync(Token);
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                "select status from evidgate_resolve.session_revoke_one(cast(@h as bytea[]), @s, @o, @now)";
+            command.Parameters.Add(new NpgsqlParameter("h", NpgsqlDbType.Array | NpgsqlDbType.Bytea)
+            {
+                Value = new[] { ProofOf(adminTicket) },
+            });
+            command.Parameters.AddWithValue("s", memberTicket.SessionId);
+            command.Parameters.AddWithValue("o", org);
+            command.Parameters.AddWithValue("now", clock.UtcNow);
+
+            status = (string?)await command.ExecuteScalarAsync(Token);
+        }
+
+        status.ShouldBe("revoked", "the four-argument form still binds through `p_request_id`/`p_trace_id` defaults");
+
+        var row = (await RowsAsync(org)).ShouldHaveSingleItem();
+
+        row.Action.ShouldBe(AdminRevokeAction, "the old caller gets the same administrative row");
+        row.RequestId.ShouldBeNull("an old caller passes no request id");
+        row.TraceId.ShouldBeNull("an old caller passes no trace id");
+
+        (await VerifyAsync(org)).ShouldBeNull("the ids are `null` in the row and in the hash alike");
+    }
+
+    /// <summary>
+    /// The catalogue of 0051: exactly ONE <c>session_revoke_one</c> exists (the new six-argument definition; the
+    /// four-argument one is dropped, not left behind as an overload that a stale grant could reach), and its
+    /// privilege is the documented one — <c>evidgate_app</c> holds EXECUTE and no other non-owner role does.
+    /// </summary>
+    [Fact]
+    public async Task Exactly_One_Six_Argument_Definer_Exists_And_Only_The_App_Role_May_Call_It()
+    {
+        (await OwnerScalarAsync<long>(
+            """
+            select count(*)
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """)).ShouldBe(1L, "0051 replaces the definition; two overloads would leave an ungranted copy behind");
+
+        (await OwnerScalarAsync<string>(
+            """
+            select pg_catalog.pg_get_function_identity_arguments(p.oid)
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """)).ShouldBe(
+            "p_cookie_hmacs bytea[], p_session_id uuid, p_org_id uuid, p_now timestamp with time zone, "
+            + "p_request_id text, p_trace_id text",
+            "the correlation ids are the trailing text arguments, after 0050's four");
+
+        (await OwnerScalarAsync<string>(
+            """
+            select array_to_string(p.proargnames[1:p.pronargs], ',') || '|' || p.pronargdefaults::text
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """)).ShouldBe(
+            "p_cookie_hmacs,p_session_id,p_org_id,p_now,p_request_id,p_trace_id|2",
+            "the six INPUT names, in order, and the two trailing ids are defaulted");
+
+        (await OwnerScalarAsync<string>(
+            """
+            select coalesce(string_agg(
+                     case when a.grantee = 0 then 'PUBLIC'
+                          else pg_catalog.pg_get_userbyid(a.grantee) end
+                     || ':' || a.privilege_type, ',' order by a.grantee)
+                   , '')
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+              cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+               and a.privilege_type = 'EXECUTE'
+               and a.grantee <> p.proowner
+            """)).ShouldBe(
+            "evidgate_app:EXECUTE",
+            "`drop function` discarded 0050's ACL, so 0051 re-states it: the app role, and never PUBLIC");
+
+        foreach (var role in new[] { "evidgate_operator", "evidgate_worker_sched" })
+        {
+            (await OwnerScalarAsync<bool>(
+                """
+                select exists (
+                  select 1
+                    from pg_catalog.pg_proc p
+                    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+                   where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+                     and pg_catalog.has_function_privilege(@role, p.oid, 'execute'))
+                """,
+                ("role", role))).ShouldBeFalse($"{role} must not execute the revoke");
+        }
     }
 
     /// <summary>A store over the app-role data source; the route statements never open the sweep connection.</summary>
@@ -700,6 +961,8 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
                  , action as "Action"
                  , object_type as "ObjectType"
                  , object_id as "ObjectId"
+                 , request_id as "RequestId"
+                 , trace_id as "TraceId"
                  , coalesce(metadata, '{}'::jsonb)::text as "MetadataJson"
                  , prev_hash as "PrevHash"
                  , entry_hash as "EntryHash"
@@ -787,6 +1050,8 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
     /// <param name="Action">The audited action string.</param>
     /// <param name="ObjectType">The object kind.</param>
     /// <param name="ObjectId">The object's id as text.</param>
+    /// <param name="RequestId">The request id the row was stamped with, when there was one.</param>
+    /// <param name="TraceId">The W3C trace id the row was stamped with, when there was one.</param>
     /// <param name="MetadataJson">The stored metadata, as JSON text.</param>
     /// <param name="PrevHash">The previous row's entry hash.</param>
     /// <param name="EntryHash">This row's entry hash.</param>
@@ -799,6 +1064,8 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         string Action,
         string? ObjectType,
         string? ObjectId,
+        string? RequestId,
+        string? TraceId,
         string MetadataJson,
         byte[] PrevHash,
         byte[] EntryHash,

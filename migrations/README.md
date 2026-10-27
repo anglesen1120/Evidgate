@@ -112,9 +112,15 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   `org_id = p_org_id`) commit or roll back in ONE transaction, the row chained in SQL under the
   application writer's `hashtext('audit:' || org)` advisory lock and 2000 ms `lock_timeout`, while a
   self revoke and every refusal write nothing (the rows carry `request_id`/`trace_id` as NULL — a
-  declared, non-blocking loss: a definition cannot see the caller's `Activity`, so correlating the row
-  to its HTTP request needs an argument the signature cannot gain; receiver, queue row `F58`);
-  the next free number is `0051`;
+  declared, non-blocking loss: a definition cannot see the caller's `Activity`), and `0051` is F58's
+  closure of that loss — `session_revoke_one` re-created as the SIX-argument definition
+  (`p_cookie_hmacs, p_session_id, p_org_id, p_now, p_request_id default null, p_trace_id default null`),
+  the two ids validated in SQL (`^[!-~]{1,128}$` for the request id, `^[0-9a-f]{32}$` and not the
+  all-zero value for the trace id — anything else is NULLED, never refused) and then stored AND hashed
+  as the escaped RFC 8785 string the C# writer produces; **deploy order is migrate before app** (an old
+  four-argument caller still binds through the defaults, a new six-argument caller needs the file
+  first), and the 0050 rows keep their NULL ids and still verify;
+  the next free number is `0052`;
   a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
@@ -295,15 +301,48 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   index on a deadline, or on the nullable `expired_at`, would be rewritten by every idle
   slide or stamp, moving cost from a bounded sweep onto every authenticated request).
 - Per-call audit rows for the other three routes (`session_list`, `session_revoke_current`,
-  `session_revoke_others`) are deferred to 02.7.1-T2.2 with the other definers (`0048`'s
-  `lint: audit-deferred` line, D-S75-Q4). The ADMIN revoke is no longer deferred: `0050` has
+  `session_revoke_others`) are NOT written, and that is now a recorded decision rather than a
+  pending deferral: `0048` deferred them to 02.7.1-T2.2 with the other definers (its
+  `lint: audit-deferred` line, D-S75-Q4), that receiver task is merged, and S122/F58 re-pointed
+  the whole session family into `scripts/check-rls.py`'s `DEFINER_AUDIT_EXEMPT` — one exact
+  qualified name each, with its reason (pre-tenant `auth.login`/`auth.link` written by
+  `IdentityAuditWriter`, `security_event` for self-service revokes under D-S102-Q3, or a T80
+  sweep observed via the task row). The ADMIN revoke is not exempt: `0050` has
   `session_revoke_one` append its own `auth.session_revoke_admin` row inside the same
-  transaction, so the revocation and its record commit or roll back together. The "a definer
+  transaction, so the revocation and its record commit or roll back together, and `0051` keeps
+  that while adding the ids. The "a definer
   cannot extend a hash chain" reasoning of `0048`'s header and of its `lint: audit-deferred`
   entry holds only where the RFC 8785 canonical fields cannot be reproduced in SQL; `0050`'s
   header names the three C# sources it mirrors (`AuditHashing.CanonicalFields`,
   `JsonCanonicalizer`, `AuditSql.AdvisoryLock`/`LockTimeout`) and is verified by the existing
   `AuditChainVerifier`, never by a second hashing implementation.
+
+## Notes on the revoke's correlation ids (F58, `0051`)
+
+- `session_revoke_one` is now the SIX-argument definition: 0050's four arguments plus
+  `p_request_id text default null` and `p_trace_id text default null`. `drop function`
+  (required — a signature change cannot be `create or replace`) discards the ACL, so `0051`
+  re-states it: `revoke all ... from public`, `grant execute ... to evidgate_app`. Exactly one
+  `session_revoke_one` exists in the catalogue; the four-argument one is dropped, not left as an
+  overload.
+- **Deploy order: migrate before app.** The defaults keep the old four-argument call binding, so
+  an already-running API keeps working the moment the file is applied. The new build binds six
+  arguments, so deploying it before the migration answers `42883` on every administrative revoke:
+  apply `0051`, then deploy.
+- The ids are untrusted input and are validated inside the definer: the request id only in
+  `CorrelationNames.IsSafeRequestId`'s shape (`^[!-~]{1,128}$`, visible ASCII, 1-128 —
+  `CorrelationNames.cs:53,70-88`), the trace id only as 32 lowercase hex digits that are not the
+  all-zero (W3C-invalid) value. An unacceptable value is NULLED — never an error, never a
+  refusal — so a malformed correlation id can neither block a revocation nor steer the chain.
+- The validated ids reach BOTH the row's `request_id`/`trace_id` columns and the canonical string
+  the chain hashes, in the spelling the C# writer produces: a JSON string (`to_jsonb(<text>)::text`,
+  which escapes `"` and `\` per RFC 8785 for the accepted ASCII) or the literal `null`. So the
+  rows an upgraded definer writes verify with `AuditChainVerifier` next to the application's own
+  rows, and the 0050 rows keep `null` ids and keep verifying.
+- `0051` is idempotent (`drop function if exists` + `create or replace function` + re-stated
+  grants) and touches no data. Rollback is the reverse file: drop the six-argument definition and
+  re-state 0050's four-argument one (`0050:108-290`), with the OLD application build in place
+  first; rows already written keep their ids.
 
 ## Notes on `evidence_revision` (05.3.2-T5, `0049`)
 
