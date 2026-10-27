@@ -2669,6 +2669,23 @@
       <trans-unit id="runs.detail.copy-hash" datatype="html"><source>Copy full manifest hash</source></trans-unit>
       <trans-unit id="runs.detail.copied" datatype="html"><source>Manifest hash copied</source></trans-unit>
       <trans-unit id="runs.detail.copy-failed" datatype="html"><source>Copy failed. Select and copy the full hash shown above.</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.title" datatype="html"><source>Attempts</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.scroll-region" datatype="html"><source>Attempts table</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.pagination" datatype="html"><source>Attempts pagination</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.execution" datatype="html"><source>Execution</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.attempt" datatype="html"><source>Attempt</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.raw" datatype="html"><source>Raw status</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.normalised" datatype="html"><source>Normalised status</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.duration" datatype="html"><source>Duration</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.artifacts" datatype="html"><source>Artifacts</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.empty" datatype="html"><source>No attempts recorded</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.pre-healing" datatype="html"><source>Pre-healing failure</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.candidate" datatype="html"><source>Healing candidate</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.shadow" datatype="html"><source>Shadow evaluation</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.official" datatype="html"><source>Official evaluation</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.previous" datatype="html"><source>Previous page</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.next" datatype="html"><source>Next page</source></trans-unit>
     </body>
   </file>
 </xliff>

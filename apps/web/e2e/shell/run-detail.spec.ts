@@ -48,6 +48,9 @@ for (const locale of LOCALES) {
     await expect(page.locator('app-run-header [data-run-policy]')).toHaveCount(0);
     await expect(page.locator('[data-run-fork]')).toHaveText(locale === 'vi' ? 'Không' : 'No');
     await expect(page.locator('app-manifest-panel app-status-pill')).toHaveCount(5);
+    await expect(page.locator('app-attempts-table [data-attempts-unavailable]')).toHaveText(
+      locale === 'vi' ? 'Chưa có trạng thái' : 'Status unavailable',
+    );
     await expect(page.locator('app-run-detail-page h1')).toHaveCount(1);
     await expect(
       page.locator('app-run-detail-page app-decision-chip, app-run-detail-page app-outcome-pill'),
