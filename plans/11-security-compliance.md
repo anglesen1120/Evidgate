@@ -345,7 +345,7 @@ Epic 11.9 total: 7.5
 
 | # | Question | Owner | Needed by |
 |---|---|---|---|
-| 1 | ASVS target level ⚠️: confirm L2 or accept a documented subset | Tech Lead | M2 (11.1.1-T3) |
+| 1 | ASVS target level ⚠️: confirm L2 or accept a documented subset — **Closed 2026-10-27 (D-S107-Q1):** ASVS 5.0.0 (tag `v5.0.0`), level L2 confirmed for the web origin and the `/v1` API; chapter-level mapping, 38 published gaps and a named owner per gap in `docs/security/asvs-l2-mapping.md`, requirement-level walkthrough stays with 11.7.1-T5 | Tech Lead | M2 (11.1.1-T3) |
 | 2 | Cloud provider/region and whether any store may leave Vietnam (O3) | Owner | M2 (first pilot data) |
 | 3 | LLM provider(s) and whether tenant content may leave Vietnam (O4) | Owner | V2 healing PR |
 | 4 | Whether a container-only isolation boundary is acceptable for any V2 execution, or the agent must stay wholly customer-side `[OPEN]` | Tech Lead | M4 (11.2.1-T4) |
