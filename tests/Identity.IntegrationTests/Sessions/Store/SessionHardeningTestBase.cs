@@ -44,6 +44,20 @@ public abstract class SessionHardeningTestBase : SessionTestBase
     {
     }
 
+    /// <summary>
+    /// Resets the harness database, then restores the migration-seeded permission catalogue.
+    /// </summary>
+    /// <remarks>
+    /// These suites arrange memberships with a built-in role (<c>tenant_admin</c>, <c>viewer</c>) and custom
+    /// roles carrying <c>membership:write</c>, so the catalogue rows Respawn's blanket truncate removes have to
+    /// be back before the test body runs — the same step <see cref="CatalogueTestBase"/> takes for its suites.
+    /// </remarks>
+    public override async ValueTask InitializeAsync()
+    {
+        await Fixture.ResetAsync(Token);
+        await CatalogueSeed.ApplyAsync(Fixture, Token);
+    }
+
     /// <summary>A clock the test owns and moves, so every deadline is provable without waiting.</summary>
     /// <param name="start">The first instant, or the suite's fixed default.</param>
     private protected static MutableClock ClockAt(DateTimeOffset? start = null) =>

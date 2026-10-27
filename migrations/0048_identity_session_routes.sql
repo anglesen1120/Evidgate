@@ -129,11 +129,12 @@ alter table public.session
 -- The caller's live sessions (AC6). `status` is per row, not a second result set: an
 -- authenticated caller always has at least ONE live row (the one the proof resolved),
 -- so a caller with `unauthenticated` and a caller with an empty list can never be
--- confused. `ip::text` renders the `inet` of 0041 as the string the wire contract
--- carries ('203.0.113.7', or '203.0.113.7/32' for a network value) — the column stays
--- `inet`, the projection is textual, and a caller that wants the network semantics can
--- parse it back. The credential columns are absent on purpose and the plan §5 list is
--- the whole projection.
+-- confused. `host(ip)` renders the `inet` of 0041 as the address text the wire contract
+-- carries ('203.0.113.7', never '203.0.113.7/32'): `ip::text` appends the netmask, which
+-- is storage detail and not part of the contract (the same read the login completion
+-- suite uses, `SessionStoreTests`). The column stays `inet`, the projection is textual,
+-- and a caller that wants the network semantics can parse it back. The credential
+-- columns are absent on purpose and the plan §5 list is the whole projection.
 create or replace function evidgate_resolve.session_list(
   p_cookie_hmacs bytea[],
   p_now timestamptz)
@@ -185,7 +186,7 @@ begin
            s.last_seen_at,
            s.expires_at,
            s.absolute_expires_at,
-           s.ip::text,
+           host(s.ip),
            s.user_agent,
            'ok'::text
       from public.session s

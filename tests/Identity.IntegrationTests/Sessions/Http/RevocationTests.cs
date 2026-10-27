@@ -47,6 +47,21 @@ public sealed class RevocationTests : HarnessTest
     }
 
     /// <summary>
+    /// Resets the harness database, then restores the migration-seeded permission catalogue.
+    /// </summary>
+    /// <remarks>
+    /// The administrative half of AC6 signs a <c>tenant_admin</c> in and revokes a member's session, so the
+    /// built-in roles and their grant rows — which Respawn's blanket truncate removes with every other table —
+    /// must be back before the test body runs. <see cref="CatalogueSeed"/> is the same step the store suites and
+    /// <see cref="CatalogueTestBase"/> take.
+    /// </remarks>
+    public override async ValueTask InitializeAsync()
+    {
+        await Fixture.ResetAsync(Token);
+        await CatalogueSeed.ApplyAsync(Fixture, Token);
+    }
+
+    /// <summary>
     /// AC4/AC6 (Sec F5): revoking the caller's OWN session is a sign-out, so the 204 also expires the session
     /// cookie and the antiforgery pair exactly as <c>logout</c> does; the next request (or a replay of the dead
     /// value) answers 401 <c>session_revoked</c>, the row — not the cookie — being what changed.

@@ -180,9 +180,10 @@ public sealed class MigrationTests : SessionHardeningTestBase
             """
             select count(*)
               from pg_catalog.pg_proc p
-              cross join lateral aclexplode(p.proacl) a
+              cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
               join pg_catalog.pg_namespace n on n.oid = p.pronamespace
              where n.nspname = 'evidgate_resolve' and p.proname = any(@names) and a.grantee = 0
+               and a.privilege_type = 'EXECUTE'
             """,
             ("names", SessionWriters))).ShouldBe(0, "PUBLIC holds no EXECUTE on a session writer");
     }
@@ -262,16 +263,18 @@ public sealed class MigrationTests : SessionHardeningTestBase
             select count(*)
               from pg_catalog.pg_proc p
               join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-             where {SessionDefiners}
+             where ({SessionDefiners})
             """)).ShouldBe(5, "0048 defines exactly these five functions");
 
         (await OwnerScalarAsync<long>(
             $"""
             select count(*)
               from pg_catalog.pg_proc p
-              cross join lateral aclexplode(p.proacl) a
+              cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
               join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-             where {SessionDefiners} and a.grantee = 0
+             where ({SessionDefiners})
+               and a.grantee = 0
+               and a.privilege_type = 'EXECUTE'
             """)).ShouldBe(0, "PUBLIC holds no EXECUTE on a session definer");
 
         var results = await OwnerScalarAsync<string>(
@@ -279,7 +282,7 @@ public sealed class MigrationTests : SessionHardeningTestBase
             select string_agg(pg_catalog.pg_get_function_result(p.oid), E'\n' order by p.proname)
               from pg_catalog.pg_proc p
               join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-             where {SessionDefiners}
+             where ({SessionDefiners})
             """);
 
         results.ShouldNotContain("cookie", Case.Sensitive, "no function may return the cookie value or its hash");
@@ -290,11 +293,16 @@ public sealed class MigrationTests : SessionHardeningTestBase
             select string_agg(coalesce(array_to_string(p.proargnames, ','), ''), E'\n')
               from pg_catalog.pg_proc p
               join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-             where {SessionDefiners}
+             where ({SessionDefiners})
             """)).ShouldNotContain("user_id", Case.Sensitive, "the acting user is never an argument (D-S85-D8)");
     }
 
-    /// <summary>The five definers 0048 adds, as one SQL predicate over <c>pg_proc p</c> / <c>pg_namespace n</c>.</summary>
+    /// <summary>
+    /// The five definers 0048 adds, as one SQL predicate over <c>pg_proc p</c> / <c>pg_namespace n</c>. It has a
+    /// top-level <c>or</c>, so every place that ANDs another condition onto it must wrap it in parentheses —
+    /// `where {SessionDefiners} and a.grantee = 0` would bind the <c>and</c> to the second branch alone and count
+    /// every ACL item of the four route functions (8 instead of 0).
+    /// </summary>
     private const string SessionDefiners = """
         (n.nspname = 'evidgate_resolve'
          and p.proname in ('session_list', 'session_revoke_current', 'session_revoke_one', 'session_revoke_others'))
