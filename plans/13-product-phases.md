@@ -166,7 +166,7 @@ Notes (S92, 2026-10-26, owner request): the three-layer design is seed templates
 | 13.3.1-T3 | Test case generation from checklist items, plus rebuild and translate actions | L | V1 | G1 | 13.3.1-T2 |
 | 13.3.1-T4 | Cache by hash of (input, settings version, model); small / large model routing | M | V1 | G1 | 13.3.1-T2 |
 | 13.3.1-T5 | Evaluation set: 20 requirement fixtures in vi + en, rubric, regression gate on prompt or model change | M | V1 | G1 | 13.3.1-T3 |
-**Epic 13.3 total: 7.0**
+**Epic 13.3 total: 7.0** Feature plan for story 13.3.1 (S112, 2026-10-27): `plans/features/13-product-phases/13.3.1-generation-pipeline.md` (16 sub-tasks of at most 0.5 d summing to the task sizes above, estimate unchanged; open items OI-13-401 to OI-13-411 in `plans/open-items/05-product-phases-g1.md`).
 
 ### Epic 13.4 Authoring screens (G1)
 #### Story 13.4.1 Authoring UI — acceptance: an approved design (`design-ui` agent) precedes build; tree, table with filters, test case editor, batched changes panel, generation flow, timeline, settings and export work in vi + en and meet WCAG 2.2 AA; the navigation hides items of a later phase and the usage page shows the AI credit balance and usage by action.
@@ -180,7 +180,7 @@ Notes (S92, 2026-10-26, owner request): the three-layer design is seed templates
 | 13.4.1-T6 | E2E Playwright flows for authoring in vi + en | M | V1 | G1 | 13.4.1-T4, 13.4.1-T5 |
 | 13.4.1-T7 | Navigation regrouped by phase (items of a later phase hidden, not disabled) and the AI credit balance and usage by action on the usage page (G1 builds only the credit region; the quota and retention regions stay 09.7.1-T5, G2) | M | V1 | G1 | 13.4.1-T1, 09.1.1-T4, 08.5.5-T5 |
 Notes (S92): the generation flow screens of 13.4.1-T4 carry the role-profile selector (one profile per generation, optional run note) and 13.4.1-T5 sits next to the profile editor; both are built by 13.2.2-T6, which depends on the 13.4.1-T1 design deltas, so `13.4.1-T1` must include the selector and the editor in its wireframes and states (vi + en).
-**Epic 13.4 total: 10.0**
+**Epic 13.4 total: 10.0** Feature plan for story 13.4.1 (S112, 2026-10-27): `plans/features/13-product-phases/13.4.1-authoring-ui.md` (21 sub-tasks of at most 0.5 d summing to the task sizes above, estimate unchanged; open items OI-13-501 to OI-13-506 in `plans/open-items/05-product-phases-g1.md`).
 
 ### Epic 13.5 Script generation and local runs (G2)
 #### Story 13.5.1 Test case → bound Playwright script — acceptance: an approved test case with an environment URL and a seed test yields a TypeScript Playwright script whose every step is bound to an element found on the live page; the locator policy holds; forbidden patterns are never emitted; the script reaches the repository only as a PR and becomes `active` after 3 of 3 green runs on one build; a scripts screen shows status, stability, unbound steps, lint results, PR state and testability.
