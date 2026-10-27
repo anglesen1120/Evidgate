@@ -214,6 +214,10 @@ public sealed class CiAuthTests
             ("missing repository_id", api.Jwks.Mint(RepoId, (c, _) => c.Remove("repository_id"))),
             ("non-numeric run_id", api.Jwks.Mint(RepoId, (c, _) => c["run_id"] = "abc")),
             ("pull_request_target", api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "pull_request_target")),
+            ("workflow_run", api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "workflow_run")),
+            ("missing event_name", api.Jwks.Mint(RepoId, (c, _) => c.Remove("event_name"))),
+            ("empty event_name", api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = string.Empty)),
+            ("blank event_name", api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "  ")),
             ("jti beyond the column", api.Jwks.Mint(RepoId, (c, _) => c["jti"] = new string('j', 300))),
             ("garbage", "not.a.jwt"),
         };
@@ -239,6 +243,57 @@ public sealed class CiAuthTests
         // Both sub formats are accepted: the binding follows repository_id, never `sub` (F3, D5).
         (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["sub"] = "repo:acme/web:ref:refs/heads/main"))).Status.ShouldBe(HttpStatusCode.OK);
         (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["sub"] = $"repository_owner_id:1:repository_id:{RepoId}:ref:refs/heads/main"))).Status.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData("push")]
+    [InlineData("workflow_dispatch")]
+    [InlineData("pull_request")]
+    [InlineData("merge_group")]
+    [InlineData("schedule")]
+    [InlineData("release")]
+    public async Task Exchange_AllowedEvents_StillMint(string eventName)
+    {
+        var (api, client, user, org, project) = await StartAsync();
+        await using var _ = api;
+        var challenge = (await CreateBindingAsync(client, user, org, project)).Body.GetProperty("binding_challenge").GetString()!;
+
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = eventName), challenge))
+            .Status.ShouldBe(HttpStatusCode.OK, eventName);
+    }
+
+    /// <summary>
+    /// Comparison is ordinal and case-exact (GitHub sends lowercase), so a differently cased <c>Workflow_Run</c> is not in the
+    /// deny list and still mints. Pinned so a change to the comparer is a conscious one; the F50 allowlist follow-up closes it.
+    /// </summary>
+    [Fact]
+    public async Task Exchange_EventNameComparison_IsOrdinalAndCaseExact()
+    {
+        var (api, client, user, org, project) = await StartAsync();
+        await using var _ = api;
+        var challenge = (await CreateBindingAsync(client, user, org, project)).Body.GetProperty("binding_challenge").GetString()!;
+
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "Workflow_Run"), challenge))
+            .Status.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Exchange_ExplicitDeniedEventNamesOverride_ReplacesTheDefault()
+    {
+        _database = await _fixture.CreateDatabaseAsync();
+        var overrides = new Dictionary<string, string?>(StringComparer.Ordinal) { ["EVIDGATE:Ci:DeniedEventNames"] = "schedule" };
+        var api = TenancyApiFactory.Ci(_fixture.AppConnectionString(_database), overrides);
+        await using var _ = api;
+        var client = api.CreateClient();
+        var user = Guid.CreateVersion7();
+        var org = await CreateOrgAsync(client, user, "acme");
+        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var challenge = (await CreateBindingAsync(client, user, org, project)).Body.GetProperty("binding_challenge").GetString()!;
+
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "schedule"), challenge))
+            .ErrorCode.ShouldBe("token_invalid");
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "workflow_run"), challenge))
+            .Status.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]

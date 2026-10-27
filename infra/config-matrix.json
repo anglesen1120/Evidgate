@@ -357,7 +357,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "comma-separated GitHub event_name values refused at the exchange (02.4.1 review); default pull_request_target, which runs in the base repository context while it may execute fork code."
+      "note": "comma-separated GitHub event_name values refused at the exchange (02.4.1 review, F50); default pull_request_target,workflow_run — both run in the base repository context while they may execute fork code. An explicit value replaces this default: removing workflow_run from an override re-opens the workflow_run risk (02.4.1 / F50). The event_name claim itself is required by code and is not configurable."
     },
     {
       "key": "EVIDGATE__CI__EXCHANGEWINDOWSECONDS",
