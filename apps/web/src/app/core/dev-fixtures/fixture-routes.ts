@@ -170,6 +170,11 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
   { operationId: 'createPolicyRevision', method: 'POST', path: '/projects/{p}/policies' },
+  {
+    operationId: 'activatePolicyRevision',
+    method: 'POST',
+    path: '/projects/{p}/policy-activation',
+  },
   { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}', idKeyParameter: 'id' },
   { operationId: 'listPolicyRevisions', method: 'GET', path: '/policies/{id}/revisions' },
 ];

@@ -69,6 +69,15 @@
             @if (store.project(); as project) {
               <app-onboarding-connect-ci [orgId]="orgId()" [projectId]="project.id" />
             }
+          } @else if (store.viewStep() === 5) {
+            <!-- 09.2.1-T5.1: step 5 is the enable step. Without a project it cannot be reached from
+                 the derivation, so the placeholder stays as the honest answer instead of an empty
+                 region. -->
+            @if (store.project(); as project) {
+              <app-onboarding-enable-collection [orgId]="orgId()" [projectId]="project.id" />
+            } @else {
+              <app-onboarding-step-pending />
+            }
           } @else {
             <app-onboarding-step-pending />
           }

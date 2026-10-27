@@ -1,0 +1,18 @@
+{
+  "operation_id": "activatePolicyRevision",
+  "variant": "forbidden",
+  "status": 403,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000a108"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "forbidden",
+      "message": "the principal is not allowed to perform this operation",
+      "request_id": "018f0000-0000-7000-8000-00000000a108",
+      "retryable": false,
+      "details": []
+    }
+  }
+}

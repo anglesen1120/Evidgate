@@ -1,0 +1,19 @@
+{
+  "operation_id": "activatePolicyRevision",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000a105"
+  },
+  "latency_ms": 0,
+  "body": {
+    "project_id": "018f0000-0000-7000-8000-000000000011",
+    "policy_revision_id": "018f0000-0000-7000-8000-00000000a004",
+    "hash": "sha256:f250bbce48fca2a9a5f93b45236c0f330bb471f5d3f0d1396ddc5ac964928064",
+    "mode": "advisory",
+    "activated_by": "018f0000-0000-7000-8000-0000000000e1",
+    "activated_at": "2026-10-26T08:22:00Z",
+    "previous_policy_revision_id": "018f0000-0000-7000-8000-00000000a003",
+    "changed": true
+  }
+}

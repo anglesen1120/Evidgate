@@ -5,8 +5,8 @@
 // would claim a step nobody earned:
 //
 //   1. the wizard's own read, at a project address — `getProject` answers 403/404 and the shell
-//      renders the forbidden / not-found pattern inside `onboarding-shell` (steps 3–5 are still the
-//      placeholders T3…T5 own, and step 2 only renders for a project the wizard could read, so a
+//      renders the forbidden / not-found pattern inside `onboarding-shell` (steps 3–4 are still the
+//      placeholders T3/T4 own, and step 2 only renders for a project the wizard could read, so a
 //      "step 2" here would be a fabrication);
 //   2. the org's scope read, at the onboarding root — a 403 or 404 on `listProjects` is answered by
 //      the shell's scope guard as the same not-found page (00 §9.2 never distinguishes "you may

@@ -70,6 +70,7 @@ import orgsListUnavailable from '../../../../../../fixtures/web-api/orgs-list-un
 import permissionsList from '../../../../../../fixtures/web-api/permissions-list/input.json';
 import permissionsListLimited from '../../../../../../fixtures/web-api/permissions-list-limited/input.json';
 import permissionsListOnboarding from '../../../../../../fixtures/web-api/permissions-list-onboarding/input.json';
+import permissionsListOnboardingEnable from '../../../../../../fixtures/web-api/permissions-list-onboarding-enable/input.json';
 import permissionsListOnboardingNoWrites from '../../../../../../fixtures/web-api/permissions-list-onboarding-no-writes/input.json';
 import permissionsListSettingsAdmin from '../../../../../../fixtures/web-api/permissions-list-settings-admin/input.json';
 import permissionsListSettingsAuditOnly from '../../../../../../fixtures/web-api/permissions-list-settings-audit-only/input.json';
@@ -78,6 +79,10 @@ import permissionsListSettingsNoTab from '../../../../../../fixtures/web-api/per
 import permissionsListSettingsPolicyReadonly from '../../../../../../fixtures/web-api/permissions-list-settings-policy-readonly/input.json';
 import permissionsListSettingsPolicyWrite from '../../../../../../fixtures/web-api/permissions-list-settings-policy-write/input.json';
 import permissionsListSettingsSecretsWrite from '../../../../../../fixtures/web-api/permissions-list-settings-secrets-write/input.json';
+import policyActivationForbidden from '../../../../../../fixtures/web-api/policy-activation-forbidden/input.json';
+import policyActivationInvalidTransition from '../../../../../../fixtures/web-api/policy-activation-invalid-transition/input.json';
+import policyActivationOk from '../../../../../../fixtures/web-api/policy-activation-ok/input.json';
+import policyActivationUnchanged from '../../../../../../fixtures/web-api/policy-activation-unchanged/input.json';
 import policyRevisionCreate from '../../../../../../fixtures/web-api/policy-revision-create/input.json';
 import policyRevisionCreateCriticalCaseQuarantined from '../../../../../../fixtures/web-api/policy-revision-create-critical-case-quarantined/input.json';
 import policyRevisionCreatePreconditionFailed from '../../../../../../fixtures/web-api/policy-revision-create-precondition-failed/input.json';
@@ -212,8 +217,10 @@ export interface FixtureCatalogRow {
  * so a failing progress read renders the T8 pattern instead of a wrong step whether the wizard was
  * opened at the org's root or at a project address.
  * Every wizard URL also carries `permissions-list-onboarding`: the catalogue's own rows for the
- * seven codes the wizard gates on, because the default page holds no `project:*` code and the
- * create submission is disabled without `project:create`. `project-create` answers 201 with the
+ * seven codes the wizard gates steps 1–4 on (the step-5 code `policy:write` lives in
+ * `permissions-list-onboarding-enable` since 09.2.1-T5), because the default page holds no
+ * `project:*` code and the create submission is disabled without `project:create`.
+ * `project-create` answers 201 with the
  * project of the default `project-detail` page, so the post-create reload — which carries no seed,
  * the wizard navigating to a plain `/orgs/<org>/onboarding/<projectId>` — resolves the created
  * project from that one read. `project-detail`, `ci-bindings-list`, `ingest-tokens-list` and
@@ -245,8 +252,10 @@ export interface FixtureCatalogRow {
  * (contracts/openapi.yaml:2376-2397), so a token create cannot be refused with a status the client
  * is contracted to map. `permissions-list-onboarding-no-writes` (variant `onboarding-no-writes` of
  * `listPermissions`) is `permissions-list-onboarding` minus `ci_binding:write` and
- * `ingest_token:write`, so step 2's two controls render disabled with their localized reason
- * instead of disappearing.
+ * `ingest_token:write` plus `policy:write`: it was authored (09.2.1-T2) while the wizard's set
+ * still carried that code, and 09.2.1-T5 moved `policy:write` to
+ * `permissions-list-onboarding-enable` instead. So step 2's two controls render disabled with their
+ * localized reason instead of disappearing, while the step-5 confirm stays enabled under this set.
  *
  * One shape note for future rows: `allowed_workflow_refs` holds `job_workflow_ref` values,
  * `owner/repo/.github/workflows/<file>@refs/heads/main` — what the contract describes
@@ -522,6 +531,37 @@ export interface FixtureCatalogRow {
  * `run-list-unavailable` (`=unavailable`) is the same read's 503 `unavailable` (always
  * `Retry-After`, 00 §9.2), the state the list's error pattern renders with the server's retry hint.
  * Every `X-Request-Id` above (`…e10`–`…e17`) is distinct from the older `runs-list*` rows.
+ *
+ * 09.2.1-T5 adds step 5's documents and splits the wizard's grant set in two. The contract has no
+ * project-keyed read of a `policy_activation` (`activatePolicyRevision` is the POST alone), so the
+ * wizard cannot derive step 5 as done and the corpus answers that POST only: a reload shows the
+ * confirm again and a repeat submit is the replay state below.
+ * `permissions-list-onboarding` (`=onboarding`) is the seven codes the wizard gates steps 1–4 on
+ * and holds NO `policy:write`, so step 5's confirm is natively disabled for it — the state of the
+ * session whose `release_approver` role was reassigned away (plan §8 row 123 asks for the copy
+ * "ask your release approver" in exactly this state, never for a hidden control).
+ * `permissions-list-onboarding-enable` (`=onboarding-enable`, `X-Request-Id …a109`) is that same
+ * seven-code set plus `policy:write`: the lone org creator's grants (T98, `release_approver` from
+ * org creation), which makes step 5 confirmable without another member. The two sets therefore
+ * differ in exactly the one code the confirm is derived from, and
+ * `permissions-list-onboarding-no-writes` stays the separate step-2 state (no `ci_binding:write` /
+ * `ingest_token:write`, `policy:write` kept) — its name is about step 2's creates, not step 5.
+ *
+ * The four activation answers are one project's pointer (`…0011`, as the policy revision documents
+ * above) on revision 4 (`…a004`, the revision `policy-revision-create` returns):
+ * `policy-activation-ok` is the `200` that moves the pointer, so it carries the same `hash` as the
+ * create document and
+ * `previous_policy_revision_id: …a003` — the seeded `active` head this call retires, because
+ * `PolicyActivationStore.cs:18` defines that member as "the revision this call retired, or null when
+ * nothing changed" (`activated_by` is the org-owner user id `…e1` `memberships-list` holds).
+ * `policy-activation-unchanged` (`=unchanged`) is the replay of that same submit: same revision,
+ * same hash, `changed: false` and `previous_policy_revision_id: null`, which is what a second click
+ * and a post-reload confirm answer (00 §9.1: a repeated submit is not an error).
+ * `policy-activation-invalid-transition` (`=invalid-transition`) is `409 invalid_transition`, the
+ * retired-revision refusal verbatim ("a retired policy revision can never be activated again",
+ * `PolicyActivationStore.cs:277-279`), and `policy-activation-forbidden` (`=forbidden`) is the 403 a
+ * principal without `policy:write` gets; both are 00 §9.2 envelopes the page renders as its own
+ * error state. Their `X-Request-Id`s (`…a105`–`…a108`) are distinct from every older policy row.
  */
 export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'ci-binding-create', document: ciBindingCreate },
@@ -596,6 +636,7 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'permissions-list', document: permissionsList },
   { name: 'permissions-list-limited', document: permissionsListLimited },
   { name: 'permissions-list-onboarding', document: permissionsListOnboarding },
+  { name: 'permissions-list-onboarding-enable', document: permissionsListOnboardingEnable },
   {
     name: 'permissions-list-onboarding-no-writes',
     document: permissionsListOnboardingNoWrites,
@@ -619,6 +660,10 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
     name: 'permissions-list-settings-secrets-write',
     document: permissionsListSettingsSecretsWrite,
   },
+  { name: 'policy-activation-forbidden', document: policyActivationForbidden },
+  { name: 'policy-activation-invalid-transition', document: policyActivationInvalidTransition },
+  { name: 'policy-activation-ok', document: policyActivationOk },
+  { name: 'policy-activation-unchanged', document: policyActivationUnchanged },
   { name: 'policy-revision-create', document: policyRevisionCreate },
   {
     name: 'policy-revision-create-critical-case-quarantined',
