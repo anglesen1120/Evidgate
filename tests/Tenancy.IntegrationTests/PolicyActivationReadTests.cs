@@ -16,12 +16,15 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The two reads are project-scoped, so every "not there" case is one answer: a project that was never
-/// activated (or has no revision yet), an unknown id, a soft-deleted project, another tenant's project and a
-/// pointer naming another project's revision all answer the same <c>404</c> body, and the tests compare the
-/// error bodies rather than only the status. The <c>403</c> cases cover both refusals a credential can meet:
-/// <c>policy:read</c> is outside the service-role ceiling, so a credential on its own project is refused
-/// <c>forbidden</c> (the <c>PolicyEndpointTests</c> precedent), while a credential scoped to another project is
-/// refused <c>project_scope_mismatch</c> by its scope before any read runs.
+/// activated (or has no revision yet), an unknown id, a soft-deleted project (with or without a stored pointer),
+/// another tenant's project (activated or not) and a pointer naming another project's revision all answer the
+/// same <c>404</c> body, and the tests compare the error bodies rather than only the status. Every <c>403</c>
+/// here is the permission stage's: <c>policy:read</c> is outside the service-role ceiling, so a service
+/// credential is refused <c>forbidden</c> whether or not it holds <c>policy:read</c> and whatever project it is
+/// scoped to — the ceiling answers before the <c>ProjectScope</c> guard, so neither the project in the path nor
+/// the route changes the answer (the
+/// <c>PolicyEndpointTests.ProjectScopedServiceCredential_IsRefusedByTheServiceRoleCeiling_OnReadAndWrite</c>
+/// precedent).
 /// </remarks>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
@@ -64,14 +67,21 @@ public sealed class PolicyActivationReadTests
         return new World(api, client, database, user, org, project);
     }
 
-    /// <summary>Appends a revision through the documented route; the answer carries its id and hash.</summary>
-    private static async Task<ApiAnswer> CreateRevisionAsync(World world, string body, Guid? project = null)
+    /// <summary>
+    /// Appends a revision through the documented route; the answer carries its id and hash.
+    /// <paramref name="caller"/> defaults to this world's admin, so another tenant's own admin can seed its project.
+    /// </summary>
+    private static async Task<ApiAnswer> CreateRevisionAsync(
+        World world,
+        string body,
+        Guid? project = null,
+        Action<HttpRequestHeaders>? caller = null)
     {
         var created = await SendRawAsync(
             world.Client,
             HttpMethod.Post,
             $"/v1/projects/{project ?? world.Project}/policies",
-            world.Admin,
+            caller ?? world.Admin,
             body);
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
 
@@ -281,8 +291,8 @@ public sealed class PolicyActivationReadTests
 
     /// <summary>
     /// Every unreadable-project case is the same answer: a project with no pointer, an unknown id, a soft-deleted
-    /// project, another tenant's project, and a pointer naming another project's revision. Status and the error
-    /// body (code, message, retryable, details) are compared, not only the status.
+    /// project, another tenant's project that <em>has</em> a live pointer, and a pointer naming another project's
+    /// revision. Status and the error body (code, message, retryable, details) are compared, not only the status.
     /// </summary>
     [Fact]
     public async Task GetActivation_NeverActivatedUnknownSoftDeletedForeignAndCrossProjectPointer_AreTheSame404()
@@ -298,14 +308,19 @@ public sealed class PolicyActivationReadTests
         await CreateRevisionAsync(world, BodyB, deleted);
         await _fixture.ExecuteAsync(world.Database, $"update public.project set status = 'deleted' where id = '{deleted}'");
 
+        // Another tenant's project, activated by its own admin: the 404 must not be the never-activated answer.
         var otherUser = Guid.CreateVersion7();
         var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
         var outsider = TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg);
+        var rival = await CreateProjectAsync(world.Client, otherUser, otherOrg, "rival-checkout");
+        var rivalRevision = await CreateRevisionAsync(world, BodyC, rival, outsider);
+        (await ActivateAsync(world, rivalRevision.Id(), rival, outsider)).Status.ShouldBe(HttpStatusCode.OK);
+        (await GetAsync(world, ActivationUrl(world, rival), outsider)).Status.ShouldBe(HttpStatusCode.OK, "its own tenant reads the seeded pointer");
 
         var never = await GetAsync(world, ActivationUrl(world));
         var unknown = await GetAsync(world, ActivationUrl(world, Guid.CreateVersion7()));
         var hidden = await GetAsync(world, ActivationUrl(world, deleted));
-        var foreign = await GetAsync(world, ActivationUrl(world), outsider);
+        var foreign = await GetAsync(world, ActivationUrl(world, rival));
         var crossProject = await GetAsync(world, ActivationUrl(world, sibling));
 
         foreach (var answer in new[] { never, unknown, hidden, foreign, crossProject })
@@ -318,7 +333,74 @@ public sealed class PolicyActivationReadTests
         var shapes = new[] { never, unknown, hidden, foreign, crossProject }.Select(ProblemShape).Distinct().ToList();
         shapes.Count.ShouldBe(1, "the five unreadable-project cases must share one error body: " + string.Join(" / ", shapes));
 
-        // The sibling's own pointer row is still there: the read hid it, it did not delete it.
+        // Both stored pointers are still there: the reads hid them, they did not delete them.
+        (await PointerCountAsync(world)).ShouldBe(2);
+    }
+
+    /// <summary>
+    /// A pointer that outlives its project's soft deletion is not readable: the read is the never-activated
+    /// <c>404</c>, body included, so a deleted project is not an existence oracle for its own activation either.
+    /// </summary>
+    [Fact]
+    public async Task GetActivation_SoftDeletedProjectWithALivePointer_IsTheSame404AsNeverActivated()
+    {
+        await using var world = await StartAsync();
+
+        var deleted = await CreateProjectAsync(world.Client, world.User, world.Org, "gone");
+        var revision = await CreateRevisionAsync(world, BodyA, deleted);
+        (await ActivateAsync(world, revision.Id(), deleted)).Status.ShouldBe(HttpStatusCode.OK);
+        (await GetAsync(world, ActivationUrl(world, deleted))).Status.ShouldBe(HttpStatusCode.OK, "the pointer is live before the deletion");
+
+        // The soft deletion is the status column the other cases use; the pointer row stays behind it.
+        await _fixture.ExecuteAsync(world.Database, $"update public.project set status = 'deleted' where id = '{deleted}'");
+        (await PointerCountAsync(world)).ShouldBe(1, "the soft deletion left the pointer row in place");
+
+        var never = await GetAsync(world, ActivationUrl(world));
+        var hidden = await GetAsync(world, ActivationUrl(world, deleted));
+
+        hidden.Status.ShouldBe(HttpStatusCode.NotFound, hidden.ErrorMessage);
+        hidden.ErrorCode.ShouldBe("not_found");
+        hidden.ErrorMessage.ShouldNotBeNullOrWhiteSpace();
+        ProblemShape(hidden).ShouldBe(ProblemShape(never));
+    }
+
+    /// <summary>
+    /// The activation read follows the stored pointer, the head follows the append order: activating revision 2
+    /// moves the pointer to 2, and appending revision 3 without activating it leaves the activation on 2 while the
+    /// head is 3.
+    /// </summary>
+    [Fact]
+    public async Task GetActivation_FollowsTheSecondActivation_WhileTheHeadMovesToTheUnactivatedNewest()
+    {
+        await using var world = await StartAsync();
+        var first = await CreateRevisionAsync(world, BodyA);
+        (await ActivateAsync(world, first.Id())).Status.ShouldBe(HttpStatusCode.OK);
+
+        var second = await CreateRevisionAsync(world, BodyB);
+        var moved = await ActivateAsync(world, second.Id());
+        moved.Status.ShouldBe(HttpStatusCode.OK, moved.ErrorMessage);
+        moved.Body.GetProperty("changed").GetBoolean().ShouldBeTrue();
+        moved.Body.GetProperty("previous_policy_revision_id").GetGuid().ShouldBe(first.Id());
+
+        var atSecond = await GetAsync(world, ActivationUrl(world));
+        atSecond.Status.ShouldBe(HttpStatusCode.OK, atSecond.ErrorMessage);
+        atSecond.Id("policy_revision_id").ShouldBe(second.Id());
+        atSecond.Text("hash").ShouldBe(second.Text("hash"));
+        atSecond.Text("mode").ShouldBe("advisory");
+
+        var third = await CreateRevisionAsync(world, BodyC);
+
+        var stillSecond = await GetAsync(world, ActivationUrl(world));
+        stillSecond.Status.ShouldBe(HttpStatusCode.OK, stillSecond.ErrorMessage);
+        stillSecond.Id("policy_revision_id").ShouldBe(second.Id(), "appending a revision does not move the pointer");
+        stillSecond.Text("hash").ShouldBe(second.Text("hash"));
+
+        var head = await GetAsync(world, HeadUrl(world));
+        head.Status.ShouldBe(HttpStatusCode.OK, head.ErrorMessage);
+        head.Id().ShouldBe(third.Id(), "the head is the newest revision, not the activated one");
+        head.Body.GetProperty("revision_no").GetInt32().ShouldBe(3);
+        head.Text("state").ShouldBe("draft");
+
         (await PointerCountAsync(world)).ShouldBe(1);
     }
 
@@ -330,8 +412,8 @@ public sealed class PolicyActivationReadTests
         var revision = await CreateRevisionAsync(world, BodyA);
         (await ActivateAsync(world, revision.Id())).Status.ShouldBe(HttpStatusCode.OK);
 
-        // No project scope: a scoped credential would answer `project_scope_mismatch` for the unknown id and
-        // `forbidden` for its own, which would make the two probes incomparable as well as distinguishable.
+        // No project scope: the answer must come from the permission stage alone. A project-scoped credential is
+        // refused by the same service-role ceiling before its scope guard — the scope test below records that.
         var ci = TenancyApiFactory.Resolved(serviceOrg: world.Org, servicePermissions: ["run:create"]);
 
         var activation = await GetAsync(world, ActivationUrl(world), ci);
@@ -352,20 +434,24 @@ public sealed class PolicyActivationReadTests
     }
 
     /// <summary>
-    /// Contract case (6): a credential scoped to another project (<c>ProjectScope</c>) is refused 403
-    /// <c>project_scope_mismatch</c> on this project's read, and 403 <c>forbidden</c> on its own project — because
-    /// <c>policy:read</c> is outside the service-role ceiling (<c>PermissionEvaluator.ServiceRoleCeiling</c>), so a
-    /// service principal can never hold the route permission. The scope refusal comes first, so neither answer names
-    /// a project and a foreign project is not an existence oracle for a scoped credential either.
+    /// Contract case (6): <c>policy:read</c> is outside the service-role ceiling
+    /// (<c>PermissionEvaluator.ServiceRoleCeiling</c>), so a service credential can never hold the route
+    /// permission and the ceiling answers 403 <c>forbidden</c> before the <c>ProjectScope</c> guard runs. Both
+    /// projects hold a live pointer, so a read that got past the ceiling would answer <c>200</c>: the refusal is the
+    /// permission stage's on the credential's own project and on another alike, on both routes, with one body — so
+    /// neither the project in the path nor the route is an existence oracle for a project-scoped credential.
     /// </summary>
     [Fact]
-    public async Task GetActivation_AndHead_AProjectScopedPolicyReadCredential_Is403ScopeMismatchOffItsProject()
+    public async Task GetActivation_AndHead_AProjectScopedPolicyReadCredential_Is403ForbiddenOnEveryProject()
     {
         await using var world = await StartAsync();
         var revision = await CreateRevisionAsync(world, BodyA);
         (await ActivateAsync(world, revision.Id())).Status.ShouldBe(HttpStatusCode.OK);
 
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
+        var siblingRevision = await CreateRevisionAsync(world, BodyB, sibling);
+        (await ActivateAsync(world, siblingRevision.Id(), sibling)).Status.ShouldBe(HttpStatusCode.OK);
+
         var scoped = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: sibling, servicePermissions: ["policy:read"]);
 
         var activationOther = await GetAsync(world, ActivationUrl(world), scoped);
@@ -373,24 +459,18 @@ public sealed class PolicyActivationReadTests
         var headOther = await GetAsync(world, HeadUrl(world), scoped);
         var headOwn = await GetAsync(world, HeadUrl(world, sibling), scoped);
 
-        foreach (var answer in new[] { activationOther, headOther })
+        foreach (var answer in new[] { activationOther, activationOwn, headOther, headOwn })
         {
-            answer.Status.ShouldBe(HttpStatusCode.Forbidden);
-            answer.ErrorCode.ShouldBe(
-                "project_scope_mismatch",
-                "the credential is scoped to another project, so the scope refusal answers before any read");
-        }
-
-        foreach (var answer in new[] { activationOwn, headOwn })
-        {
-            answer.Status.ShouldBe(HttpStatusCode.Forbidden);
+            answer.Status.ShouldBe(HttpStatusCode.Forbidden, answer.ErrorMessage);
             answer.ErrorCode.ShouldBe(
                 "forbidden",
-                "policy:read is outside the service ceiling, so even its own project is refused as a service claim");
+                "policy:read is outside the service ceiling, so the ceiling answers before the project scope does");
         }
 
-        ProblemShape(activationOther).ShouldBe(ProblemShape(headOther));
-        ProblemShape(activationOwn).ShouldBe(ProblemShape(headOwn));
+        var shapes = new[] { activationOther, activationOwn, headOther, headOwn }.Select(ProblemShape).Distinct().ToList();
+        shapes.Count.ShouldBe(
+            1,
+            "the own project, another project and both routes must share one refusal: " + string.Join(" / ", shapes));
     }
 
     // ------------------------------------------------------------------------------------- GET policies/head

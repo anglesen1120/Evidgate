@@ -1811,8 +1811,8 @@ paths:
         answer (00 §9.2): a project that has never been activated, an unknown
         id, a soft-deleted project and another tenant's project are
         indistinguishable, and an activation row that points at another
-        project's revision reads nothing. A credential scoped to another
-        project is `403 project_scope_mismatch`. A read, so no
+        project's revision reads nothing. A project-scoped (service) credential
+        holds no `policy:read` and gets `403 forbidden`. A read, so no
         `Idempotency-Key`.
       x-permission: policy:read
       x-version: v1
@@ -1930,8 +1930,8 @@ paths:
         the revision id, quoted, exactly as `GET /v1/policies/{id}` issues it.
         `404` is one undifferentiated answer (00 §9.2): a project with no
         revision, an unknown id, a soft-deleted project and another tenant's
-        project are indistinguishable. A credential scoped to another project is
-        `403 project_scope_mismatch`. A read, so no `Idempotency-Key`.
+        project are indistinguishable. A project-scoped (service) credential
+        holds no `policy:read` and gets `403 forbidden`. A read, so no `Idempotency-Key`.
       x-permission: policy:read
       x-version: v1
       parameters:
@@ -7096,7 +7096,7 @@ components:
       schema:
         type: string
     ETag:
-      description: The row's `version`, quoted; send it back in `If-Match` (00 §9.1).
+      description: Endpoint-specific quoted validator — row version, revision id or number, content or revision hash; send it back in `If-Match` (00 §9.1).
       schema:
         type: string
     NoStore:

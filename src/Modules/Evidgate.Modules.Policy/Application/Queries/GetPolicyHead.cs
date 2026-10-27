@@ -57,21 +57,26 @@ internal sealed class GetPolicyHeadQueryHandler(
 internal static class GetPolicyHeadSql
 {
     /// <summary>
-    /// The live project joined to its newest revision. RLS scopes both to the request's tenant, and the project join
-    /// hides a soft-deleted project, so an unreadable project and a project without revisions are the same empty
-    /// result. The unique btree on <c>(org_id, project_id, revision_no)</c> serves the backward scan (07.1.1-T1
-    /// deviation), and the pair is unique, so the order needs no tie-break.
+    /// The live project's newest revision. RLS scopes both tables to the request's tenant, and the ordering is
+    /// structural: the project row is checked first, so an unknown, other-tenant or soft-deleted project reads no
+    /// revision row at all and a project without revisions is the same empty result (one 404). The lateral probe
+    /// then touches the unique btree on <c>(org_id, project_id, revision_no)</c> once, walking it backwards for the
+    /// highest <c>revision_no</c> (07.1.1-T1 deviation); the pair is unique, so the order needs no tie-break. No
+    /// state filter applies: the head is the append-only sequence's last row, not the active revision.
     /// </summary>
     internal const string Head = """
         select r.id, r.revision_no, r.hash, r.state, r.created_by, r.created_at, r.version
           from public.project p
-          join public.policy_revision r
-            on r.org_id = p.org_id
-           and r.project_id = p.id
+          cross join lateral (
+              select r.id, r.revision_no, r.hash, r.state, r.created_by, r.created_at, r.version
+                from public.policy_revision r
+               where r.org_id = p.org_id
+                 and r.project_id = p.id
+               order by r.revision_no desc
+               limit 1
+          ) r
          where p.id = @project_id
            and p.org_id = @org_id
            and p.status <> 'deleted'
-         order by r.revision_no desc
-         limit 1
         """;
 }
