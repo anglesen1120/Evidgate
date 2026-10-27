@@ -6,9 +6,9 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 
 **Current state (2026-10-27).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next, §6 blocked), not here.
 
-- Landed on `develop` (#234 merged as `7bad46a`): 177 of 655 planned tasks = 182.75 of 702.75 raw person-days (≈27 % of tasks, ≈26 % of effort); 478 tasks / 520.0 d remain.
-- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 132 / 144.25 of 281.25 · G2 39 / 32.5 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
-- Landed by area plan (tasks / planned): 01 45/53 · 02 29/48 · 03 8/40 · 04 22/53 · 05 16/53 · 06 12/36 · 07 6/42 · 08 0/69 · 09 20/72 · 10 4/54 · 11 9/51 · 12 1/30 · 13 5/54.
+- Landed on `develop` (#236 merged as `148bc06`): 178 of 655 planned tasks = 183.25 of 702.75 raw person-days (≈27 % of tasks, ≈26 % of effort); 477 tasks / 519.5 d remain.
+- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 132 / 144.25 of 281.25 · G2 40 / 33 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
+- Landed by area plan (tasks / planned): 01 45/53 · 02 29/48 · 03 8/40 · 04 22/53 · 05 17/53 · 06 12/36 · 07 6/42 · 08 0/69 · 09 20/72 · 10 4/54 · 11 9/51 · 12 1/30 · 13 5/54.
 - Delivered substrate: M1 foundation (toolchain pins, contracts pipeline + generated SDK drift gate, CI running `scripts/verify.sh`, dev stack, licence/SBOM/action-pin gates) and the Stage A waves (FORCE-RLS tenancy, orgs/projects/memberships, permissions, audit chain, CI tokens).
 - Delivered modules: catalog case/suite identity and revisions (03.1.1/03.1.3/03.2.1), runs manifest upload (05.1.1), 05.3.2-T1 only, evidence upload + safe parsing (06.1/06.3.1–06.3.2), policy revisions and waiver/quarantine lifecycles (07.1.1/07.3.1), sessions with list/revoke/revoke-all/logout and the cleanup sweep (02.3.2-T1/T2), and the Angular 22 web app with scaffold, app shell, shared state components and generated-SDK data layer (09.1.1-T1/T3/T4/T5/T7/T8/T9/T10/T12).
 - Migrations `0001`–`0048` are contiguous; highest is `0048_identity_session_routes.sql` (merged in #228), the migration lane is free and the next free number is `0049`.

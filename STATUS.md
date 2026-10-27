@@ -9,8 +9,8 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop: 177/655 tasks; 182.75/702.75 raw person-days; remaining 478 tasks / 520.0 d. Via merged PRs: 150 tasks / 157.75 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- Landed by phase (done tasks / raw d): G1 132 / 144.25; G2 39 / 32.5; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop: 178/655 tasks; 183.25/702.75 raw person-days; remaining 477 tasks / 519.5 d. Via merged PRs: 151 tasks / 158.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 132 / 144.25; G2 40 / 33; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1 with the same 10 missing 13.x feature plans (queue F37, §6 row), unchanged.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -24,10 +24,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 177 | 182.75 |
-| Via merged PRs | 150 | 157.75 |
+| Fully landed on develop | 178 | 183.25 |
+| Via merged PRs | 151 | 158.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 478 | 520.0 |
+| Remaining | 477 | 519.5 |
 | Plan total | 655 | 702.75 |
 
 Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 09.2.1-T5 (T5.2 reload acceptance awaits F18), 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764) and whose remainder is the T2.2 acceptance plus T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -40,7 +40,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 02 | 29 | 0 | 8 | 18 | 3 | 0 | 28 |
 | 03 | 8 | 0 | 3 | 4 | 1 | 0 | 7.5 |
 | 04 | 22 | 0 | 7 | 12 | 3 | 0 | 21.5 |
-| 05 | 16 | 0 | 4 | 8 | 4 | 0 | 18 |
+| 05 | 17 | 0 | 5 | 8 | 4 | 0 | 18.5 |
 | 06 | 12 | 0 | 4 | 8 | 0 | 0 | 10 |
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
 | 08 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -49,17 +49,17 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 11 | 9 | 1 | 3 | 4 | 1 | 0 | 7.75 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 177 | 3 | 48 | 95 | 30 | 1 | 182.75 |
+| TOTAL | 178 | 3 | 49 | 95 | 30 | 1 | 183.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
 | G1 | 132 | 3 | 29 | 72 | 27 | 1 | 144.25 |
-| G2 | 39 | 0 | 17 | 20 | 2 | 0 | 32.5 |
+| G2 | 40 | 0 | 18 | 20 | 2 | 0 | 33 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 177 | 3 | 48 | 95 | 30 | 1 | 182.75 |
+| TOTAL | 178 | 3 | 49 | 95 | 30 | 1 | 183.25 |
 
 ### Landed task groups
 
@@ -187,7 +187,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 10.7.1 | 10.7.1-T4.1 + T4.2 written half: key rotation runbook | merged (#222, 1adcc47) | `docs/runbooks/key-rotation.md` covers all six key classes (ingest tokens, CI OIDC trust, JWT signing key, webhook secrets, database credentials, provider keys via the 10.1.1-T2 `ISecretProvider`) plus the operator rotation path and its authorisation, and the T4.2 written half (§3: a new `pepper_vN` signs new tokens while old versions verify until their last token, with the session three-step overlap and the invite pepper that has none). Docs-only, tier T0. No task or person-day credit: counts include only whole tasks, so 10.7.1-T4 is not a landed task while the T4.2 staging drill (AC5) is open (§6 row "Key rotation drill needs staging (S106, O-F)"), and no count line, `AGENTS.md`, area or phase row changes. |
 | 11.2.1 | 11.2.1-T3 (T3.1 + T3.2) | merged (#225, f4c7de8) | `docs/security/ingest-token-review.md`: shipped ingest/CI token design reviewed against code at 96e0f17 (scope, TTL, OIDC claim validation, revocation, replay, T5 storage, single return, pepper custody and rotation, 17-row abuse table, five new gaps T3-G1..G5). Docs-only, tier T0. Whole task: counts +1 task / +1.0 d (M); nothing else in §5 was unblocked (04.9.1-T2, 08.4.3-T2, 11.2.1-T4 and 11.2.1-T5 wait on 11.2.1-T6/T4, 05.9.2-T1 on all of 11.2.1). |
 | 06.4.6 | 06.4.6-T1 (T1.1 + T1.2) | merged (#234, 7bad46a) | `docs/adr/0009-event-table-partitioning.md` (proposed, owner confirmation pending): option C, monthly partitions by `run_created_at`, widened dedupe key, `DEFAULT` partition + plain `DETACH` with `lock_timeout` ≤ 5 s (D-S113-Q1; PostgreSQL 18 forbids `DETACH CONCURRENTLY` with a default partition), retention table, 90-day cap proposal; CR proposals logged `[OPEN]` as OI-06-17. Docs-only, tier T0. Whole task: counts +1 task / +0.5 d (S); 06.4.6-T2 and T3 remain. |
-| 05.5.2 | 05.5.2-T1 (T1.1 + T1.2) | in review (#236) | CI re-run contract change (docs only, tier T0, proposed, owner confirmation pending): 00 §8.1 gains `rerun_scope = ci_attempt` and the attempt rule (triple identity, new run per higher attempt with parent = highest stored lower attempt, `stale_attempt`, partial-attempt label), §9.4 binds the whole triple; 00 §15 row, plan 05 FR-05-7/§4/producer-binding line, DECISIONS §6 F10–F13 (GitHub facts ✅, one ⚠️ kept), OI-05-05 reworded, OI-05-16 added. No claim, wire field, code or contract file changed. Counts bump in the close-out. |
+| 05.5.2 | 05.5.2-T1 (T1.1 + T1.2) | merged (#236, 148bc06) | CI re-run contract change (docs only, tier T0, proposed, owner confirmation pending): 00 §8.1 gains `rerun_scope = ci_attempt` and the attempt rule (triple identity, new run per higher attempt with parent = highest stored lower attempt, `stale_attempt`, partial-attempt label), §9.4 binds the whole triple; 00 §15 row, plan 05 FR-05-7/§4/producer-binding line, DECISIONS §6 F10–F13 (GitHub facts ✅, one ⚠️ kept), OI-05-05 reworded, OI-05-16 added. No claim, wire field, code or contract file changed. |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -781,3 +781,4 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Event-table partitioning owner confirmation and 00/04 CR (06.4.6-T1, S113, #234, D-S113-Q1) | ADR-0009 is `proposed`. Open: O-06.4.6-1 (`metadata_days` cap and event-class ceiling; proposal 90 d, plan text said 365 d), O-06.4.6-2 (CR to 00 §8/§11 and plan 04 §8, not applied), O-06.4.6-3 (02.9.1-T2 composite-FK lint rule for partitioned parents). Corrections to the 06.4.6 plan text (no `DETACH CONCURRENTLY` with a `DEFAULT` partition, no `ON CONFLICT` target to change, `artifact.attempt_run_created_at`) are in its Notes (S113). Register row OI-06-17 in `plans/open-items/02-catalog-ingest-runs-evidence.md` | receiver: 06.4.6-T2 (M2) DoR pass, with owner confirmation; hand-over Notes: `plans/features/06-evidence-artifacts/06.4.6-retention-and-partitioning-for-high-volume-tables.md:172`, `plans/features/04-ingestion-adapters/04.1.1-atomic-batch-ingest-with-per-event.md:409` |
 | Merge debt (#234) | S113 06.4.6-T1 merged as `7bad46a` (reviewed head `1ec7656`) under coordinator-review 6c, send-back waived (waiver rule clause 2, D-S113-M1, `docs/phase-review.md`): reviews_cover_final 0.22 only; the coordinator verified the fix range docs-only. Docs only (T0). ADR-0009 stays `proposed`. Open hand-over: `STATUS.md:781` "Event-table partitioning owner confirmation and 00/04 CR (06.4.6-T1, S113, #234, D-S113-Q1)", receiver 06.4.6-T2 DoR pass; plan Notes `plans/features/06-evidence-artifacts/06.4.6-retention-and-partitioning-for-high-volume-tables.md:172`. | coordinator (D-S113-M1, `docs/phase-review.md`) |
 | CI re-run attempt hand-over (05.5.2-T1, S114, #236, D-S114-Q1) | For 05.5.2-T2 (Notes 05.5.2 §11 Notes): widen `run_rerun_scope_check` (`migrations/0031_orchestration_run.sql:120`), attempt lookup + partial unique index, register `stale_attempt` (00 §9.2, `contracts/openapi.yaml`), `shard_selection` source, derived label "earlier attempt not recorded", scratch re-run to confirm the OIDC first-attempt `run_attempt` (F12 ⚠️, OI-05-05). For 05.5.2-T3: `ci_rerun_unavailable`. Parent rule awaits owner confirmation (OI-05-16). S110 owns the OIDC code; no claim added. |
+| Merge debt (#236) | S114 05.5.2-T1 merged as `148bc06` (reviewed head `a06f0b1`, fix head `b659b6e`) under coordinator-review 6c, send-back waived (waiver rule clause 2, D-S114-M1, `docs/phase-review.md`). Docs only (T0). The parent rule is a coordinator decision, owner confirmation pending (D-S114-Q1, OI-05-16). Open hand-over: `STATUS.md:783` "CI re-run attempt hand-over (05.5.2-T1, S114, #236, D-S114-Q1)", receivers 05.5.2-T2 and T3, plan Notes `plans/features/05-runs-orchestration/05.5.2-ci-rerun-semantics-and-trigger.md:154`. | coordinator (D-S114-M1, `docs/phase-review.md`) |
