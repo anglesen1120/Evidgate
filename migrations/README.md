@@ -98,7 +98,7 @@ The playbook for changing a table without breaking the running version is
   acting user resolved from the presented cookie hash INSIDE every definer, and EXECUTE
   on the sweep granted to `evidgate_worker_sched` alone), and `0049` is 05.3.2-T5's
   `evidence_revision` — one immutable row per frozen evidence set of a run (`unique (org_id, run_id,
-  revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_error`, the
+revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_error`, the
   `completeness`/`outcome`/watermark CHECKs, `revoke update, delete` for the app role, the SQL half of
   C6/AC9), a BEFORE INSERT trigger that makes `revision_no` gap-free by taking the run row first, and
   the pointer wiring 0036 deferred — the composite FK `run_current_evidence_revision_fk`
@@ -346,7 +346,7 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
 - `missing[]`'s code list is a CHECK over the closed 00 §8.5 list (`<@`,
   `setup_error` included), so a new reason code is a migration, not a code
   change; a multi-dimensional array is refused (`array_ndims(missing) is null
-  or 1`, wrapped in a `CASE` because `array_position` raises `0A000` on a
+or 1`, wrapped in a `CASE` because `array_position` raises `0A000` on a
   nested array and CHECK term order is not guaranteed; duplicates are
   tolerated); `completeness = 'complete'` requires
   `missing = '{}'` (AC4), while the converse is the reconciler's rule. An
@@ -354,7 +354,7 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   `completeness` (only its value set is constrained), so a reader keys on
   `completeness` alone and never infers it from `missing` or `outcome`.
 - Idempotent like `0025`/`0027`/`0028`/`0046`: `if not exists` / `drop … if
-  exists` and a catalog check around the FK add, so a re-run is a no-op; one
+exists` and a catalog check around the FK add, so a re-run is a no-op; one
   file runs in one transaction.
 
 ## Tests and fixtures
