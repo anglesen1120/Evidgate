@@ -1,16 +1,8 @@
 using System.Net;
+using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
-using Evidgate.Modules.Identity.Endpoints;
-using Evidgate.Modules.Identity.Login.Audit;
 using Evidgate.Testing;
-using Identity.IntegrationTests.Login.Linking;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -18,35 +10,28 @@ using Xunit;
 namespace Identity.IntegrationTests.Sessions.Http;
 
 /// <summary>
-/// F48 over HTTP: <c>DELETE /v1/auth/sessions/{s}</c> with <c>X-Evidgate-Org</c> writes ONE
-/// <c>auth.session_revoke_admin</c> row — and only when the caller is an admin ending ANOTHER member's session.
+/// F55 over HTTP: <c>DELETE /v1/auth/sessions/{s}</c> with <c>X-Evidgate-Org</c> appends ONE
+/// <c>auth.session_revoke_admin</c> row — written by the definer, in the revoke's own transaction, and only when the
+/// caller is an admin ending ANOTHER member's session.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>What the row may say.</b> The actor is the admin whose session made the call, the chain is the org named by
-/// the header, and the object is the revoked <c>session</c> row. The target user is deliberately absent (the
-/// definer answers a status only; F55 returns it), so the stored row — every column, read back as JSON — is also
-/// asserted to carry no cookie value, no cookie HMAC in either spelling and no pepper: the audit says who ended
-/// which session where, never how the credential was proved.
+/// <b>The row, and the transaction it shares.</b> The actor is the admin whose session made the call, the chain is
+/// the org named by the header, the object is the revoked <c>session</c> row and the metadata names the member it
+/// belonged to (F55). Because <c>evidgate_resolve.session_revoke_one</c> appends it inside its own transaction, the
+/// two states this suite may ever observe are "revoked with one row" and "live with none" — including after a
+/// fault inside the append and after a caller that leaves mid-flight.
 /// </para>
 /// <para>
-/// <b>What must write nothing.</b> A self revoke (the current row, or a second device of the caller, with or
-/// without the header), <c>logout</c>, <c>revoke-all</c> and every refusal are the account acting on its own
-/// sessions or not acting at all; each is measured as a before/after snapshot of the org's chain, and each refusal
-/// also keeps the target row live and its answer identical to the pre-F48 behaviour.
+/// <b>What the stored row may say.</b> Every column, read back as JSON, is asserted to carry no cookie value, no
+/// cookie HMAC in either spelling and no pepper: the audit says who ended which session of whose, never how the
+/// credential was proved.
 /// </para>
 /// <para>
-/// <b>The failure case is the honest one.</b> The writer opens its own transaction after the definer committed, so
-/// a fault leaves the revoke in place and the row missing: the route answers 503, the response touches no cookie,
-/// one Error line names the actor, the org and the fault's type (with the SQLSTATE of a database fault) and never
-/// the session id, the writer's own message text or a credential, and the retry answers 404 without reaching the
-/// writer — the window F55 closes with a definer that returns <c>target_user_id</c> and writes the row in its own
-/// transaction.
-/// </para>
-/// <para>
-/// <b>The committed revoke is recorded even when the caller leaves.</b> The audit write runs on its own bounded
-/// token, never on <c>HttpContext.RequestAborted</c>: a request aborted after the definer answered still writes its
-/// one row (F48 S1).
+/// <b>What must write nothing.</b> A self revoke (the current row, or a second device of the caller, with or without
+/// the header), <c>logout</c>, <c>revoke-all</c> and every refusal (401, 403, 404) are the account acting on its own
+/// sessions or not acting at all; each is measured against the org's chain, and no line of the deployment's log may
+/// name the session either (02.3.2 D9).
 /// </para>
 /// </remarks>
 [Collection(HarnessSuite.Name)]
@@ -56,20 +41,17 @@ public sealed class AdminRevokeAuditTests : HarnessTest
     /// <summary>The single-session route of AC6.</summary>
     private const string SessionsPath = "/v1/auth/sessions";
 
-    /// <summary>The logout route (no audit row: it ends the caller's own session).</summary>
+    /// <summary>The logout route (no admin row: it ends the caller's own session).</summary>
     private const string LogoutPath = "/v1/auth/logout";
 
-    /// <summary>The revoke-all route (no audit row either).</summary>
+    /// <summary>The revoke-all route (no admin row either).</summary>
     private const string RevokeAllPath = "/v1/auth/sessions/revoke-all";
 
-    /// <summary>The cookie-independent part of every row assertion: <c>audit_log</c> speaks uuid text.</summary>
-    private const string UuidText = "D";
+    /// <summary>The action the definer writes; after F55 the string lives in SQL, so it is pinned here.</summary>
+    private const string AdminRevokeAction = "auth.session_revoke_admin";
 
-    /// <summary>
-    /// Text planted in every fault the failure writer raises. A line renders the fault's type only, so this string
-    /// reaching a log line means the exception object (or its message) was handed to the logger (F48 S3).
-    /// </summary>
-    private const string FaultCanary = "f48-writer-fault-canary";
+    /// <summary>The uuid text format every row assertion uses: <c>audit_log</c> stores ids as <c>"D"</c> text.</summary>
+    private const string UuidText = "D";
 
     public AdminRevokeAuditTests(DatabaseFixture fixture)
         : base(fixture)
@@ -84,12 +66,13 @@ public sealed class AdminRevokeAuditTests : HarnessTest
     }
 
     /// <summary>
-    /// The administered case: an admin revoking a member's session in the org it administers writes exactly one
-    /// <c>auth.session_revoke_admin</c> row — action, actor, object, org, metadata and no credential anywhere in the
-    /// stored row — and the revoked row really is dead.
+    /// The administered case: an admin revoking a member's session in the org it administers answers 204, ends the
+    /// row, and appends exactly one <c>auth.session_revoke_admin</c> row — action, actor, object, target user, org,
+    /// nothing credentialed in the stored payload — which the production verifier accepts between the application
+    /// rows written before and after it.
     /// </summary>
     [Fact]
-    public async Task An_Admin_Revoke_Writes_Exactly_One_Row_For_The_Org()
+    public async Task An_Admin_Revoke_Writes_Exactly_One_Row_In_The_Revoke_Transaction()
     {
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
@@ -105,7 +88,8 @@ public sealed class AdminRevokeAuditTests : HarnessTest
             AssertNoSessionCookie(revoked, "an admin revoke leaves the admin's own cookies alone");
         }
 
-        (await host.SessionRowAsync(victimSessionId)).RevokedAt.ShouldNotBeNull("the addressed row is the one revoked");
+        (await host.SessionRowAsync(victimSessionId)).RevokedAt.ShouldNotBeNull(
+            "the addressed row is the one revoked");
 
         var after = await AuditSnapshotAsync(victim.OrgId);
         after.Rows.ShouldBe(before.Rows + 1, "exactly one row, not one per org and not a second on the same call");
@@ -113,39 +97,47 @@ public sealed class AdminRevokeAuditTests : HarnessTest
 
         var row = await NewestAuditRowAsync(victim.OrgId);
         row.Seq.ShouldBe(after.MaxSeq);
-        row.Action.ShouldBe(IdentityAuditActions.SessionRevokeByAdmin);
+        row.Action.ShouldBe(AdminRevokeAction);
         row.ActorType.ShouldBe("user");
         row.ActorId.ShouldBe(admin.UserId.ToString(UuidText), "the actor is the admin, resolved from its own cookie");
         row.ObjectType.ShouldBe("session");
         row.ObjectId.ShouldBe(victimSessionId.ToString(UuidText));
-        row.MetadataJson.ShouldBe("{}", "the row carries no metadata: nothing to allowlist for a revoke");
 
-        // The documented F48 limit: the definer does not return the target user, so the member's id is nowhere in the
-        // stored row (F55 adds it, inside the definer's own transaction).
-        row.Payload.ShouldNotContain(victim.UserId.ToString(UuidText), Case.Insensitive);
+        using (var document = JsonDocument.Parse(row.MetadataJson))
+        {
+            document.RootElement.EnumerateObject().Select(property => property.Name)
+                .ShouldBe(["target_user_id"], "the row names the member, and nothing else beyond its columns");
+            document.RootElement.GetProperty("target_user_id").GetString()
+                .ShouldBe(victim.UserId.ToString(UuidText), "F55 records the target user the definer resolved");
+        }
 
         AssertCarriesNoCredential(row.Payload, host, victim.SessionCookie);
+
+        // An application row AFTER the definer's, in the same org: the SQL row has to link with the C# writer's
+        // rows, which is the one thing that makes it trustworthy to the existing verifier.
+        await host.SignInMemberInOrgAsync(client, victim.OrgId, roleCode: null);
+
+        (await AuditSnapshotAsync(victim.OrgId)).Rows.ShouldBe(before.Rows + 2);
+        (await VerifyAsync(victim.OrgId)).ShouldBeNull("the definer's row verifies inside the org's chain");
     }
 
     /// <summary>
     /// The owner side, with the header present: the caller's own second device and the caller's current row both
-    /// revoke normally — 204, the row dead — and neither writes an admin row, because the addressed row is in the
-    /// caller's own live list.
+    /// revoke normally — 204, the row dead — and neither writes an admin row, because the addressed row is the
+    /// caller's own. <c>logout</c> and <c>revoke-all</c> write none either.
     /// </summary>
     [Fact]
-    public async Task A_Self_Revoke_Writes_No_Admin_Row_Even_With_The_Org_Header()
+    public async Task Self_Revoke_Logout_And_RevokeAll_Write_No_Admin_Row()
     {
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
         var currentId = await host.SessionIdOfAsync(member.SessionCookie);
 
-        // A second device of the same account, with the header: still the owner path, because the list says so.
+        // A second device of the same account, with the header: still the owner path.
         host.Clock.Advance(TimeSpan.FromSeconds(5));
         var other = await host.CreateSessionAsync(member.UserId);
         var otherId = await host.SessionIdOfAsync(other.CookieValue);
-
-        var beforeOther = await AuditSnapshotAsync(member.OrgId);
 
         using (var revoked = await RevokeAsync(client, member, otherId, member.OrgId.ToString()))
         {
@@ -154,87 +146,68 @@ public sealed class AdminRevokeAuditTests : HarnessTest
         }
 
         (await host.SessionRowAsync(otherId)).RevokedAt.ShouldNotBeNull();
-        (await AuditSnapshotAsync(member.OrgId)).ShouldBe(
-            beforeOther,
-            "a self revoke wearing the header is still the owner path: no administrative row");
+        (await AdminRowCountAsync(member.OrgId)).ShouldBe(0L, "a self revoke is not an administrative action");
 
-        // The same second device without the header: the owner path the route always had.
-        var otherWithoutHeader = await host.CreateSessionAsync(member.UserId);
-        var otherWithoutHeaderId = await host.SessionIdOfAsync(otherWithoutHeader.CookieValue);
-        var beforeNoHeader = await AuditSnapshotAsync(member.OrgId);
+        // The same second device without the header.
+        var withoutHeader = await host.CreateSessionAsync(member.UserId);
+        var withoutHeaderId = await host.SessionIdOfAsync(withoutHeader.CookieValue);
 
-        using (var revoked = await RevokeAsync(client, member, otherWithoutHeaderId))
+        using (var revoked = await RevokeAsync(client, member, withoutHeaderId))
         {
             revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         }
 
-        (await host.SessionRowAsync(otherWithoutHeaderId)).RevokedAt.ShouldNotBeNull();
-        (await AuditSnapshotAsync(member.OrgId)).ShouldBe(beforeNoHeader);
+        (await host.SessionRowAsync(withoutHeaderId)).RevokedAt.ShouldNotBeNull();
+        (await AdminRowCountAsync(member.OrgId)).ShouldBe(0L);
 
-        // Last, because it ends the caller's own credential: the CURRENT row WITH the header is still no admin row.
-        var beforeCurrent = await AuditSnapshotAsync(member.OrgId);
+        // A fresh sign-in for the logout half: the login path writes `auth.login` rows, and the count below is of
+        // this action only.
+        var forLogout = await host.SignInMemberAsync(client);
 
+        using (var loggedOut = await SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Post,
+            LogoutPath,
+            SessionTestHost.CookieHeaderFor(forLogout.SessionCookie, forLogout.Xsrf),
+            xsrfToken: forLogout.Xsrf.RequestToken))
+        {
+            loggedOut.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        (await AdminRowCountAsync(forLogout.OrgId)).ShouldBe(0L, "a logout is the account ending its own session");
+
+        var forRevokeAll = await host.SignInMemberAsync(client);
+
+        using (var revoked = await SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Post,
+            RevokeAllPath,
+            SessionTestHost.CookieHeaderFor(forRevokeAll.SessionCookie, forRevokeAll.Xsrf),
+            xsrfToken: forRevokeAll.Xsrf.RequestToken))
+        {
+            revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        (await AdminRowCountAsync(forRevokeAll.OrgId)).ShouldBe(0L, "revoke-all acts on the caller's own sessions");
+
+        // Last, because it ends the caller's own credential: the CURRENT row WITH the header writes nothing either.
         using (var revoked = await RevokeAsync(client, member, currentId, member.OrgId.ToString()))
         {
             revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         }
 
         (await host.SessionRowAsync(currentId)).RevokedAt.ShouldNotBeNull();
-        (await AuditSnapshotAsync(member.OrgId)).ShouldBe(beforeCurrent);
+        (await AdminRowCountAsync(member.OrgId)).ShouldBe(0L);
     }
 
     /// <summary>
-    /// <c>logout</c> and <c>revoke-all</c> write no administrative row: they end the caller's own sessions, which the
-    /// <c>session</c> rows already record.
+    /// Every refusal keeps its documented answer and writes nothing: a member without <c>membership:write</c>, an
+    /// admin naming an org it does not administer, an unknown id, a malformed id, a session of another org's member
+    /// (all 404), a mutation without the <c>X-XSRF-TOKEN</c> header (403 <c>csrf_failed</c>) and a dead caller
+    /// cookie (401 <c>session_revoked</c>).
     /// </summary>
     [Fact]
-    public async Task Logout_And_RevokeAll_Write_No_Admin_Row()
-    {
-        using var host = SessionTestHost.Start(Fixture);
-        using var client = host.CreateSessionClient();
-
-        var first = await host.SignInMemberAsync(client);
-        var beforeLogout = await AuditSnapshotAsync(first.OrgId);
-
-        using (var loggedOut = await SessionTestHost.SendAsync(
-            client,
-            HttpMethod.Post,
-            LogoutPath,
-            SessionTestHost.CookieHeaderFor(first.SessionCookie, first.Xsrf),
-            xsrfToken: first.Xsrf.RequestToken))
-        {
-            loggedOut.StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        }
-
-        (await AuditSnapshotAsync(first.OrgId)).ShouldBe(beforeLogout, "a logout is the account ending its own session");
-
-        // A fresh sign-in for the second half: the login path writes its own `auth.login` rows, and the snapshot is
-        // taken after it, so the delta belongs to `revoke-all` alone.
-        var second = await host.SignInMemberAsync(client);
-        var beforeRevokeAll = await AuditSnapshotAsync(second.OrgId);
-
-        using (var revoked = await SessionTestHost.SendAsync(
-            client,
-            HttpMethod.Post,
-            RevokeAllPath,
-            SessionTestHost.CookieHeaderFor(second.SessionCookie, second.Xsrf),
-            xsrfToken: second.Xsrf.RequestToken))
-        {
-            revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        }
-
-        (await AuditSnapshotAsync(second.OrgId)).ShouldBe(
-            beforeRevokeAll,
-            "revoke-all is the account acting on its own sessions, not an administrator ending someone else's");
-    }
-
-    /// <summary>
-    /// Every refusal keeps its pre-F48 answer and writes nothing: a member without <c>membership:write</c>, an admin
-    /// naming an org it does not administer, an unknown id, a malformed id, and an admin naming its own org for a
-    /// session that belongs to another org's member.
-    /// </summary>
-    [Fact]
-    public async Task Refused_Administrative_Revokes_Answer_404_And_Write_No_Row()
+    public async Task Refused_Revokes_Answer_401_403_404_And_Write_No_Row()
     {
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
@@ -249,9 +222,10 @@ public sealed class AdminRevokeAuditTests : HarnessTest
         var strangerSessionId = await host.SessionIdOfAsync(stranger.SessionCookie);
         stranger.OrgId.ShouldNotBe(victim.OrgId);
 
+        var beforeRow = (await host.SessionRowAsync(victimSessionId)).RevokedAt;
+        var beforeStranger = (await host.SessionRowAsync(strangerSessionId)).RevokedAt;
         var beforeVictimOrg = await AuditSnapshotAsync(victim.OrgId);
         var beforeOtherOrg = await AuditSnapshotAsync(otherOrg);
-        var beforeStrangerOrg = await AuditSnapshotAsync(stranger.OrgId);
 
         // A membership is not the permission: the same org, no role.
         using (var refused = await RevokeAsync(client, plain, victimSessionId, victim.OrgId.ToString()))
@@ -286,27 +260,54 @@ public sealed class AdminRevokeAuditTests : HarnessTest
             (await SessionTestHost.ErrorCodeAsync(refused)).ShouldBe(ApiErrorCode.NotFound);
         }
 
-        // A live session of ANOTHER org's member, with this org's header: the target's membership in the named org
-        // is what the definer checks, not the member's anywhere else.
+        // A live session of ANOTHER org's member, with this org's header.
         using (var refused = await RevokeAsync(client, admin, strangerSessionId, victim.OrgId.ToString()))
         {
             refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
             (await SessionTestHost.ErrorCodeAsync(refused)).ShouldBe(ApiErrorCode.NotFound);
         }
 
-        (await host.SessionRowAsync(victimSessionId)).RevokedAt.ShouldBeNull("a refused revoke writes no row state");
-        (await host.SessionRowAsync(strangerSessionId)).RevokedAt.ShouldBeNull();
+        // 403: the antiforgery pair's cookie without its header never reaches a handler.
+        using (var refused = await SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Delete,
+            SessionsPath + "/" + victimSessionId,
+            SessionTestHost.CookieHeaderFor(admin.SessionCookie, admin.Xsrf),
+            orgHeader: victim.OrgId.ToString()))
+        {
+            refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            (await SessionTestHost.ErrorCodeAsync(refused)).ShouldBe(ApiErrorCode.CsrfFailed);
+        }
 
+        (await host.SessionRowAsync(victimSessionId)).RevokedAt.ShouldBe(beforeRow);
+        (await host.SessionRowAsync(strangerSessionId)).RevokedAt.ShouldBe(beforeStranger);
         (await AuditSnapshotAsync(victim.OrgId)).ShouldBe(
             beforeVictimOrg,
-            "no refusal may append an administrative row to the org the caller named");
+            "no refusal may append a row to the org the caller named");
         (await AuditSnapshotAsync(otherOrg)).ShouldBe(beforeOtherOrg);
-        (await AuditSnapshotAsync(stranger.OrgId)).ShouldBe(beforeStrangerOrg);
+
+        // 401 last, because it ends the admin's own credential: a dead cookie judges before anything else does.
+        var adminSessionId = await host.SessionIdOfAsync(admin.SessionCookie);
+        await host.RevokeSessionAsync(adminSessionId);
+
+        using (var refused = await SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Delete,
+            SessionsPath + "/" + victimSessionId,
+            SessionTestHost.CookieHeaderFor(admin.SessionCookie),
+            orgHeader: victim.OrgId.ToString()))
+        {
+            refused.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+            (await SessionTestHost.ErrorCodeAsync(refused)).ShouldBe(ApiErrorCode.SessionRevoked);
+        }
+
+        (await host.SessionRowAsync(victimSessionId)).RevokedAt.ShouldBe(beforeRow);
+        (await AdminRowCountAsync(victim.OrgId)).ShouldBe(0L, "not one refusal may leave an administrative row");
     }
 
     /// <summary>
     /// A second administrative call for the SAME session writes no second row: the row is already dead, so the
-    /// definer answers <c>not_found</c> before the writer is ever asked.
+    /// definer answers <c>not_found</c> before it appends anything.
     /// </summary>
     [Fact]
     public async Task A_Second_Admin_Revoke_Of_The_Same_Dead_Session_Writes_No_Second_Row()
@@ -323,7 +324,7 @@ public sealed class AdminRevokeAuditTests : HarnessTest
         }
 
         var afterFirst = await AuditSnapshotAsync(victim.OrgId);
-        afterFirst.Rows.ShouldBeGreaterThan(0L);
+        (await AdminRowCountAsync(victim.OrgId)).ShouldBe(1L);
 
         using (var replay = await RevokeAsync(client, admin, victimSessionId, victim.OrgId.ToString()))
         {
@@ -331,170 +332,151 @@ public sealed class AdminRevokeAuditTests : HarnessTest
             (await SessionTestHost.ErrorCodeAsync(replay)).ShouldBe(ApiErrorCode.NotFound);
         }
 
-        (await AuditSnapshotAsync(victim.OrgId)).ShouldBe(afterFirst, "a 404 revokes nothing, so it records nothing");
+        var afterReplay = await AuditSnapshotAsync(victim.OrgId);
+
+        afterReplay.Rows.ShouldBe(afterFirst.Rows, "a 404 revokes nothing, so it records nothing");
+        afterReplay.MaxSeq.ShouldBe(afterFirst.MaxSeq);
     }
 
     /// <summary>
-    /// The failure case, in the four fault shapes seen in practice — a database error, the org's busy chain, a
-    /// deadlock reported as a <see cref="PostgresException"/> carrying a SQLSTATE, and an unexpected writer defect:
-    /// any writer throw makes the route answer 503 <c>unavailable</c> with no cookie touched and no row written,
-    /// leaves the revoke committed, logs one Error line that names the actor, the org and the fault's type (with the
-    /// SQLSTATE of a database fault) but never the session id, the writer's own message text or a credential, and
-    /// the retry answers 404 without reaching the writer.
+    /// The definer's own fault: a throwaway trigger on <c>audit_log</c> that refuses this action's insert makes the
+    /// whole call abort — 503 <c>unavailable</c>, the member's session STILL live, no row, no cookie touched — and
+    /// the retry, with the fault gone, records the revoke exactly once.
     /// </summary>
-    [Theory]
-    [InlineData("database")]
-    [InlineData("busy-chain")]
-    [InlineData("deadlock")]
-    [InlineData("unexpected")]
-    public async Task A_Failed_Audit_Answers_503_Leaves_The_Revoke_Committed_And_Logs_Only_Ids(string fault)
+    [Fact]
+    public async Task A_Faulted_Audit_Rolls_The_Revoke_Back_And_Answers_503()
     {
         using var logs = new CapturingLogProvider();
-        FailingSessionRevokeAuditWriter? writer = null;
-        using var host = SessionTestHost.Start(
-            Fixture,
-            logProvider: logs,
-            overrides: services =>
-            {
-                // The production writer behind a switch that fails only the revoke call: the sign-ins below keep
-                // writing their real `auth.login` rows, so the snapshot delta belongs to this route alone.
-                services.RemoveAll<IIdentityAuditWriter>();
-                services.AddSingleton<IIdentityAuditWriter>(provider =>
-                    writer = new FailingSessionRevokeAuditWriter(
-                        AuditWriterFactory.Create(provider),
-                        fault switch
-                        {
-                            "busy-chain" => () => new AuditBusyException(new NpgsqlException(FaultCanary + " lock not available (injected)")),
-                            "deadlock" => () => new PostgresException(FaultCanary + " deadlock detected (injected)", "ERROR", "ERROR", "40P01"),
-                            "unexpected" => () => new InvalidOperationException(FaultCanary + " (injected writer defect)"),
-                            _ => () => new NpgsqlException(FaultCanary + " (injected audit fault)"),
-                        }));
-            });
+        using var host = SessionTestHost.Start(Fixture, logProvider: logs);
         using var client = host.CreateSessionClient();
         var victim = await host.SignInMemberAsync(client);
         var victimSessionId = await host.SessionIdOfAsync(victim.SessionCookie);
         var admin = await host.SignInMemberInOrgAsync(client, victim.OrgId, "tenant_admin");
-        writer.ShouldNotBeNull("the sign-in resolves the writer from the container");
 
         var before = await AuditSnapshotAsync(victim.OrgId);
         logs.Clear();
 
-        using (var failed = await RevokeAsync(client, admin, victimSessionId, victim.OrgId.ToString()))
+        try
         {
+            await InstallAuditFaultAsync(victim.OrgId);
+
+            using var failed = await RevokeAsync(client, admin, victimSessionId, victim.OrgId.ToString());
+
             failed.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
             (await SessionTestHost.ErrorCodeAsync(failed)).ShouldBe(ApiErrorCode.Unavailable);
-            AssertNoSessionCookie(failed, "the admin's own credential is never ended by a failed audit");
+            AssertNoSessionCookie(failed, "the admin's own credential is never ended by a refused revoke");
+        }
+        finally
+        {
+            await DropAuditFaultAsync();
         }
 
-        // The revoke committed (the definer's transaction) and the row did not (the writer's): that window is what
-        // the 503 reports, and F55 closes it by writing inside the definer's transaction.
+        (await host.SessionRowAsync(victimSessionId)).RevokedAt.ShouldBeNull(
+            "the revoke shares the definer's transaction, so a failed append leaves the session live");
+        (await AuditSnapshotAsync(victim.OrgId)).ShouldBe(before, "the faulted call committed nothing");
+
+        // No line may name the session, in either spelling, whatever the fault produced.
+        foreach (var entry in logs.Entries)
+        {
+            entry.Message.ShouldNotContain(victimSessionId.ToString(UuidText), Case.Sensitive);
+            entry.Message.ShouldNotContain(victimSessionId.ToString("N"), Case.Sensitive);
+        }
+
+        // The retry, with the fault gone, is an ordinary successful administrative revoke.
+        using (var retried = await RevokeAsync(client, admin, victimSessionId, victim.OrgId.ToString()))
+        {
+            retried.StatusCode.ShouldBe(HttpStatusCode.NoContent, "the failed call left nothing behind");
+        }
+
         (await host.SessionRowAsync(victimSessionId)).RevokedAt.ShouldNotBeNull();
-        (await AuditSnapshotAsync(victim.OrgId)).ShouldBe(before);
-        writer!.Calls.ShouldBe(1);
+        (await AuditSnapshotAsync(victim.OrgId)).Rows.ShouldBe(before.Rows + 1, "the retry records the revoke once");
 
-        var errors = logs.Entries
-            .Where(entry => entry.Level == LogLevel.Error
-                && string.Equals(entry.Category, typeof(SessionEndpoints).FullName, StringComparison.Ordinal))
-            .ToList();
-        var error = errors.ShouldHaveSingleItem("one committed-but-unrecorded revoke is one Error line");
-
-        // The line names who and where, never which row: 02.3.2 D9 puts the session id (like the cookie value) out of
-        // every log line, in both of its spellings, even though the audit row itself carries it (D-S102-Q3).
-        error.Message.ShouldContain(admin.UserId.ToString(UuidText));
-        error.Message.ShouldContain(victim.OrgId.ToString(UuidText));
-        error.Message.ShouldNotContain(victimSessionId.ToString(UuidText), Case.Sensitive);
-        error.Message.ShouldNotContain(victimSessionId.ToString("N"), Case.Sensitive);
-        AssertCarriesNoCredential(error.Message, host, victim.SessionCookie);
-
-        // F48 S3: the line renders the fault's TYPE, and its SQLSTATE when the database reported one — never the
-        // exception object, whose text (Npgsql's included) can echo the failing statement and its parameters.
-        var expectedFault = fault switch
-        {
-            "busy-chain" => nameof(AuditBusyException),
-            "deadlock" => nameof(PostgresException) + " (SQLSTATE 40P01)",
-            "unexpected" => nameof(InvalidOperationException),
-            _ => nameof(NpgsqlException),
-        };
-        error.Message.ShouldContain(expectedFault);
-        error.Message.ShouldNotContain(FaultCanary, Case.Sensitive, "the writer's own text is never rendered");
-
-        // The documented retry: the session is dead, so the answer is 404 and the writer is never asked again.
-        using (var retry = await RevokeAsync(client, admin, victimSessionId, victim.OrgId.ToString()))
-        {
-            retry.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        }
-
-        (await AuditSnapshotAsync(victim.OrgId)).ShouldBe(before);
-        writer.Calls.ShouldBe(1, "the retry never reaches the writer");
+        var row = await NewestAuditRowAsync(victim.OrgId);
+        row.Action.ShouldBe(AdminRevokeAction);
+        row.ObjectId.ShouldBe(victimSessionId.ToString(UuidText));
+        (await VerifyAsync(victim.OrgId)).ShouldBeNull();
     }
 
     /// <summary>
-    /// The committed revoke is recorded even when the caller has gone: the audit write runs on its own bounded
-    /// token, never on <c>HttpContext.RequestAborted</c>, so a request aborted after the definer answered still
-    /// writes the ONE <c>auth.session_revoke_admin</c> row and answers 204 (F48 S1).
+    /// A caller that leaves mid-flight can no longer tear the two halves apart: at every abort point, either the
+    /// answer is 204 and the row exists, or the session is still live and no row does.
     /// </summary>
     /// <remarks>
-    /// The host cannot cancel a TestServer request mid-flight, so the probe's token stands in for the connection's:
-    /// the middleware installs it as <c>RequestAborted</c>, and the writer reads that same property back through
-    /// <see cref="IHttpContextAccessor"/> — proving the abort reached the request the handler is bound to, not just
-    /// a probe — then aborts it once the definer has committed (the row does not exist yet at that instant) and
-    /// records what the route handed it.
+    /// The abort delay sweeps the interesting window — before the definer starts, while it is running and after it
+    /// committed — and each iteration mints its own session, so a committed revoke never confuses the next probe.
+    /// The assertion is the invariant, not a timing guess: the two states a transaction can leave are the only two
+    /// this suite accepts.
     /// </remarks>
     [Fact]
-    public async Task An_Aborted_Request_Does_Not_Cancel_The_Committed_Audit_Row()
+    public async Task An_Aborted_Request_Never_Leaves_A_Revoked_Session_Unrecorded()
     {
-        using var probe = new RequestAbortProbe();
-        AbortAwareRecordingAuditWriter? writer = null;
-        using var host = SessionTestHost.Start(
-            Fixture,
-            overrides: services =>
-            {
-                services.AddHttpContextAccessor();
-                services.RemoveAll<IIdentityAuditWriter>();
-                services.AddSingleton<IIdentityAuditWriter>(provider =>
-                    writer = new AbortAwareRecordingAuditWriter(
-                        AuditWriterFactory.Create(provider),
-                        probe,
-                        provider.GetRequiredService<IHttpContextAccessor>()));
-                services.AddSingleton<IStartupFilter>(new RequestAbortProbeStartupFilter(probe));
-            });
+        using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
         var victim = await host.SignInMemberAsync(client);
-        var victimSessionId = await host.SessionIdOfAsync(victim.SessionCookie);
         var admin = await host.SignInMemberInOrgAsync(client, victim.OrgId, "tenant_admin");
-        writer.ShouldNotBeNull("the admin's revoke resolves the writer from the container");
 
-        var before = await AuditSnapshotAsync(victim.OrgId);
+        var sawNoContent = false;
 
-        using (var revoked = await RevokeAsync(client, admin, victimSessionId, victim.OrgId.ToString()))
+        foreach (var delay in new[]
         {
-            revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            TimeSpan.Zero,
+            TimeSpan.FromMilliseconds(1),
+            TimeSpan.FromMilliseconds(10),
+            TimeSpan.FromMilliseconds(50),
+        })
+        {
+            var probe = await host.CreateSessionAsync(victim.UserId);
+            var probeId = await host.SessionIdOfAsync(probe.CookieValue);
+
+            using var abort = new CancellationTokenSource();
+            abort.CancelAfter(delay);
+
+            HttpResponseMessage? response = null;
+            try
+            {
+                response = await RevokeAsync(client, admin, probeId, victim.OrgId.ToString(), abort.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // The caller left before a response existed: the invariant below still has to hold.
+            }
+
+            using (response)
+            {
+                // Both facts in ONE statement, so they come from one snapshot: the server may still be finishing a
+                // request the client already dropped, and two reads could straddle that commit.
+                var state = await ProbeStateAsync(victim.OrgId, probeId);
+
+                if (response?.StatusCode == HttpStatusCode.NoContent)
+                {
+                    sawNoContent = true;
+                    state.Revoked.ShouldBeTrue("a 204 is a committed revoke");
+                    state.Rows.ShouldBe(1L, "and the row committed with it, whatever the caller did next");
+                }
+                else
+                {
+                    state.Rows.ShouldBe(
+                        state.Revoked ? 1L : 0L,
+                        "the revoke and its row are one transaction: a live session has no row and a record has a revoke");
+                }
+            }
         }
 
-        writer!.Calls.ShouldBe(1);
-        writer.RequestAbortedAtWrite.ShouldNotBeNull(
-            "the writer runs inside the request, so the accessor must see the handler's HttpContext");
-        writer.RequestAbortedAtWrite!.Value.ShouldBe(
-            probe.RequestToken,
-            "the handler was bound to the probe's token, so this case really exercises a client abort");
-        writer.RequestAbortedAtWrite.Value.IsCancellationRequested.ShouldBeTrue(
-            "the case aborts once the definer has answered `revoked` and before the row exists");
-        writer.WriteToken.ShouldNotBe(
-            probe.RequestToken,
-            "the audit write must run on its own source, not on the request's abort token");
-        writer.WriteToken.IsCancellationRequested.ShouldBeFalse(
-            "a caller leaving cannot cancel the only record of a committed revoke");
-        writer.WriteToken.CanBeCanceled.ShouldBeTrue("the detached write is still bounded by its own deadline");
+        sawNoContent.ShouldBeTrue("the sweep must include at least one request that finished");
 
-        var after = await AuditSnapshotAsync(victim.OrgId);
-        after.Rows.ShouldBe(before.Rows + 1, "the aborted request still records its one committed revoke");
-        after.MaxSeq.ShouldBe(before.MaxSeq + 1);
+        // The control: an unaborted call on a fresh session still answers 204 and records it, so a sweep in which
+        // every probe happened to be cancelled cannot pass this case by being vacuous.
+        var control = await host.CreateSessionAsync(victim.UserId);
+        var controlId = await host.SessionIdOfAsync(control.CookieValue);
 
-        var row = await NewestAuditRowAsync(victim.OrgId);
-        row.Action.ShouldBe(IdentityAuditActions.SessionRevokeByAdmin);
-        row.ActorId.ShouldBe(admin.UserId.ToString(UuidText));
-        row.ObjectId.ShouldBe(victimSessionId.ToString(UuidText));
-        (await host.SessionRowAsync(victimSessionId)).RevokedAt.ShouldNotBeNull();
+        using (var finished = await RevokeAsync(client, admin, controlId, victim.OrgId.ToString()))
+        {
+            finished.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        var controlState = await ProbeStateAsync(victim.OrgId, controlId);
+        controlState.Revoked.ShouldBeTrue("the control request ran to completion");
+        controlState.Rows.ShouldBe(1L);
     }
 
     /// <summary>One <c>DELETE /sessions/{s}</c> as <paramref name="caller"/>'s browser sends it.</summary>
@@ -502,18 +484,21 @@ public sealed class AdminRevokeAuditTests : HarnessTest
     /// <param name="caller">The signed-in account.</param>
     /// <param name="sessionId">The addressed row.</param>
     /// <param name="orgHeader">The <c>X-Evidgate-Org</c> value, or null for the owner path only.</param>
+    /// <param name="cancellationToken">The request's own token, or null for the suite's.</param>
     private static Task<HttpResponseMessage> RevokeAsync(
         HttpClient client,
         SignedInMember caller,
         Guid sessionId,
-        string? orgHeader = null) =>
+        string? orgHeader = null,
+        CancellationToken? cancellationToken = null) =>
         SessionTestHost.SendAsync(
             client,
             HttpMethod.Delete,
             SessionsPath + "/" + sessionId,
             SessionTestHost.CookieHeaderFor(caller.SessionCookie, caller.Xsrf),
             xsrfToken: caller.Xsrf.RequestToken,
-            orgHeader: orgHeader);
+            orgHeader: orgHeader,
+            cancellationToken: cancellationToken);
 
     /// <summary>One org's chain as a case compares it before and after an action.</summary>
     /// <param name="Rows">How many rows the org's chain holds.</param>
@@ -556,6 +541,58 @@ public sealed class AdminRevokeAuditTests : HarnessTest
         return new OrgAuditSnapshot(reader.GetInt64(0), reader.GetInt64(1));
     }
 
+    /// <summary>How many administrative-revoke rows the org's chain holds.</summary>
+    /// <param name="orgId">The org whose chain is counted.</param>
+    private Task<long> AdminRowCountAsync(Guid orgId) =>
+        OwnerScalarAsync<long>(
+            "select count(*) from public.audit_log where org_id = @org and action = @action",
+            ("org", orgId),
+            ("action", AdminRevokeAction));
+
+    /// <summary>
+    /// The two facts the abort case compares, read in ONE statement so both come from one snapshot — a commit that
+    /// lands between two statements would otherwise report a live session with a recorded revoke.
+    /// </summary>
+    /// <param name="orgId">The org whose chain is counted.</param>
+    /// <param name="sessionId">The session row under test.</param>
+    private async Task<ProbeState> ProbeStateAsync(Guid orgId, Guid sessionId)
+    {
+        await using var connection = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await connection.OpenAsync(Token);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            select exists (
+                     select 1
+                       from public.session s
+                      where s.id = @id
+                        and s.revoked_at is not null
+                   )
+                 , (
+                     select count(*)
+                       from public.audit_log a
+                      where a.org_id = @org
+                        and a.action = @action
+                        and a.object_id = @oid
+                   )
+            """;
+        command.Parameters.AddWithValue("id", sessionId);
+        command.Parameters.AddWithValue("org", orgId);
+        command.Parameters.AddWithValue("action", AdminRevokeAction);
+        command.Parameters.AddWithValue("oid", sessionId.ToString(UuidText));
+
+        await using var reader = await command.ExecuteReaderAsync(Token);
+        (await reader.ReadAsync(Token)).ShouldBeTrue();
+
+        return new ProbeState(reader.GetBoolean(0), reader.GetInt64(1));
+    }
+
+    /// <summary>Whether the session is revoked, and how many administrative-revoke rows name it.</summary>
+    /// <param name="Revoked">The <c>session.revoked_at</c> is set.</param>
+    /// <param name="Rows">The org's <c>auth.session_revoke_admin</c> rows for that session.</param>
+    private sealed record ProbeState(bool Revoked, long Rows);
+
     /// <summary>The newest row of the org's chain, read as the owner with every column.</summary>
     /// <param name="orgId">The org whose chain is read.</param>
     private async Task<StoredAuditRow> NewestAuditRowAsync(Guid orgId)
@@ -595,6 +632,94 @@ public sealed class AdminRevokeAuditTests : HarnessTest
             reader.GetString(7));
     }
 
+    /// <summary>Recomputes the org's chain with the production verifier, inside that org's scope.</summary>
+    /// <param name="orgId">The org whose chain is verified.</param>
+    private async Task<AuditChainFinding?> VerifyAsync(Guid orgId)
+    {
+        await using var scope = await Fixture.BeginTenantScopeAsync(
+            orgId,
+            readOnlyTransaction: true,
+            cancellationToken: Token);
+
+        return await new AuditChainVerifier(scope.Db).VerifyAsync(orgId, Token);
+    }
+
+    /// <summary>
+    /// Installs the throwaway fault: a trigger on <c>audit_log</c> that refuses the administrative-revoke action of
+    /// this org only, so no other write of the harness is disturbed. Created as the owner (the table's owner), under
+    /// names no production object uses.
+    /// </summary>
+    /// <param name="orgId">The org whose row must be refused.</param>
+    private async Task InstallAuditFaultAsync(Guid orgId)
+    {
+        await OwnerExecuteAsync(
+            """
+            create or replace function public.f55_http_audit_fault() returns trigger
+              language plpgsql
+              set search_path = ''
+              as $$
+              begin
+                raise exception 'f55 http audit fault' using errcode = '58000';
+              end
+              $$;
+            """,
+            []);
+
+        // A utility statement takes no bind parameters, so the org travels as a literal uuid (a Guid's "D" text can
+        // carry no SQL) and the action is the pinned constant.
+        await OwnerExecuteAsync(
+            "create trigger f55_http_audit_fault before insert on public.audit_log "
+            + "for each row when (new.action = '" + AdminRevokeAction + "' and new.org_id = '" + orgId.ToString(UuidText) + "'::uuid) "
+            + "execute function public.f55_http_audit_fault()",
+            []);
+    }
+
+    /// <summary>Drops the throwaway trigger and its function, whatever the test's outcome was.</summary>
+    private async Task DropAuditFaultAsync()
+    {
+        await OwnerExecuteAsync("drop trigger if exists f55_http_audit_fault on public.audit_log", []);
+        await OwnerExecuteAsync("drop function if exists public.f55_http_audit_fault()", []);
+    }
+
+    /// <summary>Runs one statement on the owner connection (arrangement only: a test may not arrange via the tenant path).</summary>
+    /// <param name="sql">The statement.</param>
+    /// <param name="values">Its parameters.</param>
+    private async Task OwnerExecuteAsync(string sql, (string Name, object Value)[] values)
+    {
+        await using var connection = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await connection.OpenAsync(Token);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+
+        foreach (var (name, value) in values)
+        {
+            command.Parameters.AddWithValue(name, value);
+        }
+
+        await command.ExecuteNonQueryAsync(Token);
+    }
+
+    /// <summary>One scalar, read as the owner.</summary>
+    /// <typeparam name="T">The scalar's type.</typeparam>
+    /// <param name="sql">The query.</param>
+    /// <param name="values">Its parameters.</param>
+    private async Task<T> OwnerScalarAsync<T>(string sql, params (string Name, object Value)[] values)
+    {
+        await using var connection = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await connection.OpenAsync(Token);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+
+        foreach (var (name, value) in values)
+        {
+            command.Parameters.AddWithValue(name, value);
+        }
+
+        return (T)(await command.ExecuteScalarAsync(Token))!;
+    }
+
     /// <summary>
     /// Nothing credential-shaped in a stored row or a log line: not the cookie value, not its HMAC in either
     /// spelling, not the pepper in either spelling.
@@ -630,136 +755,5 @@ public sealed class AdminRevokeAuditTests : HarnessTest
         {
             SessionTestHost.Cookies(response, cookieName).ShouldBeEmpty($"{cookieName}: {because}");
         }
-    }
-}
-
-/// <summary>
-/// The production identity audit writer behind a switch that fails only the administrative session-revoke call
-/// (F48): the sign-in path keeps writing its real rows, so a case can prove the revoke route's fail-closed answer
-/// without turning the member's sign-in into the failure.
-/// </summary>
-/// <param name="inner">The writer every other call reaches unchanged.</param>
-/// <param name="fault">
-/// The fault the revoke call raises: a database error (<see cref="NpgsqlException"/>), a deadlock carrying a
-/// SQLSTATE (<see cref="PostgresException"/>) or the org's busy chain (<see cref="AuditBusyException"/>) — the
-/// shapes the handler must answer and log the same way.
-/// </param>
-internal sealed class FailingSessionRevokeAuditWriter(IIdentityAuditWriter inner, Func<Exception> fault) : IIdentityAuditWriter
-{
-    /// <summary>How many times the revoke route reached the writer.</summary>
-    internal int Calls { get; private set; }
-
-    /// <inheritdoc />
-    public ValueTask WriteAsync(
-        IdentityAuditEvent auditEvent,
-        IReadOnlyCollection<Guid> orgIds,
-        CancellationToken cancellationToken) =>
-        inner.WriteAsync(auditEvent, orgIds, cancellationToken);
-
-    /// <inheritdoc />
-    /// <remarks>Fails like the deployment's writer does on a busy chain or a vanished org.</remarks>
-    public ValueTask WriteSessionRevokedAsync(
-        Guid actorUserId,
-        Guid orgId,
-        Guid sessionId,
-        CancellationToken cancellationToken)
-    {
-        Calls++;
-
-        throw fault();
-    }
-}
-
-/// <summary>
-/// The connection's abort token as a case can control it: a middleware installs <see cref="RequestToken"/> as
-/// <c>HttpContext.RequestAborted</c>, so "the client leaves" can happen at an exact point of the request (F48 S1).
-/// </summary>
-internal sealed class RequestAbortProbe : IDisposable
-{
-    private readonly CancellationTokenSource _source = new();
-
-    /// <summary>The token every request of the host runs on, which a case aborts when it wants the caller gone.</summary>
-    internal CancellationToken RequestToken => _source.Token;
-
-    /// <summary>Stands in for the client closing its connection.</summary>
-    internal void Abort() => _source.Cancel();
-
-    /// <inheritdoc />
-    public void Dispose() => _source.Dispose();
-}
-
-/// <summary>
-/// Installs a <see cref="RequestAbortProbe"/>'s token as <c>HttpContext.RequestAborted</c> for every request, so a
-/// case can abort after the definer committed. TestServer's own request token cannot be cancelled mid-flight.
-/// </summary>
-/// <param name="probe">The case's abort probe.</param>
-internal sealed class RequestAbortProbeStartupFilter(RequestAbortProbe probe) : IStartupFilter
-{
-    /// <inheritdoc />
-    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
-    {
-        ArgumentNullException.ThrowIfNull(next);
-
-        return app =>
-        {
-            app.Use(async (context, nextMiddleware) =>
-            {
-                context.RequestAborted = probe.RequestToken;
-
-                await nextMiddleware().ConfigureAwait(false);
-            });
-
-            next(app);
-        };
-    }
-}
-
-/// <summary>
-/// The real identity audit writer, recording what the revoke route hands it and aborting the request exactly when the
-/// definer has committed and the row does not exist yet (F48 S1): the row must still be written, on a token of its
-/// own.
-/// </summary>
-/// <param name="inner">The production writer, which commits the row.</param>
-/// <param name="probe">The case's abort probe, cancelled before the row is written.</param>
-/// <param name="httpContextAccessor">The current request, read for the token it is really bound to.</param>
-internal sealed class AbortAwareRecordingAuditWriter(
-    IIdentityAuditWriter inner,
-    RequestAbortProbe probe,
-    IHttpContextAccessor httpContextAccessor) : IIdentityAuditWriter
-{
-    /// <summary>How many times the revoke route reached the writer.</summary>
-    internal int Calls { get; private set; }
-
-    /// <summary>The token the route passed with the revoked-session row.</summary>
-    internal CancellationToken WriteToken { get; private set; }
-
-    /// <summary>
-    /// <c>HttpContext.RequestAborted</c> of the request being served — the token ASP.NET Core binds a handler's
-    /// <see cref="CancellationToken"/> from, so the case can prove the abort reached the handler and not just a probe.
-    /// </summary>
-    internal CancellationToken? RequestAbortedAtWrite { get; private set; }
-
-    /// <inheritdoc />
-    public ValueTask WriteAsync(
-        IdentityAuditEvent auditEvent,
-        IReadOnlyCollection<Guid> orgIds,
-        CancellationToken cancellationToken) =>
-        inner.WriteAsync(auditEvent, orgIds, cancellationToken);
-
-    /// <inheritdoc />
-    public ValueTask WriteSessionRevokedAsync(
-        Guid actorUserId,
-        Guid orgId,
-        Guid sessionId,
-        CancellationToken cancellationToken)
-    {
-        Calls++;
-        WriteToken = cancellationToken;
-        RequestAbortedAtWrite = httpContextAccessor.HttpContext?.RequestAborted;
-
-        // The caller leaves here: the definer has committed the revoke, the audit row has not been written.
-        probe.Abort();
-
-        return inner.WriteSessionRevokedAsync(actorUserId, orgId, sessionId, cancellationToken);
     }
 }

@@ -180,7 +180,8 @@ public sealed class ResolverTests
             var parts = function.Split('|');
             parts[1].ShouldBe("evidgate_owner", $"{parts[0]} must be owner-owned");
             parts[2].ShouldBe("true", $"{parts[0]} must be SECURITY DEFINER");
-            parts[3].ShouldBe("search_path=\"\"", $"{parts[0]} must pin an empty search_path");
+            parts[3].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ShouldContain("search_path=\"\"", $"{parts[0]} must pin an empty search_path");
         }
 
         foreach (var signature in new[]
