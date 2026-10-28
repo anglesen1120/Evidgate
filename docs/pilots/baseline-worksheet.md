@@ -9,7 +9,11 @@ Definitions: `docs/pilots/metric-definitions.md` is v1 and unchanged. If it has 
 - Never 0 for an unknown: write `null` and a reason in the Reason column (T60). Allowed example reasons: `no product before enablement`, `customer did not keep a timesheet`, `export not provided`.
 - Self-reported values say `self-reported` in the Source column.
 - Only aggregates and opaque ids are committed. Raw customer exports (ticket exports, timesheets, CI history dumps) stay in the pilot's own storage, are referenced here by a description of where they are, and are redacted: no names, emails, tokens, credentials, or unredacted artifacts. Do not ask a pilot to send credentials.
-- `failure_ref` is an opaque id (for example `F-001`), never a person or ticket title.
+- `failure_ref` is an opaque sequential id (for example `F-001`), never a person, ticket id, hash or title; the mapping to real tickets stays in the pilot's own storage.
+- No URLs, hostnames, repo or branch names, or test titles in any cell. Personal data or secrets seen in customer material are not copied; they are filed back to the customer.
+- "Raw measurements" in story AC2 means the derived per-failure minutes and per-sprint hours in this sheet, not the exports.
+- Null handling: M1's median is over non-null rows only with n reported; no non-null rows gives `null`; `0` is only a measured zero.
+- At pilot exit or on a deletion request, per-failure rows are purged or redacted per the agreement's data-handling terms.
 
 ## Header
 
@@ -30,10 +34,10 @@ One row per metric of `metric-definitions.md` section 1.
 | M1 Triage time per failure (median) | `<minutes or null>` | `<ticket system or self-reported>` | weekly | `<date>` | |
 | M2 Test-maintenance time | `<hours or null>` | `<customer timesheet>` | per sprint | `<date>` | |
 | M3 Repeated incidents handled correctly | `null` | product labels | monthly | `<date>` | no product before enablement |
-| M4 Retention | `null` | product usage | monthly | `<date>` | no product before enablement |
-| M5 Contribution margin | `null` | ledger + cost model | monthly | `<date>` | no product before enablement |
+| M4 Retention | `null` | product usage | monthly | `<date>` | N and window not fixed (pilot agreement) |
+| M5 Contribution margin | `null` | ledger + cost model | monthly | `<date>` | revenue (O5) or ledger/cost model not available |
 | M6 Heal rate | `null` | product | monthly | `<date>` | no product before enablement |
-| M7 Missed bugs | `null` | customer labels | monthly | `<date>` | `<value or null + reason>` |
+| M7 Missed bugs | `null` | customer labels | monthly | `<date>` | no product before enablement (or a historical count with its source) |
 
 M6 is only shown next to M7 (guardrail pair).
 
