@@ -85,7 +85,7 @@ Owned (shapes land in `contracts/openapi.yaml`; mutations follow 00 §9.1):
 | `POST /v1/projects/{p}/ingest-tokens`, `POST /v1/ingest-tokens/{t}/rotate`, `DELETE /v1/ingest-tokens/{t}` | `ingest_token:write` | response carries the plaintext once |
 | `GET /v1/orgs/{o}/audit`, `GET /v1/orgs/{o}/audit/export` | `audit:read` | cursor pagination (00 §9.1) |
 | `POST /v1/support-grants`, `POST /v1/support-grants/{g}/approve`, `…/revoke` | `support:grant` / `support:approve` | approve by `tenant_admin` of the target org, approver ≠ requester |
-| `GET /v1/auth/oidc/{provider}/start`, `GET /v1/auth/oidc/{provider}/callback`, `POST /v1/auth/logout`, `GET /v1/auth/sessions`, `DELETE /v1/auth/sessions/{s}` | session cookie | `__Host-` cookie + `X-XSRF-TOKEN` antiforgery on mutating routes (T38); not in the 00 core list; documented here and in `contracts/` |
+| `GET /v1/auth/oidc/{provider}/start`, `GET /v1/auth/oidc/{provider}/callback`, `POST /v1/auth/logout`, `GET /v1/auth/sessions`, `DELETE /v1/auth/sessions/{s}`, `POST /v1/auth/sessions/revoke-all` | session cookie | `__Host-` cookie + `X-XSRF-TOKEN` antiforgery on mutating routes (T38); the four session routes are in the 00 §9.3 core list (F47), the OIDC pair is documented here and in `contracts/`; the admin end-all verb is 02.3.2-T3 |
 | `POST /v1/auth/invite-token`, `POST /v1/auth/link/{provider}`, `GET /v1/auth/link/pending`, `DELETE /v1/auth/link/pending`, `POST /v1/auth/link/confirm` | invite-token: anonymous (stages an encrypted cookie); link routes: session cookie | 02.3.1-T2: the token never travels in a URL; linking is staged then confirmed explicitly, never auto-merged; `X-XSRF-TOKEN` is required by the contract on the link mutations and enforced when 02.3.2-T1.2 lands (`contracts/README.md`) |
 | `GET /v1/me`, `PATCH /v1/me` | session cookie (own user only) | current user profile (`id`, `email`, `display_name`, `preferred_locale`); PATCH accepts only `preferred_locale ∈ {vi, en}`, `If-Match` on `user.version`; 02.3.1-T3 |
 
@@ -199,12 +199,13 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 |---|---|---|---|---|---|
 | 02.3.2-T1 | `session` table, `__Host-` cookie handling, ASP.NET Core antiforgery (`XSRF-TOKEN` cookie / `X-XSRF-TOKEN` header), rotation on login/role change (T38) | M | V1 | G1 | 02.3.1-T1 |
 | 02.3.2-T2 | Logout, session list/revoke, revoke-all (self and admin-triggered) | S | V1 | G1 | 02.3.2-T1 |
-**Story 02.3.2 total: 1.5**
+| 02.3.2-T3 | Admin route to end ALL sessions of one user in an org the caller administers (`membership:write`, same org, `X-Evidgate-Org`, audited like the F48 single revoke) over the existing `ISessionRevocation.RevokeAllForUserAsync`; ASVS-GAP-14 7.4.5 remainder (the 7.5.2 session screen stays with queue row F41) | S | V1 | G1 | 02.3.2-T2 |
+**Story 02.3.2 total: 2.0**
 #### Story 02.3.3 Enterprise SAML — acceptance: an org can configure a SAML IdP and its users log in and land in the same session model as OIDC users.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 02.3.3-T1 | SAML 2.0 SSO (metadata, SP-initiated login, assertion mapping, JIT membership policy) | XL | V3 | G4 | 02.3.2-T1, 02.1.2-T2 |
-**Epic 02.3 total: 8.0 · (V1 5.0 · V3 3.0)**
+**Epic 02.3 total: 8.5 · (V1 5.5 · V3 3.0)**
 ### Epic 02.4 CI authentication
 #### Story 02.4.1 GitHub OIDC exchange — acceptance: a workflow job of a bound repository with the allowed `ref` and `job_workflow_ref` receives a `ci_producer` token scoped to one project; any claim mismatch, unbound repository, fork workflow, or replayed `jti` receives 401/403 and no token.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -324,7 +325,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 |---|---|---|---|---|
 | 02.1 Tenant core | 5.0 | 0 | 0 | 5.0 |
 | 02.2 Roles and permissions as data | 3.0 | 0 | 0 | 3.0 |
-| 02.3 Human login (OIDC / OAuth2) | 5.0 | 0 | 3.0 | 8.0 |
+| 02.3 Human login (OIDC / OAuth2) | 5.5 | 0 | 3.0 | 8.5 |
 | 02.4 CI authentication | 10.5 | 0 | 0 | 10.5 |
 | 02.5 Agent service identity | 0 | 2.0 | 0 | 2.0 |
 | 02.6 Tenant isolation (RLS) | 4.0 | 0 | 0 | 4.0 |
@@ -332,9 +333,9 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days). Version = V1/V2/V3;
 | 02.8 Support access | 2.0 | 0 | 0 | 2.0 |
 | 02.9 Cross-tenant isolation suite | 3.0 | 0 | 0 | 3.0 |
 | 02.10 Transactional notifications | 4.5 | 1.5 | 0 | 6.0 |
-| **Total** | **39.5** | **3.5** | **3.0** | **46.0** |
+| **Total** | **40.0** | **3.5** | **3.0** | **46.5** |
 
-→ with 20 % buffer **55.2** person-days
+→ with 20 % buffer **55.8** person-days
 ## 13. Contract change requests
 
 > **Status:** Applied 2026-09-24: CR-1 → 00 §5.4.1; CR-2 → 00 §8.9; CR-3 → 00 §9.3; CR-4 → 00 §2; CR-5 confirmed (ids resolve).

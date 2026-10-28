@@ -6,7 +6,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 
 **Current state (2026-10-27).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next) and `docs/status-carried.md` (blocked / carried items, formerly STATUS §6), not here.
 
-- Landed on `develop` (#260, S124 08.6.3-T1): 181 of 655 planned tasks = 187.25 of 702.75 raw person-days (≈28 % of tasks, ≈27 % of effort); 474 tasks / 515.5 d remain.
+- Landed on `develop` (#260, S124 08.6.3-T1): 181 of 656 planned tasks = 187.25 of 703.25 raw person-days (≈28 % of tasks, ≈27 % of effort); 475 tasks / 516.0 d remain.
 - Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 133 / 145.25 of 281.25 · G2 42 / 36 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
 - Landed by area plan (tasks / planned): 01 45/53 · 02 29/48 · 03 8/40 · 04 22/53 · 05 19/53 · 06 12/36 · 07 6/42 · 08 1/69 · 09 20/72 · 10 4/54 · 11 9/51 · 12 1/30 · 13 5/54.
 - Delivered substrate: M1 foundation (toolchain pins, contracts pipeline + generated SDK drift gate, CI running `scripts/verify.sh`, dev stack, licence/SBOM/action-pin gates) and the Stage A waves (FORCE-RLS tenancy, orgs/projects/memberships, permissions, audit chain, CI tokens).
@@ -23,7 +23,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 | `DECISIONS.md` | Name, locked architecture (A1–A10), stack + versions (§4), safe-healing rules (§5), verified facts (§6), open owner decisions (§8), review deltas vs the source (§9) |
 | `RECOMMENDATIONS.md` | Working recommendations for open decisions (O1–O10) and plan §11 questions; not decisions |
 | `plans/00-overview.md` | Shared contracts: glossary, milestones, architecture, IDs, state machines, API, NFRs, feature-plan process, estimate roll-up |
-| `plans/01`–`13` | High-level area plans (epics → stories → tasks with sizes); 655 tasks, 702.75 raw / 843.3 buffered person-days (00 §14; story 13.2.2 added 8 tasks / 9.5 d on 2026-10-26). `13-product-phases.md` is the CR-D-2 master plan (authoring, script generation, element memory, drift classification); the Milestone column in every plan holds the CR-D-2 phase G1–G4 (13 §4.4) |
+| `plans/01`–`13` | High-level area plans (epics → stories → tasks with sizes); 656 tasks, 703.25 raw / 843.9 buffered person-days (00 §14; story 13.2.2 added 8 tasks / 9.5 d on 2026-10-26, task 02.3.2-T3 added 0.5 d on 2026-10-28). `13-product-phases.md` is the CR-D-2 master plan (authoring, script generation, element memory, drift classification); the Milestone column in every plan holds the CR-D-2 phase G1–G4 (13 §4.4) |
 | `plans/open-items/` | Register of every `[OPEN]`/⚠️ with a recommended default, the information needed and the task it must precede |
 | `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T101), findings register (`REVIEW-2026-09-25.md`), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
 | `docs/source/` | Original Vietnamese system design (working name "ReleaseHub") and its .docx |
