@@ -38,5 +38,8 @@
     <InternalsVisibleTo Include="Evidgate.Worker" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
     <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
+    <!-- 06.3.6-T1.3: the parse runner's tests drive IParseRunner/ChildProcessParseRunner, which stay internal to
+         this module (they are reached through its registration, not from another assembly's code). -->
+    <InternalsVisibleTo Include="Parser.Tests" />
   </ItemGroup>
 </Project>

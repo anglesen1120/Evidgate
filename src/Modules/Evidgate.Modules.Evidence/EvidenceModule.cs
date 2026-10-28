@@ -7,6 +7,7 @@ using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
 using FluentValidation;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -19,9 +20,20 @@ namespace Evidgate.Modules.Evidence;
 internal static class EvidenceModule
 {
     /// <summary>Registers the module's services in the calling host.</summary>
-    public static IServiceCollection AddEvidenceModule(this IServiceCollection services)
+    /// <param name="services">The host's service collection.</param>
+    /// <param name="configuration">
+    /// The host's configuration. Nothing in this shared registration is decided by it today: the one switch that used
+    /// to be read here (<c>EVIDGATE__PARSE__OUTOFPROCESS</c>) now lives in the Worker-only
+    /// <c>ParseRunnerServiceCollectionExtensions.AddParseRunner</c>, because that registration is a process-spawn
+    /// capability the Api must not hold. Every other module setting is bound lazily through
+    /// <c>BindConfiguration</c>, like <c>EVIDGATE__OBJECT__*</c>.
+    /// </param>
+    public static IServiceCollection AddEvidenceModule(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
 
         // 06.1.1-T1: the EF write model of artifacts and their kind policies (00 §5.5 C4).
         services.AddEvidgateDbContext<EvidenceDbContext>(typeof(EvidenceDbContext).Assembly);
@@ -60,6 +72,11 @@ internal static class EvidenceModule
         // hash. Scoped like every other module service; it takes the ambient scope through ITenantDb and never opens
         // a connection or a transaction of its own (00 §5.5 C3/C7).
         services.TryAddScoped<IEvidenceFreeze, EvidenceFreeze>();
+
+        // 06.3.6-T1.3: the out-of-process parse runner is deliberately NOT registered here. It spawns processes, so
+        // only the Worker composes it, through ParseRunnerServiceCollectionExtensions.AddParseRunner (06.3.6 review:
+        // the Api process must not hold a process-spawn capability). This shared registration is what both hosts call,
+        // so a runner registered here would be resolvable from the Api again.
 
         return services;
     }

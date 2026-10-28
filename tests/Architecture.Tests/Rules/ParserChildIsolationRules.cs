@@ -35,6 +35,12 @@ public static class ParserChildIsolationRules
     public const string ContractsProjectFile =
         "src/Modules/Evidgate.Modules.Evidence.Contracts/Evidgate.Modules.Evidence.Contracts.csproj";
 
+    /// <summary>The contracts project's directory, repo-relative with '/': its sources run in the child.</summary>
+    public const string ContractsProjectDirectory = "src/Modules/Evidgate.Modules.Evidence.Contracts/";
+
+    /// <summary>The shared kernel project's directory, repo-relative with '/': its sources run in the child.</summary>
+    public const string SharedKernelProjectDirectory = "src/BuildingBlocks/SharedKernel/";
+
     /// <summary>
     /// The child's complete restore allow-list: the two projects its project file references (the artifact contracts
     /// and the shared kernel), plus the analyzer package the build adds to every project. Anything else in
@@ -198,20 +204,22 @@ public static class ParserChildIsolationRules
     /// an <c>using F = System.IO.File</c> alias and <c>System.IO.Pipes</c> at once.
     /// </para>
     /// <para>
-    /// Native code and the launcher's own environment are denied the same way: <c>DllImport</c>, <c>LibraryImport</c>,
-    /// <c>NativeLibrary</c> and <c>Marshal.</c> keep the child inside the runtime the launcher started — a
-    /// <c>setrlimit</c>-style call from inside the child would set limits on a process it does not own, and the limits
-    /// arrive from the launcher as arguments — and <c>Environment.SetEnvironmentVariable</c>/
-    /// <c>Environment.GetFolderPath</c> complete the environment rule: the child neither reads nor writes one.
-    /// <c>System.Diagnostics.Process</c> is listed for its message; the name itself is denied as an identifier by
-    /// <see cref="ForbiddenChildIdentifiers"/>, because a parameter type (<c>Process p</c>) or a target-typed
-    /// <c>new()</c> carries no <c>.</c> or constructor text for a token to match.
+    /// Native code and the launcher's own environment are denied the same way: <c>NativeLibrary</c> and
+    /// <c>Marshal.</c> keep the child inside the runtime the launcher started — a process that loads a library by
+    /// name or marshals its own pointers is doing something the profile does not — and
+    /// <c>Environment.SetEnvironmentVariable</c>/<c>Environment.GetFolderPath</c> complete the environment rule:
+    /// the child neither reads nor writes one. <c>System.Diagnostics.Process</c> is listed for its message; the name
+    /// itself is denied as an identifier by <see cref="ForbiddenChildIdentifiers"/>, because a parameter type
+    /// (<c>Process p</c>) or a target-typed <c>new()</c> carries no <c>.</c> or constructor text for a token to
+    /// match.
     /// </para>
     /// <para>
-    /// A later task that needs one of these tokens needs it exactly once and recognisably: 06.3.6-T1.3 calls
-    /// <c>setrlimit</c> through the platform's <c>libc</c>, so the entry it adds belongs beside this list as an exact
-    /// allow entry (the import attribute and entry point it names), not as a removed token — every other import, and
-    /// any second one, keeps failing the rule.
+    /// <c>DllImport</c>/<c>LibraryImport</c> are not on this list because the child has exactly <em>one</em> legal
+    /// native import — libc's <c>setrlimit</c>, which the launcher cannot apply for it (the chiselled image has no
+    /// launcher) and which 06.3.6 §7 requires the child to set on itself. That import is not a token here but a
+    /// declaration rule of its own (<see cref="NativeImportViolations"/>): the exact attribute, library and entry
+    /// point, declared once, in the child's own project — while every other import and every second one, in the
+    /// child's files or in the profile it links, keeps failing the rule.
     /// </para>
     /// </summary>
     private static readonly string[] ForbiddenChildApis =
@@ -229,8 +237,6 @@ public static class ParserChildIsolationRules
         "ZipFile.",
         "System.Diagnostics.Process",
         "ProcessStartInfo",
-        "DllImport",
-        "LibraryImport",
         "NativeLibrary",
         "Marshal.",
         "Environment.GetEnvironmentVariable",
@@ -238,6 +244,64 @@ public static class ParserChildIsolationRules
         "Environment.GetFolderPath",
         "Environment.ExpandEnvironmentVariables",
         "Environment.CurrentDirectory",
+    ];
+
+    /// <summary>
+    /// The one native import the child may declare (06.3.6 §7, hand-over Notes <c>Self-applied limits</c>): the
+    /// C library it comes from, and the entry point it must name. <c>RLIMIT_CPU</c>, <c>RLIMIT_FSIZE</c> and
+    /// <c>RLIMIT_CORE</c> are all applied by this one call, so one import covers the whole limit contract.
+    /// </summary>
+    public const string AllowedNativeImportLibrary = "libc";
+
+    /// <summary>The single entry point the one allowed import may name.</summary>
+    public const string AllowedNativeImportEntryPoint = "setrlimit";
+
+    /// <summary>The two attribute spellings that declare a native import; both are scanned, one is allowed.</summary>
+    private static readonly string[] NativeImportAttributes = ["DllImport", "LibraryImport"];
+
+    /// <summary>
+    /// Every route out of the child into a second process, denied in the child's own files, in the profile files it
+    /// links <em>and</em> in the two projects it loads (<c>Evidence.Contracts</c>, the shared kernel): launching a
+    /// process by API (<c>Process.Start</c>, <c>ProcessStartInfo</c>, the qualified type), and the reflection routes
+    /// that resolve a type or a method by name at run time (<c>Activator.</c>, <c>Assembly.Load</c>,
+    /// <c>Type.GetType</c>, <c>AppDomain</c>, <c>Interop.</c>) or bind a native symbol directly
+    /// (<c>NativeLibrary</c>, <c>Marshal.</c>). The child's one native import is licensed by
+    /// <see cref="NativeImportViolations"/>; these names are the ways around that licence, so they are denied
+    /// everywhere in the child's assembly rather than only in its own files.
+    /// </summary>
+    private static readonly string[] ForbiddenSpawnApis =
+    [
+        "Process.Start",
+        "ProcessStartInfo",
+        "System.Diagnostics.Process",
+        "Activator.",
+        "Assembly.Load",
+        "Type.GetType",
+        "AppDomain",
+        "Interop.",
+        "NativeLibrary",
+        "Marshal.",
+    ];
+
+    /// <summary>
+    /// The C entry points that create or replace a process. The allowed native import (<c>libc</c>'s
+    /// <c>setrlimit</c>) is the only one the child may declare, so <see cref="NativeImportViolations"/> already
+    /// rejects every other declaration; this list is the explicit, named check on top of that rule, so a declaration
+    /// of <c>fork</c>/<c>execve</c>/<c>posix_spawn</c> fails with its own message instead of the generic one. The
+    /// names are read out of a declaration's literals (the entry point) and, when a declaration names no entry point,
+    /// out of the <c>extern</c> method's own name — a comment or a message that names one of them is not a use.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ProcessCreationEntryPoints =
+    [
+        "fork",
+        "vfork",
+        "clone",
+        "execve",
+        "execv",
+        "execvp",
+        "posix_spawn",
+        "system",
+        "popen",
     ];
 
     /// <summary>
@@ -519,10 +583,11 @@ public static class ParserChildIsolationRules
 
     /// <summary>
     /// AC1(d), the transport half: the child's own files open no file, start no process, read no environment variable,
-    /// resolve no temp path and load no native library — the launcher applies the limits and the caps arrive as
-    /// arguments, so the child reads stdin and writes stdout/stderr only. The linked profile files are deliberately
-    /// not passed here: the profile's extraction arm legitimately creates files for the callers that own a temp root
-    /// (and <see cref="ChildExtractionCodeViolations"/> is what keeps that arm out of the child).
+    /// resolve no temp path and load no native library beyond the one declaration
+    /// <see cref="NativeImportViolations"/> licenses, so the child reads stdin, writes stdout/stderr and sets its own
+    /// rlimits only. The linked profile files are deliberately not passed here: the profile's extraction arm
+    /// legitimately creates files for the callers that own a temp root (and
+    /// <see cref="ChildExtractionCodeViolations"/> is what keeps that arm out of the child).
     /// </summary>
     /// <param name="ownFiles">The child's own files (path + text).</param>
     /// <returns>The violations, ordered by path.</returns>
@@ -539,6 +604,11 @@ public static class ParserChildIsolationRules
             {
                 violations.Add(ChildIoViolation(path, api));
             }
+
+            // Native imports have their own declaration rule (the one legal libc setrlimit), so the token list no
+            // longer carries their names: this is where a file's own import is judged, including the second copy
+            // of the allowed one.
+            violations.AddRange(NativeImportViolations([(path, text)]));
 
             // A bare identifier is the last net, for the spellings no token matches (a parameter type, a target-typed
             // `new()`). One use is reported once: when an entry above already named `Process`
@@ -561,6 +631,246 @@ public static class ParserChildIsolationRules
     private static string ChildIoViolation(string path, string api) =>
         $"{path} uses {api}: the parser child reads stdin and writes stdout/stderr only — no file, no process, "
         + "no environment variable, no temp path, no native library (06.3.6 §7, AC1)";
+
+    /// <summary>
+    /// 06.3.6 §7, hand-over Notes <c>Self-applied limits</c>: the child may declare <em>one</em> native import —
+    /// libc's <c>setrlimit</c>, which applies <c>RLIMIT_CPU</c>, <c>RLIMIT_FSIZE</c> and <c>RLIMIT_CORE</c> to the
+    /// process the child is — and nothing else. The chiselled image carries no launcher, so this is the only way
+    /// the limits can be applied at all; every other import (a different library, a different entry point, the
+    /// source-generated <c>LibraryImport</c> spelling, or a second copy of the allowed one) is code the profile
+    /// does not have and the child must not run.
+    /// <para>
+    /// The shape is checked rather than the intent: the declaration must be the <c>DllImport</c> attribute with
+    /// <c>"libc"</c>, <c>EntryPoint = "setrlimit"</c> and <c>SetLastError = true</c>, on an <c>extern</c> method
+    /// taking a <c>ref</c> value, and it must sit in the child's own project — the linked profile sources may
+    /// declare none, because the profile is also compiled in-process where no limit may be set. Comments and
+    /// literals are blanked before the scan, so a comment naming <c>setrlimit</c> is not a declaration, and every
+    /// structural part of the declaration (<c>SetLastError = true</c>, <c>extern</c>, <c>ref</c>) is checked on that
+    /// blanked copy: trivia inside the declaration cannot stand in for a missing named argument or keyword. Only the
+    /// two string literals — the library and the entry point — are read from the original text, each at its own
+    /// position, so a comment cannot supply them and a non-literal argument is not the allowed declaration.
+    /// </para>
+    /// </summary>
+    /// <param name="files">The child's own files and the profile files it links (path + text).</param>
+    /// <returns>The violations, ordered by path and position.</returns>
+    public static IReadOnlyList<string> NativeImportViolations(IEnumerable<(string Path, string Text)> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+
+        var violations = new List<string>();
+        var allowed = 0;
+
+        foreach (var (path, text) in files.OrderBy(file => file.Path, StringComparer.Ordinal))
+        {
+            var code = ParserConstructionRules.StripTrivia(text);
+
+            foreach (var at in NativeImportMentions(code))
+            {
+                if (IsAllowedNativeImport(path, code, at, text))
+                {
+                    allowed++;
+
+                    if (allowed > 1)
+                    {
+                        violations.Add(
+                            $"{path} declares a second native import: the parser child declares libc's "
+                            + $"{AllowedNativeImportEntryPoint} exactly once and imports no other native symbol "
+                            + "(06.3.6 §7, AC1)");
+                    }
+
+                    continue;
+                }
+
+                violations.Add(
+                    $"{path} declares {NativeImportSpelling(code, at)}: the parser child declares libc's "
+                    + $"{AllowedNativeImportEntryPoint} (RLIMIT_CPU, RLIMIT_FSIZE, RLIMIT_CORE) once, in its own "
+                    + "project, and no other native import — the profile declares none (06.3.6 §7, AC1)");
+            }
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// How many declarations of the allowed native import <paramref name="files"/> carry. The real-solution test
+    /// asserts this is exactly one, so a clean rule cannot pass because the import silently disappeared.
+    /// </summary>
+    /// <param name="files">The child's own files and the profile files it links (path + text).</param>
+    /// <returns>The number of allowed declarations found.</returns>
+    public static int AllowedNativeImportCount(IEnumerable<(string Path, string Text)> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+
+        return files.Sum(file =>
+        {
+            var code = ParserConstructionRules.StripTrivia(file.Text);
+
+            return NativeImportMentions(code).Count(at => IsAllowedNativeImport(file.Path, code, at, file.Text));
+        });
+    }
+
+    /// <summary>Every position in <paramref name="code"/> where a native-import attribute is named.</summary>
+    /// <param name="code">The source with comments and literals blanked.</param>
+    /// <returns>The positions, in order.</returns>
+    private static List<int> NativeImportMentions(string code)
+    {
+        var positions = new SortedSet<int>();
+
+        foreach (var attribute in NativeImportAttributes)
+        {
+            var from = 0;
+
+            while (true)
+            {
+                var at = code.IndexOf(attribute, from, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    break;
+                }
+
+                // A mention is a use when nothing identifier-like precedes it (`[DllImport`, `…Services.DllImport`),
+                // which is the same boundary the token rules use: a longer identifier that merely contains the
+                // name is someone else's type.
+                if (at == 0 || !IsIdentifier(code[at - 1]))
+                {
+                    positions.Add(at);
+                }
+
+                from = at + 1;
+            }
+        }
+
+        return positions.ToList();
+    }
+
+    /// <summary>The attribute spelling that matched at <paramref name="at"/>, for the message.</summary>
+    /// <param name="code">The source with comments and literals blanked.</param>
+    /// <param name="at">The match position.</param>
+    private static string NativeImportSpelling(string code, int at) =>
+        code.AsSpan(at).StartsWith("LibraryImport", StringComparison.Ordinal) ? "LibraryImport" : "DllImport";
+
+    /// <summary>
+    /// True when the declaration at <paramref name="at"/> is the one legal native import: in the child's own
+    /// project, the <c>DllImport</c> attribute (not <c>LibraryImport</c>, not <c>DllImportAttribute</c>), the
+    /// <c>"libc"</c> library, the <c>setrlimit</c> entry point, <c>SetLastError = true</c>, on an <c>extern</c>
+    /// method taking a <c>ref</c> value.
+    /// </summary>
+    /// <param name="path">The file the declaration is in.</param>
+    /// <param name="code">The file's source with comments and literals blanked.</param>
+    /// <param name="at">The attribute's position.</param>
+    /// <param name="text">The file's original source, read for the attribute's string literals.</param>
+    private static bool IsAllowedNativeImport(string path, string code, int at, string text)
+    {
+        // The allowed declaration lives in the child's own project files; a path is repo-relative in a synthetic
+        // case and absolute in the real-solution scan, so the project directory is matched in both shapes.
+        var normalizedPath = path.Replace('\\', '/');
+        if (!normalizedPath.StartsWith(ProjectDirectory, StringComparison.Ordinal)
+            && !normalizedPath.Contains("/" + ProjectDirectory, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // `LibraryImport` and `DllImportAttribute` are different spellings of a different declaration: the rule
+        // allows one exact form, so the name must end at a boundary and be followed by its argument list.
+        var after = at + "DllImport".Length;
+        if (!code.AsSpan(at).StartsWith("DllImport", StringComparison.Ordinal)
+            || after >= code.Length
+            || IsIdentifier(code[after]))
+        {
+            return false;
+        }
+
+        // The attribute must open an attribute section and be followed by its argument list, so a bare mention or a
+        // member access cannot pass for a declaration.
+        var section = at - 1;
+        while (section >= 0 && char.IsWhiteSpace(code[section]))
+        {
+            section--;
+        }
+
+        var open = after;
+        while (open < code.Length && char.IsWhiteSpace(code[open]))
+        {
+            open++;
+        }
+
+        if (section < 0 || code[section] != '[' || open >= code.Length || code[open] != '(')
+        {
+            return false;
+        }
+
+        var end = code.IndexOf(';', open);
+        if (end < 0)
+        {
+            return false;
+        }
+
+        // The two string literals are located in the blanked copy (whose indices are the original ones) and read from
+        // the original text at exactly those positions: a comment can neither supply them nor hide a different value.
+        // The step over whitespace reads the original text, because the blanked copy turns the literal itself into
+        // spaces and would step straight past it.
+        var libraryAt = open + 1;
+        while (libraryAt < end && char.IsWhiteSpace(text[libraryAt]))
+        {
+            libraryAt++;
+        }
+
+        var entryPointAt = code.IndexOf("EntryPoint", open, end - open, StringComparison.Ordinal);
+        var entryPointValueAt = -1;
+        if (entryPointAt > 0)
+        {
+            var equals = code.IndexOf('=', entryPointAt + "EntryPoint".Length);
+            if (equals > 0 && equals < end)
+            {
+                entryPointValueAt = equals + 1;
+                while (entryPointValueAt < end && char.IsWhiteSpace(text[entryPointValueAt]))
+                {
+                    entryPointValueAt++;
+                }
+            }
+        }
+
+        if (entryPointValueAt < 0)
+        {
+            return false;
+        }
+
+        // Everything else is structural and is checked on the blanked copy: nothing the compiler treats as a comment
+        // or a literal can stand in for a named argument or a keyword.
+        var shape = WithoutWhitespace(code[open..end]);
+
+        return string.Equals(ReadStringLiteral(text, libraryAt), "\"" + AllowedNativeImportLibrary + "\"", StringComparison.Ordinal)
+            && string.Equals(ReadStringLiteral(text, entryPointValueAt), "\"" + AllowedNativeImportEntryPoint + "\"", StringComparison.Ordinal)
+            && shape.Contains("SetLastError=true", StringComparison.Ordinal)
+            && shape.Contains(")]", StringComparison.Ordinal)
+            && shape.Contains("extern", StringComparison.Ordinal)
+            && shape.Contains("ref", StringComparison.Ordinal);
+    }
+
+    /// <summary>The source with every whitespace character removed, for shape checks that must not care about layout.</summary>
+    /// <param name="code">A source fragment (already trivia-blanked by the caller).</param>
+    /// <returns>The fragment without whitespace.</returns>
+    private static string WithoutWhitespace(string code) =>
+        new(code.Where(character => !char.IsWhiteSpace(character)).ToArray());
+
+    /// <summary>
+    /// The ordinary string literal starting at <paramref name="at"/>, quotes included, or the empty string when the
+    /// argument at that position is not a plain string literal (<c>nameof(…)</c>, a constant, a verbatim literal).
+    /// </summary>
+    /// <param name="text">The original, untriviaed source.</param>
+    /// <param name="at">The position the blanked copy marks as the start of the literal.</param>
+    /// <returns>The literal token, or the empty string.</returns>
+    private static string ReadStringLiteral(string text, int at)
+    {
+        if (at < 0 || at >= text.Length || text[at] != '"')
+        {
+            return string.Empty;
+        }
+
+        var close = text.IndexOf('"', at + 1);
+
+        return close < 0 ? string.Empty : text[at..(close + 1)];
+    }
 
     /// <summary>
     /// True when <paramref name="api"/> is a spelling of <paramref name="identifier"/> itself — the name, or a
@@ -638,6 +948,193 @@ public static class ParserChildIsolationRules
         }
 
         return violations;
+    }
+
+    /// <summary>
+    /// The other side of the one-import licence and of the child's no-I/O contract: nothing in the child's assembly
+    /// may reach a second process. Every file compiled into <c>Evidgate.Parser</c> is scanned — its own files, the
+    /// profile files it links — together with the two projects it loads (<c>Evidence.Contracts</c> and the shared
+    /// kernel), because a helper in either of those runs in the same process. Four shapes are checked: the API routes
+    /// (<see cref="ForbiddenSpawnApis"/>: <c>Process.Start</c>, <c>ProcessStartInfo</c>, the qualified
+    /// <c>System.Diagnostics.Process</c>, and the reflection/native-binding routes that could resolve one by name);
+    /// the bare <c>Process</c> identifier, the spelling no token sees (<c>Process p = new();</c>); any native import
+    /// declaration outside the child's own project, because the licensed <c>setrlimit</c> is the only symbol the
+    /// assembly may bind; and the C entry points that create or replace a process
+    /// (<see cref="ProcessCreationEntryPoints"/>), read out of a declaration's literals or, when it names none, out of
+    /// its <c>extern</c> method name. <see cref="NativeImportViolations"/> already rejects every declaration but
+    /// libc's <c>setrlimit</c>; the named checks exist so the failure says what was attempted. Comments and literals
+    /// are blanked before the token scan, so prose that names one of these is not a use.
+    /// </summary>
+    /// <param name="files">Every source compiled into or loaded by the child (path + text).</param>
+    /// <returns>The violations, ordered by path and position.</returns>
+    public static IReadOnlyList<string> ChildNeverForksViolations(IEnumerable<(string Path, string Text)> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+
+        var violations = new List<string>();
+
+        foreach (var (path, text) in files.OrderBy(file => file.Path, StringComparer.Ordinal))
+        {
+            var code = ParserConstructionRules.StripTrivia(text);
+            var matched = ForbiddenSpawnApis.Where(api => Mentions(code, api)).ToList();
+
+            foreach (var api in matched)
+            {
+                violations.Add(
+                    $"{path} uses {api}: the parser child never launches or resolves a second process — its one "
+                    + "native import is libc's setrlimit, and no reflection, assembly or native-binding route may "
+                    + "stand in for a process launch (06.3.6 §7, AC1)");
+            }
+
+            // A bare `Process` name is the spelling no token sees (a parameter type, a target-typed `new()`), and a
+            // file that already matched a Process spelling is the more specific entry.
+            var processNamed = matched.Any(api => api.Contains("Process", StringComparison.Ordinal));
+            if (!processNamed && MentionsIdentifier(code, "Process"))
+            {
+                violations.Add(
+                    $"{path} names Process: the parser child never launches or resolves a second process, so the type "
+                    + "has no legitimate use in its assembly (06.3.6 §7, AC1)");
+            }
+
+            foreach (var at in NativeImportMentions(code))
+            {
+                // The single licensed declaration is libc's setrlimit in the child's own project (06.3.6 §7). Any
+                // other declaration — in a linked profile file or in one of the two loaded projects — is a native
+                // symbol the child would bind, whether or not it creates a process.
+                if (!IsInChildProject(path))
+                {
+                    violations.Add(
+                        $"{path} declares {NativeImportSpelling(code, at)}: the parser child's only native import is "
+                        + "libc's setrlimit, declared once in its own project, so neither the profile it links nor the "
+                        + "projects it loads may bind a native symbol (06.3.6 §7, AC1)");
+                }
+
+                foreach (var name in DeclaredNativeEntryPoints(code, text, at))
+                {
+                    if (ProcessCreationEntryPoints.Contains(name, StringComparer.Ordinal))
+                    {
+                        violations.Add(
+                            $"{path} declares a native import of {name}: the parser child never forks or executes "
+                            + $"another process, so no declaration of {Names(ProcessCreationEntryPoints)} may appear in "
+                            + "its assembly, and its one import is libc's setrlimit (06.3.6 §7, AC1)");
+                    }
+                }
+            }
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/> belongs to the child's own project. A path is repo-relative in a synthetic
+    /// case and absolute in the real-solution scan, so the project directory is matched in both shapes (the same test
+    /// <see cref="IsAllowedNativeImport"/> uses).
+    /// </summary>
+    /// <param name="path">The file's path.</param>
+    private static bool IsInChildProject(string path)
+    {
+        var normalizedPath = path.Replace('\\', '/');
+
+        return normalizedPath.StartsWith(ProjectDirectory, StringComparison.Ordinal)
+            || normalizedPath.Contains("/" + ProjectDirectory, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The symbol names a native import declaration at <paramref name="at"/> can bind: its library literal, its
+    /// <c>EntryPoint</c> literal when it names one, and — when it does not — the <c>extern</c> method's own name,
+    /// which is what the runtime then uses as the entry point. Both literals are located structurally in the blanked
+    /// copy and read from the original text at exactly those positions (<see cref="IsAllowedNativeImport"/>), so a
+    /// comment cannot supply a name or hide one.
+    /// </summary>
+    /// <param name="code">The source with comments and literals blanked.</param>
+    /// <param name="text">The original source, read for the declaration's string literals.</param>
+    /// <param name="at">The native-import attribute's position.</param>
+    /// <returns>The names the declaration can bind, in declaration order.</returns>
+    private static List<string> DeclaredNativeEntryPoints(string code, string text, int at)
+    {
+        var names = new List<string>();
+
+        var open = at;
+        while (open < code.Length && code[open] != '(')
+        {
+            open++;
+        }
+
+        if (open >= code.Length)
+        {
+            return names;
+        }
+
+        var end = code.IndexOf(';', open);
+        if (end < 0)
+        {
+            return names;
+        }
+
+        var libraryAt = open + 1;
+        while (libraryAt < end && char.IsWhiteSpace(text[libraryAt]))
+        {
+            libraryAt++;
+        }
+
+        AddLiteral(names, text, libraryAt);
+
+        var entryPointAt = code.IndexOf("EntryPoint", open, end - open, StringComparison.Ordinal);
+        if (entryPointAt >= 0)
+        {
+            var equals = code.IndexOf('=', entryPointAt + "EntryPoint".Length);
+            if (equals > 0 && equals < end)
+            {
+                var valueAt = equals + 1;
+                while (valueAt < end && char.IsWhiteSpace(text[valueAt]))
+                {
+                    valueAt++;
+                }
+
+                AddLiteral(names, text, valueAt);
+            }
+
+            return names;
+        }
+
+        // No EntryPoint argument: the runtime binds the method's own name, so that name is the entry point.
+        var externAt = code.IndexOf("extern", open, end - open, StringComparison.Ordinal);
+        var call = externAt < 0 ? -1 : code.IndexOf('(', externAt);
+        if (call > externAt && call < end)
+        {
+            var nameEnd = call - 1;
+            while (nameEnd > externAt && char.IsWhiteSpace(code[nameEnd]))
+            {
+                nameEnd--;
+            }
+
+            var nameStart = nameEnd;
+            while (nameStart > externAt && IsIdentifier(code[nameStart - 1]))
+            {
+                nameStart--;
+            }
+
+            if (nameEnd >= nameStart)
+            {
+                names.Add(code[nameStart..(nameEnd + 1)]);
+            }
+        }
+
+        return names;
+    }
+
+    /// <summary>Appends the plain string literal at <paramref name="at"/>, quotes stripped, when there is one.</summary>
+    /// <param name="names">The list to append to.</param>
+    /// <param name="text">The original source.</param>
+    /// <param name="at">The literal's position.</param>
+    private static void AddLiteral(List<string> names, string text, int at)
+    {
+        var literal = ReadStringLiteral(text, at);
+
+        if (literal.Length > 2)
+        {
+            names.Add(literal[1..^1]);
+        }
     }
 
     /// <summary>

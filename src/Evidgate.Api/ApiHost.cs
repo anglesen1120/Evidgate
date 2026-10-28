@@ -120,7 +120,7 @@ public static partial class ApiHost
         builder.Services.AddAuthoringModule();
         builder.Services.AddOrchestratorModule();
         // 06.1.1-T1: the evidence module — the artifact and kind-policy write model.
-        builder.Services.AddEvidenceModule();
+        builder.Services.AddEvidenceModule(builder.Configuration);
         // 07.1.1-T1: the policy module — the append-only revision write model and store.
         builder.Services.AddPolicyModule();
         // 02.2.1-T1.2/T2.2: the permission-catalogue module — reads (00 §2, 02 §4.2),
