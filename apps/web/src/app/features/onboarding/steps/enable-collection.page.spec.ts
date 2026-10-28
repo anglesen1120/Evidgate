@@ -199,7 +199,7 @@ describe('EnableCollectionPage', () => {
     await drain(fixture);
   });
 
-  it('previews the default advisory policy, states nothing is gated yet, and names the hazard (AC5, AC-F18-c)', async () => {
+  it('previews the default advisory policy, states nothing is gated yet, and names the hazard (AC5, AC-F18-c)', () => {
     expect(readPolicyActivation).toHaveBeenCalledExactlyOnceWith('project-1');
     const preview = text(root, '[data-testid="enable-collection-policy-preview"]');
     // T62: the 24 h late-evidence window, in minutes, as the body carries it.
