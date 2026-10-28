@@ -69,7 +69,9 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 row.MinSequence,
                 row.MaxSequence,
                 row.UnknownStatusCount,
-                row.UnfinishedStartedCount);
+                row.UnfinishedStartedCount,
+                row.StaleCount,
+                row.BlockedCount);
         }
 
         return new ReconcileOutcome(ReconcileDisposition.Compared, ReconcileComparer.Compare(planned, seen));
@@ -109,5 +111,9 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         public long UnknownStatusCount { get; set; }
 
         public long UnfinishedStartedCount { get; set; }
+
+        public long StaleCount { get; set; }
+
+        public long BlockedCount { get; set; }
     }
 }

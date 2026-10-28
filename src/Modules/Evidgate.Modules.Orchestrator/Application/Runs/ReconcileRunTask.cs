@@ -10,9 +10,9 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// Consumes one <c>orchestrator.run.reconcile</c> row (05.3.2 §5/§7, <c>ReconcileRunTask</c>): the trigger a finalize
 /// enqueues when it newly closes a producer slot (<see cref="RunReconcileContract"/>). Tenant-bound, so the consumer
 /// opens the row's tenant transaction around it and commits it only when the attempt returns. The handler resolves and
-/// decides nothing itself: it hands the run id to <see cref="IRunReconciler"/> and lets the reconciler's outcome
-/// decide, which is why a run that is gone or not <c>collecting</c> is a normal completion — the task row is the record
-/// of what ran, and nothing changed.
+/// decides nothing itself: it hands the run id to <see cref="IRunReconciler"/> and, for a compared attempt, that attempt's
+/// comparison to <see cref="IReconcileFinisher"/>, which is why a run that is gone or not <c>collecting</c> is a normal
+/// completion — the task row is the record of what ran, and nothing changed.
 /// <para>
 /// <see cref="IServiceScopeFactory"/> is the plumbing that reaches the scoped <see cref="IRunReconciler"/>: the task
 /// queue registers every handler as a singleton (<c>AddTaskHandler</c>), and a scoped service must not be captured by a
@@ -69,6 +69,20 @@ internal sealed partial class ReconcileRunTaskHandler(
         var missingCount = comparison?.Missing.Count ?? 0;
 
         LogReconciled(logger, payload.RunId, disposition, shardsPlanned, shardsClosed, missingCount);
+
+        // T2.3/T2.4: a compared attempt is finished in the SAME ambient tenant transaction (the reconciler has already
+        // locked the run FOR NO KEY UPDATE and its comparison is this attempt's own read). NotCollectable and
+        // RunNotFound reach no finisher at all — nothing to freeze, nothing to append. An exception here is not caught:
+        // it must abort the attempt so the consumer rolls the transaction back and retries it.
+        if (comparison is null)
+        {
+            return;
+        }
+
+        var finisher = attemptScope.ServiceProvider.GetRequiredService<IReconcileFinisher>();
+        var finalization = await finisher.FinishAsync(payload.RunId, comparison, cancellationToken).ConfigureAwait(false);
+
+        LogFinalized(logger, payload.RunId, finalization.Completeness, finalization.RevisionNo);
     }
 
     /// <summary>
@@ -99,6 +113,21 @@ internal sealed partial class ReconcileRunTaskHandler(
         int shardsPlanned,
         int shardsClosed,
         int missingCount);
+
+    /// <summary>
+    /// The one extra line a finished attempt writes: the completeness the revision persisted and its <c>revision_no</c>.
+    /// Numbers and one interned token only — never the payload, never a missing code list, never an artifact identity
+    /// (00 §5.7 S3).
+    /// </summary>
+    [LoggerMessage(
+        EventId = 2424,
+        Level = LogLevel.Information,
+        Message = "finalized run {RunId}: evidence revision {RevisionNo} is {Completeness}")]
+    private static partial void LogFinalized(
+        ILogger logger,
+        Guid runId,
+        string completeness,
+        int revisionNo);
 
     /// <summary>
     /// The run of this trigger is not visible in the caller's tenant: the attempt compared nothing and changed nothing,

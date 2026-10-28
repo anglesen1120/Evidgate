@@ -6,12 +6,13 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// 05.3.2-T2.2 without a database: the pure declared-versus-observed comparer — every 00 §8.5 code it can name from
-/// event evidence, the open-shard short circuit, the fail-closed missing declaration, the three bounds a closed shard's
-/// declaration is checked against (count, end and the contiguity rule of <c>contracts/events/ordering.md</c> §3), the
-/// ordinal reason order and the planned/closed shard counts — plus the pin that the three literals are the event-evidence
-/// subset of the closed list <c>migrations/0049</c> enforces. The database half (the one grouped aggregate, the run lock)
-/// is exercised by the reconcile integration suite.
+/// 05.3.2-T2.2/T2.3 without a database: the pure declared-versus-observed comparer — every 00 §8.5 code it can name from
+/// event evidence and from the event flags (<c>stale_epoch</c>, <c>setup_error</c>), the open-shard short circuit, the
+/// fail-closed missing declaration, the three bounds a closed shard's declaration is checked against (count, end and the
+/// contiguity rule of <c>contracts/events/ordering.md</c> §3), the ordinal reason order, the planned/closed shard counts
+/// and the stored-event watermark — plus the pin that every literal is one of the closed list <c>migrations/0049</c>
+/// enforces. The database half (the one grouped aggregate, the run lock) is exercised by the reconcile integration
+/// suite.
 /// </summary>
 public sealed class ReconcileComparerUnitTests
 {
@@ -322,6 +323,86 @@ public sealed class ReconcileComparerUnitTests
         reason.Detail.ShouldBe("null_status=2;unfinished=3");
     }
 
+    // ---- readiness reasons derived from the event flags (05.3.2-T2.3) ----------------------
+
+    [Fact]
+    public void A_Stale_Event_With_Matching_Counts_Is_StaleEpoch()
+    {
+        // The stale event still fills its sequence slot, so the declared count and the stored range agree: only the flag
+        // shows the epoch is older than the run's, and counting it as acknowledged must not hide that.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 1, declaredCount: 2)],
+            [Observed("producer-1", upTo: 2, max: 1, stale: 1)]);
+
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.StaleEpoch);
+        reason.ProducerId.ShouldBe("producer-1");
+        reason.Detail.ShouldBe("stale=1");
+        result.EventsMatch.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_Blocked_Finish_With_Matching_Counts_Is_SetupError()
+    {
+        // A blocked finish is a failed setup (00 §8.3): the shard's own counts can still agree and the evidence is not
+        // complete.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
+            [Observed("producer-1", upTo: 3, max: 2, blocked: 2)]);
+
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.SetupError);
+        reason.ProducerId.ShouldBe("producer-1");
+        reason.Detail.ShouldBe("blocked=2");
+        result.EventsMatch.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void An_Open_Shard_Is_Not_Compared_For_Stale_Or_Blocked_Events()
+    {
+        // The open shard is reported once and its events stay unexamined, so the flag counts add no second reason.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", shardIndex: 4, closed: false)],
+            [Observed("producer-1", upTo: 3, beyond: 3, stale: 2, blocked: 1)]);
+
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.MissingShard);
+        reason.Detail.ShouldBe("shard_index=4");
+    }
+
+    [Fact]
+    public void Stale_And_Setup_Reasons_Do_Not_Hide_The_Count_Mismatch()
+    {
+        // One closed shard can break every bound at once: each reason is its own entry, and the count mismatch keeps its
+        // own detail instead of being folded into the flags.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
+            [Observed("producer-1", upTo: 2, max: 1, stale: 1, blocked: 1, unknown: 1)]);
+
+        result.Missing.Select(missing => missing.Code).ShouldBe(
+            [
+                ReconcileMissingCodes.CountMismatch,
+                ReconcileMissingCodes.SetupError,
+                ReconcileMissingCodes.StaleEpoch,
+                ReconcileMissingCodes.UnknownStatus,
+            ]);
+        result.Missing[1].Detail.ShouldBe("blocked=1");
+        result.Missing[2].Detail.ShouldBe("stale=1");
+        result.Missing[3].Detail.ShouldBe("null_status=1;unfinished=0");
+    }
+
+    [Fact]
+    public void A_Closed_Shard_Without_Stale_Or_Blocked_Events_Names_Neither_Reason()
+    {
+        // The flags are the only source of these two reasons: zero counts add nothing to an otherwise matching shard.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 1, declaredCount: 2)],
+            [Observed("producer-1", upTo: 2, max: 1)]);
+
+        result.Missing.ShouldBeEmpty();
+        result.EventsMatch.ShouldBeTrue();
+    }
+
     // ---- code order and producer order ----------------------------------------------------
 
     [Fact]
@@ -365,6 +446,27 @@ public sealed class ReconcileComparerUnitTests
             ]);
         result.ShardsPlanned.ShouldBe(3);
         result.ShardsClosed.ShouldBe(2);
+    }
+
+    [Fact]
+    public void Flag_Reasons_Are_Ordered_By_Producer_Then_Code()
+    {
+        var result = ReconcileComparer.Compare(
+            [
+                Planned("b", shardIndex: 2, declaredLastSequence: 0, declaredCount: 1),
+                Planned("A", shardIndex: 1, declaredLastSequence: 0, declaredCount: 1),
+            ],
+            [
+                Observed("b", stale: 3),
+                Observed("A", blocked: 2),
+            ]);
+
+        // Ordinal again: "A" before "b", and each shard names its own reason only.
+        result.Missing.Select(missing => $"{missing.ProducerId}|{missing.Code}|{missing.Detail}").ShouldBe(
+            [
+                "A|setup_error|blocked=2",
+                "b|stale_epoch|stale=3",
+            ]);
     }
 
     [Fact]
@@ -430,6 +532,65 @@ public sealed class ReconcileComparerUnitTests
     }
 
     [Fact]
+    public void Event_Watermark_Sums_Every_Observed_Row()
+    {
+        // Both branches of the aggregate are counted: the events up to each declared high-water mark here.
+        var result = ReconcileComparer.Compare(
+            [
+                Planned("producer-1", shardIndex: 1, declaredLastSequence: 3, declaredCount: 4),
+                Planned("producer-2", shardIndex: 2, declaredLastSequence: 0, declaredCount: 1),
+            ],
+            [
+                Observed("producer-1", upTo: 4, max: 3),
+                Observed("producer-2", upTo: 1, max: 0),
+            ]);
+
+        result.Missing.ShouldBeEmpty();
+        result.EventWatermark.ShouldBe(5);
+    }
+
+    [Fact]
+    public void Event_Watermark_Counts_Beyond_Declared_And_Unplanned_Rows()
+    {
+        // The watermark is the stored event total, not the compared total: events past a declaration and events of a
+        // producer outside the plan are stored events too, so both are summed while neither adds a reason for the
+        // unplanned producer.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 0, declaredCount: 1)],
+            [
+                Observed("producer-1", upTo: 1, beyond: 2, min: 0, max: 2),
+                Observed("producer-9", upTo: 2, beyond: 3),
+            ]);
+
+        result.EventWatermark.ShouldBe(8);
+        result.Missing.ShouldHaveSingleItem().ProducerId.ShouldBe("producer-1");
+    }
+
+    [Fact]
+    public void Event_Watermark_Counts_A_Repeated_Producer_Row_Once()
+    {
+        // The grouped statement answers at most one row per producer, so a repeat is unreachable from the database; the
+        // function ignores a repeat the same way it does for the reasons, so those events are never added twice.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1")],
+            [Observed("producer-1"), Observed("producer-1", upTo: 2, beyond: 1)]);
+
+        result.EventWatermark.ShouldBe(1);
+        result.Missing.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Event_Watermark_Of_A_Run_Without_Events_Is_Zero()
+    {
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1", declaredLastSequence: 0, declaredCount: 0)],
+            []);
+
+        result.Missing.ShouldBeEmpty();
+        result.EventWatermark.ShouldBe(0);
+    }
+
+    [Fact]
     public void Shards_Planned_And_Closed_Are_Counted()
     {
         var result = ReconcileComparer.Compare(
@@ -452,9 +613,9 @@ public sealed class ReconcileComparerUnitTests
     public void Every_Code_Is_A_0049_Literal_And_Makes_The_Evidence_Incomplete()
     {
         // The migration's closed list is the one authority for these strings: T2.4 persists the comparison into
-        // evidence_revision, whose CHECK refuses a code outside it. This comparer names the event-evidence subset only
-        // (T2.3/T2.4 own artifact_missing, setup_error and stale_epoch), and each of its literals must be one of the
-        // migration's, verbatim.
+        // evidence_revision, whose CHECK refuses a code outside it. Every literal this module names must be one of the
+        // migration's, verbatim; the comparer emits all of them except artifact_missing, which the freeze result of
+        // T2.4 contributes.
         var migrationCodes = MigrationMissingCodes();
         migrationCodes.ShouldBe(
             ["missing_shard", "count_mismatch", "artifact_missing", "build_mismatch", "unknown_status", "setup_error", "stale_epoch"],
@@ -465,22 +626,26 @@ public sealed class ReconcileComparerUnitTests
             ReconcileMissingCodes.MissingShard,
             ReconcileMissingCodes.CountMismatch,
             ReconcileMissingCodes.UnknownStatus,
+            ReconcileMissingCodes.SetupError,
+            ReconcileMissingCodes.StaleEpoch,
+            ReconcileMissingCodes.ArtifactMissing,
         ];
 
-        // Each literal is a migration literal, and together they are exactly the event-evidence subset.
         codeLiterals.Where(code => !migrationCodes.Contains(code, StringComparer.Ordinal)).ShouldBeEmpty(
-            "every comparer code must be a 0049 literal");
+            "every reconciler code must be a 0049 literal");
         codeLiterals.Order(StringComparer.Ordinal).ToArray().ShouldBe(
-            ["count_mismatch", "missing_shard", "unknown_status"],
-            "the event-evidence codes of 05.3.2-T2.2");
+            ["artifact_missing", "count_mismatch", "missing_shard", "setup_error", "stale_epoch", "unknown_status"],
+            "the codes the reconciler names");
 
-        // Each code leaves Missing non-empty, so the reconciler can never report matching evidence (EventsMatch) while
-        // a shard is incomplete.
+        // Each code the comparer itself emits leaves Missing non-empty, so the reconciler can never report matching
+        // evidence (EventsMatch) while a shard is incomplete.
         (string Code, PlannedShard[] Planned, ObservedShard[] Observed)[] cases =
         [
             (ReconcileMissingCodes.MissingShard, [Planned("producer-1", closed: false)], []),
             (ReconcileMissingCodes.CountMismatch, [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)], [Observed("producer-1", upTo: 2, min: 1, max: 2)]),
             (ReconcileMissingCodes.UnknownStatus, [Planned("producer-1")], [Observed("producer-1", unknown: 1)]),
+            (ReconcileMissingCodes.SetupError, [Planned("producer-1")], [Observed("producer-1", blocked: 1)]),
+            (ReconcileMissingCodes.StaleEpoch, [Planned("producer-1")], [Observed("producer-1", stale: 1)]),
         ];
 
         foreach (var testCase in cases)
@@ -548,8 +713,10 @@ public sealed class ReconcileComparerUnitTests
         long unknown = 0,
         long unfinished = 0,
         long? min = 0,
-        long? max = 0) =>
-        new(producerId, upTo, beyond, min, max, unknown, unfinished);
+        long? max = 0,
+        long stale = 0,
+        long blocked = 0) =>
+        new(producerId, upTo, beyond, min, max, unknown, unfinished, stale, blocked);
 
     /// <summary>
     /// The closed code list of <c>migrations/0049_orchestration_evidence_revision.sql</c>, read from the

@@ -17,6 +17,11 @@ namespace Tenancy.IntegrationTests;
 /// surface run creation calls to pin a policy (FR-07-2, ruling T93). A project with no activation (or a
 /// soft-deleted project) answers null and keeps the caller's defaults; an activated project answers the
 /// revision, its hash and the two body fields run creation copies, with SQL null when the body omits a field.
+/// <para>
+/// 05.3.2-T2 reads the same surface for the body's <c>required_artifacts</c>: <see cref="IPolicyContracts.GetRequiredArtifactKindsAsync"/>
+/// answers the kinds ordinal and de-duplicated, and an unknown, invisible (another tenant's) or field-less
+/// revision answers an empty list rather than an error.
+/// </para>
 /// </summary>
 /// <remarks>
 /// The state is written through the real activation store inside its own tenant transaction (the write path
@@ -27,6 +32,15 @@ namespace Tenancy.IntegrationTests;
 [Trait("Category", "Docker")]
 public sealed class PolicyContractsTests
 {
+    /// <summary>The kinds the ordinal read orders <c>["trace","junit_xml","log"]</c> into (CA1861: no literal arrays as arguments).</summary>
+    private static readonly string[] OrdinalKinds = ["junit_xml", "log", "trace"];
+
+    /// <summary>The de-duplicated kinds a body with <c>["trace","log","trace"]</c> answers.</summary>
+    private static readonly string[] DeduplicatedKinds = ["log", "trace"];
+
+    /// <summary>The single kind the control revisions require.</summary>
+    private static readonly string[] TraceOnly = ["trace"];
+
     private readonly PostgresTenancyFixture _fixture;
 
     public PolicyContractsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
@@ -93,6 +107,52 @@ public sealed class PolicyContractsTests
         await scope.CommitAsync(TestContext.Current.CancellationToken);
 
         return policy;
+    }
+
+    /// <summary>Reads a revision's required artifact kinds through the module's registered contracts surface.</summary>
+    private static async Task<IReadOnlyList<string>> ReadKindsAsync(World world, Guid revisionId)
+    {
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
+        await using var scope = await scopes.BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
+        var contracts = services.ServiceProvider.GetRequiredService<IPolicyContracts>();
+
+        var kinds = await contracts.GetRequiredArtifactKindsAsync(revisionId, TestContext.Current.CancellationToken);
+        await scope.CommitAsync(TestContext.Current.CancellationToken);
+
+        return kinds;
+    }
+
+    /// <summary>
+    /// Writes a revision straight into the table as owner, past the route's schema: the only way to store a body
+    /// the contract refuses (duplicate items, a non-array <c>required_artifacts</c>) and prove the read still
+    /// answers a list rather than raising (the owner policy of <c>policy_revision</c> allows it).
+    /// </summary>
+    private async Task<Guid> InsertRevisionAsOwnerAsync(World world, string body)
+    {
+        var revision = Guid.CreateVersion7();
+
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            await owner.ExecuteAsync(
+                """
+                insert into public.policy_revision (id, org_id, project_id, revision_no, hash, body, created_by)
+                values (@id, @org_id, @project_id,
+                        (select coalesce(max(revision_no), 0) + 1
+                           from public.policy_revision
+                          where org_id = @org_id and project_id = @project_id),
+                        @hash, @body::jsonb, @created_by)
+                """,
+                ("id", revision),
+                ("org_id", world.Org),
+                ("project_id", world.Project),
+                ("hash", "sha256:" + new string('b', 64)),
+                ("body", body),
+                ("created_by", world.User));
+            await owner.CommitAsync();
+        }
+
+        return revision;
     }
 
     /// <summary>Sends a raw body verbatim, the shape the policy routes take.</summary>
@@ -237,5 +297,80 @@ public sealed class PolicyContractsTests
         // The pointer is org-valid but project-mismatched, so the other project has no active policy.
         (await ReadAsync(world, otherProject)).ShouldBeNull();
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_activation")).ShouldBe(1);
+    }
+
+    // ------------------------------------------------------------------ the required artifact kinds
+
+    [Fact]
+    public async Task RequiredArtifactKinds_AreReturnedInOrdinalOrder()
+    {
+        await using var world = await StartAsync();
+        var (revision, _) = await CreateRevisionAsync(
+            world,
+            """{"flaky_budget":3,"required_artifacts":["trace","junit_xml","log"]}""");
+
+        // Written unsorted, answered ordinal: the caller compares the list as it comes.
+        (await ReadKindsAsync(world, revision)).ShouldBe(OrdinalKinds, ignoreOrder: false);
+    }
+
+    /// <summary>
+    /// The route refuses duplicate items (<c>uniqueItems</c>), so a body with a repeated kind is only representable
+    /// when a row is written past the schema (owner insert here). The read still answers each kind once.
+    /// </summary>
+    [Fact]
+    public async Task RequiredArtifactKinds_AreDeduplicated()
+    {
+        await using var world = await StartAsync();
+        var revision = await InsertRevisionAsOwnerAsync(world, """{"required_artifacts":["trace","log","trace"]}""");
+
+        (await ReadKindsAsync(world, revision)).ShouldBe(DeduplicatedKinds, ignoreOrder: false);
+    }
+
+    [Fact]
+    public async Task RequiredArtifactKinds_AreEmpty_WhenTheBodyOmitsTheField()
+    {
+        await using var world = await StartAsync();
+        var (revision, _) = await CreateRevisionAsync(world, """{"flaky_budget":3}""");
+
+        (await ReadKindsAsync(world, revision)).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The schema types <c>required_artifacts</c> as an array, but the body column has no such check: a row written
+    /// past the route with a scalar must answer empty, not raise 22023 from <c>jsonb_array_elements_text</c>.
+    /// </summary>
+    [Fact]
+    public async Task RequiredArtifactKinds_AreEmpty_WhenTheFieldIsNotAnArray()
+    {
+        await using var world = await StartAsync();
+        var revision = await InsertRevisionAsOwnerAsync(world, """{"required_artifacts":"trace"}""");
+
+        (await ReadKindsAsync(world, revision)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task RequiredArtifactKinds_AreEmpty_ForAnUnknownRevision()
+    {
+        await using var world = await StartAsync();
+        var (revision, _) = await CreateRevisionAsync(world, """{"required_artifacts":["trace"]}""");
+
+        (await ReadKindsAsync(world, Guid.CreateVersion7())).ShouldBeEmpty();
+        // The known revision still answers, so the empty list is the unknown id and not a broken read.
+        (await ReadKindsAsync(world, revision)).ShouldBe(TraceOnly, ignoreOrder: false);
+    }
+
+    [Fact]
+    public async Task RequiredArtifactKinds_AreEmpty_ForAnotherTenantsRevision()
+    {
+        await using var world = await StartAsync();
+        var otherOrg = await CreateOrgAsync(world.Client, world.User, "other");
+        var otherProject = await CreateProjectAsync(world.Client, world.User, otherOrg, "checkout");
+        var other = world with { Org = otherOrg, Project = otherProject };
+        var (theirs, _) = await CreateRevisionAsync(other, """{"required_artifacts":["trace"]}""");
+
+        // Read under the first tenant's scope: RLS hides the row and the read's own org_id match is the module guard.
+        (await ReadKindsAsync(world, theirs)).ShouldBeEmpty();
+        // The owning tenant reads it, so the empty list is the tenant boundary and not a missing row.
+        (await ReadKindsAsync(other, theirs)).ShouldBe(TraceOnly, ignoreOrder: false);
     }
 }

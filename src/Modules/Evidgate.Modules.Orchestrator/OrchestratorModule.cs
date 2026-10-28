@@ -63,8 +63,15 @@ internal static class OrchestratorModule
         // 05.3.2-T2.1/T2.2: the reconciler behind the orchestrator.run.reconcile task — the run row locked FOR NO KEY
         // UPDATE, the shard plan, then one grouped aggregate of the acknowledged events. Scoped like every other module
         // service: it takes the ambient scope through ITenantDb/ITenantScopeAccessor, never a connection of its own, and
-        // it never changes the run (T2.4 owns the transition and the evidence_revision insert).
+        // it stays read-only (T2.3/T2.4's finisher composes after it, in the same transaction).
         services.TryAddScoped<IRunReconciler, RunReconciler>();
+
+        // 05.3.2-T2.3/T2.4: the requirement seam (the pinned policy's artifact kinds through Policy.Contracts, D-S123-Q3)
+        // and the finisher that freezes the evidence, appends the one evidence_revision row, moves the run's pointer and
+        // moves collecting -> complete|incomplete. Scoped over the ambient tenant transaction; the finisher never opens
+        // one of its own, so the consumer's commit is the only commit.
+        services.TryAddScoped<IRequiredArtifactResolver, RequiredArtifactResolver>();
+        services.TryAddScoped<IReconcileFinisher, ReconcileFinisher>();
 
         // 05.3.2-T2.1: the consumer of the type 05.3.2-T1's finalize enqueues. Registered in both hosts like every
         // module piece; only the Worker runs a queue consumer, and a task_type is claimed exactly while a handler

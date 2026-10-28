@@ -3,21 +3,31 @@ using System.Globalization;
 namespace Evidgate.Modules.Orchestrator.Application.Runs;
 
 /// <summary>
-/// The declared-versus-observed comparison of 05.3.2-T2.2 without a database: given the run's producer slots and the
-/// one grouped aggregate row per producer, it names every <c>missing[]</c> reason the acknowledged events support.
+/// The declared-versus-observed comparison of 05.3.2-T2.2/T2.3 without a database: given the run's producer slots and
+/// the one grouped aggregate row per producer, it names every <c>missing[]</c> reason that evidence supports and the
+/// stored-event watermark of the run.
 /// Pure and deterministic (no I/O, no clock, no ambient scope), so the integration tests can exercise it directly
 /// through <c>InternalsVisibleTo</c> and the reconciler stays a thin reader around it.
 /// </summary>
 /// <remarks>
-/// The comparison never walks the stored sequences; it reads the aggregate's counts and its two bounds. For a closed
-/// shard that declared at least one event it enforces the gap rule of <c>contracts/events/ordering.md</c> §3, which is
-/// derived from exactly those columns: the sequences in <c>[min stored sequence, declared_last_sequence]</c> must all be
-/// stored, and the highest stored sequence must be the declared high-water mark. A count alone cannot see either — three
-/// stored sequences 0, 1, 2 under a declaration of three events ending at 3 is a hole — so an equal count with a hole
-/// is still a disagreement. Storage order, late arrivals and a hole below the lowest stored sequence (an unwritten
-/// prefix) change nothing. A shard whose slot never closed is reported once as
-/// <see cref="ReconcileMissingCodes.MissingShard"/> and its events are not compared; observed rows for producers outside
-/// the plan are ignored (the <c>event_slot_fk</c> makes them impossible).
+/// The comparison never walks the stored sequences; it reads the aggregate's counts, its two bounds and its two flag
+/// counts. For a closed shard that declared at least one event it enforces the gap rule of
+/// <c>contracts/events/ordering.md</c> §3, which is derived from exactly those columns: the sequences in
+/// <c>[min stored sequence, declared_last_sequence]</c> must all be stored, and the highest stored sequence must be the
+/// declared high-water mark. A count alone cannot see either — three stored sequences 0, 1, 2 under a declaration of
+/// three events ending at 3 is a hole — so an equal count with a hole is still a disagreement. Storage order, late
+/// arrivals and a hole below the lowest stored sequence (an unwritten prefix) change nothing.
+/// <para>
+/// Every stored event counts as acknowledged whatever its <c>stale</c> flag, so a stale event can fill a sequence slot
+/// and leave the count bounds agreeing; the stale count keeps that from looking complete — a closed shard holding any
+/// stale event names <see cref="ReconcileMissingCodes.StaleEpoch"/>, and a closed shard holding a
+/// <c>blocked</c> <c>test.finished</c> names <see cref="ReconcileMissingCodes.SetupError"/>.
+/// </para>
+/// <para>
+/// A shard whose slot never closed is reported once as <see cref="ReconcileMissingCodes.MissingShard"/> and neither its
+/// events nor its flags are compared; observed rows for producers outside the plan never add a reason (the
+/// <c>event_slot_fk</c> makes them impossible) but do count towards the watermark.
+/// </para>
 /// </remarks>
 internal static class ReconcileComparer
 {
@@ -25,12 +35,13 @@ internal static class ReconcileComparer
     internal const string DeclaredMissingDetail = "declared_missing";
 
     /// <summary>
-    /// Compares the planned shards against the observed events. Reasons are ordered by producer id (ordinal) and, per
-    /// shard, in the fixed code order <c>missing_shard</c>, <c>count_mismatch</c>, <c>unknown_status</c>.
+    /// Compares the planned shards against the observed events. Reasons are ordered by producer id (ordinal) and then by
+    /// code (ordinal): one closed shard reports <c>count_mismatch</c>, <c>setup_error</c>, <c>stale_epoch</c> and
+    /// <c>unknown_status</c> in that order, and an open shard reports only <c>missing_shard</c>.
     /// </summary>
     /// <param name="planned">The run's producer slots as the shard plan; one row per shard.</param>
     /// <param name="observed">The grouped aggregate rows, at most one per producer.</param>
-    /// <returns>The reasons and the planned/closed shard counts.</returns>
+    /// <returns>The reasons, the planned/closed shard counts and the stored-event watermark.</returns>
     /// <exception cref="ArgumentNullException">Either list is null.</exception>
     public static ReconcileComparison Compare(
         IReadOnlyList<PlannedShard> planned,
@@ -40,11 +51,18 @@ internal static class ReconcileComparer
         ArgumentNullException.ThrowIfNull(observed);
 
         // The one grouped statement returns at most one row per producer; a repeat is ignored rather than merged so the
-        // result stays a pure function of the input sequence.
+        // result stays a pure function of the input sequence, and the watermark follows the same rule: events are
+        // immutable, so the stored total only grows and is a watermark T2.4 can persist as it stands, summed over the
+        // rows the comparison actually read (one per producer) — a repeated producer row is not merged, so it is not
+        // added twice either.
         var observations = new Dictionary<string, ObservedShard>(observed.Count, StringComparer.Ordinal);
+        long eventWatermark = 0;
         foreach (var row in observed)
         {
-            observations.TryAdd(row.ProducerId, row);
+            if (observations.TryAdd(row.ProducerId, row))
+            {
+                eventWatermark += row.CountUpToDeclared + row.CountBeyondDeclared;
+            }
         }
 
         var missing = new List<ReconcileMissing>();
@@ -85,6 +103,26 @@ internal static class ReconcileComparer
                     countDetail));
             }
 
+            // A blocked finish is a failed setup (00 §8.3), and a stale event is an older epoch: neither depends on the
+            // declaration, so both are named for a shard that already reported declared_missing as well.
+            if (seen.BlockedCount > 0)
+            {
+                missing.Add(new ReconcileMissing(
+                    ReconcileMissingCodes.SetupError,
+                    shard.ProducerId,
+                    string.Create(CultureInfo.InvariantCulture, $"blocked={seen.BlockedCount}")));
+            }
+
+            if (seen.StaleCount > 0)
+            {
+                // A stale event still filled its sequence slot above, so the counts can agree while the evidence is not
+                // trustworthy: this reason is what keeps the shard from looking complete (D-S119-Q2 risk).
+                missing.Add(new ReconcileMissing(
+                    ReconcileMissingCodes.StaleEpoch,
+                    shard.ProducerId,
+                    string.Create(CultureInfo.InvariantCulture, $"stale={seen.StaleCount}")));
+            }
+
             // A null normalized_status and a started attempt with no finish do not depend on the declaration, so this
             // reason is also named for a shard that already reported declared_missing.
             if (seen.UnknownStatusCount > 0 || seen.UnfinishedStartedCount > 0)
@@ -98,13 +136,29 @@ internal static class ReconcileComparer
             }
         }
 
-        return new ReconcileComparison(missing.ToArray(), planned.Count, closedShards);
+        // The stated order, made explicit rather than implied by the loop: producer id (ordinal), then code (ordinal).
+        // Each code is added at most once per shard, so the ordering is total and stays stable for equal keys.
+        var ordered = missing
+            .OrderBy(static reason => reason.ProducerId ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(static reason => reason.Code, StringComparer.Ordinal)
+            .ToArray();
+
+        return new ReconcileComparison(ordered, planned.Count, closedShards, eventWatermark);
     }
 
     /// <summary>The observation of a producer that stored no event.</summary>
     /// <param name="producerId">The producer id the plan names.</param>
     private static ObservedShard NoObservation(string producerId) =>
-        new(producerId, CountUpToDeclared: 0, CountBeyondDeclared: 0, MinSequence: null, MaxSequence: null, UnknownStatusCount: 0, UnfinishedStartedCount: 0);
+        new(
+            producerId,
+            CountUpToDeclared: 0,
+            CountBeyondDeclared: 0,
+            MinSequence: null,
+            MaxSequence: null,
+            UnknownStatusCount: 0,
+            UnfinishedStartedCount: 0,
+            StaleCount: 0,
+            BlockedCount: 0);
 
     /// <summary>
     /// The detail of a closed shard whose declaration at least one bound breaks, or null when the declared pair and the
