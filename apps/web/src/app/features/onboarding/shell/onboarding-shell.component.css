@@ -95,6 +95,7 @@ h2 {
 }
 
 .stepper__button:focus-visible,
+#onboarding-title:focus-visible,
 #onboarding-step-title:focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);
   outline-offset: var(--eg-focus-offset);

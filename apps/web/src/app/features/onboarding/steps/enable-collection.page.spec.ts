@@ -150,6 +150,11 @@ function readRetryAction(root: HTMLElement): HTMLButtonElement | null {
   return root.querySelector<HTMLButtonElement>('[data-testid="enable-collection-retry-read"]');
 }
 
+/** AC-F63-c: the one recovery a refused (403) read offers. */
+function readAgainButton(root: HTMLElement): HTMLButtonElement | null {
+  return root.querySelector<HTMLButtonElement>('[data-testid="enable-collection-read-again"]');
+}
+
 function text(root: HTMLElement, selector: string): string {
   return root.querySelector(selector)?.textContent?.trim() ?? '';
 }
@@ -814,11 +819,170 @@ describe('EnableCollectionPage activation read', () => {
     expect(activatePolicy).not.toHaveBeenCalled();
   });
 
+  it('returns focus to the named failure heading after each failed re-read (AC-F63-b)', async () => {
+    // Two consecutive failures of the same read: the control the user pressed is replaced by the
+    // answer, so the page must hand focus to its own named target instead of dropping it on <body>.
+    readPolicyActivation.mockRejectedValue(failure('unavailable', 503));
+    const fixture = await createPage();
+    const root = fixture.nativeElement as HTMLElement;
+
+    // The first read's own failure takes no focus: nothing was pressed, so nothing moves.
+    const firstHeading = root.querySelector('#enable-read-failed-heading');
+    expect(firstHeading).not.toBeNull();
+    expect(document.activeElement, 'the first failure took focus').not.toBe(firstHeading);
+    expect(root.contains(document.activeElement), 'the page took focus on its first render').toBe(
+      false,
+    );
+
+    for (const attempt of [1, 2]) {
+      retryButton(root)!.click();
+      await drain(fixture);
+      const heading = root.querySelector<HTMLElement>('#enable-read-failed-heading');
+      expect(heading, `failure ${attempt} did not render its heading`).not.toBeNull();
+      // The target is the same named element on both failures — not <body>, and not the destroyed
+      // control. `tabindex="-1"` keeps it out of the tab order: an announcement target, not a stop.
+      expect(document.activeElement, `failure ${attempt} dropped focus`).toBe(heading);
+      expect(heading!.getAttribute('tabindex')).toBe('-1');
+      // The shared pattern's title drops to level 4 inside the named section, one outline level.
+      expect(heading!.tagName).toBe('H3');
+      expect(
+        root.querySelector('app-error-pattern h4'),
+        `failure ${attempt} rendered two headings at the same level`,
+      ).not.toBeNull();
+    }
+    expect(readPolicyActivation).toHaveBeenCalledTimes(3);
+    expect(createPolicyRevision).not.toHaveBeenCalled();
+    expect(activatePolicy).not.toHaveBeenCalled();
+  });
+
+  it('closes the read controls for the answer’s own interval and opens them when it elapses (AC-F63-a)', async () => {
+    // The page's own interval is faked, together with the clock it is measured against, and nothing
+    // else: the framework's scheduling and the spec's own macrotask stay real, so the wait is
+    // advanced instead of waited for without freezing the render.
+    vi.useFakeTimers({
+      toFake: ['setInterval', 'clearInterval', 'Date'],
+      now: new Date('2026-10-28T00:00:00Z'),
+    });
+    try {
+      readPolicyActivation
+        .mockRejectedValueOnce(
+          failure('rate_limited', 429, { retryable: true, retryAfterSeconds: 30 }),
+        )
+        .mockResolvedValueOnce(null);
+      const fixture = await createPage();
+      const root = fixture.nativeElement as HTMLElement;
+      const wait = (): string => text(root, '[data-testid="enable-collection-read-wait"]');
+
+      // The window is open: the Retry says so natively, and the wait names both numbers — the time
+      // left and the interval the server supplied — with copy that is neutral about the reason (the
+      // same wait is shown for any answer that names an interval, not only a `429`).
+      expect(retryButton(root)!.disabled).toBe(true);
+      expect(wait()).toContain('The server asked you to wait');
+      expect(wait()).toContain('30 s left of the 30 s it named');
+      expect(wait()).not.toContain('Rate limited');
+      // The countdown is text, never a live region: the sheet asks for the interval, not a
+      // per-second announcement.
+      const waitNode = root.querySelector('[data-testid="enable-collection-read-wait"]')!;
+      expect(waitNode.getAttribute('role')).toBeNull();
+      expect(waitNode.getAttribute('aria-live')).toBeNull();
+
+      // One second short of the interval: still closed, and the remainder has counted down.
+      await vi.advanceTimersByTimeAsync(29_000);
+      await drain(fixture);
+      expect(retryButton(root)!.disabled).toBe(true);
+      expect(wait()).toContain('1 s left of the 30 s it named');
+
+      // The window elapses: the control opens, the wait goes, and the read is the only request.
+      await vi.advanceTimersByTimeAsync(1_000);
+      await drain(fixture);
+      expect(retryButton(root)!.disabled).toBe(false);
+      expect(root.querySelector('[data-testid="enable-collection-read-wait"]')).toBeNull();
+
+      retryButton(root)!.click();
+      await drain(fixture);
+      expect(readPolicyActivation).toHaveBeenCalledTimes(2);
+      expect(root.querySelector('[data-testid="enable-collection-error"]')).toBeNull();
+      expect(confirmButton(root)).not.toBeNull();
+      expect(createPolicyRevision).not.toHaveBeenCalled();
+      expect(activatePolicy).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('offers one read-only recovery on a refused (403) read, keyboard reachable (AC-F63-c)', async () => {
+    readPolicyActivation.mockRejectedValue(failure('forbidden', 403));
+    const fixture = await createPage();
+    const root = fixture.nativeElement as HTMLElement;
+
+    const readAgain = readAgainButton(root);
+    expect(readAgain, 'a refused read offered no way back').not.toBeNull();
+    // A native button: in the tab order, activated by Enter/Space — never a `tabindex="-1"` or
+    // `aria-disabled` imitation, and never a second control beside it.
+    expect(readAgain!.tagName).toBe('BUTTON');
+    expect(readAgain!.type).toBe('button');
+    expect(readAgain!.disabled).toBe(false);
+    expect(readAgain!.tabIndex).toBe(0);
+    expect(readAgain!.hasAttribute('aria-disabled')).toBe(false);
+    expect(root.querySelectorAll('button')).toHaveLength(2);
+
+    // The refusal stays visible and the confirm stays natively disabled: nothing mutating is
+    // reachable from this state.
+    expect(text(root, '[data-testid="enable-collection-unreadable"]')).toContain(
+      'could not be read with your permissions',
+    );
+    expect(confirmButton(root)!.disabled).toBe(true);
+
+    // The control issues the read and nothing else — twice, so a repeated failure proves the focus
+    // rule too (AC-F63-b): the pressed control is replaced, and focus returns to its successor.
+    readAgain!.focus();
+    expect(document.activeElement).toBe(readAgain);
+    readAgain!.click();
+    await drain(fixture);
+    expect(readPolicyActivation).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe(readAgainButton(root));
+
+    readAgainButton(root)!.click();
+    await drain(fixture);
+    expect(readPolicyActivation).toHaveBeenCalledTimes(3);
+    expect(document.activeElement).toBe(readAgainButton(root));
+    // No command was ever sent, and the confirm is still closed.
+    expect(createPolicyRevision).not.toHaveBeenCalled();
+    expect(activatePolicy).not.toHaveBeenCalled();
+    expect(confirmButton(root)!.disabled).toBe(true);
+  });
+
+  it('never opens a wait window for a refused read, whatever the answer carries (AC-F63-c)', async () => {
+    // A `403` is a refusal, not a throttled attempt: an answer that still carries a `Retry-After`
+    // must not close the one recovery a refused read offers, or the page would strand the user for
+    // an interval nobody asked them to wait.
+    readPolicyActivation.mockRejectedValue(
+      failure('forbidden', 403, { retryable: false, retryAfterSeconds: 30 }),
+    );
+    const fixture = await createPage();
+    const root = fixture.nativeElement as HTMLElement;
+
+    const readAgain = readAgainButton(root);
+    expect(readAgain).not.toBeNull();
+    expect(readAgain!.disabled).toBe(false);
+    expect(root.querySelector('[data-testid="enable-collection-read-wait"]')).toBeNull();
+
+    readAgain!.click();
+    await drain(fixture);
+    expect(readPolicyActivation).toHaveBeenCalledTimes(2);
+    expect(readAgainButton(root)!.disabled).toBe(false);
+    expect(root.querySelector('[data-testid="enable-collection-read-wait"]')).toBeNull();
+    expect(createPolicyRevision).not.toHaveBeenCalled();
+    expect(activatePolicy).not.toHaveBeenCalled();
+  });
+
   it.each([
-    ['rate_limited', 429, 60],
+    // An absent or zero interval is no interval ([DECISION 2]): the Retry is usable at once, and an
+    // interval the server did state closes it for exactly that long (the fake-clock case above).
+    ['rate_limited', 429, null],
     ['unavailable', 503, null],
   ] as const)(
-    're-reads a retryable %s read failure through the shared Retry action (AC-T5.2-3)',
+    're-reads a retryable %s read failure through the shared Retry action at once (AC-T5.2-3)',
     async (kind, status, retryAfterSeconds) => {
       // The shape the client produces (`core/http/error-mapper.ts`): a 429 or 503 read is retryable,
       // and a 429 carries the `Retry-After` interval the answer named.
@@ -1112,5 +1276,46 @@ describe('EnableCollectionPage scope changes', () => {
     expect(enabled!.textContent).toContain('project-2');
     expect(enabled!.textContent).not.toContain('project-1');
     expect(confirmButton(hostRoot)).toBeNull();
+  });
+
+  it('keeps a lost re-read’s focus request out of the next scope’s failure (AC-F63-b)', async () => {
+    // A read the user pressed Retry for, left in flight while the scope moves: its focus request
+    // belongs to a press that no longer exists, so the new scope's *first* failure — an answer to
+    // nobody's press — must leave focus where it is.
+    readPolicyActivation.mockReset().mockRejectedValue(failure('unavailable', 503));
+    host.componentInstance.projectId.set('project-2');
+    await drainHost();
+    const heading = hostRoot.querySelector<HTMLElement>('#enable-read-failed-heading');
+    expect(heading).not.toBeNull();
+    expect(document.activeElement).not.toBe(heading);
+
+    const inFlight = deferredResult<PolicyActivationStateDto | null>();
+    readPolicyActivation
+      .mockReset()
+      .mockResolvedValue(null)
+      .mockImplementationOnce(() => inFlight.promise)
+      .mockRejectedValueOnce(failure('unavailable', 503));
+
+    retryButton(hostRoot)!.click();
+    await drainHost();
+    expect(readPolicyActivation).toHaveBeenCalledExactlyOnceWith('project-2');
+
+    // The scope moves before that answer arrives; the new scope's own read fails, and only then does
+    // the answer the lost generation was waiting for arrive.
+    host.componentInstance.projectId.set('project-3');
+    await drainHost();
+    expect(readPolicyActivation).toHaveBeenLastCalledWith('project-3');
+    inFlight.resolve(null);
+    await drainHost();
+
+    const latest = hostRoot.querySelector<HTMLElement>('#enable-read-failed-heading');
+    expect(latest).not.toBeNull();
+    expect(document.activeElement).not.toBe(latest);
+    expect(
+      hostRoot.contains(document.activeElement),
+      'a failure nobody pressed for took focus',
+    ).toBe(false);
+    expect(createPolicyRevision).not.toHaveBeenCalled();
+    expect(activatePolicy).not.toHaveBeenCalled();
   });
 });
