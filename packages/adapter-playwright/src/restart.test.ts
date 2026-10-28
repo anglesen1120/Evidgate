@@ -5,6 +5,7 @@
 // ahead of the chunks is a floor (reuse is the only sequence refusal the server has — a hole
 // is an accepted reconciliation fact, contracts/events/ordering.md §1/§3), while an unusable
 // value (PS8(b), e.g. `1e300`) is dropped and the chunk scan decides.
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,8 +15,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildEnvelope, EXT_SCHEMA, type UnsignedEnvelope } from './envelope.js';
 import { SHARDS_FILE, SpoolWriter, type SpoolWriterOptions } from './spool.js';
 
-/** The pid of the "crashed" writer: never this process, so the default liveness check says dead. */
-const CRASHED_PID = 4242;
+/**
+ * The pid of the "crashed" writer: a child that has already exited, so it is dead for the
+ * default liveness check. A literal pid is not safe: inside a busy container (the clean-build
+ * smoke) any small pid may belong to a live process.
+ */
+const CRASHED_PID = spawnSync(process.execPath, ['-e', '']).pid;
 const PRODUCER_ID = 'pw-0';
 
 const baseDirs: string[] = [];
