@@ -398,8 +398,8 @@ Draft: `draft → dry_running → dry_passed | dry_failed → pr_open → merged
 | `GET /v1/auth/sessions`, `DELETE /v1/auth/sessions/{s}` (optional `X-Evidgate-Org`), `POST /v1/auth/sessions/revoke-all`, `POST /v1/auth/logout` | session cookie only, pre-tenant (`x-permission: none`); with `X-Evidgate-Org` the caller needs `membership:write` in that org | List own live sessions (`SessionView`, `current` marked, no cursor); revoke one (204; own row expires cookies; member's row only inside the named org; unknown, foreign or dead id → one 404 `not_found`, never an id-based 403); `revoke-all` body `keep_current` (default `true`; 413 over 1024 B, 422 bad body); `logout` 204 expires cookies. XSRF pair on the three mutations, no `Idempotency-Key`, `no-store` (02.3.2-T2) |
 
 Org/role administration is listed in 02 §4 only. Detailed request/response shapes live in `contracts/` and area plans 02-08.
-CLI gate exit codes (`evidgate gate`, recorded in `contracts/cli.md`): `0` PASS, `1` FAIL, `2` INCONCLUSIVE, `3` tool or transport error (07, 04).
 
+CLI gate exit codes (`evidgate gate`, recorded in `contracts/cli.md`): `0` PASS, `1` FAIL, `2` INCONCLUSIVE, `3` tool or transport error (07, 04).
 ### 9.4 Event envelope v1
 
 ```json
