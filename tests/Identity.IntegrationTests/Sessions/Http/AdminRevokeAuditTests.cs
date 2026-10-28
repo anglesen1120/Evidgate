@@ -3,6 +3,7 @@ using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Testing;
+using Identity.IntegrationTests.Login;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -26,6 +27,12 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// <b>What the stored row may say.</b> Every column, read back as JSON, is asserted to carry no cookie value, no
 /// cookie HMAC in either spelling and no pepper: the audit says who ended which session of whose, never how the
 /// credential was proved.
+/// </para>
+/// <para>
+/// <b>The row also says which call wrote it (F58).</b> The request id the edge accepted (or minted) and the W3C
+/// trace id of the call are stored on the row from the same two sources the C# audit writer reads, so a SQL row
+/// and an application row of one request join on both; a caller-supplied id the edge refused reaches neither the
+/// response nor the row.
 /// </para>
 /// <para>
 /// <b>What must write nothing.</b> A self revoke (the current row, or a second device of the caller, with or without
@@ -52,6 +59,18 @@ public sealed class AdminRevokeAuditTests : HarnessTest
 
     /// <summary>The uuid text format every row assertion uses: <c>audit_log</c> stores ids as <c>"D"</c> text.</summary>
     private const string UuidText = "D";
+
+    /// <summary>The edge's request-id header (00 §9.1): honoured when safe, echoed on every response (F58).</summary>
+    private const string RequestIdHeaderName = "X-Request-Id";
+
+    /// <summary>The 32-hex trace id a case joins, in the form <c>Activity.TraceId.ToString()</c> writes.</summary>
+    private const string JoinedTraceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+
+    /// <summary>The 16-hex parent span id of that trace, as <c>traceparent</c> carries it.</summary>
+    private const string JoinedSpanId = "00f067aa0ba902b7";
+
+    /// <summary>The shape every stored trace id has: what <c>Activity.TraceId</c> renders.</summary>
+    private const string TraceIdShape = "^[0-9a-f]{32}$";
 
     public AdminRevokeAuditTests(DatabaseFixture fixture)
         : base(fixture)
@@ -479,6 +498,140 @@ public sealed class AdminRevokeAuditTests : HarnessTest
         controlState.Rows.ShouldBe(1L);
     }
 
+    /// <summary>
+    /// F58: the administrative row carries the call's correlation ids — the request id the response echoes and the
+    /// trace id of the trace the caller joined through <c>traceparent</c> — and the org's chain still verifies.
+    /// </summary>
+    [Fact]
+    public async Task An_Admin_Revoke_Records_The_Request_And_Trace_Ids_Of_The_Call()
+    {
+        // A listener makes the host open a server activity per request, which is what a traceparent needs to be
+        // continued into: without one the request runs outside a trace and the row would have no trace id at all.
+        using var spans = new SpanCollector();
+        using var host = SessionTestHost.Start(Fixture);
+        using var client = host.CreateSessionClient();
+        var victim = await host.SignInMemberAsync(client);
+        var victimSessionId = await host.SessionIdOfAsync(victim.SessionCookie);
+        var admin = await host.SignInMemberInOrgAsync(client, victim.OrgId, "tenant_admin");
+
+        const string InboundRequestId = "f58-http-request-1";
+
+        using (var revoked = await SendRevokeAsync(
+            client,
+            admin,
+            victimSessionId,
+            victim.OrgId.ToString(),
+            requestId: InboundRequestId,
+            traceParent: TraceParentOf(JoinedTraceId)))
+        {
+            revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            ResponseRequestId(revoked).ShouldBe(
+                InboundRequestId,
+                "a safe inbound id is the effective one, and the response echoes it");
+        }
+
+        var row = await NewestAuditRowAsync(victim.OrgId);
+        row.Action.ShouldBe(AdminRevokeAction);
+        row.ObjectId.ShouldBe(victimSessionId.ToString(UuidText));
+        row.RequestId.ShouldBe(
+            InboundRequestId,
+            "F58 stores the same request id the C# audit writer records for this request");
+        row.TraceId.ShouldBe(
+            JoinedTraceId,
+            "F58 stores the trace id of the trace the caller joined, so the row joins its trace");
+
+        (await VerifyAsync(victim.OrgId)).ShouldBeNull(
+            "a row carrying both correlation ids still canonicalises exactly as the C# writer hashes it");
+    }
+
+    /// <summary>
+    /// F58 boundaries: an absent, over-long or space-carrying <c>X-Request-Id</c> is replaced by a minted id at the
+    /// edge, so the row stores the MINTED id — the one the response echoes — and never the raw value the caller
+    /// sent, while an id the definer would refuse can never abort the revoke.
+    /// </summary>
+    [Fact]
+    public async Task An_Absent_Or_Unsafe_Request_Id_Is_Minted_And_The_Row_Keeps_The_Minted_One()
+    {
+        using var spans = new SpanCollector();
+        using var host = SessionTestHost.Start(Fixture);
+        using var client = host.CreateSessionClient();
+        var victim = await host.SignInMemberAsync(client);
+        var admin = await host.SignInMemberInOrgAsync(client, victim.OrgId, "tenant_admin");
+
+        // No header at all, one character over the edge's 128 bound, and a printable value that is not a token
+        // (CorrelationNames.IsSafeRequestId refuses the space): each is replaced, never echoed raw.
+        string?[] inbound = [null, new string('a', 129), "f58 request with a space"];
+
+        foreach (var raw in inbound)
+        {
+            host.Clock.Advance(TimeSpan.FromSeconds(5));
+            var probe = await host.CreateSessionAsync(victim.UserId);
+            var probeId = await host.SessionIdOfAsync(probe.CookieValue);
+
+            using var revoked = await SendRevokeAsync(
+                client,
+                admin,
+                probeId,
+                victim.OrgId.ToString(),
+                requestId: raw);
+
+            revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+            var minted = ResponseRequestId(revoked);
+            minted.ShouldNotBeNullOrEmpty("the edge mints an id when it accepts none");
+
+            if (raw is not null)
+            {
+                minted.ShouldNotBe(raw, "a value the edge refused is never echoed");
+            }
+
+            var row = await NewestAuditRowAsync(victim.OrgId);
+            row.Action.ShouldBe(AdminRevokeAction);
+            row.ObjectId.ShouldBe(probeId.ToString(UuidText));
+            row.RequestId.ShouldBe(minted, "the row stores the minted id, the same one the response echoes");
+            row.TraceId.ShouldNotBeNull("the request ran inside a trace");
+            row.TraceId!.ShouldMatch(TraceIdShape);
+        }
+
+        (await VerifyAsync(victim.OrgId)).ShouldBeNull("a minted id canonicalises as any other");
+    }
+
+    /// <summary>
+    /// F58 on the owner path: a self revoke that carries a request id and joins a trace writes no administrative
+    /// row, so neither id is stored anywhere — the account acted on its own session (F48, F55, D-S102-Q3).
+    /// </summary>
+    [Fact]
+    public async Task A_Self_Revoke_Carrying_Correlation_Ids_Still_Records_No_Row()
+    {
+        using var spans = new SpanCollector();
+        using var host = SessionTestHost.Start(Fixture);
+        using var client = host.CreateSessionClient();
+        var member = await host.SignInMemberAsync(client);
+
+        host.Clock.Advance(TimeSpan.FromSeconds(5));
+        var second = await host.CreateSessionAsync(member.UserId);
+        var secondId = await host.SessionIdOfAsync(second.CookieValue);
+        var before = await AuditSnapshotAsync(member.OrgId);
+
+        using (var revoked = await SendRevokeAsync(
+            client,
+            member,
+            secondId,
+            member.OrgId.ToString(),
+            requestId: "f58-self-request-1",
+            traceParent: TraceParentOf(JoinedTraceId)))
+        {
+            revoked.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+            ResponseRequestId(revoked).ShouldBe("f58-self-request-1");
+        }
+
+        (await host.SessionRowAsync(secondId)).RevokedAt.ShouldNotBeNull("the caller may end its own second device");
+        (await AdminRowCountAsync(member.OrgId)).ShouldBe(0L, "a self revoke is not an administrative action");
+        (await AuditSnapshotAsync(member.OrgId)).ShouldBe(
+            before,
+            "no row was written, so no request id or trace id was stored either");
+    }
+
     /// <summary>One <c>DELETE /sessions/{s}</c> as <paramref name="caller"/>'s browser sends it.</summary>
     /// <param name="client">A client of the host.</param>
     /// <param name="caller">The signed-in account.</param>
@@ -505,6 +658,67 @@ public sealed class AdminRevokeAuditTests : HarnessTest
     /// <param name="MaxSeq">The newest position, or 0 for an empty chain.</param>
     private sealed record OrgAuditSnapshot(long Rows, long MaxSeq);
 
+    /// <summary>
+    /// The same <c>DELETE /sessions/{s}</c>, carrying the edge's correlation headers (F58): the
+    /// <c>X-Request-Id</c> the middleware judges and the <c>traceparent</c> a caller joins, built here because the
+    /// suite's own sender fixes its header set.
+    /// </summary>
+    /// <param name="client">A client of the host.</param>
+    /// <param name="caller">The signed-in account.</param>
+    /// <param name="sessionId">The addressed row.</param>
+    /// <param name="orgHeader">The <c>X-Evidgate-Org</c> value, or null for the owner path only.</param>
+    /// <param name="requestId">The <c>X-Request-Id</c> value to send, or null for none.</param>
+    /// <param name="traceParent">The <c>traceparent</c> value to send, or null for none.</param>
+    private static async Task<HttpResponseMessage> SendRevokeAsync(
+        HttpClient client,
+        SignedInMember caller,
+        Guid sessionId,
+        string? orgHeader,
+        string? requestId,
+        string? traceParent = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, SessionsPath + "/" + sessionId);
+        request.Headers.Add("User-Agent", SessionTestHost.UserAgent);
+        request.Headers.Add("Cookie", SessionTestHost.CookieHeaderFor(caller.SessionCookie, caller.Xsrf));
+        request.Headers.Add(SessionTestHost.XsrfHeaderName, caller.Xsrf.RequestToken);
+
+        if (orgHeader is not null)
+        {
+            request.Headers.Add("X-Evidgate-Org", orgHeader);
+        }
+
+        if (requestId is not null)
+        {
+            // A case sends values the edge must judge itself (one over the bound, one carrying a space), so the
+            // client's own validation is bypassed: the request has to carry exactly what a hostile caller sends.
+            request.Headers.TryAddWithoutValidation(RequestIdHeaderName, requestId).ShouldBeTrue(
+                "the request-id header name is valid");
+        }
+
+        if (traceParent is not null)
+        {
+            request.Headers.TryAddWithoutValidation("traceparent", traceParent).ShouldBeTrue(
+                "the traceparent header name is valid");
+        }
+
+        // Awaited inside the using scope, the request must outlive the send (the SessionTestHost rule).
+        return await client.SendAsync(request, Token).ConfigureAwait(false);
+    }
+
+    /// <summary>A <c>traceparent</c> joining <paramref name="traceId"/> as a sampled client call.</summary>
+    /// <param name="traceId">The 32-hex trace id to join.</param>
+    private static string TraceParentOf(string traceId) => "00-" + traceId + "-" + JoinedSpanId + "-01";
+
+    /// <summary>The effective request id the edge echoed: every response of this host carries one (00 §9.1).</summary>
+    /// <param name="response">The response.</param>
+    private static string ResponseRequestId(HttpResponseMessage response)
+    {
+        response.Headers.TryGetValues(RequestIdHeaderName, out var values).ShouldBeTrue(
+            "the request-id middleware echoes the effective id on every response");
+
+        return values!.ShouldHaveSingleItem();
+    }
+
     /// <summary>The one row these cases read back, every column included.</summary>
     /// <param name="Seq">Position in the org's chain.</param>
     /// <param name="ActorType">Who acted.</param>
@@ -512,6 +726,8 @@ public sealed class AdminRevokeAuditTests : HarnessTest
     /// <param name="Action">The audited action string.</param>
     /// <param name="ObjectType">The object kind, or null.</param>
     /// <param name="ObjectId">The object id, or null.</param>
+    /// <param name="RequestId">The 00 §9.1 request id the row was stamped with (F58), or null.</param>
+    /// <param name="TraceId">The W3C trace id the row was stamped with (F58), or null.</param>
     /// <param name="MetadataJson">The stored metadata as JSON text.</param>
     /// <param name="Payload">Every stored column as JSON text, which is what the secrecy assertion inspects.</param>
     private sealed record StoredAuditRow(
@@ -521,6 +737,8 @@ public sealed class AdminRevokeAuditTests : HarnessTest
         string Action,
         string? ObjectType,
         string? ObjectId,
+        string? RequestId,
+        string? TraceId,
         string MetadataJson,
         string Payload);
 
@@ -609,6 +827,8 @@ public sealed class AdminRevokeAuditTests : HarnessTest
                  , a.action
                  , a.object_type
                  , a.object_id
+                 , a.request_id
+                 , a.trace_id
                  , coalesce(a.metadata, '{}'::jsonb)::text
                  , to_jsonb(a)::text
               from public.audit_log a
@@ -628,8 +848,10 @@ public sealed class AdminRevokeAuditTests : HarnessTest
             reader.GetString(3),
             await reader.IsDBNullAsync(4, Token) ? null : reader.GetString(4),
             await reader.IsDBNullAsync(5, Token) ? null : reader.GetString(5),
-            reader.GetString(6),
-            reader.GetString(7));
+            await reader.IsDBNullAsync(6, Token) ? null : reader.GetString(6),
+            await reader.IsDBNullAsync(7, Token) ? null : reader.GetString(7),
+            reader.GetString(8),
+            reader.GetString(9));
     }
 
     /// <summary>Recomputes the org's chain with the production verifier, inside that org's scope.</summary>

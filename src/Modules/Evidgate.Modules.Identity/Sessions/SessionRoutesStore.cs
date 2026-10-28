@@ -73,6 +73,12 @@ internal sealed record SessionCleanupResult(int Stamped, int Deleted);
 /// sign a healthy user out (D-S85-D2).
 /// </para>
 /// <para>
+/// <b>What rides along (F58).</b> <see cref="RevokeOneAsync"/> takes the call's request id and trace id so the
+/// definer can stamp the administrative row it writes with the same two correlation values the C# audit writer
+/// records (02.7.1). The store only passes them: the shape check lives in SQL, and the owner path stores none of
+/// it because it writes no row at all (F48, F55).
+/// </para>
+/// <para>
 /// <b>Nothing is logged here.</b> The cookie value, the proof hash, the session id, the
 /// address and the user agent are personal data or credentials (02.3.2 §8); the only
 /// telemetry this class adds is the revocation count, through
@@ -99,12 +105,27 @@ internal interface ISessionRoutesStore
     /// <param name="sessionProof">The HMAC of the live cookie value; empty when the request carried no cookie.</param>
     /// <param name="sessionId">The target session id from the route.</param>
     /// <param name="orgId">The org named by <c>X-Evidgate-Org</c>, or null for the owner path only.</param>
+    /// <param name="requestId">
+    /// The 00 §9.1 request id of the call — the value the edge put in the
+    /// <see cref="Evidgate.BuildingBlocks.Persistence.Audit.AuditTrail.RequestIdBaggage"/> baggage item, which is
+    /// the same value the C# audit writer records (F58) — or null when the request carries none. The definer
+    /// stores it on the row it writes only when it is a bounded printable token
+    /// (<see cref="Evidgate.BuildingBlocks.Observability.Correlation.CorrelationNames.IsSafeRequestId"/>'s rule),
+    /// and nulls anything else instead of failing the revoke.
+    /// </param>
+    /// <param name="traceId">
+    /// The W3C trace id of the call (<see cref="System.Diagnostics.Activity.TraceId"/> in its 32-hex form), or
+    /// null when the request runs outside a trace. Stored only when it carries that shape, never validated by
+    /// this store: the definer decides, so a malformed value can never abort a revoke.
+    /// </param>
     /// <param name="cancellationToken">Request abort.</param>
     /// <returns><see cref="SessionRouteStatus.Done"/>, <see cref="SessionRouteStatus.NotFound"/> or <see cref="SessionRouteStatus.Unauthenticated"/>.</returns>
     ValueTask<SessionRouteStatus> RevokeOneAsync(
         byte[] sessionProof,
         Guid sessionId,
         Guid? orgId,
+        string? requestId,
+        string? traceId,
         CancellationToken cancellationToken);
 
     /// <summary>Revokes every live session of the caller, keeping the current one unless told otherwise.</summary>
@@ -245,6 +266,8 @@ internal sealed class SessionRoutesStore(
         byte[] sessionProof,
         Guid sessionId,
         Guid? orgId,
+        string? requestId,
+        string? traceId,
         CancellationToken cancellationToken)
     {
         if (sessionProof.Length == 0)
@@ -254,7 +277,7 @@ internal sealed class SessionRoutesStore(
 
         await using var command = dataSource.CreateCommand(
             "select status from evidgate_resolve.session_revoke_one("
-            + "cast(@cookie_hmacs as bytea[]), @session_id, @org_id, @now)");
+            + "cast(@cookie_hmacs as bytea[]), @session_id, @org_id, @now, @request_id, @trace_id)");
         command.Parameters.Add(ProofParameter(sessionProof));
         command.Parameters.AddWithValue("session_id", sessionId);
 
@@ -264,6 +287,20 @@ internal sealed class SessionRoutesStore(
             Value = (object?)orgId ?? DBNull.Value,
         });
         command.Parameters.AddWithValue("now", clock.GetUtcNow().ToUniversalTime());
+
+        // F58: the same explicit type for the two correlation ids, because "the request carried none" is a legal
+        // value and a DBNull has no CLR type either. Passed as they arrive: the definer nulls a value that is not
+        // a safe request id or a 32-hex trace id, so a malformed one can never abort a revoke here. They are the
+        // definer's positions 5 and 6 of 0051 (p_request_id, p_trace_id); 0048's four-argument signature is gone,
+        // so a build that still called it would fail loudly on the statement, not silently record nothing.
+        command.Parameters.Add(new NpgsqlParameter("request_id", NpgsqlDbType.Text)
+        {
+            Value = (object?)requestId ?? DBNull.Value,
+        });
+        command.Parameters.Add(new NpgsqlParameter("trace_id", NpgsqlDbType.Text)
+        {
+            Value = (object?)traceId ?? DBNull.Value,
+        });
 
         var status = await ReadStatusAsync(command, "session_revoke_one", cancellationToken).ConfigureAwait(false);
         if (string.Equals(status, RevokedStatus, StringComparison.Ordinal))
