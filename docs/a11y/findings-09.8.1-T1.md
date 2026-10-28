@@ -1,6 +1,6 @@
 # Findings list 09.8.1-T1 (WCAG 2.2 AA, six FR-09-12 flows)
 
-Source: task 09.8.1-T1 sub-tasks T1.1 + T1.2 (plan `plans/features/09-web-ui/09.8.1-core-flows-are-usable-and-proven.md`, `### 09.8.1-T1`). One shared list; 09.8.1-T2 consumes it. Audit date 2026-10-28, base `dd479e95`; file:line cites in the Evidence column are lines at that base (pre-fix for rows marked `fixed`). Legend: Severity blocker/major/minor; Status `fixed - T1.2` = fixed and proven by the named keyboard-only walkthrough; `open - T1.3` / `open - T1.4` = remainder of 09.8.1-T1 (declared partial); `open - receiver next 09.2.1 onboarding web task` = owning component is under `apps/web/src/app/features/onboarding/**` (outside this lane); `not auditable - flow not built` = no rendered surface.
+Source: task 09.8.1-T1 sub-tasks T1.1 + T1.2 (plan `plans/features/09-web-ui/09.8.1-core-flows-are-usable-and-proven.md`, `### 09.8.1-T1`). One shared list; 09.8.1-T2 consumes it. Audit date 2026-10-28, base `dd479e95`; file:line cites in the Evidence column are lines at that base (pre-fix for rows marked `fixed`). Legend: Severity blocker/major/minor; Status `fixed - T1.2` = fixed and proven by the named keyboard-only walkthrough; `fixed - F63 #<n> <sha>` = fixed by the S138 lane (F63 (b)), proven by the specs named in that PR; `open - T1.3` / `open - T1.4` = remainder of 09.8.1-T1 (declared partial); `open - receiver next 09.2.1 onboarding web task` = owning component is under `apps/web/src/app/features/onboarding/**` (outside this lane); `not auditable - flow not built` = no rendered surface.
 
 ## Audit method (per criterion)
 
@@ -49,5 +49,5 @@ Skip link and focus handoff (`e2e/shell/keyboard.spec.ts`), scope switcher keybo
 - Login: `apps/web/e2e/shell/a11y-keyboard-login.spec.ts`
 - Project switch: `apps/web/e2e/shell/a11y-keyboard-scope.spec.ts`
 - Run detail: `apps/web/e2e/shell/a11y-keyboard-runs.spec.ts`
-- Onboarding: `apps/web/e2e/shell/a11y-keyboard-onboarding.spec.ts` (stops at the last good step where F-ONB-04..10 apply)
+- Onboarding: `apps/web/e2e/shell/a11y-keyboard-onboarding.spec.ts` (stops at the last good step where F-ONB-05 and F-ONB-07..10 apply (F-ONB-04 and F-ONB-06 are fixed by F63 #287))
 - Failure triage, evidence viewer: not built, no walkthrough possible.
