@@ -79,6 +79,7 @@
 <!-- Keep cursor controls outside the nonempty projection: a filtered page may have zero matches. -->
 @if (status() === 'ready') {
   <section
+    #paging
     class="pagination"
     [attr.aria-label]="copy.pagination"
     [attr.aria-busy]="store.loadingMore()"
@@ -94,23 +95,18 @@
         <p>{{ failure.message }}</p>
         <code>{{ failure.code }}</code>
         @if (failure.retryable) {
-          <button
-            type="button"
-            [disabled]="store.loadingMore() || !retryReady()"
-            (click)="store.loadMore()"
-          >
+          <!-- Only the wait disables this control: never its own request, which would drop the
+               focus it holds mid-retry; the store refuses a second follow while one is in flight. -->
+          <button #pagingRetryControl type="button" [disabled]="!retryReady()" (click)="loadMore()">
             {{ copy.retryMore }}
           </button>
         }
       </div>
     }
     @if (store.hasMore() && !store.pagingError()) {
-      <button
-        type="button"
-        data-run-load-more
-        [disabled]="store.loadingMore()"
-        (click)="store.loadMore()"
-      >
+      <!-- Never disabled for its own request: a disabled element cannot hold focus, and this
+           control is removed once the cursor ends. `loadMore` guards re-entry. -->
+      <button #loadMoreControl type="button" data-run-load-more (click)="loadMore()">
         {{ copy.more }}
       </button>
     }

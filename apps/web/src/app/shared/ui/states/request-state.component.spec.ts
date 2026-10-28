@@ -51,6 +51,40 @@ class Host {
   readonly actions: string[] = [];
 }
 
+/**
+ * A page around the replacement: the heading and `main` region the recovery handoff targets, and a
+ * control outside it that stands for a visitor who moved elsewhere while the request settled.
+ */
+@Component({
+  imports: [RequestStateComponent],
+  template: `
+    <main id="page-main" role="main">
+      @if (withHeading()) {
+        <h1>{{ headingText }}</h1>
+      }
+      <app-request-state
+        [status]="status()"
+        [error]="error()"
+        [retryEligible]="eligible()"
+        (retry)="retried = true"
+      >
+        <p data-testid="recovered">{{ recoveredText }}</p>
+      </app-request-state>
+      <button type="button" data-elsewhere>{{ elsewhereText }}</button>
+    </main>
+  `,
+})
+class PageHost {
+  readonly status = signal<'loading' | 'ready' | 'error'>('error');
+  readonly error = signal<ApiError | null>(failure());
+  readonly withHeading = signal(true);
+  readonly eligible = signal(true);
+  readonly headingText = 'Runs';
+  readonly recoveredText = 'Recovered rows';
+  readonly elsewhereText = 'Elsewhere';
+  retried = false;
+}
+
 describe('RequestStateComponent route-level replacement', () => {
   let fixture: ComponentFixture<Host>;
   let host: Host;
@@ -223,5 +257,92 @@ describe('RequestStateComponent route-level replacement', () => {
     await fixture.whenStable();
     expect(root.querySelector('app-error-pattern')).not.toBeNull();
     expect(root.querySelector('[data-testid="current-data"], button')).toBeNull();
+  });
+});
+
+describe('RequestStateComponent failure-panel focus handoff', () => {
+  let fixture: ComponentFixture<PageHost>;
+  let host: PageHost;
+  let root: HTMLElement;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [PageHost],
+      providers: [provideZonelessChangeDetection()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(PageHost);
+    host = fixture.componentInstance;
+    root = fixture.nativeElement as HTMLElement;
+    await fixture.whenStable();
+  });
+
+  async function recover(): Promise<void> {
+    host.status.set('loading');
+    await fixture.whenStable();
+    host.status.set('ready');
+    await fixture.whenStable();
+  }
+
+  it('hands the focus the failure panel lost to the page heading, never to body', async () => {
+    const retry = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    retry.focus();
+    expect(document.activeElement).toBe(retry);
+    retry.click();
+    expect(host.retried).toBe(true);
+
+    // The panel — and the control that held focus — is gone in this render.
+    await recover();
+    const heading = root.querySelector('h1')!;
+    expect(document.activeElement).toBe(heading);
+    // Programmatically focusable without becoming a Tab stop of its own.
+    expect(heading.getAttribute('tabindex')).toBe('-1');
+    expect(root.querySelector('[data-testid="recovered"]')).not.toBeNull();
+
+    // The attribute was this component's loan, so leaving the heading gives the page its markup
+    // back; the recovered content is reachable from where focus now is.
+    root.querySelector<HTMLButtonElement>('[data-elsewhere]')!.focus();
+    expect(heading.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('hands focus to the page heading when a re-failure disables the retry it just used', async () => {
+    host.error.set(failure({ kind: 'rate_limited', status: 429, retryAfterSeconds: 30 }));
+    await fixture.whenStable();
+    const retry = root.querySelector<HTMLButtonElement>('app-retry-after button')!;
+    retry.focus();
+    expect(document.activeElement).toBe(retry);
+    // The answer's own wait re-disables the control that asked; it cannot keep holding focus.
+    host.eligible.set(false);
+    await fixture.whenStable();
+    expect(retry.disabled).toBe(true);
+    expect(document.activeElement).toBe(root.querySelector('h1'));
+  });
+
+  it('falls back to the main region when the page has no heading', async () => {
+    host.withHeading.set(false);
+    await fixture.whenStable();
+    const retry = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    retry.focus();
+    retry.click();
+    await recover();
+    const main = root.querySelector('#page-main')!;
+    expect(document.activeElement).toBe(main);
+    expect(main.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('leaves the focus alone when the visitor moved elsewhere before the panel cleared', async () => {
+    const retry = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    retry.focus();
+    const elsewhere = root.querySelector<HTMLButtonElement>('[data-elsewhere]')!;
+    elsewhere.focus();
+    retry.click();
+    await recover();
+    expect(document.activeElement).toBe(elsewhere);
+    expect(root.querySelector('h1')?.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('does not move focus for a failure nothing in the replacement owned', async () => {
+    expect(document.activeElement).toBe(document.body);
+    await recover();
+    expect(document.activeElement).toBe(document.body);
   });
 });

@@ -1,5 +1,16 @@
 <span #rowProbe class="row-probe" aria-hidden="true"></span>
-<div class="table-scroll" role="region" tabindex="0" [attr.aria-label]="copy.caption">
+<!-- The wrapper is always a keyboard stop: it is the only scroll container with horizontal
+     overflow, so it is how the last columns are reached without a pointer. With more than 200 rows
+     the CDK viewport is a second stop (the vertical scroller), and the two stops carry different
+     names - "Project runs" for the region, "Project runs rows" for the rowgroup - so the table is
+     never announced twice under one name (F-RUN-04). -->
+<div
+  class="table-scroll"
+  role="region"
+  tabindex="0"
+  [attr.aria-label]="copy.caption"
+  (keydown)="scrollColumns($event)"
+>
   <h2 id="run-table-caption">{{ copy.caption }}</h2>
   <div
     class="run-table"
@@ -24,7 +35,7 @@
         [itemSize]="itemSize()"
         role="rowgroup"
         tabindex="0"
-        [attr.aria-label]="copy.caption"
+        [attr.aria-label]="copy.rows"
       >
         <div
           *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow"
