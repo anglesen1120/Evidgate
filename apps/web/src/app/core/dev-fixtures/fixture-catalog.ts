@@ -86,6 +86,7 @@ import policyActivationReadEnforcing from '../../../../../../fixtures/web-api/po
 import policyActivationReadForbidden from '../../../../../../fixtures/web-api/policy-activation-read-forbidden/input.json';
 import policyActivationReadNotFound from '../../../../../../fixtures/web-api/policy-activation-read-not-found/input.json';
 import policyActivationReadOk from '../../../../../../fixtures/web-api/policy-activation-read-ok/input.json';
+import policyActivationReadRateLimited from '../../../../../../fixtures/web-api/policy-activation-read-rate-limited/input.json';
 import policyActivationUnchanged from '../../../../../../fixtures/web-api/policy-activation-unchanged/input.json';
 import policyRevisionCreate from '../../../../../../fixtures/web-api/policy-revision-create/input.json';
 import policyRevisionCreateCriticalCaseQuarantined from '../../../../../../fixtures/web-api/policy-revision-create-critical-case-quarantined/input.json';
@@ -580,6 +581,15 @@ export interface FixtureCatalogRow {
  * principal without `policy:read`, the state in which steps 1–4 still derive and step 5 alone stays
  * open. `X-Request-Id`s `…a10a`–`…a10d` are distinct from every row above, and the `404`/`403`
  * bodies name their own request id, as every 00 §9.2 envelope in the corpus does.
+ *
+ * F63 adds the read's own throttled answer, `policy-activation-read-rate-limited`
+ * (`=rate-limited`): the contract's `429 RateLimited` response — `Retry-After: 30` and a
+ * `retryable: true` envelope — which is the state the page's own wait is built from. The document
+ * pins that answer and `fixture-backend.spec.ts` replays it into `ApiError.retryAfterSeconds`; the
+ * countdown itself is proven in the page's Vitest spec, because a `429` is not a state the wizard
+ * reaches in the fixtures build (the progress read rejects the whole load for any refusal other
+ * than `403`, so step 5 does not mount under it).
+ * Its `X-Request-Id` (`…a10e`) is distinct again, and the body names the same id.
  */
 export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'ci-binding-create', document: ciBindingCreate },
@@ -685,6 +695,10 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'policy-activation-read-forbidden', document: policyActivationReadForbidden },
   { name: 'policy-activation-read-not-found', document: policyActivationReadNotFound },
   { name: 'policy-activation-read-ok', document: policyActivationReadOk },
+  {
+    name: 'policy-activation-read-rate-limited',
+    document: policyActivationReadRateLimited,
+  },
   { name: 'policy-activation-unchanged', document: policyActivationUnchanged },
   { name: 'policy-revision-create', document: policyRevisionCreate },
   {

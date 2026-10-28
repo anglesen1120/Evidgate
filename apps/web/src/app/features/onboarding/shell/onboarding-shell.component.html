@@ -1,6 +1,6 @@
 <section class="wizard" data-testid="onboarding-shell" aria-labelledby="onboarding-title">
   <header class="wizard__header">
-    <h1 id="onboarding-title">{{ title }}</h1>
+    <h1 #pageHeading id="onboarding-title" tabindex="-1">{{ title }}</h1>
     <p>{{ description }}</p>
   </header>
 
@@ -18,7 +18,12 @@
         }
         @default {
           <app-error-pattern />
-          <button class="state-panel__action" type="button" (click)="reload()">
+          <button
+            class="state-panel__action"
+            type="button"
+            data-testid="onboarding-retry"
+            (click)="reload()"
+          >
             {{ retryLabel }}
           </button>
         }

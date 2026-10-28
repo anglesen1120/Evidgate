@@ -164,6 +164,19 @@
         <p id="enable-activation-unreadable" data-testid="enable-collection-unreadable">
           {{ activationUnreadable }}
         </p>
+        <!-- AC-F63-c: a refused read gets exactly one way back, and it re-runs the read alone. The
+             control is a native button, so it is in the tab order and Enter/Space activate it; the
+             confirm above stays natively disabled, so no command can start from here. -->
+        <button
+          class="state-panel__action"
+          data-testid="enable-collection-read-again"
+          type="button"
+          #readAgainControl
+          [disabled]="reading()"
+          (click)="readAgain()"
+        >
+          {{ retryReadLabel }}
+        </button>
       }
       <button
         class="state-panel__action primary"
@@ -178,13 +191,35 @@
   }
 
   @if (failureView(); as error) {
-    <section data-testid="enable-collection-error">
+    <section
+      class="read-failure"
+      data-testid="enable-collection-error"
+      [attr.aria-labelledby]="readFailure() !== null ? 'enable-read-failed-heading' : null"
+    >
+      @if (readFailure() !== null) {
+        <!-- AC-F63-b: the named target a failed re-read returns focus to. `tabindex="-1"` keeps it
+             out of the tab order — it is an announcement target, not a stop — and the section above
+             takes its name from it while the shared pattern's title drops to level 4. -->
+        <h3
+          class="read-failure__heading"
+          id="enable-read-failed-heading"
+          tabindex="-1"
+          #readFailureHeading
+        >
+          {{ readFailedHeading }}
+        </h3>
+      }
       <app-error-pattern
         [error]="error"
-        [headingLevel]="3"
+        [headingLevel]="failureHeadingLevel()"
         [retryDisabled]="retryDisabled()"
         (retry)="retry()"
       />
+      @if (readWaitText(); as waitText) {
+        <!-- AC-F63-a: the server's interval and the time left, as text and never as a live region:
+             the state sheet asks for the supplied interval, not a per-second announcement. -->
+        <p class="read-wait" data-testid="enable-collection-read-wait">{{ waitText }}</p>
+      }
       <!-- A read is side-effect free, but the shared pattern only offers Retry for a retryable
            failure; a 401/5xx read therefore gets this page-owned re-read action instead. -->
       @if (readRetryWithoutAction()) {

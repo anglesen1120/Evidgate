@@ -18,6 +18,12 @@
 // before shortening.
 // The heading takes focus after either a successful read or confirm. Refusals use app-error-pattern
 // so the typed server message, code and request id are preserved rather than replaced by fixed copy.
+//
+// F63 completes the read's own failure handling: a failed read keeps the answer's `Retry-After`
+// window (the runner's rule for the confirm, measured on the page's injected clock, with the
+// countdown as text rather than a live region), both read controls stay disabled until it elapses,
+// a re-read the user asked for returns focus to the named failure heading or to the 403 recovery
+// control, and a refused read offers exactly one control that re-runs the read and never a command.
 
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -26,6 +32,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  InjectionToken,
   computed,
   effect,
   inject,
@@ -68,6 +75,20 @@ type ActivationRead =
   | { readonly kind: 'forbidden' }
   | { readonly kind: 'error'; readonly error: ApiError };
 
+/** Largest delay a browser or Node timer accepts; a longer interval is clamped to it. */
+const MAX_WAIT_DELAY_MS = 2 ** 31 - 1;
+
+/**
+ * The clock a failed read's `Retry-After` wait is measured against. `createIntentRunner` takes its
+ * clock the same way — an option (`IntentRunnerOptions.now` in `core/http/retry.ts`), never a bare
+ * `Date.now` — but a read has no intent and no runner, so the page owns the same rule and the same
+ * seam: a spec overrides this provider and advances the wait without waiting for it.
+ */
+export const READ_CLOCK = new InjectionToken<() => number>('evidgate.onboarding.read-clock', {
+  providedIn: 'root',
+  factory: () => (): number => Date.now(),
+});
+
 @Component({
   selector: 'app-onboarding-enable-collection',
   imports: [DatePipe, ErrorPatternComponent, FormsModule],
@@ -81,6 +102,8 @@ export class EnableCollectionPage {
   private readonly data = inject(OnboardingDataService);
   private readonly session = inject(SessionStore);
   private readonly destroyRef = inject(DestroyRef);
+  /** The clock the confirm's and the read's `Retry-After` windows are measured against. */
+  private readonly now = inject(READ_CLOCK);
   /**
    * The append that belongs to the current intent. Kept in per-visit component state (never in
    * storage) so a retry after an activation failure reuses the revision instead of appending again,
@@ -95,8 +118,9 @@ export class EnableCollectionPage {
    * The confirm as one user intent: the chain runs under a single `Idempotency-Key`, and the runner
    * never retries on its own — the error state asks, the user decides.
    */
-  protected readonly activation = createIntentRunner<PolicyActivationDto>((intent) =>
-    this.confirmPolicy(intent),
+  protected readonly activation = createIntentRunner<PolicyActivationDto>(
+    (intent) => this.confirmPolicy(intent),
+    { now: () => this.now() },
   );
 
   protected readonly permitted = computed(() => this.session.has('policy:write'));
@@ -118,6 +142,50 @@ export class EnableCollectionPage {
     const kind = this.failure()?.kind;
     return kind === 'timeout' || kind === 'network';
   });
+  /**
+   * AC-F63-a: a failed read's `Retry-After` window, as this page renders it. The runner owns the
+   * same rule for the confirm, but a read has no intent to protect, so the page keeps its own: one
+   * deadline from the answer's own `retryAfterSeconds`, one second-tick for the visible countdown
+   * (never a poll for eligibility — the tick only re-renders the remainder — and never a live
+   * region: the state sheet asks for the interval as text, not a per-second announcement).
+   */
+  private readonly readWaitDeadline = signal<number | null>(null);
+  /** The server's own interval for the open window, in whole seconds; `null` when none is open. */
+  private readonly readWaitSupplied = signal<number | null>(null);
+  /** The clock reading the countdown is rendered against; rewritten by the tick. */
+  private readonly readWaitNow = signal(0);
+  private readWaitTimer: ReturnType<typeof setInterval> | null = null;
+  /** Whole seconds left in the open window; `null` when no window is open. */
+  protected readonly readWaitSeconds = computed<number | null>(() => {
+    const deadline = this.readWaitDeadline();
+    if (deadline === null) return null;
+    const left = deadline - this.readWaitNow();
+    return left > 0 ? Math.max(1, Math.ceil(left / 1000)) : null;
+  });
+  /** True while the failed read's window is open: both read controls stay disabled. */
+  protected readonly readWaitOpen = computed(() => this.readWaitSeconds() !== null);
+  /**
+   * The wait as the panel states it: the time left and the interval the server itself named, so a
+   * reader can tell a countdown from a guess about a missing interval.
+   */
+  protected readonly readWaitText = computed<string | null>(() => {
+    const remaining = this.readWaitSeconds();
+    if (remaining === null) return null;
+    const supplied = this.readWaitSupplied() ?? remaining;
+    return $localize`:@@onboarding.enable.read-wait:Rate limited. Read the activation again in ${remaining}:remaining: s — the server asked for ${supplied}:supplied: s.`;
+  });
+  /**
+   * AC-F63-b: set by this page's own re-read, so the answer that replaces the pressed control can
+   * hand focus to the named failure target. The first read, a scope change and the shell's reload
+   * never set it, which is what keeps the page from moving focus on a render nobody asked for.
+   */
+  private refocusReadFailure = false;
+  private readonly readFailureHeadingRef = viewChild<ElementRef<HTMLElement>>('readFailureHeading');
+  private readonly readAgainRef = viewChild<ElementRef<HTMLButtonElement>>('readAgainControl');
+  /** The shared pattern's title is a sibling of the page's own heading once a read has failed. */
+  protected readonly failureHeadingLevel = computed<2 | 3 | 4>(() =>
+    this.readFailure() !== null ? 4 : 3,
+  );
   /** Only a failure the contract calls retryable offers the same-intent retry action. */
   protected readonly retryEligible = computed(
     () =>
@@ -164,10 +232,13 @@ export class EnableCollectionPage {
   });
   /**
    * The shared error panel's retry, per failure: a failed read is re-read (it wrote nothing), while
-   * a failed command retries the same intent only when the contract calls it retryable.
+   * a failed command retries the same intent only when the contract calls it retryable. A read's
+   * `Retry-After` window closes both read controls, because either one would be the same request.
    */
   protected readonly retryDisabled = computed(() =>
-    this.readFailure() !== null ? this.busy() : !this.retryEligible() || this.busy(),
+    this.readFailure() !== null
+      ? this.busy() || this.readWaitOpen()
+      : !this.retryEligible() || this.busy(),
   );
 
   /**
@@ -218,6 +289,8 @@ export class EnableCollectionPage {
   protected readonly activeReadCopy = $localize`:@@onboarding.enable.active-read:This project is enabled. This panel is built from the activation recorded on the server, so reloading the wizard shows the same state.`;
   protected readonly retryReadLabel = $localize`:@@onboarding.enable.retry-read:Read the activation again`;
   private readonly readFailedMessage = $localize`:@@onboarding.enable.read-failed:The activation could not be read. Reading it again is safe.`;
+  /** AC-F63-b: the named target a failed re-read returns focus to. */
+  protected readonly readFailedHeading = $localize`:@@onboarding.enable.read-failed-heading:The activation could not be read`;
   protected readonly previewHeading = $localize`:@@onboarding.enable.preview-heading:Default advisory policy`;
   protected readonly notGatingCopy = $localize`:@@onboarding.enable.not-gating:Not gating yet. This policy runs in advisory mode, so Evidgate records what it would have decided and never blocks a merge.`;
   protected readonly lateWindowLabel = $localize`:@@onboarding.enable.late-window:Late-evidence window`;
@@ -269,8 +342,28 @@ export class EnableCollectionPage {
       }
       this.enabledHeadingRef()?.nativeElement.focus();
     });
+    // AC-F63-b: a re-read the user asked for replaces the control it was pressed from, so the answer
+    // hands focus to a named target — the read failure's own heading, or the 403 recovery control.
+    // Only a read this page's own re-read started arrives here: the first read, a scope change and
+    // the shell's reload leave focus where the shell put it. Reading the refs keeps them tracked, so
+    // the pass that mounts the target re-runs this with a resolved element.
+    effect(() => {
+      const read = this.activationRead();
+      if (!this.refocusReadFailure || read.kind === 'loading') return;
+      if (read.kind === 'active' || read.kind === 'none') {
+        this.refocusReadFailure = false;
+        return;
+      }
+      const target = read.kind === 'error' ? this.readFailureHeadingRef() : this.readAgainRef();
+      // A target that has not mounted yet leaves the request open: reading the ref keeps it tracked,
+      // so the pass that mounts it re-runs this with a resolved element.
+      if (target === undefined) return;
+      this.refocusReadFailure = false;
+      target.nativeElement.focus();
+    });
     this.destroyRef.onDestroy(() => {
       this.readGeneration++;
+      this.clearReadWait();
       this.activation.reset();
     });
   }
@@ -285,6 +378,7 @@ export class EnableCollectionPage {
   protected async retry(): Promise<void> {
     if (this.retryDisabled()) return;
     if (this.readFailure() !== null) {
+      this.refocusReadFailure = true;
       await this.readActivation();
       return;
     }
@@ -292,11 +386,57 @@ export class EnableCollectionPage {
     await this.activation.retry();
   }
 
+  /**
+   * AC-F63-c: the only way out of a refused (`403`) read. Reading is side-effect free, so repeating
+   * it is always safe — and it is all this control does: the confirm stays natively disabled, so no
+   * create or activation can start from here.
+   */
+  protected async readAgain(): Promise<void> {
+    if (this.reading()) return;
+    this.refocusReadFailure = true;
+    await this.readActivation();
+  }
+
+  /**
+   * Start the failed read's `Retry-After` window from the answer's own interval. The same rule the
+   * runner applies to the confirm (`core/http/retry.ts`): an absent, negative or non-finite interval
+   * is no interval, so the control opens at once, and a positive one is one timer, never a poll.
+   */
+  private startReadWait(seconds: number | null): void {
+    this.clearReadWait();
+    const interval = seconds !== null && Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+    if (interval === null || interval === 0) return;
+    const startedAt = this.now();
+    this.readWaitSupplied.set(interval);
+    this.readWaitNow.set(startedAt);
+    // Clamped like a runner's delay: a value above the timer maximum would fire at once and turn a
+    // hostile interval into no wait at all.
+    this.readWaitDeadline.set(startedAt + Math.min(interval * 1000, MAX_WAIT_DELAY_MS));
+    this.readWaitTimer = setInterval(() => {
+      const instant = this.now();
+      this.readWaitNow.set(instant);
+      const deadline = this.readWaitDeadline();
+      if (deadline !== null && deadline <= instant) this.clearReadWait();
+    }, 1000);
+  }
+
+  /** Close the window (the countdown's own deadline, a new attempt, or this page going away). */
+  private clearReadWait(): void {
+    if (this.readWaitTimer !== null) {
+      clearInterval(this.readWaitTimer);
+      this.readWaitTimer = null;
+    }
+    this.readWaitDeadline.set(null);
+    this.readWaitSupplied.set(null);
+  }
+
   /** A generation invalidates late answers, including an org change that keeps the project id. */
   protected async readActivation(): Promise<void> {
     const generation = ++this.readGeneration;
     const orgId = this.orgId();
     const projectId = this.projectId();
+    // A new attempt abandons the previous failure's window, as `attempt()` does for the runner.
+    this.clearReadWait();
     this.activationRead.set({ kind: 'loading' });
     const current = (): boolean =>
       !this.destroyRef.destroyed &&
@@ -328,6 +468,9 @@ export class EnableCollectionPage {
             details: [],
             retryAfterSeconds: null,
           };
+      // AC-F63-a: the answer's own interval opens the read's window; an absent one opens it not at
+      // all, so the control is usable at once (the runner's own rule for the confirm).
+      this.startReadWait(failure.retryAfterSeconds);
       this.activationRead.set(
         failure.status === 403 ? { kind: 'forbidden' } : { kind: 'error', error: failure },
       );
