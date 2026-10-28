@@ -822,9 +822,7 @@ describe('EnableCollectionPage activation read', () => {
   it('returns focus to the named failure heading after each failed re-read (AC-F63-b)', async () => {
     // Two consecutive failures of the same read: the control the user pressed is replaced by the
     // answer, so the page must hand focus to its own named target instead of dropping it on <body>.
-    readPolicyActivation.mockImplementation(async () => {
-      throw failure('unavailable', 503);
-    });
+    readPolicyActivation.mockRejectedValue(failure('unavailable', 503));
     const fixture = await createPage();
     const root = fixture.nativeElement as HTMLElement;
 
