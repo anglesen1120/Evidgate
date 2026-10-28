@@ -198,8 +198,9 @@ public sealed class ParseRunnerLifecycleTests
     /// A dispose that lands while a run is starting must not leave a child behind. The window is the instant between
     /// the child's start and the runner's registration of it — the one window where the dispose's own sweep of the
     /// running table cannot see the child yet — and a whole run can pass through it before a caller's thread gets
-    /// another turn, so the runner's start hook puts the dispose exactly there. The run must then end as the abnormal
-    /// exit a dispose causes, never at its own wall clock.
+    /// another turn, so the runner's start hook puts the dispose exactly there. The run must then end as the
+    /// cancellation a dispose causes, never as a verdict and never at its own wall clock: the shutdown's kill is the
+    /// parent's own, so none of its exit codes may become a permanent rejection of the artifact (S125 F3).
     /// </summary>
     [Fact]
     public async Task Disposing_The_Runner_While_A_Run_Starts_Leaves_No_Child()
@@ -218,16 +219,18 @@ public sealed class ParseRunnerLifecycleTests
 
         var stopwatch = Stopwatch.StartNew();
 
-        var failure = (await runner.RunAsync(
+        var run = runner.RunAsync(
             new ParseRunRequest(ParseRunnerProfile.Xml, 1024, null, new MemoryStream([1], writable: false)),
-            CancellationToken.None)).ShouldBeOfType<ParseRunFailed>();
+            CancellationToken.None);
+
+        var exception = await Should.ThrowAsync<OperationCanceledException>(run);
 
         runner.Dispose();
 
-        // 137 (SIGKILL) is the abnormal exit the interface documents for a dispose, and the run must return long
-        // before the ten-second wall clock: a run that reached its own deadline would prove the re-check never ran.
-        failure.Failure.ShouldBe(ParseRunFailureKind.ExitedAbnormally);
-        failure.ChildExitCode.ShouldBe(137);
+        // No verdict at all, and the run must return long before the ten-second wall clock: a run that reached its own
+        // deadline would prove the re-check never ran. The shutdown is not the caller's cancellation.
+        exception.CancellationToken.IsCancellationRequested.ShouldBeFalse(
+            "the runner's dispose cancelled the run, not the caller's token");
         stopwatch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
 
         ParseRunnerHarness.LiveChildProcess(marker).ShouldBe(
@@ -237,6 +240,12 @@ public sealed class ParseRunnerLifecycleTests
         harness.LeftoverRunDirectories().ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A dispose that lands while a run is in flight kills the child and ends the run as a cancellation, never as a
+    /// verdict: the 137 that kill produces is the parent's own, and returning it would turn every worker shutdown into
+    /// a permanent <c>parse_crashed</c> rejection of an artifact nobody judged (S125 security review F3). What the
+    /// test does not weaken: no child may outlive the dispose, and none may be left unreaped.
+    /// </summary>
     [Fact]
     public async Task Disposing_The_Runner_Ends_An_In_Flight_Run_And_Kills_The_Child()
     {
@@ -249,17 +258,20 @@ public sealed class ParseRunnerLifecycleTests
 
         runner.Dispose();
 
-        var result = await run;
+        var exception = await Should.ThrowAsync<OperationCanceledException>(run);
 
-        // The child was killed by the runner, so the run has no marker: the failure carries the signal's 128+9.
-        var failure = result.ShouldBeOfType<ParseRunFailed>();
-        failure.Failure.ShouldBe(ParseRunFailureKind.ExitedAbnormally);
-        failure.ChildExitCode.ShouldBe(137);
+        // The child was killed by the runner's own dispose, so the run carries no verdict and no exit code: there is
+        // nothing a caller could project onto a <c>parse_*</c> reason.
+        exception.CancellationToken.IsCancellationRequested.ShouldBeFalse(
+            "the runner's dispose cancelled the run, not the caller's token");
 
         await ParseRunnerHarness.WaitUntilAsync(
             () => !ParseRunnerHarness.IsAlive(pid),
             TimeSpan.FromSeconds(10),
             "the disposed runner left its child alive");
+
+        ParseRunnerHarness.StateOf(pid).Contains('Z').ShouldBeFalse(
+            "the run must return only after the killed child was reaped, not merely signalled");
 
         harness.LeftoverRunDirectories().ShouldBeEmpty();
     }

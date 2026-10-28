@@ -153,7 +153,8 @@ public sealed class ChildLimitsTests
 
     /// <summary>
     /// AC2: with <c>--cpu-seconds 7 --max-file-bytes 0</c> the child's own process carries those exact limits —
-    /// soft and hard — plus <c>RLIMIT_CORE = 0</c>, because a limited run must never dump the artifact it is about
+    /// the CPU soft value as requested and its hard value one second above it, soft equal to hard for the file
+    /// and core pairs — plus <c>RLIMIT_CORE = 0</c>, because a limited run must never dump the artifact it is about
     /// to read. Read from <c>/proc/&lt;pid&gt;/limits</c> while the child is blocked on stdin, so the kernel's
     /// enforced values are what is asserted, and then finished normally to prove the limits do not change the
     /// verdict.
@@ -171,9 +172,9 @@ public sealed class ChildLimitsTests
 
         var cpu = await WaitForLimitRowAsync(child.Pid, CpuLimitName, soft => soft == SevenCpuSeconds, timeout.Token);
 
-        // Soft and hard are the same value: the child has no headroom to raise into, so what the launcher measured
-        // is what the kernel enforces for the whole run.
-        cpu.ShouldBe((SevenCpuSeconds, SevenCpuSeconds));
+        // Soft is the requested value and hard is one second more: the soft one is what the kernel enforces, and the
+        // extra second exists only so the CPU-limit death arrives as SIGXCPU before it escalates to SIGKILL.
+        cpu.ShouldBe((SevenCpuSeconds, "8"));
         (await WaitForLimitRowAsync(child.Pid, FileSizeLimitName, soft => soft == "0", timeout.Token))
             .ShouldBe(("0", "0"));
         (await WaitForLimitRowAsync(child.Pid, CoreLimitName, soft => soft == "0", timeout.Token))

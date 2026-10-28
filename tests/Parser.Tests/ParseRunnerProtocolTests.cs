@@ -253,10 +253,11 @@ public sealed class ParseRunnerProtocolTests
 
     /// <summary>
     /// Behaviour 2: stderr is drained beyond its bounded capture, so a child that floods it never blocks on a full
-    /// pipe; the bytes never reach the result (06.3.6-T1.4 owns stderr).
+    /// pipe. A success carries no stderr at all; a failed result carries only the bounded, redacted
+    /// <c>StderrExcerpt</c> (06.3.6-T1.4 owns stderr).
     /// </summary>
     [Fact]
-    public async Task Child_Flooding_Stderr_Does_Not_Block_And_Leaves_Nothing_In_The_Result()
+    public async Task Child_Flooding_Stderr_Does_Not_Block_And_Succeeds_Without_Stderr()
     {
         ParseRunnerHarness.RequirePosixShell("a scripted child that floods stderr");
         using var harness = new ParseRunnerHarness();

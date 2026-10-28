@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Buffers;
 using System.Net;
 using Amazon;
 using Amazon.Runtime;
@@ -13,8 +14,10 @@ namespace Evidgate.BuildingBlocks.ObjectStorage;
 /// The <c>AWSSDK.S3</c> implementation of <see cref="IObjectStorage"/> (06.1.2-T1, T2).
 /// Presigning is SigV4 arithmetic over the request — no network call — so it is safe to
 /// call from a request handler. <see cref="HeadAsync"/>, <see cref="ReadPrefixAsync"/>,
-/// <see cref="CopyAsync"/> and <see cref="DeleteAsync"/> do make a network call and MUST run
-/// outside any database transaction (00 §5.7 P5, T86). The S3 client is created once, lazily and
+/// <see cref="CopyAsync"/>, <see cref="DeleteAsync"/> and <see cref="GetAsync"/> do make a network call
+/// and MUST run outside any database transaction (00 §5.7 P5, T86) — except the Worker's
+/// <c>artifact_parse</c> read of <see cref="GetAsync"/>, the one recorded exception of that rule
+/// (06.3.6-T1.4, receiver 06.3.6-T2). The S3 client is created once, lazily and
 /// thread-safely, and disposed with the adapter.
 /// </summary>
 /// <remarks>
@@ -39,6 +42,13 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
     /// signature bytes, never a whole artifact, so the cap is the only bound the caller can name.
     /// </summary>
     internal const int MaxPrefixBytes = 65536;
+
+    /// <summary>
+    /// The largest object <see cref="GetAsync"/> will buffer (06.3.6-T1.4): the kind caps it serves are at most
+    /// 256 MiB (<c>artifact_kind_policy.max_bytes</c>, D-A9), so one artifact fits and a caller cannot ask for a
+    /// buffer the process could not hold.
+    /// </summary>
+    internal const long MaxObjectBytes = 256L * 1024 * 1024;
 
     private const string ContentLengthHeaderName = "Content-Length";
 
@@ -173,7 +183,8 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
                 },
                 cancellationToken).ConfigureAwait(false);
 
-            return await ReadBoundedAsync(response.ResponseStream, maxBytes, cancellationToken).ConfigureAwait(false);
+            return await ReadBoundedAsync(
+                response.ResponseStream, maxBytes, response.ContentLength, cancellationToken).ConfigureAwait(false);
         }
         catch (AmazonS3Exception exception) when (IsAbsent(exception))
         {
@@ -199,33 +210,186 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
         }
     }
 
+    /// <inheritdoc />
+    public async Task<byte[]?> GetAsync(string objectKey, long maxBytes, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ValidateObjectKey(objectKey, nameof(objectKey));
+
+        if (maxBytes is < 1 or > MaxObjectBytes)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxBytes), maxBytes, "maxBytes must be between 1 and 268435456");
+        }
+
+        var options = _options.Value;
+        try
+        {
+            // One byte past the caller's cap is requested, so an object the caller's policy no longer admits is
+            // refused below instead of being silently truncated: a truncated report is a different document.
+            using var response = await _client.Value.GetObjectAsync(
+                new GetObjectRequest
+                {
+                    BucketName = options.Bucket,
+                    Key = objectKey,
+                    ByteRange = new ByteRange(0, maxBytes),
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            var bytes = await ReadBoundedAsync(
+                response.ResponseStream,
+                checked((int)maxBytes + 1),
+                response.ContentLength,
+                cancellationToken).ConfigureAwait(false);
+
+            if (bytes.LongLength > maxBytes)
+            {
+                // Never a truncated success (IObjectStorage.GetAsync): the message names the cap, never the key.
+                throw new InvalidOperationException(
+                    $"the stored object is larger than the {maxBytes}-byte cap the caller stated");
+            }
+
+            return bytes;
+        }
+        catch (AmazonS3Exception exception) when (IsAbsent(exception))
+        {
+            // A store 404 is an outcome, not an exception (IObjectStorage.GetAsync).
+            return null;
+        }
+        catch (AmazonS3Exception exception) when (IsEmptyRange(exception))
+        {
+            // A zero-byte object: the range cannot be satisfied because there is no first byte (06.3.1-T1 F-C10).
+            return [];
+        }
+        catch (AmazonServiceException exception)
+        {
+            // SDK v4: AmazonServiceException no longer derives from AmazonClientException, so a store service
+            // error would escape the client clause below with the SDK's message intact.
+            throw StorageFailure("read", exception);
+        }
+        catch (AmazonClientException exception)
+        {
+            throw StorageFailure("read", exception);
+        }
+    }
+
     /// <summary>
     /// Reads the response stream up to <paramref name="maxBytes"/> bytes, disposing it first. The ranged GET
     /// already caps the body, but a store that ignores the range is still read no further than the cap, so the
     /// read is bounded by construction.
+    /// <para>
+    /// The buffer is allocated once, at the length the store's own <c>Content-Length</c> declares
+    /// (<paramref name="declaredLength"/>), so the peak is about one copy of the object: no doubling writer and no
+    /// second copy at the end. The length is believed only as far as the cap and only as a starting size — a store
+    /// that declares less than it sends still cannot turn a truncated read into a complete document, because the
+    /// stream is read on past the declared length (bounded by the cap) and the buffer then grows the old way.
+    /// </para>
     /// </summary>
-    private static async Task<byte[]> ReadBoundedAsync(Stream stream, int maxBytes, CancellationToken cancellationToken)
+    /// <param name="stream">The response body.</param>
+    /// <param name="maxBytes">The most bytes to read; one byte past it is enough to prove the object is longer.</param>
+    /// <param name="declaredLength">
+    /// The response's own <c>Content-Length</c>, or a negative value when the store reported none.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    private static async Task<byte[]> ReadBoundedAsync(
+        Stream stream, int maxBytes, long declaredLength, CancellationToken cancellationToken)
     {
         await using (stream.ConfigureAwait(false))
         {
-            var buffer = new byte[maxBytes];
-            var total = 0;
-            while (total < maxBytes)
+            if (declaredLength is >= 0 && declaredLength <= maxBytes)
             {
-                var read = await stream
-                    .ReadAsync(buffer.AsMemory(total, maxBytes - total), cancellationToken)
-                    .ConfigureAwait(false);
+                var exact = new byte[declaredLength];
+                var filled = 0;
 
-                if (read == 0)
+                while (filled < exact.Length)
                 {
-                    break;
+                    var read = await stream.ReadAsync(exact.AsMemory(filled), cancellationToken).ConfigureAwait(false);
+
+                    if (read == 0)
+                    {
+                        // The store sent less than it declared: the object is that shorter body, not the promise.
+                        return exact[..filled];
+                    }
+
+                    filled += read;
                 }
 
-                total += read;
+                if (filled < maxBytes)
+                {
+                    // A store that declares less than it sends must not be able to hand back a truncated object as
+                    // if it were whole: the excess is read too (bounded by the cap) and the buffer grows for it.
+                    var probe = await ProbeAsync(stream, cancellationToken).ConfigureAwait(false);
+
+                    if (probe.Length == 0)
+                    {
+                        return exact;
+                    }
+
+                    return await ReadGrowingAsync(stream, exact, probe, maxBytes, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
+                return exact;
             }
 
-            return total == buffer.Length ? buffer : buffer[..total];
+            return await ReadGrowingAsync(stream, [], [], maxBytes, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Reads one more byte than a response declared, so a store that padded its body is noticed instead of trusted.
+    /// </summary>
+    /// <param name="stream">The response body, positioned after the declared bytes.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The bytes that followed the declared length; empty when the body ended where it said it would.</returns>
+    private static async Task<byte[]> ProbeAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        var probe = new byte[1];
+
+        if (await stream.ReadAsync(probe, cancellationToken).ConfigureAwait(false) == 0)
+        {
+            return [];
+        }
+
+        return probe;
+    }
+
+    /// <summary>
+    /// The growth path: an undeclared, or unexpectedly longer, body is read into an
+    /// <see cref="ArrayBufferWriter{T}"/> seeded with what already arrived, still bounded by
+    /// <paramref name="maxBytes"/>. <see cref="ArrayBufferWriter{T}"/> doubles, so the transient overhead stays
+    /// proportional to the object.
+    /// </summary>
+    /// <param name="stream">The response body.</param>
+    /// <param name="prefix">The bytes already read into the exact buffer.</param>
+    /// <param name="probe">The bytes the declaring store sent past its own length, empty when none were read.</param>
+    /// <param name="maxBytes">The most bytes to read.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The bytes read, at most <paramref name="maxBytes"/> of them.</returns>
+    private static async Task<byte[]> ReadGrowingAsync(
+        Stream stream, byte[] prefix, byte[] probe, int maxBytes, CancellationToken cancellationToken)
+    {
+        const int InitialCapacity = 82_944;
+
+        var writer = new ArrayBufferWriter<byte>(Math.Min(maxBytes, InitialCapacity));
+
+        writer.Write(prefix);
+        writer.Write(probe);
+
+        while (writer.WrittenCount < maxBytes)
+        {
+            var memory = writer.GetMemory(Math.Min(InitialCapacity, maxBytes - writer.WrittenCount));
+            var read = await stream.ReadAsync(memory, cancellationToken).ConfigureAwait(false);
+
+            if (read == 0)
+            {
+                break;
+            }
+
+            writer.Advance(read);
+        }
+
+        return writer.WrittenSpan.ToArray();
     }
 
     /// <inheritdoc />

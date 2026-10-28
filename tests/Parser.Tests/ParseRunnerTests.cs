@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using Evidgate.Modules.Evidence;
+using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -420,7 +421,8 @@ public sealed class ParseRunnerTests
     [Fact]
     public void Registration_Follows_The_OutOfProcess_Flag()
     {
-        using var off = Compose(new Dictionary<string, string?>());
+        var offServices = ComposeServices(new Dictionary<string, string?>());
+        using var off = offServices.BuildServiceProvider();
 
         off.GetService<IParseRunner>().ShouldBeNull();
 
@@ -429,14 +431,26 @@ public sealed class ParseRunnerTests
         bound.ChildPath.ShouldBe(ParseRunnerOptions.DefaultChildPath);
         bound.CpuSeconds.ShouldBe(ParseRunnerOptions.DefaultCpuSeconds);
 
-        using var on = Compose(new Dictionary<string, string?>
+        var onServices = ComposeServices(new Dictionary<string, string?>
         {
             [$"{ParseRunnerOptions.SectionName}:{nameof(ParseRunnerOptions.OutOfProcess)}"] = "true",
             [$"{ParseRunnerOptions.SectionName}:{nameof(ParseRunnerOptions.CpuSeconds)}"] = "11",
             [$"{ParseRunnerOptions.SectionName}:{nameof(ParseRunnerOptions.ChildPath)}"] = "/srv/parser/Evidgate.Parser.dll",
         });
+        using var on = onServices.BuildServiceProvider();
 
         on.GetRequiredService<IParseRunner>().ShouldBeOfType<ChildProcessParseRunner>();
+
+        // 06.3.6-T1.4: the `artifact_parse` task handler travels with the runner, so the consumer claims the type
+        // exactly where the runner exists. Off means neither, and an `artifact_parse` row stays queued (the
+        // in-process rollback of 06.3.6 §11).
+        // The handler is asserted by its own registration, not by enumerating ITaskHandlerInvoker: resolving that set
+        // materialises every module handler, and this composition registers no secret provider for the object-storage
+        // options they need, so the enumeration would fail for reasons unrelated to this flag. The handler's
+        // TaskType == EvidenceTaskTypes.Parse link is asserted where the handler is exercised
+        // (Tenancy.IntegrationTests/EvidenceParseTaskTests).
+        RegistersParseHandler(offServices).ShouldBeFalse("the flag is off: nothing claims an artifact_parse row");
+        RegistersParseHandler(onServices).ShouldBeTrue("the handler is registered with the runner it needs");
 
         var configured = on.GetRequiredService<IOptions<ParseRunnerOptions>>().Value;
         configured.OutOfProcess.ShouldBeTrue();
@@ -444,7 +458,53 @@ public sealed class ParseRunnerTests
         configured.ChildPath.ShouldBe("/srv/parser/Evidgate.Parser.dll");
     }
 
-    private static ServiceProvider Compose(Dictionary<string, string?> settings)
+    /// <summary>
+    /// 06.3.6-T1.4 / the security review's process-spawn finding: the Api composes the module and never
+    /// <c>AddParseRunner</c>, so with the flag ON it still cannot resolve the runner and cannot claim the task type —
+    /// a process-spawn capability never reaches the request host.
+    /// </summary>
+    [Fact]
+    public void Module_Alone_Never_Exposes_The_Runner_Or_The_Parse_Handler()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{ParseRunnerOptions.SectionName}:{nameof(ParseRunnerOptions.OutOfProcess)}"] = "true",
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddEvidenceModule(configuration);
+
+        RegistersParseHandler(services).ShouldBeFalse("the parse handler is Worker-only, flag-on");
+
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetService<IParseRunner>().ShouldBeNull(
+            "the Api must never resolve a process-spawn capability");
+    }
+
+    /// <summary>
+    /// Whether a composition registered the <c>artifact_parse</c> task handler. Read from the descriptors, before
+    /// anything is built: <c>AddTaskHandler</c> registers the handler by its own type, and resolving the module's
+    /// handlers here would materialise ones that need a secret provider this composition never registers — a failure
+    /// that would say nothing about the parse capability. The handler's own
+    /// <c>TaskType == EvidenceTaskTypes.Parse</c> link is asserted where the handler runs
+    /// (<c>Tenancy.IntegrationTests/EvidenceParseTaskTests</c>).
+    /// </summary>
+    /// <param name="services">The collection a composition registered into.</param>
+    /// <returns><see langword="true"/> when the parse handler is registered.</returns>
+    private static bool RegistersParseHandler(IServiceCollection services) =>
+        services.Any(descriptor => descriptor.ServiceType == typeof(ParseArtifactTaskHandler));
+
+    /// <summary>
+    /// The Worker's composition of the module and the runner seam, returned as the collection so a test can read what
+    /// it registered without constructing anything.
+    /// </summary>
+    /// <param name="settings">The in-memory configuration.</param>
+    /// <returns>The collection, ready to build.</returns>
+    private static ServiceCollection ComposeServices(Dictionary<string, string?> settings)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         var services = new ServiceCollection();
@@ -455,7 +515,7 @@ public sealed class ParseRunnerTests
         services.AddEvidenceModule(configuration);
         services.AddParseRunner(configuration);
 
-        return services.BuildServiceProvider();
+        return services;
     }
 
     private static string[] RecordsText(ParseRunSucceeded success) =>

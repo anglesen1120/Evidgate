@@ -1,9 +1,9 @@
 namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 
 /// <summary>
-/// Why a child run ended without a usable record stream (06.3.6 AC2, AC8). The set is closed on purpose: 06.3.6-T1.4
-/// maps each member to exactly one <c>rejected</c> reason, so adding a member here is a mapping decision that must
-/// be made there.
+/// Why a child run ended without a usable record stream (06.3.6 AC2, AC8). The set is closed on purpose:
+/// <see cref="ParseRunRejection.TryMap"/> projects each member onto exactly one <c>rejected</c> reason, so adding a
+/// member here is a mapping decision that must be made there too.
 /// </summary>
 internal enum ParseRunFailureKind
 {
@@ -46,9 +46,10 @@ internal readonly record struct ParseRecord(ReadOnlyMemory<byte> Utf8Json);
 /// streamed before its marker, <see cref="ParseRunFailed"/> carries the one failure kind and the child's exit code
 /// (<see langword="null"/> when the child never started).
 /// <para>
-/// The result never carries the child's stderr. The runner drains that pipe into a fixed-size buffer so a child
-/// cannot block on it, and drops the bytes: 06.3.6-T1.4 owns the stderr capture and its redaction, and a capture
-/// that reached this type would be a second, unredacted path to the same text.
+/// The child's stderr travels one way only. The runner drains that pipe without a bound so a flooding child cannot
+/// block, keeps at most 4 KiB of it in memory, and exposes it as <see cref="ParseRunFailed.StderrExcerpt"/>: a
+/// single-line, bounded, secret-masked excerpt for an operator log line, never on a success result, never stored
+/// and never a tenant-visible value. The raw bytes reach no member of this type.
 /// </para>
 /// </summary>
 /// <param name="ExitCode">The child's exit code, or <see langword="null"/> when no process existed.</param>
@@ -73,9 +74,17 @@ internal sealed record ParseRunSucceeded(
 /// <param name="ChildExitCode">The child's exit code, or <see langword="null"/> when it never started.</param>
 /// <param name="OutputBytes">How many stdout bytes the child wrote before the run ended.</param>
 /// <param name="OutputRecords">How many complete record lines the runner had accepted by then.</param>
+/// <param name="StderrExcerpt">
+/// The child's stderr for an operator log line, or <see langword="null"/> when it wrote nothing, when the run never
+/// spawned a child, or when its stderr pipe was abandoned after the teardown grace. Already bounded to 512
+/// characters, reduced to one printable line and passed through <c>SecretRedactor</c>, so a caller may log it but
+/// must never store it, return it to a tenant or add it to a reason: the tenant-visible value is the
+/// <c>parse_*</c> code that <see cref="ParseRunRejection"/> maps (<c>00 §5.7 S3</c>, 06.3.6 §8).
+/// </param>
 internal sealed record ParseRunFailed(
     ParseRunFailureKind Failure,
     int? ChildExitCode,
     long OutputBytes,
-    int OutputRecords)
+    int OutputRecords,
+    string? StderrExcerpt = null)
     : ParseRunResult(ChildExitCode, OutputBytes, OutputRecords);

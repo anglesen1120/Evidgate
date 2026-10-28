@@ -52,9 +52,11 @@ internal static class ParseRunTempDirectory
     /// <summary>
     /// Removes the directory and everything in it. A removal that fails once is retried once (a just-killed child's
     /// handle can hold a directory open for a moment, and a directory the child chmod'ed to 000 cannot be walked):
-    /// on Unix the owner restores its own read, write and search bits recursively before the retry. A removal that
-    /// still fails is left alone — a leftover directory under the temp root must never turn a finished parse into
-    /// an exception — and reported so a test or a future metric can see it instead of only noticing the disk.
+    /// on Unix the owner restores its own read, write and search bits recursively before the retry, and the retry
+    /// follows immediately because on Unix the open handle the first attempt lost to is closed by the kill that
+    /// preceded it — no sleep, so cleanup cannot stall the run's own thread. A removal that still fails is left
+    /// alone — a leftover directory under the temp root must never turn a finished parse into an exception — and
+    /// reported so a test or a future metric can see it instead of only noticing the disk.
     /// </summary>
     /// <param name="path">The directory <see cref="Create"/> returned.</param>
     /// <returns>True when the directory is gone, false when something under it survived both attempts.</returns>
@@ -85,10 +87,15 @@ internal static class ParseRunTempDirectory
                 if (!OperatingSystem.IsWindows())
                 {
                     // A directory without the owner's search bit cannot be enumerated by the delete at all, so the
-                    // recursive walk has to restore access first — one level at a time, from the top down.
+                    // recursive walk has to restore access first — one level at a time, from the top down. The retry
+                    // needs no pause: nothing on Unix releases a handle slower than the retry loop itself.
                     RestoreOwnerAccess(path);
+
+                    continue;
                 }
 
+                // Windows releases a directory handle asynchronously after the process that held it exits, so the
+                // only way to avoid a lost attempt there is to wait the handle out.
                 Thread.Sleep(100);
             }
         }

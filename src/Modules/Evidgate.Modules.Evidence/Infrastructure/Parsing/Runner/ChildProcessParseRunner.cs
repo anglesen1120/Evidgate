@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
+using Evidgate.BuildingBlocks.Observability.Redaction;
 using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
@@ -31,6 +33,13 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 /// stdout is read through one 64 KiB pipe buffer, a record line grows only toward the per-line cap, and the
 /// accepted records are the only retained bytes.
 /// </para>
+/// <para>
+/// <b>Stderr (06.3.6-T1.4, §8 S3).</b> The child's stderr is drained without a bound, so a child that floods it can
+/// never block, and at most <see cref="StderrCaptureBytes"/> of it are kept in memory. A failed run carries
+/// <see cref="ParseRunFailed.StderrExcerpt"/>: one printable line, at most <see cref="StderrExcerptChars"/>
+/// characters, passed through <c>SecretRedactor</c>, for the caller's operator log and nothing else. This class
+/// logs nothing — it holds no logger for a reason — and a success result carries no stderr at all.
+/// </para>
 /// </summary>
 internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 {
@@ -41,10 +50,26 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
     private const int StdinBlockBytes = 64 * 1024;
 
     /// <summary>
-    /// The stderr capture size. The pipe is drained without a bound (a child that writes megabytes must not block)
-    /// but nothing beyond this is kept anywhere: 06.3.6-T1.4 owns stderr and its redaction.
+    /// How much of the child's stderr is kept. The pipe is drained without a bound (a child that writes gigabytes
+    /// must not block) but nothing beyond this is retained anywhere, so the capture cannot become an amplification
+    /// path of its own.
     /// </summary>
-    private const int StderrDrainBytes = 4096;
+    private const int StderrCaptureBytes = 4096;
+
+    /// <summary>
+    /// The longest excerpt a failed run carries: one log line's worth. The redaction pass can shorten text but
+    /// never lengthens it past a mask, so the cap is applied again after it.
+    /// </summary>
+    private const int StderrExcerptChars = 512;
+
+    /// <summary>The block the stderr pipe is drained in; nothing of it survives past the capture's own limit.</summary>
+    private const int StderrBlockBytes = 4096;
+
+    /// <summary>
+    /// The one redaction list (00 §5.7 S3, 01.1.2): the same instance shape the host's log providers use, so the
+    /// excerpt is scrubbed by one pattern set and not a second copy of it.
+    /// </summary>
+    private static readonly SecretRedactor Redactor = new();
 
     /// <summary>
     /// The one grace a run gets once its child is gone (or being killed): the post-kill exit wait and all three
@@ -107,7 +132,9 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
     /// <summary>
     /// Kills every run still in flight and refuses new ones. The host disposes this singleton at shutdown, so a
-    /// shutting-down worker leaves no parse child behind; a run caught by the dispose ends as an abnormal exit.
+    /// shutting-down worker leaves no parse child behind; a run caught by the dispose ends as an
+    /// <see cref="OperationCanceledException"/> and never as a verdict — the kill is the parent's own, so its exit
+    /// code says nothing about the artifact (06.3.6-T1.4, S125 security review F3).
     /// </summary>
     public void Dispose()
     {
@@ -133,22 +160,33 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
     private static void AddArgument(ProcessStartInfo startInfo, string value) => startInfo.ArgumentList.Add(value);
 
-    private static async Task DrainStderrAsync(Stream stderr)
+    private static async Task<StderrCapture> CaptureStderrAsync(Stream stderr)
     {
-        var buffer = new byte[StderrDrainBytes];
+        var buffer = new byte[StderrBlockBytes];
+        var capture = new StderrCapture();
 
         try
         {
             // The read is unbounded, the capture is not: a child that fills its stderr pipe must never block, and
-            // the bytes are dropped because 06.3.6-T1.4 owns the capture and its redaction.
-            while (await stderr.ReadAsync(buffer.AsMemory(0, StderrDrainBytes)).ConfigureAwait(false) > 0)
+            // every byte past the capture's limit is dropped as it arrives.
+            while (true)
             {
+                var read = await stderr.ReadAsync(buffer).ConfigureAwait(false);
+
+                if (read == 0)
+                {
+                    break;
+                }
+
+                capture.Append(buffer.AsSpan(0, read));
             }
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException)
         {
-            // The child closed stderr first: there is nothing left to drain.
+            // The child closed stderr first: what the capture already holds is the whole answer.
         }
+
+        return capture;
     }
 
     /// <summary>
@@ -264,17 +302,17 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
         }
     }
 
-    /// <summary>Waits for the stdout pump, yielding null after the grace when a leaked pipe holds it open.</summary>
-    /// <param name="stdout">The pump.</param>
+    /// <summary>Waits for a pipe pump against the run's teardown budget, reporting an abandoned pump as null.</summary>
+    /// <param name="pump">The pump.</param>
     /// <param name="budget">The run's single teardown deadline, shared with the other two pumps.</param>
-    /// <returns>The capture, or null when the pump was abandoned.</returns>
-    private static async Task<ChildOutputCapture?> WithinDrainBoundAsync(
-        Task<ChildOutputCapture> stdout,
-        CancellationToken budget)
+    /// <typeparam name="T">What the pump returns: the stdout capture or the stderr capture.</typeparam>
+    /// <returns>The pump's result, or <see langword="null"/> when a leaked pipe held it open past the budget.</returns>
+    private static async Task<T?> WithinDrainBoundAsync<T>(Task<T> pump, CancellationToken budget)
+        where T : class
     {
         try
         {
-            return await stdout.WaitAsync(budget).ConfigureAwait(false);
+            return await pump.WaitAsync(budget).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -349,24 +387,22 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
             return SpawnFailed();
         }
 
-        ChildStarted?.Invoke();
-
-        running[process] = 0;
-
         try
         {
+            // The start hook and the registration sit inside the protected region: a hook that throws must still
+            // kill the child (the finally below is the only path that does), and the hook runs before the table
+            // holds the child so a dispose aimed at that instant exercises the unregistered window.
+            ChildStarted?.Invoke();
+
+            running[process] = 0;
+
             // A Dispose that ran between the entry check and the registration above iterated a table that did not
-            // hold this child yet, so nothing killed it: the run ends here, as the abnormal exit a dispose causes,
-            // instead of starting a child no one is tracking.
+            // hold this child yet, so nothing killed it: the run ends here, as the cancellation a dispose causes,
+            // instead of starting a child no one is tracking. The finally below still kills and reaps the child, and
+            // the run never returns the 137 of that kill as a verdict (S125 security review F3).
             if (disposed)
             {
-                KillTree(process);
-
-                using var settle = new CancellationTokenSource(ExitAfterKillWait);
-
-                await WaitForExitQuietlyAsync(process, settle.Token).ConfigureAwait(false);
-
-                return new ParseRunFailed(ParseRunFailureKind.ExitedAbnormally, ExitCodeOf(process), 0, 0);
+                throw DisposedDuringRun();
             }
 
             return await RunStartedAsync(process, request, limits, cancellationToken).ConfigureAwait(false);
@@ -408,7 +444,7 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 streamStop.RecordProtocolKill();
                 KillTree(process);
             });
-        var stderrTask = DrainStderrAsync(process.StandardError.BaseStream);
+        var stderrTask = CaptureStderrAsync(process.StandardError.BaseStream);
         var stdinTask = WriteStdinAsync(
             process.StandardInput.BaseStream,
             request.Input,
@@ -464,6 +500,10 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
         var capture = await stdoutBound.ConfigureAwait(false) ?? protocol.Abandoned();
 
+        // A stderr pump the teardown grace abandoned still owns its capture, so an abandoned pump yields no
+        // excerpt: the bytes it was reading are not a finished record of what the child wrote.
+        var stderrExcerpt = (await stderrBound.ConfigureAwait(false))?.Excerpt();
+
         // A caller cancellation is not a parse verdict, and the pumps above are already finished: no pipe is still
         // read once this throws, so the Process is never killed through a handle its caller already disposed.
         if (callerCancelled)
@@ -471,6 +511,14 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
             throw new OperationCanceledException(
                 "The caller cancelled the parse run; the child was killed and its pipes drained.",
                 cancellationToken);
+        }
+
+        // The runner was disposed while the run was in flight: the kill that ended this child is the parent's own, so
+        // the 137 it produced is not evidence about the artifact and must never become a permanent parse_crashed
+        // rejection of a benign report. The run therefore carries no verdict at all (S125 security review F3).
+        if (disposed)
+        {
+            throw DisposedDuringRun();
         }
 
         var exitCode = ExitCodeOf(process);
@@ -484,7 +532,7 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
         // unusable stream — or whose stream never closed — is MalformedOutput.
         if (capture.Failure is { } failure && failure != ParseRunFailureKind.MalformedOutput)
         {
-            return new ParseRunFailed(failure, exitCode, capture.OutputBytes, capture.RecordCount);
+            return new ParseRunFailed(failure, exitCode, capture.OutputBytes, capture.RecordCount, stderrExcerpt);
         }
 
         if (wallClockExceeded)
@@ -493,7 +541,8 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 ParseRunFailureKind.WallClockExceeded,
                 exitCode,
                 capture.OutputBytes,
-                capture.RecordCount);
+                capture.RecordCount,
+                stderrExcerpt);
         }
 
         if (capture.Failure == ParseRunFailureKind.MalformedOutput && streamStop.ProtocolKillRecorded)
@@ -502,7 +551,8 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 ParseRunFailureKind.MalformedOutput,
                 exitCode,
                 capture.OutputBytes,
-                capture.RecordCount);
+                capture.RecordCount,
+                stderrExcerpt);
         }
 
         if (exitCode != 0)
@@ -512,7 +562,8 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 ParseRunFailureKind.ExitedAbnormally,
                 exitCode,
                 capture.OutputBytes,
-                capture.RecordCount);
+                capture.RecordCount,
+                stderrExcerpt);
         }
 
         if (capture.Failure is not null || capture.Records is not { } records)
@@ -521,7 +572,8 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 ParseRunFailureKind.MalformedOutput,
                 exitCode,
                 capture.OutputBytes,
-                capture.RecordCount);
+                capture.RecordCount,
+                stderrExcerpt);
         }
 
         return new ParseRunSucceeded(records, exitCode, capture.OutputBytes, records.Count);
@@ -529,6 +581,18 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
     private static ParseRunFailed SpawnFailed() =>
         new(ParseRunFailureKind.SpawnFailed, null, 0, 0);
+
+    /// <summary>
+    /// The exception a run caught by the runner's own disposal ends with. A cancellation is not a parse verdict
+    /// (<see cref="IParseRunner"/>), and the child's death was the parent's decision, so no exit code is carried: the
+    /// caller's handler persists nothing and the artifact stays <c>ready</c> for the next attempt (S125 F3). The
+    /// token is nobody's own, because it is the shutdown that cancelled the run and not the caller.
+    /// </summary>
+    /// <returns>The cancellation to throw.</returns>
+    private static OperationCanceledException DisposedDuringRun() =>
+        new(
+            "The parse runner was disposed while the run was in flight: the child was killed by the shutdown and the "
+            + "run carries no verdict.");
 
     /// <summary>Builds the child's whole start information: no shell, one argument per entry, scrubbed environment.</summary>
     /// <param name="command">The executable and its leading arguments for this run.</param>
@@ -590,6 +654,140 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
         }
 
         return startInfo;
+    }
+
+    /// <summary>
+    /// The child's stderr as a bounded capture (06.3.6-T1.4): at most <see cref="StderrCaptureBytes"/> bytes are
+    /// kept whatever the child writes, and <see cref="Excerpt"/> turns them into the one printable, secret-masked
+    /// line a caller may log. It is never stored, never attached to a success result and never lowered into a
+    /// reason — the tenant-visible value is only the <c>parse_*</c> code.
+    /// </summary>
+    private sealed class StderrCapture
+    {
+        private readonly byte[] buffer = new byte[StderrCaptureBytes];
+
+        private int length;
+
+        /// <summary>
+        /// Keeps what still fits and drops the rest. The drain must never block or buffer on the capture's account,
+        /// so a child that writes gigabytes of stderr costs this array and nothing more.
+        /// </summary>
+        /// <param name="block">The bytes just read from the pipe.</param>
+        public void Append(ReadOnlySpan<byte> block)
+        {
+            var room = buffer.Length - length;
+
+            if (room <= 0)
+            {
+                return;
+            }
+
+            var take = Math.Min(room, block.Length);
+
+            block[..take].CopyTo(buffer.AsSpan(length));
+            length += take;
+        }
+
+        /// <summary>
+        /// The captured bytes as one line: decoded as UTF-8 (invalid sequences become the replacement character),
+        /// reduced to printable characters with every run of line breaks or tabs folded into one space, then passed
+        /// through the shared <see cref="SecretRedactor"/> and cut to <see cref="StderrExcerptChars"/>.
+        /// </summary>
+        /// <remarks>
+        /// The order matters. The single-line pass runs first because the redaction patterns describe an assignment
+        /// on one line, so a secret split across a line break would not be recognised after the fact; and the cut
+        /// runs last so a mask can never be left half-replaced by a truncation that happened before it. A cut that
+        /// lands inside a mask leaves <c>**</c>, which reveals nothing.
+        /// </remarks>
+        /// <returns>The excerpt, or <see langword="null"/> when the child wrote nothing printable.</returns>
+        public string? Excerpt()
+        {
+            if (length == 0)
+            {
+                return null;
+            }
+
+            var text = Encoding.UTF8.GetString(buffer, 0, length);
+
+            // A capture that filled the buffer was cut in the middle of the child's stream, so its last token is only
+            // a prefix of what the child wrote — and a secret the redaction patterns know in full is not recognised
+            // in part. The fragment is dropped rather than shown, which changes nothing a caller normally sees (the
+            // excerpt is the head of the capture) and stops a shrunk redaction from ever surfacing half a token
+            // (S125 security review F8).
+            if (length == buffer.Length)
+            {
+                text = DropPartialTrailingToken(text);
+            }
+
+            var line = Redactor.RedactText(SingleLine(text));
+
+            if (line.Length == 0)
+            {
+                return null;
+            }
+
+            return line.Length > StderrExcerptChars ? line[..StderrExcerptChars] : line;
+        }
+
+        /// <summary>Removes the last token of a capture the buffer cut in half, with the separator before it.</summary>
+        /// <param name="text">The decoded, truncated capture.</param>
+        /// <returns>The capture up to its last whole token, or unchanged when it holds no separator.</returns>
+        private static string DropPartialTrailingToken(string text)
+        {
+            for (var index = text.Length - 1; index >= 0; index--)
+            {
+                if (char.IsWhiteSpace(text[index]))
+                {
+                    return text[..index];
+                }
+            }
+
+            // One token and nothing else: there is no whole token to fall back to, so the operator keeps the head the
+            // excerpt would show anyway rather than losing the only evidence the child produced.
+            return text;
+        }
+
+        /// <summary>Folds one bounded text into a single line of printable characters.</summary>
+        /// <param name="text">The decoded capture; at most <see cref="StderrCaptureBytes"/> characters.</param>
+        /// <returns>The line, trimmed: no control character survives, so a log line cannot be forged or moved.</returns>
+        /// <remarks>
+        /// The line break set is the one a reader honours and not only the ASCII one: U+2028 LINE SEPARATOR and
+        /// U+2029 PARAGRAPH SEPARATOR are <c>char.IsControl</c>-false, so a child that writes them would otherwise
+        /// hand a consumer a second record inside one excerpt (S125 security review F8). They fold into the same
+        /// single space as <c>\r</c>, <c>\n</c> and <c>\t</c>.
+        /// </remarks>
+        private static string SingleLine(string text)
+        {
+            var builder = new StringBuilder(text.Length);
+            var pendingSpace = false;
+
+            foreach (var character in text)
+            {
+                if (character is '\r' or '\n' or '\t' or '\u2028' or '\u2029')
+                {
+                    pendingSpace = true;
+
+                    continue;
+                }
+
+                // Everything else in the control range — an escape sequence, a bell, a form feed — is dropped
+                // rather than shown: a terminal must not be able to act on what a child wrote.
+                if (char.IsControl(character))
+                {
+                    continue;
+                }
+
+                if (pendingSpace && builder.Length > 0)
+                {
+                    builder.Append(' ');
+                }
+
+                pendingSpace = false;
+                builder.Append(character);
+            }
+
+            return builder.ToString().Trim();
+        }
     }
 
     /// <summary>

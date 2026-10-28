@@ -81,9 +81,10 @@ public static class WorkerHost
         builder.Services.AddOrchestratorModule();
         // 06.1.1-T1: the evidence module, so every handler the Api composes resolves here too.
         builder.Services.AddEvidenceModule(builder.Configuration);
-        // 06.3.6-T1.3: the out-of-process parse runner, behind EVIDGATE__PARSE__OUTOFPROCESS. Registered here and
-        // nowhere else: it is a process-spawn capability, and the Api — which shares every other module piece — must
-        // never be able to resolve IParseRunner (06.3.6 review, security finding).
+        // 06.3.6-T1.3/T1.4: the out-of-process parse runner and its `artifact_parse` handler, behind
+        // EVIDGATE__PARSE__OUTOFPROCESS. Registered here and nowhere else: it is a process-spawn capability, and the
+        // Api — which shares every other module piece — must never be able to resolve IParseRunner or claim the task
+        // (06.3.6 review, security finding).
         builder.Services.AddParseRunner(builder.Configuration);
         // 07.1.1-T1: the policy module, so every handler the Api composes resolves here too.
         builder.Services.AddPolicyModule();

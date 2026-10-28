@@ -6,7 +6,7 @@ using Xunit;
 namespace Parser.Tests;
 
 /// <summary>One finished child run: its exit code, the exact stdout bytes and the decoded stderr.</summary>
-/// <param name="ExitCode">The process exit code (0 streamed, 2 usage, 3 internal).</param>
+/// <param name="ExitCode">The process exit code (0 streamed, 2 usage, 3 internal, 4 heap limit).</param>
 /// <param name="StdoutBytes">The raw stdout bytes, kept so a test can assert byte identity across runs.</param>
 /// <param name="Stderr">The decoded stderr text (fixed words only, on the child's contract).</param>
 internal sealed record ChildRun(int ExitCode, byte[] StdoutBytes, string Stderr)

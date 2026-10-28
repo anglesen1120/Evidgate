@@ -9,19 +9,22 @@ using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Endpoints;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using FluentValidation;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace Evidgate.Modules.Evidence.Application;
 
 /// <summary>
 /// The task types 06.1.2's <c>complete</c> hands to the background through the outbox (00 §5.3 C7, T19/T86): the
-/// async masking scan of a <c>ready</c> artifact and the delete of the <c>pending/</c> staging object. Both names
-/// are the wire contract's (<c>task.task_type</c>, 06.1.2 §5); the consumer only claims the types a registered
-/// handler declares, so an undeployed handler leaves its rows <c>queued</c> instead of dead-lettering them.
+/// async masking scan of a <c>ready</c> artifact, the delete of the <c>pending/</c> staging object and — when
+/// out-of-process parsing is composed — the parse of a raw report (06.3.6-T1.4). Every name is the wire contract's
+/// (<c>task.task_type</c>, 06.1.2 §5); the consumer only claims the types a registered handler declares, so an
+/// undeployed handler leaves its rows <c>queued</c> instead of dead-lettering them.
 /// </summary>
 internal static class EvidenceTaskTypes
 {
@@ -30,6 +33,13 @@ internal static class EvidenceTaskTypes
 
     /// <summary>Deletes the staging object after the completion committed; handled by <see cref="ArtifactStagingDeleteTaskHandler"/>.</summary>
     public const string StagingDelete = "artifact_staging_delete";
+
+    /// <summary>
+    /// Parses one <c>raw_report</c> artifact in the resource-limited child (06.3.6 §5, T1.4); handled by
+    /// <c>ParseArtifactTaskHandler</c>, which only the Worker composes and only with <c>EVIDGATE__PARSE__OUTOFPROCESS</c>
+    /// on.
+    /// </summary>
+    public const string Parse = "artifact_parse";
 }
 
 /// <summary>
@@ -60,8 +70,8 @@ internal sealed record ArtifactCompletionVerdict(bool Verified, long? VerifiedBy
 /// Complete one presigned upload (06.1.2 §5, <c>POST /v1/artifacts/{a}/complete</c>): the writer half of T86. The
 /// endpoint's <see cref="ArtifactCompletionVerifier"/> already read the row, <c>HEAD</c>ed the object and promoted
 /// it — all with no transaction open (00 §5.7 P5) — so this command only commits the verdict inside the C2 tenant
-/// transaction: guard the state, write <c>ready</c> with the verified size, <c>scan_state=pending</c> and the two
-/// outbox rows, or <c>rejected</c> with its reason code and no outbox rows. <c>org_id</c> and <c>project_id</c> are
+/// transaction: guard the state, write <c>ready</c> with the verified size, <c>scan_state=pending</c> and the outbox
+/// rows, or <c>rejected</c> with its reason code and no outbox rows. <c>org_id</c> and <c>project_id</c> are
 /// never command members — they come from the tenant transaction (00 §5.4.1, T3).
 /// <para>
 /// The verdict is part of the idempotency hash (the store canonicalises the serialized command), so a replay must
@@ -102,10 +112,12 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 /// Handler of <see cref="CompleteArtifactUpload"/> (06.1.2 §5, T86 step 5): inside the tenant transaction it reads
 /// the row once, guards its state (the endpoint's verdict is derived from facts read before this transaction
 /// opened, so it is never trusted for the state), re-reads the project's status so a project that flipped to
-/// <c>deleted</c> since the verifier cannot commit, writes the outcome and — for a verified object — the two outbox
-/// rows, in one commit (C7). A row that already holds <c>ready</c>/<c>rejected</c> is returned unchanged: a fresh
-/// key on a completed artifact is a no-op, never a second scan or a second staging delete (T19/T86). The staging
-/// object is deleted only by the <see cref="ArtifactStagingDeleteTaskHandler"/>, after this transaction commits.
+/// <c>deleted</c> since the verifier cannot commit, writes the outcome and — for a verified object — the outbox
+/// rows (the scan and the staging delete, plus the parse row of a raw report when out-of-process parsing is on,
+/// 06.3.6-T1.4), in one commit (C7). A row that already holds <c>ready</c>/<c>rejected</c> is returned unchanged: a
+/// fresh key on a completed artifact is a no-op, never a second scan, a second staging delete or a second parse
+/// (T19/T86). The staging object is deleted only by the <see cref="ArtifactStagingDeleteTaskHandler"/>, after this
+/// transaction commits, and the parse runs only in the Worker (<c>ParseArtifactTaskHandler</c>).
 /// </summary>
 /// <remarks>
 /// The version column is the concurrency token (migration 0028's trigger owns the increment) and the artifact
@@ -115,16 +127,26 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 /// scan or a 23505. No storage call happens here: <c>HEAD</c> and the copy ran before the transaction opened
 /// (00 §5.7 P5).
 /// </remarks>
+/// <param name="contexts">The tenant write model the row is read and written through.</param>
+/// <param name="outbox">The outbox the background rows are written on the same connection and transaction.</param>
+/// <param name="audit">The trail the completed command is recorded on.</param>
+/// <param name="db">The Dapper path, used only for the project-status guard.</param>
+/// <param name="parseOptions">
+/// The parse runner's options, read for the one switch that decides whether a <c>raw_report</c> schedules the parse
+/// task (<c>EVIDGATE__PARSE__OUTOFPROCESS</c>, 06.3.6 §11). Both hosts bind them, because the Api commits the row
+/// even though only the Worker runs the task.
+/// </param>
 [AuditedAction("artifact.complete")]
 [Permission(Permissions.Artifact.Write)]
 internal sealed class CompleteArtifactUploadHandler(
     ITenantDbContextFactory<EvidenceDbContext> contexts,
     IOutboxWriter outbox,
     IAuditTrail audit,
-    ITenantDb db)
+    ITenantDb db,
+    IOptions<ParseRunnerOptions> parseOptions)
     : ICommandHandler<CompleteArtifactUpload, Result<CompleteResponse>>
 {
-    /// <summary>The outbox aggregate the two rows belong to (00 §5.3).</summary>
+    /// <summary>The outbox aggregate the rows belong to (00 §5.3).</summary>
     private const string AggregateType = "artifact";
 
     /// <summary>The <c>project.status</c> that refuses a completion (migration 0005, 06.4.4 AC2).</summary>
@@ -286,9 +308,12 @@ internal sealed class CompleteArtifactUploadHandler(
             : new CompleteResponse(artifact.Id, ArtifactState.Rejected, null, null, artifact.FailureCode);
 
     /// <summary>
-    /// The two outbox rows of 06.1.2 §5 (AC4), written on this scope's connection and transaction so they commit
-    /// with the state change or not at all (C7). The idempotency keys are per artifact, so a second commit cannot
-    /// enqueue a second scan or a second delete; the staging key is derived, never read from the row (T1 decision 7).
+    /// The outbox rows of 06.1.2 §5 (AC4) and 06.3.6-T1.4, written on this scope's connection and transaction so they
+    /// commit with the state change or not at all (C7). The idempotency keys are per artifact, so a second commit
+    /// cannot enqueue a second scan, a second delete or a second parse; the staging key is derived, never read from
+    /// the row (T1 decision 7). The parse row is written only when out-of-process parsing is composed and only for
+    /// <c>raw_report</c>, the one kind with a parse arm: with the flag off nothing extra is scheduled, which is the
+    /// in-process rollback 06.3.6 §11 names, and the other seven kinds are never parsed.
     /// </summary>
     /// <param name="artifact">The row that just became <c>ready</c>.</param>
     /// <param name="cancellationToken">Cancels the statements.</param>
@@ -311,5 +336,17 @@ internal sealed class CompleteArtifactUploadHandler(
             artifact.Id,
             $"evidence:artifact:{artifact.Id:D}:staging_delete",
             cancellationToken).ConfigureAwait(false);
+
+        if (parseOptions.Value.OutOfProcess
+            && string.Equals(artifact.Kind, ArtifactKind.RawReport, StringComparison.Ordinal))
+        {
+            await outbox.EnqueueAsync(
+                EvidenceTaskTypes.Parse,
+                JsonSerializer.Serialize(new { artifact_id = artifact.Id }),
+                AggregateType,
+                artifact.Id,
+                $"evidence:artifact:{artifact.Id:D}:parse",
+                cancellationToken).ConfigureAwait(false);
+        }
     }
 }
