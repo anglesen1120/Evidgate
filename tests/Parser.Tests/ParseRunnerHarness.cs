@@ -24,7 +24,7 @@ internal sealed class ParseRunnerHarness : IDisposable
     {
         TempRoot = Path.Combine(
             Path.GetTempPath(),
-            "evidgate-parse-runner-test-" + Guid.NewGuid().ToString("N"));
+            "evgt-runner-test-" + Guid.NewGuid().ToString("N"));
 
         Directory.CreateDirectory(TempRoot);
     }

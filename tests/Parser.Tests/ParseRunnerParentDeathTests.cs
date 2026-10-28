@@ -85,7 +85,7 @@ public sealed class ParseRunnerParentDeathTests
 
         var root = Path.Combine(
             Path.GetTempPath(),
-            "evidgate-parse-parent-death-" + Guid.NewGuid().ToString("N"));
+            "evgt-runner-parent-death-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
 
         try

@@ -388,7 +388,7 @@ public sealed class ParseRunnerLifecycleTests
     [Fact]
     public void A_Configured_Temp_Root_Is_Resolved_To_An_Absolute_Path()
     {
-        var relativeRoot = "evidgate-parse-relative-" + Guid.NewGuid().ToString("N");
+        var relativeRoot = "evgt-runner-relative-" + Guid.NewGuid().ToString("N");
         var path = ParseRunTempDirectory.Create(relativeRoot);
 
         try
