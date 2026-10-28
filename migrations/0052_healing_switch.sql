@@ -31,7 +31,11 @@
 -- NULL-`org_id` row fails the WITH CHECK (42501). The only writer of the system row is the operator
 -- definer below, which runs as `evidgate_owner` and reaches the row through the owner policy that
 -- FORCE ROW LEVEL SECURITY would otherwise deny (`DECISIONS F5` rejects BYPASSRLS, 0004/0005
--- precedent).
+-- precedent). That owner-rights reach is exactly why the function carries the tenant boundary
+-- itself: RLS cannot stop a definer (it runs as the owner), so the definer refuses to run at all
+-- when `evidgate.current_org_id()` is not NULL. A tenant transaction that found the name — the
+-- grants below are what keep it out of reach, this guard is what keeps it harmless — would otherwise
+-- have written the platform-wide switch from inside one org (23514, and nothing touched).
 --
 -- COLUMNS. `at` is when this scope's mode was last set (the resolver reports it), and
 -- `created_at`/`updated_at`/`version` are the 00 §7 audit columns plus the shared
@@ -61,24 +65,30 @@
 -- role holds no DELETE), and a project override must not survive its project and block that delete
 -- with a 23503.
 --
--- GRANTS. The app role reads (SELECT) and writes its own tenant/project rows: table-level INSERT plus
--- an UPDATE limited to the six columns a switch change re-stamps (`mode`, `reason`, `set_by`, `at`,
--- `updated_at`, `version`), so `id`, `scope`, `org_id` and `project_id` — the row's identity — stay
--- unwritable and no DELETE exists at all (M1W3-05, 0001's default privileges are revoked first, as
--- 0033:91 does). The operator reads through its SELECT grant (TL T76: an audited read with no
--- operator policy until 02.8.1's `evidgate.operator_grant_ok` lands), and the sweep role holds
--- nothing.
+-- GRANTS. The app role reads (SELECT) and writes its own tenant/project rows: INSERT on exactly the
+-- eight columns a switch row is made of (`id`, `scope`, `org_id`, `project_id`, `mode`, `reason`,
+-- `set_by`, `at`) plus an UPDATE limited to what a switch change re-stamps (`mode`, `reason`,
+-- `set_by`, `at`, and the two — `updated_at`, `version` — the shared trigger owns). The column list
+-- is the point, not a formality: `created_at`, `updated_at` and `version` carry defaults and the
+-- trigger, so a caller that could name one on INSERT could backdate a switch change or pin its
+-- concurrency token, and a table-level INSERT would let it. On UPDATE, `id`, `scope`, `org_id` and
+-- `project_id` — the row's identity — stay unwritable and no DELETE exists at all (M1W3-05, 0001's
+-- default privileges are revoked first, as 0033:91 does). The operator reads through its SELECT
+-- grant (TL T76: an audited read with no operator policy until 02.8.1's `evidgate.operator_grant_ok`
+-- lands), and the sweep role holds nothing.
 --
 -- THE DEFINER. `evidgate.healing_switch_set_system` is the operator's only write path to the system
--- row (it cannot be reached from a tenant transaction, see above). It validates `p_mode` against the
--- three storable values (`'unavailable'` and anything else raise 22023
--- `invalid_parameter_value`), upserts the single `scope = 'system'` row (`insert` when absent,
--- `update` otherwise, so the shared trigger bumps `version` and `updated_at`) and RETURNs the stored
--- row so the route can answer exactly what the database now holds. A concurrent first write cannot
--- defeat it: the loser of the insert race re-runs the update on the `unique_violation`. It is
--- `SECURITY DEFINER` with a pinned empty `search_path` and every relation schema-qualified (0051
--- precedent); EXECUTE is granted to `evidgate_app` alone, which is the role the operator ingress runs
--- as (02.8.1's `RequireOperatorFilter` gate).
+-- row, and it refuses to run at all from inside a tenant transaction (a non-NULL
+-- `evidgate.current_org_id()`, 23514 `check_violation`) — the owner's rights would otherwise cross the tenant boundary
+-- that RLS enforces (see the WRITABLE paragraph above). It validates `p_mode` against the three
+-- storable values (`'unavailable'` and anything else raise 22023 `invalid_parameter_value`), upserts
+-- the single `scope = 'system'` row (`insert` when absent, `update` otherwise, so the shared trigger
+-- bumps `version` and `updated_at`) and RETURNs the stored row so the route can answer exactly what
+-- the database now holds. A concurrent first write cannot defeat it: the loser of the insert race
+-- re-runs the update on the `unique_violation`. It is `SECURITY DEFINER` with a pinned empty
+-- `search_path` and every relation — and `evidgate.current_org_id()` — schema-qualified (0051
+-- precedent); EXECUTE is granted to `evidgate_app` alone, which is the role the operator route runs as
+-- (02.8.1's `RequireOperatorFilter` gate).
 --
 -- DEPLOY ORDER: MIGRATE BEFORE APP. The module, its wire routes and the operator ingress are new in
 -- this story, so nothing binds to the table before this file is applied. Rollback: `drop function if
@@ -114,8 +124,11 @@ create table if not exists public.healing_switch (
   constraint healing_switch_scope_org_check check ((scope = 'system') = (org_id is null)),
   -- Only a `project` row carries a project; `system` and `tenant` rows carry none.
   constraint healing_switch_scope_project_check check ((scope = 'project') = (project_id is not null)),
-  -- The wire bound of the route (`reason` ≤ 2000), enforced by the database as the last line;
-  -- an empty string is a stored "no reason given", not a violation.
+  -- The wire bound of the route (`reason` ≤ 2000 characters, counted in code points because that is
+  -- the unit `char_length` uses), enforced by the database as the last line. An empty string passes
+  -- this CHECK — it is a stored "no reason given" here; the routes' own validation is what refuses
+  -- an empty `reason` (422 `request_invalid`, detail `reason: empty`), so an empty value never
+  -- arrives through them.
   constraint healing_switch_reason_length_check check (reason is null or char_length(reason) <= 2000),
   constraint healing_switch_version_check check (version >= 1)
 );
@@ -171,12 +184,13 @@ create policy healing_switch_owner_backfill on public.healing_switch
 
 -- 0001's default privileges grant `evidgate_app` full DML on every table the migration role creates
 -- in `public`, so the grants below would be additive no-ops without the revoke (0006/0009/0027/0033
--- precedent). After it the app role holds SELECT, table-level INSERT on the columns a switch row
--- needs, and UPDATE on exactly the six re-stamped columns: it can neither delete a switch nor rewrite
--- a row's identity, and it can never write a `system` row (the policy above refuses one).
+-- precedent). After it the app role holds SELECT, INSERT on the eight columns a switch row is made
+-- of, and UPDATE on the columns a switch change re-stamps: it can neither delete a switch nor rewrite
+-- a row's identity or its trigger-owned audit columns, and it can never write a `system` row (the
+-- policy above refuses one).
 revoke insert, update, delete on public.healing_switch from evidgate_app;
 grant select on public.healing_switch to evidgate_app;
-grant insert on public.healing_switch to evidgate_app;
+grant insert (id, scope, org_id, project_id, mode, reason, set_by, at) on public.healing_switch to evidgate_app;
 grant update (mode, reason, set_by, at, updated_at, version) on public.healing_switch to evidgate_app;
 
 -- TL T76: the operator's read is grant-gated with no operator policy until 02.8.1's
@@ -188,7 +202,8 @@ revoke all on public.healing_switch from evidgate_worker_sched;
 -- The operator's write path to the system row. The tenant write path is a plain app-role UPDATE on
 -- its own rows (no definer needed, 00 §5.5 C6 prefers a grant to a definer); only the tenant-less
 -- `system` row cannot be reached that way, which is what makes this function necessary rather than
--- decorative.
+-- decorative — and the function refuses a call made from inside a tenant transaction, so the rights
+-- it borrows from `evidgate_owner` never act on one org's behalf.
 --
 -- The body's `returning` lists are qualified with the row alias `h` and the results land in `v_*`
 -- locals: the RETURNS TABLE column names (`mode`, `reason`, `set_by`, `at`, `version`) are plpgsql
@@ -210,6 +225,20 @@ declare
   v_at timestamptz;
   v_version integer;
 begin
+  -- The tenant boundary, enforced by the function itself. RLS cannot do it here: this SECURITY DEFINER
+  -- runs as `evidgate_owner`, which the owner policy lets through, so a caller inside a tenant
+  -- transaction (evidgate.current_org_id() non-NULL) would reach the platform-wide row with the
+  -- operator's rights. The refusal is first, before the argument checks and before any statement, and
+  -- it leaves the table untouched; the operator route runs on its own non-tenant connection, where the
+  -- setting is unset (NULL) and the call proceeds.
+  -- 23514, not 42501: the caller holds EXECUTE (only `evidgate_app` ever does), so no grant is missing — what is
+  -- wrong is the writer's context, the same shape as 0027:102-105 / 0030:164-167 ("written only by X, not by
+  -- evidgate_app"). 42501 stays the code of the real grant and policy boundaries on this table.
+  if evidgate.current_org_id() is not null then
+    raise exception 'healing switch: the system row is not writable inside a tenant transaction (org %)', evidgate.current_org_id()
+      using errcode = '23514';
+  end if;
+
   -- `unavailable` is a dependency observation, never a storable mode (AC2); the refusal is the
   -- database's own, so no caller can widen the vocabulary by forgetting the route's validation.
   if p_mode is null or p_mode not in ('enabled', 'shadow', 'disabled') then

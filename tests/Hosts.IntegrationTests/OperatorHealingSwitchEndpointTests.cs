@@ -3,7 +3,9 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
 using Evidgate.Api.OperatorIngress;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -49,7 +51,9 @@ public sealed class OperatorHealingSwitchEndpointTests
         }
     }
 
-    /// <summary>AC1/T72: the default (fail-closed) gate answers 401 <c>unauthenticated</c> and writes no row.</summary>
+    /// <summary>
+    /// AC1/T72: the default (fail-closed) gate answers 401 <c>unauthenticated</c> and writes no row.
+    /// </summary>
     [Fact]
     public async Task The_default_gate_denies_the_system_switch()
     {
@@ -60,6 +64,26 @@ public sealed class OperatorHealingSwitchEndpointTests
 
         using var response = await client.PostAsJsonAsync(
             "/internal/operator/healing/switch", new { mode = "shadow" }, Token);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        (await ErrorCodeAsync(response)).ShouldBe("unauthenticated");
+    }
+
+    /// <summary>
+    /// The body is read inside the handler, after the gate and the attribution checks: an anonymous caller sending a
+    /// body that is not even JSON still gets 401, so the route never parses untrusted input before it is admitted
+    /// (SR-F6, decision (d)).
+    /// </summary>
+    [Fact]
+    public async Task The_gate_decides_before_the_body_is_parsed()
+    {
+        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+
+        await using var factory = new EvidgateApiFactory(connectionString);
+        using var client = factory.CreateClient();
+
+        using var content = new StringContent("{not json at all", System.Text.Encoding.UTF8, "application/json");
+        using var response = await client.PostAsync("/internal/operator/healing/switch", content, Token);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await ErrorCodeAsync(response)).ShouldBe("unauthenticated");
@@ -109,6 +133,35 @@ public sealed class OperatorHealingSwitchEndpointTests
             "/internal/operator/healing/switch", new { mode = "enabled" }, Token);
         enabled.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await ErrorCodeAsync(enabled)).ShouldBe("mode_not_available");
+    }
+
+    /// <summary>
+    /// AC7 on the operator path with the clamp on: a host configured with <c>EVIDGATE:Healing:Apply=true</c> stores
+    /// <c>enabled</c> on the platform row, so the flag both writers read really is the deployment key.
+    /// </summary>
+    [Fact]
+    public async Task The_permitted_operator_may_enable_healing_when_the_clamp_is_on()
+    {
+        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+
+        await using var factory = new EvidgateApiFactory(
+            connectionString,
+            configureServices: services => services.AddSingleton<IOperatorGate>(new PermitGate(OperatorId)));
+        await using var host = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+                {
+                    ["EVIDGATE:Healing:Apply"] = "true",
+                })));
+        using var client = host.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/internal/operator/healing/switch", new { mode = "enabled" }, Token);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(Token), cancellationToken: Token);
+        body.RootElement.GetProperty("scope").GetString().ShouldBe("system");
+        body.RootElement.GetProperty("mode").GetString().ShouldBe("enabled");
     }
 
     /// <summary>

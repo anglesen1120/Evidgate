@@ -14,8 +14,12 @@ namespace Evidgate.Modules.Healing.Application;
 /// </summary>
 internal sealed class HealingOptions
 {
-    /// <summary>The configuration section the options bind from.</summary>
-    public const string SectionName = "Healing";
+    /// <summary>
+    /// The configuration section the options bind from — <c>EVIDGATE:Healing</c>, the deployment prefix every module
+    /// section carries (the environment spelling is <c>EVIDGATE__HEALING__APPLY</c>, D-S124-Q3), so the documented key
+    /// really is the key that flips the clamp.
+    /// </summary>
+    public const string SectionName = "EVIDGATE:Healing";
 
     /// <summary>
     /// Whether healing may be <em>enabled</em> (08.6.3 §3, T33): <c>false</c> (the default) keeps every scope at
@@ -45,7 +49,7 @@ internal sealed class HealingApplyPolicy(IOptionsMonitor<HealingOptions> options
 /// The one place the switch body's mode and reason are judged (08.6.3 §3, AC1/AC2/AC7), shared by the tenant route
 /// and the operator's system-scope writer so the two can never drift: the mode is one of the three storable values
 /// (<c>unavailable</c> and every other token is 422 <c>invalid_switch_mode</c>), <c>enabled</c> is 422
-/// <c>mode_not_available</c> while <c>Healing:Apply</c> is off, and the reason is 1–2000 storable characters when
+/// <c>mode_not_available</c> while <c>Healing:Apply</c> is off, and the reason is 1–2000 Unicode code points when
 /// present.
 /// </summary>
 internal static class HealingModeGate
@@ -80,12 +84,17 @@ internal static class HealingModeGate
             return null;
         }
 
+        // The route's schema already refuses `""` (`minLength: 1`), so on the HTTP path this branch is defence in
+        // depth for a direct caller of the gate (the operator writer, a unit test): an empty reason is never stored.
         if (reason.Length == 0)
         {
             return Error.Invalid("the switch request is not valid", [new ErrorDetail("reason", "empty")]);
         }
 
-        if (reason.Length > ReasonMaxLength)
+        // Counted in code points, the unit the column's own `length(reason)` check uses (QuarantineSupport's
+        // precedent): `string.Length` is UTF-16 units, so "😀" would otherwise cost 2 and a 1001-emoji reason —
+        // 1001 characters to PostgreSQL — would be refused here for a bound the database does not enforce.
+        if (LongerThan(reason, ReasonMaxLength))
         {
             return Error.Invalid("the switch request is not valid", [new ErrorDetail("reason", "too_long")]);
         }
@@ -93,6 +102,23 @@ internal static class HealingModeGate
         return reason.Contains('\0')
             ? Error.Invalid("the switch request is not valid", [new ErrorDetail("reason", "invalid_value")])
             : null;
+    }
+
+    /// <summary>True when <paramref name="text"/> holds more than <paramref name="maximum"/> Unicode code points.</summary>
+    /// <param name="text">The reason text.</param>
+    /// <param name="maximum">The largest acceptable code-point count.</param>
+    private static bool LongerThan(string text, int maximum)
+    {
+        var count = 0;
+        foreach (var _ in text.EnumerateRunes())
+        {
+            if (++count > maximum)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -183,17 +209,27 @@ internal static class HealingSwitchSql
         """ + " " + Returning;
 
     /// <summary>
-    /// The operator's system-scope write (migration 0052's definer): the one path to the tenant-less row. The casts
-    /// carry the NULLs Npgsql cannot type.
+    /// The live-project check of a <c>project</c> scope, under RLS (another tenant's project reads nothing). A
+    /// soft-deleted project is not live: the row's <c>status</c> is the registry's tombstone, so it reads no row and
+    /// the route answers the same 404 an unknown id gets (like <c>WaiverSupport.ProjectExists</c>).
     /// </summary>
-    internal const string SetSystem = """
-        select mode, reason, set_by, at, version
-          from evidgate.healing_switch_set_system(@mode::text, @reason::text, @set_by::uuid)
+    internal const string ProjectExists = """
+        select 1 from public.project where id = @project_id::uuid and status <> 'deleted'
         """;
 
-    /// <summary>The live-project check of a <c>project</c> scope, under RLS (another tenant's project reads nothing).</summary>
-    internal const string ProjectExists = """
-        select 1 from public.project where id = @project_id::uuid
+    /// <summary>
+    /// The same live-project check, taking the row <c>FOR SHARE</c> for the write path: the upsert's check and its
+    /// insert run under this lock, so a concurrent soft delete (the registry's <c>status</c> update) cannot retire the
+    /// project between the check and the row that would then point at it. <c>evidgate_app</c> holds table-level
+    /// <c>UPDATE</c> on <c>public.project</c> (0005), so the lock is permitted — the same posture as
+    /// <c>QuarantineSupport.LockProjectForShare</c>.
+    /// </summary>
+    internal const string ProjectExistsForShare = """
+        select 1
+          from public.project
+         where id = @project_id::uuid
+           and status <> 'deleted'
+           for share
         """;
 }
 
@@ -249,11 +285,18 @@ internal sealed class HealingSwitchStore(ITenantDb db, ITenantScopeAccessor scop
             new { org_id = scopes.Require().OrgId, project_id = projectId },
             cancellationToken);
 
-    /// <summary>Whether <paramref name="projectId"/> is a project of the caller's org (404 when it is not).</summary>
+    /// <summary>
+    /// Whether <paramref name="projectId"/> is a live project of the caller's org (404 when it is not). The write path
+    /// asks for the row <c>FOR SHARE</c> so a concurrent soft delete cannot land between this check and the upsert.
+    /// </summary>
     /// <param name="projectId">The project named by the body or query.</param>
+    /// <param name="forShare">Whether this is the write path, which locks the project row.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    internal async Task<bool> ProjectExistsAsync(Guid projectId, CancellationToken cancellationToken) =>
-        await db.ScalarAsync<int?>(HealingSwitchSql.ProjectExists, new { project_id = projectId }, cancellationToken)
+    internal async Task<bool> ProjectExistsAsync(Guid projectId, bool forShare, CancellationToken cancellationToken) =>
+        await db.ScalarAsync<int?>(
+                forShare ? HealingSwitchSql.ProjectExistsForShare : HealingSwitchSql.ProjectExists,
+                new { project_id = projectId },
+                cancellationToken)
             .ConfigureAwait(false) is not null;
 }
 

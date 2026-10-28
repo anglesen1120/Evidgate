@@ -73,6 +73,22 @@ public sealed class V1ModeClampTests
             .ShouldContain(detail => detail.Path == "reason" && detail.Reason == "invalid_value");
     }
 
+    /// <summary>
+    /// The reason bound counts Unicode code points (QA-D7), the unit the column's own <c>length(reason)</c> check
+    /// uses: 1001 emoji are 1001 characters to PostgreSQL and accepted, while their 2002 UTF-16 units must not be
+    /// what the gate measures. One code point over the bound is still refused.
+    /// </summary>
+    [Fact]
+    public void The_reason_bound_counts_code_points()
+    {
+        var emoji = string.Concat(Enumerable.Repeat("😀", 1001));
+
+        HealingModeGate.Check("shadow", emoji, applyEnabled: false).ShouldBeNull();
+
+        Details(HealingModeGate.Check("shadow", string.Concat(Enumerable.Repeat("😀", 2001)), applyEnabled: false))
+            .ShouldContain(detail => detail.Path == "reason" && detail.Reason == "too_long");
+    }
+
     /// <summary>The details of a refusal, which every gate answer in these tests carries.</summary>
     private static IReadOnlyList<Evidgate.BuildingBlocks.SharedKernel.Api.ErrorDetail> Details(
         Evidgate.BuildingBlocks.SharedKernel.Results.Error? error)

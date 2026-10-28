@@ -18,8 +18,9 @@ namespace Tenancy.IntegrationTests;
 /// </description></item>
 /// <item><description>
 /// the operator definer <c>evidgate.healing_switch_set_system</c>: it upserts the one system row, the
-/// shared trigger bumps <c>version</c>, an unstorable mode is refused with 22023, and EXECUTE is held
-/// by <c>evidgate_app</c> alone (AC9);
+/// shared trigger bumps <c>version</c>, an unstorable mode is refused with 22023, a call made from
+/// inside a tenant transaction is refused with 23514 and writes nothing, and EXECUTE is held by
+/// <c>evidgate_app</c> alone (AC9);
 /// </description></item>
 /// <item><description>
 /// the resolution read's plan: the resolver's SELECT is answered from the three partial unique
@@ -196,6 +197,7 @@ public sealed class HealingSwitchSchemaTests
             "c:healing_switch_mode_check:",
             "c:healing_switch_scope_org_check:",
             "c:healing_switch_scope_project_check:",
+            "c:healing_switch_reason_length_check:",
             "c:healing_switch_version_check:",
         })
         {
@@ -261,6 +263,80 @@ public sealed class HealingSwitchSchemaTests
 
         error.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
         error.ConstraintName.ShouldBe("healing_switch_mode_check");
+    }
+
+    [Fact]
+    public async Task ReasonLength_IsCountedInCodePoints_AndAnEmptyReasonIsStorable()
+    {
+        var world = await SeedTenantsAsync();
+
+        // `char_length` counts code points, not UTF-16 units, so 2000 astral characters fit — the same unit
+        // the route's own 2000-character check uses (HealingModeGate, `EnumerateRunes`). The database is the
+        // last line of that bound, not a narrower one.
+        var twoThousand = string.Concat(Enumerable.Repeat("\U0001F600", 2000));
+
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA))
+        {
+            await scope.ExecuteAsync(
+                """
+                insert into public.healing_switch (id, scope, org_id, project_id, mode, reason, set_by, at)
+                values (@id, 'tenant', @org_id, null, 'shadow', @reason, @set_by, now())
+                """,
+                ("id", Guid.CreateVersion7()),
+                ("org_id", world.OrgA),
+                ("reason", twoThousand),
+                ("set_by", Guid.CreateVersion7()));
+            await scope.CommitAsync();
+        }
+
+        (await _fixture.ScalarAsync<int>(
+            world.Database,
+            "select char_length(reason) from public.healing_switch where scope = 'tenant'"))
+            .ShouldBe(2000, "the column stores 2000 code points, not 2000 UTF-16 units");
+
+        // One code point over the bound is the CHECK's refusal, whoever writes.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            var error = await scope.CaptureErrorAsync(
+                """
+                insert into public.healing_switch (id, scope, org_id, project_id, mode, reason, set_by, at)
+                values (@id, 'project', @org_id, @project_id, 'shadow', @reason, @set_by, now())
+                """,
+                ("id", Guid.CreateVersion7()),
+                ("org_id", world.OrgA),
+                ("project_id", world.ProjectA),
+                ("reason", twoThousand + "\U0001F600"),
+                ("set_by", Guid.CreateVersion7()));
+
+            error.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
+            error.ConstraintName.ShouldBe("healing_switch_reason_length_check");
+        }
+
+        // An empty string passes the CHECK — the database stores "no reason given"; it is the routes'
+        // validation that refuses an empty `reason` (422 `reason: empty`), so nothing empty arrives here
+        // through them. Pinned so the migration comment and the behaviour cannot drift apart.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            await scope.ExecuteAsync(
+                """
+                insert into public.healing_switch (id, scope, org_id, project_id, mode, reason, set_by, at)
+                values (@id, 'project', @org_id, @project_id, 'shadow', '', @set_by, now())
+                """,
+                ("id", Guid.CreateVersion7()),
+                ("org_id", world.OrgA),
+                ("project_id", world.ProjectA),
+                ("set_by", Guid.CreateVersion7()));
+            await scope.CommitAsync();
+        }
+
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            """
+            select bool_or(reason = '' and reason is not null)
+              from public.healing_switch
+             where scope = 'project'
+            """))
+            .ShouldBeTrue("the CHECK bounds the length only; an empty reason is storable");
     }
 
     [Fact]
@@ -550,6 +626,50 @@ public sealed class HealingSwitchSchemaTests
     }
 
     [Fact]
+    public async Task AppRole_InsertsOnlyTheEightSwitchColumns()
+    {
+        var world = await SeedTenantsAsync();
+
+        // The grant is column-level on exactly the eight columns a switch row is made of (CR: a
+        // table-level INSERT would let a caller name `created_at`, `updated_at` or `version` and backdate
+        // a switch change or pin its concurrency token). `has_table_privilege` stays false for a
+        // column-level grant, so both halves are asserted.
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            $"select has_table_privilege('evidgate_app', 'public.{Table}', 'INSERT')"))
+            .ShouldBeFalse("INSERT is granted per column, never on the table");
+
+        foreach (var column in new[] { "id", "scope", "org_id", "project_id", "mode", "reason", "set_by", "at" })
+        {
+            (await _fixture.ScalarAsync<bool>(
+                world.Database,
+                $"select has_column_privilege('evidgate_app', 'public.{Table}', '{column}', 'INSERT')"))
+                .ShouldBeTrue($"the app role inserts `{column}`");
+        }
+
+        foreach (var column in new[] { "created_at", "updated_at", "version" })
+        {
+            (await _fixture.ScalarAsync<bool>(
+                world.Database,
+                $"select has_column_privilege('evidgate_app', 'public.{Table}', '{column}', 'INSERT')"))
+                .ShouldBeFalse($"`{column}` belongs to the column defaults and the trigger, not to the caller");
+        }
+
+        // … and naming one of them is refused before any policy or CHECK runs.
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA);
+        var error = await scope.CaptureErrorAsync(
+            """
+            insert into public.healing_switch (id, scope, org_id, project_id, mode, set_by, at, version)
+            values (@id, 'tenant', @org_id, null, 'shadow', @set_by, now(), 7)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", world.OrgA),
+            ("set_by", Guid.CreateVersion7()));
+
+        error.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+    }
+
+    [Fact]
     public async Task CompositeFk_RefusesAProjectOfAnotherTenant()
     {
         var world = await SeedTenantsAsync();
@@ -618,9 +738,10 @@ public sealed class HealingSwitchSchemaTests
     }
 
     [Fact]
-    public async Task Definer_TouchesOnlyTheSystemRow()
+    public async Task Definer_RefusesATenantTransaction_AndLeavesEveryRowAlone()
     {
         var world = await SeedTenantsAsync();
+        await SetSystemAsync(world, "enabled");
 
         await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA))
         {
@@ -629,35 +750,71 @@ public sealed class HealingSwitchSchemaTests
             await scope.CommitAsync();
         }
 
-        // The operator's call runs the definer as the owner, so it is NOT confined by the tenant setting it
-        // happens to run under: what keeps it to the system row is the function's own predicate.
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA))
+        var before = await AllRowsAsync(world.Database);
+
+        // The definer borrows `evidgate_owner`'s rights, so row level security cannot confine it: the
+        // function refuses on its own account when a tenant context is set — before the argument checks
+        // and before any statement — and the refusal is the same for every org. It is a 23514 (wrong
+        // writer/context, 0027/0030 precedent), not a 42501: the caller does hold EXECUTE.
+        foreach (var org in new[] { world.OrgA, world.OrgB })
         {
-            await scope.ScalarAsync<string>(
-                "select r.mode from evidgate.healing_switch_set_system(@mode, @reason, @set_by) r",
-                ("mode", "disabled"),
-                ("reason", "operator"),
+            await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), org);
+            var error = await scope.CaptureErrorAsync(
+                "select * from evidgate.healing_switch_set_system('disabled', 'operator', @set_by)",
                 ("set_by", Guid.CreateVersion7()));
-            await scope.CommitAsync();
+
+            error.SqlState.ShouldBe(
+                PostgresErrorCodes.CheckViolation,
+                "a tenant transaction must not reach the platform-wide switch through the definer");
+            error.MessageText.ShouldContain("tenant transaction");
         }
 
-        var stored = await _fixture.ColumnAsync<string>(
-            world.Database,
-            """
-            select scope || ':' || mode || ':' || version
-              from public.healing_switch
-             where scope <> 'system'
-             order by scope
-            """);
-        stored.ShouldBe(
-            ["project:enabled:1", "tenant:enabled:1"],
-            "the definer neither rewrites nor re-versions a tenant/project row");
+        (await AllRowsAsync(world.Database)).ShouldBe(
+            before,
+            "a refused call writes nothing: no system, tenant or project row changes, not even its version");
 
-        (await _fixture.ScalarAsync<long>(
-            world.Database,
-            "select count(*) from public.healing_switch where scope = 'system'"))
-            .ShouldBe(1, "and it never creates a second system row");
+        // Outside a tenant context the call still works — the app role on the operator route's own
+        // connection (no org GUC) …
+
+        await using (var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database)))
+        {
+            (await app.ScalarAsync<string>(
+                "select r.mode || ':' || r.version from evidgate.healing_switch_set_system('disabled', 'operator', @set_by) r",
+                ("set_by", Guid.CreateVersion7())))
+                .ShouldBe("disabled:2", "the first update of the seeded row bumps version 1 -> 2");
+            await app.CommitAsync();
+        }
+
+        // … and as the owner, which is how a migration or a backfill would call it.
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            (await owner.ScalarAsync<string>(
+                "select r.mode || ':' || r.version from evidgate.healing_switch_set_system('shadow', null, @set_by) r",
+                ("set_by", Guid.CreateVersion7())))
+                .ShouldBe("shadow:3");
+            await owner.CommitAsync();
+        }
+
+        (await AllRowsAsync(world.Database)).ShouldBe(
+            "project:enabled:1:-,system:shadow:3:-,tenant:enabled:1:-",
+            "the definer writes the system row and nothing else, at any scope");
     }
+
+    /// <summary>
+    /// Every switch row as <c>scope:mode:version:reason</c> (<c>-</c> for a null reason), scope-ordered — a
+    /// whole-table snapshot, so a refusal can prove that nothing anywhere moved.
+    /// </summary>
+    private async Task<string> AllRowsAsync(string database) =>
+        await _fixture.ScalarAsync<string>(
+            database,
+            """
+            select coalesce(
+                     string_agg(
+                       scope || ':' || mode || ':' || version || ':' || coalesce(reason, '-'),
+                       ',' order by scope),
+                     '')
+              from public.healing_switch
+            """);
 
     [Fact]
     public async Task Definer_RefusesAModeOutsideTheThree()

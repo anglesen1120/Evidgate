@@ -25,7 +25,7 @@ internal sealed record HealingSwitchView(
     Guid? ProjectId,
     string Mode,
     string? Reason,
-    Guid SetBy,
+    Guid? SetBy,
     DateTimeOffset At,
     int Version)
 {
@@ -35,6 +35,19 @@ internal sealed record HealingSwitchView(
     {
         ArgumentNullException.ThrowIfNull(row);
         return new HealingSwitchView(row.Scope, row.ProjectId, row.Mode, row.Reason, row.SetBy, row.At, row.Version);
+    }
+
+    /// <summary>
+    /// The <c>system</c> row as a <em>tenant</em> read may see it: the mode (which governs the caller) and the
+    /// row's <c>at</c>/<c>version</c>, but neither the operator's <c>set_by</c> nor the free-text <c>reason</c> —
+    /// those are the platform operator's identity and incident notes, not something every tenant may read. The
+    /// operator's own response to <c>POST /internal/operator/healing/switch</c> keeps both (it is the writer).
+    /// </summary>
+    /// <param name="row">The stored system row.</param>
+    internal static HealingSwitchView Redacted(HealingSwitchRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        return new HealingSwitchView(row.Scope, row.ProjectId, row.Mode, Reason: null, SetBy: null, row.At, row.Version);
     }
 }
 
@@ -70,7 +83,9 @@ internal sealed record GetHealingSwitchQuery(Guid? ProjectId) : IQuery<Result<He
 /// Handler of <see cref="GetHealingSwitchQuery"/> (08.6.3 AC2/AC9): <c>healing:triage</c> reads the switch (00 §2 —
 /// triage sees whether healing may act), a named project must be in scope and live (404 otherwise, like the waiver
 /// list), and the answer is one SQL statement over at most three rows. Missing rows are null and contribute nothing;
-/// with no row at any scope the resolution is <c>shadow</c>, the V1 posture of healing that never applies.
+/// with no row at any scope the resolution is <c>shadow</c>, the V1 posture of healing that never applies. The
+/// <c>system</c> member is redacted: mode, <c>at</c> and <c>version</c> only, with <c>set_by</c> and <c>reason</c>
+/// null, so the platform operator's identity and incident notes never reach a tenant read.
 /// </summary>
 [Permission(Permissions.Healing.Triage)]
 internal sealed class GetHealingSwitchQueryHandler(
@@ -91,7 +106,7 @@ internal sealed class GetHealingSwitchQueryHandler(
                 return Result.Failure<HealingSwitchResolutionView>(mismatch);
             }
 
-            if (!await store.ProjectExistsAsync(named, cancellationToken).ConfigureAwait(false))
+            if (!await store.ProjectExistsAsync(named, forShare: false, cancellationToken).ConfigureAwait(false))
             {
                 return Result.Failure<HealingSwitchResolutionView>(
                     Error.NotFound("no live project with that id is visible to this tenant"));
@@ -115,17 +130,18 @@ internal sealed class GetHealingSwitchQueryHandler(
             }
 
             modes.Add(mode);
-            var view = HealingSwitchView.Of(row);
             switch (row.Scope)
             {
                 case HealingSwitchScopes.System:
-                    system = view;
+                    // The platform row governs every org, but its operator identity and reason are not the tenants'
+                    // to read: mode/at/version only (SR-F2, decision (b)).
+                    system = HealingSwitchView.Redacted(row);
                     break;
                 case HealingSwitchScopes.Tenant:
-                    tenantRow = view;
+                    tenantRow = HealingSwitchView.Of(row);
                     break;
                 case HealingSwitchScopes.Project:
-                    projectRow = view;
+                    projectRow = HealingSwitchView.Of(row);
                     break;
                 default:
                     break;

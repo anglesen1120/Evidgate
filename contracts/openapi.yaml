@@ -4635,7 +4635,9 @@ paths:
         it is an observation of 08.6.3-T2's health probes, and both `dependency_health` fields are `null`
         until then (`null` means not observed, never healthy). A `project_id` outside the credential's or
         the request's scope is `403 project_scope_mismatch`; an unknown, soft-deleted or other-tenant one is
-        `404` (also for another tenant's project). One SQL statement reads the three rows (AC9).
+        `404` (also for another tenant's project). The `system` member is redacted for a tenant read: `mode`, `at`
+        and `version` only, with `set_by` and `reason` null — the operator's identity and incident notes stay on the
+        operator ingress. One SQL statement reads the three rows (AC9).
       x-permission: healing:triage
       x-version: v1
       parameters:
@@ -4677,8 +4679,9 @@ paths:
         is a dependency observation and not a configuration — is `422 invalid_switch_mode`, and `enabled`
         while the deployment runs with `Healing:Apply` off (the default in V1, ruling T33) is `422
         mode_not_available`, on this route and on the operator's system write alike. The body is
-        `contracts/schemas/healing-switch-set.v1.json` (closed, 4 KiB → `413`); `reason` is 1–2000
-        characters when present. A change writes one `healing.switch_changed` outbox event carrying the
+        `contracts/schemas/healing-switch-set.v1.json` (closed, 4 KiB → `413`); `reason` is 1–2000 Unicode code
+        points when present — the unit the column's own `length(reason)` check uses, so a reason of 1001 emoji is
+        1001 characters and fits. A change writes one `healing.switch_changed` outbox event carrying the
         row's version, so a retry adds none.
       x-permission: healing:configure
       x-version: v1
@@ -8810,7 +8813,9 @@ components:
       description: >-
         One stored switch scope (08.6.3-T1, 00 §8.7). `scope`, `org_id` and `project_id` are the row's identity and
         cannot be rewritten: a change re-stamps only the mode, the reason, who set it and when, and the database bumps
-        `version` itself.
+        `version` itself. The `system` member of a tenant's `GET` is redacted (SR-F2): it carries `mode`, `at` and
+        `version` only, with `set_by` and `reason` null, because the platform operator's identity and incident notes
+        are not the tenants' to read. The operator's own write response keeps both.
       required: [scope, project_id, mode, reason, set_by, at, version]
       properties:
         scope:
@@ -8826,9 +8831,12 @@ components:
         reason:
           type: [string, 'null']
           maxLength: 2000
+          description: The free-text reason of the change; null on a redacted `system` row and when none was given
         set_by:
-          type: string
+          type: [string, 'null']
           format: uuid
+          description: >-
+            The member (or platform operator) who set this scope; null on a redacted `system` row of a tenant's `GET`
         at:
           type: string
           format: date-time

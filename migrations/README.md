@@ -125,7 +125,9 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   closed `mode in ('enabled','shadow','disabled')` vocabulary (`unavailable` is a runtime observation,
   never a stored mode), the `catalogue` read policy that lets every tenant read the tenant-less system
   row while the write policy keeps that row unreachable from a tenant transaction, and the
-  `evidgate.healing_switch_set_system` definer the operator ingress writes the system row through
+  `evidgate.healing_switch_set_system` definer the operator route writes the system row through —
+  which itself refuses a call made inside a tenant transaction (`23514`, nothing written), because a
+  definer runs as the owner and row level security cannot confine it
   (`contracts/rls-exceptions.txt` lists the table because of its NULL-org row);
   the next free number is `0053`;
   a gap means two branches invented the same sequence and neither history can be trusted.
@@ -358,7 +360,7 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
 ## Notes on `healing_switch` (08.6.3-T1, `0052`)
 
 - One row per scope, and the scope IS the identity: `healing_switch_system_key (scope) where scope =
-  'system'`, `healing_switch_tenant_key (org_id) where scope = 'tenant'` and
+'system'`, `healing_switch_tenant_key (org_id) where scope = 'tenant'` and
   `healing_switch_project_key (org_id, project_id) where scope = 'project'`. The resolver reads
   `where scope = 'system' or (org_id = <org> and scope in ('tenant','project'))` and takes the most
   restrictive row (`disabled` > `shadow` > `enabled`); with no row at any scope it resolves to
@@ -377,15 +379,27 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   `org_id` NULL fails the WITH CHECK (`42501`).
 - The system row's only writer is `evidgate.healing_switch_set_system` (`SECURITY DEFINER`, pinned
   `search_path = ''`, EXECUTE to `evidgate_app` alone, and exempt from the per-call audit row because
-  `audit_log` is chained per org and this row has no org — the operator ingress `RequireOperatorFilter`
-  and the security_event receiver 11.5.1-T5 attest the action instead). It upserts and returns the
-  stored row, refuses a mode outside the three with `22023`, and survives a concurrent first write by
-  re-running its update on the `unique_violation`.
-- The app role holds `select, insert` plus `update (mode, reason, set_by, at, updated_at, version)`:
-  a switch's identity (`id`, `scope`, `org_id`, `project_id`) is unwritable and there is no DELETE at
-  all, so a tenant can move its own switch between `enabled`/`shadow`/`disabled` and nothing else.
+  `audit_log` is chained per org and this row has no org). It upserts and returns the stored row,
+  refuses a mode outside the three with `22023`, survives a concurrent first write by re-running its
+  update on the `unique_violation`, and — because it runs with `evidgate_owner`'s rights, which row
+  level security does not confine — refuses a call made from inside a tenant transaction with `23514`
+  before it touches a row. What attests a system write instead of an audit row is the operator route
+  `POST /internal/operator/healing/switch` (behind 02.8.1's fail-closed `RequireOperatorFilter`),
+  which writes a structured operator log event (mode, set_by, version — never the reason text) on
+  every write, plus the `security_event` row 11.5.1-T5 will add once that table lands (an open
+  receiver; `security_event` does not exist yet).
+- The app role holds `select`, `insert (id, scope, org_id, project_id, mode, reason, set_by, at)` and
+  `update (mode, reason, set_by, at, updated_at, version)`: INSERT is column-level on purpose, so a
+  caller cannot name `created_at`, `updated_at` or `version` and backdate a switch change or pin its
+  concurrency token. A switch's identity (`id`, `scope`, `org_id`, `project_id`) is unwritable and
+  there is no DELETE at all, so a tenant can move its own switch between
+  `enabled`/`shadow`/`disabled` and nothing else.
+- `reason` is a free text of at most 2000 characters, counted by `char_length` — code points, the
+  same unit the routes count — and an empty string passes that CHECK (the routes refuse an empty
+  `reason` themselves, 422 `request_invalid` `reason: empty`, so nothing empty arrives through them).
+  The column is a stored justification, not a control input: the resolver never reads it.
 - Rollback: `drop function if exists evidgate.healing_switch_set_system(text, text, uuid); drop table
-  if exists public.healing_switch;` plus the `contracts/rls-exceptions.txt` line, in the same change.
+if exists public.healing_switch;` plus the `contracts/rls-exceptions.txt` line, in the same change.
   The table holds configuration only.
 
 ## Notes on `evidence_revision` (05.3.2-T5, `0049`)

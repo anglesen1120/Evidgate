@@ -16,7 +16,8 @@ namespace Isolation.Tests;
 /// added by a later migration is covered the moment it lands; the documented tuple per function
 /// is the contract of 00 §5.4.8 ("return only <c>(org_id, project_id, binding_id, status)</c>"),
 /// and a resolver that is not registered here fails the suite by name. A definer outside
-/// <c>evidgate_resolve</c> is a sweep and must be on the sweep allowlist, so a new definer
+/// <c>evidgate_resolve</c> is an owner-side definer — a TL T80 sweep or a platform-scope writer such as
+/// the operator's healing-switch writer — and must be on the allowlist below, so a new definer
 /// cannot be added without being classified.
 /// </para>
 /// </summary>
@@ -85,13 +86,13 @@ public sealed class ResolverTests : HarnessTest
     };
 
     /// <summary>
-    /// The <c>SECURITY DEFINER</c> functions outside <c>evidgate_resolve</c>: the owner sweeps of
-    /// <c>evidgate</c> (TL T80), which return a count or a set of ids rather than the tenant
-    /// tuple. Every definer in any non-system schema that is not in <c>evidgate_resolve</c> must
-    /// be named here or the suite fails by name, so a new definer cannot be added without being
-    /// classified. The value is the migration that creates it.
+    /// The <c>SECURITY DEFINER</c> functions outside <c>evidgate_resolve</c>: the owner-side definers of
+    /// <c>evidgate</c> — the TL T80 sweeps and the platform-scope writers — which return a count, a set of
+    /// ids or one stored row rather than the tenant tuple. Every definer in any non-system schema that is
+    /// not in <c>evidgate_resolve</c> must be named here or the suite fails by name, so a new definer
+    /// cannot be added without being classified. The value is the migration that creates it.
     /// </summary>
-    private static readonly Dictionary<string, string> SweepAllowlist = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> OwnerDefinerAllowlist = new(StringComparer.Ordinal)
     {
         ["evidgate.purge_expired_idempotency"] = "0007_platform_idempotency_record.sql:137",
         ["evidgate.audit_org_ids"] = "0015_identity_audit_log.sql:132",
@@ -99,7 +100,7 @@ public sealed class ResolverTests : HarnessTest
             "0017_identity_ci_token_issue.sql:67 (redefined 0019_identity_ci_review_fixes.sql:8)",
         ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:177",
         ["evidgate.session_cleanup"] = "0048_identity_session_routes.sql:479",
-        ["evidgate.healing_switch_set_system"] = "0052_healing_switch.sql:194",
+        ["evidgate.healing_switch_set_system"] = "0052_healing_switch.sql:211",
     };
 
     /// <summary>
@@ -159,9 +160,9 @@ public sealed class ResolverTests : HarnessTest
 
         var failures = new List<string>();
 
-        // 1. Hygiene of every SECURITY DEFINER function (TL T80). The sweep functions of
-        //    evidgate (purge_expired_*, audit_org_ids) are in this set too: they are owner-owned
-        //    definers as well, and PUBLIC must not be able to call any of them.
+        // 1. Hygiene of every SECURITY DEFINER function (TL T80). The owner-side definers of
+        //    evidgate (purge_expired_*, audit_org_ids, the operator's healing-switch writer) are in
+        //    this set too: PUBLIC must not be able to call any of them.
         foreach (var function in functions)
         {
             if (!string.Equals(function.Owner, "evidgate_owner", StringComparison.Ordinal))
@@ -188,30 +189,30 @@ public sealed class ResolverTests : HarnessTest
         resolvers.ShouldNotBeEmpty(
             "no SECURITY DEFINER function was found in evidgate_resolve: the pre-tenant path would have no sanctioned way to resolve a tenant");
 
-        // 2b. Every definer outside evidgate_resolve is a sweep and must be allowlisted by name.
-        //     The schema, not the result shape, decides (SEC3): a definer in evidgate_resolve
-        //     returning a different tuple is a resolver and is compared below; a definer
-        //     anywhere else is a sweep and must be registered here.
-        var sweeps = functions.Where(function => !function.IsResolver).ToList();
-        foreach (var sweep in sweeps)
+        // 2b. Every definer outside evidgate_resolve is an owner-side definer and must be allowlisted by
+        //     name. The schema, not the result shape, decides (SEC3): a definer in evidgate_resolve
+        //     returning a different tuple is a resolver and is compared below; a definer anywhere else
+        //     — a T80 sweep or a platform-scope writer — must be registered here.
+        var ownerDefiners = functions.Where(function => !function.IsResolver).ToList();
+        foreach (var ownerDefiner in ownerDefiners)
         {
-            var sweepKey = $"{sweep.Schema}.{sweep.Name}";
-            if (!SweepAllowlist.ContainsKey(sweepKey))
+            var ownerDefinerKey = $"{ownerDefiner.Schema}.{ownerDefiner.Name}";
+            if (!OwnerDefinerAllowlist.ContainsKey(ownerDefinerKey))
             {
                 failures.Add(
-                    $"{sweep.Signature}: a SECURITY DEFINER function outside evidgate_resolve that is not on the sweep "
-                    + "allowlist — a resolver belongs in evidgate_resolve, and a sweep must be registered with the "
-                    + "migration that creates it");
+                    $"{ownerDefiner.Signature}: a SECURITY DEFINER function outside evidgate_resolve that is not on the "
+                    + "definer allowlist — a resolver belongs in evidgate_resolve, and an owner-side definer must be "
+                    + "registered with the migration that creates it");
             }
         }
 
-        var allowlistWithoutFunction = SweepAllowlist.Keys
-            .Except(sweeps.Select(sweep => $"{sweep.Schema}.{sweep.Name}"), StringComparer.Ordinal)
+        var allowlistWithoutFunction = OwnerDefinerAllowlist.Keys
+            .Except(ownerDefiners.Select(ownerDefiner => $"{ownerDefiner.Schema}.{ownerDefiner.Name}"), StringComparer.Ordinal)
             .ToArray();
         if (allowlistWithoutFunction.Length > 0)
         {
             failures.Add(
-                $"the sweep allowlist names [{string.Join(", ", allowlistWithoutFunction)}] but no such SECURITY DEFINER "
+                $"the definer allowlist names [{string.Join(", ", allowlistWithoutFunction)}] but no such SECURITY DEFINER "
                 + "function exists — remove the stale entry");
         }
 

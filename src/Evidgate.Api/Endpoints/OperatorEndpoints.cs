@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Evidgate.Api.OperatorIngress;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -148,9 +149,20 @@ public static class OperatorEndpoints
     /// principal's user id is the row's <c>set_by</c>; an unauthenticated caller is 401 and an authenticated one
     /// without a subject 403, so a system write can never be attributed to nobody. 422
     /// <c>invalid_switch_mode</c> / <c>mode_not_available</c> come from the same gate the tenant route uses.
+    /// <para>
+    /// The body is read <em>inside</em> the handler, after those two checks, instead of being bound as a parameter:
+    /// a bound parameter is materialised by the framework before this method runs, so an anonymous caller could
+    /// learn from a 400 that its body was malformed — and a body is untrusted input the gate has not yet admitted.
+    /// An unreadable or absent body is 400 <c>request_invalid</c> here, once the caller is authenticated and
+    /// attributable.
+    /// </para>
+    /// <para>
+    /// There is deliberately no <c>Idempotency-Key</c> on this route (D-S124-Q4): <c>set</c> is naturally idempotent
+    /// on the mode — a retry writes the same value and only bumps <c>version</c> — and the operator surface has a
+    /// single trusted caller, not a client fleet retrying on timeouts.
+    /// </para>
     /// </summary>
     private static async Task<Result<HealingSwitchView>> SetHealingSwitchSystemAsync(
-        HealingSystemSwitchRequest request,
         HttpContext context,
         HealingSystemSwitchWriter writer)
     {
@@ -167,6 +179,26 @@ public static class OperatorEndpoints
         {
             return Result.Failure<HealingSwitchView>(Error.Forbidden(
                 "the operator principal carries no user id, so the switch change cannot be attributed"));
+        }
+
+        HealingSystemSwitchRequest? request;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync<HealingSystemSwitchRequest>(context.RequestAborted)
+                .ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return Result.Failure<HealingSwitchView>(Error.BadRequest(
+                "the switch request body is not valid JSON",
+                [new ErrorDetail("body", "invalid_json")]));
+        }
+
+        if (request is null)
+        {
+            return Result.Failure<HealingSwitchView>(Error.BadRequest(
+                "the switch request body is required",
+                [new ErrorDetail("body", "required")]));
         }
 
         return await writer.SetAsync(request.Mode, request.Reason, setBy, context.RequestAborted).ConfigureAwait(false);

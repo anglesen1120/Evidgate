@@ -1015,7 +1015,7 @@ export type GrantRoleRequest = {
 };
 
 /**
- * One stored switch scope (08.6.3-T1, 00 §8.7). `scope`, `org_id` and `project_id` are the row's identity and cannot be rewritten: a change re-stamps only the mode, the reason, who set it and when, and the database bumps `version` itself.
+ * One stored switch scope (08.6.3-T1, 00 §8.7). `scope`, `org_id` and `project_id` are the row's identity and cannot be rewritten: a change re-stamps only the mode, the reason, who set it and when, and the database bumps `version` itself. The `system` member of a tenant's `GET` is redacted (SR-F2): it carries `mode`, `at` and `version` only, with `set_by` and `reason` null, because the platform operator's identity and incident notes are not the tenants' to read. The operator's own write response keeps both.
  */
 export type HealingSwitchView = {
     scope: 'system' | 'tenant' | 'project';
@@ -1024,8 +1024,14 @@ export type HealingSwitchView = {
      */
     project_id: string | null;
     mode: 'enabled' | 'shadow' | 'disabled';
+    /**
+     * The free-text reason of the change; null on a redacted `system` row and when none was given
+     */
     reason: string | null;
-    set_by: string;
+    /**
+     * The member (or platform operator) who set this scope; null on a redacted `system` row of a tenant's `GET`
+     */
+    set_by: string | null;
     at: string;
     version: number;
 };
@@ -2008,7 +2014,7 @@ export type HealingSwitchSetV1 = {
      */
     mode: string;
     /**
-     * Why the switch was set, 1–2000 characters when present
+     * Why the switch was set, 1–2000 Unicode code points when present (a JSON-Schema string length counts characters, the same unit the column's length() check uses)
      */
     reason?: string | null;
 };

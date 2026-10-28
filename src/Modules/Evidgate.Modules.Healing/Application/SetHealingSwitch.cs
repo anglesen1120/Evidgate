@@ -135,7 +135,7 @@ internal sealed class SetHealingSwitchCommandHandler(
                 return Result.Failure<HealingSwitchView>(mismatch);
             }
 
-            if (!await store.ProjectExistsAsync(named, cancellationToken).ConfigureAwait(false))
+            if (!await store.ProjectExistsAsync(named, forShare: true, cancellationToken).ConfigureAwait(false))
             {
                 return Result.Failure<HealingSwitchView>(Error.NotFound("no live project with that id is visible to this tenant"));
             }
@@ -153,15 +153,15 @@ internal sealed class SetHealingSwitchCommandHandler(
 
         await HealingSwitchEvents.EnqueueAsync(outbox, row, cancellationToken).ConfigureAwait(false);
 
+        // 02.7.1-T2.2's allowlist is closed and `scope`/`project_id`/`version` are not on it: the row id names the
+        // switch row, `mode` is the change itself, and the scope and project travel in the `healing.switch_changed`
+        // payload of the same transaction (HealingSwitchEvents) rather than as an unvetted metadata key.
         audit.Describe(new AuditObject(
             "healing_switch",
             row.Id.ToString("D"),
             Metadata: new Dictionary<string, string>
             {
-                ["scope"] = row.Scope,
-                ["project_id"] = row.ProjectId?.ToString("D") ?? string.Empty,
                 ["mode"] = row.Mode,
-                ["version"] = row.Version.ToString(System.Globalization.CultureInfo.InvariantCulture),
             }));
 
         return Result.Success(HealingSwitchView.Of(row));

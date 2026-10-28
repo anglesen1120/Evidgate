@@ -28,7 +28,7 @@
       "type": ["string", "null"],
       "minLength": 1,
       "maxLength": 2000,
-      "description": "Why the switch was set, 1–2000 characters when present"
+      "description": "Why the switch was set, 1–2000 Unicode code points when present (a JSON-Schema string length counts characters, the same unit the column's length() check uses)"
     }
   }
 }

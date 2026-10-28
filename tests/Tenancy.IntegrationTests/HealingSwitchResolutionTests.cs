@@ -19,33 +19,48 @@ namespace Tenancy.IntegrationTests;
 /// </remarks>
 public sealed class HealingSwitchResolutionTests
 {
-    private static readonly HealingAvailability[] Modes =
-        [HealingAvailability.Enabled, HealingAvailability.Shadow, HealingAvailability.Disabled];
-
-    /// <summary>AC2: the 27 combinations of the three storable modes resolve to their most restrictive member.</summary>
-    public static TheoryData<string, string, string, string> Combinations()
+    /// <summary>
+    /// AC2: the 27 stored combinations of the three storable modes, each with the mode it must resolve to. The
+    /// expectation is written out here instead of being computed from
+    /// <see cref="HealingAvailabilityResolution.Rank"/>: a table derived from the production order agrees with any
+    /// change to that order, a wrong one included, so it would pin nothing (CR-F6). Reading the table: of the three
+    /// scopes that carry a row, the most restrictive wins — <c>disabled</c> &gt; <c>shadow</c> &gt; <c>enabled</c>.
+    /// </summary>
+    public static TheoryData<string, string, string, string> Combinations() => new()
     {
-        var data = new TheoryData<string, string, string, string>();
-        foreach (var system in Modes)
-        {
-            foreach (var tenant in Modes)
-            {
-                foreach (var project in Modes)
-                {
-                    var expected = new[] { system, tenant, project }
-                        .OrderByDescending(HealingAvailabilityResolution.Rank)
-                        .First();
-                    data.Add(
-                        HealingAvailabilityModes.ToWire(system),
-                        HealingAvailabilityModes.ToWire(tenant),
-                        HealingAvailabilityModes.ToWire(project),
-                        HealingAvailabilityModes.ToWire(expected));
-                }
-            }
-        }
+        // system = enabled
+        { "enabled", "enabled", "enabled", "enabled" },
+        { "enabled", "enabled", "shadow", "shadow" },
+        { "enabled", "enabled", "disabled", "disabled" },
+        { "enabled", "shadow", "enabled", "shadow" },
+        { "enabled", "shadow", "shadow", "shadow" },
+        { "enabled", "shadow", "disabled", "disabled" },
+        { "enabled", "disabled", "enabled", "disabled" },
+        { "enabled", "disabled", "shadow", "disabled" },
+        { "enabled", "disabled", "disabled", "disabled" },
 
-        return data;
-    }
+        // system = shadow
+        { "shadow", "enabled", "enabled", "shadow" },
+        { "shadow", "enabled", "shadow", "shadow" },
+        { "shadow", "enabled", "disabled", "disabled" },
+        { "shadow", "shadow", "enabled", "shadow" },
+        { "shadow", "shadow", "shadow", "shadow" },
+        { "shadow", "shadow", "disabled", "disabled" },
+        { "shadow", "disabled", "enabled", "disabled" },
+        { "shadow", "disabled", "shadow", "disabled" },
+        { "shadow", "disabled", "disabled", "disabled" },
+
+        // system = disabled
+        { "disabled", "enabled", "enabled", "disabled" },
+        { "disabled", "enabled", "shadow", "disabled" },
+        { "disabled", "enabled", "disabled", "disabled" },
+        { "disabled", "shadow", "enabled", "disabled" },
+        { "disabled", "shadow", "shadow", "disabled" },
+        { "disabled", "shadow", "disabled", "disabled" },
+        { "disabled", "disabled", "enabled", "disabled" },
+        { "disabled", "disabled", "shadow", "disabled" },
+        { "disabled", "disabled", "disabled", "disabled" },
+    };
 
     /// <summary>AC2: every persisted combination, resolved through the wire vocabulary.</summary>
     [Theory]
