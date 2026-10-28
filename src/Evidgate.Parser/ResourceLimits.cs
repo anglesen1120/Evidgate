@@ -45,7 +45,7 @@ internal static class ResourceLimits
     /// no marshalling beyond the struct reference happens.
     /// </summary>
     /// <param name="resource">The <c>RLIMIT_*</c> number.</param>
-    /// <param name="limit">The soft and hard values, both applied.</param>
+    /// <param name="limit">The soft and hard values; the CPU pair is split (soft = requested seconds, hard = one more).</param>
     /// <returns>0 on success, -1 with <c>errno</c> set on failure (never logged: the child says one fixed word).</returns>
     [DllImport("libc", EntryPoint = "setrlimit", SetLastError = true)]
     private static extern int SetRlimit(int resource, ref ResourceLimit limit);

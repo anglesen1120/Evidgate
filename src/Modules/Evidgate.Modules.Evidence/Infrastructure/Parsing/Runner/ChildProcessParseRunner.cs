@@ -132,7 +132,9 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
     /// <summary>
     /// Kills every run still in flight and refuses new ones. The host disposes this singleton at shutdown, so a
-    /// shutting-down worker leaves no parse child behind; a run caught by the dispose ends as an abnormal exit.
+    /// shutting-down worker leaves no parse child behind; a run caught by the dispose ends as an
+    /// <see cref="OperationCanceledException"/> and never as a verdict — the kill is the parent's own, so its exit
+    /// code says nothing about the artifact (06.3.6-T1.4, S125 security review F3).
     /// </summary>
     public void Dispose()
     {
@@ -395,17 +397,12 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
             running[process] = 0;
 
             // A Dispose that ran between the entry check and the registration above iterated a table that did not
-            // hold this child yet, so nothing killed it: the run ends here, as the abnormal exit a dispose causes,
-            // instead of starting a child no one is tracking.
+            // hold this child yet, so nothing killed it: the run ends here, as the cancellation a dispose causes,
+            // instead of starting a child no one is tracking. The finally below still kills and reaps the child, and
+            // the run never returns the 137 of that kill as a verdict (S125 security review F3).
             if (disposed)
             {
-                KillTree(process);
-
-                using var settle = new CancellationTokenSource(ExitAfterKillWait);
-
-                await WaitForExitQuietlyAsync(process, settle.Token).ConfigureAwait(false);
-
-                return new ParseRunFailed(ParseRunFailureKind.ExitedAbnormally, ExitCodeOf(process), 0, 0);
+                throw DisposedDuringRun();
             }
 
             return await RunStartedAsync(process, request, limits, cancellationToken).ConfigureAwait(false);
@@ -516,6 +513,14 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 cancellationToken);
         }
 
+        // The runner was disposed while the run was in flight: the kill that ended this child is the parent's own, so
+        // the 137 it produced is not evidence about the artifact and must never become a permanent parse_crashed
+        // rejection of a benign report. The run therefore carries no verdict at all (S125 security review F3).
+        if (disposed)
+        {
+            throw DisposedDuringRun();
+        }
+
         var exitCode = ExitCodeOf(process);
 
         // The verdict order is deliberate. A cap breach is the parent's own decision (it killed the child, so the
@@ -576,6 +581,18 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
     private static ParseRunFailed SpawnFailed() =>
         new(ParseRunFailureKind.SpawnFailed, null, 0, 0);
+
+    /// <summary>
+    /// The exception a run caught by the runner's own disposal ends with. A cancellation is not a parse verdict
+    /// (<see cref="IParseRunner"/>), and the child's death was the parent's decision, so no exit code is carried: the
+    /// caller's handler persists nothing and the artifact stays <c>ready</c> for the next attempt (S125 F3). The
+    /// token is nobody's own, because it is the shutdown that cancelled the run and not the caller.
+    /// </summary>
+    /// <returns>The cancellation to throw.</returns>
+    private static OperationCanceledException DisposedDuringRun() =>
+        new(
+            "The parse runner was disposed while the run was in flight: the child was killed by the shutdown and the "
+            + "run carries no verdict.");
 
     /// <summary>Builds the child's whole start information: no shell, one argument per entry, scrubbed environment.</summary>
     /// <param name="command">The executable and its leading arguments for this run.</param>
@@ -690,7 +707,19 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
                 return null;
             }
 
-            var line = Redactor.RedactText(SingleLine(Encoding.UTF8.GetString(buffer, 0, length)));
+            var text = Encoding.UTF8.GetString(buffer, 0, length);
+
+            // A capture that filled the buffer was cut in the middle of the child's stream, so its last token is only
+            // a prefix of what the child wrote — and a secret the redaction patterns know in full is not recognised
+            // in part. The fragment is dropped rather than shown, which changes nothing a caller normally sees (the
+            // excerpt is the head of the capture) and stops a shrunk redaction from ever surfacing half a token
+            // (S125 security review F8).
+            if (length == buffer.Length)
+            {
+                text = DropPartialTrailingToken(text);
+            }
+
+            var line = Redactor.RedactText(SingleLine(text));
 
             if (line.Length == 0)
             {
@@ -700,9 +729,33 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
             return line.Length > StderrExcerptChars ? line[..StderrExcerptChars] : line;
         }
 
+        /// <summary>Removes the last token of a capture the buffer cut in half, with the separator before it.</summary>
+        /// <param name="text">The decoded, truncated capture.</param>
+        /// <returns>The capture up to its last whole token, or unchanged when it holds no separator.</returns>
+        private static string DropPartialTrailingToken(string text)
+        {
+            for (var index = text.Length - 1; index >= 0; index--)
+            {
+                if (char.IsWhiteSpace(text[index]))
+                {
+                    return text[..index];
+                }
+            }
+
+            // One token and nothing else: there is no whole token to fall back to, so the operator keeps the head the
+            // excerpt would show anyway rather than losing the only evidence the child produced.
+            return text;
+        }
+
         /// <summary>Folds one bounded text into a single line of printable characters.</summary>
         /// <param name="text">The decoded capture; at most <see cref="StderrCaptureBytes"/> characters.</param>
         /// <returns>The line, trimmed: no control character survives, so a log line cannot be forged or moved.</returns>
+        /// <remarks>
+        /// The line break set is the one a reader honours and not only the ASCII one: U+2028 LINE SEPARATOR and
+        /// U+2029 PARAGRAPH SEPARATOR are <c>char.IsControl</c>-false, so a child that writes them would otherwise
+        /// hand a consumer a second record inside one excerpt (S125 security review F8). They fold into the same
+        /// single space as <c>\r</c>, <c>\n</c> and <c>\t</c>.
+        /// </remarks>
         private static string SingleLine(string text)
         {
             var builder = new StringBuilder(text.Length);
@@ -710,7 +763,7 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
             foreach (var character in text)
             {
-                if (character is '\r' or '\n' or '\t')
+                if (character is '\r' or '\n' or '\t' or '\u2028' or '\u2029')
                 {
                     pendingSpace = true;
 

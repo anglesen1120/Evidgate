@@ -30,10 +30,32 @@ internal sealed record ParseArtifactPayload(Guid ArtifactId);
 /// value to their own caller and store nothing), so writing a result here would be a second, unrouted representation.
 /// </para>
 /// <para>
-/// <b>One guarded write per artifact.</b> A verdict is a single <c>UPDATE</c> whose predicate is the parseable state
-/// (<c>uploaded</c>/<c>ready</c>), so a replay after the rejection — the queue is at-least-once — updates no row and
-/// the artifact is parsed and decided once (06.3.6 AC8). An artifact that is already <c>rejected</c>, or not
-/// <c>ready</c>/<c>uploaded</c> any more, is not parsed again.
+/// <b>The child's own rejection is still a verdict.</b> A run that ends 0 with its marker may hold a <c>rejected</c>
+/// record — the child's decision on content it refuses (a DTD, an unsafe archive entry, an input over the cap) — and
+/// that record is the verdict: the artifact is rejected with the record's <c>reason</c> when that value is shaped like
+/// a code word (<c>^[a-z0-9_]{1,64}$</c>) and with <see cref="ArtifactFailureCode.ParseCrashed"/> otherwise, so no text
+/// the untrusted document influenced can reach a tenant-visible column (D-S125-Q4, 00 §5.7 S3).
+/// </para>
+/// <para>
+/// <b>An object the cap no longer admits is a verdict too.</b> <see cref="IObjectStorage.GetAsync"/> refuses to
+/// truncate an object above the kind's cap (a truncated report is a different document), and that refusal is
+/// <see cref="ArtifactFailureCode.TooLarge"/>: retrying cannot shrink the stored object, so the artifact is rejected
+/// instead of being retried to a dead letter.
+/// </para>
+/// <para>
+/// <b>One guarded write per artifact.</b> A verdict is a single <c>UPDATE</c> whose predicate is the row's version
+/// token (the entity's concurrency mapping), issued only after this attempt read the row in a parseable state — so a
+/// replay after the rejection, or a concurrent attempt that already wrote, matches no row and the artifact is decided
+/// once (06.3.6 AC8). An artifact that is already <c>rejected</c>, or not <c>ready</c>/<c>uploaded</c> any more, is not
+/// parsed again at all.
+/// </para>
+/// <para>
+/// <b>A lost race is not a verdict.</b> When the guarded <c>UPDATE</c> matches no row the handler re-reads the stored
+/// state before concluding anything: a stored <c>rejected</c> means the artifact was decided, and a row that left the
+/// parseable set (a delete in flight) is the same no-op the top of the handler makes. A row that is still
+/// <c>ready</c>/<c>uploaded</c> was changed by some other writer (a freeze resolving <c>attempt_id</c>, an operator
+/// update), so this attempt throws and the queue's redelivery parses again — dropping it would leave the artifact
+/// undecided forever.
 /// </para>
 /// <para>
 /// <b>What is not a verdict.</b> A cancellation (lease loss, shutdown) rethrows: the runner has already tree-killed
@@ -47,10 +69,21 @@ internal sealed record ParseArtifactPayload(Guid ArtifactId);
 /// failure code, the artifact row or a thrown exception's message (00 §5.7 S3, 06.3.6 §8).
 /// </para>
 /// <para>
-/// The object read and the child run happen inside the tenant transaction the consumer opened around this attempt —
-/// the same posture <see cref="ArtifactStagingDeleteTaskHandler"/> takes for its delete. The read takes no row lock,
-/// so the exposure is one idle-in-transaction connection for the length of one parse, bounded by the wall clock the
-/// runner enforces (06.3.6 §7) and by the queue's own per-queue concurrency.
+/// <b>P5 exception, recorded (06.3.6-T2).</b> The object read and the child run happen inside the tenant
+/// transaction the consumer opened around this attempt, because a task handler receives that transaction and cannot
+/// release it — the same posture <see cref="ArtifactStagingDeleteTaskHandler"/> takes for its delete. This is a
+/// deliberate exception to the 00 §5.7 P5 rule that storage calls run outside a database transaction, and it is
+/// temporary: <see cref="IObjectStorage.GetAsync"/>'s own remarks name it as the one recorded exception and forbid a
+/// new caller from copying it.
+/// <list type="bullet">
+/// <item><b>Receiver:</b> 06.3.6-T2 (its own parse queue and concurrency), which schedules the parse outside the
+/// consumer's transaction or runs it on a scope opened after the read.</item>
+/// <item><b>Exposure now:</b> one idle-in-transaction connection for the length of one parse and one object read,
+/// bounded by the wall clock the runner enforces (06.3.6 §7) and by the queue's own per-queue concurrency
+/// (originally one, this queue's default).</item>
+/// <item><b>Why it is not exploitable:</b> the read takes no row lock, so it blocks no writer; the transaction
+/// commits only the guarded verdict <c>UPDATE</c> at the end.</item>
+/// </list>
 /// </para>
 /// </summary>
 /// <param name="contexts">The tenant write model the artifact and its kind policy are read through.</param>
@@ -86,6 +119,28 @@ internal sealed partial class ParseArtifactTaskHandler(
 
     /// <summary>The parameter separator a declared media type may carry (<c>application/xml; charset=utf-8</c>).</summary>
     private const char ParameterSeparator = ';';
+
+    /// <summary>The record kind a rejection carries, as the child's protocol spells it (<c>NdjsonWriter.RejectedKind</c>).</summary>
+    private const string RejectedRecordKind = "rejected";
+
+    /// <summary>The property a record's kind travels in (<c>NdjsonWriter.KindProperty</c>).</summary>
+    private const string RecordKindProperty = "t";
+
+    /// <summary>The property a rejection record's reason word travels in (<c>NdjsonWriter.ReasonProperty</c>).</summary>
+    private const string RecordReasonProperty = "reason";
+
+    /// <summary>
+    /// The bytes the JSON value <c>rejected</c> always occupies in a record — quotes included, because that value has no
+    /// escapable character — so a record can be dismissed as "not a rejection" without being parsed.
+    /// </summary>
+    private static ReadOnlySpan<byte> RejectedRecordKindBytes => "\"rejected\""u8;
+
+    /// <summary>
+    /// The fixed first line of the exception a row raises whose stored <c>object_key</c> is not the key its own
+    /// coordinates mint. It names no key and no coordinate (00 §5.7 S3).
+    /// </summary>
+    private const string ObjectKeyMismatchMessage =
+        "the artifact's stored object key is not the key its row mints, so the report was not read; an operator must look at this artifact";
 
     /// <inheritdoc />
     public string TaskType => EvidenceTaskTypes.Parse;
@@ -147,9 +202,32 @@ internal sealed partial class ParseArtifactTaskHandler(
             return;
         }
 
+        if (!ObjectKeyIsMintedFor(artifact))
+        {
+            // Defence in depth over the 0028 shape CHECK: the key a row holds must be the key this row mints, so a
+            // parse can never read bytes another coordinate names. A row that fails this is corrupt or hand-written;
+            // the attempt throws (redelivered, then dead-lettered) rather than reading an object it cannot vouch for.
+            throw new InvalidOperationException(ObjectKeyMismatchMessage);
+        }
+
         var maxBytes = await MaxBytesAsync(context, artifact, cancellationToken).ConfigureAwait(false);
 
-        var bytes = await storage.GetAsync(artifact.ObjectKey, maxBytes, cancellationToken).ConfigureAwait(false);
+        byte[]? bytes;
+
+        try
+        {
+            bytes = await storage.GetAsync(artifact.ObjectKey, maxBytes, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException exception) when (exception is not ObjectDisposedException)
+        {
+            // The store refuses to truncate an object above the caller's cap (IObjectStorage.GetAsync: the only
+            // InvalidOperationException that read raises), so the bytes are larger than the kind policy admits now.
+            // Retrying cannot shrink them: the artifact is rejected, not retried towards a dead letter. A disposed
+            // store is excluded by the filter: that is the host's fault (shutdown), never a property of the artifact.
+            LogOversizeRejected(logger, artifact.Id, maxBytes);
+            await RejectAsync(context, artifact, ArtifactFailureCode.TooLarge, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
         if (bytes is null)
         {
@@ -169,7 +247,14 @@ internal sealed partial class ParseArtifactTaskHandler(
         if (result is not ParseRunFailed failed)
         {
             // Success: the record stream belongs to the caller that asked for a parse, and no such caller persists it
-            // yet (see the type remarks). Nothing is written, which is exactly what the in-process path does.
+            // yet (see the type remarks). Nothing is written, which is exactly what the in-process path does — unless
+            // the stream carries the child's own rejection record, which is this run's verdict (D-S125-Q4).
+            if (result is ParseRunSucceeded succeeded && ChildRejectionReasonIn(succeeded) is { } reported)
+            {
+                LogChildRejected(logger, artifact.Id, reported, succeeded.ChildExitCode);
+                await RejectAsync(context, artifact, reported, cancellationToken).ConfigureAwait(false);
+            }
+
             return;
         }
 
@@ -181,13 +266,34 @@ internal sealed partial class ParseArtifactTaskHandler(
         }
 
         LogRejected(logger, artifact.Id, reason, failed.ChildExitCode, failed.StderrExcerpt);
+        await RejectAsync(context, artifact, reason, cancellationToken).ConfigureAwait(false);
+    }
 
-        // The verdict is the row's own transition (MarkRejected: state rejected, the reason kept, bytes and scan
-        // state untouched), written as ONE statement whose predicate is the version token the entity's concurrency
-        // mapping appends (EvidenceDbContext: <c>version</c> IsConcurrencyToken). A replay — or a concurrent attempt
-        // that already wrote — matches no row and throws instead of overwriting a later decision (06.3.6 AC8, §6
-        // "transitions idempotent"); the 0028 trigger owns updated_at and the version increment. Only the columns the
-        // transition changes are in the SET list, which is exactly what evidgate_app may update on this table.
+    /// <summary>
+    /// Writes the verdict as the row's own guarded transition — state <c>rejected</c> and one reason, bytes, checksum,
+    /// key and scan state untouched — and decides what a lost race means.
+    /// </summary>
+    /// <param name="context">This attempt's write model, holding the tracked row.</param>
+    /// <param name="artifact">The row this attempt read.</param>
+    /// <param name="reason">The failure code the run derived.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <remarks>
+    /// The <c>UPDATE</c>'s predicate is the version token the entity's concurrency mapping appends (EvidenceDbContext:
+    /// <c>version</c> IsConcurrencyToken), so a concurrent writer makes it match no row. That alone proves nothing
+    /// about the stored outcome: the handler re-reads the state <see langword="as no tracking"/> and decides on what
+    /// it reads — a stored <c>rejected</c> is decided once (nothing added), a row that left the parseable set has no
+    /// evidence left to judge (the same no-op the top of the handler makes), and a row still
+    /// <c>ready</c>/<c>uploaded</c> was changed by some other writer (a freeze resolving <c>attempt_id</c>, an operator
+    /// update) and is thrown out for the queue's redelivery, because returning would leave the artifact without a
+    /// verdict forever. Only the columns the transition changes are in the <c>SET</c> list, which is exactly what the
+    /// app role may update on this table; the 0028 trigger owns <c>updated_at</c> and the version increment.
+    /// </remarks>
+    private async Task RejectAsync(
+        EvidenceDbContext context,
+        Artifact artifact,
+        string reason,
+        CancellationToken cancellationToken)
+    {
         context.Entry(artifact).CurrentValues.SetValues(artifact.MarkRejected(reason));
 
         try
@@ -196,9 +302,209 @@ internal sealed partial class ParseArtifactTaskHandler(
         }
         catch (DbUpdateConcurrencyException)
         {
-            // The stored outcome is already there (a replay, or another attempt of the same row): nothing to add.
-            LogVerdictAlreadyWritten(logger, artifact.Id, reason);
+            var stored = await context.Artifacts
+                .AsNoTracking()
+                .Where(row => row.Id == artifact.Id)
+                .Select(row => row.State)
+                .SingleOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (string.Equals(stored, ArtifactState.Rejected, StringComparison.Ordinal))
+            {
+                // A verdict is stored — this attempt's own, a replay's, or a concurrent attempt's — so the artifact is
+                // decided once and this attempt adds nothing.
+                LogVerdictAlreadyWritten(logger, artifact.Id, reason);
+                return;
+            }
+
+            if (!IsParseable(stored))
+            {
+                // The row left the parseable set while it was parsed (a delete in flight, a missing row): there is no
+                // evidence left to judge, so this is the same no-op the top of the handler makes for such a state.
+                LogAlreadyDecided(logger, artifact.Id, stored);
+                return;
+            }
+
+            // Still parseable, so no verdict is stored: the attempt lost a race to another write and must not drop the
+            // parse. The message carries neither stderr nor a key (00 §5.7 S3).
+            throw new InvalidOperationException(
+                "the parse verdict could not be written because the artifact changed while it was parsed, so the task is retried");
         }
+    }
+
+    /// <summary>
+    /// True when the row's stored <c>object_key</c> is exactly the final key the row's own coordinates mint
+    /// (<see cref="ArtifactKeyMinter.Mint"/>). The 0028 shape CHECK enforces this in the database; this is the same
+    /// statement in code, so the read never names an object the row does not own.
+    /// </summary>
+    /// <param name="artifact">The row about to be read.</param>
+    /// <returns><see langword="true"/> when the key is the row's minted final key.</returns>
+    private static bool ObjectKeyIsMintedFor(Artifact artifact)
+    {
+        string minted;
+
+        try
+        {
+            minted = ArtifactKeyMinter.Mint(
+                artifact.OrgId,
+                artifact.ProjectId,
+                artifact.RunId,
+                artifact.ExecutionKey,
+                artifact.AttemptNo,
+                artifact.Id);
+        }
+        catch (ArgumentException)
+        {
+            // Coordinates the CHECK constraints should have refused (a malformed execution key, attempt_no below 1):
+            // no key is minted for them, so the row is a mismatch rather than a read.
+            return false;
+        }
+
+        return string.Equals(artifact.ObjectKey, minted, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The failure code a successful stream's own <c>rejected</c> record carries, or <see langword="null"/> when the
+    /// child reported no rejection (the stream is then the parsed records alone, and nothing is written).
+    /// <para>
+    /// The child writes one <c>rejected</c> record and still exits 0 with its marker when it refuses the content
+    /// itself — a DTD, an unsafe archive entry name, an input over the cap — because the run succeeded and the
+    /// document is what failed (D-S125-Q4). Only that record's <c>reason</c> is read, and only a value shaped like
+    /// a code word (<c>^[a-z0-9_]{1,64}$</c>) is kept: anything else becomes
+    /// <see cref="ArtifactFailureCode.ParseCrashed"/>, so no text the untrusted document influenced can reach the
+    /// tenant-visible column (00 §5.7 S3).
+    /// </para>
+    /// </summary>
+    /// <param name="succeeded">The run's records, in stream order.</param>
+    /// <returns>The code to write, or <see langword="null"/> for a stream without a rejection record.</returns>
+    private static string? ChildRejectionReasonIn(ParseRunSucceeded succeeded)
+    {
+        foreach (var record in succeeded.Records)
+        {
+            // A record that does not carry the literal `"rejected"` anywhere cannot be a rejection — no encoding of
+            // that value escapes it — so the overwhelming majority of a stream's records are dismissed by one
+            // vectorised search over bytes, without a reader, a string or a copy.
+            if (record.Utf8Json.Span.IndexOf(RejectedRecordKindBytes) < 0)
+            {
+                continue;
+            }
+
+            if (TryReadRejectedReason(record.Utf8Json, out var reason))
+            {
+                return IsCodeWord(reason) ? reason : ArtifactFailureCode.ParseCrashed;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads one record's top level only — its kind and, for a rejection, its reason — with
+    /// <see cref="Utf8JsonReader"/> over the UTF-8 the child wrote. Nothing else of the record is decoded, kept or
+    /// logged, so a hostile record costs no string for its content.
+    /// </summary>
+    /// <param name="utf8">The record's bytes, without the terminating newline.</param>
+    /// <param name="reason">The rejection's <c>reason</c> string, or <see langword="null"/> when it is absent or not a string.</param>
+    /// <returns><see langword="true"/> when the record is object-kind <c>rejected</c>.</returns>
+    private static bool TryReadRejectedReason(ReadOnlyMemory<byte> utf8, out string? reason)
+    {
+        reason = null;
+
+        if (utf8.IsEmpty)
+        {
+            return false;
+        }
+
+        try
+        {
+            var reader = new Utf8JsonReader(utf8.Span);
+
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            {
+                return false;
+            }
+
+            string? kind = null;
+            var kindRead = false;
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndObject)
+                {
+                    break;
+                }
+
+                if (reader.TokenType != JsonTokenType.PropertyName)
+                {
+                    return false;
+                }
+
+                if (reader.ValueTextEquals(RecordKindProperty))
+                {
+                    if (!reader.Read() || reader.TokenType != JsonTokenType.String)
+                    {
+                        return false;
+                    }
+
+                    kind = reader.GetString();
+                    kindRead = true;
+                }
+                else if (reader.ValueTextEquals(RecordReasonProperty))
+                {
+                    if (!reader.Read())
+                    {
+                        return false;
+                    }
+
+                    reason = reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
+
+                    if (reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray)
+                    {
+                        // A reason that is not a string is never a code word; the value is skipped, not walked, so a
+                        // hostile record cannot make the handler traverse it.
+                        reader.Skip();
+                    }
+                }
+                else
+                {
+                    reader.Skip();
+                }
+            }
+
+            if (kindRead && string.Equals(kind, RejectedRecordKind, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+        catch (JsonException)
+        {
+            // A line the runner framed but that is not one JSON object is not a rejection this handler can read; the
+            // framing check already reports such a stream as malformed output, and no verdict is invented from it.
+        }
+
+        reason = null;
+        return false;
+    }
+
+    /// <summary>True when <paramref name="value"/> matches <c>^[a-z0-9_]{1,64}$</c> — the shape of a reason word.</summary>
+    /// <param name="value">The child-supplied reason.</param>
+    /// <returns><see langword="true"/> when the value may become a tenant-visible failure code.</returns>
+    private static bool IsCodeWord(string? value)
+    {
+        if (value is null || value.Length is 0 or > 64)
+        {
+            return false;
+        }
+
+        foreach (var character in value)
+        {
+            if (character is not ((>= 'a' and <= 'z') or (>= '0' and <= '9') or '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>True when the artifact may still be parsed: <c>uploaded</c> or <c>ready</c> (00 §8.4, 06.3.6 §6).</summary>
@@ -331,17 +637,49 @@ internal sealed partial class ParseArtifactTaskHandler(
     private static partial void LogAlreadyDecided(ILogger logger, Guid artifactId, string? state);
 
     /// <summary>
-    /// The guarded <c>UPDATE</c> matched no row: this attempt's verdict had already been written (a replay of the same
-    /// task row, or a concurrent attempt that got there first), so exactly one write stands.
+    /// The guarded <c>UPDATE</c> matched no row and the re-read found a stored rejection: the artifact was decided
+    /// once — by this attempt's earlier write, a replay, or a concurrent attempt — so nothing was added.
     /// </summary>
     /// <param name="logger">The handler's logger.</param>
     /// <param name="artifactId">The artifact the payload named.</param>
-    /// <param name="reason">The reason this attempt derived, which the stored row already carries.</param>
+    /// <param name="reason">The reason this attempt derived; the stored row carries the verdict that stands.</param>
     [LoggerMessage(
         EventId = 2444,
         Level = LogLevel.Debug,
-        Message = "parse verdict for artifact {ArtifactId} was already written as {Reason}: the replay changed nothing")]
+        Message = "parse verdict for artifact {ArtifactId} was already written as {Reason}: this attempt changed nothing")]
     private static partial void LogVerdictAlreadyWritten(ILogger logger, Guid artifactId, string reason);
+
+    /// <summary>
+    /// The verdict the child reported itself, on a run that exited 0: an operator wants to know that the rejected
+    /// document was content, not a crash, so this line names the reason and the exit code and never a record's other
+    /// text (00 §5.7 S3).
+    /// </summary>
+    /// <param name="logger">The handler's logger.</param>
+    /// <param name="artifactId">The artifact whose stream held the rejection.</param>
+    /// <param name="reason">The failure code the record's reason became.</param>
+    /// <param name="exitCode">The child's exit code, which is 0 on this shape.</param>
+    [LoggerMessage(
+        EventId = 2445,
+        Level = LogLevel.Warning,
+        Message = "parse rejected artifact {ArtifactId} as {Reason}: the child reported the rejection itself (exit {ExitCode})")]
+    private static partial void LogChildRejected(
+        ILogger logger,
+        Guid artifactId,
+        string reason,
+        int? exitCode);
+
+    /// <summary>
+    /// The stored object is larger than the kind's cap, so it was never read and no child ran: the one rejection that
+    /// happens before the runner.
+    /// </summary>
+    /// <param name="logger">The handler's logger.</param>
+    /// <param name="artifactId">The artifact whose object is over the cap.</param>
+    /// <param name="maxBytes">The cap the kind policy resolved to for this artifact.</param>
+    [LoggerMessage(
+        EventId = 2446,
+        Level = LogLevel.Warning,
+        Message = "parse rejected artifact {ArtifactId} as too_large: the stored object is larger than the kind's {MaxBytes}-byte cap, so it was not read and no child started")]
+    private static partial void LogOversizeRejected(ILogger logger, Guid artifactId, long maxBytes);
 
     /// <summary>
     /// A <c>raw_report</c> artifact whose media type has no profile arm: nothing is parsed, exactly as the in-process

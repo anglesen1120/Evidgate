@@ -73,12 +73,20 @@ public interface IObjectStorage
     /// an artifact's bytes to the child process from here, so the caller names the cap its own kind policy allows
     /// (<c>artifact_kind_policy.max_bytes</c>) and never buffers more than that. Returns <see langword="null"/> when
     /// the object does not exist (a store 404 is an outcome, not an exception, exactly like <see cref="HeadAsync"/>);
-    /// a zero-byte object answers an empty array.
+    /// a zero-byte object answers an empty array. The read allocates one buffer of the object's own length, so its
+    /// peak is about one copy of the artifact.
     /// <para>
     /// The read fails closed on a longer object: an object above <paramref name="maxBytes"/> throws
     /// <see cref="InvalidOperationException"/> instead of answering a truncated array, because a truncated report is
-    /// a different document and must never be parsed as if it were the stored one. Like every other storage call
-    /// this is a network call and MUST run outside any database transaction (00 §5.7 P5).
+    /// a different document and must never be parsed as if it were the stored one.
+    /// </para>
+    /// <para>
+    /// Like every other storage call this is a network call and MUST run outside any database transaction
+    /// (00 §5.7 P5) — with one recorded exception: the Worker's <c>artifact_parse</c> handler calls it inside the
+    /// consumer-owned tenant transaction, which that handler cannot release. It is recorded as the P5 exception of
+    /// 06.3.6-T1.4 with receiver <c>06.3.6-T2</c>, whose own parse queue and concurrency take the read out of the
+    /// consumer's transaction. The exception belongs to that handler alone: a new caller MUST NOT read an object
+    /// inside a transaction, and either reads after the commit or through a queue of its own.
     /// </para>
     /// </summary>
     /// <param name="objectKey">A server-minted final (or staging) key.</param>

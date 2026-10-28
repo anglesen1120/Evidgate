@@ -3,8 +3,8 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 /// <summary>
 /// The one projection from a failed child run to the <c>artifact.failure_code</c> a tenant sees (06.3.6 AC3,
 /// 00 §9.2, contracts note O-06.3.6-1). It is a pure function of <see cref="ParseRunFailed"/> so the three
-/// vocabulary words exist in exactly one place: the runner never says <c>parse_*</c>, and the <c>parse</c> task
-/// handler never decides a reason itself.
+/// vocabulary words exist in exactly one place: the runner never says <c>parse_*</c>, and the
+/// <c>artifact_parse</c> task handler never decides a reason itself.
 /// <para>
 /// <b>Not a verdict: the infrastructure failure.</b> <see cref="ParseRunFailureKind.SpawnFailed"/> means no child
 /// existed to judge the artifact, so it has no tenant-visible reason at all — the caller throws and the queue

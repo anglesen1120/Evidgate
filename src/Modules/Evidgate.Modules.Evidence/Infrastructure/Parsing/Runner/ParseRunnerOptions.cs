@@ -8,8 +8,8 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 /// <para>
 /// <b>Out of process.</b> <c>OUTOFPROCESS</c> gates registration of <see cref="IParseRunner"/>: with the flag off
 /// nothing is registered and the in-process <c>IParsing</c> path is untouched, which is the rollback 06.3.6 §11
-/// names. The default is off — no call site resolves the runner before 06.3.6-T1.4, and a host that has not
-/// opted in must not start a process it never uses.
+/// names. The default is still off; the <c>artifact_parse</c> handler (06.3.6-T1.4) is the runner's one call
+/// site when a host opts in, and a host that has not opted in must not start a process it never uses.
 /// </para>
 /// <para>
 /// <b>Output caps.</b> The child's amplification is not bounded by its input: 06.3.6-T1.1+T1.2 measured up to

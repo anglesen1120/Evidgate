@@ -45,6 +45,31 @@ public sealed class ObjectStorageReadTests(SeaweedFsFixture fixture) : IDisposab
     }
 
     /// <summary>
+    /// An object big enough that the response body arrives over several reads still comes back whole and exact: the
+    /// read fills one buffer of the store's own declared length, so a body split across reads must not be truncated at
+    /// the first one, and the answer's length is the object's length — no padding and no second copy
+    /// (06.3.6-T1.4, S125 performance review 1).
+    /// </summary>
+    [Fact]
+    public async Task Get_Of_An_Object_Arriving_In_Several_Reads_Returns_Every_Byte()
+    {
+        var body = RandomNumberGenerator.GetBytes(512 * 1024);
+        var key = FinalKey();
+        using var adapter = Adapter();
+
+        using var response = await PutAsync(
+            adapter.PresignPut(new PresignPutRequest(key, body.LongLength, Sha256Hex(body))), body);
+        response.IsSuccessStatusCode.ShouldBeTrue(
+            $"the signed PUT must be accepted; status={(int)response.StatusCode}");
+
+        var bytes = await adapter.GetAsync(key, body.LongLength, CancellationToken.None);
+
+        bytes.ShouldNotBeNull();
+        bytes!.Length.ShouldBe(body.Length, "the answer is exactly the object's length");
+        bytes.ShouldBe(body, "a body split across reads must arrive intact and in order");
+    }
+
+    /// <summary>
     /// A store object above the caller's cap is refused instead of truncated: a truncated report is a different
     /// document, and parsing it as if it were the stored one would hide the inconsistency (06.3.6 AC3).
     /// </summary>

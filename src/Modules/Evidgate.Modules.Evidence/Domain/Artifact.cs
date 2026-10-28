@@ -156,8 +156,12 @@ internal static class ArtifactState
 /// (06.1.2 §2 AC3/AC5, §5): the object never became evidence. The column's CHECK only bounds the length
 /// (migration 0028: <c>char_length between 1 and 128</c>), so this type carries the vocabulary and is the SLI's
 /// <c>failure_code</c> dimension (06.1.2 §8). Every code is also a committed 200, never an error response. The
-/// <c>parse_*</c> trio is written later by the <c>parse</c> task (06.3.6 AC3), on an artifact that had become
-/// <c>ready</c>: the same column, the same 1-128 bound, no new status.
+/// <c>parse_*</c> codes are written later by the <c>artifact_parse</c> task (06.3.6 AC3), on an artifact that had
+/// become <c>ready</c>: the same column, the same 1-128 bound, no new status. That task also writes
+/// <see cref="TooLarge"/> there, when the stored object no longer fits the kind's cap, and — for a rejection the child
+/// reported itself — one of the profile's reason words (<c>ParsingFailureReason</c>: <c>dtd_prohibited</c>,
+/// <c>unsafe_entry_name</c>, <c>size_exceeded</c>, …), which is why the codes this type names are not the column's
+/// whole vocabulary.
 /// </summary>
 internal static class ArtifactFailureCode
 {
@@ -170,7 +174,11 @@ internal static class ArtifactFailureCode
     /// <summary>The declared media type is not one the kind policy accepts.</summary>
     public const string MediaTypeMismatch = "media_type_mismatch";
 
-    /// <summary>The object is larger than the kind policy's <c>max_bytes</c>.</summary>
+    /// <summary>
+    /// The object is larger than the kind policy's <c>max_bytes</c>. Written by <c>complete</c> when the stored object
+    /// exceeds the declared cap (06.1.2-T1) and by the <c>artifact_parse</c> task when the capped read refuses to
+    /// truncate it (06.3.6-T1.4): retrying cannot shrink the object, so that read is a verdict and no child runs.
+    /// </summary>
     public const string TooLarge = "too_large";
 
     /// <summary>Neither the staging object nor a matching final object exists in the store (T86).</summary>
@@ -179,7 +187,7 @@ internal static class ArtifactFailureCode
     /// <summary>
     /// The parse child died of its heap limit (06.3.6 AC3). The value is the one
     /// <c>ParseRunRejection.Oom</c> maps a run to, so the vocabulary word exists once for the domain and once for the
-    /// mapping and a test pins the two together; the parse task writes it on a <c>ready</c> artifact.
+    /// mapping and a test pins the two together; the <c>artifact_parse</c> task writes it on a <c>ready</c> artifact.
     /// </summary>
     public const string ParseOom = "parse_oom";
 
@@ -188,7 +196,9 @@ internal static class ArtifactFailureCode
 
     /// <summary>
     /// Every other failed parse — a non-zero or signal exit, output over a cap, a stdout stream that is not the child's
-    /// protocol (06.3.6 AC3, <c>ParseRunRejection.Crashed</c>).
+    /// protocol (06.3.6 AC3, <c>ParseRunRejection.Crashed</c>) — and the code a child-reported rejection record earns
+    /// when its reason is not a code word (a value outside <c>^[a-z0-9_]{1,64}$</c>, D-S125-Q4): no text the parsed
+    /// document influenced may reach this column (00 §5.7 S3).
     /// </summary>
     public const string ParseCrashed = "parse_crashed";
 }
@@ -282,10 +292,10 @@ internal sealed class Artifact
     /// <c>artifact_failure_code_check</c> bounds the code's length, which is checked here so a value the database
     /// would refuse never reaches a statement (C6).
     /// <para>
-    /// The <c>parse</c> task's verdict (06.3.6-T1.4) is the same transition from <c>ready</c>: an artifact whose bytes
-    /// no longer parse cannot stay evidence, so it keeps its size, checksum, key and scan state and gains one
-    /// <c>parse_*</c> reason. Reusing this member is deliberate — a second rejection shape would be a second place
-    /// for the state's invariants to drift.
+    /// The <c>artifact_parse</c> task's verdict (06.3.6-T1.4) is the same transition from <c>ready</c>: an artifact
+    /// whose bytes no longer parse cannot stay evidence, so it keeps its size, checksum, key and scan state and gains
+    /// one reason — a <c>parse_*</c> code, <c>too_large</c>, or the child's own reason word. Reusing this member is
+    /// deliberate — a second rejection shape would be a second place for the state's invariants to drift.
     /// </para>
     /// </summary>
     /// <param name="failureCode">One of the <see cref="ArtifactFailureCode"/> reasons.</param>

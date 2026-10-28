@@ -39,7 +39,7 @@ has no `unshare`).
 
 ## 2. What is enforced in code (proven, CI)
 
-1. **The child has no networking API.** The compiled `Evidgate.Parser.dll` references no `System.Net*` assembly and
+1. **The child has no managed networking API.** The compiled `Evidgate.Parser.dll` references no `System.Net*` assembly and
    contains no type reference or definition in a `System.Net*` namespace:
    `tests/Parser.Tests/ChildNetworkTests.cs` (`Child_Assembly_References_No_Networking_Type`) reads the assembly
    metadata, so a global `using`, a generated file or a suppressed analyzer cannot hide a use. The source-level rule
@@ -58,8 +58,10 @@ has no `unshare`).
    `Runner_Child_Environment_Holds_Only_The_Allow_List`, `Spawned_Child_Environment_Carries_No_Network_Configuration`,
    which sets `HTTPS_PROXY`/`https_proxy` in the test process and asserts the child's own dump lacks them, so the
    assertion cannot pass merely because the host configures no proxy).
-3. **Nothing else to leak.** The child receives one artifact's bytes on stdin, has no connection string and no
-   credential in its environment, so even a hypothetical network call would authenticate as nobody.
+3. **The child's own environment carries no credentials.** The child receives one artifact's bytes on stdin and
+   its environment holds no connection string and no credential. This is not isolation of the Worker's
+   credentials: a compromised child shares the Worker's UID, its filesystem reads and its egress, so it can read
+   any credential that UID can read and reach anything the Worker's network path reaches.
 
 ## 3. What remains a deployment item
 
@@ -96,9 +98,12 @@ computes (`parse_crashed`/`parse_timeout` distinguish an attempt from a resource
 
 ## 4. Claim summary
 
-- **Met:** the child can form no outbound connection by construction (no `System.Net` type in the built assembly)
-  and receives no proxy/resolver/networking configuration in its environment.
-- **Met where the container denies egress:** an attempt from a process started exactly like the child fails (proven
-  in a `--network none` container); this is the shape this repository can test, not the production shape.
+- **Met:** the child has no managed networking API (no `System.Net` type in the built assembly) — this does not stop
+  a native syscall that no managed type exposes — and the child's own environment carries no credentials and no
+  proxy/resolver/networking configuration. A compromised child still shares the Worker's UID, filesystem reads and
+  egress.
+- **Met where the container denies egress:** an attempt from a scripted `/bin/bash` child started through the
+  runner's own path fails in a `--network none` container. The egress half of that test exercises that scripted
+  child, not the real `Evidgate.Parser` child; it is the shape this repository can test, not the production shape.
 - **Not met (deployment, 10.2.1-T1.1):** a runtime guarantee for the production Worker container.
 - **Not met (11.5.1-T5.1 / 11.1.1-T4.1):** the security event for the attempt.

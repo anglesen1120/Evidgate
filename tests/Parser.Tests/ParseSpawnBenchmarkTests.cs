@@ -31,9 +31,8 @@ namespace Parser.Tests;
 /// (published without <c>PublishReadyToRun</c>, 06.3.6 plan Notes :168).
 /// </para>
 /// <para>
-/// Excluded from a normal gate with <c>--filter-not-trait "Category=Benchmark"</c> (the same
-/// <c>[Trait("Category", …)]</c> convention the Docker integration suites use), because it is a measurement, not a
-/// pass/fail check.
+/// Runs inside every <c>Parser.Tests</c> run: no gate excludes the <c>Category=Benchmark</c> trait, so nothing has
+/// to be filtered for it. It is a measurement, not a pass/fail check, and asserts no timing threshold.
 /// </para>
 /// </summary>
 [Trait("Category", "Benchmark")]
