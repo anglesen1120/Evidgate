@@ -160,39 +160,6 @@ button:disabled {
   background: var(--eg-neutral-bg);
   color: var(--eg-neutral-fg);
 }
-/* D-S104-Q2: the acknowledgement row. The label is the only visible text, so it must stay beside
-   the box at 360 px (no fixed columns) and wrap instead of overflowing. */
-.acknowledge {
-  display: flex;
-  gap: var(--eg-space-3);
-  align-items: start;
-  min-inline-size: var(--eg-space-0);
-}
-.acknowledge input {
-  flex: none;
-  inline-size: var(--eg-control-md);
-  block-size: var(--eg-control-md);
-  margin: var(--eg-space-0);
-  accent-color: var(--eg-accent);
-}
-.acknowledge input:focus-visible {
-  outline: var(--eg-focus-width) solid var(--eg-focus);
-  outline-offset: var(--eg-focus-offset);
-}
-.acknowledge input:disabled {
-  cursor: not-allowed;
-}
-.acknowledge label {
-  color: var(--eg-text);
-  font-size: var(--eg-text-sm);
-  line-height: var(--eg-leading-sm);
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-.acknowledge input:disabled + label {
-  color: var(--eg-text-muted);
-  cursor: not-allowed;
-}
 /* The live confirmation region reserves its line so the layout does not jump when it speaks. */
 .busy-status {
   min-block-size: var(--eg-leading-sm);

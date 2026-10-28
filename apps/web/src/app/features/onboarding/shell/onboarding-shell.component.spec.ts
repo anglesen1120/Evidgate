@@ -289,7 +289,8 @@ describe('OnboardingShellComponent', () => {
     expect(root.querySelector('[data-testid="enable-collection-page"]')?.textContent).toContain(
       'org-1 project-1',
     );
-    // Step 5 is never derived done without an activation read (plan 09.2.1 line 148).
+    // Next stays disabled on this open step: `done[5]` comes from the project's activation read
+    // (09.2.1-T5.2), and this stub state reports no activation.
     expect(button('next').disabled).toBe(true);
   });
 
@@ -353,7 +354,7 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
   const NO_PROJECT: OnboardingProgress = {
     project: null,
     done: { 1: false, 2: false, 3: false, 4: false, 5: false },
-    activationReadable: false,
+    activation: { kind: 'none' },
     sampleRun: null,
     bindings: [],
     tokens: [],

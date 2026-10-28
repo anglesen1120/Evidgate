@@ -1253,6 +1253,72 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     ).toContain('precondition_failed');
   });
 
+  it("pins step 5's activation read to the project-keyed GET (09.2.1-T5.2)", () => {
+    // The wizard derives step 5 from this read alone (07.1.1 F18), so the corpus must answer the
+    // operation the route names, with the read's own document shape: `PolicyActivationStateDto`
+    // holds the six stored/joined members and none of the POST answer's two extra ones (migration
+    // `0033` stores no `previous_policy_revision_id` and no `changed`, and this route does not
+    // serve them). A fixture that drifted either way would make the wizard's `done[5]` a claim
+    // about a body the server cannot produce.
+    expect(FIXTURE_ROUTE_ROWS.find((route) => route.operationId === 'getPolicyActivation')).toEqual(
+      {
+        operationId: 'getPolicyActivation',
+        method: 'GET',
+        path: '/projects/{p}/policy-activation',
+      },
+    );
+
+    const names = [
+      'policy-activation-read-ok',
+      'policy-activation-read-enforcing',
+      'policy-activation-read-not-found',
+      'policy-activation-read-forbidden',
+    ];
+    for (const name of names) {
+      const document = corpusDocument(name);
+      expect(document.operation_id).toBe('getPolicyActivation');
+      expect(
+        VALIDATOR.validateResponse('getPolicyActivation', document.status, document.body).errors,
+        `fixtures/web-api/${name} no longer matches the getPolicyActivation responses of contracts/openapi.yaml`,
+      ).toEqual([]);
+    }
+
+    const activated = corpusDocument('policy-activation-read-ok').body;
+    expect(isRecord(activated)).toBe(true);
+    if (isRecord(activated)) {
+      expect(Object.keys(activated).sort()).toEqual([
+        'activated_at',
+        'activated_by',
+        'hash',
+        'mode',
+        'policy_revision_id',
+        'project_id',
+      ]);
+      expect(activated['mode']).toBe('advisory');
+    }
+    // The same pointer in `enforcing` mode: a mode the wizard's own confirm never sends (07.7.1),
+    // so a review can still show the read answering it.
+    const enforcing = corpusDocument('policy-activation-read-enforcing').body;
+    expect(isRecord(enforcing) && enforcing['mode']).toBe('enforcing');
+    expect(corpusDocument('policy-activation-read-enforcing').status).toBe(200);
+
+    // The contract's one undifferentiated 404 and the 403 of a principal without `policy:read`:
+    // the two states the client separates from "no activation" and from a failed load.
+    const notFound = corpusDocument('policy-activation-read-not-found');
+    expect(notFound.status).toBe(404);
+    const notFoundBody = notFound.body;
+    expect(
+      isRecord(notFoundBody) && isRecord(notFoundBody['error']) && notFoundBody['error']['code'],
+    ).toBe('not_found');
+
+    const forbidden = corpusDocument('policy-activation-read-forbidden');
+    expect(forbidden.status).toBe(403);
+    const forbiddenBody = forbidden.body;
+    expect(
+      isRecord(forbiddenBody) && isRecord(forbiddenBody['error']) && forbiddenBody['error']['code'],
+    ).toBe('forbidden');
+  });
+
   it('answers the one-time step-2 secrets in the create documents alone (09.2.1-T2)', () => {
     // 1. Every document of an operation that mints no secret is secret-free. This is AC2's
     //    "metadata only on resume" on the wire: the wizard's lists and detail reads can only show

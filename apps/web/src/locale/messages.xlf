@@ -2634,11 +2634,16 @@
       <trans-unit id="onboarding.enable.revision" datatype="html"><source>Policy revision</source></trans-unit>
       <trans-unit id="onboarding.enable.hash" datatype="html"><source>Revision hash</source></trans-unit>
       <trans-unit id="onboarding.enable.activated-at" datatype="html"><source>Activated (UTC)</source></trans-unit>
-      <trans-unit id="onboarding.enable.replaces-active" datatype="html"><source>Confirming activates the default advisory policy for this project and replaces whatever policy is active now. Gating stops until a gating policy is activated again.</source></trans-unit>
-      <trans-unit id="onboarding.enable.acknowledge" datatype="html"><source>I understand this replaces the active policy.</source></trans-unit>
+      <trans-unit id="onboarding.enable.replaces-active" datatype="html"><source>Confirming activates the default advisory policy for this project. It can only replace a policy activated after this page read that the project had no activation.</source></trans-unit>
+      <trans-unit id="onboarding.enable.activation-unreadable" datatype="html"><source>The project's activation state could not be read with your permissions. Confirmation is disabled.</source></trans-unit>
+      <trans-unit id="onboarding.enable.reading" datatype="html"><source>Reading the project's activation…</source></trans-unit>
+      <trans-unit id="onboarding.enable.active-read" datatype="html"><source>This project is enabled. This panel is built from the activation recorded on the server, so reloading the wizard shows the same state.</source></trans-unit>
+      <trans-unit id="onboarding.enable.retry-read" datatype="html"><source>Read the activation again</source></trans-unit>
+      <trans-unit id="onboarding.enable.read-failed" datatype="html"><source>The activation could not be read. Reading it again is safe.</source></trans-unit>
+      <trans-unit id="onboarding.enable.project" datatype="html"><source>Project</source></trans-unit>
+      <trans-unit id="onboarding.enable.activated-by" datatype="html"><source>Activated by</source></trans-unit>
       <trans-unit id="onboarding.enable.previous-revision" datatype="html"><source>Revision this replaced</source></trans-unit>
       <trans-unit id="onboarding.enable.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
-      <trans-unit id="onboarding.enable.unexpected-mode" datatype="html"><source>This step cannot present the policy mode the server reported, so the project was not shown as enabled. Reload the wizard to read the project's policy again.</source></trans-unit>
       <trans-unit id="runs.detail.title" datatype="html"><source>Run detail</source></trans-unit>
       <trans-unit id="runs.detail.back" datatype="html"><source>Back to runs</source></trans-unit>
       <trans-unit id="runs.detail.id" datatype="html"><source>Run id</source></trans-unit>

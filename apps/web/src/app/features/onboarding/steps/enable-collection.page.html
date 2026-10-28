@@ -1,75 +1,170 @@
 <section class="enable" data-testid="enable-collection" [attr.aria-busy]="busy()">
   <p>{{ intro }}</p>
 
-  <section
-    class="panel"
-    aria-labelledby="enable-preview-heading"
-    data-testid="enable-collection-policy-preview"
-  >
-    <h3 id="enable-preview-heading">{{ previewHeading }}</h3>
-    <p class="advisory" data-testid="enable-collection-not-gating">{{ notGatingCopy }}</p>
-    <!-- F1: the confirm is a REPLACE command, so the hazard is stated before the press, not after.
-         It also anchors the confirm's `aria-describedby` while the acknowledgement is open. -->
-    <p
-      class="replaces-active"
-      id="enable-replaces-warning"
-      data-testid="enable-collection-replaces-active"
-    >
-      {{ replacesActiveCopy }}
-    </p>
-    <dl class="metadata">
-      <div>
-        <dt>{{ lateWindowLabel }}</dt>
-        <dd>
-          @if (preview.lateWindowMinutes !== null) {
-            {{ preview.lateWindowMinutes }} {{ minutesSuffix }}
-          } @else {
-            {{ notSetLabel }}
-          }
-        </dd>
-      </div>
-      <div>
-        <dt>{{ requiredSuitesLabel }}</dt>
-        <dd>{{ preview.requiredSuites.join(', ') || noneLabel }}</dd>
-      </div>
-      <div>
-        <dt>{{ requiredCasesLabel }}</dt>
-        <dd>{{ preview.requiredCases.join(', ') || noneLabel }}</dd>
-      </div>
-      <div>
-        <dt>{{ gatedBranchLabel }}</dt>
-        <dd>{{ preview.gatesDefaultBranch ? yesLabel : noLabel }}</dd>
-      </div>
-    </dl>
-  </section>
-
   <!-- QA-01: the busy line is a live region by `role="status"` alone; a second `aria-live` on the
        same node is redundant (and the terminal panel below relies on `role="status"` too). -->
   <p class="busy-status" role="status">
     @if (busy()) {
       {{ confirmingLabel }}
+    } @else if (reading()) {
+      {{ readingLabel }}
     }
   </p>
 
-  @if (enabled() === null) {
+  @if (enabled(); as activation) {
+    <section
+      class="panel panel--done"
+      role="status"
+      aria-labelledby="enable-enabled-heading"
+      data-testid="enable-collection-enabled"
+    >
+      <h3 id="enable-enabled-heading" tabindex="-1" #enabledHeadingTarget>
+        {{ enabledHeading }}
+      </h3>
+      <p>{{ terminalIntro() }}</p>
+      <!-- Only an advisory server value gets the not-gating sentence: any other mode is reported
+           as the wire value below and never described as advisory or as gating on its behalf. -->
+      @if (advisoryMode()) {
+        <p class="advisory">{{ notGatingCopy }}</p>
+      }
+      <dl class="metadata">
+        <div>
+          <dt>{{ projectLabel }}</dt>
+          <dd>
+            @if (enabledProject(); as project) {
+              <code
+                ><bdi>{{ project }}</bdi></code
+              >
+            } @else {
+              {{ unavailableLabel }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ revisionLabel }}</dt>
+          <dd>
+            @if (enabledRevisionNo(); as revisionNo) {
+              {{ revisionNo }}
+            } @else if (enabledRevision(); as revision) {
+              <code
+                ><bdi>{{ revision }}</bdi></code
+              >
+            } @else {
+              {{ unavailableLabel }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ hashLabel }}</dt>
+          <dd>
+            @if (enabledHash(); as hash) {
+              <code
+                ><bdi>{{ hash }}</bdi></code
+              >
+            } @else {
+              {{ unavailableLabel }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ modeLabel }}</dt>
+          <dd>
+            <bdi>{{ modeText(activation.mode) }}</bdi>
+          </dd>
+        </div>
+        <div>
+          <dt>{{ activatedByLabel }}</dt>
+          <dd>
+            @if (enabledBy(); as activator) {
+              <code
+                ><bdi>{{ activator }}</bdi></code
+              >
+            } @else {
+              {{ unavailableLabel }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ activatedAtLabel }}</dt>
+          <dd>
+            @if (enabledInstant(); as instant) {
+              <time [attr.datetime]="instant">{{ instant | date: 'medium' : '+0000' }}</time>
+            } @else {
+              {{ unavailableLabel }}
+            }
+          </dd>
+        </div>
+        @if (enabledPreviousRevision(); as replaced) {
+          <div>
+            <dt>{{ previousRevisionLabel }}</dt>
+            <dd>
+              <code
+                ><bdi>{{ replaced }}</bdi></code
+              >
+            </dd>
+          </div>
+        }
+      </dl>
+    </section>
+  }
+
+  <!-- The preview belongs to the confirm: it shows the one body a confirm would append, so it is
+       not shown beside an activation the server already recorded. -->
+  @if (enabled() === null && readFailure() === null) {
+    <section
+      class="panel"
+      aria-labelledby="enable-preview-heading"
+      data-testid="enable-collection-policy-preview"
+    >
+      <h3 id="enable-preview-heading">{{ previewHeading }}</h3>
+      <p class="advisory" data-testid="enable-collection-not-gating">{{ notGatingCopy }}</p>
+      <!-- F1: the confirm is a REPLACE command, so the hazard is stated before the press, not after.
+           It is also part of the confirm's `aria-describedby` in every state (AC-F18-c). -->
+      <p
+        class="replaces-active"
+        id="enable-replaces-warning"
+        data-testid="enable-collection-replaces-active"
+      >
+        {{ replacesActiveCopy }}
+      </p>
+      <dl class="metadata">
+        <div>
+          <dt>{{ lateWindowLabel }}</dt>
+          <dd>
+            @if (preview.lateWindowMinutes !== null) {
+              {{ preview.lateWindowMinutes }} {{ minutesSuffix }}
+            } @else {
+              {{ notSetLabel }}
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>{{ requiredSuitesLabel }}</dt>
+          <dd>{{ preview.requiredSuites.join(', ') || noneLabel }}</dd>
+        </div>
+        <div>
+          <dt>{{ requiredCasesLabel }}</dt>
+          <dd>{{ preview.requiredCases.join(', ') || noneLabel }}</dd>
+        </div>
+        <div>
+          <dt>{{ gatedBranchLabel }}</dt>
+          <dd>{{ preview.gatesDefaultBranch ? yesLabel : noLabel }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <!-- AC-T5.2-3: the confirm exists only beside a read that permits it, i.e. inside this branch. It
+       is native-disabled until the read settles and stays disabled for an unreadable (403) state;
+       the read answering 200 or failing in any other way removes the whole preview section. -->
     <form (ngSubmit)="confirm()">
       @if (!permitted()) {
         <p id="enable-permission" data-testid="enable-collection-ask-approver">{{ askApprover }}</p>
       }
-      <!-- D-S104-Q2: the acknowledgement is required for every confirm, not only when a policy is
-           known to be active — until activation is readable (F18) the page cannot prove there is
-           none. It starts unchecked and is reset when the step moves or the grant goes away. -->
-      <div class="acknowledge">
-        <input
-          id="enable-acknowledge"
-          data-testid="enable-collection-acknowledge"
-          type="checkbox"
-          [checked]="acknowledged()"
-          [disabled]="!permitted() || busy()"
-          (change)="setAcknowledged($event)"
-        />
-        <label for="enable-acknowledge">{{ acknowledgeLabel }}</label>
-      </div>
+      @if (activationRead().kind === 'forbidden') {
+        <p id="enable-activation-unreadable" data-testid="enable-collection-unreadable">
+          {{ activationUnreadable }}
+        </p>
+      }
       <button
         class="state-panel__action primary"
         data-testid="enable-collection-confirm"
@@ -87,9 +182,22 @@
       <app-error-pattern
         [error]="error"
         [headingLevel]="3"
-        [retryDisabled]="!retryEligible() || busy()"
+        [retryDisabled]="retryDisabled()"
         (retry)="retry()"
       />
+      <!-- A read is side-effect free, but the shared pattern only offers Retry for a retryable
+           failure; a 401/5xx read therefore gets this page-owned re-read action instead. -->
+      @if (readRetryWithoutAction()) {
+        <button
+          class="state-panel__action"
+          data-testid="enable-collection-retry-read"
+          type="button"
+          [disabled]="retryDisabled()"
+          (click)="retry()"
+        >
+          {{ retryReadLabel }}
+        </button>
+      }
       @if (responseUncertain()) {
         <p class="notice" data-testid="enable-collection-response-uncertain">
           {{ uncertainLabel }}
@@ -101,66 +209,5 @@
         <p class="validation">{{ clean(detail.path) }} {{ clean(detail.reason) }}</p>
       }
     </section>
-  }
-
-  @if (enabled(); as activation) {
-    @if (advisoryMode()) {
-      <section
-        class="panel panel--done"
-        role="status"
-        aria-labelledby="enable-enabled-heading"
-        data-testid="enable-collection-enabled"
-      >
-        <h3 id="enable-enabled-heading" tabindex="-1" #enabledHeadingTarget>
-          {{ enabledHeading }}
-        </h3>
-        <p>{{ activation.changed ? changedCopy : unchangedCopy }}</p>
-        <p class="advisory">{{ notGatingCopy }}</p>
-        <dl class="metadata">
-          <div>
-            <dt>{{ modeLabel }}</dt>
-            <dd>{{ modeText(activation.mode) }}</dd>
-          </div>
-          @if (enabledRevisionNo(); as revisionNo) {
-            <div>
-              <dt>{{ revisionLabel }}</dt>
-              <dd>{{ revisionNo }}</dd>
-            </div>
-          }
-          @if (enabledPreviousRevision(); as replaced) {
-            <div>
-              <dt>{{ previousRevisionLabel }}</dt>
-              <dd>
-                <code
-                  ><bdi>{{ replaced }}</bdi></code
-                >
-              </dd>
-            </div>
-          }
-          <div>
-            <dt>{{ hashLabel }}</dt>
-            <dd>
-              @if (enabledHash(); as hash) {
-                <code
-                  ><bdi>{{ hash }}</bdi></code
-                >
-              } @else {
-                {{ unavailableLabel }}
-              }
-            </dd>
-          </div>
-          <div>
-            <dt>{{ activatedAtLabel }}</dt>
-            <dd>
-              @if (enabledInstant(); as instant) {
-                <time [attr.datetime]="instant">{{ instant | date: 'medium' : '+0000' }}</time>
-              } @else {
-                {{ unavailableLabel }}
-              }
-            </dd>
-          </div>
-        </dl>
-      </section>
-    }
   }
 </section>

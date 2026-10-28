@@ -82,6 +82,10 @@ import permissionsListSettingsSecretsWrite from '../../../../../../fixtures/web-
 import policyActivationForbidden from '../../../../../../fixtures/web-api/policy-activation-forbidden/input.json';
 import policyActivationInvalidTransition from '../../../../../../fixtures/web-api/policy-activation-invalid-transition/input.json';
 import policyActivationOk from '../../../../../../fixtures/web-api/policy-activation-ok/input.json';
+import policyActivationReadEnforcing from '../../../../../../fixtures/web-api/policy-activation-read-enforcing/input.json';
+import policyActivationReadForbidden from '../../../../../../fixtures/web-api/policy-activation-read-forbidden/input.json';
+import policyActivationReadNotFound from '../../../../../../fixtures/web-api/policy-activation-read-not-found/input.json';
+import policyActivationReadOk from '../../../../../../fixtures/web-api/policy-activation-read-ok/input.json';
 import policyActivationUnchanged from '../../../../../../fixtures/web-api/policy-activation-unchanged/input.json';
 import policyRevisionCreate from '../../../../../../fixtures/web-api/policy-revision-create/input.json';
 import policyRevisionCreateCriticalCaseQuarantined from '../../../../../../fixtures/web-api/policy-revision-create-critical-case-quarantined/input.json';
@@ -210,8 +214,8 @@ export interface FixtureCatalogRow {
  *                                 so the AC6 no-PASS/FAIL check runs on a failing run;
  *   `onboarding-run-complete`     that run's `getRun` has `current_evidence_revision_id: null`
  *                                 → step 4;
- *   `onboarding-evidence`         the same run with an evidence revision → step 5 (activation is
- *                                 not readable yet, so the wizard reports it as not done).
+ *   `onboarding-evidence`         the same run with an evidence revision → step 5 (its
+ *                                 `getPolicyActivation` pin answers 404, so step 5 is not done).
  *
  * `onboarding-forbidden` (403) and `onboarding-project-not-found` (404) answer both project reads,
  * so a failing progress read renders the T8 pattern instead of a wrong step whether the wizard was
@@ -532,10 +536,7 @@ export interface FixtureCatalogRow {
  * `Retry-After`, 00 §9.2), the state the list's error pattern renders with the server's retry hint.
  * Every `X-Request-Id` above (`…e10`–`…e17`) is distinct from the older `runs-list*` rows.
  *
- * 09.2.1-T5 adds step 5's documents and splits the wizard's grant set in two. The contract has no
- * project-keyed read of a `policy_activation` (`activatePolicyRevision` is the POST alone), so the
- * wizard cannot derive step 5 as done and the corpus answers that POST only: a reload shows the
- * confirm again and a repeat submit is the replay state below.
+ * 09.2.1-T5 adds step 5's documents and splits the wizard's grant set in two.
  * `permissions-list-onboarding` (`=onboarding`) is the seven codes the wizard gates steps 1–4 on
  * and holds NO `policy:write`, so step 5's confirm is natively disabled for it — the state of the
  * session whose `release_approver` role was reassigned away (plan §8 row 123 asks for the copy
@@ -562,6 +563,23 @@ export interface FixtureCatalogRow {
  * `PolicyActivationStore.cs:277-279`), and `policy-activation-forbidden` (`=forbidden`) is the 403 a
  * principal without `policy:write` gets; both are 00 §9.2 envelopes the page renders as its own
  * error state. Their `X-Request-Id`s (`…a105`–`…a108`) are distinct from every older policy row.
+ *
+ * 09.2.1-T5.2 adds the read those documents could not stand in for
+ * (`getPolicyActivation`, `GET /v1/projects/{p}/policy-activation`, 07.1.1 F18), which is now how
+ * the wizard derives step 5 instead of assuming it is never done. Its four documents are the same
+ * pointer on the same revision, and — being a read — carry `PolicyActivationStateDto`'s six
+ * members and none of the POST's two extra ones (`previous_policy_revision_id`, `changed` are not
+ * stored by migration `0033` and are not on this route):
+ * `policy-activation-read-ok` (`=ok`) is the activated project in `advisory` mode, the state that
+ * completes step 5 and opens the terminal screen; `policy-activation-read-enforcing` (`=enforcing`)
+ * is the same pointer in `enforcing` mode, so a review can show the read answering a mode the
+ * wizard's own confirm never sends (07.7.1); `policy-activation-read-not-found` (`=not-found`) is
+ * the contract's one undifferentiated `404` — never activated, unknown, soft-deleted and another
+ * tenant's project all read here (00 §9.2) — which the client reports as "no activation", never as
+ * a not-found error; and `policy-activation-read-forbidden` (`=forbidden`) is the `403` of a
+ * principal without `policy:read`, the state in which steps 1–4 still derive and step 5 alone stays
+ * open. `X-Request-Id`s `…a10a`–`…a10d` are distinct from every row above, and the `404`/`403`
+ * bodies name their own request id, as every 00 §9.2 envelope in the corpus does.
  */
 export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'ci-binding-create', document: ciBindingCreate },
@@ -663,6 +681,10 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'policy-activation-forbidden', document: policyActivationForbidden },
   { name: 'policy-activation-invalid-transition', document: policyActivationInvalidTransition },
   { name: 'policy-activation-ok', document: policyActivationOk },
+  { name: 'policy-activation-read-enforcing', document: policyActivationReadEnforcing },
+  { name: 'policy-activation-read-forbidden', document: policyActivationReadForbidden },
+  { name: 'policy-activation-read-not-found', document: policyActivationReadNotFound },
+  { name: 'policy-activation-read-ok', document: policyActivationReadOk },
   { name: 'policy-activation-unchanged', document: policyActivationUnchanged },
   { name: 'policy-revision-create', document: policyRevisionCreate },
   {
