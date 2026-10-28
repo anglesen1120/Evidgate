@@ -242,6 +242,11 @@ public static class IsolationRouteCases
             new(Get("/v1/orgs/{o}/audit"), "org B's audit events", bAdmin, $"/v1/orgs/{b.Id}/audit?limit=2", "id",
                 runner => runner.OwnerIdsAsync("select id::text from public.audit_log where org_id = @org", b.Id),
                 aAdmin, $"/v1/orgs/{a.Id}/audit?limit=1"),
+            // 11.5.1-T5.2: the world seeds three security events per org, so limit=1 pages three times and org A's
+            // first page carries a next_cursor for the cross-org cursor step below.
+            new(Get("/v1/orgs/{o}/security-events"), "org B's security events", bAdmin, $"/v1/orgs/{b.Id}/security-events?limit=1", "id",
+                runner => runner.TenantIdsAsync("select id::text from public.security_event where org_id = @org", b.Id),
+                aAdmin, $"/v1/orgs/{a.Id}/security-events?limit=1"),
             new(Get("/v1/roles"), "built-in roles only, identical to org A's list", bAdmin, "/v1/roles?limit=1", "id",
                 runner => runner.WalkIdsAsync(aAdmin, "/v1/roles?limit=1", "id"), aAdmin, "/v1/roles?limit=1",
                 item => OrgIdOf(item) is { } org && org != b.Id ? $"role {IdOf(item, "id")} belongs to org {org}" : null),
@@ -505,6 +510,11 @@ public static class IsolationRouteCases
         // ---- Audit (AuditEndpoints.cs:42-46) -------------------------------------------------------------------
         OrgCase("GET", "/v1/orgs/{o}/audit", o => new(HttpMethod.Get, $"/v1/orgs/{o}/audit")),
         OrgCase("GET", "/v1/orgs/{o}/audit/export", o => new(HttpMethod.Get, $"/v1/orgs/{o}/audit/export")),
+
+        // ---- Security events (SecurityEventEndpoints.cs:55-66; 11.5.1-T5.2) -------------------------------------
+        // {o} is the tenant the read runs in; another org's id is refused at tenant resolution (403 for a member,
+        // the same answer for an id that does not exist), and the rows are invisible to RLS besides.
+        OrgCase("GET", "/v1/orgs/{o}/security-events", o => new(HttpMethod.Get, $"/v1/orgs/{o}/security-events")),
 
         // ---- CI admin (CiAdminEndpoints.cs:30-55) --------------------------------------------------------------
         ProjectCase("POST", "/v1/projects/{p}/ci-bindings", p => new(HttpMethod.Post, $"/v1/projects/{p}/ci-bindings", Binding())),
@@ -2387,6 +2397,36 @@ public sealed class RouteProbeRunner
         command.Parameters.AddWithValue("id", user);
         command.Parameters.AddWithValue("email", email);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The <c>id::text</c> values an owner-connection query returns for <paramref name="org"/> (<c>@org</c>), read
+    /// inside that org's tenant scope: a FORCE-RLS table (migration 0053's <c>security_event</c>) hides every row
+    /// from a tenant-less owner connection, so the GUC is set in the same transaction the query runs in.
+    /// </summary>
+    public async Task<IReadOnlyCollection<string>> TenantIdsAsync(string sql, Guid org)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var connection = new NpgsqlConnection(_fixture.OwnerConnectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        await using (var scope = new NpgsqlCommand("select set_config('evidgate.org_id', @scope_org, true)", connection, transaction))
+        {
+            scope.Parameters.AddWithValue("scope_org", org.ToString("D", CultureInfo.InvariantCulture));
+            await scope.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("org", org);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            ids.Add(reader.GetString(0));
+        }
+
+        return ids;
     }
 
     /// <summary>The <c>id::text</c> values an owner-connection query returns for <paramref name="org"/> (<c>@org</c>).</summary>

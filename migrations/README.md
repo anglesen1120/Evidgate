@@ -129,8 +129,8 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   which itself refuses a call made inside a tenant transaction (`23514`, nothing written), because a
   definer runs as the owner and row level security cannot confine it
   (`contracts/rls-exceptions.txt` lists the table because of its NULL-org row);
-  the next free number is `0053`;
-  a gap means two branches invented the same sequence and neither history can be trusted.
+  and `0053` is 11.5.1-T5's `security_event` (shape and emitter contract in its own notes below);
+  the next free number is `0054`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -465,6 +465,42 @@ or 1`, wrapped in a `CASE` because `array_position` raises `0A000` on a
 - Idempotent like `0025`/`0027`/`0028`/`0046`: `if not exists` / `drop … if
 exists` and a catalog check around the FK add, so a re-run is a no-op; one
   file runs in one transaction.
+
+## Notes on `security_event` (11.5.1-T5, `0053`)
+
+- Shape: `id uuid primary key` (a UUIDv7 the emitter picks), `org_id uuid not null`, `project_id uuid`
+  (null = the event belongs to no project), `type text not null`, `severity text not null`,
+  `actor jsonb not null`, `details jsonb not null default '{}'`, `request_id text`,
+  `created_at`/`updated_at timestamptz not null default now()` and `version int not null default 1`.
+  `unique (org_id, id)` is the target of any later composite tenant FK; nothing references the table
+  yet, so `0053` adds no foreign key.
+- `type` and `severity` are closed vocabularies — `auth_failure`, `cross_tenant_probe`,
+  `secret_scanner_alert`, `kill_switch_used`, `support_access`; `info`, `warning`, `critical` — owned
+  by `docs/security/security-event-baseline.md` and mirrored by the route's `Types`/`Severities`
+  arrays and the OpenAPI description, and deliberately NOT by the database: no CHECK, no enum. A new
+  type is a taxonomy change first (11.1.1-T4.1), and a CHECK would turn every addition into a
+  migration; the cost is that the database cannot refuse a value no reader knows.
+- `actor` is the closed `{kind, id}` object of whoever caused the event. `details` carries ids, hashes
+  and counts only: never a raw payload, a secret or free-text reason. Neither rule is enforced in
+  SQL, so an emitter that writes a payload is a defect its own review must catch (11.5.1 §8, S3).
+- RLS is the ordinary tenant shape: `ENABLE` + `FORCE ROW LEVEL SECURITY`, one default policy
+  `tenant_isolation` with `org_id = evidgate.current_org_id()` in `USING` — a `FOR ALL` policy also
+  applies that predicate as `WITH CHECK`, and with no `TO` clause it applies to PUBLIC. The table is
+  absent from `contracts/rls-exceptions.txt` on purpose: `org_id` is NOT NULL, so there is no
+  NULL-org read row, and the boot self-check sees a plain scoped policy.
+- `security_event_list_idx (org_id, project_id, type, severity, created_at desc, id)` serves the list:
+  the route filters on the four leading columns and keysets on `(created_at, id)` descending, so one
+  statement per page is index-ordered (P3/P4). An emitter inserts `insert into public.security_event (id, org_id, project_id, type, severity, actor, details, request_id)` with `org_id` from the tenant scope, inside its own tenant transaction, and needs no definer, no trigger and no outbox row.
+- Privileges are the `0001` defaults and nothing else: `evidgate_app` gets full DML (`select, insert, update, delete`) and `evidgate_operator` `select`, because `evidgate_owner` creates the table in schema `public`. `0053` adds NO revoke and no column-level narrowing, so append-only is a convention here, not a grant: the app role can update or delete a row today. Whether immutability becomes real — a revoke, as `0015`/`0049` do — is an open decision for the emitter work, owned by a later migration.
+- `updated_at` and `version` are inert for now: no `set_updated_at_and_version()` trigger and no
+  writer touch them, so both keep their defaults. They exist because the shape follows the house
+  pattern; a reader must never treat `version` as a concurrency token.
+- Platform-scope events do NOT fit: `org_id` is NOT NULL, so neither the NULL-org system healing
+  switch (`0052`, 08.6.3-T1) nor the verifier fault (G8, 02.7.1 AC6) has a row here. That stays an
+  open hand-over recorded in the 11.5.1 plan Notes and `docs/status-carried.md`; a nullable `org_id`
+  versus a separate platform table is a coordinator decision, and `0053` does not pre-empt it.
+- Rollback: `drop table if exists public.security_event;` — the policy and the index go with it, and
+  nothing else references the table.
 
 ## Tests and fixtures
 

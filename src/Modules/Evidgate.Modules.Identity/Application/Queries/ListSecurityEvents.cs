@@ -5,7 +5,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
-using Evidgate.Modules.Identity.Endpoints;
+using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Identity.Infrastructure.Persistence;
 using Mediator;
 
@@ -26,7 +26,7 @@ internal sealed record SecurityEventFilter(
 
 /// <summary><c>GET /v1/orgs/{o}/security-events</c> (11.5.1 AC3): one cursor page, newest first.</summary>
 internal sealed record ListSecurityEventsQuery(Guid OrgId, string? Cursor, int Limit, SecurityEventFilter Filter)
-    : IQuery<Result<SecurityEventListResponse>>;
+    : IQuery<Result<SecurityEventList>>;
 
 /// <summary>
 /// Handler of <see cref="ListSecurityEventsQuery"/>: a single statement per page (P3), served by
@@ -34,10 +34,10 @@ internal sealed record ListSecurityEventsQuery(Guid OrgId, string? Cursor, int L
 /// </summary>
 [Permission(Permissions.SecurityEvent.Read)]
 internal sealed class ListSecurityEventsQueryHandler(ITenantDb db, ITenantScopeAccessor scopes)
-    : IQueryHandler<ListSecurityEventsQuery, Result<SecurityEventListResponse>>
+    : IQueryHandler<ListSecurityEventsQuery, Result<SecurityEventList>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<SecurityEventListResponse>> Handle(
+    public async ValueTask<Result<SecurityEventList>> Handle(
         ListSecurityEventsQuery query,
         CancellationToken cancellationToken)
     {
@@ -47,7 +47,7 @@ internal sealed class ListSecurityEventsQueryHandler(ITenantDb db, ITenantScopeA
 
         if (query.OrgId != orgId)
         {
-            return Result.Failure<SecurityEventListResponse>(Error.NotFound(OrgMismatch.Message));
+            return Result.Failure<SecurityEventList>(Error.NotFound(OrgMismatch.Message));
         }
 
         DateTimeOffset? cursorCreatedAt = null;
@@ -57,7 +57,7 @@ internal sealed class ListSecurityEventsQueryHandler(ITenantDb db, ITenantScopeA
         {
             if (!KeysetCursor.TryDecode(query.Cursor, out var createdAt, out var id))
             {
-                return Result.Failure<SecurityEventListResponse>(Error.Invalid(
+                return Result.Failure<SecurityEventList>(Error.Invalid(
                     "the cursor is not a value this endpoint issued",
                     [new ErrorDetail("cursor", "malformed")]));
             }
@@ -85,7 +85,7 @@ internal sealed class ListSecurityEventsQueryHandler(ITenantDb db, ITenantScopeA
         var hasMore = rows.Count > query.Limit;
         var page = rows.Take(query.Limit).Select(ToDto).ToList();
 
-        return Result.Success(new SecurityEventListResponse(
+        return Result.Success(new SecurityEventList(
             page,
             hasMore ? KeysetCursor.Encode(page[^1].CreatedAt, page[^1].Id) : null));
     }
@@ -95,7 +95,7 @@ internal sealed class ListSecurityEventsQueryHandler(ITenantDb db, ITenantScopeA
     /// <c>::text</c> cast, as the audit read does) and become <see cref="JsonElement"/> here, so the
     /// persistence layer never names an HTTP type.
     /// </summary>
-    private static SecurityEventDto ToDto(SecurityEventPageRow row) => new(
+    private static SecurityEventItem ToDto(SecurityEventPageRow row) => new(
         row.Id,
         row.ProjectId,
         row.Type,

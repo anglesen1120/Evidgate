@@ -635,6 +635,9 @@ internal static class RouteRequests
         Add("GET", "/v1/orgs/{o}/audit", ctx => new(HttpMethod.Get, $"/v1/orgs/{ctx.OrgId}/audit"));
         Add("GET", "/v1/orgs/{o}/audit/export", ctx => new(HttpMethod.Get, $"/v1/orgs/{ctx.OrgId}/audit/export"));
 
+        // ---- Security events (SecurityEventEndpoints.cs:55-66; 11.5.1-T5.2) ---------------------------------
+        Add("GET", "/v1/orgs/{o}/security-events", ctx => new(HttpMethod.Get, $"/v1/orgs/{ctx.OrgId}/security-events"));
+
         // ---- CI admin ----------------------------------------------------------------------------------------
         Add("POST", "/v1/projects/{p}/ci-bindings", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/ci-bindings",
             Binding(), IdempotencyKey: Key()));

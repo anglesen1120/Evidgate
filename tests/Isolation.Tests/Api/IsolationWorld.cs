@@ -482,6 +482,8 @@ public sealed class IsolationWorld
                 seeded.Add(await SeedProjectAsync(slug, org, projects[i], ProjectSlugs[i], admin, maintainer, 7000 + (orgIndex * 10) + i).ConfigureAwait(false));
             }
 
+            await SeedSecurityEventsAsync(org, projects[0]).ConfigureAwait(false);
+
             return new IsolationOrg
             {
                 Id = org,
@@ -494,6 +496,51 @@ public sealed class IsolationWorld
                 Projects = seeded,
                 RoleIds = roles,
             };
+        }
+
+        /// <summary>
+        /// Three security events of the org (11.5.1-T5): no emitter module writes the table yet, so the world seeds
+        /// what the read serves. Three rows make the isolation walk page at <c>limit=1</c> and leave org A's first
+        /// page a <c>next_cursor</c> for the cross-org cursor step. Seeded through the owner connection inside a
+        /// tenant scope, because the table is under FORCE row level security and only its own org may see the rows.
+        /// </summary>
+        /// <param name="org">The org (and the tenant scope) the rows belong to.</param>
+        /// <param name="project">The project of the first row; the others belong to no project.</param>
+        private async Task SeedSecurityEventsAsync(Guid org, Guid project)
+        {
+            string[] types = ["auth_failure", "cross_tenant_probe", "support_access"];
+
+            await using var connection = await OpenOwnerAsync().ConfigureAwait(false);
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+            await using (var scope = new NpgsqlCommand("select set_config('evidgate.org_id', @org, true)", connection, transaction))
+            {
+                scope.Parameters.AddWithValue("org", org.ToString("D", CultureInfo.InvariantCulture));
+                await scope.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            for (var index = 0; index < types.Length; index++)
+            {
+                await using var insert = new NpgsqlCommand(
+                    """
+                    insert into public.security_event
+                        (id, org_id, project_id, type, severity, actor, details, created_at)
+                    values
+                        (@id, @org_id, @project_id, @type, 'info', '{"kind":"system"}'::jsonb, '{"count":1}'::jsonb,
+                         now() - make_interval(secs => @offset))
+                    """,
+                    connection,
+                    transaction);
+
+                insert.Parameters.AddWithValue("id", Guid.CreateVersion7());
+                insert.Parameters.AddWithValue("org_id", org);
+                insert.Parameters.AddWithValue("project_id", index == 0 ? project : (object)DBNull.Value);
+                insert.Parameters.AddWithValue("type", types[index]);
+                insert.Parameters.AddWithValue("offset", index);
+                await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private async Task<IsolationProject> SeedProjectAsync(string orgSlug, Guid org, Guid project, string projectSlug, IsolationUser admin, IsolationUser maintainer, long repositoryId)
