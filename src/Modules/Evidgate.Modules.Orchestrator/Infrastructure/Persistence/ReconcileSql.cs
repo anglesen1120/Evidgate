@@ -26,9 +26,18 @@ internal static class ReconcileSql
     /// <see cref="RunEventScopeReader"/> rely on). An invisible run answers no row, which the reconciler reports as
     /// <c>RunNotFound</c>.
     /// </para>
+    /// <para>
+    /// <c>deadline_passed</c> is the collection deadline evaluated by the database, in the same statement and under the
+    /// same lock, so no application clock decides it and the flag cannot disagree with the row it was read from. It is
+    /// <c>coalesce(r.collection_deadline_at &lt;= now(), false)</c>: <c>0031</c> declares the column <c>NOT NULL</c>, so
+    /// the coalesce never fires today — it keeps a NULL (were the column ever relaxed) meaning "not passed", i.e. the
+    /// attempt waits for every planned shard instead of forcing a decision on an unset deadline (fail open on waiting,
+    /// never on completeness). A passed deadline is what 05.3.2-T3.1 needs to force the verdict.
+    /// </para>
     /// </summary>
     internal const string LockRun = """
-        select r.state as state
+        select r.state as state,
+               coalesce(r.collection_deadline_at <= now(), false) as deadline_passed
           from public.run r
          where r.org_id = @org_id and r.id = @run_id
            for no key update of r
@@ -74,6 +83,14 @@ internal static class ReconcileSql
     /// is attributed to the producer of the started row. Only <c>type = 'test.started'</c> rows are candidates: an
     /// unrelated type never becomes an unfinished attempt.
     /// </para>
+    /// <para>
+    /// Two flag counts ride along in the same pass, and neither narrows the acknowledged total above:
+    /// <c>stale_count</c> counts the stored events with <c>stale = true</c> (an older epoch that still filled its
+    /// sequence slot), and <c>blocked_count</c> counts the <c>test.finished</c> events whose normalized status is
+    /// <c>blocked</c> — a failed setup, which marks its dependants blocked (00 §8.3). The comparer turns a non-zero
+    /// count on a closed shard into <c>stale_epoch</c> / <c>setup_error</c>, so a stale or blocked event can never leave
+    /// the evidence looking complete (D-S119-Q2 risk, 05.3.2-T2.3).
+    /// </para>
     /// </summary>
     internal const string ObservedEvents = """
         with grouped as (
@@ -84,7 +101,10 @@ internal static class ReconcileSql
                    min(e.sequence) as min_sequence,
                    max(e.sequence) as max_sequence,
                    count(e.sequence) filter (where e.type = 'test.finished' and e.normalized_status is null)
-                       as unknown_status_count
+                       as unknown_status_count,
+                   count(e.sequence) filter (where e.stale) as stale_count,
+                   count(e.sequence) filter (where e.type = 'test.finished' and e.normalized_status = 'blocked')
+                       as blocked_count
               from public.producer_slot s
               left join public.event e
                      on e.org_id = @org_id and e.run_id = @run_id and e.producer_id = s.producer_id
@@ -111,7 +131,9 @@ internal static class ReconcileSql
                g.min_sequence as min_sequence,
                g.max_sequence as max_sequence,
                g.unknown_status_count as unknown_status_count,
-               coalesce(u.unfinished_started_count, 0) as unfinished_started_count
+               coalesce(u.unfinished_started_count, 0) as unfinished_started_count,
+               g.stale_count as stale_count,
+               g.blocked_count as blocked_count
           from grouped g
           left join unfinished u on u.producer_id = g.producer_id
         """;
