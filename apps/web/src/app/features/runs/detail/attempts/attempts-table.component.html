@@ -82,6 +82,7 @@
     @if (pages().length > 1) {
       <nav class="pagination" [attr.aria-label]="copy.pagination">
         <button
+          #previous
           type="button"
           data-attempts-previous
           [disabled]="page() === 0"
@@ -91,6 +92,7 @@
         </button>
         <p role="status">{{ copy.page }} {{ page() + 1 }} / {{ pages().length }}</p>
         <button
+          #next
           type="button"
           data-attempts-next
           [disabled]="page() + 1 === pages().length"

@@ -275,8 +275,93 @@ describe('RunListPage', () => {
     expect(store.loadMore).toHaveBeenCalledTimes(1);
     store.loadingMore.set(true);
     await fixture.whenStable();
-    expect(root.querySelector<HTMLButtonElement>('[data-run-load-more]')!.disabled).toBe(true);
+    // The follow it started does not disable the control that holds focus: `disabled` would drop
+    // the visitor's place to `body` while the rows were still loading.
+    expect(root.querySelector<HTMLButtonElement>('[data-run-load-more]')!.disabled).toBe(false);
   });
+  it('moves focus to the first appended row when the follow removes Load more', async () => {
+    const appended: RunSummary = {
+      ...run,
+      run_id: '018f0000-0000-7000-8000-000000000022',
+    };
+    store.hasMore.set(true);
+    const { fixture, root } = await render();
+    const more = root.querySelector<HTMLButtonElement>('[data-run-load-more]')!;
+    more.focus();
+    expect(document.activeElement).toBe(more);
+    // The follow appends a page and the cursor ends with it, so the control that carried focus is
+    // removed by the render that follows. Its place belongs to the row it brought in.
+    store.loadMore.mockImplementation(() => {
+      store.loadingMore.set(true);
+      store.rows.set([run, appended]);
+      store.loadingMore.set(false);
+      store.hasMore.set(false);
+      return Promise.resolve();
+    });
+    more.click();
+    await fixture.whenStable();
+    const rows = root.querySelectorAll('[data-run-row]');
+    expect(rows).toHaveLength(2);
+    expect(document.activeElement).toBe(rows[1]!.querySelector('a'));
+  });
+
+  it('moves focus to the paging retry when the follow replaces Load more with a failure', async () => {
+    store.hasMore.set(true);
+    const { fixture, root } = await render();
+    const more = root.querySelector<HTMLButtonElement>('[data-run-load-more]')!;
+    more.focus();
+    store.loadMore.mockImplementation(() => {
+      store.loadingMore.set(true);
+      store.loadingMore.set(false);
+      store.pagingError.set(failure);
+      return Promise.resolve();
+    });
+    more.click();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-run-load-more]')).toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('[data-run-paging-error] button'));
+  });
+
+  it('keeps the place in the paging region when the retry is still waiting its Retry-After', async () => {
+    store.hasMore.set(true);
+    const { fixture, root } = await render();
+    const more = root.querySelector<HTMLButtonElement>('[data-run-load-more]')!;
+    more.focus();
+    store.loadMore.mockImplementation(() => {
+      store.loadingMore.set(true);
+      store.loadingMore.set(false);
+      store.pagingError.set({ ...failure, retryAfterSeconds: 30 });
+      return Promise.resolve();
+    });
+    more.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // The retry replaced the button that held focus and is disabled for the wait, so the place
+    // moves to the paging region - never to `body`.
+    const waiting = root.querySelector<HTMLButtonElement>('[data-run-paging-error] button');
+    expect(waiting?.disabled).toBe(true);
+    const paging = root.querySelector<HTMLElement>('.pagination');
+    expect(document.activeElement).toBe(paging);
+    expect(paging?.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('leaves focus alone when a follow it did not own removes Load more', async () => {
+    store.hasMore.set(true);
+    const { fixture, root } = await render();
+    const clear = root.querySelector<HTMLButtonElement>('[data-run-clear]')!;
+    clear.focus();
+    store.loadMore.mockImplementation(() => {
+      store.rows.set([run, { ...run, run_id: '018f0000-0000-7000-8000-000000000023' }]);
+      store.hasMore.set(false);
+      return Promise.resolve();
+    });
+    root.querySelector<HTMLButtonElement>('[data-run-load-more]')!.click();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-run-load-more]')).toBeNull();
+    expect(document.activeElement).toBe(clear);
+  });
+
   it('renders exactly one error surface per failure kind, with no duplicate page banner', async () => {
     store.status.set('loading');
     const { fixture, root } = await render();

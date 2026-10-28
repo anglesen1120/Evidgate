@@ -1,12 +1,16 @@
-import { formatNumber } from '@angular/common';
+import { DOCUMENT, formatNumber } from '@angular/common';
 import {
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
-  LOCALE_ID,
   computed,
   effect,
+  ElementRef,
   inject,
+  Injector,
+  LOCALE_ID,
   signal,
+  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -38,6 +42,13 @@ export class RunListPage {
   });
   protected readonly retryReady = signal(true);
   private projectId: string | null = null;
+  private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly loadMoreButton = viewChild<ElementRef<HTMLButtonElement>>('loadMoreControl');
+  private readonly pagingRetryButton =
+    viewChild<ElementRef<HTMLButtonElement>>('pagingRetryControl');
+  private readonly pagingSection = viewChild<ElementRef<HTMLElement>>('paging');
   protected readonly copy = {
     title: $localize`:@@runs.list.title:Runs`,
     description: $localize`:@@runs.list.description:Review collection state and stored decisions. Evidence completeness is not provided by this list.`,
@@ -126,6 +137,68 @@ export class RunListPage {
   protected clear(): void {
     this.draft = { state: '', decision: '', scope: '', refName: '' };
     this.apply();
+  }
+
+  /**
+   * The next cursor page (or the retry of one), keeping the visitor's place.
+   *
+   * Both controls are removed by a successful follow — Load more once the cursor ends, the retry
+   * button once the failure clears — and neither is disabled for its own request, so the control
+   * that had focus stays focusable while the page is on its way. When the render does remove it,
+   * focus moves to the continuation instead of dropping to `body`: the first row this follow
+   * appended, else the control that replaced it, else the paging region. A visitor who moved focus
+   * elsewhere keeps it.
+   */
+  protected async loadMore(): Promise<void> {
+    const active: unknown = this.document.activeElement;
+    const owned =
+      active instanceof HTMLElement &&
+      (active === this.loadMoreButton()?.nativeElement ||
+        active === this.pagingRetryButton()?.nativeElement);
+    const shownBefore = this.store.visibleRows().length;
+    try {
+      await this.store.loadMore();
+    } finally {
+      if (owned) {
+        afterNextRender(() => this.handoffAfterLoadMore(shownBefore), {
+          injector: this.injector,
+        });
+      }
+    }
+  }
+
+  private handoffAfterLoadMore(shownBefore: number): void {
+    const active: unknown = this.document.activeElement;
+    // The browser moves focus to `body` when the control under it is removed; a test environment
+    // may leave it on the detached node instead, so both count as the same loss. Any other live
+    // element means the visitor moved on, and their own focus wins.
+    const lost =
+      !(active instanceof HTMLElement) || active === this.document.body || !active.isConnected;
+    if (!lost) return;
+    const retry = this.pagingRetryButton()?.nativeElement;
+    const loadMore = this.loadMoreButton()?.nativeElement;
+    const appended = this.host.nativeElement.querySelectorAll('[data-run-row]')[shownBefore];
+    const appendedLink =
+      appended instanceof HTMLElement ? appended.querySelector<HTMLElement>('a') : null;
+    // A control that is disabled at this moment cannot take focus, so it is not a candidate: a
+    // follow that failed again with a Retry-After wait leaves the retry button disabled, and
+    // focusing it would silently leave the place on `body`.
+    const usable = (candidate: HTMLElement | null | undefined): candidate is HTMLElement =>
+      candidate instanceof HTMLElement && !candidate.matches(':disabled');
+    const target = [
+      this.store.pagingError() !== null ? retry : undefined,
+      appendedLink,
+      loadMore,
+      retry,
+      this.pagingSection()?.nativeElement,
+    ].find(usable);
+    if (target === undefined) return;
+    const addedTabIndex = !target.hasAttribute('tabindex');
+    if (addedTabIndex) target.setAttribute('tabindex', '-1');
+    target.focus();
+    if (addedTabIndex) {
+      target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true });
+    }
   }
 
   /**

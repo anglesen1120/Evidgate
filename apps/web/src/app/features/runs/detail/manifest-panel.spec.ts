@@ -82,6 +82,40 @@ describe('ManifestPanelComponent', () => {
     expect(writeText).toHaveBeenCalledWith(manifest.manifestHash);
     expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied');
   });
+  it('keeps the copy button enabled and focused while the copy is in flight', async () => {
+    let settle!: () => void;
+    // The deferred resolver by hand: `Promise.withResolvers` is ES2024 and this project
+    // compiles against the ES2022 lib.
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const { root, fixture } = await render(manifest);
+    const button = root.querySelector('button')!;
+    button.focus();
+    expect(document.activeElement).toBe(button);
+
+    button.click();
+    await Promise.resolve();
+    // The result is announced by the live region, so the control that carries the visitor's place
+    // must stay focusable: `disabled` here would drop focus to `body` for the rest of the copy.
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(button.disabled).toBe(false);
+    expect(document.activeElement).toBe(button);
+
+    // A second activation starts nothing; that guard is the handler's, not the attribute's.
+    button.click();
+    await Promise.resolve();
+    expect(writeText).toHaveBeenCalledTimes(1);
+
+    settle();
+    await fixture.whenStable();
+    expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied');
+    expect(document.activeElement).toBe(button);
+  });
   it('escapes format characters in the displayed hash but copies the exact raw hash', async () => {
     const hash = 'sha256:abc\u202edef';
     const writeText = vi.fn().mockResolvedValue(undefined);

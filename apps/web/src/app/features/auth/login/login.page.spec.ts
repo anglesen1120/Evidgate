@@ -1,6 +1,7 @@
 // State sheet: docs/design/web/state-sheet.md#shared-accessibility-and-themes
 import { provideZonelessChangeDetection, signal, type WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { vi, type Mock } from 'vitest';
 
 import { AuthFlow, type LoginProvider, type LoginReason } from '../auth-flow';
@@ -9,6 +10,12 @@ import { LoginPage } from './login.page';
 describe('LoginPage', () => {
   let fixture: ComponentFixture<LoginPage>;
   let root: HTMLElement;
+  /**
+   * The one field the page reads off the router: `navigated` is false while the initial document
+   * navigation activates and true once any navigation has ended (the shell's own marker for "this
+   * is a client-side entry", `shell.component.ts:68`). A stub keeps these cases about focus.
+   */
+  const router = { navigated: false };
   let flow: {
     returnUrl: WritableSignal<string>;
     reason: WritableSignal<LoginReason>;
@@ -18,8 +25,10 @@ describe('LoginPage', () => {
 
   const buttons = () => Array.from(root.querySelectorAll('button'));
   const notice = () => root.querySelector<HTMLElement>('[role="status"]')!;
+  const heading = () => root.querySelector<HTMLElement>('#login-heading')!;
 
   beforeEach(async () => {
+    router.navigated = false;
     flow = {
       returnUrl: signal('/private-target?secret=never-render'),
       reason: signal<LoginReason>('none'),
@@ -33,7 +42,11 @@ describe('LoginPage', () => {
     });
     await TestBed.configureTestingModule({
       imports: [LoginPage],
-      providers: [provideZonelessChangeDetection(), { provide: AuthFlow, useValue: flow }],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: AuthFlow, useValue: flow },
+        { provide: Router, useValue: router },
+      ],
     }).compileComponents();
     fixture = TestBed.createComponent(LoginPage);
     fixture.detectChanges();
@@ -72,6 +85,45 @@ describe('LoginPage', () => {
     expect(buttons().every((button) => button.tabIndex === 0)).toBe(true);
     expect(root.querySelector('section')?.hasAttribute('tabindex')).toBe(false);
     expect(flow.start).not.toHaveBeenCalled();
+  });
+
+  it('entry (F-LOGIN-01): leaves the browser’s own focus start alone on a page load', () => {
+    // A fresh document load has no handoff to make: the visitor starts at the top of the document
+    // and the first Tab is the first provider button (the heading is never a Tab stop).
+    expect(document.activeElement).toBe(document.body);
+    expect(heading().getAttribute('tabindex')).toBe('-1');
+    expect(heading().tabIndex).toBe(-1);
+    expect(heading().textContent?.trim()).toBe(fixture.componentInstance.heading);
+  });
+
+  it('entry (F-LOGIN-01): focuses the heading when the visit came from inside the app', async () => {
+    // No shell renders around this page, so its own handoff is the only one a client-side entry
+    // gets: the callback's failed/unavailable redirect and the store's expiry redirect land here.
+    router.navigated = true;
+    const revisit = TestBed.createComponent(LoginPage);
+    revisit.detectChanges();
+    await revisit.whenStable();
+
+    const landed = (revisit.nativeElement as HTMLElement).querySelector('#login-heading')!;
+    expect(document.activeElement).toBe(landed);
+    expect(landed.getAttribute('tabindex')).toBe('-1');
+    expect(landed.textContent?.trim()).toBe(fixture.componentInstance.heading);
+  });
+
+  it('redirecting (F-LOGIN-02): moves focus off the disabling provider onto the heading', async () => {
+    const google = buttons()[0]!;
+    google.focus();
+    expect(document.activeElement).toBe(google);
+
+    flow.redirecting.set(true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Both providers are unfocusable now, so leaving focus on the button would leave the page with
+    // no focus and no ring at all while it is still on screen.
+    expect(buttons().every((button) => button.disabled)).toBe(true);
+    expect(document.activeElement).toBe(heading());
+    expect(document.activeElement).not.toBe(google);
   });
 
   it('active: delegates each provider activation to AuthFlow and nothing else', () => {

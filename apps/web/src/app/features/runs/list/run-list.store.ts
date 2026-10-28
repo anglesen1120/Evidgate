@@ -152,7 +152,10 @@ export interface RunListState {
   loadError: ApiError | null;
   /** The server's typed failure for the last followed page, if any. */
   pagingError: ApiError | null;
-  /** True while a followed page is on its way; the "Load more" control is disabled meanwhile. */
+  /**
+   * True while a followed page is on its way; the page's paging controls stay enabled meanwhile
+   * (a disabled control cannot hold focus) and this flag is what refuses a second follow.
+   */
   loadingMore: boolean;
   /**
    * True when a trigger stopped at its page/row bound with a cursor still named and the filtered
