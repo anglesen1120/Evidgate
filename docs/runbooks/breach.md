@@ -19,7 +19,7 @@ Evidgate is the **processor** of its customers' test evidence (cited by the 11.9
   | Sender and channel | `[OPEN]` named person and channel per customer; T2.4 | sends the notice, confirms receipt |
   | Counsel | `[OPEN]` not engaged; T2.4 | reviews notice wording and legal mapping |
 
-- Never put secret values, credentials, tokens, cookies, raw payloads, artifact content, screenshots of tenant data or any personal data in the runbook, the notice, the clock record, tickets or the evidence pack. Record ids, closed enums, counts, timestamps and hashes only (same rule as [security-event-baseline](../security/security-event-baseline.md) §1).
+- Never put secret values, credentials, tokens, cookies, raw payloads, artifact content, screenshots of tenant data or any personal data in the runbook, the notice, the clock record, tickets or the evidence pack. Record ids, closed enums, counts, timestamps and hashes only (same rule as [security-event-baseline](../security/security-event-baseline.md) §1). No customer names, repository names, URLs, hostnames or e-mail addresses in free text either: use org and project ids. In a cross-tenant exposure the notice to one controller says "an unauthorised party" and carries only that controller's own ids, never another tenant's identity.
 - A breach is never "closed" by deleting evidence. A deletion request that arrives during an incident is routed to the deletion runbook and does not remove incident records.
 - Do not wait for a complete picture to send the first notice: send early, then add detail in later notices (EDPB Guidelines 9/2022 ⚠️ `[INFERENCE]`: [source](https://www.edpb.europa.eu/system/files/2023-04/edpb_guidelines_202209_personal_data_breach_notification_v2.0_en.pdf) §II.A.4, paras 44–46, GDPR text, not Vietnamese law; seen as a search summary on 2026-10-28, document not opened).
 
@@ -30,7 +30,7 @@ State of each source on this base. A source marked planned cannot be queried tod
 | # | Source | What it tells you | State | Where to look |
 |---|---|---|---|---|
 | D1 | Security events feed | five V1 types: `auth_failure`, `cross_tenant_probe`, `secret_scanner_alert`, `kill_switch_used`, `support_access`; severity `info\|warning\|critical` | ⚠️ **planned, not shipped.** `GET /v1/orgs/{o}/security-events` exists only in the contract (`contracts/openapi.yaml:3672`); there is no table, writer or `src/` handler; four of five types have no emitter ([security-event-baseline](../security/security-event-baseline.md) §1 `:15`, §5 rows 2 and 9; receivers 11.5.1-T3.2, 11.5.1-T5). `[OPEN]` | none today; use D2–D5 |
-| D2 | Audit log | success-only rows (actor, action, object, request and trace id, hashes) with a per-org hash chain | ✅ shipped: `GET /v1/orgs/{o}/audit` (`src/Modules/Evidgate.Modules.Identity/Endpoints/AuditEndpoints.cs:42`), `audit:read` | §5 |
+| D2 | Audit log | success-only rows (actor, action, object, request and trace id, hashes) with a per-org hash chain | ✅ shipped: `GET /v1/orgs/{o}/audit` (`src/Modules/Evidgate.Modules.Identity/Endpoints/AuditEndpoints.cs:42`), `audit:read`. Limits: it records successful actions only, so a missing row is not proof of no exposure (denied and read-only lookups write no row, [audit-taxonomy](../security/audit-taxonomy.md) `:62,64`); and Evidgate staff cannot query a customer org's audit without a tenant principal (§5.1) `[OPEN]` 02.8.1 | §5 |
 | D3 | Audit chain verification | a gap, broken link or hash mismatch in one org's chain | ✅ shipped: task `audit.verify_chain` every 6 h; on a fault it logs event `2400`, increments `audit_chain_verification_failures_total` and dead-letters the task (`src/BuildingBlocks/Persistence/Audit/VerifyAuditChainTask.cs`; [audit-taxonomy](../security/audit-taxonomy.md) §6 `:240`). The scan cannot see deletion of the newest rows or a fully emptied chain (`:242`) | log search for event `2400`; metric `audit_chain_verification_failures_total` |
 | D4 | Secret scanner | secret-shaped content in a stored artifact | ⚠️ **detection not shipped:** `artifact.scan_state` is a closed column and nothing writes `flagged` yet (06.2.3-T1; baseline §3.3). A secret found by a human (review, customer report, support) is a D5 signal. `[OPEN]` | none automated today |
 | D5 | Support and human reports | customer or engineer says data was exposed, a credential leaked, a wrong tenant saw data | ✅ available, manual | support channel `[OPEN]` (T2.4 names it) |
@@ -57,14 +57,14 @@ Covers every breach-adjacent row of area plan 11 §5 (`plans/11-security-complia
 
 | Signal | Default class | First actions (in order) | Notice? |
 |---|---|---|---|
-| Secret found in a log or artifact (§5 `:142`) | Suspected → Confirmed if tenant data or tenant credentials were exposed | stop the leak, purge the log, rotate the secret per [key-rotation](key-rotation.md), identify which tenants were exposed | yes if tenant data or a tenant credential was exposed |
+| Secret found in a log or artifact (§5 `:142`) | Suspected → Confirmed if tenant data or tenant credentials were exposed | record ids, times and a hash of the affected log or object range, restrict access to it, then purge or redact under a recorded decision, rotate the secret per [key-rotation](key-rotation.md), identify which tenants were exposed; never paste the secret or log lines into a ticket | yes if tenant data or a tenant credential was exposed |
 | Fork-PR exfiltration attempt (`:143`) | False positive or Confirmed | check that no Evidgate credential was reachable from that context; confirm what was read | only if a tenant credential or data left |
 | Malicious or rejected artifact (`:144`) | False positive (rejected artifacts stay `rejected`) | confirm the parser rejected it and the isolated origin held | no, unless content escaped |
 | Prompt injection in DOM or log (`:145`) | False positive (injection is data) | confirm the validator was the authority and no kill switch was bypassed | no, unless a policy decision was changed |
 | Webhook replay or timestamp skew (`:146`) | False positive | confirm one rejection, no state change; escalate if bursts continue | no |
 | Compromised dependency or action (`:147`) | Suspected | pin check, advisory triage, emergency rotation path | if a deployed build ran the compromised code with tenant access |
-| Support-access misuse (`:148`) | Suspected | pull the audit rows for the grant (`support.read`/`support.write` metadata); compare to the grant scope | yes if data outside the grant was read; `[OPEN]` support grants are not shipped (02.8.1) |
-| Cross-tenant probe (`:149`) | False positive per single row; Suspected as a pattern | check D2 for any successful cross-tenant read, check the chain (D3) | yes if any foreign row was returned |
+| Support-access misuse (`:148`) | Suspected | `[OPEN]` not executable today: no support-grant handler or audit rows exist (02.8.1, [audit-taxonomy](../security/audit-taxonomy.md) `:181`); until then compare access logs and ask the operator for a written account, and treat "no row found" as unknown, not as no exposure | yes if data outside the grant was read |
+| Cross-tenant probe (`:149`) | False positive per single row; Suspected as a pattern | `[OPEN]` a denied foreign lookup writes no audit row (OI-02-31, [audit-taxonomy](../security/audit-taxonomy.md) `:62,182`), so D2 cannot show who read what; use D2 only for successful writes, check the chain (D3), and treat "no row found" as unknown | yes if any foreign row was returned |
 | Broken audit chain (D3) | Suspected | treat as possible tampering; preserve the database and logs; page the incident lead | decided on facts |
 | Breach on a Friday night (`:150`) | any | the same steps; the weekend/holiday on-call path is T2.4 `[OPEN]`; until it exists the incident lead and clock owner are the fallback and must be reachable | per class |
 | Customer-reported exposure (D5) | Suspected | take only ids and times; do not ask the customer to send the exposed data | per class |
@@ -139,11 +139,11 @@ Caller needs a principal of the affected org with `audit:read` (`plans/00-overvi
 | `GET /v1/orgs/{o}/audit?from=<iso>&to=<iso>&actor_type=&action=&object_type=&limit=` | cursor page, newest first; page with `next_cursor` until it is null |
 | `GET /v1/orgs/{o}/audit/export?format=jsonl\|csv&from=<iso>&to=<iso>` | the filtered set as a file; default range 30 d, max 92 d, at most 100 000 events, otherwise 422 `export_range_too_large`; the export writes an `audit.export` row |
 
-Each row carries `seq`, `created_at`, `actor_type`, `actor_id`, `action`, `object_type`, `object_id`, `request_id`, `trace_id`, `prev_hash`, `entry_hash` (`src/Modules/Evidgate.Modules.Identity.Contracts/AuditDtos.cs:19-34`). Keep the file, its `sha256` and the call parameters in the pack; do not paste rows into tickets.
+Each JSONL row (and each list-endpoint item) carries `seq`, `created_at`, `actor_type`, `actor_id`, `action`, `object_type`, `object_id`, `request_id`, `trace_id`, `before_hash`, `after_hash`, `metadata`, `prev_hash`, `entry_hash` (`src/Modules/Evidgate.Modules.Identity.Contracts/AuditDtos.cs:19-34`). **CSV drops `prev_hash`, `before_hash`, `after_hash` and `metadata`** (`AuditEndpoints.cs:29-32`), so a pack that must show a chain walk uses `format=jsonl`. The export is tenant data, not a sanitised artifact: `actor_id` identifies a person and `metadata` can hold free text (e.g. a `reason`, an e-mail domain, a slug; [audit-taxonomy](../security/audit-taxonomy.md) `:75-76`). Store it only with the incident lead and clock owner; keep the file, its `sha256` and the call parameters in the pack; do not paste rows into tickets or chat and do not copy those fields into the timeline or scope text.
 
 ### 5.2 Chain check (✅ shipped, indirect)
 
-Record whether event `2400` or the metric `audit_chain_verification_failures_total` fired for the org in the window; if the pack must show a chain walk, re-compute `entry_hash` from the extract (the rule is `AuditChainVerifier`, [audit-taxonomy](../security/audit-taxonomy.md) §6 `:239`). Limits: it cannot see deletion of the newest rows (`:242`); say so in the pack.
+Record whether event `2400` or the metric `audit_chain_verification_failures_total` fired for the org in the window; if the pack must show a chain walk, re-compute `entry_hash` from the JSONL extract (the rule is `AuditChainVerifier`, [audit-taxonomy](../security/audit-taxonomy.md) §6 `:239`). Limits: it cannot see deletion of the newest rows (`:242`), and the hash is unkeyed, so an owner-role or superuser rewrite, or self-consistent appended rows, would pass (OI-02-32, `:242`). A passing check is not proof of no tampering; say so in the pack and never present it to a controller or regulator as integrity assurance.
 
 ### 5.3 Security-events extract (⚠️ planned)
 
@@ -151,7 +151,7 @@ Record whether event `2400` or the metric `audit_chain_verification_failures_tot
 
 ### 5.4 Clock record and timeline
 
-Planned location: one file per incident under `docs/runbooks/records/` `[INFERENCE]` from OI-11-08 `[OPEN OI-11-08]`; the directory does not exist and this runbook creates none. Until the owner decides, keep the record in the incident ticket and attach it to the pack. Template:
+Planned location: one file per incident under `docs/runbooks/records/` `[INFERENCE]` from OI-11-08 `[OPEN OI-11-08]`; the directory does not exist and this runbook creates none. Until the owner decides, keep the record in the incident ticket and attach it to the pack; the ticket system, its access list and its retention are not identified in the repo `[OPEN]` (B-G), so keep org ids and times there and nothing from the audit export. Template:
 
 ```
 incident_id: <id>            class: <confirmed|suspected|false_positive|no_customer_data>
@@ -190,7 +190,7 @@ One paragraph per affected org: org id, project ids, data classes touched (evide
 | B-D | Security-events feed and four missing emitters | 11.5.1-T3.2, 11.5.1-T5 |
 | B-E | Secret-scanner detection writes nothing yet | 06.2.3-T1 |
 | B-F | Evidgate staff cannot read a customer org's audit without a tenant principal | 02.8.1 |
-| B-G | Clock-record location and retention | OI-11-08; owner |
+| B-G | Clock-record location and retention; the ticket system's access list and retention | OI-11-08; owner |
 | B-H | Timed rehearsal and drill record (AC6 second half, AC7) | 11.9.1-T3 |
 
 ## 7. Rehearsal — not executed
