@@ -2007,4 +2007,63 @@ public sealed class ReconcileRunTests
 
         return lines;
     }
+
+    /// <summary>
+    /// A pinned policy's trace requirement is satisfied for every planned execution by a ready artifact that resolves
+    /// to its committed case attempt. Matching closed-shard evidence then produces a complete revision (05.3.2 AC4).
+    /// The freeze-call counter proves the requirement set was really applied — one requirement per planned execution,
+    /// so the complete verdict cannot be reached by an empty set — and that the freeze ran exactly once (no retry).
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_PolicyRequiredKindReady_WritesCompleteRevision()
+    {
+        var counter = new FreezeCallCounter();
+        await using var world = await StartAsync(services: services => CountFreezeCalls(services, counter));
+        var runId = world.RunId;
+        var executions = world.Plan.Executions;
+        executions.ShouldNotBeEmpty("the positive requirement case must exercise a non-empty plan");
+        await SetRunStateAsync(world, runId, "collecting");
+        await SeedPinnedPolicyAsync(world, runId, requiredKind: "trace");
+
+        // Follow EvidenceFreezeGuardTests.SeedAttemptsAsync: the real writer owns the schema and resolves each case.
+        await using (var attempts = await AttemptScope.BeginAsync(world.Api, world.Org))
+        {
+            var inputs = executions.Select(execution => new CaseAttemptInput(execution.ExecutionKey, 1, "passed")).ToArray();
+            var outcomes = await attempts.WriteAsync(runId, inputs);
+            outcomes.Count.ShouldBe(executions.Count);
+            outcomes.ShouldAllBe(outcome => outcome.Status == CaseAttemptWriteStatus.Accepted);
+            await attempts.CommitAsync();
+        }
+
+        foreach (var execution in executions)
+        {
+            await SeedReadyArtifactAsync(world, runId, execution.ExecutionKey, attemptNo: 1, kind: "trace");
+        }
+
+        var events = executions
+            .Select((execution, index) => new StoredEvent(
+                Producer, index + 1L, "test.finished", "passed", ExecutionKey: execution.ExecutionKey))
+            .ToArray();
+        await StoreEventsAsync(world, runId, events);
+        await CloseSlotAsync(
+            world, runId, Producer, declaredLastSequence: events.Length, declaredCount: events.Length);
+
+        var (outcome, finalization) = await ReconcileAndFinishOnHostAsync(world, runId);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
+        outcome.Comparison!.Missing.ShouldBeEmpty("every closed shard's stored evidence matches");
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Complete);
+
+        // One required kind times every planned execution: the set the finisher froze with, asked once.
+        counter.Calls.ShouldBe(1, "a satisfied requirement set freezes once and is never refused by shape");
+        counter.LastRequiredCount.ShouldBe(executions.Count, "the policy's kind was required for every planned execution");
+
+        var revision = await RevisionSummaryAsync(world, runId);
+        revision.Completeness.ShouldBe(ReconcileFinisher.Complete);
+        revision.Missing.ShouldBeEmpty("every planned execution has its required trace resolved to a case attempt");
+        revision.ArtifactSetHash.ShouldNotBeNullOrEmpty();
+        (await StateAsync(world, runId)).ShouldBe("complete");
+        (await PointerAsync(world, runId)).ShouldBe(revision.Id);
+        (await RevisionCountAsync(world)).ShouldBe(1);
+    }
 }
