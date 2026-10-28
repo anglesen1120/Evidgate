@@ -565,6 +565,15 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("run_id", runId));
+        // The 11.5.1-T5 table (migration 0053): one event with ids/hashes only in `details`.
+        await scope.ExecuteAsync(
+            """
+            insert into public.security_event (id, org_id, project_id, type, severity, actor, details)
+            values (@id, @org_id, @project_id, 'auth_failure', 'warning', '{"kind":"user","id":"probe"}', '{}')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
 
         await scope.CommitAsync();
     }

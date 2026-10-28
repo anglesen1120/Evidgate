@@ -68,7 +68,7 @@ has no `unshare`).
 | Gap | Receiver | Why it is not code |
 |---|---|---|
 | A runtime guarantee that an outbound attempt from the Worker's process tree fails (and the network-namespace deny, if it is ever bought with a capability or a separate pod) | **10.2.1-T1.1** (image runtime contract; the concrete run-time policy lands with the deploy pipeline 10.2.2-T1) | Namespace creation is refused by the container profile (§1) and the Worker genuinely needs network for PostgreSQL, object storage and its queue, so a blanket `--network none` on the Worker is wrong. The shaped answer is an egress-deny network policy limited to the endpoints the Worker needs, or a dedicated parser runtime that can be network-isolated — both are deployment artefacts. |
-| A security event for a blocked (or even attempted) outbound connection | **11.5.1-T5.1** (creates `security_event`) with the type set owned by 11.1.1-T4.1 | No `security_event` table or emitter exists yet (`docs/security/security-event-baseline.md`, "No row exists yet"), and the V1 closed type set has no "parse network attempt" member. AC4's "logged as a security event" half therefore cannot be met by 06.3.6 and must not be claimed. |
+| A security event for a blocked (or even attempted) outbound connection | **11.5.1-T5.1** (creates `security_event`) with the type set owned by 11.1.1-T4.1 | The `security_event` table exists since `0053` (11.5.1-T5) but no emitter writes it (`docs/security/security-event-baseline.md`), and the V1 closed type set has no "parse network attempt" member. AC4's "logged as a security event" half therefore cannot be met by 06.3.6 and must not be claimed. |
 
 Where the runtime half *can* be asserted today is a container started with `--network none`:
 `ChildNetworkTests.A_Process_Started_Like_The_Child_Reaches_Loopback_But_Has_No_Egress_Path` spawns a process
@@ -88,7 +88,7 @@ decided by the resolver's own network, not the child's.
 AC4's "and the attempt is logged as a security event" clause is a **contract gap**, not a code gap: the detection
 site it would need — `ChildProcessParseRunner`, which is the only place that observes a failed or blocked attempt —
 emits nothing today, and the V1 `security_event` type set (`docs/security/security-event-baseline.md`) is a closed
-enumeration with no member for a blocked outbound attempt, while the table itself does not exist yet. This page
+enumeration with no member for a blocked outbound attempt, while no emitter writes the table (it exists since `0053`). This page
 therefore records the gap rather than inventing a sixth type:
 `11.5.1-T5.1` creates the table and the emitter, and `11.1.1-T4.1` owns the type set and the baseline revision; when
 both exist, wiring the runner's failed attempt to that emitter is a small change in

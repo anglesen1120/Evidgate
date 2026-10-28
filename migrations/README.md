@@ -129,8 +129,8 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   which itself refuses a call made inside a tenant transaction (`23514`, nothing written), because a
   definer runs as the owner and row level security cannot confine it
   (`contracts/rls-exceptions.txt` lists the table because of its NULL-org row);
-  the next free number is `0053`;
-  a gap means two branches invented the same sequence and neither history can be trusted.
+  and `0053` is 11.5.1-T5's `security_event` (shape and emitter contract in its own notes below);
+  the next free number is `0054`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -387,7 +387,7 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   `POST /internal/operator/healing/switch` (behind 02.8.1's fail-closed `RequireOperatorFilter`),
   which writes a structured operator log event (mode, set_by, version — never the reason text) on
   every write, plus the `security_event` row 11.5.1-T5 will add once that table lands (an open
-  receiver; `security_event` does not exist yet).
+  receiver; the `security_event` table has existed since `0053`, no emitter yet).
 - The app role holds `select`, `insert (id, scope, org_id, project_id, mode, reason, set_by, at)` and
   `update (mode, reason, set_by, at, updated_at, version)`: INSERT is column-level on purpose, so a
   caller cannot name `created_at`, `updated_at` or `version` and backdate a switch change or pin its
@@ -465,6 +465,59 @@ or 1`, wrapped in a `CASE` because `array_position` raises `0A000` on a
 - Idempotent like `0025`/`0027`/`0028`/`0046`: `if not exists` / `drop … if
 exists` and a catalog check around the FK add, so a re-run is a no-op; one
   file runs in one transaction.
+
+## Notes on `security_event` (11.5.1-T5, `0053`)
+
+- Shape: `id uuid primary key` (a UUIDv7 the emitter picks), `org_id uuid not null`, `project_id uuid`
+  (null = the event belongs to no project), `type text not null`, `severity text not null`,
+  `actor jsonb not null`, `details jsonb not null default '{}'`, `request_id text`,
+  `created_at`/`updated_at timestamptz not null default now()` and `version int not null default 1`.
+  `unique (org_id, id)` is the target of any later composite tenant FK; nothing references the table
+  yet, so `0053` adds no foreign key.
+- `type` and `severity` are closed vocabularies — `auth_failure`, `cross_tenant_probe`,
+  `secret_scanner_alert`, `kill_switch_used`, `support_access`; `info`, `warning`, `critical` — owned
+  by `docs/security/security-event-baseline.md` and mirrored by the route's `Types`/`Severities`
+  arrays and the OpenAPI description, and deliberately NOT by the database: no CHECK, no enum. A new
+  type is a taxonomy change first (11.1.1-T4.1), and a CHECK would turn every addition into a
+  migration; the cost is that the database cannot refuse a value no reader knows.
+- `actor` is the closed `{kind, id}` object of whoever caused the event. `details` carries ids, hashes
+  and counts only: never a raw payload, a secret or free-text reason. Neither rule is enforced in
+  SQL, so an emitter that writes a payload is a defect its own review must catch (11.5.1 §8, S3).
+- RLS is the ordinary tenant shape: `ENABLE` + `FORCE ROW LEVEL SECURITY`. `tenant_isolation` is the
+  tenant policy — `org_id = evidgate.current_org_id()` in `USING`, applied as `WITH CHECK` too, and with
+  no `TO` clause it applies to PUBLIC, so the app role reaches only its own scope. `security_event_owner_backfill`
+  is the house second policy (`FOR ALL TO evidgate_owner USING (true) WITH CHECK (true)`,
+  `0004`/`0005`/`0028`/`0046`/`0049`/`0052` precedent): `FORCE` applies to the owner as well, so a
+  migration or fixture write would otherwise be refused. It names `evidgate_owner` only and grants the
+  app role nothing. The table is absent from `contracts/rls-exceptions.txt` on purpose: `org_id` is NOT
+  NULL, so there is no NULL-org read row, and the boot self-check sees a plain scoped tenant policy.
+- Two indexes, one per read shape. `security_event_org_created_idx (org_id, created_at desc, id desc)`
+  serves the unfiltered page and the `from`/`to` window: those reads filter on `org_id` alone and
+  keyset on `(created_at, id)` descending, so the page is index-ordered (P3/P4).
+  `security_event_list_idx (org_id, project_id, type, severity, created_at desc, id desc)` narrows a
+  read that binds all three filter columns: those equalities come first and the cursor tuple follows,
+  so an index scan returns the page already ordered. Two planner choices still sort, legitimately: a
+  bitmap scan (cheaper for a small selective page, and it keeps no order) and a partial bind on the
+  three filters (an unbound column precedes `created_at` in the key). The plan test explains the
+  ordered path. An emitter inserts `insert into public.security_event (id, org_id, project_id, type, severity, actor, details, request_id)` with `org_id` from the tenant scope, inside its own tenant transaction, and needs no definer, no trigger and no outbox row.
+- Append-only by grant, the way `0049`'s `evidence_revision` is: the table rides `0001`'s default
+  privileges, so `evidgate_app` starts with full DML, and `0053` closes with
+  `revoke update, delete, truncate on public.security_event from evidgate_app;`. `select` and `insert`
+  remain — exactly what an emitter needs: the application role can record an event and read it back, but
+  cannot rewrite or remove one after the fact. `evidgate_operator` keeps `0001`'s default `select`. The
+  reason: a security record an ordinary tenant request could edit is not evidence, and no retention
+  sweep exists yet, so nothing legitimate updates or deletes a row today. (A future sweep, if any, is a
+  definer task of its own, like `0015`'s purge.)
+- `updated_at` and `version` belong to the database: `security_event_set_updated_at_and_version` is the
+  `0004` convention trigger (`BEFORE UPDATE … FOR EACH ROW`, `public.set_updated_at_and_version()`), so a
+  privileged backfill stamps the time and increments `version`. No route writes them — the app role may
+  not UPDATE at all (the revoke above) — and a reader must never treat `version` as a concurrency token.
+- Platform-scope events do NOT fit: `org_id` is NOT NULL, so neither the NULL-org system healing
+  switch (`0052`, 08.6.3-T1) nor the verifier fault (G8, 02.7.1 AC6) has a row here. That stays an
+  open hand-over recorded in the 11.5.1 plan Notes and `docs/status-carried.md`; a nullable `org_id`
+  versus a separate platform table is a coordinator decision, and `0053` does not pre-empt it.
+- Rollback: `drop table if exists public.security_event;` — the two policies, both indexes and the trigger
+  go with it, and nothing else references the table.
 
 ## Tests and fixtures
 
