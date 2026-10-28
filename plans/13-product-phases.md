@@ -207,7 +207,7 @@ Notes (S92): the generation flow screens of 13.4.1-T4 carry the role-profile sel
 | 13.6.1-T1 | Reporter capture of the bound-step accessibility subtree with CLI-side redaction | L | V1 | G2 | 04.3.1-T1, 08.1.2-T2 |
 | 13.6.1-T2 | `element_profile` store (append-only per run, latest-green view), RLS, retention | M | V1 | G2 | 13.6.1-T1, 06.1.2-T2 |
 | 13.6.1-T3 | Similarity function spec v1 + stability tests (dynamic ids, locales, reorder) | L | V1 | G2 | 13.6.1-T2, 08.1.2-T3 |
-**Epic 13.6 total: 5.0**
+**Epic 13.6 total: 5.0** Feature plan for story 13.6.1 (S139, 2026-10-28): `plans/features/13-product-phases/13.6.1-element-profiles.md` (10 sub-tasks of at most 0.5 d summing to the task sizes above, estimate unchanged; open items OI-13-545 to OI-13-550 in `plans/open-items/05-product-phases-g1.md`).
 
 ### Epic 13.7 Mobile spike and multimodal locate fallback (G2, G3)
 #### Story 13.7.1 Mobile spike (mobile-mcp / mobilewright) — acceptance: 10 real tasks on one Android emulator and one iOS simulator, each run twice: first driven by a model through mobile-mcp, then replayed as a mobilewright script without a model; pass rate, time per step, model cost and repeatability are recorded; a memo states whether a model-driven run converts to a deterministic mobilewright script, the licence status of every driver in the dependency tree (the `mobilecli` driver is FSL-1.1-ALv2, CR-D-2 §7), and what `DECISIONS.md` §7 and ADR-0002 / ADR-0005 would need.
@@ -235,7 +235,7 @@ Notes (S92): the generation flow screens of 13.4.1-T4 carry the role-profile sel
 |---|---|---|---|---|---|
 | 13.8.2-T1 | Capture and diff data for before / after | M | V1 | G3 | 13.8.1-T2, 08.6.1-T1 |
 | 13.8.2-T2 | Review screen additions, plus the failure label and drift class on the failure inbox and detail (design via `design-ui` first) | M | V1 | G3 | 13.8.2-T1, 09.4.1-T1, 09.4.1-T2, 09.5.1-T1, 09.5.1-T2 |
-**Epic 13.8 total: 7.0**
+**Epic 13.8 total: 7.0** Feature plan for story 13.8.1 (S139, 2026-10-28): `plans/features/13-product-phases/13.8.1-locator-drift-vs-ui-change.md` (11 sub-tasks of at most 0.5 d summing to the task sizes above, estimate unchanged; open items OI-13-551 to OI-13-557 in the same register).
 
 ### Epic 13.9 Phase gates
 #### Story 13.9.1 Gate metrics — acceptance: each §4.3 gate metric is computed from stored data and readable by the operator; the G1 free trial also reports the measured model cost per AI action.
