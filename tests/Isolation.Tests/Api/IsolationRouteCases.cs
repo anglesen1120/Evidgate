@@ -730,6 +730,10 @@ public static class IsolationRouteCases
         QuarantineRemoveCase(),
         ProjectCase("GET", "/v1/projects/{p}/quarantine", p => new(HttpMethod.Get, $"/v1/projects/{p}/quarantine"), list: true),
 
+        // ---- Healing switch (HealingEndpoints.cs; 08.6.3-T1) ----------------------------------------------------
+        HealingSwitchReadCase(),
+        HealingSwitchSetCase(),
+
         // ---- Evidence (EvidenceEndpoints.cs:28; 06.1.2) ---------------------------------------------------------
         EvidenceUploadUrlCase(),
         EventBatchCase(),
@@ -1392,6 +1396,131 @@ public static class IsolationRouteCases
                 ];
             });
     }
+
+    /// <summary>
+    /// <c>GET /v1/healing/switch</c> (08.6.3-T1): the read side of the kill switch, which needs
+    /// <c>healing:triage</c> (org B's <c>qa_engineer</c>). A <c>?project_id=</c> of another tenant is the same 404
+    /// an unknown id gets, never an existence oracle, while org B's own project answers 200 — so the foreign 404 is
+    /// decided by tenancy and not by a missing switch row.
+    /// </summary>
+    private static RouteCase HealingSwitchReadCase()
+    {
+        static ProbeRequest Read(Guid project) => new(HttpMethod.Get, $"/v1/healing/switch?project_id={project}");
+        static ProbeRequest SetTenantMode() => new(HttpMethod.Put, "/v1/healing/switch", new JsonObject
+        {
+            ["scope"] = "tenant",
+            ["mode"] = "disabled",
+            ["reason"] = "isolation probe",
+        });
+
+        return Case(
+            "GET",
+            "/v1/healing/switch",
+            (route, w) =>
+            {
+                var caller = HealingTriageCaller(w);
+                const string Name = "org A's disabled tenant row never leaks into org B's read";
+                return
+                [
+                    Pair(route, "?project_id= an org A project", ProbeExpect.NotFound, caller,
+                        Read(w.Acme.Projects[0].Id), Read(Guid.CreateVersion7())),
+                    OwnObject(route, "own project answers 200", caller, Read(w.Acme2.Projects[0].Id)),
+                    // The row-level half of the isolation contract: org A stores `disabled` for its tenant, org A's
+                    // qa_engineer resolves it, and org B's qa_engineer — reading the same route in the same database —
+                    // must resolve `shadow` with no scope row at all. A leak would surface as org B resolving
+                    // `disabled`, which a status-only parity probe cannot see.
+                    new RouteProbe(route, Name, async runner =>
+                    {
+                        var violations = new List<string>();
+                        static string Short(string text) => text.Length <= 200 ? text : text[..200] + "…";
+                        var seed = await runner.SendAsync(OrgAAdmin(w), SetTenantMode());
+                        if (!seed.IsSuccess)
+                        {
+                            violations.Add($"{route} [{Name}] seeding org A's tenant-wide disabled switch answered {seed.Status}: {Short(seed.Text)}");
+                            return violations;
+                        }
+
+                        var own = await runner.SendAsync(caller, Read(w.Acme2.Projects[0].Id));
+                        var ownResolved = ResolvedOf(own);
+                        if (ownResolved != "shadow")
+                        {
+                            violations.Add($"{route} [{Name}] org B resolved '{ownResolved}', expected 'shadow' (org A's disabled row must not apply): {Short(own.Text)}");
+                        }
+
+                        var acme = await runner.SendAsync(TriageCallerOf(w.Acme, "A"), Read(w.Acme.Projects[0].Id));
+                        var acmeResolved = ResolvedOf(acme);
+                        if (acmeResolved != "disabled")
+                        {
+                            violations.Add($"{route} [{Name}] org A resolved its own tenant row as '{acmeResolved}', expected 'disabled': {Short(acme.Text)}");
+                        }
+
+                        return violations;
+                    }),
+                ];
+            },
+            (route, w) =>
+            [
+                Pair(route, "?project_id= an org A project as ci_producer", ProbeExpect.ServiceRefused, OrgBService(w),
+                    Read(w.Acme.Projects[0].Id), Read(Guid.CreateVersion7())),
+            ]);
+    }
+
+    /// <summary>
+    /// <c>PUT /v1/healing/switch</c> (08.6.3-T1): the kill switch's write side, which needs <c>healing:configure</c>
+    /// (org B's <c>tenant_admin</c>). A <c>scope=project</c> body naming org A's project is the same 404 an unknown
+    /// project gets and writes no row; org B's own <c>scope=tenant</c> write answers 200, so the refusal is tenancy
+    /// and not the V1 clamp (<c>mode=shadow</c> is always storable).
+    /// </summary>
+    private static RouteCase HealingSwitchSetCase()
+    {
+        static ProbeRequest SetProject(Guid project) => new(HttpMethod.Put, "/v1/healing/switch", new JsonObject
+        {
+            ["scope"] = "project",
+            ["project_id"] = project.ToString(),
+            ["mode"] = "shadow",
+            ["reason"] = "isolation probe",
+        });
+
+        static ProbeRequest SetTenant() => new(HttpMethod.Put, "/v1/healing/switch", new JsonObject
+        {
+            ["scope"] = "tenant",
+            ["mode"] = "shadow",
+        });
+
+        return Case(
+            "PUT",
+            "/v1/healing/switch",
+            (route, w) =>
+            [
+                Pair(route, "scope=project naming an org A project", ProbeExpect.NotFound, OrgBAdmin(w),
+                    SetProject(w.Acme.Projects[0].Id), SetProject(Guid.CreateVersion7())),
+                OwnObject(route, "own tenant-wide switch answers 200", OrgBAdmin(w), SetTenant()),
+            ],
+            (route, w) =>
+            [
+                Pair(route, "scope=project naming an org A project as ci_producer", ProbeExpect.ServiceRefused, OrgBService(w),
+                    SetProject(w.Acme.Projects[0].Id), SetProject(Guid.CreateVersion7())),
+            ]);
+    }
+
+    /// <summary>Org B's <c>qa_engineer</c> naming org B: the only built-in member role that holds <c>healing:triage</c>.</summary>
+    private static ProbeCaller HealingTriageCaller(IsolationWorld world) =>
+        TriageCallerOf(Require(world).Acme2, "B");
+
+    /// <summary>An org's <c>qa_engineer</c> naming its own org, for the switch's read side.</summary>
+    private static ProbeCaller TriageCallerOf(IsolationOrg org, string label) =>
+        ProbeCaller.Member(
+            $"org-{label} qa_engineer (X-Evidgate-Org: {label})",
+            org.User("qa_engineer"),
+            org.Id);
+
+    /// <summary>The <c>resolved</c> member of a healing switch read, or a placeholder when the answer is not one.</summary>
+    private static string ResolvedOf(ProbeResponse response) =>
+        response.Json is { ValueKind: JsonValueKind.Object } json
+            && json.TryGetProperty("resolved", out var resolved)
+            && resolved.ValueKind == JsonValueKind.String
+            ? resolved.GetString()!
+            : $"(no resolved in status {response.Status})";
 
     /// <summary>
     /// <c>POST /v1/quarantine</c>: the project is named in the body, the org in <c>X-Evidgate-Org</c>. Org A's

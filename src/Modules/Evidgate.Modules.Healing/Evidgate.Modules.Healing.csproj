@@ -5,8 +5,25 @@
   <ItemGroup>
     <PackageReference Include="Mediator.Abstractions" />
   </ItemGroup>
+  <!-- 08.6.3-T1: the healing kill-switch routes (00 §5.5 `Endpoints/`). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Healing.Contracts\Evidgate.Modules.Healing.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <!-- 08.6.3-T1: the C2 pipeline seams (principal/tenant accessors) and the contract schema set. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
+  </ItemGroup>
+  <!-- 01.1.2-T2.1: internal implementation, opened to the composition root and the tests. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Evidgate.Api" />
+    <InternalsVisibleTo Include="Evidgate.Worker" />
+    <InternalsVisibleTo Include="Hosts.IntegrationTests" />
+    <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
+    <InternalsVisibleTo Include="Architecture.Tests" />
   </ItemGroup>
 </Project>

@@ -71,6 +71,26 @@
       "note": "the custom-role write flag of 02.2.1-T2.2 (RECOMMENDATIONS 02-Q3): off in V1, where built-in roles are the only roles, so POST/PATCH /v1/roles answer 403 `forbidden`; on, the flagged commands may add a role to the caller's org (422 `unknown_permission` / `permission_not_assignable` still apply, and a built-in role stays immutable, 409). Nothing about an existing tenant is read differently while it is off, so no environment sets it."
     },
     {
+      "key": "EVIDGATE__HEALING__APPLY",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "boolean",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "the V1 healing mode clamp of 08.6.3-T1 (T33): off by default, so PUT /v1/healing/switch answers 422 `mode_not_available` for `enabled` at tenant, project and (operator) system scope and only `shadow`/`disabled` are accepted; 08.6.1 turns it on together with the apply routes. Read once per request through IOptionsMonitor; no environment sets it in V1."
+    },
+    {
       "key": "EVIDGATE__CI__SIGNINGKEY",
       "scope": "runtime",
       "consumers": ["api", "worker"],
