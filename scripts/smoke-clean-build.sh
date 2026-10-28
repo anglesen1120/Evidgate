@@ -54,9 +54,15 @@ npm ci
 # AC6 (01.2.1): the clean clone also passes the full local gate. verify.sh
 # itself does tsc -b via the root tsconfig and never runs npm ci, so it runs
 # after npm ci here. The tar copy has no .git; check-layout.sh needs
-# `git ls-files`, so a fresh repo where every file is untracked reproduces
-# the clean-clone listing.
+# `git ls-files`, so the copy becomes a fresh repo with one commit holding every
+# file the clean clone would hold. The commit is also the `develop` ref: the
+# change-set stages (check-dor-security) scope themselves to "changed against
+# develop", so a clone with no change set checks nothing, instead of every
+# pre-existing plan being "new" because it is untracked.
 git init -q
+git add -A
+git -c user.name=smoke -c user.email=smoke@localhost commit -q -m "clean clone"
+git branch develop
 EVIDGATE_VERIFY_SKIP_DOCKER=1 scripts/verify.sh
 INNER
 
