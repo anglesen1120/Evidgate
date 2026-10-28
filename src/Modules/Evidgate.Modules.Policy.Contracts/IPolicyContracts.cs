@@ -17,6 +17,20 @@ public interface IPolicyContracts
     /// <param name="projectId">The project the run is created in.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     ValueTask<ActivePolicy?> GetActivePolicyAsync(Guid projectId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads the artifact kinds one policy revision requires a run to produce: the body's
+    /// <c>required_artifacts</c> array (<c>contracts/schemas/policy-revision.v1.json</c>: kind names matching
+    /// <c>^[a-z][a-z0-9_]{0,63}$</c>, at most 100 entries). One lock-free, read-only statement over the ambient
+    /// tenant scope: the revision is matched by its own <c>org_id</c> on top of RLS, takes no row lock and writes
+    /// nothing. The kinds come back de-duplicated and in ordinal order, so a caller can compare them as sets
+    /// without sorting again. An unknown or invisible revision id answers an empty list, and so does a revision
+    /// whose body carries no <c>required_artifacts</c> (or a value that is not an array): "no requirement" is not
+    /// an error here, exactly like "no active policy" on <see cref="GetActivePolicyAsync"/>.
+    /// </summary>
+    /// <param name="policyRevisionId">The revision whose required artifact kinds the caller needs.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyList<string>> GetRequiredArtifactKindsAsync(Guid policyRevisionId, CancellationToken cancellationToken);
 }
 
 /// <summary>
