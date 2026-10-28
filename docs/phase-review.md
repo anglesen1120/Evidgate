@@ -299,4 +299,4 @@ Columns: Id · Date · Source (session/task or PR) · Question · Decided · How
 
 ## Closed
 
-Moved verbatim to docs/phase-review-archive.md (2026-10-28, PR #PRNUM). Move a row there when it is closed.
+Moved verbatim to docs/phase-review-archive.md (2026-10-28, PR #266). Move a row there when it is closed.
