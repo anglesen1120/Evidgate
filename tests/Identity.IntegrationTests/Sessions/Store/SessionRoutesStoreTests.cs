@@ -160,7 +160,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var ticket = await CreateSessionAsync(user, clock);
         var keep = await CreateSessionAsync(user, clock);
 
-        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(ticket), ticket.SessionId, orgId: null, Token))
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(ticket), ticket.SessionId, orgId: null, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.Done);
 
         (await OwnerScalarAsync<bool>(
@@ -187,10 +187,10 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
         var routes = CreateRoutes(clock);
 
-        (await routes.RevokeOneAsync(ProofOf(actorTicket), victimTicket.SessionId, orgId: null, Token))
+        (await routes.RevokeOneAsync(ProofOf(actorTicket), victimTicket.SessionId, orgId: null, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound);
 
-        (await routes.RevokeOneAsync(ProofOf(actorTicket), victimTicket.SessionId, org, Token))
+        (await routes.RevokeOneAsync(ProofOf(actorTicket), victimTicket.SessionId, org, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "the actor is not an admin of that org");
 
         (await OwnerScalarAsync<bool>(
@@ -215,7 +215,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var memberTicket = await CreateSessionAsync(member, clock);
         var routes = CreateRoutes(clock);
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.Done);
 
         (await OwnerScalarAsync<bool>(
@@ -225,7 +225,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var replay = await AuthenticateAsync(memberTicket.CookieValue, clock);
         replay.Value.Status.ShouldBe(SessionAuthStatus.Revoked);
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "the target is dead; the actor is still live");
     }
 
@@ -244,7 +244,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var plainTicket = await CreateSessionAsync(plain, clock);
         var colleagueTicket = await CreateSessionAsync(colleague, clock);
 
-        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(plainTicket), colleagueTicket.SessionId, org, Token))
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(plainTicket), colleagueTicket.SessionId, org, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound);
 
         (await OwnerScalarAsync<bool>(
@@ -269,10 +269,10 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var foreignTicket = await CreateSessionAsync(foreignMember, clock);
         var routes = CreateRoutes(clock);
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), foreignTicket.SessionId, adminOrg, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), foreignTicket.SessionId, adminOrg, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "the target is not a member of the admin's org");
 
-        (await routes.RevokeOneAsync(ProofOf(adminTicket), foreignTicket.SessionId, otherOrg, Token))
+        (await routes.RevokeOneAsync(ProofOf(adminTicket), foreignTicket.SessionId, otherOrg, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "the admin holds no membership in the target's org");
 
         (await OwnerScalarAsync<bool>(
@@ -309,11 +309,11 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var refusedTargetTicket = await CreateSessionAsync(refusedTarget, clock);
         var routes = CreateRoutes(clock);
 
-        (await routes.RevokeOneAsync(ProofOf(localTicket), localTargetTicket.SessionId, org, Token))
+        (await routes.RevokeOneAsync(ProofOf(localTicket), localTargetTicket.SessionId, org, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.Done,
                 "a custom role of THIS org carrying membership:write authorizes the revoke");
 
-        (await routes.RevokeOneAsync(ProofOf(foreignTicket), refusedTargetTicket.SessionId, org, Token))
+        (await routes.RevokeOneAsync(ProofOf(foreignTicket), refusedTargetTicket.SessionId, org, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound,
                 "one org's custom role grants nothing in another org, whatever the membership_role row says");
 
@@ -348,7 +348,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var adminTicket = await CreateSessionAsync(admin, clock);
         var memberTicket = await CreateSessionAsync(member, clock);
 
-        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, $"a '{status}' membership holds no membership:write");
 
         (await OwnerScalarAsync<bool>(
@@ -378,7 +378,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var adminTicket = await CreateSessionAsync(admin, clock);
         var memberTicket = await CreateSessionAsync(member, clock);
 
-        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, $"a '{status}' membership is not an active member of the org");
 
         (await OwnerScalarAsync<bool>(
@@ -405,10 +405,10 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
 
         var routes = CreateRoutes(clock);
 
-        (await routes.RevokeOneAsync(ProofOf(actorTicket), Guid.CreateVersion7(), orgId: null, Token))
+        (await routes.RevokeOneAsync(ProofOf(actorTicket), Guid.CreateVersion7(), orgId: null, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound);
 
-        (await routes.RevokeOneAsync(ProofOf(actorTicket), expired.SessionId, orgId: null, Token))
+        (await routes.RevokeOneAsync(ProofOf(actorTicket), expired.SessionId, orgId: null, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.NotFound, "an expired session is dead to the route too");
 
         (await OwnerScalarAsync<bool>(
