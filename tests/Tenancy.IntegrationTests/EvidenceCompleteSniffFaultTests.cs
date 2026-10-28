@@ -560,6 +560,10 @@ internal sealed class FaultInjectingObjectStorage : IObjectStorage, IDisposable
     }
 
     /// <inheritdoc />
+    public Task<byte[]?> GetAsync(string objectKey, long maxBytes, CancellationToken cancellationToken) =>
+        Inner().GetAsync(objectKey, maxBytes, cancellationToken);
+
+    /// <inheritdoc />
     public Task CopyAsync(string sourceKey, string destinationKey, CancellationToken cancellationToken) =>
         Inner().CopyAsync(sourceKey, destinationKey, cancellationToken);
 

@@ -53,8 +53,13 @@ public sealed class ParseRunnerParentDeathTests
     private const string InnerStdinTest = "Parser.Tests.ParseRunnerParentDeathTests.Parent_Process_Runs_Until_It_Is_Killed";
     private const string InnerEmitTest = "Parser.Tests.ParseRunnerParentDeathTests.Parent_Process_Streams_Until_It_Is_Killed";
 
-    /// <summary>How long the killed parent's child gets to disappear: its own RLIMIT_CPU and profile cap.</summary>
-    private static readonly TimeSpan OrphanBound = TimeSpan.FromSeconds(30);
+    /// <summary>
+    /// How long the killed parent's child gets to disappear. Ten seconds, not the profile's own 30 s timer: the
+    /// child is blocked on stdin or mid-emit, so what ends it is the pipe closing at parent death (EOF on its read,
+    /// EPIPE on its write) and that is immediate — a bound that equalled the 30 s cap could let a child which
+    /// ignored pipe closure pass on the very timer that hid the bug (06.3.6-T1.4 delta review).
+    /// </summary>
+    private static readonly TimeSpan OrphanBound = TimeSpan.FromSeconds(10);
 
     [Fact]
     public Task WorkerKilledMidParse_LeavesNoOrphanChild() =>

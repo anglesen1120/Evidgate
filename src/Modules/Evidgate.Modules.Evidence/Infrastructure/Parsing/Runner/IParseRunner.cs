@@ -58,10 +58,11 @@ internal sealed class ParseRunRequest
 /// The parent side of 06.3.6 §7: runs the 06.3.1 profile in the <c>Evidgate.Parser</c> child process and returns
 /// either the buffered record stream or the one failure kind that ended the run.
 /// <para>
-/// It is registered only when <c>EVIDGATE__PARSE__OUTOFPROCESS</c> is on (06.3.6 §11 rollout); nothing resolves it
-/// yet — 06.3.6-T1.4 wires the <c>parse</c> task handler, which is also where the failure kinds become
-/// <c>rejected</c> reasons. The interface therefore carries no <c>parse_*</c> vocabulary: the projection from
-/// <see cref="ParseRunFailureKind"/> to a reason is T1.4's, so a mapping decision cannot be made twice.
+/// It is registered only when <c>EVIDGATE__PARSE__OUTOFPROCESS</c> is on (06.3.6 §11 rollout); the <c>parse</c> task
+/// handler (06.3.6-T1.4) is the one caller and the only place a failed run becomes a <c>rejected</c> artifact. The
+/// interface itself carries no <c>parse_*</c> vocabulary: the projection from
+/// <see cref="ParseRunFailureKind"/> to a reason is <see cref="ParseRunRejection.TryMap"/>, so a mapping decision
+/// cannot be made twice.
 /// </para>
 /// </summary>
 internal interface IParseRunner

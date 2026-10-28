@@ -155,7 +155,9 @@ internal static class ArtifactState
 /// The reason codes 06.1.2's <c>complete</c> writes into <c>artifact.failure_code</c> when it refuses an upload
 /// (06.1.2 §2 AC3/AC5, §5): the object never became evidence. The column's CHECK only bounds the length
 /// (migration 0028: <c>char_length between 1 and 128</c>), so this type carries the vocabulary and is the SLI's
-/// <c>failure_code</c> dimension (06.1.2 §8). Every code is also a committed 200, never an error response.
+/// <c>failure_code</c> dimension (06.1.2 §8). Every code is also a committed 200, never an error response. The
+/// <c>parse_*</c> trio is written later by the <c>parse</c> task (06.3.6 AC3), on an artifact that had become
+/// <c>ready</c>: the same column, the same 1-128 bound, no new status.
 /// </summary>
 internal static class ArtifactFailureCode
 {
@@ -173,6 +175,22 @@ internal static class ArtifactFailureCode
 
     /// <summary>Neither the staging object nor a matching final object exists in the store (T86).</summary>
     public const string ObjectMissing = "object_missing";
+
+    /// <summary>
+    /// The parse child died of its heap limit (06.3.6 AC3). The value is the one
+    /// <c>ParseRunRejection.Oom</c> maps a run to, so the vocabulary word exists once for the domain and once for the
+    /// mapping and a test pins the two together; the parse task writes it on a <c>ready</c> artifact.
+    /// </summary>
+    public const string ParseOom = "parse_oom";
+
+    /// <summary>The parse child exceeded its wall clock or its CPU limit (06.3.6 AC3, <c>ParseRunRejection.Timeout</c>).</summary>
+    public const string ParseTimeout = "parse_timeout";
+
+    /// <summary>
+    /// Every other failed parse — a non-zero or signal exit, output over a cap, a stdout stream that is not the child's
+    /// protocol (06.3.6 AC3, <c>ParseRunRejection.Crashed</c>).
+    /// </summary>
+    public const string ParseCrashed = "parse_crashed";
 }
 
 /// <summary>
@@ -263,6 +281,12 @@ internal sealed class Artifact
     /// evidence, so the row keeps the size it declared and carries the reason. Terminal (00 §8.4); the 0028
     /// <c>artifact_failure_code_check</c> bounds the code's length, which is checked here so a value the database
     /// would refuse never reaches a statement (C6).
+    /// <para>
+    /// The <c>parse</c> task's verdict (06.3.6-T1.4) is the same transition from <c>ready</c>: an artifact whose bytes
+    /// no longer parse cannot stay evidence, so it keeps its size, checksum, key and scan state and gains one
+    /// <c>parse_*</c> reason. Reusing this member is deliberate — a second rejection shape would be a second place
+    /// for the state's invariants to drift.
+    /// </para>
     /// </summary>
     /// <param name="failureCode">One of the <see cref="ArtifactFailureCode"/> reasons.</param>
     public Artifact MarkRejected(string failureCode)

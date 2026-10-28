@@ -5,7 +5,7 @@ namespace Evidgate.BuildingBlocks.ObjectStorage;
 /// the API mints a short-lived presigned <c>PUT</c> for a server-chosen staging key
 /// so the client uploads bytes straight to storage and the API never proxies the
 /// bandwidth (DECISIONS §9). Presigning is CPU-only (SigV4 arithmetic, no network call);
-/// <see cref="HeadAsync"/>, <see cref="ReadPrefixAsync"/>, <see cref="CopyAsync"/> and
+/// <see cref="HeadAsync"/>, <see cref="ReadPrefixAsync"/>, <see cref="GetAsync"/>, <see cref="CopyAsync"/> and
 /// <see cref="DeleteAsync"/> are network calls and MUST run outside any database transaction
 /// (00 §5.7 P5, T86).
 /// </summary>
@@ -67,6 +67,28 @@ public interface IObjectStorage
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxBytes"/> is below 1 or above 65536.</exception>
     /// <exception cref="ObjectStorageException">The store refused the conditional read (the object changed).</exception>
     Task<byte[]?> ReadPrefixAsync(string objectKey, int maxBytes, CancellationToken cancellationToken, string? ifMatch = null);
+
+    /// <summary>
+    /// Fetches one whole object, bounded by <paramref name="maxBytes"/> (06.3.6-T1.4): the <c>parse</c> handler hands
+    /// an artifact's bytes to the child process from here, so the caller names the cap its own kind policy allows
+    /// (<c>artifact_kind_policy.max_bytes</c>) and never buffers more than that. Returns <see langword="null"/> when
+    /// the object does not exist (a store 404 is an outcome, not an exception, exactly like <see cref="HeadAsync"/>);
+    /// a zero-byte object answers an empty array.
+    /// <para>
+    /// The read fails closed on a longer object: an object above <paramref name="maxBytes"/> throws
+    /// <see cref="InvalidOperationException"/> instead of answering a truncated array, because a truncated report is
+    /// a different document and must never be parsed as if it were the stored one. Like every other storage call
+    /// this is a network call and MUST run outside any database transaction (00 §5.7 P5).
+    /// </para>
+    /// </summary>
+    /// <param name="objectKey">A server-minted final (or staging) key.</param>
+    /// <param name="maxBytes">The most bytes the stored object may hold, between 1 and 268 435 456 (256 MiB).</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>The whole object, or <see langword="null"/> when it is absent.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxBytes"/> is below 1 or above the cap.</exception>
+    /// <exception cref="InvalidOperationException">The stored object is larger than <paramref name="maxBytes"/>.</exception>
+    /// <exception cref="ObjectStorageException">The store refused the read.</exception>
+    Task<byte[]?> GetAsync(string objectKey, long maxBytes, CancellationToken cancellationToken);
 
     /// <summary>
     /// Copies the staging object <paramref name="sourceKey"/> (a <c>pending/</c> key) to the final

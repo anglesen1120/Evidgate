@@ -20,7 +20,8 @@ namespace Evidgate.Parser;
 /// the byte cap, the 30 s timeout and the zip-slip rules are the same code the in-process caller runs. This file
 /// only applies the limits, chooses the arm, caps the stdin read, streams what the profile produced and owns the
 /// exit-code contract: 0 for a streamed result or rejection, 2 for a usage error, 3 for an unexpected internal
-/// error — with fixed words on stderr and never an artifact byte, a name or an exception message (00 §5.7 S3).
+/// error — with fixed words on stderr and never an artifact byte, a name or an exception message (00 §5.7 S3) —
+/// and 4 for a run that exhausted its heap ceiling (06.3.6-T1.4).
 /// </para>
 /// <para>
 /// The marker's <c>count</c> is the number of records written before it, and a <c>rejected</c> record is counted
@@ -39,6 +40,14 @@ internal static class Program
 
     /// <summary>Exit 3: an unexpected internal error; the marker is missing, so the launcher maps a crash.</summary>
     private const int ExitInternal = 3;
+
+    /// <summary>
+    /// Exit 4: the run exhausted its heap ceiling (<c>DOTNET_GCHeapHardLimit</c>), which the launcher maps to
+    /// <c>parse_oom</c> (06.3.6 AC3, 06.3.6-T1.4). Distinct from exit 3 on purpose: an <see cref="OutOfMemoryException"/>
+    /// caught here is proof that the memory limit the launcher set is what ended the run, while exit 3 stays the
+    /// "the child died" code for every other fault.
+    /// </summary>
+    private const int ExitMemoryLimit = 4;
 
     /// <summary>The one usage line; a fixed string, so it can never echo an argument.</summary>
     private const string UsageText =
@@ -95,6 +104,23 @@ internal static class Program
         try
         {
             return Run(options);
+        }
+        catch (OutOfMemoryException)
+        {
+            // The heap ceiling is what ended this run, so it is a result and not a fault: exit 4 tells the launcher
+            // `parse_oom` instead of `parse_crashed` (AC3), which is the whole point of the distinct code. Nothing
+            // is written here and nothing is allocated: formatting a word on stderr needs a string, and under an
+            // exhausted ceiling that allocation can fail again — a second OutOfMemoryException from inside this
+            // catch escapes the process, and the launcher then reads whatever code the runtime gives it. Measured
+            // in mcr.microsoft.com/dotnet/sdk:10.0.100 with DOTNET_GCHeapHardLimit=64 MiB: the same allocation loop
+            // without a catch dies at 134 (SIGABRT) after the runtime writes "Out of memory." on stderr, and the
+            // launcher maps that crash. A death the child cannot report is never reported as a limit that held.
+            // `Environment.Exit` ends the process with the code set from a constant and no further managed work; the
+            // `return` behind it is the second, allocation-free answer for a runtime whose Exit throws instead — both
+            // leave 4, and neither formats a word.
+            Environment.Exit(ExitMemoryLimit);
+
+            return ExitMemoryLimit;
         }
         catch (Exception)
         {

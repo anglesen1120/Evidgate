@@ -6,6 +6,7 @@ using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -77,6 +78,12 @@ internal static class EvidenceModule
         // only the Worker composes it, through ParseRunnerServiceCollectionExtensions.AddParseRunner (06.3.6 review:
         // the Api process must not hold a process-spawn capability). This shared registration is what both hosts call,
         // so a runner registered here would be resolvable from the Api again.
+
+        // 06.3.6-T1.4: the runner's options, bound in BOTH hosts because `complete` reads the one switch that decides
+        // whether a raw report schedules the parse task (`EVIDGATE__PARSE__OUTOFPROCESS`) — the Api commits that row
+        // even though only the Worker runs it. Binding them registers no capability: the runner and its task handler
+        // stay in AddParseRunner, Worker-only and flag-on.
+        services.AddOptions<ParseRunnerOptions>().BindConfiguration(ParseRunnerOptions.SectionName);
 
         return services;
     }

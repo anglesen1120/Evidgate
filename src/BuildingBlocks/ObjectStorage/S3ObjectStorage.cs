@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Buffers;
 using System.Net;
 using Amazon;
 using Amazon.Runtime;
@@ -39,6 +40,13 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
     /// signature bytes, never a whole artifact, so the cap is the only bound the caller can name.
     /// </summary>
     internal const int MaxPrefixBytes = 65536;
+
+    /// <summary>
+    /// The largest object <see cref="GetAsync"/> will buffer (06.3.6-T1.4): the kind caps it serves are at most
+    /// 256 MiB (<c>artifact_kind_policy.max_bytes</c>, D-A9), so one artifact fits and a caller cannot ask for a
+    /// buffer the process could not hold.
+    /// </summary>
+    internal const long MaxObjectBytes = 256L * 1024 * 1024;
 
     private const string ContentLengthHeaderName = "Content-Length";
 
@@ -199,32 +207,103 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
         }
     }
 
+    /// <inheritdoc />
+    public async Task<byte[]?> GetAsync(string objectKey, long maxBytes, CancellationToken cancellationToken)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ValidateObjectKey(objectKey, nameof(objectKey));
+
+        if (maxBytes is < 1 or > MaxObjectBytes)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxBytes), maxBytes, "maxBytes must be between 1 and 268435456");
+        }
+
+        var options = _options.Value;
+        try
+        {
+            // One byte past the caller's cap is requested, so an object the caller's policy no longer admits is
+            // refused below instead of being silently truncated: a truncated report is a different document.
+            using var response = await _client.Value.GetObjectAsync(
+                new GetObjectRequest
+                {
+                    BucketName = options.Bucket,
+                    Key = objectKey,
+                    ByteRange = new ByteRange(0, maxBytes),
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            var bytes = await ReadBoundedAsync(
+                response.ResponseStream, checked((int)maxBytes + 1), cancellationToken).ConfigureAwait(false);
+
+            if (bytes.LongLength > maxBytes)
+            {
+                // Never a truncated success (IObjectStorage.GetAsync): the message names the cap, never the key.
+                throw new InvalidOperationException(
+                    $"the stored object is larger than the {maxBytes}-byte cap the caller stated");
+            }
+
+            return bytes;
+        }
+        catch (AmazonS3Exception exception) when (IsAbsent(exception))
+        {
+            // A store 404 is an outcome, not an exception (IObjectStorage.GetAsync).
+            return null;
+        }
+        catch (AmazonS3Exception exception) when (IsEmptyRange(exception))
+        {
+            // A zero-byte object: the range cannot be satisfied because there is no first byte (06.3.1-T1 F-C10).
+            return [];
+        }
+        catch (AmazonServiceException exception)
+        {
+            // SDK v4: AmazonServiceException no longer derives from AmazonClientException, so a store service
+            // error would escape the client clause below with the SDK's message intact.
+            throw StorageFailure("read", exception);
+        }
+        catch (AmazonClientException exception)
+        {
+            throw StorageFailure("read", exception);
+        }
+    }
+
     /// <summary>
     /// Reads the response stream up to <paramref name="maxBytes"/> bytes, disposing it first. The ranged GET
     /// already caps the body, but a store that ignores the range is still read no further than the cap, so the
     /// read is bounded by construction.
+    /// <para>
+    /// The buffer grows with the bytes that actually arrive instead of being allocated at the cap: the cap is also
+    /// <see cref="MaxObjectBytes"/>' order of magnitude (256 MiB), so a one-megabyte report read under a 256 MiB
+    /// policy would otherwise cost its own size twice over in zeroed arrays while the Worker's memory limits are
+    /// exactly what the parse runs under (06.3.6 AC5). <see cref="ArrayBufferWriter{T}"/> doubles, so the transient
+    /// overhead stays proportional to the object, and the return is one exact-length array.
+    /// </para>
     /// </summary>
+    /// <param name="stream">The response body.</param>
+    /// <param name="maxBytes">The most bytes to read; one byte past it is enough to prove the object is longer.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
     private static async Task<byte[]> ReadBoundedAsync(Stream stream, int maxBytes, CancellationToken cancellationToken)
     {
+        const int InitialCapacity = 82_944;
+
         await using (stream.ConfigureAwait(false))
         {
-            var buffer = new byte[maxBytes];
-            var total = 0;
-            while (total < maxBytes)
+            var writer = new ArrayBufferWriter<byte>(Math.Min(maxBytes, InitialCapacity));
+
+            while (writer.WrittenCount < maxBytes)
             {
-                var read = await stream
-                    .ReadAsync(buffer.AsMemory(total, maxBytes - total), cancellationToken)
-                    .ConfigureAwait(false);
+                var memory = writer.GetMemory(Math.Min(InitialCapacity, maxBytes - writer.WrittenCount));
+                var read = await stream.ReadAsync(memory, cancellationToken).ConfigureAwait(false);
 
                 if (read == 0)
                 {
                     break;
                 }
 
-                total += read;
+                writer.Advance(read);
             }
 
-            return total == buffer.Length ? buffer : buffer[..total];
+            return writer.WrittenSpan.ToArray();
         }
     }
 

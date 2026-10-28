@@ -19,9 +19,12 @@ namespace Evidgate.Parser;
 /// <para>
 /// <c>rlim_t</c> is 64-bit on Linux and on Darwin, and the three resource numbers are the same on both
 /// (<c>&lt;sys/resource.h&gt;</c>: CPU = 0, FSIZE = 1, CORE = 4), so one declaration covers the two hosts the
-/// child runs on. Soft and hard are always set to the same value: the child has no reason to keep headroom it
-/// could raise into, and a hard limit equal to the soft one means a surprise <c>setrlimit</c> "fix" cannot lift
-/// the ceiling the launcher measured. A requested limit that cannot be applied is not a degraded run but a
+/// child runs on. <c>RLIMIT_CPU</c> is the one pair that is deliberately split: the soft value is the requested
+/// seconds and the hard value is one second more, so the kernel sends <c>SIGXCPU</c> — a death the launcher reads
+/// as <c>152</c> and maps to <c>parse_timeout</c> — before it escalates to <c>SIGKILL</c> (<c>137</c>, the code a
+/// crash and an OOM kill also use). That one second is not headroom a run can spend, and an unprivileged process
+/// cannot lift the hard value, so the ceiling the launcher measured stands; <c>RLIMIT_FSIZE</c> and
+/// <c>RLIMIT_CORE</c> keep soft equal to hard. A requested limit that cannot be applied is not a degraded run but a
 /// refusal — the caller writes one fixed word and exits 3 before stdin is read (fail closed, no marker).
 /// </para>
 /// </summary>
@@ -86,9 +89,10 @@ internal static class ResourceLimits
         try
         {
             // Core first: from here on a fault must not write a dump of the artifact the child is about to read.
-            return Apply(CoreResource, 0)
-                && (options.CpuSeconds is not { } cpuSeconds || Apply(CpuResource, (ulong)cpuSeconds))
-                && (options.MaxFileBytes is not { } maxFileBytes || Apply(FileSizeResource, (ulong)maxFileBytes));
+            return Apply(CoreResource, 0, 0)
+                && (options.CpuSeconds is not { } cpuSeconds
+                    || Apply(CpuResource, (ulong)cpuSeconds, (ulong)cpuSeconds + 1))
+                && (options.MaxFileBytes is not { } maxFileBytes || Apply(FileSizeResource, (ulong)maxFileBytes, (ulong)maxFileBytes));
         }
         catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException)
         {
@@ -97,9 +101,14 @@ internal static class ResourceLimits
         }
     }
 
-    private static bool Apply(int resource, ulong value)
+    /// <summary>Sets one resource's soft and hard values.</summary>
+    /// <param name="resource">The <c>RLIMIT_*</c> number.</param>
+    /// <param name="soft">The value the kernel enforces first.</param>
+    /// <param name="hard">The ceiling the soft value may be raised to; equal to <paramref name="soft"/> except for the CPU pair.</param>
+    /// <returns>True when the kernel accepted the pair.</returns>
+    private static bool Apply(int resource, ulong soft, ulong hard)
     {
-        var limit = new ResourceLimit { Soft = value, Hard = value };
+        var limit = new ResourceLimit { Soft = soft, Hard = hard };
 
         return SetRlimit(resource, ref limit) == 0;
     }
