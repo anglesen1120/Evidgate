@@ -122,7 +122,7 @@ public static partial class ApiHost
         builder.Services.AddAuthoringModule();
         builder.Services.AddOrchestratorModule();
         // 06.1.1-T1: the evidence module — the artifact and kind-policy write model.
-        builder.Services.AddEvidenceModule();
+        builder.Services.AddEvidenceModule(builder.Configuration);
         // 07.1.1-T1: the policy module — the append-only revision write model and store.
         builder.Services.AddPolicyModule();
         // 08.6.3-T1: the healing module — the kill switch store, its resolver and the V1 clamp (Healing:Apply).

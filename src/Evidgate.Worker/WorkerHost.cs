@@ -8,6 +8,7 @@ using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Evidence;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Identity;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
@@ -78,7 +79,11 @@ public static class WorkerHost
         builder.Services.AddCatalogModule();
         builder.Services.AddOrchestratorModule();
         // 06.1.1-T1: the evidence module, so every handler the Api composes resolves here too.
-        builder.Services.AddEvidenceModule();
+        builder.Services.AddEvidenceModule(builder.Configuration);
+        // 06.3.6-T1.3: the out-of-process parse runner, behind EVIDGATE__PARSE__OUTOFPROCESS. Registered here and
+        // nowhere else: it is a process-spawn capability, and the Api — which shares every other module piece — must
+        // never be able to resolve IParseRunner (06.3.6 review, security finding).
+        builder.Services.AddParseRunner(builder.Configuration);
         // 07.1.1-T1: the policy module, so every handler the Api composes resolves here too.
         builder.Services.AddPolicyModule();
         // 02.2.1-T1.2: both entry points compose the same module set (00 §5.1 A1).
