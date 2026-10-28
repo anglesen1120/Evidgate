@@ -22,6 +22,18 @@
 #        globalization setting (invariant for Worker, NOT invariant for the Api,
 #        which needs ICU for NFC — 13.1.1-T2, D-S55-Q1), and (Api/Worker) the main
 #        assembly has a ReadyToRun header;
+#   06.3.6 the Worker image carries its parse child as a second published process
+#        (/app/parser/Evidgate.Parser.dll with its own runtimeconfig.json and
+#        deps.json, globalization-invariant like the Worker it serves), and
+#        `dotnet /app/parser/Evidgate.Parser.dll` with no arguments answers the
+#        child's usage contract — the fixed usage line on stderr, exit 2 — as the
+#        image's own non-root user, so a Worker image that ships no runnable child
+#        fails here and not at the first parse in production;
+#   06.3.6 the Worker image's /app tree is root-owned (uid 0) with no group/other
+#        write bit and 0755 on /app and /app/parser, so the non-root runtime can
+#        read and start both processes but cannot unlink or replace an assembly —
+#        the child is the one process that runs untrusted bytes; ownership is read
+#        from the exported image filesystem because the chiseled base has no shell;
 #   AC5  the Migrator image is its own image on the same pins and
 #        `docker run <image> --help` still prints the CLI contract;
 #   AC1/AC5 with --with-db: a throwaway PostgreSQL 18 (the pinned compose.dev.yml
@@ -121,6 +133,32 @@ assembly_of() {
     api) echo Evidgate.Api.dll ;;
     worker) echo Evidgate.Worker.dll ;;
     migrator) echo Evidgate.Migrator.dll ;;
+  esac
+}
+
+# 06.3.6-T1.3: the Worker image publishes two entry points. The parse child
+# (06.3.6 §5) is the second one, in its own /app/parser directory — the two
+# publish outputs carry the same dependency assemblies, so a shared directory
+# would let one publish overwrite the other's runtimeconfig.json/deps.json.
+# No other image ships a child.
+child_project_of() {
+  case "$(prefix "$1")" in
+    worker) echo src/Evidgate.Parser/Evidgate.Parser.csproj ;;
+    *) echo "" ;;
+  esac
+}
+
+child_assembly_of() {
+  case "$(prefix "$1")" in
+    worker) echo Evidgate.Parser.dll ;;
+    *) echo "" ;;
+  esac
+}
+
+child_directory_of() {
+  case "$(prefix "$1")" in
+    worker) echo parser ;;
+    *) echo "" ;;
   esac
 }
 
@@ -470,6 +508,166 @@ PYEOF
   rm -rf "$scratch"
 }
 
+# 06.3.6-T1.3: the Worker image's second entry point. The parent runner launches
+# the child by path (`dotnet /app/parser/Evidgate.Parser.dll`), so three things
+# must hold in the image and none of them is visible from the Worker's own dll:
+# the child's assembly is there, it ships its own runtimeconfig.json and
+# deps.json (a publish that landed in /app instead of /app/parser would find the
+# Worker's files of the same name and silently bind the wrong graph), and its
+# runtime options match the group `Directory.Build.props` puts it in — the Worker's
+# InvariantGlobalization group, because this image carries no ICU (06.3.6-T1.2).
+# Server GC and a ReadyToRun header are deliberately NOT asserted: 00 §5.7 P7
+# names the long-lived Api/Worker processes for both, and the child is a
+# short-lived process (the same reasoning Dockerfile.migrator states for its
+# one-shot tool) — the child's runtimeconfig.json carries neither.
+check_parse_child() {
+  local reference="$1" name assembly directory stem scratch
+  name="$(prefix "$2")"
+  assembly="$(child_assembly_of "$name")"
+  directory="$(child_directory_of "$name")"
+  [[ -n "$assembly" ]] || die "$name has no parse child: check_parse_child is called for the wrong image"
+  stem="${assembly%.dll}"
+  scratch="$(mktemp -d)"
+  copy_from_image "$reference" "/app/$directory/$assembly" "$scratch/$assembly"
+  copy_from_image "$reference" "/app/$directory/$stem.runtimeconfig.json" "$scratch/runtimeconfig.json"
+  copy_from_image "$reference" "/app/$directory/$stem.deps.json" "$scratch/deps.json"
+  python3 - "$scratch/runtimeconfig.json" "$scratch/deps.json" "$scratch/$assembly" "$assembly" "$(invariant_of "$name")" <<'PYEOF'
+import json, sys
+
+runtimeconfig, dependencies, binary = sys.argv[1], sys.argv[2], sys.argv[3]
+assembly, invariant = sys.argv[4], sys.argv[5] == "1"
+document = json.load(open(runtimeconfig, encoding="utf-8"))
+options = document.get("runtimeOptions", {})
+properties = options.get("configProperties", {})
+actual = properties.get("System.Globalization.Invariant") is True
+if actual is not invariant:
+    sys.exit("build-images: /app/parser/%s's runtimeconfig.json carries "
+             "System.Globalization.Invariant=%s, expected %s (06.3.6-T1.2 puts the child in the "
+             "Worker's invariant group; this chiseled base ships no ICU)" % (assembly, actual, invariant))
+if not options.get("framework"):
+    sys.exit("build-images: /app/parser/%s's runtimeconfig.json declares no framework: the child "
+             "was published self-contained, but the runner launches it with the image's own "
+             "`dotnet` and its base is the framework-dependent aspnet runtime" % assembly)
+library = json.load(open(dependencies, encoding="utf-8")).get("libraries", {})
+if not any(entry.split("/")[0] == assembly[:-4] for entry in library):
+    sys.exit("build-images: /app/parser/%s.deps.json does not describe %s itself: the publish "
+             "output is not the child's own dependency graph" % (assembly[:-4], assembly))
+# The other half of the R2R policy, asserted rather than left to a Dockerfile
+# comment: the child is published without crossgen (00 §5.7 P7 names the
+# long-lived Api/Worker processes; Dockerfile.migrator states the same rule for
+# its one-shot tool), so a ReadyToRun header here means a publish flag drifted.
+if b"RTR\x00" in open(binary, "rb").read(1 << 20):
+    sys.exit("build-images: /app/parser/%s carries a ReadyToRun header, but the parse child is "
+             "published without crossgen (00 §5.7 P7 names the long-lived Api/Worker processes; "
+             "06.3.6-T1.3)" % assembly)
+print("   parse child: /app/parser/%s + runtimeconfig.json + deps.json "
+      "(System.Globalization.Invariant=%s, framework=%s, no ReadyToRun header)"
+      % (assembly, actual, options["framework"].get("name")))
+PYEOF
+  rm -rf "$scratch"
+  echo "   published: $(child_project_of "$name") -> /app/$directory (no crossgen, 00 §5.7 P7)"
+}
+
+# The end-to-end proof an "image missing the child" defect is caught by: run the
+# child the way the parent runner does, as the image's own non-root user, with no
+# arguments. It answers the usage contract before it reads stdin — exit 2, its
+# fixed usage line on stderr and nothing on stdout — so this needs no artifact,
+# no shell and no elevated permissions, and an unreadable dll, a missing
+# runtimeconfig.json or a dll that is not the child all fail here.
+check_parse_child_runs() {
+  local reference="$1" name assembly path output status stderr_file
+  name="$(prefix "$2")"
+  assembly="$(child_assembly_of "$name")"
+  [[ -n "$assembly" ]] || die "$name has no parse child: check_parse_child_runs is called for the wrong image"
+  path="/app/$(child_directory_of "$name")/$assembly"
+  stderr_file="$(mktemp)"
+  set +e
+  output="$(docker run --rm --platform "$CHECK_PLATFORM" --entrypoint /usr/bin/dotnet \
+    "$reference" "$path" 2>"$stderr_file")"
+  status=$?
+  set -e
+  if [[ "$status" -ne 2 ]]; then
+    sed 's/^/   | /' "$stderr_file"
+    rm -f "$stderr_file"
+    die "'docker run --entrypoint /usr/bin/dotnet $reference $path' exited $status, expected the " \
+      "child's usage error 2: the image does not carry a runnable parse child (06.3.6-T1.3)"
+  fi
+  [[ -z "$output" ]] || {
+    rm -f "$stderr_file"
+    die "'$path' wrote to stdout for a usage error: the child's contract keeps stdout for the " \
+      "NDJSON stream and its final marker (06.3.6 §7)"
+  }
+  grep -q '^evidgate-parser: ' "$stderr_file" || {
+    sed 's/^/   | /' "$stderr_file"
+    rm -f "$stderr_file"
+    die "'$path' printed no fixed 'evidgate-parser: ' line on stderr for a usage error"
+  }
+  rm -f "$stderr_file"
+  echo "   parse child entry point: 'dotnet $path' exits 2 with the usage line, as Config.User runs it"
+}
+
+# 06.3.6 review (security finding): the Worker image's /app tree is not writable by the non-root runtime. The parse
+# child is the one process that touches untrusted bytes and it runs as $APP_UID; a /app the app uid can write would
+# let a compromised child unlink and replace the Worker's (or its own) assemblies for the next start or a sibling
+# process. So every entry of the tree must be root-owned, carry no group/other write bit, and /app and /app/parser
+# must be 0755 so the runtime can still read and launch. Both halves are asserted: a root-owned file in a directory
+# the app uid owns is just as replaceable — which is why the Dockerfile creates the WORKDIR as root (BuildKit gives a
+# missing WORKDIR the ownership of the active USER). The chiseled base has no shell and no coreutils, so the modes
+# are read from `docker export` here instead of from inside a container.
+check_app_tree_ownership() {
+  local reference="$1" name assembly worker_assembly archive container
+  name="$(prefix "$2")"
+  assembly="$(child_assembly_of "$name")"
+  worker_assembly="$(assembly_of "$name")"
+  [[ -n "$assembly" ]] || die "$name has no parse child: check_app_tree_ownership is called for the wrong image"
+  archive="$(mktemp)"
+  container="$(docker create --platform "$CHECK_PLATFORM" "$reference")"
+  docker export --output "$archive" "$container" >/dev/null
+  docker rm -f "$container" >/dev/null
+  python3 - "$archive" "app/$worker_assembly" "app/$(child_directory_of "$name")/$assembly" <<'PYEOF'
+import sys, tarfile
+
+archive, worker_assembly, child_assembly = sys.argv[1], sys.argv[2], sys.argv[3]
+required_dirs = {"app": 0o755, "app/parser": 0o755}
+members = {}
+directories = {}
+problems = []
+with tarfile.open(archive) as tar:
+    for member in tar:
+        name = member.name
+        while name.startswith("./"):
+            name = name[2:]
+        name = name.rstrip("/")
+        if name != "app" and not name.startswith("app/"):
+            continue
+        members[name] = member
+        if member.isdir():
+            directories[name] = member
+        if member.uid != 0 or member.gid != 0:
+            problems.append("%s is owned by %d:%d, not root" % (name, member.uid, member.gid))
+        if member.mode & 0o022:
+            problems.append("%s has mode %04o: a non-root writer can change it" % (name, member.mode))
+for directory, mode in required_dirs.items():
+    member = directories.get(directory)
+    if member is None:
+        problems.append("%s is missing from the image" % directory)
+    elif member.mode != mode:
+        problems.append("%s has mode %04o, expected %04o" % (directory, member.mode, mode))
+for assembly in (worker_assembly, child_assembly):
+    if assembly not in members:
+        problems.append("%s is missing from the image" % assembly)
+if not members:
+    problems.append("/app is missing from the image")
+if problems:
+    sys.exit("build-images: the image's /app tree is not root-owned and read-only to the app uid "
+             "(06.3.6 review): %s" % "; ".join(problems))
+print("   app tree: %d entries under /app, root-owned, no group/other write "
+      "(/app and /app/parser at 0755), incl. %s and %s"
+      % (len(members), worker_assembly, child_assembly))
+PYEOF
+  rm -f "$archive"
+}
+
 # 01.1.2-T1.3: BuildingBlocks.Persistence globs migrations/*.sql at build time and
 # bakes the greatest file name into assembly metadata as the expected journal head.
 # A build context without migrations/ does not fail — it bakes the "(none)"
@@ -643,6 +841,11 @@ for platform in $PLATFORMS; do
     else
       check_p7 "$reference" "$image"
       check_migration_head "$reference"
+      if [[ "$image" == "worker" ]]; then
+        check_parse_child "$reference" "$image"
+        check_parse_child_runs "$reference" "$image"
+        check_app_tree_ownership "$reference" "$image"
+      fi
       if [[ "$image" == "api" ]]; then built_api="$reference"; else built_worker="$reference"; fi
     fi
   done

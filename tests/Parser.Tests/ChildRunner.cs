@@ -183,6 +183,13 @@ internal static class ChildRunner
                 $"'{path}' is missing: the parser child must be built in this configuration before these tests run");
     }
 
+    /// <summary>
+    /// The built child assembly's absolute path, for a test that starts the child through the parent runner
+    /// (06.3.6-T1.3) instead of driving the pipes itself. One location rule serves both.
+    /// </summary>
+    /// <returns>The absolute path of <c>Evidgate.Parser.dll</c> in this configuration.</returns>
+    internal static string ChildAssemblyPath() => ChildAssembly;
+
     private static string LocateChildDirectory()
     {
         // tests/Parser.Tests/bin/<configuration>/net10.0/ → the child's own bin/<configuration>/net10.0.
