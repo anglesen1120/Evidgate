@@ -4,7 +4,7 @@
 
 Evidgate collects automated test results (web, API, mobile, unit) from customer CI or agents, keeps them as immutable evidence bound to exact builds, and turns that evidence into a release decision (PASS / FAIL / INCONCLUSIVE) through versioned policies. It adds **safe healing**: repairing test mechanics (for example a changed locator) without changing test intent, shadow first, never hiding a product bug.
 
-**Current state (2026-10-27).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next, §6 blocked), not here.
+**Current state (2026-10-27).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next) and `docs/status-carried.md` (blocked / carried items, formerly STATUS §6), not here.
 
 - Landed on `develop` (#260, S124 08.6.3-T1): 181 of 655 planned tasks = 187.25 of 702.75 raw person-days (≈28 % of tasks, ≈27 % of effort); 474 tasks / 515.5 d remain.
 - Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 133 / 145.25 of 281.25 · G2 42 / 36 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
@@ -27,6 +27,8 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 | `plans/open-items/` | Register of every `[OPEN]`/⚠️ with a recommended default, the information needed and the task it must precede |
 | `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T101), findings register (`REVIEW-2026-09-25.md`), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
 | `docs/source/` | Original Vietnamese system design (working name "ReleaseHub") and its .docx |
+| `docs/status-carried.md` | Live blocked / carried items table (moved verbatim from STATUS §6 on 2026-10-28); add new carried rows at the end, cite rows by title |
+| `docs/status-archive.md` | Delivered waves (old STATUS §3-§4) and closed carried rows, moved verbatim and never edited |
 
 ## Authority and editing rules
 

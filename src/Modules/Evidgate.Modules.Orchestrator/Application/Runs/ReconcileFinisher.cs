@@ -44,7 +44,7 @@ internal interface IReconcileFinisher
     /// unresolved or vanished artifact, a short resolution <c>UPDATE</c>, a run above
     /// <see cref="FreezeRequest.MaxReadyArtifacts"/>), the run's manifest hash cannot be read, the pointer update
     /// touched no row, or the state transition failed. The caller MUST let the exception escape so the consumer rolls
-    /// the whole attempt back and retries it (STATUS.md:588/589 fail-closed). A requirement set above
+    /// the whole attempt back and retries it (docs/status-carried.md:116/117 fail-closed). A requirement set above
     /// <see cref="FreezeRequest.MaxRequired"/> is NOT an exception: it resolves as unsatisfiable and becomes an
     /// <c>artifact_missing</c> reason, so the attempt records an <c>incomplete</c> revision instead of retrying forever.
     /// </exception>
