@@ -1160,7 +1160,7 @@ export const revokeSupportGrant = <ThrowOnError extends boolean = false>(options
 /**
  * Security events filtered by project/type/severity/time
  *
- * Auth failures and support access in V1; injection attempts from V2 (11.5.1-T5, 11.4.1-T2; view 09.7.1-T9).
+ * The tenant's own security events, newest first: V1 carries all five types (`auth_failure`, `cross_tenant_probe`, `secret_scanner_alert`, `kill_switch_used`, `support_access`) and V2 adds `injection_attempt` (11.5.1-T5, 11.4.1-T2; view 09.7.1-T9). One statement per page, keyset-ordered on `(created_at, id)` descending and served by `security_event_list_idx` (11.5.1 §4). Each filter is optional and exact: omitting it does not narrow the page. A `project_id` that is unknown or belongs to another org answers an empty page, not 404; another org's `o` is 404 (00 §9.2). A present but invalid `project_id`, `type`, `severity`, `from`, `to`, `cursor` or `limit` is 422 `request_invalid` with `details[].path` naming the parameter. Rows are written by the emitter modules, never by this read.
  */
 export const listSecurityEvents = <ThrowOnError extends boolean = false>(options: Options<ListSecurityEventsData, ThrowOnError>): RequestResult<ListSecurityEventsResponses, ListSecurityEventsErrors, ThrowOnError> => (options.client ?? client).get<ListSecurityEventsResponses, ListSecurityEventsErrors, ThrowOnError>({
     security: [{

@@ -859,6 +859,45 @@ export type AuditListResponse = {
 };
 
 /**
+ * One tenant-visible security event (11.5.1 AC3, migration `security_event`). `actor` is `{kind, id}` and `details` carries ids, hashes and counts only: never a raw payload, a secret or a reason text (11.1.1 baseline §4).
+ */
+export type SecurityEventItem = {
+    id: string;
+    /**
+     * Null for an event that belongs to no project.
+     */
+    project_id?: string | null;
+    /**
+     * The five V1 types; `injection_attempt` arrives in V2 (11.4.1-T2).
+     */
+    type: 'auth_failure' | 'cross_tenant_probe' | 'secret_scanner_alert' | 'kill_switch_used' | 'support_access';
+    severity: 'info' | 'warning' | 'critical';
+    /**
+     * Who caused the event (`{kind, id}`, no secrets).
+     */
+    actor: {
+        kind?: string;
+        id?: string | null;
+    };
+    /**
+     * Ids, hashes and counts only; never a raw payload, a secret or a reason text.
+     */
+    details: {
+        [key: string]: unknown;
+    };
+    request_id?: string | null;
+    created_at: string;
+};
+
+/**
+ * 00 §9.1 cursor page of `SecurityEventItem`, newest first.
+ */
+export type SecurityEventList = {
+    items: Array<SecurityEventItem>;
+    next_cursor: string | null;
+};
+
+/**
  * One organization in `GET /v1/orgs`.
  */
 export type OrganizationSummaryDto = {
@@ -2141,6 +2180,31 @@ export type AuditFrom = string;
  * Exclusive upper bound on `created_at` (ISO 8601).
  */
 export type AuditTo = string;
+
+/**
+ * Exact `project_id` (11.5.1 AC3). An id that is unknown or belongs to another org answers an empty page, not 404; a present but non-uuid value is 422 `request_invalid` with `details[].path` = `project_id`.
+ */
+export type SecurityEventProjectFilter = string;
+
+/**
+ * Exact `type` from the closed V1 set (`injection_attempt` arrives in V2, 11.4.1-T2); any other value is 422 `request_invalid` with `details[].path` = `type`.
+ */
+export type SecurityEventType = 'auth_failure' | 'cross_tenant_probe' | 'secret_scanner_alert' | 'kill_switch_used' | 'support_access';
+
+/**
+ * Exact `severity` from the closed set; any other value is 422 `request_invalid` with `details[].path` = `severity`.
+ */
+export type SecurityEventSeverity = 'info' | 'warning' | 'critical';
+
+/**
+ * Inclusive lower bound on `created_at` (ISO 8601); a malformed value is 422 `request_invalid` with `details[].path` = `from`.
+ */
+export type SecurityEventFrom = string;
+
+/**
+ * Exclusive upper bound on `created_at` (ISO 8601); a malformed value is 422 `request_invalid` with `details[].path` = `to`.
+ */
+export type SecurityEventTo = string;
 
 /**
  * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
@@ -6309,6 +6373,26 @@ export type ListSecurityEventsData = {
          */
         cursor?: string;
         limit?: number;
+        /**
+         * Exact `project_id` (11.5.1 AC3). An id that is unknown or belongs to another org answers an empty page, not 404; a present but non-uuid value is 422 `request_invalid` with `details[].path` = `project_id`.
+         */
+        project_id?: string;
+        /**
+         * Exact `type` from the closed V1 set (`injection_attempt` arrives in V2, 11.4.1-T2); any other value is 422 `request_invalid` with `details[].path` = `type`.
+         */
+        type?: 'auth_failure' | 'cross_tenant_probe' | 'secret_scanner_alert' | 'kill_switch_used' | 'support_access';
+        /**
+         * Exact `severity` from the closed set; any other value is 422 `request_invalid` with `details[].path` = `severity`.
+         */
+        severity?: 'info' | 'warning' | 'critical';
+        /**
+         * Inclusive lower bound on `created_at` (ISO 8601); a malformed value is 422 `request_invalid` with `details[].path` = `from`.
+         */
+        from?: string;
+        /**
+         * Exclusive upper bound on `created_at` (ISO 8601); a malformed value is 422 `request_invalid` with `details[].path` = `to`.
+         */
+        to?: string;
     };
     url: '/orgs/{o}/security-events';
 };
@@ -6327,6 +6411,10 @@ export type ListSecurityEventsErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
@@ -6340,9 +6428,9 @@ export type ListSecurityEventsError = ListSecurityEventsErrors[keyof ListSecurit
 
 export type ListSecurityEventsResponses = {
     /**
-     * Page of security events
+     * Page of security events, newest first
      */
-    200: CursorList;
+    200: SecurityEventList;
 };
 
 export type ListSecurityEventsResponse = ListSecurityEventsResponses[keyof ListSecurityEventsResponses];
