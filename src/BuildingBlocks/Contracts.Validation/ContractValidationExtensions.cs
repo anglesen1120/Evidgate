@@ -44,6 +44,12 @@ public static class ContractSchemaKeys
     public const string PolicyRevision = "policy-revision.v1";
 
     /// <summary>
+    /// <c>contracts/schemas/healing-switch-set.v1.json</c> — the <c>PUT /v1/healing/switch</c> request body
+    /// (08.6.3-T1).
+    /// </summary>
+    public const string HealingSwitchSet = "healing-switch-set.v1";
+
+    /// <summary>
     /// <c>contracts/schemas/authoring-steps.v1.json</c> — the <c>manual_test_case.steps</c> document
     /// of the manual test case create/patch routes (13.1.1-T1.2). Not a request body: it is the
     /// jsonb value carried inside one, so it declares no <c>x-max-bytes</c>.

@@ -59,6 +59,9 @@ public sealed class CatalogueTests : HarnessTest
     private static readonly Guid OrgA = Guid.Parse("11111111-1111-7111-8111-111111111111");
     private static readonly Guid OrgB = Guid.Parse("22222222-2222-7222-8222-222222222222");
 
+    /// <summary>The fixed id of the built-in system switch row this suite seeds for the 0052 surface.</summary>
+    private static readonly Guid SystemSwitchId = Guid.Parse("33333333-3333-7333-8333-333333333333");
+
     /// <summary>
     /// The catalogue surfaces AC5 names, with the clause that selects their built-in rows and the
     /// expression that yields a row key as text. <c>permission</c> has no <c>org_id</c> column, so
@@ -69,6 +72,9 @@ public sealed class CatalogueTests : HarnessTest
         ("public.permission", "true", "code"),
         ("public.role", "org_id is null", "id::text"),
         ("public.role_permission", "org_id is null", "id::text"),
+        // 08.6.3 (0052): the system-scope kill switch is the platform-wide built-in row every tenant
+        // reads; its tenant/project siblings are the per-org custom rows (a separate suite's subject).
+        ("public.healing_switch", "scope = 'system'", "id::text"),
     ];
 
     private readonly ITestOutputHelper _output;
@@ -163,6 +169,7 @@ public sealed class CatalogueTests : HarnessTest
         await CheckPermissionWritesAsync(failures);
         await CheckRoleWritesAsync(failures);
         await CheckRolePermissionWritesAsync(failures);
+        await CheckHealingSwitchWritesAsync(failures);
 
         failures.ShouldBeEmpty(
             $"the catalogue is not read-only for the application role:{Environment.NewLine}"
@@ -328,6 +335,18 @@ public sealed class CatalogueTests : HarnessTest
         }
 
         await Fixture.SeedAsync(migration[start..(end + SeedEnd.Length)], [], Token);
+
+        // 08.6.3 (0052) seeds no row: a database with no switch row resolves to the `shadow` posture,
+        // so the built-in row this suite probes is created by the operator's own write path (the
+        // tenant-less system row, which the app role cannot write directly), once, as the owner seam.
+        await Fixture.SeedAsync(
+            """
+            insert into public.healing_switch (id, scope, org_id, project_id, mode, reason, set_by, at)
+            values (@id, 'system', null, null, 'shadow', 'catalogue probe', @set_by, now())
+            on conflict do nothing
+            """,
+            [("id", SystemSwitchId), ("set_by", OrgA)],
+            Token);
     }
 
     /// <summary><c>public.permission</c>: 0010 revokes INSERT/UPDATE/DELETE from the app role, so every command is a 42501.</summary>
@@ -437,6 +456,39 @@ public sealed class CatalogueTests : HarnessTest
         AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
 
         await AssertUnchangedAsync(table, "org_id is null", "id::text", before, failures);
+        _output.WriteLine("{0}: insert/update/delete/truncate refused; {1} built-in row(s) unchanged", table, before.Count);
+    }
+
+    /// <summary>
+    /// <c>public.healing_switch</c> (08.6.3/0052): the system row is the platform's, so an app-role
+    /// INSERT of another one fails the <c>WITH CHECK</c> (<c>org_id</c> NULL never equals the current
+    /// org), an UPDATE of it matches zero rows, and DELETE is revoked outright.
+    /// </summary>
+    private async Task CheckHealingSwitchWritesAsync(List<string> failures)
+    {
+        const string table = "public.healing_switch";
+        var before = await ReadKeysAsync(table, "scope = 'system'", "id::text");
+        before.ShouldNotBeEmpty($"{table}: the system switch row is missing — the write probe would have nothing to target");
+
+        var insert = await RefusalAsync(
+            "insert into public.healing_switch (id, scope, org_id, project_id, mode, set_by, at) values (@key::uuid, 'system', null, null, 'disabled', @key::uuid, now())",
+            ("key", Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture)));
+        AssertRefused(table, "INSERT of a second system row", insert, silentAllowed: false, failures);
+
+        var update = await RefusalAsync(
+            "update public.healing_switch set mode = 'disabled' where scope = 'system'");
+        AssertRefused(table, "UPDATE of the system row", update, silentAllowed: true, failures);
+
+        var delete = await RefusalAsync(
+            "delete from public.healing_switch where scope = 'system'");
+        AssertRefused(table, "DELETE of the system row", delete, silentAllowed: true, failures);
+
+        // SEC2: TRUNCATE is not scoped by row level security, so the only refusal available is the
+        // missing privilege — 0052 never grants it and 0001's default privileges do not include it.
+        var truncate = await RefusalAsync("truncate public.healing_switch");
+        AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
+
+        await AssertUnchangedAsync(table, "scope = 'system'", "id::text", before, failures);
         _output.WriteLine("{0}: insert/update/delete/truncate refused; {1} built-in row(s) unchanged", table, before.Count);
     }
 

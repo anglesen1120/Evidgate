@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "healing-switch-set.v1.json",
+  "title": "Healing switch set v1",
+  "description": "The body of PUT /v1/healing/switch (08.6.3-T1, 00 §8.7, rulings T33/T72): the kill switch of one scope. The server refuses scope=system with 403 forbidden_scope (only the operator ingress writes the platform row), a project scope without a project_id, and a tenant scope that carries one, each as 422 with a field detail. `mode` is deliberately a free string here instead of an enum: the mode vocabulary is checked by the handler so that `unavailable` and every other value answer 422 invalid_switch_mode rather than a generic schema failure, and `enabled` answers 422 mode_not_available while the deployment runs with Healing:Apply off. The schema is closed: a member not listed here is refused with its JSON pointer in error.details[].path. The transport cap is 4 KiB.",
+  "x-max-bytes": 4096,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope", "mode"],
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": ["system", "tenant", "project"],
+      "description": "The scope the switch is set on; `system` is refused by this route (403 forbidden_scope)"
+    },
+    "project_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "The project of a `project` scope row; refused on a `tenant` row and required on a `project` row"
+    },
+    "mode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "description": "One of enabled, shadow, disabled — anything else, `unavailable` included, is 422 invalid_switch_mode"
+    },
+    "reason": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 2000,
+      "description": "Why the switch was set, 1–2000 characters when present"
+    }
+  }
+}

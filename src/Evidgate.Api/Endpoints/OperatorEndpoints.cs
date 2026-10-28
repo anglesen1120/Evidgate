@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using Evidgate.Api.OperatorIngress;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Healing.Application;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Evidgate.Api.Endpoints;
@@ -40,6 +42,15 @@ public static class OperatorEndpoints
 
         group.MapGet("/dead-letter", ListDeadLetterAsync);
         group.MapPost("/dead-letter/{id:guid}/replay", ReplayDeadLetterAsync);
+
+        // 08.6.3-T1 (AC1/T72): the platform-wide healing switch. The same gate and envelope filters as the task
+        // routes, and the same ExcludeFromDescription posture: the operator surface is never in the served document.
+        var healing = app.MapGroup("/internal/operator/healing")
+            .ExcludeFromDescription()
+            .AddEndpointFilter<RequireOperatorFilter>()
+            .AddEndpointFilter<ResultEndpointFilter>();
+
+        healing.MapPost("/switch", SetHealingSwitchSystemAsync);
     }
 
     /// <summary>
@@ -130,6 +141,36 @@ public static class OperatorEndpoints
                 "the task is not dead-lettered")),
         };
     }
+
+    /// <summary>
+    /// <c>POST /internal/operator/healing/switch</c> → <see cref="HealingSystemSwitchWriter"/>: the
+    /// platform-wide row, set through migration 0052's definer on a non-tenant connection (08.6.3 §5, T72). The
+    /// principal's user id is the row's <c>set_by</c>; an unauthenticated caller is 401 and an authenticated one
+    /// without a subject 403, so a system write can never be attributed to nobody. 422
+    /// <c>invalid_switch_mode</c> / <c>mode_not_available</c> come from the same gate the tenant route uses.
+    /// </summary>
+    private static async Task<Result<HealingSwitchView>> SetHealingSwitchSystemAsync(
+        HealingSystemSwitchRequest request,
+        HttpContext context,
+        HealingSystemSwitchWriter writer)
+    {
+        if (context.User?.Identity?.IsAuthenticated != true)
+        {
+            return Result.Failure<HealingSwitchView>(new Error(
+                ApiErrorCode.Unauthenticated,
+                "the operator principal is not authenticated",
+                StatusCodes.Status401Unauthorized));
+        }
+
+        var subject = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue("sub");
+        if (!Guid.TryParse(subject, out var setBy))
+        {
+            return Result.Failure<HealingSwitchView>(Error.Forbidden(
+                "the operator principal carries no user id, so the switch change cannot be attributed"));
+        }
+
+        return await writer.SetAsync(request.Mode, request.Reason, setBy, context.RequestAborted).ConfigureAwait(false);
+    }
 }
 
 /// <summary>
@@ -138,3 +179,11 @@ public static class OperatorEndpoints
 /// <c>available_at</c> the guarded update set.
 /// </summary>
 public sealed record ReplayDeadLetterTaskResponse(Guid Id, string State, int Attempts, DateTime AvailableAt);
+
+/// <summary>
+/// The body of <c>POST /internal/operator/healing/switch</c> (08.6.3 §5): the platform-wide mode and its reason.
+/// <c>set_by</c> is never in the body — it is the authenticated operator's own id.
+/// </summary>
+/// <param name="Mode">One of <c>enabled</c>, <c>shadow</c>, <c>disabled</c>.</param>
+/// <param name="Reason">Why the switch was set, 1–2000 characters when present.</param>
+public sealed record HealingSystemSwitchRequest(string? Mode, string? Reason);

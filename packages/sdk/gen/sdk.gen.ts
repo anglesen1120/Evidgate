@@ -1546,7 +1546,9 @@ export const rejectHealingCandidate = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
- * Resolved healing availability per tenant/project (most restrictive wins)
+ * Resolved healing availability per scope (most restrictive wins)
+ *
+ * The healing kill switch in force (08.6.3-T1, 00 §8.7, rulings T33/T72). Three scopes may carry a row — the platform-wide `system` row the operator ingress writes, the org's `tenant` row and an optional `project` row — and each is returned as stored, `null` when that scope has none. The resolved value is the most restrictive stored mode (`disabled` > `shadow` > `enabled`), and a database with no row at any scope resolves to `shadow`: the V1 posture of healing that decides but never applies. `unavailable` exists in the vocabulary (00 §8.7) but this story never produces it — it is an observation of 08.6.3-T2's health probes, and both `dependency_health` fields are `null` until then (`null` means not observed, never healthy). A `project_id` outside the credential's or the request's scope is `403 project_scope_mismatch`; an unknown, soft-deleted or other-tenant one is `404` (also for another tenant's project). One SQL statement reads the three rows (AC9).
  */
 export const getHealingSwitch = <ThrowOnError extends boolean = false>(options?: Options<GetHealingSwitchData, ThrowOnError>): RequestResult<GetHealingSwitchResponses, GetHealingSwitchErrors, ThrowOnError> => (options?.client ?? client).get<GetHealingSwitchResponses, GetHealingSwitchErrors, ThrowOnError>({
     security: [{
@@ -1560,6 +1562,8 @@ export const getHealingSwitch = <ThrowOnError extends boolean = false>(options?:
 
 /**
  * Set the healing switch (`enabled|shadow|disabled` only, TL T33)
+ *
+ * Sets the switch of the org (`scope: tenant`) or of one of its projects (`scope: project` with `project_id`); `healing:configure` is required and `Idempotency-Key` is mandatory — a replay of the same key and body answers the same stored switch, and a different body under the same key is `409 idempotency_conflict` (00 §9.1). There is no `If-Match`: concurrency is the row's `version`, which the response carries. `scope: system` is `403 forbidden_scope` and is refused before any project lookup, so a tenant cannot probe ids through a system write; the platform row is written only by the operator ingress (`POST /internal/operator/healing/switch`). A `tenant` body carrying a `project_id` is `422` with `project_id: not_allowed`, a `project` body without one is `422 project_id: required`, a `project_id` outside the credential's or the request's scope is `403 project_scope_mismatch`, and an unknown, soft-deleted or other-tenant one is `404`. The mode vocabulary is `enabled`, `shadow`, `disabled`: anything else — `unavailable` included, because it is a dependency observation and not a configuration — is `422 invalid_switch_mode`, and `enabled` while the deployment runs with `Healing:Apply` off (the default in V1, ruling T33) is `422 mode_not_available`, on this route and on the operator's system write alike. The body is `contracts/schemas/healing-switch-set.v1.json` (closed, 4 KiB → `413`); `reason` is 1–2000 characters when present. A change writes one `healing.switch_changed` outbox event carrying the row's version, so a retry adds none.
  */
 export const setHealingSwitch = <ThrowOnError extends boolean = false>(options: Options<SetHealingSwitchData, ThrowOnError>): RequestResult<SetHealingSwitchResponses, SetHealingSwitchErrors, ThrowOnError> => (options.client ?? client).put<SetHealingSwitchResponses, SetHealingSwitchErrors, ThrowOnError>({
     security: [{

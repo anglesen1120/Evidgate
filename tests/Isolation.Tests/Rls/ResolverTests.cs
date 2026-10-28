@@ -99,6 +99,7 @@ public sealed class ResolverTests : HarnessTest
             "0017_identity_ci_token_issue.sql:67 (redefined 0019_identity_ci_review_fixes.sql:8)",
         ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:177",
         ["evidgate.session_cleanup"] = "0048_identity_session_routes.sql:479",
+        ["evidgate.healing_switch_set_system"] = "0052_healing_switch.sql:194",
     };
 
     /// <summary>

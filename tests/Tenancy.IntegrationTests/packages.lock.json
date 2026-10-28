@@ -1171,6 +1171,10 @@
       "evidgate.modules.healing": {
         "type": "Project",
         "dependencies": {
+          "Evidgate.BuildingBlocks.Contracts.Validation": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Healing.Contracts": "[1.0.0, )",
           "Mediator.Abstractions": "[3.0.2, )"

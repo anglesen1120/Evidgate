@@ -119,8 +119,15 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   all-zero value for the trace id — anything else is NULLED, never refused) and then stored AND hashed
   as the escaped RFC 8785 string the C# writer produces; **deploy order is migrate before app** (an old
   four-argument caller still binds through the defaults, a new six-argument caller needs the file
-  first), and the 0050 rows keep their NULL ids and still verify;
-  the next free number is `0052`;
+  first), and the 0050 rows keep their NULL ids and still verify, and `0052` is 08.6.3-T1's
+  `healing_switch` — one kill-switch row per scope (`system`/`tenant`/`project`), three partial unique
+  indexes carrying the identity, the `(org_id, project_id) → project (org_id, id)` composite FK, the
+  closed `mode in ('enabled','shadow','disabled')` vocabulary (`unavailable` is a runtime observation,
+  never a stored mode), the `catalogue` read policy that lets every tenant read the tenant-less system
+  row while the write policy keeps that row unreachable from a tenant transaction, and the
+  `evidgate.healing_switch_set_system` definer the operator ingress writes the system row through
+  (`contracts/rls-exceptions.txt` lists the table because of its NULL-org row);
+  the next free number is `0053`;
   a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
@@ -347,6 +354,39 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   grants) and touches no data. Rollback is the reverse file: drop the six-argument definition and
   re-state 0050's four-argument one (`0050:108-290`), with the OLD application build in place
   first; rows already written keep their ids.
+
+## Notes on `healing_switch` (08.6.3-T1, `0052`)
+
+- One row per scope, and the scope IS the identity: `healing_switch_system_key (scope) where scope =
+  'system'`, `healing_switch_tenant_key (org_id) where scope = 'tenant'` and
+  `healing_switch_project_key (org_id, project_id) where scope = 'project'`. The resolver reads
+  `where scope = 'system' or (org_id = <org> and scope in ('tenant','project'))` and takes the most
+  restrictive row (`disabled` > `shadow` > `enabled`); with no row at any scope it resolves to
+  `shadow` (the V1 posture: shadow healing that never applies), which is a resolver rule, not a
+  stored value — this file inserts nothing.
+- `mode` is a closed vocabulary and `'unavailable'` is deliberately NOT in it: availability is a
+  runtime observation of a dependency (`dependency_health`, 08.6.3 §5), never something an operator
+  stores. `healing_switch_mode_check` refuses the value at the database, so a caller cannot widen the
+  vocabulary by skipping the route's validation.
+- The tenant-less `scope = 'system'` row (`org_id IS NULL`) is why the table is listed in
+  `contracts/rls-exceptions.txt` as `catalogue`: its read policy is the documented all-org read shape
+  (`org_id IS NULL OR org_id = evidgate.current_org_id()`), which the boot self-check
+  (`permissive_policy_unscoped`) accepts only for that kind. The write policy is the plain tenant
+  predicate, so a tenant transaction reads the system row but cannot touch it: an app-role UPDATE of
+  it affects zero rows, a DELETE is a privilege error (no DELETE grant exists), and an INSERT with
+  `org_id` NULL fails the WITH CHECK (`42501`).
+- The system row's only writer is `evidgate.healing_switch_set_system` (`SECURITY DEFINER`, pinned
+  `search_path = ''`, EXECUTE to `evidgate_app` alone, and exempt from the per-call audit row because
+  `audit_log` is chained per org and this row has no org — the operator ingress `RequireOperatorFilter`
+  and the security_event receiver 11.5.1-T5 attest the action instead). It upserts and returns the
+  stored row, refuses a mode outside the three with `22023`, and survives a concurrent first write by
+  re-running its update on the `unique_violation`.
+- The app role holds `select, insert` plus `update (mode, reason, set_by, at, updated_at, version)`:
+  a switch's identity (`id`, `scope`, `org_id`, `project_id`) is unwritable and there is no DELETE at
+  all, so a tenant can move its own switch between `enabled`/`shadow`/`disabled` and nothing else.
+- Rollback: `drop function if exists evidgate.healing_switch_set_system(text, text, uuid); drop table
+  if exists public.healing_switch;` plus the `contracts/rls-exceptions.txt` line, in the same change.
+  The table holds configuration only.
 
 ## Notes on `evidence_revision` (05.3.2-T5, `0049`)
 

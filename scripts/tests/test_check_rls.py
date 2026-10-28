@@ -213,6 +213,24 @@ class AuditExemptions(unittest.TestCase):
         findings = run(EXEMPT_DEFINER.format(name="evidgate.session_list"))
         self.assertEqual(rules(findings), {"definer_audit"}, "the key is the qualified name, not the bare one")
 
+    def test_the_healing_switch_definer_is_exempt_only_under_its_exact_name(self):
+        """08.6.3/`0052`: the tenant-less system switch has no org chain to write into.
+
+        The exemption has to stay as narrow as the reason: the same spelling in another schema, and
+        a neighbour whose name merely starts with it, are both ordinary definers that owe an audit
+        row.
+        """
+        self.assertIn("evidgate.healing_switch_set_system", check_rls.DEFINER_AUDIT_EXEMPT)
+        self.assertEqual(run(EXEMPT_DEFINER.format(name="evidgate.healing_switch_set_system")), [])
+
+        for unlisted in (
+            "public.healing_switch_set_system",
+            "evidgate.healing_switch_set_system_v2",
+            "evidgate.healing_switch_set_tenant",
+        ):
+            with self.subTest(name=unlisted):
+                self.assertEqual(rules(run(EXEMPT_DEFINER.format(name=unlisted))), {"definer_audit"})
+
 
 class RealRepository(unittest.TestCase):
     def test_migrations_of_this_repository_are_clean(self):
