@@ -23,6 +23,31 @@ function specificity(selector: string): number {
   return (selector.match(/\.[\w-]+|\[[^\]]+\]/g) ?? []).length;
 }
 
+/**
+ * F56: `CdkVirtualScrollViewport.setRenderedRange` publishes the new range synchronously but
+ * schedules the re-render from a microtask, so a single `whenStable()` can resolve before the
+ * bounded window reaches the DOM under CPU load. Poll with a forced change detection, bounded:
+ * the first pass renders the requested window, and that render is what this observes, before
+ * the fixed-size strategy's post-render recompute re-expands the range from the jsdom scroll
+ * offset. The caller's strict assertions then judge that rendered window.
+ */
+async function waitForRenderedWindow<T>(
+  fixture: ComponentFixture<T>,
+  root: HTMLElement,
+  expected: { readonly ariaRowIndex: string; readonly rowId: string },
+): Promise<void> {
+  await vi.waitFor(
+    () => {
+      fixture.detectChanges();
+      const firstRow = root.querySelector('.body-table [role="row"]');
+      expect(firstRow?.getAttribute('aria-rowindex')).toBe(expected.ariaRowIndex);
+      expect(firstRow?.getAttribute('data-row-id')).toBe(expected.rowId);
+    },
+    // Bounded well below vitest's 5 s test timeout so a real mismatch reports its own assertion.
+    { timeout: 3000, interval: 10 },
+  );
+}
+
 /** The `ResizeObserver` surface the lifecycle spec records, as plain spies (no `this` binding). */
 interface ObserverSpies {
   observe: Mock;
@@ -200,7 +225,7 @@ describe('DataTableComponent', () => {
     expect(table.getAttribute('aria-rowcount')).toBe('5001');
     // Set a public CDK rendered range; jsdom cannot prove physical scrolling.
     viewport.setRenderedRange({ start: 400, end: 420 });
-    await fixture.whenStable();
+    await waitForRenderedWindow(fixture, root, { ariaRowIndex: '402', rowId: 'demo-400' });
     expect(root.querySelector('.body-table [role="row"]')?.getAttribute('aria-rowindex')).toBe(
       '402',
     );

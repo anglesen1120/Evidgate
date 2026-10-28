@@ -13,11 +13,6 @@ namespace Isolation.Tests.Api;
 /// metadata, and the coverage gate goes red for an uncovered, stale or unspecified
 /// route and green once the route is covered or allowlisted.
 /// </summary>
-// The tests are pure, but this assembly's DatabaseFixture assembly fixture
-// (tests/Shared/DatabaseFixture.cs:16) starts Testcontainers for every test it runs, so
-// a Docker-less run (--filter-not-trait Category=Docker, smoke-clean-build.sh) would
-// fail them with DockerUnavailableException; same defect class as 01.6.1 Notes.
-[Trait("Category", "Docker")]
 public sealed class RouteCoverageTests
 {
     private static readonly ApiRoute GetOrg = new("GET", "/v1/orgs/{o}");
