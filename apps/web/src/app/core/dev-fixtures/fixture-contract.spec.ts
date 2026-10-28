@@ -1260,13 +1260,13 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     // `0033` stores no `previous_policy_revision_id` and no `changed`, and this route does not
     // serve them). A fixture that drifted either way would make the wizard's `done[5]` a claim
     // about a body the server cannot produce.
-    expect(
-      FIXTURE_ROUTE_ROWS.find((route) => route.operationId === 'getPolicyActivation'),
-    ).toEqual({
-      operationId: 'getPolicyActivation',
-      method: 'GET',
-      path: '/projects/{p}/policy-activation',
-    });
+    expect(FIXTURE_ROUTE_ROWS.find((route) => route.operationId === 'getPolicyActivation')).toEqual(
+      {
+        operationId: 'getPolicyActivation',
+        method: 'GET',
+        path: '/projects/{p}/policy-activation',
+      },
+    );
 
     const names = [
       'policy-activation-read-ok',
@@ -1308,18 +1308,14 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(notFound.status).toBe(404);
     const notFoundBody = notFound.body;
     expect(
-      isRecord(notFoundBody) &&
-        isRecord(notFoundBody['error']) &&
-        notFoundBody['error']['code'],
+      isRecord(notFoundBody) && isRecord(notFoundBody['error']) && notFoundBody['error']['code'],
     ).toBe('not_found');
 
     const forbidden = corpusDocument('policy-activation-read-forbidden');
     expect(forbidden.status).toBe(403);
     const forbiddenBody = forbidden.body;
     expect(
-      isRecord(forbiddenBody) &&
-        isRecord(forbiddenBody['error']) &&
-        forbiddenBody['error']['code'],
+      isRecord(forbiddenBody) && isRecord(forbiddenBody['error']) && forbiddenBody['error']['code'],
     ).toBe('forbidden');
   });
 

@@ -550,10 +550,7 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
 
   it('readPolicyActivation() reads the stored activation by project id', async () => {
     const read = service.readPolicyActivation('p-1');
-    const request = await takeRequest(
-      httpMock,
-      `${API_BASE_URL}/projects/p-1/policy-activation`,
-    );
+    const request = await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/policy-activation`);
     expect(request.request.method).toBe('GET');
     // A read takes no Idempotency-Key and no XSRF header: the contract asks for neither.
     expect(request.request.headers.has('Idempotency-Key')).toBe(false);
