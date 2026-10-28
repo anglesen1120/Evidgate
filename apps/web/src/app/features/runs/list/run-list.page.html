@@ -95,8 +95,9 @@
         <p>{{ failure.message }}</p>
         <code>{{ failure.code }}</code>
         @if (failure.retryable) {
-          <!-- Only the wait disables this control: never its own request, which would drop the
-               focus it holds mid-retry; the store refuses a second follow while one is in flight. -->
+          <!-- Only the wait disables this control, never its own request. The store clears the paging
+               error when a follow starts, so this button unmounts until the request ends;
+               `handoffAfterLoadMore` then returns focus (the store refuses a second follow meanwhile). -->
           <button #pagingRetryControl type="button" [disabled]="!retryReady()" (click)="loadMore()">
             {{ copy.retryMore }}
           </button>

@@ -113,10 +113,18 @@ export class RequestStateComponent {
   private readonly injector = inject(Injector);
   /** The status the replacement effect saw last, so only a move out of `error` reacts. */
   private lastStatus: 'loading' | 'ready' | 'error' | null = null;
-  /** Focus reached this replacement at some point: its own panels or the content it projects. */
+  /**
+   * Focus reached this replacement during the current failure: its own panels or the page content
+   * it projects. Ownership is scoped to one failure — a new failure starts unowned and a recovery
+   * spends the claim — so an earlier visit cannot pull focus off `body` later.
+   */
   private hadFocus = false;
   /** A handoff is queued for the render in which the failure panel is gone. */
   private handoff = false;
+  /** Where this component last sent focus, while that loan is still the place holding it. */
+  private parked: HTMLElement | null = null;
+  /** A return to the retry control is queued for the render in which it answers again. */
+  private resume = false;
 
   constructor() {
     // The visitor's Retry is inside the panel this component replaces, so activating it destroys
@@ -127,9 +135,18 @@ export class RequestStateComponent {
     // queued while this component owned it, and it is dropped if focus landed outside by then.
     effect(() => {
       const status = this.status();
-      const replaced = this.lastStatus === 'error' && status !== 'error';
+      const previous = this.lastStatus;
       this.lastStatus = status;
-      if (!replaced || !this.hadFocus || this.focusElsewhere()) return;
+      // A failure is the only place this component may claim focus: entering one starts with
+      // nothing owned, so focus left on `body` at that point is the visitor's own choice.
+      if (status === 'error' && previous !== 'error') this.hadFocus = false;
+      if (previous !== 'error' || status === 'error') return;
+      // Leaving `error` spends the claim, whether or not the handoff takes it.
+      const claimed = this.hadFocus;
+      this.hadFocus = false;
+      // A settled recovery ends the loan: focus belongs to the page again.
+      if (status === 'ready') this.parked = null;
+      if (!claimed || this.focusElsewhere()) return;
       this.handoff = true;
       afterNextRender(() => this.finishHandoff(), { injector: this.injector });
     });
@@ -143,6 +160,17 @@ export class RequestStateComponent {
       if (!(active instanceof HTMLElement) || !this.host.nativeElement.contains(active)) return;
       this.handoff = true;
       afterNextRender(() => this.finishHandoff(), { injector: this.injector });
+    });
+    // That move is a loan, not a landing: while the control the visitor asked with answers again
+    // in the same failure, the place this component borrowed comes back to it — unless focus has
+    // moved somewhere the visitor chose since, in which case it is left alone.
+    effect(() => {
+      const answers = this.status() === 'error' && this.retryEligible() && !this.retryBusy();
+      const parked = this.parked;
+      if (!answers || parked === null || !parked.isConnected) return;
+      if (this.document.activeElement !== parked) return;
+      this.resume = true;
+      afterNextRender(() => this.finishResume(), { injector: this.injector });
     });
   }
 
@@ -180,6 +208,32 @@ export class RequestStateComponent {
     if (addedTabIndex) {
       target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true });
     }
+    // Remember the loan, so a control that answers again in the same failure gets the place back.
+    this.parked = target;
+    // The claim is spent with the move: focus belongs to the page until it comes back inside.
+    this.hadFocus = false;
+  }
+
+  /** Returns the loaned place to the retry control, only while focus is still where this put it. */
+  private finishResume(): void {
+    if (!this.resume) return;
+    this.resume = false;
+    const parked = this.parked;
+    this.parked = null;
+    // Anything but the loan still holding focus is where the visitor chose to be: leave it there.
+    if (parked === null || this.document.activeElement !== parked) return;
+    const control = this.retryControl();
+    if (control === null) return;
+    control.focus();
+  }
+
+  /** The failure panel's own retry control, once it answers again; the panel's only button. */
+  private retryControl(): HTMLElement | null {
+    return (
+      Array.from(
+        this.host.nativeElement.querySelectorAll<HTMLButtonElement>('section button'),
+      ).find((control) => !control.disabled) ?? null
+    );
   }
 
   private handoffTarget(): HTMLElement | null {

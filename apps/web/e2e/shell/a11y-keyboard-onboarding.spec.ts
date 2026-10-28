@@ -1,7 +1,9 @@
 // 09.8.1-T1.2 (plan 09.8.1 §10 T1.2, story AC2): the onboarding wizard walked with the keyboard
 // only — `page.keyboard` for every interaction, no `page.click`, no `locator.click`, no
-// `{ force: true }` — asserting `document.activeElement` by element identity (test id, id, role) at
-// every stop, and that the focused element actually renders its focus ring.
+// `locator.focus()`, no `{ force: true }` — asserting `document.activeElement` by element identity
+// (test id, id, role) at every stop, and that the focused element actually renders its focus ring.
+// Each walk starts a fresh document at the skip link and enters the main region with Enter, so
+// every stop on the way is one a keyboard visitor really crosses.
 //
 // The walkthrough follows `docs/a11y/parts/onboarding.md` "Keyboard walkthrough plan" W1–W4 and
 // stops at the last good step wherever a recorded finding blocks the next one. No assertion in this
@@ -85,18 +87,35 @@ async function pressTab(page: Page, times = 1): Promise<void> {
 }
 
 /**
+ * Puts focus on the wizard's main region with real keys only, for the walks that start inside it:
+ * a fresh document starts its tab order at the shell's skip link, and Enter on it activates the
+ * skip target (`main#main-content`, `tabindex="-1"`). Both stops are asserted by identity and by
+ * their focus ring.
+ *
+ * This replaces `page.locator(MAIN).focus()`, which AC2 does not allow (a programmatic focus move
+ * is not a keyboard one) and which also skipped the two stops a keyboard visitor really crosses on
+ * the way in.
+ */
+async function enterMainByKeyboard(page: Page): Promise<void> {
+  await pressTab(page);
+  await expectKeyboardFocus(page, page.locator(SKIP_LINK), 'the skip link before the walk');
+  await page.keyboard.press('Enter');
+  await expectKeyboardFocus(page, page.locator(MAIN), 'the main region before the walk');
+}
+
+/**
  * AC2's second clause: the focused control is visibly focused, not merely focused. Every focusable
  * in these flows declares the `--eg-focus` ring (2px, 2px offset — `onboarding-shell.component.css`,
  * `connect-ci.page.css`, `state-panel.css`, `cli-quickstart.component.css`, `connect-step-reveal
  * .component.css`, `enable-collection.page.css`, `shell.component.css`); an `outline: none` anywhere
  * on that path would leave a keyboard visitor guessing, so the computed outline is what is asserted.
  *
- * Every call follows a Tab or Enter, which is what makes the assertion honest for the two targets
- * styled `:focus-visible` only (`main#main-content`, `#onboarding-step-title`): a programmatic
- * `.focus()` with no keyboard interaction behind it would not match that selector, so a future stop
- * reached that way must assert focus identity only, not a ring. The headings this suite reaches
- * programmatically are styled on `:focus` instead (the reveal heading, the connect panel headings,
- * `#enable-enabled-heading`), so they render a ring either way.
+ * Every call follows a Tab or Enter — this file moves focus only with real key presses, never with
+ * `locator.focus()` — which is what makes the assertion honest for the two targets styled
+ * `:focus-visible` only (`main#main-content`, `#onboarding-step-title`): both are reached by an
+ * Enter, so the browser reports them as keyboard-focused. The headings the pages focus themselves
+ * after a step move (the reveal heading, the connect panel headings, `#enable-enabled-heading`) are
+ * styled on `:focus` instead, so they render a ring either way.
  */
 async function expectFocusRing(page: Page, context: string): Promise<void> {
   const focused = await page.evaluate(() => {
@@ -271,8 +290,9 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 2);
 
-    // 1. The stepper first: this seed enables steps 1–2 and leaves 3–5 natively disabled.
-    await page.locator(MAIN).focus();
+    // 1. The stepper first: this seed enables steps 1–2 and leaves 3–5 natively disabled. The walk
+    //    into the region is the skip link and its Enter, not a programmatic focus move.
+    await enterMainByKeyboard(page);
     await pressTab(page);
     await expectKeyboardFocus(page, stepButton(page, 1), 'stepper 1 is enabled at step 2');
     await pressTab(page);
@@ -410,8 +430,9 @@ test.describe('W3 — step 5, enable collection', () => {
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 5);
 
-    // 1. All five stepper buttons are enabled at step 5; the confirm follows them directly.
-    await page.locator(MAIN).focus();
+    // 1. All five stepper buttons are enabled at step 5; the confirm follows them directly. The walk
+    //    into the region is the skip link and its Enter, not a programmatic focus move.
+    await enterMainByKeyboard(page);
     await pressTab(page, 5);
     await expectKeyboardFocus(page, stepButton(page, 5), 'stepper 5 is the last stepper stop');
     await expect(stepItem(page, 5)).toHaveAttribute('aria-current', 'step');
@@ -466,8 +487,8 @@ test.describe('W3 — step 5, enable collection', () => {
     await expect(confirm).not.toHaveAttribute('aria-describedby', /enable-permission/);
 
     // A keyboard user therefore can never submit a state the server refused to describe: the sixth
-    // Tab skips the disabled confirm and lands on Back.
-    await page.locator(MAIN).focus();
+    // Tab after the main region skips the disabled confirm and lands on Back.
+    await enterMainByKeyboard(page);
     await pressTab(page, 6);
     await expectKeyboardFocus(page, backButton(page), 'Back, with the disabled confirm skipped');
   });
@@ -485,8 +506,9 @@ test.describe('W4 — resume at step 3, Back into step 2, health panel and quick
     await expectCurrentStep(page, 3);
 
     // 1. Three enabled stepper buttons at step 3; the step-3 placeholder holds no focusable, so the
-    //    next stop after the stepper is Back.
-    await page.locator(MAIN).focus();
+    //    next stop after the stepper is Back. The walk into the region is the skip link and its
+    //    Enter, not a programmatic focus move.
+    await enterMainByKeyboard(page);
     await pressTab(page, 3);
     await expectKeyboardFocus(page, stepButton(page, 3), 'stepper 3 is the last stepper stop');
     await pressTab(page);

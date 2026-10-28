@@ -285,6 +285,59 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     await expect(providerButton(page, 'Google')).toBeFocused();
   });
 
+  test('an expiry that interrupts a client-side navigation hands focus to the heading', async ({
+    page,
+  }) => {
+    // F-LOGIN-01's client-side half, which the deep link above cannot reach (`Router.navigated` is
+    // false there, so the document keeps the browser's own focus start). `/welcome` is the one shell
+    // screen that resolves no scope, so the document boots authenticated with the expiry toggle
+    // already seeded — `FixtureToggles` reads `location.search` once, in its constructor
+    // (`core/dev-fixtures/fixture-toggles.ts:78-96`) — and no project list has been read yet.
+    await page.goto(withVariant(localePath('en', '/welcome'), EXPIRED_SCOPE));
+    await expect(page.locator('#main-content h1')).toHaveText('No organization yet');
+    await expect(page.locator('app-shell')).toHaveCount(1);
+    expect(new URL(page.url()).pathname).toBe('/en/welcome');
+
+    // The document's own time origin: it proves the redirect below is a router navigation inside the
+    // loaded app, not a second page load that happens to land on `/login`.
+    const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+
+    // Skip link, then the route's own region — the shell's two fixed first stops.
+    await page.keyboard.press('Tab');
+    await expect(page.locator('a.skip-link')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#main-content')).toBeFocused();
+
+    // The page's own action is the next stop; Enter is the whole walk. That navigation resolves the
+    // workspace scope, whose project-list read answers `401`, so the store performs the expiry
+    // redirect itself (`session.store.ts:274-283`): `/login?reason=expired&returnUrl=…`.
+    await page.keyboard.press('Tab');
+    const workspace = page.getByRole('link', { name: 'Back to workspace' });
+    await expect(workspace).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/en/login');
+    const login = new URL(page.url());
+    expect(login.searchParams.get('reason')).toBe('expired');
+    expect(login.searchParams.get('returnUrl')).toBe('/');
+    await expect(page.locator('.login-notice')).toContainText('Your session expired');
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+
+    // F-LOGIN-01: the page owns the handoff for this entry too, so the heading — its focus target —
+    // holds the focus, and the ring below is the page's own focus style rather than a UA default.
+    await expect(page.locator('#login-heading')).toBeFocused();
+    expect(await activeElement(page)).toMatchObject({ tag: 'h1', id: 'login-heading' });
+    await expect(page.locator('#login-heading')).toHaveAttribute('tabindex', '-1');
+    await expect(page.locator('#login-heading')).toHaveCSS('outline-style', 'solid');
+    await expect(page.locator('#login-heading')).toHaveCSS('outline-width', '2px');
+    await expect(page.locator('#login-heading')).toHaveCSS('outline-offset', '2px');
+    await expect(page.locator('#login-heading')).toHaveCSS('outline-color', 'rgb(0, 107, 102)');
+
+    // The order inside the page is unchanged: from the heading the next Tab is the first provider.
+    await page.keyboard.press('Tab');
+    await expect(providerButton(page, 'Google')).toBeFocused();
+  });
+
   test('a signed-out tab explains itself and keeps the keyboard path to a provider', async ({
     page,
   }) => {

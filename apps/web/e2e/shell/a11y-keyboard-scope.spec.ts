@@ -1,7 +1,13 @@
 // 09.8.1-T1.2 (plan 09.8.1 §10 T1.2, §2 AC2; finding F-SWITCH-01 in docs/a11y): the scope flow is
-// walked with the keyboard ALONE — every focus move in this file is a real `page.keyboard.press`,
-// no `click`, no `force` — at the desktop width and at 360px, and every stop is asserted by element
-// identity plus geometry, never by counting Tabs.
+// walked with the keyboard ALONE — every focus move in this file is a real `page.keyboard.press`
+// (Tab, Shift+Tab, Enter), every control is reached by Tabbing from the skip link, with no `click`,
+// no `force` and no `locator.focus()` — at the desktop width and at 360px, and every stop is
+// asserted by element identity plus geometry, never by counting Tabs.
+//
+// One exception, and it is not a focus move: `stepSelect` dispatches the select's step (its
+// `keydown`, the value write and the `input`/`change` the browser would have fired), because this
+// host's engine does not step a closed native `<select>` from the keyboard at all. The probe
+// evidence and the exact boundary of that exception are at the helper.
 //
 // The finding was a focus order that followed paint rather than the document: below 768px the
 // `.topbar` wraps, the two scope selects are painted on a second row, and a `order: 3` rule lifted
@@ -47,12 +53,29 @@ async function settle(page: Page): Promise<void> {
 }
 
 /**
- * Reproduces what Chromium and Firefox on Windows and Linux do for ArrowDown on a focused, closed
- * select: a `keydown` followed by `input` and `change` with the stepped value. macOS opens the
- * picker instead, so a real key press would not step there; the Enter and Tab that follow stay real
- * key presses (same helper as `scope-switcher-keyboard.spec.ts`, which owns the held-step rules).
+ * Steps a focused, closed native `<select>` to `value`.
+ *
+ * The step is this file's ONE synthetic interaction, and the reason is measured, not assumed. In
+ * the engine this suite launches (`channel: 'chrome'`, Chrome 156.0.8078.48 on macOS, probed
+ * headless AND headed on 2026-10-28) a real `page.keyboard.press` of `ArrowDown`, `ArrowUp`, `Home`
+ * or `End` on a focused, closed select leaves the value on its option: the page sees the `keydown`
+ * and nothing else — no `input`, no `change` — and a following real `Enter` steps nothing either.
+ * Playwright's `selectOption` would fire the events but is not a keyboard interaction, and a
+ * printable key IS a keyboard interaction but is a typeahead pick, which
+ * `ScopeSwitcherComponent.onChange` commits at once instead of holding it.
+ *
+ * The same probe against this app's own switcher — the project select on the overview route,
+ * reached by the Tab walk this file uses, in the same `chrome` project — leaves the value on its
+ * option after one real `ArrowDown`, after two, and after the `Enter` that follows: the URL stays
+ * on the overview, so no step and no commit happened either.
+ *
+ * So this helper delivers the `keydown` the switcher's `onKeydown` holds a step on (a real key
+ * press produces that same event, and without it the `change` below would commit immediately) and
+ * then the value write with the `input`/`change` pair the browser fires for a step on the platforms
+ * that support it. Every other interaction in this file — the Tabs that reach the select, the Enter
+ * that commits the held step, the Tab and Shift+Tab that leave it — is a real key press.
  */
-async function stepWithArrow(select: Locator, value: string): Promise<void> {
+async function stepSelect(select: Locator, value: string): Promise<void> {
   await select.evaluate((element: HTMLSelectElement, next: string) => {
     element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     element.value = next;
@@ -60,6 +83,53 @@ async function stepWithArrow(select: Locator, value: string): Promise<void> {
     element.dispatchEvent(new Event('change', { bubbles: true }));
   }, value);
   await expect(select).toHaveValue(value);
+}
+
+/**
+ * The topbar's four stops, in the order the fixed document gives them (F-SWITCH-01).
+ */
+type TopbarStop = 'navigation' | 'theme' | 'organization' | 'project';
+
+/**
+ * Reaches a topbar stop with real key presses only, asserting element identity at every stop on
+ * the way: the skip link first, then the brand and the sidebar rows (`desktop`), or the navigation
+ * toggle directly (`compact` — below 768px the brand is not a stop and the drawer is inert), then
+ * navigation toggle → theme toggle → organization → project. It returns once `stop` holds focus.
+ *
+ * This exists because AC2 allows no `locator.focus()`: the commit cases below used to focus the
+ * select programmatically, which is a synthetic focus move, not a keyboard one.
+ */
+async function walkTopbar(
+  page: Page,
+  stop: TopbarStop,
+  layout: 'desktop' | 'compact',
+): Promise<void> {
+  await page.keyboard.press('Tab');
+  await expectFocusVisible(page, page.locator('a.skip-link'));
+
+  if (layout === 'desktop') {
+    await page.keyboard.press('Tab');
+    await expectFocusVisible(page, page.locator('a.brand'));
+
+    const navLinks = page.locator('app-shell-nav nav a');
+    for (let index = 0; index < (await navLinks.count()); index += 1) {
+      await page.keyboard.press('Tab');
+      await expectFocusVisible(page, navLinks.nth(index));
+    }
+  }
+
+  const stops: readonly (readonly [TopbarStop, Locator])[] = [
+    ['navigation', page.locator('button.nav-toggle')],
+    ['theme', page.locator('button.theme-toggle')],
+    ['organization', page.getByRole('combobox', { name: 'Organization' })],
+    ['project', page.getByRole('combobox', { name: 'Project' })],
+  ];
+  const last = stops.findIndex(([name]) => name === stop);
+  if (last < 0) throw new Error(`${stop} is not a topbar stop`);
+  for (const [, control] of stops.slice(0, last + 1)) {
+    await page.keyboard.press('Tab');
+    await expectFocusVisible(page, control);
+  }
 }
 
 /**
@@ -215,10 +285,10 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     const projectSelect = page.getByRole('combobox', { name: 'Project' });
     await expect(projectSelect).toBeEnabled();
 
-    // Reached the way the walk reaches it, not by a click: focus from a real key press, then the
-    // step is held until Enter commits it.
-    await projectSelect.focus();
-    await stepWithArrow(projectSelect, PROJECT_CHECKOUT);
+    // Reached the way a keyboard visitor reaches it — Tab from the skip link, every stop's identity
+    // asserted, no `locator.focus()` — then the step is held until Enter commits it.
+    await walkTopbar(page, 'project', 'desktop');
+    await stepSelect(projectSelect, PROJECT_CHECKOUT);
     await settle(page);
     expect(new URL(page.url()).pathname).not.toBe(CHECKOUT_OVERVIEW);
 
@@ -237,10 +307,11 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
 
     // The keyboard equivalent of the mouse path `scope-theme.spec.ts` documents: the same attempt,
-    // the same destination, reached without a pointer.
+    // the same destination, reached without a pointer — Tab from the skip link to the organization
+    // select, the step held, then Enter.
     const orgSelect = page.getByRole('combobox', { name: 'Organization' });
-    await orgSelect.focus();
-    await stepWithArrow(orgSelect, ORG_LUMEN);
+    await walkTopbar(page, 'organization', 'desktop');
+    await stepSelect(orgSelect, ORG_LUMEN);
     await page.keyboard.press('Enter');
 
     await expect.poll(() => new URL(page.url()).pathname).toBe('/en/forbidden');
@@ -375,9 +446,11 @@ test.describe('scope flow at 360px: keyboard order (AC2, F-SWITCH-01)', () => {
     const themeToggle = page.locator('button.theme-toggle');
     const orgSelect = page.getByRole('combobox', { name: 'Organization' });
 
-    // Walk to the organization select by keyboard, then Shift+Tab back out of it: the theme toggle
-    // and the navigation toggle are the two stops above it in the fixed order.
-    await navToggle.focus();
+    // The walk starts at the skip link and, below 768px, asserts the navigation toggle as its second
+    // stop (no `locator.focus()`); from there Tab reaches the organization select and Shift+Tab
+    // comes back out: the theme toggle and the navigation toggle are the two stops above it in the
+    // fixed order.
+    await walkTopbar(page, 'navigation', 'compact');
     await page.keyboard.press('Tab');
     await expect(themeToggle).toBeFocused();
     await page.keyboard.press('Tab');

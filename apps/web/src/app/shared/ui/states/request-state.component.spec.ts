@@ -66,9 +66,10 @@ class Host {
         [status]="status()"
         [error]="error()"
         [retryEligible]="eligible()"
+        [retryBusy]="busy()"
         (retry)="retried = true"
       >
-        <p data-testid="recovered">{{ recoveredText }}</p>
+        <p data-testid="recovered" tabindex="0">{{ recoveredText }}</p>
       </app-request-state>
       <button type="button" data-elsewhere>{{ elsewhereText }}</button>
     </main>
@@ -79,6 +80,7 @@ class PageHost {
   readonly error = signal<ApiError | null>(failure());
   readonly withHeading = signal(true);
   readonly eligible = signal(true);
+  readonly busy = signal(false);
   readonly headingText = 'Runs';
   readonly recoveredText = 'Recovered rows';
   readonly elsewhereText = 'Elsewhere';
@@ -344,5 +346,103 @@ describe('RequestStateComponent failure-panel focus handoff', () => {
     expect(document.activeElement).toBe(document.body);
     await recover();
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it('leaves focus where the visitor left it when a recovery follows an earlier visit', async () => {
+    // The visitor was inside the content this replacement projects, then the page failed and they
+    // moved on to nothing in particular. That earlier visit is not the failure that recovers now.
+    host.status.set('ready');
+    host.error.set(null);
+    await fixture.whenStable();
+    const content = root.querySelector<HTMLElement>('[data-testid="recovered"]')!;
+    content.focus();
+    expect(document.activeElement).toBe(content);
+    host.status.set('error');
+    host.error.set(failure());
+    await fixture.whenStable();
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+
+    await recover();
+    expect(document.activeElement).toBe(document.body);
+    expect(root.querySelector('h1')?.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('returns the place to the retry control after a repeat failure', async () => {
+    const retry = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    retry.focus();
+    retry.click();
+    host.status.set('loading');
+    await fixture.whenStable();
+    const heading = root.querySelector('h1')!;
+    expect(document.activeElement).toBe(heading);
+
+    // The retry failed again: the panel is back and its control answers again, so the place
+    // this component borrowed comes back to it instead of resting on the heading.
+    host.error.set(failure({ message: 'Still offline.' }));
+    host.status.set('error');
+    await fixture.whenStable();
+    const again = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    expect(document.activeElement).toBe(again);
+    // The heading gave the page its own markup back when focus moved on.
+    expect(heading.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('returns the place to the retry control of a host that never leaves the error status', async () => {
+    // `create-project.page.ts` binds a constant `status="error"`; only its retry state moves.
+    const retry = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    retry.focus();
+    expect(document.activeElement).toBe(retry);
+    retry.click();
+    host.busy.set(true);
+    await fixture.whenStable();
+    expect(retry.disabled).toBe(true);
+    expect(document.activeElement).toBe(root.querySelector('h1'));
+
+    host.busy.set(false);
+    await fixture.whenStable();
+    const again = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    expect(again.disabled).toBe(false);
+    expect(document.activeElement).toBe(again);
+  });
+
+  it('leaves a place the visitor chose instead of returning it to the retry control', async () => {
+    const retry = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    retry.focus();
+    retry.click();
+    host.busy.set(true);
+    await fixture.whenStable();
+    const elsewhere = root.querySelector<HTMLButtonElement>('[data-elsewhere]')!;
+    elsewhere.focus();
+    host.busy.set(false);
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(elsewhere);
+  });
+
+  it('returns the place to a Retry-After control once its wait is over', async () => {
+    host.error.set(failure({ kind: 'rate_limited', status: 429, retryAfterSeconds: 30 }));
+    await fixture.whenStable();
+    const retry = root.querySelector<HTMLButtonElement>('app-retry-after button')!;
+    retry.focus();
+    expect(document.activeElement).toBe(retry);
+
+    retry.click();
+    host.busy.set(true);
+    await fixture.whenStable();
+    const heading = root.querySelector('h1')!;
+    expect(document.activeElement).toBe(heading);
+
+    // Busy is over but the wait is not: the control still cannot answer, so focus stays parked.
+    host.busy.set(false);
+    host.eligible.set(false);
+    await fixture.whenStable();
+    expect(root.querySelector<HTMLButtonElement>('app-retry-after button')!.disabled).toBe(true);
+    expect(document.activeElement).toBe(heading);
+
+    // The wait elapsed: the only control in the panel answers again, so the loan comes back.
+    host.eligible.set(true);
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(root.querySelector('app-retry-after button'));
+    expect(heading.hasAttribute('tabindex')).toBe(false);
   });
 });
