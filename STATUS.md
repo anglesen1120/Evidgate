@@ -9,14 +9,14 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop (counting S115 05.3.2-T5 and S123 05.3.2-T2 once merged): 181/656 tasks; 187.25/703.25 raw person-days; remaining 475 tasks / 516.0 d. Via merged PRs: 154 tasks / 162.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- Landed by phase (done tasks / raw d): G1 133 / 145.25; G2 42 / 36; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 once merged): 182/656 tasks; 187.75/703.25 raw person-days; remaining 474 tasks / 515.5 d. Via merged PRs: 155 tasks / 162.75 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 134 / 145.75; G2 42 / 36; G3 0 / 0; G4 6 / 6.
 - Plan totals: 656 tasks / 703.25 raw / 843.9 buffered person-days (S130 F47 added 02.3.2-T3, S, V1, G1; the S93 canonical figures were 655 / 702.75 / 843.3). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
 - Next picks, web-only lane: 09.1.1-T5 is merged (#213) and 09.1.1-T9.2 is done (#209), so the web-only lane moves to G2 (§5).
 - Next picks, backend lane: refill order in `.omp/coordinator/prompts/held/README.md`; when a backend slot frees, 08.5.1-T1 (XL, split, migration lane) unless §5 ranks another G1 task higher, and 04.1.2-T1 only after S91 releases.
-- Next step: §5, 90 dependency-ready tasks / 101.0 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
+- Next step: §5, 91 dependency-ready tasks / 102.0 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
 - STATUS split (S126, 2026-10-28; merged #264, a9159257): §3-§4 delivered waves moved verbatim to `docs/status-archive.md` together with the closed §6 rows; the live §6 table is `docs/status-carried.md` (add new carried rows there, at the end).
 
 ## 2. Done
@@ -25,10 +25,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 181 | 187.25 |
-| Via merged PRs | 154 | 162.25 |
+| Fully landed on develop | 182 | 187.75 |
+| Via merged PRs | 155 | 162.75 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 475 | 516.0 |
+| Remaining | 474 | 515.5 |
 | Plan total | 656 | 703.25 |
 
 Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 09.2.1-T5 (T5.2 reload acceptance awaits the `apps/web` wire-up of the S116 activation read), 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764) and whose remainder is the T2.2 acceptance plus T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -47,20 +47,20 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | 09 | 20 | 0 | 6 | 11 | 3 | 0 | 20 |
 | 10 | 4 | 0 | 1 | 2 | 1 | 0 | 4.5 |
-| 11 | 9 | 1 | 3 | 4 | 1 | 0 | 7.75 |
+| 11 | 10 | 1 | 4 | 4 | 1 | 0 | 8.25 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 181 | 3 | 49 | 97 | 31 | 1 | 187.25 |
+| TOTAL | 182 | 3 | 50 | 97 | 31 | 1 | 187.75 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 133 | 3 | 29 | 73 | 27 | 1 | 145.25 |
+| G1 | 134 | 3 | 30 | 73 | 27 | 1 | 145.75 |
 | G2 | 42 | 0 | 18 | 21 | 3 | 0 | 36 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 181 | 3 | 49 | 97 | 31 | 1 | 187.25 |
+| TOTAL | 182 | 3 | 50 | 97 | 31 | 1 | 187.75 |
 
 ### Landed task groups
 
@@ -193,6 +193,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 05.3.2 | 05.3.2-T2 (T2.1–T2.4) | merged (#257, e9edb866); T2.1+T2.2 in (#253, 8f3c3eed) | Reconciler, whole. T2.1+T2.2 (#253): `ReconcileRunTaskHandler` claims `orchestrator.run.reconcile` through the task queue (`SKIP LOCKED`), locks the run row `FOR NO KEY UPDATE` first (S115 lock order) and compares declared `(last_sequence, count)` with the acknowledged events in one grouped statement, reporting `missing_shard`, `count_mismatch` and `unknown_status`. T2.3+T2.4 (#257, S123): the requirement set (the pinned policy's `required_artifacts` kinds × every planned execution, read through the new additive `IPolicyContracts.GetRequiredArtifactKindsAsync`), `setup_error` (a `blocked` `test.finished` in a closed shard, 00 §8.3) and `stale_epoch` (a closed shard holding a stale event) join the reason list; then `IEvidenceFreeze.FreezeAsync` → one `evidence_revision` insert → `run.current_evidence_revision_id` → `IRunStateTransition` `collecting → complete\|incomplete`, all in the consumer's tenant transaction; a `Pending` attempt (a planned shard still open, `collection_deadline_at` evaluated in the run-lock statement) freezes, inserts, points and transitions nothing. No migration, no route, no OpenAPI. D-S123-Q1..Q4 (coordinator-decided, owner confirmation pending) in plan 05.3.2 Notes. Acceptance executed at the merged head 8a12963b (after the N1 narrowing commit 1a7a6abe): `ReconcileRunTests` 51 passed / 0 failed, `ReconcileComparerUnitTests` 46/0, `PolicyContractsTests` 12/0, build and format stages exit 0 (built runner through `locked-run.sh`), and re-executed at the head on top of 8a12963b that carries the new positive case: `ReconcileRunTests` 52/0 (including `Reconcile_PolicyRequiredKindReady_WritesCompleteRevision` at `ReconcileRunTests.cs:2016`, 1/0), `ReconcileComparerUnitTests` 46/0, `PolicyContractsTests` 12/0, `Architecture` `ModuleBoundariesTests` 8/0, build and format exit 0; the earlier 94ff7db3 QA run (43/0, 42/0, 12/0) covered the smaller suite. Whole L task: this row is its §2 credit (+1 task / +2.0 d). T2.4's Done-when (plan row `:162`) is "AC4, AC5 pass" and both hold inside T2: AC4 (a `complete` revision once every planned shard has closed) by `Reconcile_AllShardsMatch_WritesCompleteRevision`, `Reconcile_OpenShardBeforeDeadline_ThenClosingShardCompletes` and the required-artifact positive `Reconcile_PolicyRequiredKindReady_WritesCompleteRevision` (`ReconcileRunTests.cs:2016`, executed in the 52-case run), with `Reconcile_PolicyRequiredKindMissing_IncompleteWithArtifactMissing` and the artifact cases of `Reconcile_EachMissingReason_IncompleteWithCode` as the negatives; AC5 (incomplete with the matching `missing[]` reason plus `collecting → incomplete`) by `Reconcile_EachMissingReason_IncompleteWithCode` and `Reconcile_OpenShardPastDeadline_IncompleteWithMissingShard`. The forced verdict at `collection_deadline_at`, "retried until the deadline" and AC7's finalize-before-events retry are 05.3.2-T3.1 / T4.1 scope (plan rows `:170`, `:177`), not T2.1–T2.4. |
 | 08.6.3 | 08.6.3-T1 (T1.1 + T1.2) | merged (#260, 569b538f) | `migrations/0052_healing_switch.sql`: `healing_switch` (mode CHECK excludes `unavailable`, `(scope='system') = (org_id is null)`, partial uniques per scope, composite project FK, FORCE RLS with the T72 NULL-org read policy, column-grant writes) plus the `evidgate.healing_switch_set_system` definer; `SetHealingSwitch`/`GetHealingSwitch`, pure `IHealingAvailabilityResolver` (most restrictive wins, no rows = `shadow`), V1 clamp on `Healing:Apply`, `PUT|GET /v1/healing/switch` with OpenAPI + SDK, operator system route behind the fail-closed gate. D-S124-Q1..Q3 (coordinator-decided, owner review non-blocking). Counts bumped at close-out. |
 | F47 | F47 (docs/contract, tier T0) | merged (#268, a1483914) | 00 §9.3 gains one block row for the four shipped session routes (`GET /v1/auth/sessions`, `DELETE /v1/auth/sessions/{s}`, `POST /v1/auth/sessions/revoke-all`, `POST /v1/auth/logout`, admin scope `X-Evidgate-Org`) and §15 one row; plan 02 story 02.3.2 gains `02.3.2-T3` (admin ends all sessions of one user, ASVS-GAP-14 7.4.5; planned only, not landed); totals 656 tasks / 703.25 raw / 843.9 buffered. A follow-up row, not a planned task: the landed counts (181 tasks / 187.25 d) do NOT change. |
+| 11.5.2 | 11.5.2-T1 (T1.1 + T1.2) | open (#270) | Docs only (tier T0): `docs/adr/0010-audit-chain-keyed-hash-and-external-checkpoints.md` (`proposed`; AC1; HMAC-SHA-256 keyed chain with `chain_key_id`, secret-store custody, rotation without rewriting history, ECDSA P-256 checkpoints every 15 min, residual risk, three rejected alternatives), its index row, DECISIONS §6 F15-F22 (✅ F15, F16, F18; ✅ with ⚠️ residue F19-F21; ⚠️ F17, F22), the four labelled DoR answers in the 11.5.2 plan §8, the `[OPEN]` change request text for 00 §5.4/T8 and §15 (queued in the 11.5.2 plan Notes, 00 not edited) and the 02.7.1 gap note (`audit_log.chain_key_id`, `IAuditChainSigner`). The ASVS-GAP-24 row stays open until T2 and T3 ship. |
 
 ## 3-4. Delivered waves
 
@@ -200,11 +201,11 @@ Moved verbatim to docs/status-archive.md
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **90 tasks / 101.0 d** (G1 38 / 40.5, G2 36 / 37.5, G3 6 / 9, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0051`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
+Dependency-ready: **91 tasks / 102.0 d** (G1 38 / 40.5, G2 37 / 38.5, G3 6 / 9, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0051`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
 
 Stricter variant that also requires every dependency task's whole story to be merged: **47 tasks / 51.0 d** (G1 16 / 18, G2 23 / 23, G3 0 / 0, G4 8 / 10), fully recomputed on `787f592` from the plan graph plus the landed set. This corrects the previous incremental 50 / 53.5 d claim (G1 19 / 20.5); 11.5.1-T3 and 11.5.1-T5 remain included because 11.1.1 is fully landed. S102 adds 02.1.2-T3 to the task-edge ready set but no strict-ready task: 02.1.2-T1's whole story still includes unbuilt T3.
 
-### G1: 38 tasks / 40.5 d (backend lane 27 / 27.5 d, web-only 0 / 0 d, docs-only 11 / 13.0 d)
+### G1: 38 tasks / 40.5 d (backend lane 28 / 28.0 d, web-only 0 / 0 d, docs-only 10 / 12.5 d)
 
 #### G1 backend lane
 
@@ -213,7 +214,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 01.8.1-T3 | M (rem T3.2) | Partial: T3.1 seed-dev shipped (`db209e4`, `SeedDevTests`); T3.2 still needs a clean-checkout `up.sh` run and a second-developer review of `docs/dev-setup.md`. | yes | no | no | n/a | yes — files exist; rem = clean-checkout `scripts/dev/up.sh` run (AC1/AC4) + second-dev review of `docs/dev-setup.md` |
 | 02.3.1-T3 | S | `GET /v1/me` profile + `PATCH /v1/me {preferred_locale}` | yes | yes (0049+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | n/a | yes |
 | 02.1.2-T3 | S | Membership lifecycle (deactivation/removal semantics; may switch to revoke-all, docs/status-carried.md:206). Ready: S102 02.3.2-T2 merged (#228, 787f592). | yes | no | no | n/a | yes — deps 02.1.2-T1 landed, 02.3.2-T2 merged |
-| 03.1.4-T1 | S | Decision + contract: optional `requirement_ref`. Partial: decision half landed as D-A6 (`DECISIONS.md:164`, `a4c546c`); the contract half is open — `requirement_ref` and the sidecar `requirement` key appear nowhere under `contracts/`. | yes | yes (0049+) | no | n/a | yes |
+| 03.1.4-T1 | S | Decision + contract: optional `requirement_ref`. Partial: decision half landed as D-A6 (`DECISIONS.md:172`, `a4c546c`); the contract half is open — `requirement_ref` and the sidecar `requirement` key appear nowhere under `contracts/`. | yes | yes (0049+) | no | n/a | yes |
 | 03.1.4-T2 | S | `platform`, `level`, `purpose` on suite/template | yes | yes (0049+) | S97: Catalog suite create/list endpoint code + tests; `contracts/openapi.yaml`, generated SDK | n/a | yes |
 | 03.4.1-T1 | L | GitHub App registration + installation binding + `git_repo_binding`; typed `HttpClient` + RS256 app JWT | yes | yes (0049+) | S97: `contracts/openapi.yaml`, generated SDK, isolation route cases | T1.1-T1.2 ; T1.3-T1.4 | yes (App registration itself needs GitHub org/admin credentials) |
 | 04.1.2-T1 | S | Per-project rate limit/quota with `Retry-After`; counters and spans (after S91) | yes | no | S91: `src/BuildingBlocks/Observability/EvidgateTelemetry.cs` (`ingest_*` counters on the batch span) | n/a | yes |
@@ -237,6 +238,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 10.1.1-T4 | M | Isolated artifact-viewer origin | yes | no | no | n/a | no — needs a distinct registrable domain + DNS record + TLS certificate (registrar/DNS action) |
 | 10.3.2-T1 | S | ADR: observability backend for M1 with retention and cost limits, plus the compose profile; unblocks 10.3.1-T2 (T1 merged in #203) | yes | no | no | n/a | yes |
 | 10.8.1-T2 | L | Hands-on spike on two candidates | yes | no | no | T2.1-T2.2 (candidate A) ; T2.3-T2.4 (candidate B) | no — needs two managed-provider accounts/credentials to provision and measure |
+| 11.9.2-T2 | S | Reconcile the audit chain with deletion (unblocked by 11.5.2-T1, S131 PR #270): T2.1 written rule, T2.2 audit payload schema plus an erasure-then-verify test | yes | no | no | n/a | yes |
 
 #### G1 web-only lane
 
@@ -244,7 +246,6 @@ Stricter variant that also requires every dependency task's whole story to be me
 |---|---|---|---|---|---|---|---|
 | 10.7.1-T4 | M | Key rotation runbook | no | no | no | n/a | T4.1 and the written pepper section of T4.2 delivered by S106 (PR #222); remaining: T4.2 staging drill (AC5), see §6 rows |
 | 10.11.1-T3 | S | WAF/edge decision record | no | no | no (plans Notes row only at close-out) | n/a | yes |
-| 11.5.2-T1 | S | ADR: HMAC-keyed chain, key custody/rotation, checkpoint cadence (unblocked by 11.5.1-T1, #219). The plan has no four §8 DoR answers, so touching it needs them added (`scripts/check-dor-security.sh`). | no | no | no | n/a | yes |
 | 11.9.1-T2 | L | Breach runbook with the 72 h clock (unblocked by 11.5.1-T1, #219). T2.1–T2.3 are drafting; T2.4 needs counsel + on-call names. The plan has no four §8 DoR answers. | no | no | no | T2.1 ; T2.2 ; T2.3 ; T2.4 | yes for T2.1–T2.3; T2.4 needs counsel review |
 | 12.2.1-T2 | M | Baseline measurement kit | no | no | no | n/a | yes for T2.1 kit; T2.2 needs signed pilots |
 | 11.8.1-T1 | L | DPA template + counsel review | no | no | no | T1.1-T1.2 ; T1.3-T1.4 | no — counsel engagement is external and the AC needs `approved` + counsel name in `manifest.yaml` |
@@ -254,7 +255,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 13.3.1-T1 | M | Feature plan written (S112, merged #241 ce9999d, `plans/features/13-product-phases/13.3.1-generation-pipeline.md` §10, sub-tasks T1.1 to T1.4); build after owner confirmation of its `[OPEN]` rows OI-13-403, OI-13-404 (extraction caps, PDF library) | no | no | no | n/a | no — OI-13-401 (model pair and cost key, plan 13 Q1) is owner-open and due before 13.3.1-T2, not T1 |
 | 13.4.1-T1 | L | Feature plan written (S112, merged #241 ce9999d, `plans/features/13-product-phases/13.4.1-authoring-ui.md` §10, sub-tasks T1.1 to T1.4); design task for the `design-ui` agent, owner approval before T2 to T7 | no | no | no | split by its four sub-tasks; declared L = wireframes/all states + CR-D-2 deltas | no — needs the `design-ui` agent run and owner approval (plan AC1) |
 
-### G2: 36 tasks / 37.5 d (backend lane 27 / 27.5 d = 26 code + 1 docs writing `infra/`, web-only 5 / 7 d, docs-only 4 / 3 d)
+### G2: 37 tasks / 38.5 d (backend lane 28 / 28.5 d = 27 code + 1 docs writing `infra/`, web-only 5 / 7 d, docs-only 4 / 3 d)
 
 #### G2 backend lane
 
@@ -286,6 +287,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 12.3.1-T5 | M | Roll-up job + reconciliation query; unblocked by 12.3.1-T1 | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` (`billing:read`) | n/a | yes |
 | 02.10.1-T1 | S | Provider choice and sender setup | yes | no | S91: `infra/config-matrix.json` + `.env.dev.template` (new email keys, additive row) | n/a | no |
 | 13.5.2-T1 | L | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | yes | no | unknown (no feature plan; likely `packages/cli`, no lane owns it) | no plan; proposed slices: command+config \| reporter+ingest wiring | no |
+| 11.5.2-T2 | M | Signed periodic checkpoint exported to write-once storage (unblocked by 11.5.2-T1, S131 PR #270; ADR-0010 is `proposed` and the 00 §5.4/T8 change request is `[OPEN]`, so confirm both with the owner before building). Needs the 02.7.1 `chain_key_id` writer change first (gap filed in the 02.7.1 plan Notes) | yes | `[OPEN]` the additive `chain_key_id` column is filed on 02.7.1 | unknown (02.7.1 writer, `src/BuildingBlocks/Persistence/Audit/`) | n/a | yes |
 
 #### G2 web-only lane
 
