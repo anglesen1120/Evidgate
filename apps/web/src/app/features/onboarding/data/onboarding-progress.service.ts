@@ -8,8 +8,8 @@
 //   - the project resolves first, because every later read is project-scoped; a route that names
 //     one is read with a single `getProject` (`GET /v1/projects/{p}`), never by walking the org's
 //     project list;
-//   - the three project reads (bindings, tokens, oldest run) are issued together, so a resume
-//     costs one round trip after the project instead of three;
+//   - the four project reads (bindings, tokens, oldest run, policy activation) are issued
+//     together, so a resume costs one round trip after the project instead of four;
 //   - `getRun` follows `listRuns`, because its run id is what the list answered (step 4 reads
 //     `current_evidence_revision_id`, which the list row does not carry).
 //
@@ -28,22 +28,28 @@
 // pattern rather than another tenant's steps (00 §9.2: a foreign id is indistinguishable from an
 // unknown one).
 //
-// Step 5 is deliberately not derivable: the contract has `POST /v1/projects/{p}/policy-activation`
-// and no project-keyed GET of it (07 §4, decisions (b)). `activationReadable` is therefore always
-// `false` and `done[5]` is always `false`, so the wizard never claims an activation it has not
-// seen; that is recorded as an open item rather than guessed `true`.
+// Step 5 is derived from the project-keyed read `getPolicyActivation`
+// (`GET /v1/projects/{p}/policy-activation`, 07.1.1 F18): `activation` carries the answer as one
+// of three states — `active` with the server's `PolicyActivationStateDto`, `none` for the
+// contract's single `404`, `forbidden` when the caller may not read it — and `done[5]` is true
+// exactly for `active`, so the wizard claims an activation only from a row the server answered.
+// A `forbidden` read is not a failed load: steps 1–4 are unaffected and step 5 simply stays
+// un-derived, which is the panel's "you may not read this" state rather than a guessed `true` or
+// a "nothing is active" the caller cannot know. Any other refusal rejects the whole load, because
+// it says nothing about the activation and the wizard must not publish a step it did not read.
 
 import { inject, Injectable } from '@angular/core';
 import type {
   CiBindingView,
   IngestTokenView,
+  PolicyActivationStateDto,
   ProjectDto,
   RunStateDto,
   RunSummary,
 } from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
-import { ApiRequestError } from '../../../core/http/api-error';
+import { ApiRequestError, isApiRequestError } from '../../../core/http/api-error';
 import {
   deriveCurrentStep,
   NO_STEPS_DONE,
@@ -72,13 +78,30 @@ const STEP_THREE_DONE: Partial<Record<RunStateDto['state'], true>> = {
  */
 export const CONNECT_LIST_LIMIT = 50;
 
+/**
+ * Step 5's input as one closed set (09.2.1-T5.2): what the project-keyed activation read answered.
+ *
+ * `active` carries the server's document unchanged, so a panel renders the activation it was
+ * actually given; `none` is the contract's single `404` (never activated, unknown, soft-deleted or
+ * another tenant's project — indistinguishable, 00 §9.2); `forbidden` is a read the caller may not
+ * make, which is neither of the other two and must not be reported as one.
+ */
+export type ProgressActivation =
+  | { readonly kind: 'active'; readonly state: PolicyActivationStateDto }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'forbidden' };
+
 /** What the wizard knows after one resume: the project and the five done-conditions. */
 export interface OnboardingProgress {
   /** The project the wizard resumes on; `null` only when the org has none (step 1). */
   readonly project: ProjectDto | null;
   readonly done: StepsDone;
-  /** Whether step 5's activation state could be read; always `false` (decision (b)). */
-  readonly activationReadable: boolean;
+  /**
+   * The project's policy activation as the read answered it. `done[5]` is true exactly when this
+   * is `active`; `none` and `forbidden` both leave step 5 open, and they stay distinguishable so
+   * step 5's panel can say which of the two it is instead of implying the other.
+   */
+  readonly activation: ProgressActivation;
   /** The oldest run of the project with its current evidence revision, if any. */
   readonly sampleRun: RunStateDto | null;
   /**
@@ -124,7 +147,8 @@ export class OnboardingProgressService {
       return {
         project: null,
         done: NO_STEPS_DONE,
-        activationReadable: false,
+        // No project means no activation was read, and none can be active.
+        activation: { kind: 'none' },
         sampleRun: null,
         bindings: [],
         tokens: [],
@@ -135,12 +159,13 @@ export class OnboardingProgressService {
       };
     }
 
-    // Issued together: the array is built before `Promise.all` subscribes, so all three requests
+    // Issued together: the array is built before `Promise.all` subscribes, so all four requests
     // are in flight while the first one is still pending.
-    const [bindings, tokens, runs] = await Promise.all([
+    const [bindings, tokens, runs, activation] = await Promise.all([
       this.data.listCiBindings(project.id, { limit: CONNECT_LIST_LIMIT }),
       this.data.listIngestTokens(project.id, { limit: CONNECT_LIST_LIMIT }),
       this.data.listRuns(project.id, { limit: 1 }),
+      this.readActivation(project.id),
     ]);
     const oldest = pickOldestRun(runs.items);
     const sampleRun = oldest === null ? null : await this.data.getRun(oldest.run_id);
@@ -150,14 +175,15 @@ export class OnboardingProgressService {
       2: bindings.items.length + tokens.items.length > 0,
       3: sampleRun !== null && STEP_THREE_DONE[sampleRun.state] === true,
       4: sampleRun !== null && sampleRun.current_evidence_revision_id !== null,
-      // No project-keyed read of the activation exists (decision (b)): never claimed as done.
-      5: false,
+      // An activation the server answered is the only proof of step 5: a refused or absent read
+      // leaves it open (the `forbidden` and `none` states say which).
+      5: activation.kind === 'active',
     };
 
     return {
       project,
       done,
-      activationReadable: false,
+      activation,
       sampleRun,
       bindings: bindings.items,
       tokens: tokens.items,
@@ -166,6 +192,26 @@ export class OnboardingProgressService {
       tokensTruncated: tokens.next_cursor !== null,
       currentStep: deriveCurrentStep(done),
     };
+  }
+
+  /**
+   * Step 5's read as the three states the wizard reports. `readPolicyActivation` already answers
+   * `null` for the contract's single `404` (never activated / unknown / foreign / soft-deleted —
+   * indistinguishable, 00 §9.2), so `null` is `none`. A `403` is `forbidden`: the caller may not
+   * read the pointer, which is a state of its own and not a failed load — steps 1–4 stay as
+   * derived and step 5 stays open. Every other refusal re-throws, so the load rejects rather than
+   * publishing a step 5 it never read.
+   */
+  private async readActivation(projectId: string): Promise<ProgressActivation> {
+    try {
+      const state = await this.data.readPolicyActivation(projectId);
+      return state === null ? { kind: 'none' } : { kind: 'active', state };
+    } catch (cause) {
+      if (isApiRequestError(cause) && cause.error.status === 403) {
+        return { kind: 'forbidden' };
+      }
+      throw cause;
+    }
   }
 
   /**

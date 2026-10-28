@@ -29,6 +29,7 @@ import type {
   IngestTokenListResponse,
   IngestTokenView,
   PolicyActivationDto,
+  PolicyActivationStateDto,
   PolicyRevisionDto,
   PolicyRevisionV1,
   ProjectDto,
@@ -142,6 +143,16 @@ const ACTIVATION: PolicyActivationDto = {
   activated_at: '2026-10-26T08:22:00Z',
   previous_policy_revision_id: null,
   changed: true,
+};
+
+/** 09.2.1-T5.2: the read's answer — the stored pointer, without the POST's two extra members. */
+const ACTIVATION_STATE: PolicyActivationStateDto = {
+  project_id: ACTIVATION.project_id,
+  policy_revision_id: ACTIVATION.policy_revision_id,
+  hash: ACTIVATION.hash,
+  mode: ACTIVATION.mode,
+  activated_by: ACTIVATION.activated_by,
+  activated_at: ACTIVATION.activated_at,
 };
 
 const RUN_STATE: RunStateDto = {
@@ -534,6 +545,88 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
     expect(isApiRequestError(cause)).toBe(true);
     if (isApiRequestError(cause)) {
       expect(cause.error.kind).toBe('not_found');
+    }
+  });
+
+  it('readPolicyActivation() reads the stored activation by project id', async () => {
+    const read = service.readPolicyActivation('p-1');
+    const request = await takeRequest(
+      httpMock,
+      `${API_BASE_URL}/projects/p-1/policy-activation`,
+    );
+    expect(request.request.method).toBe('GET');
+    // A read takes no Idempotency-Key and no XSRF header: the contract asks for neither.
+    expect(request.request.headers.has('Idempotency-Key')).toBe(false);
+    request.flush(JSON.stringify(ACTIVATION_STATE), { headers: JSON_HEADERS });
+
+    await expect(read).resolves.toEqual(ACTIVATION_STATE);
+  });
+
+  it('readPolicyActivation() answers null for the contract 404 and only for it', async () => {
+    const read = service.readPolicyActivation('p-1');
+    (await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/policy-activation`)).flush(
+      JSON.stringify({
+        error: {
+          code: 'not_found',
+          message: 'the requested resource does not exist',
+          request_id: '3f2b9d54-0d7e-4c1a-9a2e-6b0f5c7d81c4',
+          retryable: false,
+          details: [],
+        },
+      }),
+      { status: 404, statusText: '', headers: JSON_HEADERS },
+    );
+
+    // One undifferentiated 404 (00 §9.2): never activated, unknown, soft-deleted and foreign all
+    // read here, so the service reports "no activation" rather than a not-found error.
+    await expect(read).resolves.toBeNull();
+  });
+
+  it('readPolicyActivation() re-throws a 403 unchanged, never as an absent activation', async () => {
+    const read = service.readPolicyActivation('p-1');
+    (await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/policy-activation`)).flush(
+      JSON.stringify({
+        error: {
+          code: 'forbidden',
+          message: 'Missing permission policy:read.',
+          request_id: '3f2b9d54-0d7e-4c1a-9a2e-6b0f5c7d81c4',
+          retryable: false,
+          details: [],
+        },
+      }),
+      { status: 403, statusText: '', headers: JSON_HEADERS },
+    );
+
+    const cause = await rejectionOf(read);
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('forbidden');
+      expect(cause.error.status).toBe(403);
+    }
+  });
+
+  it('readPolicyActivation() re-throws a 500 unchanged, so no UI state is invented', async () => {
+    const read = service.readPolicyActivation('p-1');
+    (await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/policy-activation`)).flush(
+      JSON.stringify({
+        error: {
+          code: 'internal_error',
+          message: 'the request could not be completed',
+          request_id: '3f2b9d54-0d7e-4c1a-9a2e-6b0f5c7d81c4',
+          retryable: true,
+          details: [],
+        },
+      }),
+      { status: 500, statusText: '', headers: JSON_HEADERS },
+    );
+
+    const cause = await rejectionOf(read);
+    // 500 is the mapper's `unexpected` arm: the status's meaning depends on the body, and the
+    // service passes the gateway's error through instead of reading it as "no activation".
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.status).toBe(500);
+      expect(cause.error.code).toBe('internal_error');
     }
   });
 

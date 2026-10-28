@@ -4,9 +4,10 @@
 // single fact to read.
 //
 // What is pinned here:
-//   - the three project reads are issued together, not one after another (a resume is one round
-//     trip after the project, not three), each with the page size the panel needs
-//     (`CONNECT_LIST_LIMIT` rows for step 2's two lists, `limit: 1` for the oldest run);
+//   - the four project reads are issued together, not one after another (a resume is one round
+//     trip after the project, not four), each with the page size the panel needs
+//     (`CONNECT_LIST_LIMIT` rows for step 2's two lists, `limit: 1` for the oldest run, and one
+//     project-keyed activation read);
 //   - step 2 completes on *presence* — a binding with no token, a token with no binding — and the
 //     progress carries the rows themselves, in server order, so step 2's panel can render metadata
 //     for a project it resumed on (AC2, AC7: a resume re-issues nothing); each list also reports
@@ -15,9 +16,12 @@
 //   - step 3 completes only on a *terminal collection* state — `incomplete` counts, `canceled`
 //     does not (plan §6: "canceled in the wizard shows a retry control, never treated as complete");
 //   - step 4 reads the evidence revision of the oldest run, never the newest one;
-//   - step 5 is never done and `activationReadable` is always false, because the contract has no
-//     project-keyed read of the activation (decision (b)) — the wizard must not guess `true`;
-//   - a refusal arrives as the same typed error the gateway produced;
+//   - step 5 is derived from the project-keyed `getPolicyActivation` read (09.2.1-T5.2): an
+//     answered activation completes it and moves the wizard to the terminal screen, the contract's
+//     `404` is `none` and leaves it open, and a refused (`403`) read resolves the rest of the
+//     wizard with `forbidden` instead of failing the load or guessing `true`;
+//   - a refusal arrives as the same typed error the gateway produced, and a refusal of the
+//     activation read that is neither `403` nor `404` rejects the whole load;
 //   - a project id that the org's own list does not hold is `not_found`, so a guessed URL can
 //     never resume another tenant's wizard.
 
@@ -28,6 +32,7 @@ import type {
   IngestTokenListResponse,
   IngestTokenView,
   ListProjectsData,
+  PolicyActivationStateDto,
   ProjectDto,
   ProjectListResponse,
   RunPage,
@@ -80,6 +85,16 @@ const OTHER_ORG_PROJECT: ProjectDto = {
   org_id: 'o-2',
   slug: 'lumen-widgets',
   case_prefix: 'LUME',
+};
+
+/** The activation document the project-keyed read answers (07.1.1 F18), as step 5's proof. */
+const ACTIVATION: PolicyActivationStateDto = {
+  project_id: 'p-1',
+  policy_revision_id: '018f0000-0000-7000-8000-00000000a004',
+  hash: 'sha256:f250bbce48fca2a9a5f93b45236c0f330bb471f5d3f0d1396ddc5ac964928064',
+  mode: 'advisory',
+  activated_by: '018f0000-0000-7000-8000-0000000000e1',
+  activated_at: '2026-10-26T08:22:00Z',
 };
 
 const BINDING: CiBindingView = {
@@ -171,28 +186,34 @@ class FakeOnboardingDataService {
   tokens: IngestTokenListResponse = tokenPage([]);
   runs: RunPage = runPage([]);
   readonly runStates = new Map<string, RunStateDto>();
+  /** What `readPolicyActivation` answers; `null` is the contract's `404` (no activation). */
+  activation: PolicyActivationStateDto | null = null;
 
   projectFailure: Error | null = null;
   projectReadFailure: Error | null = null;
   bindingFailure: Error | null = null;
   tokenFailure: Error | null = null;
   runStateFailure: Error | null = null;
+  activationFailure: Error | null = null;
 
   readonly projectCalls: Array<{ orgId: string; query: ProjectListQuery }> = [];
   readonly projectReadIds: string[] = [];
   readonly bindingQueries: unknown[] = [];
   readonly tokenQueries: unknown[] = [];
   readonly runQueries: unknown[] = [];
+  readonly activationIds: string[] = [];
   bindingCalls = 0;
   tokenCalls = 0;
   runCalls = 0;
+  activationCalls = 0;
   readonly runIds: string[] = [];
 
-  /** When true the three project reads answer only when the test settles their slots. */
+  /** When true the four project reads answer only when the test settles their slots. */
   deferProjectReads = false;
   readonly pendingBindings: Array<(page: CiBindingListResponse) => void> = [];
   readonly pendingTokens: Array<(page: IngestTokenListResponse) => void> = [];
   readonly pendingRuns: Array<(page: RunPage) => void> = [];
+  readonly pendingActivations: Array<(state: PolicyActivationStateDto | null) => void> = [];
 
   settleBindings(page: CiBindingListResponse): void {
     this.pendingBindings.shift()?.(page);
@@ -204,6 +225,10 @@ class FakeOnboardingDataService {
 
   settleRuns(page: RunPage): void {
     this.pendingRuns.shift()?.(page);
+  }
+
+  settleActivation(state: PolicyActivationStateDto | null): void {
+    this.pendingActivations.shift()?.(state);
   }
 
   listProjects(orgId: string, query: ProjectListQuery = {}): Promise<ProjectListResponse> {
@@ -267,6 +292,20 @@ class FakeOnboardingDataService {
     return state === undefined
       ? Promise.reject(apiError('not_found', 404))
       : Promise.resolve(state);
+  }
+
+  readPolicyActivation(projectId: string): Promise<PolicyActivationStateDto | null> {
+    this.activationCalls += 1;
+    this.activationIds.push(projectId);
+    if (this.activationFailure !== null) {
+      return Promise.reject(this.activationFailure);
+    }
+    if (this.deferProjectReads) {
+      return new Promise<PolicyActivationStateDto | null>((resolve) =>
+        this.pendingActivations.push(resolve),
+      );
+    }
+    return Promise.resolve(this.activation);
   }
 }
 
@@ -391,7 +430,7 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     expect(whole.tokensTruncated).toBe(false);
   });
 
-  it('reads the bindings, tokens and runs together, before any of them answers', async () => {
+  it('reads the bindings, tokens, runs and activation together, before any of them answers', async () => {
     data.projectsById.set('p-1', PROJECT);
     data.deferProjectReads = true;
 
@@ -402,13 +441,15 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     });
     await settle();
 
-    // All three requests are in flight while none has answered.
+    // All four requests are in flight while none has answered.
     expect(data.bindingCalls).toBe(1);
     expect(data.tokenCalls).toBe(1);
     expect(data.runCalls).toBe(1);
+    expect(data.activationCalls).toBe(1);
     expect(settled).toBe(false);
 
-    // They settle in the reverse order they were issued: the derivation waits for all three.
+    // They settle in the reverse order they were issued: the derivation waits for all four.
+    data.settleActivation(ACTIVATION);
     data.settleRuns(runPage([]));
     data.settleTokens(tokenPage([TOKEN]));
     data.settleBindings(bindingPage([]));
@@ -416,6 +457,7 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
 
     expect(progress.bindings).toEqual([]);
     expect(progress.tokens).toEqual([TOKEN]);
+    expect(progress.activation).toEqual({ kind: 'active', state: ACTIVATION });
     expect(progress.currentStep).toBe(3);
   });
 
@@ -472,20 +514,80 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     expect(progress.currentStep).toBe(3);
   });
 
-  it('completes step 4 on an evidence revision and never claims step 5', async () => {
+  it('completes step 5 and reaches the terminal screen when the activation read answers', async () => {
     data.projectsById.set('p-1', PROJECT);
     data.bindings = bindingPage([BINDING]);
     data.runs = runPage([runSummary('r-1', '2026-10-21T09:00:00Z', 'complete')]);
     data.runStates.set('r-1', runState('r-1', 'complete', 'rev-7'));
+    data.activation = ACTIVATION;
 
     const progress = await service.load('o-1', 'p-1');
 
+    expect(progress.done).toEqual({ 1: true, 2: true, 3: true, 4: true, 5: true });
+    expect(progress.currentStep).toBe('enabled');
+    // The server's document travels unchanged, so step 5's panel renders what it was given.
+    expect(progress.activation).toEqual({ kind: 'active', state: ACTIVATION });
+    // The read is project-keyed and made once, with the id the project row carries.
+    expect(data.activationIds).toEqual(['p-1']);
+  });
+
+  it('leaves step 5 open when the activation read answers 404 (no activation)', async () => {
+    data.projectsById.set('p-1', PROJECT);
+    data.bindings = bindingPage([BINDING]);
+    data.runs = runPage([runSummary('r-1', '2026-10-21T09:00:00Z', 'complete')]);
+    data.runStates.set('r-1', runState('r-1', 'complete', 'rev-7'));
+    // The data service turns the contract's single 404 into `null`; a project that was never
+    // activated is indistinguishable from an unknown or foreign one (00 §9.2).
+    data.activation = null;
+
+    const progress = await service.load('o-1', 'p-1');
+
+    expect(progress.done[3]).toBe(true);
     expect(progress.done[4]).toBe(true);
-    expect(progress.currentStep).toBe(5);
-    // Decision (b): the activation has no project-keyed read, so step 5 is never claimed done,
-    // whatever the other resources say.
     expect(progress.done[5]).toBe(false);
-    expect(progress.activationReadable).toBe(false);
+    expect(progress.currentStep).toBe(5);
+    expect(progress.activation).toEqual({ kind: 'none' });
+  });
+
+  it('a progress load with the activation read refused still resolves the wizard and leaves step 5 un-derived', async () => {
+    data.projectsById.set('p-1', PROJECT);
+    data.bindings = bindingPage([BINDING]);
+    data.runs = runPage([runSummary('r-1', '2026-10-21T09:00:00Z', 'complete')]);
+    data.runStates.set('r-1', runState('r-1', 'complete', 'rev-7'));
+    data.activationFailure = apiError('forbidden', 403);
+
+    const progress = await service.load('o-1', 'p-1');
+
+    // Steps 1–4 are derived exactly as without the read: a refused activation is step 5's own
+    // state, never a failed wizard and never an "nothing is active" the caller cannot know.
+    expect(progress.done).toEqual({ 1: true, 2: true, 3: true, 4: true, 5: false });
+    expect(progress.currentStep).toBe(5);
+    expect(progress.activation).toEqual({ kind: 'forbidden' });
+    expect(progress.bindings).toEqual([BINDING]);
+    expect(progress.sampleRun?.run_id).toBe('r-1');
+  });
+
+  it('rejects the whole load for an activation refusal that is neither 403 nor the contract 404', async () => {
+    data.projectsById.set('p-1', PROJECT);
+    data.bindings = bindingPage([BINDING]);
+
+    for (const [kind, status] of [
+      ['unavailable', 503],
+      ['unauthenticated', 401],
+    ] as const) {
+      const failure = apiError(kind, status);
+      data.activationFailure = failure;
+
+      const cause = await rejectionOf(service.load('o-1', 'p-1'));
+
+      // Neither refusal says whether an activation exists, so no step is published at all: the
+      // gateway's error arrives unchanged and the store renders its error pattern.
+      expect(cause).toBe(failure);
+      expect(isApiRequestError(cause)).toBe(true);
+      if (isApiRequestError(cause)) {
+        expect(cause.error.kind).toBe(kind);
+      }
+    }
   });
 
   it('answers step 1 without any project read when the org has no project', async () => {
@@ -500,6 +602,9 @@ describe('OnboardingProgressService (09.2.1-T1.2)', () => {
     // Neither list was read, so neither is reported as truncated.
     expect(progress.bindingsTruncated).toBe(false);
     expect(progress.tokensTruncated).toBe(false);
+    // No project means the activation was never read, and none can be active.
+    expect(progress.activation).toEqual({ kind: 'none' });
+    expect(data.activationCalls).toBe(0);
     // The oldest project is the only read: no project means no project-scoped request.
     expect(data.projectCalls).toEqual([{ orgId: 'o-1', query: { limit: 1 } }]);
     expect(data.bindingCalls).toBe(0);

@@ -30,6 +30,12 @@
 // is the Settings area's append and quotes a cached head revision in `If-Match`; the wizard owns no
 // head (it cannot read one, queue row F18), so its append never quotes one and stays here, where
 // plan §5 line 73 puts every call the wizard makes.
+//
+// Step 5's read (09.2.1-T5.2 remainder) sits between them: `GET /v1/projects/{p}/policy-activation`
+// (07.1.1 F18) answers the stored pointer, so the wizard can derive step 5 from the server instead
+// of assuming it is never done. A `404` there is the contract's one "no activation" answer for
+// every case it refuses to distinguish (00 §9.2) and becomes `null`; every other refusal stays the
+// gateway's typed error.
 
 import { inject, Injectable } from '@angular/core';
 import {
@@ -38,6 +44,7 @@ import {
   createIngestToken,
   createPolicyRevision,
   createProject,
+  getPolicyActivation,
   getProject,
   getRun,
   listCiBindings,
@@ -57,6 +64,7 @@ import {
   type ListProjectsData,
   type ListRunsData,
   type PolicyActivationDto,
+  type PolicyActivationStateDto,
   type PolicyRevisionDto,
   type PolicyRevisionV1,
   type ProjectDto,
@@ -65,6 +73,7 @@ import {
   type RunStateDto,
 } from '@evidgate/sdk';
 
+import { isApiRequestError } from '../http/api-error';
 import { ApiGateway } from '../http/api-gateway';
 import { intentHeaders, type Intent } from '../http/intent';
 
@@ -211,6 +220,32 @@ export class OnboardingDataService {
     return this.gateway.call((client) =>
       createPolicyRevision({ client, path: { p: projectId }, body }),
     );
+  }
+
+  /**
+   * The project's stored policy activation (`GET /v1/projects/{p}/policy-activation`, 07.1.1 F18,
+   * step 5's read; `policy:read`). A `200` answers the pointer the server holds — the four stored
+   * members plus the activated revision's `hash` — and nothing else (`PolicyActivationStateDto`:
+   * migration `0033` stores no `previous_policy_revision_id` and no `changed`).
+   *
+   * A `404` is `null`, "no activation", and only that: the contract answers one undifferentiated
+   * `404` for a project that was never activated, an unknown id, a soft-deleted project and
+   * another tenant's project (00 §9.2), so there is no more specific fact to report. Every other
+   * refusal (401, 403, 429, 5xx) is re-thrown as the gateway's typed `ApiRequestError` unchanged:
+   * it says nothing about whether an activation exists, and folding it into `null` would let a
+   * refused read look like an unactivated project.
+   */
+  async readPolicyActivation(projectId: string): Promise<PolicyActivationStateDto | null> {
+    try {
+      return await this.gateway.call((client) =>
+        getPolicyActivation({ client, path: { p: projectId } }),
+      );
+    } catch (cause) {
+      if (isApiRequestError(cause) && cause.error.status === 404) {
+        return null;
+      }
+      throw cause;
+    }
   }
 
   /**

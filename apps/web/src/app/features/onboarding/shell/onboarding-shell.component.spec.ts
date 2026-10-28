@@ -353,7 +353,7 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
   const NO_PROJECT: OnboardingProgress = {
     project: null,
     done: { 1: false, 2: false, 3: false, 4: false, 5: false },
-    activationReadable: false,
+    activation: { kind: 'none' },
     sampleRun: null,
     bindings: [],
     tokens: [],

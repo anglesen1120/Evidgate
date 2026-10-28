@@ -175,6 +175,9 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     method: 'POST',
     path: '/projects/{p}/policy-activation',
   },
+  // 09.2.1-T5.2: step 5's read, the same path as the activation POST — the method is what tells
+  // them apart, and neither row can match the other's request.
+  { operationId: 'getPolicyActivation', method: 'GET', path: '/projects/{p}/policy-activation' },
   { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}', idKeyParameter: 'id' },
   { operationId: 'listPolicyRevisions', method: 'GET', path: '/policies/{id}/revisions' },
 ];
