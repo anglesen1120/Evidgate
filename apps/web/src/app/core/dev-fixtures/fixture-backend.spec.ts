@@ -25,6 +25,7 @@ import { TestBed } from '@angular/core/testing';
 import {
   createCiBinding,
   createIngestToken,
+  getPolicyActivation,
   getPolicyRevision,
   getRun,
   getRunDecision,
@@ -458,6 +459,28 @@ describe('fixture backend (09.1.1-T12.1)', () => {
       expect(cause.error.code).toBe(envelope.error.code);
       expect(cause.error.message).toBe(envelope.error.message);
       expect(cause.error.requestId).toBe(envelope.error.request_id);
+    }
+  });
+
+  it('carries a 429 fixture’s Retry-After into the typed error (AC-F63-a)', async () => {
+    // The document AC-F63-a's wait is built from, through the whole path this spec exists to prove:
+    // fixture `HttpBackend` -> `ApiGateway`'s error mapper -> `ApiError.retryAfterSeconds`. The
+    // interval the panel counts down is therefore the corpus header, not a number a spec wrote down.
+    toggles.setVariant('getPolicyActivation', 'rate-limited');
+    const document = documentOf('policy-activation-read-rate-limited');
+    const envelope = envelopeOf(document);
+
+    const cause = await rejectionOf(
+      gateway.call((client) => getPolicyActivation({ client, path: { p: 'p-1' } })),
+    );
+
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('rate_limited');
+      expect(cause.error.status).toBe(429);
+      expect(cause.error.code).toBe(envelope.error.code);
+      expect(cause.error.requestId).toBe(envelope.error.request_id);
+      expect(cause.error.retryAfterSeconds).toBe(Number(document.headers['Retry-After']));
     }
   });
 

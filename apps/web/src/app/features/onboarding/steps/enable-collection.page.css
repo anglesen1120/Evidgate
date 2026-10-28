@@ -168,6 +168,24 @@ app-error-pattern {
   display: block;
   min-inline-size: var(--eg-space-0);
 }
+/* AC-F63-b: the read failure's heading is a focus target, not a control — the ring is on `:focus`
+   because a programmatic focus is not always `:focus-visible`, as the terminal heading above. */
+.read-failure {
+  display: grid;
+  gap: var(--eg-space-3);
+  min-inline-size: var(--eg-space-0);
+}
+.read-failure__heading:focus {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+  border-radius: var(--eg-radius-sm);
+}
+/* AC-F63-a: the read's wait is prose beside the refusal, so it takes the muted text role and wraps
+   instead of widening the page at 360 px. */
+.read-wait {
+  color: var(--eg-text-muted);
+  overflow-wrap: anywhere;
+}
 @media (pointer: coarse), (max-width: 767px) {
   button {
     min-block-size: var(--eg-control-touch);

@@ -487,9 +487,17 @@ test.describe('W3 — step 5, enable collection', () => {
     await expect(confirm).not.toHaveAttribute('aria-describedby', /enable-permission/);
 
     // A keyboard user therefore can never submit a state the server refused to describe: the sixth
-    // Tab after the main region skips the disabled confirm and lands on Back.
+    // Tab after the main region skips the disabled confirm and lands on the refused read's one
+    // recovery (F63, AC-F63-c) — a real button that re-runs the read and never a command — and Back
+    // follows it.
     await enterMainByKeyboard(page);
     await pressTab(page, 6);
+    await expectKeyboardFocus(
+      page,
+      page.locator('[data-testid="enable-collection-read-again"]'),
+      'the refused read’s only recovery',
+    );
+    await pressTab(page);
     await expectKeyboardFocus(page, backButton(page), 'Back, with the disabled confirm skipped');
   });
 });

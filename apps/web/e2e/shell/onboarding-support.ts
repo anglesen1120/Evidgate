@@ -598,7 +598,8 @@ export async function expectNoReveal(page: Page): Promise<void> {
 // /v1/projects/{p}/policy-activation` answering `200` completes the step and opens the terminal
 // screen, its one `404` means "never activated" and leaves the step open with the confirm, and a
 // `403` leaves it open with the confirm natively disabled. `activationReadToggle` selects those
-// three answers; the `onboarding-evidence` seed pins the `404` and `onboarding-enabled` the `200`.
+// three answers — plus the `429` F63 added, whose `Retry-After` the page renders as its own wait —
+// and the `onboarding-evidence` seed pins the `404` and `onboarding-enabled` the `200`.
 // A repeated confirm is still the `unchanged` answer below, not an error; that is why the replay is
 // a corpus document and not a state the suite has to fake.
 // ---------------------------------------------------------------------------------------------
@@ -615,14 +616,18 @@ export function activationVariantToggle(answer: ActivationAnswer = 'ok'): string
 }
 
 /**
- * The four answers `getPolicyActivation` carries in the corpus (`policy-activation-read-*`), which
+ * The five answers `getPolicyActivation` carries in the corpus (`policy-activation-read-*`), which
  * is the read step 5 derives from: `ok` is an activated project in `advisory` mode (the terminal
  * panel, step done), `enforcing` the same pointer in `enforcing` mode (so a spec can see a mode the
  * wizard's own confirm never sends), `not-found` the contract's one undifferentiated `404` (the
- * confirm is offered) and `forbidden` the `403` of a principal without `policy:read` (the confirm is
- * offered but natively disabled).
+ * confirm is offered), `forbidden` the `403` of a principal without `policy:read` (the confirm is
+ * offered but natively disabled, and one control re-runs the read), and `rate-limited` the `429`
+ * with its `Retry-After: 30` (the page's own wait, with both read controls closed until it elapses).
+ * `rate-limited` is registered for that state, not driven by a spec yet: the progress read rejects
+ * the whole load for any refusal other than `403`, so step 5 does not mount under it until the shell
+ * slice lets the state through.
  */
-export type ActivationRead = 'ok' | 'enforcing' | 'not-found' | 'forbidden';
+export type ActivationRead = 'ok' | 'enforcing' | 'not-found' | 'forbidden' | 'rate-limited';
 
 /**
  * A variant toggle for the step-5 read's answer. A later toggle wins over an earlier one for the

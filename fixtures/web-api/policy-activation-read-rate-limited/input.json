@@ -1,0 +1,19 @@
+{
+  "operation_id": "getPolicyActivation",
+  "variant": "rate-limited",
+  "status": 429,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000a10e",
+    "Retry-After": "30"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "rate_limited",
+      "message": "the read burst limit for this project was reached",
+      "request_id": "018f0000-0000-7000-8000-00000000a10e",
+      "retryable": true,
+      "details": []
+    }
+  }
+}
