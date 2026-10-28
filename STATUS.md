@@ -9,8 +9,8 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged): 183/656 tasks; 188.25/703.25 raw person-days; remaining 473 tasks / 515.0 d. Via merged PRs: 156 tasks / 163.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- Landed by phase (done tasks / raw d): G1 135 / 146.25; G2 42 / 36; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged): 184/656 tasks; 189.25/703.25 raw person-days; remaining 472 tasks / 514.0 d. Via merged PRs: 157 tasks / 164.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 135 / 146.25; G2 43 / 37; G3 0 / 0; G4 6 / 6.
 - Plan totals: 656 tasks / 703.25 raw / 843.9 buffered person-days (S130 F47 added 02.3.2-T3, S, V1, G1; the S93 canonical figures were 655 / 702.75 / 843.3). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -25,13 +25,13 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 183 | 188.25 |
-| Via merged PRs | 156 | 163.25 |
+| Fully landed on develop | 184 | 189.25 |
+| Via merged PRs | 157 | 164.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 473 | 515.0 |
+| Remaining | 472 | 514.0 |
 | Plan total | 656 | 703.25 |
 
-Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 09.2.1-T5 (T5.2 reload acceptance awaits the `apps/web` wire-up of the S116 activation read), 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764) and whose remainder is the T2.2 acceptance plus T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
+Six partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764) and whose remainder is the T2.2 acceptance plus T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
 
 ### Done by area
 
@@ -45,22 +45,22 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 06 | 12 | 0 | 4 | 8 | 0 | 0 | 10 |
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
 | 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
-| 09 | 20 | 0 | 6 | 11 | 3 | 0 | 20 |
+| 09 | 21 | 0 | 6 | 12 | 3 | 0 | 21 |
 | 10 | 5 | 0 | 2 | 2 | 1 | 0 | 5 |
 | 11 | 10 | 1 | 4 | 4 | 1 | 0 | 8.25 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 183 | 3 | 51 | 97 | 31 | 1 | 188.25 |
+| TOTAL | 184 | 3 | 51 | 98 | 31 | 1 | 189.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
 | G1 | 135 | 3 | 31 | 73 | 27 | 1 | 146.25 |
-| G2 | 42 | 0 | 18 | 21 | 3 | 0 | 36 |
+| G2 | 43 | 0 | 18 | 22 | 3 | 0 | 37 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 183 | 3 | 51 | 97 | 31 | 1 | 188.25 |
+| TOTAL | 184 | 3 | 51 | 98 | 31 | 1 | 189.25 |
 
 ### Landed task groups
 
@@ -183,7 +183,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 09.3.1 | 09.3.1-T1 (T1.1 + T1.2) | merged (#212, 408f9a8) | Run list at `features/runs/list/`: `RunListStore` (cursor paging, `ref_name` server filter, state/decision/rerun-scope URL filters applied to loaded rows with a 5-page/1000-row auto-load bound), `RunDataService`, virtual-scroll table with `EvidenceBadge` (unavailable) and `DecisionChip` columns, escaped `ref_name`/rerun labels, vi + en strings, review route `dev/run-list`. Decisions D-S101-Q1/Q2 (plan 09.3.1 Notes). |
 | 09.3.1 | 09.3.1-T2.1 (T2.2 UI only); 09.3.1-T4 (PARTIAL: UI component only, wire open; S111, PR #232) | merged (#216, 1742764); T4 partial, UI merged (#232, 84c9ea3), parent T4 stays partial | Run detail at `features/runs/detail/` (`RunDetailPage`, `RunDetailStore`, run header, `ManifestPanelComponent`), route `runs/:runId`, run-list row link, `fixtures/web-api/run-detail*`, review routes `dev/run-detail` and its `dev/run-list` children, e2e `run-detail.spec.ts`, vi + en strings. T2.2 is UI ready with its acceptance open until `GET /v1/runs/{r}` exposes the manifest members (D-S103-Q1; §6 row and queue row F44). 09.3.1-T4 (S111, D-S111-Q1) is a PARTIAL delivery: `AttemptsTableComponent` at `features/runs/detail/attempts/` (typed nullable input; execution_key retry-chain grouping, raw and normalised status side by side, `duration_ms`, artifacts, pre-healing failure pinned when a healing candidate exists, paged DOM) meets the T4.1 and T4.2 done-checks at component level only, and is mounted after the manifest panel in the shared unavailable state because no run read route carries attempts (§6 row "Run detail attempts read missing (S111, D-S111-Q1)"); the live-wire parts of AC3 and AC8 stay open until the attempts read (queue F52, with F43/F44) lands and T4 swaps the `null` source. No task or person-day credit: counts include only whole tasks, so 09.3.1-T2 (T2.2 acceptance open, T2.3 and T2.4 remain) and 09.3.1-T4 (wire-dependent AC3/AC8 parts open) are not landed tasks and no count line, `AGENTS.md`, area or phase row changes. |
 | 11.5.1 | 11.5.1-T1 (T1.1 + T1.2) | merged (#219, a905754) | `docs/security/audit-taxonomy.md`: event fields, 64 emitted actions with file:line, planned-not-emitted table, retention per class (`[OPEN]`), T8 chain design with 10.6.1 AC2; written review of 02.7.1 enforcement against `migrations/0015_identity_audit_log.sql` with gaps G1–G9 in §6. T1.2 verifier and tests shipped with 02.7.1. |
-| 09.2.1 | 09.2.1-T5.1 (T5.2 partly) | merged (#218, 9a0051f); T5.1 credit only, 09.2.1-T5 stays a partial parent (T5.2 open until the web wire-up of the S116 read), counts unchanged | Onboarding step 5 `features/onboarding/steps/enable-collection.page.*`: read-only constant default advisory policy (`default-policy.ts`, T62 24 h late window, validated against the createPolicyRevision schema), `policy:write` gate with disabled confirm + "ask your release approver", confirm = createPolicyRevision then activatePolicyRevision (mode advisory, one Idempotency-Key per confirm intent), terminal panel from the response, fixtures `policy-activation-*`, e2e `onboarding-enable-collection.spec.ts`. D-S104-Q1, D-S104-Q2 (always-required acknowledgement that confirm replaces the active policy). T5.2 "reload restores enabled-and-collecting from server state" stays OPEN (the S116 `getPolicyActivation` read exists; the wizard's fetch and reload are the remaining web work, §6 row "Step 5 (enable collection)…", queue F18 addendum at `.omp/coordinator/next-wave-queue.md:94`). |
+| 09.2.1 | 09.2.1-T5.1 + T5.2 (09.2.1-T5) | merged (#218, 9a0051f; #272, 5c69ba9a); 09.2.1-T5 complete, M, G2, counted in the S129 close-out | Onboarding step 5 `features/onboarding/steps/enable-collection.page.*`: read-only constant default advisory policy (`default-policy.ts`, T62 24 h late window, validated against the createPolicyRevision schema), `policy:write` gate with disabled confirm + "ask your release approver", confirm = createPolicyRevision then activatePolicyRevision (mode advisory, one Idempotency-Key per confirm intent), terminal panel from the response, fixtures `policy-activation-*`, e2e `onboarding-enable-collection.spec.ts`. D-S104-Q1, D-S104-Q2 (always-required acknowledgement that confirm replaces the active policy). S129 (merged #272, 5c69ba9a, 09.2.1-T5 T5.2 remainder + F18 addendum 1): step 5 reads `getPolicyActivation` itself, `OnboardingProgress.activation` derives `done[5]`, terminal panel restored on reload, acknowledgement removed (D-S129-Q1), fixtures `policy-activation-read-*`; F18 addendum 2 (server default policy) stays with 07.1.1. Counts moved in the S129 close-out. |
 | 11.1.1 | 11.1.1-T3, 11.1.1-T4 | merged (#224, aa42d7a) | ASVS 5.0.0 L2 level statement and a 17-chapter mapping with 39 published gap rows — 34 L2 gaps plus five traceability observations that ASVS 5.0.0 does not require at L2 (`docs/security/asvs-l2-mapping.md`), plus the V1 security-event baseline: five types with severity, detection point and consumer per row (`docs/security/security-event-baseline.md`). Closes area plan open question 1 (D-S107-Q1); counts bumped in the close-out, and every gap is carried by a §6 row titled "ASVS L2 gaps: …" or by the §6 row "Security-event baseline contradictions and gaps (11.1.1-T4)". |
 | 10.7.1 | 10.7.1-T4.1 + T4.2 written half: key rotation runbook | merged (#222, 1adcc47) | `docs/runbooks/key-rotation.md` covers all six key classes (ingest tokens, CI OIDC trust, JWT signing key, webhook secrets, database credentials, provider keys via the 10.1.1-T2 `ISecretProvider`) plus the operator rotation path and its authorisation, and the T4.2 written half (§3: a new `pepper_vN` signs new tokens while old versions verify until their last token, with the session three-step overlap and the invite pepper that has none). Docs-only, tier T0. No task or person-day credit: counts include only whole tasks, so 10.7.1-T4 is not a landed task while the T4.2 staging drill (AC5) is open (§6 row "Key rotation drill needs staging (S106, O-F)"), and no count line, `AGENTS.md`, area or phase row changes. |
 | 11.2.1 | 11.2.1-T3 (T3.1 + T3.2) | merged (#225, f4c7de8) | `docs/security/ingest-token-review.md`: shipped ingest/CI token design reviewed against code at 96e0f17 (scope, TTL, OIDC claim validation, revocation, replay, T5 storage, single return, pepper custody and rotation, 17-row abuse table, five new gaps T3-G1..G5). Docs-only, tier T0. Whole task: counts +1 task / +1.0 d (M); nothing else in §5 was unblocked (04.9.1-T2, 08.4.3-T2, 11.2.1-T4 and 11.2.1-T5 wait on 11.2.1-T6/T4, 05.9.2-T1 on all of 11.2.1). |
@@ -195,6 +195,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | F47 | F47 (docs/contract, tier T0) | merged (#268, a1483914) | 00 §9.3 gains one block row for the four shipped session routes (`GET /v1/auth/sessions`, `DELETE /v1/auth/sessions/{s}`, `POST /v1/auth/sessions/revoke-all`, `POST /v1/auth/logout`, admin scope `X-Evidgate-Org`) and §15 one row; plan 02 story 02.3.2 gains `02.3.2-T3` (admin ends all sessions of one user, ASVS-GAP-14 7.4.5; planned only, not landed); totals 656 tasks / 703.25 raw / 843.9 buffered. A follow-up row, not a planned task: the landed counts (181 tasks / 187.25 d) do NOT change. |
 | 11.5.2 | 11.5.2-T1 (T1.1 + T1.2) | merged (#270, 142b4846) | Docs only (tier T0): `docs/adr/0010-audit-chain-keyed-hash-and-external-checkpoints.md` (`proposed`; AC1; HMAC-SHA-256 keyed chain with `chain_key_id`, secret-store custody, rotation without rewriting history, ECDSA P-256 checkpoints every 15 min, residual risk, three rejected alternatives), its index row, DECISIONS §6 F15-F22 (✅ F15, F16, F18; ✅ with ⚠️ residue F19-F21; ⚠️ F17, F22), the four labelled DoR answers in the 11.5.2 plan §8, the `[OPEN]` change request text for 00 §5.4/T8 and §15 (queued in the 11.5.2 plan Notes, 00 not edited) and the 02.7.1 gap note (`audit_log.chain_key_id`, `IAuditChainSigner`). The ASVS-GAP-24 row stays open until T2 and T3 ship. |
 | 10.11.1 | 10.11.1-T3 (T3.1) | merged (#274, e839cbb4) | Docs only (tier T0): `docs/decisions/10.11.1-waf-edge-decision-record.md` (`[OPEN]` O3, no vendor chosen): edge stance dependent on O3, what runs without a WAF (shipped throttle helpers vs AC1-AC8 planned, not merged), what is not covered, edge criteria E1-E10 for 10.8.1-T1, sources and prior art; Notes block appended to the 10.11.1 plan; two carried rows (forwarded-headers handling absent; WAF/edge stance `[OPEN]` on O3, both 10.11.1-T3, S132); D-S132-Q1..Q6 in `docs/phase-review.md`. |
+| 12.2.1 | 12.2.1-T2 (T2.1; PARTIAL — T2.2 open, needs signed pilots) | merged (#277, 95892bfd) | Docs only (tier T0): `docs/pilots/metric-definitions.md` (v1 freeze: seven §4.3 rows, guardrail pair, AC2 freeze rule, T60 null rule, O1 §3 targets `[INFERENCE]`), `docs/pilots/baseline-worksheet.md` (template; `null` + reason; raw exports stay outside the repo), `docs/README.md` row, §8 DoR lines in both plans (3 in 12.2.1, 4 in 12.5.1), Notes in both plans, one carried row. T2.2 (two-sprint baseline per signed pilot) stays open; counts and ready set unchanged. |
 
 ## 3-4. Delivered waves
 
@@ -246,8 +247,8 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
 | 10.7.1-T4 | M | Key rotation runbook | no | no | no | n/a | T4.1 and the written pepper section of T4.2 delivered by S106 (PR #222); remaining: T4.2 staging drill (AC5), see §6 rows |
-| 11.9.1-T2 | L | Breach runbook with the 72 h clock (unblocked by 11.5.1-T1, #219). T2.1–T2.3 are drafting; T2.4 needs counsel + on-call names. The plan has no four §8 DoR answers. | no | no | no | T2.1 ; T2.2 ; T2.3 ; T2.4 | yes for T2.1–T2.3; T2.4 needs counsel review |
-| 12.2.1-T2 | M | Baseline measurement kit | no | no | no | n/a | yes for T2.1 kit; T2.2 needs signed pilots |
+| 11.9.1-T2 | L | Breach runbook with the 72 h clock (unblocked by 11.5.1-T1, #219). PARTIAL: T2.1–T2.3 merged (#279, f976122d) in docs/runbooks/breach.md (4 h notice target ⚠️, OI-11-08); T2.4 (regulator support, on-call path, counsel review) stays open, see carried row "Breach runbook T2.4 open". | no | no | no | T2.1 ; T2.2 ; T2.3 ; T2.4 | yes for T2.1–T2.3; T2.4 needs counsel review |
+| 12.2.1-T2 | M | Baseline measurement kit (T2.1 kit merged in #277; T2.2 baseline remains) | no | no | no | n/a | yes for T2.1 kit; T2.2 needs signed pilots |
 | 11.8.1-T1 | L | DPA template + counsel review | no | no | no | T1.1-T1.2 ; T1.3-T1.4 | no — counsel engagement is external and the AC needs `approved` + counsel name in `manifest.yaml` |
 | 11.8.1-T2 | M | Privacy notice + counsel review | no | no | no | n/a | no — counsel review/approval is external |
 | 12.2.1-T3 | M | Pilot onboarding run + friction log | no | no | no | n/a | no — needs signed pilot orgs and the 09.2.1 wizard |
@@ -293,7 +294,6 @@ Stricter variant that also requires every dependency task's whole story to be me
 
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
-| 09.2.1-T5 (T5.2 remainder) | XS | Reload restores "enabled and collecting" from server state; the S116 read (`GET /v1/projects/{p}/policy-activation`, `getPolicyActivation`) now serves it, so only the wizard's fetch and the addendum-1 confirm changes remain; T5.1 and the confirm landed in the S104 PR | no | no | no | n/a | yes — read landed in S116 |
 | 09.3.1-T2 | L | Run detail: manifest summary, release components + digests, environment, pinned `manifest_hash`/suite/policy revision (T2.1 merged #216, 1742764) | no | no | no | T2.1+T2.2 \| T2.3+T2.4 | yes |
 | 09.3.1-T3 | L | Evidence panel: completeness verdict, `missing[]` reasons with deep links, immutable evidence-revision selector | no | no | no | T3.1+T3.2 \| T3.3+T3.4 | yes |
 | 09.3.1-T4 | M | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible. Remaining: UI component delivered in S111 (PR #232, partial); still to do is the wire swap (replace the `null` source in `run-detail.store.ts` with the SDK attempts read, add wire fixtures validated against the response schema) once queue F52 with F43/F44 lands (§6 row "Run detail attempts read missing (S111, D-S111-Q1)") | no | no | no | n/a | yes |

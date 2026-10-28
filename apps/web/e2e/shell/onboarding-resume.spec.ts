@@ -3,9 +3,10 @@
 // mid-flow (any step) resumes exactly at the first incomplete step, reading resumable state from
 // the server, not local storage". A store that persisted its step in `localStorage` would pass a
 // create-and-continue check and fail this one, because the reload re-derives every step from the
-// five reads the fixtures answer.
+// server reads the fixtures answer — step 5's activation read included (09.2.1-T5.2).
 import { expect, test } from '@playwright/test';
 
+import activationReadOk from '../../../../fixtures/web-api/policy-activation-read-ok/input.json';
 import {
   CREATED_PROJECT,
   CREATED_PROJECT_NAME,
@@ -21,8 +22,15 @@ import {
 } from './onboarding-support';
 import { ORG_ACME } from './support';
 
-/** The seeds whose resume point is worth a reload: one mid-wizard, one on the last derived step. */
-const RELOAD_SEEDS: readonly OnboardingSeed[] = ['onboarding-connected', 'onboarding-evidence'];
+/**
+ * The seeds whose resume point is worth a reload: one mid-wizard, one on the last derived step, and
+ * one whose last step is already done by its own server read (`onboarding-enabled`).
+ */
+const RELOAD_SEEDS: readonly OnboardingSeed[] = [
+  'onboarding-connected',
+  'onboarding-evidence',
+  'onboarding-enabled',
+];
 
 test.describe('a reload mid-flow resumes from the server (AC1)', () => {
   test('creating the project advances to step 2 and a reload still shows step 2', async ({
@@ -89,4 +97,33 @@ test.describe('a reload mid-flow resumes from the server (AC1)', () => {
       await expectNoStepInStorage(page, 'the reload');
     });
   }
+
+  test('an activated project reopens on its terminal step 5 panel, from the read alone', async ({
+    page,
+  }) => {
+    // `onboarding-enabled`: steps 1–4 are done and the activation read answers a `200`, so step 5 is
+    // done as well and the wizard's position is `enabled` — which renders step 5's own panel. The
+    // point of the reload here is that the panel is rebuilt from the read: no confirm ran in this
+    // browser, and nothing about the activation was carried over from the first load.
+    await page.goto(onboardingUrl('en', 'onboarding-enabled'));
+    await expect(shell(page)).toBeVisible();
+    await expectCurrentStep(page, 5);
+    await expectStepDone(page, 5, true);
+    const terminal = page.locator('[data-testid="enable-collection-enabled"]');
+    await expect(terminal).toBeVisible();
+    // One value of the read, so the panel is not an empty shell that survives a reload by accident.
+    await expect(terminal).toContainText(activationReadOk.body.project_id);
+    await expect(page.locator('[data-testid="enable-collection-confirm"]')).toHaveCount(0);
+    await expectNoStepInStorage(page, 'the first load');
+
+    await page.reload();
+    await expect(shell(page)).toBeVisible();
+    await expectCurrentStep(page, 5);
+    await expectStepDone(page, 5, true);
+    await expect(terminal).toBeVisible();
+    await expect(terminal).toContainText(activationReadOk.body.project_id);
+    await expect(terminal).toContainText(activationReadOk.body.policy_revision_id);
+    await expect(page.locator('[data-testid="enable-collection-confirm"]')).toHaveCount(0);
+    await expectNoStepInStorage(page, 'the reload');
+  });
 });

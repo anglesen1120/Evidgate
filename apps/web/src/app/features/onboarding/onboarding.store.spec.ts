@@ -34,6 +34,7 @@ import type {
   IngestTokenListResponse,
   IngestTokenView,
   ListProjectsData,
+  PolicyActivationStateDto,
   ProjectDto,
   ProjectListResponse,
   RunPage,
@@ -164,6 +165,8 @@ class FakeOnboardingDataService {
   tokens: IngestTokenListResponse = tokenPage([]);
   runs: readonly RunSummary[] = [];
   readonly runStates = new Map<string, RunStateDto>();
+  /** Step 5's read: `null` is the contract's `404` (no activation), the default state here. */
+  activation: PolicyActivationStateDto | null = null;
 
   projectFailure: Error | null = null;
   bindingFailure: Error | null = null;
@@ -230,6 +233,10 @@ class FakeOnboardingDataService {
     return state === undefined
       ? Promise.reject(apiError('not_found', 404))
       : Promise.resolve(state);
+  }
+
+  readPolicyActivation(): Promise<PolicyActivationStateDto | null> {
+    return Promise.resolve(this.activation);
   }
 
   createProject(): Promise<never> {
@@ -784,7 +791,17 @@ describe('OnboardingStore on the terminal screen (09.2.1-T1.1)', () => {
   const ENABLED: OnboardingProgress = {
     project: PROJECT,
     done: { 1: true, 2: true, 3: true, 4: true, 5: true },
-    activationReadable: false,
+    activation: {
+      kind: 'active',
+      state: {
+        project_id: PROJECT.id,
+        policy_revision_id: 'policy-revision-1',
+        hash: 'a'.repeat(64),
+        mode: 'advisory',
+        activated_by: 'user-1',
+        activated_at: '2026-10-20T09:00:00Z',
+      },
+    },
     sampleRun: null,
     bindings: [BINDING],
     tokens: [],

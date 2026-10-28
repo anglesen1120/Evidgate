@@ -51,7 +51,8 @@ export type OnboardingSeed =
   | 'onboarding-unusable'
   | 'onboarding-connected'
   | 'onboarding-run-complete'
-  | 'onboarding-evidence';
+  | 'onboarding-evidence'
+  | 'onboarding-enabled';
 
 /**
  * The step each seed resolves to, by the plan §6 derivation:
@@ -64,10 +65,13 @@ export type OnboardingSeed =
  * | `onboarding-connected`    | project + one active `ci_binding`, no run       | 3            |
  * | `onboarding-run-complete` | … and a `complete` run without an evidence      | 4            |
  * | `onboarding-evidence`     | … and an evidence revision on that run          | 5            |
+ * | `onboarding-enabled`      | … and the activation read answering `200`       | 5, done      |
  *
- * Step 5 stays current in `onboarding-evidence`: the contract has no project-keyed read of a
- * `policy_activation`, so the wizard reports activation as unreadable and never as done (decision
- * (b)).
+ * `onboarding-evidence` keeps step 5 open: its activation read is the contract's one `404` (a
+ * project that was never activated), so the step renders its panel with the confirm and stays
+ * current. `onboarding-enabled` (09.2.1-T5.2) is the same wizard one server answer later — the
+ * read answers the `ok` document — so `done[5]` holds, the shell reports step 5 done and the step's
+ * own terminal panel is built from that read (nothing this visit confirmed).
  */
 export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
   'onboarding-empty': 1,
@@ -78,6 +82,7 @@ export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
   'onboarding-connected': 3,
   'onboarding-run-complete': 4,
   'onboarding-evidence': 5,
+  'onboarding-enabled': 5,
 };
 
 /**
@@ -154,6 +159,23 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.listIngestTokens=onboarding-run',
     'fixture.variant.listRuns=onboarding-run',
     'fixture.variant.getRun=onboarding-evidence',
+    // 09.2.1-T5.2: step 5 now derives from `getPolicyActivation`, whose un-toggled answer is the
+    // `ok` document (an activated project). This seed's whole point is a project whose steps 1–4
+    // are done and whose step 5 is not, so it pins the contract's single 404 — the state of a
+    // project that was never activated. Without the pin the read completes step 5 and the wizard
+    // opens on the terminal screen instead of step 5's panel.
+    activationReadToggle('not-found'),
+  ],
+  // One server answer further than `onboarding-evidence`: the same steps 1–4, and the activation
+  // read answering `policy-activation-read-ok` (200, `advisory`). `done[5]` therefore holds and the
+  // step's terminal panel is built from that read — no confirm ran on this visit.
+  'onboarding-enabled': [
+    'fixture.variant.getProject=onboarding-run',
+    'fixture.variant.listCiBindings=onboarding-run',
+    'fixture.variant.listIngestTokens=onboarding-run',
+    'fixture.variant.listRuns=onboarding-run',
+    'fixture.variant.getRun=onboarding-evidence',
+    activationReadToggle('ok'),
   ],
 };
 
@@ -572,9 +594,13 @@ export async function expectNoReveal(page: Page): Promise<void> {
 // `policy:write` — the lone org creator's `release_approver` grants (T98) — so the confirm is
 // reachable without a second member.
 //
-// Step 5 is never derived done: `contracts/openapi.yaml` has only the activation POST, so a reload
-// shows the confirm again (plan §10 Notes). A repeated confirm is the `unchanged` answer below, not
-// an error; that is why the replay is a corpus document and not a state the suite has to fake.
+// Step 5's done-condition is the activation read (09.2.1-T5.2): `GET
+// /v1/projects/{p}/policy-activation` answering `200` completes the step and opens the terminal
+// screen, its one `404` means "never activated" and leaves the step open with the confirm, and a
+// `403` leaves it open with the confirm natively disabled. `activationReadToggle` selects those
+// three answers; the `onboarding-evidence` seed pins the `404` and `onboarding-enabled` the `200`.
+// A repeated confirm is still the `unchanged` answer below, not an error; that is why the replay is
+// a corpus document and not a state the suite has to fake.
 // ---------------------------------------------------------------------------------------------
 
 /** `fixtures/web-api/permissions-list-onboarding-enable`: the wizard grants plus `policy:write`. */
@@ -586,6 +612,26 @@ export type ActivationAnswer = 'ok' | 'unchanged' | 'invalid-transition' | 'forb
 /** A variant toggle for the step-5 confirm's answer, to append through `seedQueryWith`. */
 export function activationVariantToggle(answer: ActivationAnswer = 'ok'): string {
   return `fixture.variant.activatePolicyRevision=${answer}`;
+}
+
+/**
+ * The four answers `getPolicyActivation` carries in the corpus (`policy-activation-read-*`), which
+ * is the read step 5 derives from: `ok` is an activated project in `advisory` mode (the terminal
+ * panel, step done), `enforcing` the same pointer in `enforcing` mode (so a spec can see a mode the
+ * wizard's own confirm never sends), `not-found` the contract's one undifferentiated `404` (the
+ * confirm is offered) and `forbidden` the `403` of a principal without `policy:read` (the confirm is
+ * offered but natively disabled).
+ */
+export type ActivationRead = 'ok' | 'enforcing' | 'not-found' | 'forbidden';
+
+/**
+ * A variant toggle for the step-5 read's answer. A later toggle wins over an earlier one for the
+ * same operation (`fixture-toggles.ts` builds a `Map` from the URL), so an extra toggle passed to
+ * `seedQueryWith` overrides the seed's own pin — e.g. `activationReadToggle('ok')` on the
+ * `onboarding-evidence` seed, which pins `not-found`.
+ */
+export function activationReadToggle(answer: ActivationRead): string {
+  return `fixture.variant.getPolicyActivation=${answer}`;
 }
 
 /**

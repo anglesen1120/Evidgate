@@ -1,0 +1,18 @@
+{
+  "operation_id": "getPolicyActivation",
+  "variant": "not-found",
+  "status": 404,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000a10c"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "not_found",
+      "message": "the requested resource does not exist",
+      "request_id": "018f0000-0000-7000-8000-00000000a10c",
+      "retryable": false,
+      "details": []
+    }
+  }
+}
