@@ -176,6 +176,66 @@ describe('OnboardingShellComponent', () => {
   it('leaves focus alone on the first ready render of a page load', () => {
     expect(root.querySelector('#onboarding-step-title')).not.toBeNull();
     expect(document.activeElement?.id).not.toBe('onboarding-step-title');
+    expect(document.activeElement?.id).not.toBe('onboarding-title');
+  });
+
+  it('returns focus to the stable page heading after every failed reload (AC-F63-b)', async () => {
+    // A page whose own read already failed: this is the error branch the retry button lives in.
+    store.status.set('loading');
+    await fixture.whenStable();
+    store.status.set('error');
+    store.failure.set('unavailable');
+    await fixture.whenStable();
+    expect(root.querySelector('[data-testid="onboarding-retry"]')).not.toBeNull();
+    // Rendering a failure is not a reload: nothing moved focus to the heading on its own.
+    expect(document.activeElement?.id).not.toBe('onboarding-title');
+
+    /**
+     * A read the test answers, so the loading render really happens: that pass destroys the retry
+     * button holding focus, which is the loss this spec is about. A mock that answered in one turn
+     * lets Angular reuse the button node and hides the loss entirely.
+     */
+    // `Promise.withResolvers` is ES2024; this project compiles against the ES2022 lib
+    // (http-client-fetch.ts:203), so the executor form is how the answer handle escapes.
+    let answerRetry: (failure: 'forbidden' | 'not-found' | 'unavailable') => void = () => {};
+    store.load.mockImplementation(() => {
+      let resolveRead: () => void = () => undefined;
+      const read = new Promise<void>((resolve) => {
+        resolveRead = resolve;
+      });
+      store.status.set('loading');
+      answerRetry = (failure) => {
+        store.status.set('error');
+        store.failure.set(failure);
+        resolveRead();
+      };
+      return read;
+    });
+    const activationLoads = store.load.mock.calls.length;
+
+    // Two consecutive failed reloads, and the second answers with a different failure: the heading
+    // must be the target in every failure branch the shell renders, not only the generic one.
+    for (const failure of ['unavailable', 'forbidden'] as const) {
+      const retry = root.querySelector<HTMLButtonElement>('[data-testid="onboarding-retry"]')!;
+      retry.focus();
+      expect(document.activeElement).toBe(retry);
+      retry.click();
+      await fixture.whenStable();
+      // The loading branch replaced the control that carried focus: focus is really gone here,
+      // before the read answers, so the assertion below cannot pass on a node Angular reused.
+      expect(root.querySelector('[data-testid="onboarding-retry"]')).toBeNull();
+      expect(document.activeElement).not.toBe(retry);
+
+      answerRetry(failure);
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(root.querySelector('#onboarding-title'));
+    }
+    expect(store.load).toHaveBeenCalledTimes(activationLoads + 2);
+    // The second failure rendered its own branch, so the heading is not the generic branch's.
+    expect(root.querySelector('app-forbidden-pattern')).not.toBeNull();
+    expect(root.querySelector('[data-testid="onboarding-retry"]')).toBeNull();
+    // The retry landed on the failure branches and never opened a step of its own.
+    expect(store.viewStep()).toBe(1);
   });
 
   it('disables Back on step 1, enables it later and focuses the new step heading', async () => {

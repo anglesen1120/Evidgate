@@ -46,6 +46,19 @@ export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
   private readonly route = inject(ActivatedRoute);
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
+  /**
+   * The page's own heading. It is the one named element every branch of the shell renders, so a
+   * retry that fails has somewhere stable to put focus: the retry button itself is replaced by the
+   * failure branch it triggers, and dropping the user on `<body>` loses both the position and the
+   * announcement (WCAG 2.4.3; state-sheet.md:33).
+   */
+  private readonly pageHeading = viewChild<ElementRef<HTMLHeadingElement>>('pageHeading');
+  /**
+   * Set by a retry whose read failed. The render pass at the end of the constructor moves focus
+   * and clears it; a signal (not a plain field) because the failure may be published after the
+   * render it caused was already queued, and the write is what schedules the pass that focuses.
+   */
+  private readonly announceReloadFailure = signal(false);
   protected readonly orgId = signal('');
   private readonly projectId = signal<string | null>(null);
   /**
@@ -118,6 +131,22 @@ export class OnboardingShellComponent {
       this.focusedToken = token;
       this.heading()?.nativeElement.focus();
     });
+
+    afterRenderEffect(() => {
+      // A retry that failed, and only one: the first ready render of a page load, the create's
+      // activation and a step move all keep focus where the user left it (the token hand-off above
+      // owns the moved step). Reading the ref inside the effect keeps it tracked, so the pass that
+      // renders the failure re-runs this with the heading resolved.
+      if (!this.announceReloadFailure()) {
+        return;
+      }
+      const heading = this.pageHeading()?.nativeElement;
+      if (heading === undefined) {
+        return;
+      }
+      this.announceReloadFailure.set(false);
+      heading.focus();
+    });
   }
 
   protected canSelect(step: StepNumber): boolean {
@@ -126,6 +155,19 @@ export class OnboardingShellComponent {
   }
 
   protected reload(): void {
-    void this.store.load(this.orgId(), this.projectId());
+    void this.retryLoad();
+  }
+
+  /**
+   * The shell's own retry of the page-level read. `load` never rejects — it publishes `error`
+   * instead (see `OnboardingStore.load`) — so the status afterwards is the answer, and a failure is
+   * handed to the render pass that returns focus to the page heading.
+   */
+  private async retryLoad(): Promise<void> {
+    await this.store.load(this.orgId(), this.projectId());
+    if (this.store.status() !== 'error') {
+      return;
+    }
+    this.announceReloadFailure.set(true);
   }
 }

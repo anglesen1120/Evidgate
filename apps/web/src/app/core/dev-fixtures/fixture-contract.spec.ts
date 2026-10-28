@@ -1273,6 +1273,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       'policy-activation-read-enforcing',
       'policy-activation-read-not-found',
       'policy-activation-read-forbidden',
+      'policy-activation-read-rate-limited',
     ];
     for (const name of names) {
       const document = corpusDocument(name);
@@ -1317,6 +1318,27 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(
       isRecord(forbiddenBody) && isRecord(forbiddenBody['error']) && forbiddenBody['error']['code'],
     ).toBe('forbidden');
+
+    // AC-F63-a: the throttled read. The wait the page renders is built from this document alone —
+    // the contract's `429 RateLimited` response, which always carries `Retry-After` (00 §9.2) — so
+    // the interval and the envelope's own `retryable` are pinned rather than assumed.
+    const rateLimited = corpusDocument('policy-activation-read-rate-limited');
+    expect([rateLimited.operation_id, rateLimited.status, rateLimited.variant]).toEqual([
+      'getPolicyActivation',
+      429,
+      'rate-limited',
+    ]);
+    expect(rateLimited.headers['Retry-After']).toBe('30');
+    const rateLimitedBody = rateLimited.body;
+    expect(
+      isRecord(rateLimitedBody) && isRecord(rateLimitedBody['error'])
+        ? rateLimitedBody['error']
+        : null,
+    ).toMatchObject({
+      code: 'rate_limited',
+      retryable: true,
+      request_id: rateLimited.headers['X-Request-Id'],
+    });
   });
 
   it('answers the one-time step-2 secrets in the create documents alone (09.2.1-T2)', () => {

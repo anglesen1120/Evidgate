@@ -2641,6 +2641,8 @@
       <trans-unit id="onboarding.enable.active-read" datatype="html"><source>This project is enabled. This panel is built from the activation recorded on the server, so reloading the wizard shows the same state.</source></trans-unit>
       <trans-unit id="onboarding.enable.retry-read" datatype="html"><source>Read the activation again</source></trans-unit>
       <trans-unit id="onboarding.enable.read-failed" datatype="html"><source>The activation could not be read. Reading it again is safe.</source></trans-unit>
+      <trans-unit id="onboarding.enable.read-failed-heading" datatype="html"><source>The activation could not be read</source></trans-unit>
+      <trans-unit id="onboarding.enable.read-wait" datatype="html"><source>The server asked you to wait before reading the activation again: <x id="remaining" equiv-text="${remaining}"/> s left of the <x id="supplied" equiv-text="${supplied}"/> s it named.</source></trans-unit>
       <trans-unit id="onboarding.enable.project" datatype="html"><source>Project</source></trans-unit>
       <trans-unit id="onboarding.enable.activated-by" datatype="html"><source>Activated by</source></trans-unit>
       <trans-unit id="onboarding.enable.previous-revision" datatype="html"><source>Revision this replaced</source></trans-unit>
