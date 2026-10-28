@@ -213,6 +213,41 @@ class AuditExemptions(unittest.TestCase):
         findings = run(EXEMPT_DEFINER.format(name="evidgate.session_list"))
         self.assertEqual(rules(findings), {"definer_audit"}, "the key is the qualified name, not the bare one")
 
+    def test_the_healing_switch_definer_is_exempt_only_under_its_exact_name(self):
+        """08.6.3/`0052`: the tenant-less system switch has no org chain to write into.
+
+        The exemption has to stay as narrow as the reason: the same spelling in another schema, and
+        a neighbour whose name merely starts with it, are both ordinary definers that owe an audit
+        row.
+        """
+        self.assertIn("evidgate.healing_switch_set_system", check_rls.DEFINER_AUDIT_EXEMPT)
+        self.assertEqual(run(EXEMPT_DEFINER.format(name="evidgate.healing_switch_set_system")), [])
+
+        for unlisted in (
+            "public.healing_switch_set_system",
+            "evidgate.healing_switch_set_system_v2",
+            "evidgate.healing_switch_set_tenant",
+        ):
+            with self.subTest(name=unlisted):
+                self.assertEqual(rules(run(EXEMPT_DEFINER.format(name=unlisted))), {"definer_audit"})
+
+    def test_the_healing_switch_reason_names_the_live_caller_and_its_receiver(self):
+        """08.6.3/`0052`: the exemption describes what attests a system write today.
+
+        The reason is the only place that records why a definer owes no per-call audit row, so it
+        must name the caller that exists (the operator route, wired in T1) and the structured log
+        that stands in for the row — not a planned or removed route — plus the `security_event`
+        receiver that will add one later. A stale "not wired yet" sentence would claim the write
+        path is unbuilt while the writer ships in the same change.
+        """
+        reason = check_rls.DEFINER_AUDIT_EXEMPT["evidgate.healing_switch_set_system"]
+
+        self.assertNotIn("not wired", reason.lower())
+        self.assertIn("OperatorEndpoints.cs", reason)
+        self.assertIn("HealingSystemSwitch.cs", reason)
+        self.assertIn("structured operator log event", reason)
+        self.assertIn("11.5.1-T5", reason)
+
 
 class RealRepository(unittest.TestCase):
     def test_migrations_of_this_repository_are_clean(self):

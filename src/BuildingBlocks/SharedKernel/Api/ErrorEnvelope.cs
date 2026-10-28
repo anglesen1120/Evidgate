@@ -103,6 +103,15 @@ public static class ApiErrorCode
     /// <summary>An <c>Idempotency-Key</c> was reused for a different request (00 §9.1/§9.2: 409).</summary>
     public const string IdempotencyConflict = "idempotency_conflict";
 
+    /// <summary>422: the healing switch mode is not one of <c>enabled</c>, <c>shadow</c>, <c>disabled</c> — <c>unavailable</c> included (08.6.3 AC2).</summary>
+    public const string InvalidSwitchMode = "invalid_switch_mode";
+
+    /// <summary>422: <c>enabled</c> was requested while the deployment runs with <c>Healing:Apply</c> off (08.6.3 AC7, ruling T33).</summary>
+    public const string ModeNotAvailable = "mode_not_available";
+
+    /// <summary>403: the platform-wide healing switch is not writable from a tenant route (08.6.3 AC1).</summary>
+    public const string ForbiddenScope = "forbidden_scope";
+
 
     /// <summary>A built-in role is immutable (02.2.1 AC6: 409 <c>builtin_role_immutable</c>).</summary>
     public const string BuiltinRoleImmutable = "builtin_role_immutable";

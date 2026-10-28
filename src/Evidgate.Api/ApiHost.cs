@@ -25,6 +25,8 @@ using Evidgate.Modules.Orchestrator;
 using Evidgate.Modules.Policy;
 using Evidgate.Modules.Catalog.Endpoints;
 using Evidgate.Modules.Evidence.Endpoints;
+using Evidgate.Modules.Healing;
+using Evidgate.Modules.Healing.Endpoints;
 using Evidgate.Modules.Orchestrator.Endpoints;
 using Evidgate.Modules.Policy.Endpoints;
 using Evidgate.Modules.Tenancy;
@@ -123,6 +125,8 @@ public static partial class ApiHost
         builder.Services.AddEvidenceModule(builder.Configuration);
         // 07.1.1-T1: the policy module — the append-only revision write model and store.
         builder.Services.AddPolicyModule();
+        // 08.6.3-T1: the healing module — the kill switch store, its resolver and the V1 clamp (Healing:Apply).
+        builder.Services.AddHealingModule(builder.Configuration);
         // 02.2.1-T1.2/T2.2: the permission-catalogue module — reads (00 §2, 02 §4.2),
         // the flagged custom-role writes and the C2 permission evaluator, which
         // replaces the pipeline's fail-closed default.
@@ -207,6 +211,8 @@ public static partial class ApiHost
         app.MapIngestionEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.1.1-T3: the policy revision routes, same filters.
         app.MapPolicyEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // 08.6.3-T1: the healing switch routes of 08.6.3 §5, same filters.
+        app.MapHealingEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.3.1-T1: the waiver routes of 07.3.1 §5, same filters.
         app.MapWaiverEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.3.1-T2: the quarantine routes of 07.3.1 §5, same filters.

@@ -4624,24 +4624,34 @@ paths:
     get:
       operationId: getHealingSwitch
       tags: [healing]
-      summary: Resolved healing availability per tenant/project (most restrictive wins)
+      summary: Resolved healing availability per scope (most restrictive wins)
+      description: >-
+        The healing kill switch in force (08.6.3-T1, 00 §8.7, rulings T33/T72). Three scopes may carry a
+        row — the platform-wide `system` row the operator ingress writes, the org's `tenant` row and an
+        optional `project` row — and each is returned as stored, `null` when that scope has none. The
+        resolved value is the most restrictive stored mode (`disabled` > `shadow` > `enabled`), and a
+        database with no row at any scope resolves to `shadow`: the V1 posture of healing that decides but
+        never applies. `unavailable` exists in the vocabulary (00 §8.7) but this story never produces it —
+        it is an observation of 08.6.3-T2's health probes, and both `dependency_health` fields are `null`
+        until then (`null` means not observed, never healthy). A `project_id` outside the credential's or
+        the request's scope is `403 project_scope_mismatch`; an unknown, soft-deleted or other-tenant one is
+        `404` (also for another tenant's project). The `system` member is redacted for a tenant read: `mode`, `at`
+        and `version` only, with `set_by` and `reason` null — the operator's identity and incident notes stay on the
+        operator ingress. One SQL statement reads the three rows (AC9).
       x-permission: healing:triage
       x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/HealingProjectQuery'
       responses:
         '200':
-          description: Resolved switch (`enabled|shadow|disabled|unavailable`, 00 §8.7)
+          description: The three scope rows, the resolved mode and the dependency observations
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
-                type: object
-                required: [availability]
-                properties:
-                  availability:
-                    type: string
-                    enum: [enabled, shadow, disabled, unavailable]
+                $ref: '#/components/schemas/HealingSwitchResolutionView'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4654,37 +4664,54 @@ paths:
       operationId: setHealingSwitch
       tags: [healing]
       summary: Set the healing switch (`enabled|shadow|disabled` only, TL T33)
+      description: >-
+        Sets the switch of the org (`scope: tenant`) or of one of its projects (`scope: project` with
+        `project_id`); `healing:configure` is required and `Idempotency-Key` is mandatory — a replay of the
+        same key and body answers the same stored switch, and a different body under the same key is `409
+        idempotency_conflict` (00 §9.1). There is no `If-Match`: concurrency is the row's `version`, which
+        the response carries. `scope: system` is `403 forbidden_scope` and is refused before any project
+        lookup, so a tenant cannot probe ids through a system write; the platform row is written only by
+        the operator ingress (`POST /internal/operator/healing/switch`). A `tenant` body carrying a
+        `project_id` is `422` with `project_id: not_allowed`, a `project` body without one is `422
+        project_id: required`, a `project_id` outside the credential's or the request's scope is `403
+        project_scope_mismatch`, and an unknown, soft-deleted or other-tenant one is `404`. The mode
+        vocabulary is `enabled`, `shadow`, `disabled`: anything else — `unavailable` included, because it
+        is a dependency observation and not a configuration — is `422 invalid_switch_mode`, and `enabled`
+        while the deployment runs with `Healing:Apply` off (the default in V1, ruling T33) is `422
+        mode_not_available`, on this route and on the operator's system write alike. The body is
+        `contracts/schemas/healing-switch-set.v1.json` (closed, 4 KiB → `413`); `reason` is 1–2000 Unicode code
+        points when present — the unit the column's own `length(reason)` check uses, so a reason of 1001 emoji is
+        1001 characters and fits. A change writes one `healing.switch_changed` outbox event carrying the
+        row's version, so a retry adds none.
       x-permission: healing:configure
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/XsrfToken'
-        - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [availability]
-              properties:
-                availability:
-                  type: string
-                  enum: [enabled, shadow, disabled]
+              $ref: './schemas/healing-switch-set.v1.json'
       responses:
         '200':
-          description: Switch updated
+          description: The stored switch of that scope
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealingSwitchView'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '412':
-          $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -6471,6 +6498,17 @@ components:
         `membership:write` AND the target session's user an active membership in the same org, otherwise the
         answer is the same 404 an unknown id gets. The org is never taken from the path or the body of a
         pre-tenant route.
+      schema:
+        type: string
+        format: uuid
+    HealingProjectQuery:
+      name: project_id
+      in: query
+      required: false
+      description: >-
+        The project whose switch override applies (08.6.3-T1). Absent answers the org-level resolution; present,
+        the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and
+        exist in the caller's org (404 otherwise, also for another tenant's project).
       schema:
         type: string
         format: uuid
@@ -8770,6 +8808,83 @@ components:
           type: string
           format: uuid
           description: A built-in catalogue role or one of the caller's own org roles (else 409 `unknown_role`).
+    HealingSwitchView:
+      type: object
+      description: >-
+        One stored switch scope (08.6.3-T1, 00 §8.7). `scope`, `org_id` and `project_id` are the row's identity and
+        cannot be rewritten: a change re-stamps only the mode, the reason, who set it and when, and the database bumps
+        `version` itself. The `system` member of a tenant's `GET` is redacted (SR-F2): it carries `mode`, `at` and
+        `version` only, with `set_by` and `reason` null, because the platform operator's identity and incident notes
+        are not the tenants' to read. The operator's own write response keeps both.
+      required: [scope, project_id, mode, reason, set_by, at, version]
+      properties:
+        scope:
+          type: string
+          enum: [system, tenant, project]
+        project_id:
+          type: [string, 'null']
+          format: uuid
+          description: The project of a `project` row; null on a `system` or `tenant` row
+        mode:
+          type: string
+          enum: [enabled, shadow, disabled]
+        reason:
+          type: [string, 'null']
+          maxLength: 2000
+          description: The free-text reason of the change; null on a redacted `system` row and when none was given
+        set_by:
+          type: [string, 'null']
+          format: uuid
+          description: >-
+            The member (or platform operator) who set this scope; null on a redacted `system` row of a tenant's `GET`
+        at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    DependencyHealth:
+      type: object
+      description: >-
+        The healing subsystem's dependency observations (08.6.3 §5). Both fields are null until 08.6.3-T2 wires the
+        health probes, and null means "not observed" — never "healthy".
+      required: [llm, knowledge_store]
+      properties:
+        llm:
+          type: [string, 'null']
+          description: The model endpoint's observation; null until 08.6.3-T2 wires health probes
+        knowledge_store:
+          type: [string, 'null']
+          description: The knowledge store's observation; null until 08.6.3-T2 wires health probes
+    HealingSwitchResolutionView:
+      type: object
+      description: >-
+        The healing switch in force (08.6.3-T1, AC2): each scope's stored row, the most restrictive mode of the scopes
+        that carry one, and the dependency observations. A scope without a row is null and contributes nothing; with
+        no row at any scope the resolution is `shadow`, the V1 posture of healing that never applies.
+      required: [system, tenant, project, resolved, dependency_health]
+      properties:
+        system:
+          description: The platform-wide row, or null when the operator never set one
+          oneOf:
+            - $ref: '#/components/schemas/HealingSwitchView'
+            - type: 'null'
+        tenant:
+          description: The org's row, or null
+          oneOf:
+            - $ref: '#/components/schemas/HealingSwitchView'
+            - type: 'null'
+        project:
+          description: The project's row when the query named one and it has a row, else null
+          oneOf:
+            - $ref: '#/components/schemas/HealingSwitchView'
+            - type: 'null'
+        resolved:
+          type: string
+          enum: [enabled, shadow, disabled, unavailable]
+          description: The most restrictive stored mode; `shadow` when no scope has a row
+        dependency_health:
+          $ref: '#/components/schemas/DependencyHealth'
     WaiverDto:
       type: object
       description: >-

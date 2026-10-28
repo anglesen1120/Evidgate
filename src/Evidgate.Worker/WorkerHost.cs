@@ -9,6 +9,7 @@ using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
+using Evidgate.Modules.Healing;
 using Evidgate.Modules.Identity;
 using Evidgate.Modules.Ingestion;
 using Evidgate.Modules.Orchestrator;
@@ -93,6 +94,8 @@ public static class WorkerHost
         builder.Services.AddTenancyModule();
         // 12.3.1-T1.3: the usage module, so the ledger write path resolves in the Worker as well.
         builder.Services.AddUsageModule();
+        // 08.6.3-T1: the healing module, so every handler the Api composes resolves here too.
+        builder.Services.AddHealingModule(builder.Configuration);
 
         // 01.5.1-T1.2/T1.4: the durable task queue — claim loops per queue and the
         // cron schedule runner. Both are registered in every worker; the unique fire

@@ -114,6 +114,19 @@ DEFINER_AUDIT_EXEMPT = {
         "created 0048_identity_session_routes.sql:479 (timestamptz, integer): T80 sweep — a bounded bulk delete of "
         "expired and past-retention sessions, observed via the task row, exactly like `purge_expired_idempotency`"
     ),
+    "evidgate.healing_switch_set_system": (
+        "created 0052_healing_switch.sql:211 (text, text, uuid): the platform-wide healing kill switch "
+        "belongs to no tenant, so there is no org chain to append to — `public.audit_log.org_id` is NOT "
+        "NULL and every row of it is chained per org (0015). The action is attested outside the audit "
+        "chain: its only caller is `POST /internal/operator/healing/switch` "
+        "(src/Evidgate.Api/Endpoints/OperatorEndpoints.cs, `healing.MapPost(\"/switch\", ...)`, behind "
+        "02.8.1's fail-closed `RequireOperatorFilter`), which writes a structured operator log event on "
+        "every system write — mode, set_by and version, never the reason text — through "
+        "`HealingSystemSwitchWriter` (src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs), "
+        "and the 11.5.1-T5 security_event receiver adds its own row once that table lands — an open "
+        "receiver, exactly like the D-S102-Q3 entries above (`security_event` does not exist yet). No "
+        "per-call audit row is possible here, which is why the exemption is recorded rather than the row"
+    ),
 }
 
 # Roles a definer function may be granted EXECUTE to.

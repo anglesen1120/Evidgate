@@ -1015,6 +1015,65 @@ export type GrantRoleRequest = {
 };
 
 /**
+ * One stored switch scope (08.6.3-T1, 00 §8.7). `scope`, `org_id` and `project_id` are the row's identity and cannot be rewritten: a change re-stamps only the mode, the reason, who set it and when, and the database bumps `version` itself. The `system` member of a tenant's `GET` is redacted (SR-F2): it carries `mode`, `at` and `version` only, with `set_by` and `reason` null, because the platform operator's identity and incident notes are not the tenants' to read. The operator's own write response keeps both.
+ */
+export type HealingSwitchView = {
+    scope: 'system' | 'tenant' | 'project';
+    /**
+     * The project of a `project` row; null on a `system` or `tenant` row
+     */
+    project_id: string | null;
+    mode: 'enabled' | 'shadow' | 'disabled';
+    /**
+     * The free-text reason of the change; null on a redacted `system` row and when none was given
+     */
+    reason: string | null;
+    /**
+     * The member (or platform operator) who set this scope; null on a redacted `system` row of a tenant's `GET`
+     */
+    set_by: string | null;
+    at: string;
+    version: number;
+};
+
+/**
+ * The healing subsystem's dependency observations (08.6.3 §5). Both fields are null until 08.6.3-T2 wires the health probes, and null means "not observed" — never "healthy".
+ */
+export type DependencyHealth = {
+    /**
+     * The model endpoint's observation; null until 08.6.3-T2 wires health probes
+     */
+    llm: string | null;
+    /**
+     * The knowledge store's observation; null until 08.6.3-T2 wires health probes
+     */
+    knowledge_store: string | null;
+};
+
+/**
+ * The healing switch in force (08.6.3-T1, AC2): each scope's stored row, the most restrictive mode of the scopes that carry one, and the dependency observations. A scope without a row is null and contributes nothing; with no row at any scope the resolution is `shadow`, the V1 posture of healing that never applies.
+ */
+export type HealingSwitchResolutionView = {
+    /**
+     * The platform-wide row, or null when the operator never set one
+     */
+    system: HealingSwitchView | null;
+    /**
+     * The org's row, or null
+     */
+    tenant: HealingSwitchView | null;
+    /**
+     * The project's row when the query named one and it has a row, else null
+     */
+    project: HealingSwitchView | null;
+    /**
+     * The most restrictive stored mode; `shadow` when no scope has a row
+     */
+    resolved: 'enabled' | 'shadow' | 'disabled' | 'unavailable';
+    dependency_health: DependencyHealth;
+};
+
+/**
  * One risk-acceptance waiver (07.3.1-T1, 00 §8.8). `approved_by` is null until a different approver approves it; `state` is returned as stored.
  */
 export type WaiverDto = {
@@ -1937,6 +1996,30 @@ export type Event = unknown & {
 };
 
 /**
+ * Healing switch set v1
+ *
+ * The body of PUT /v1/healing/switch (08.6.3-T1, 00 §8.7, rulings T33/T72): the kill switch of one scope. The server refuses scope=system with 403 forbidden_scope (only the operator ingress writes the platform row), a project scope without a project_id, and a tenant scope that carries one, each as 422 with a field detail. `mode` is deliberately a free string here instead of an enum: the mode vocabulary is checked by the handler so that `unavailable` and every other value answer 422 invalid_switch_mode rather than a generic schema failure, and `enabled` answers 422 mode_not_available while the deployment runs with Healing:Apply off. The schema is closed: a member not listed here is refused with its JSON pointer in error.details[].path. The transport cap is 4 KiB.
+ */
+export type HealingSwitchSetV1 = {
+    /**
+     * The scope the switch is set on; `system` is refused by this route (403 forbidden_scope)
+     */
+    scope: 'system' | 'tenant' | 'project';
+    /**
+     * The project of a `project` scope row; refused on a `tenant` row and required on a `project` row
+     */
+    project_id?: string | null;
+    /**
+     * One of enabled, shadow, disabled — anything else, `unavailable` included, is 422 invalid_switch_mode
+     */
+    mode: string;
+    /**
+     * Why the switch was set, 1–2000 Unicode code points when present (a JSON-Schema string length counts characters, the same unit the column's length() check uses)
+     */
+    reason?: string | null;
+};
+
+/**
  * Policy revision v1
  *
  * The body of POST /v1/projects/{p}/policies (07.1.1-T3, 00 §8.6 + D-A10): the decision-rule configuration of one project — the cases and suites a run must cover, the critical cases, the skips the policy allows, the flaky budget, the required artifacts, the collection deadline and late window, the freshness bound, the quarantine list and the branch-gating references. The server canonicalises the body (RFC 8785) and hashes it into `sha256:<hex>`; content already stored for the project answers 200 with that revision, new content 201 with the next revision_no. The schema is closed: any member not listed here is refused as 422 policy_unknown_field with the member's JSON pointer in error.details[].path. The transport cap is 64 KiB.
@@ -2015,6 +2098,11 @@ export type SessionId = string;
  * Names the org in which the caller claims `membership:write` (02.3.2-T2.1). Absent, only the session's owner may be revoked; present, the caller must hold an active membership in this org with `membership:write` AND the target session's user an active membership in the same org, otherwise the answer is the same 404 an unknown id gets. The org is never taken from the path or the body of a pre-tenant route.
  */
 export type OrgHeader = string;
+
+/**
+ * The project whose switch override applies (08.6.3-T1). Absent answers the org-level resolution; present, the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and exist in the caller's org (404 otherwise, also for another tenant's project).
+ */
+export type HealingProjectQuery = string;
 
 /**
  * Post-login destination, allowlisted by `ReturnUrlPolicy` (02.3.1 §8): a same-origin path with exactly one leading `/`, no backslash or control character, at most 512 characters, re-checked through up to four percent-decoding passes. Any other value — `//host`, `/\host`, a scheme — is replaced by `/` and is not an error. The value travels only inside the protected pending-login cookie, never in a URL to the provider.
@@ -7579,7 +7667,12 @@ export type RejectHealingCandidateResponses = {
 export type GetHealingSwitchData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The project whose switch override applies (08.6.3-T1). Absent answers the org-level resolution; present, the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and exist in the caller's org (404 otherwise, also for another tenant's project).
+         */
+        project_id?: string;
+    };
     url: '/healing/switch';
 };
 
@@ -7606,19 +7699,15 @@ export type GetHealingSwitchError = GetHealingSwitchErrors[keyof GetHealingSwitc
 
 export type GetHealingSwitchResponses = {
     /**
-     * Resolved switch (`enabled|shadow|disabled|unavailable`, 00 §8.7)
+     * The three scope rows, the resolved mode and the dependency observations
      */
-    200: {
-        availability: 'enabled' | 'shadow' | 'disabled' | 'unavailable';
-    };
+    200: HealingSwitchResolutionView;
 };
 
 export type GetHealingSwitchResponse = GetHealingSwitchResponses[keyof GetHealingSwitchResponses];
 
 export type SetHealingSwitchData = {
-    body: {
-        availability: 'enabled' | 'shadow' | 'disabled';
-    };
+    body: HealingSwitchSetV1;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -7628,10 +7717,6 @@ export type SetHealingSwitchData = {
          * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
          */
         'X-XSRF-TOKEN'?: string;
-        /**
-         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
-         */
-        'If-Match': string;
     };
     path?: never;
     query?: never;
@@ -7648,13 +7733,13 @@ export type SetHealingSwitchErrors = {
      */
     403: ErrorEnvelope;
     /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
      * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
      */
     409: ErrorEnvelope;
-    /**
-     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
-     */
-    412: ErrorEnvelope;
     /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
      */
@@ -7673,10 +7758,12 @@ export type SetHealingSwitchError = SetHealingSwitchErrors[keyof SetHealingSwitc
 
 export type SetHealingSwitchResponses = {
     /**
-     * Switch updated
+     * The stored switch of that scope
      */
-    200: unknown;
+    200: HealingSwitchView;
 };
+
+export type SetHealingSwitchResponse = SetHealingSwitchResponses[keyof SetHealingSwitchResponses];
 
 export type CreateWaiverData = {
     body: WaiverCreateRequest;

@@ -753,6 +753,14 @@ internal static class RouteRequests
         Add("DELETE", "/v1/quarantine/{q}", ctx => new(HttpMethod.Delete, $"/v1/quarantine/{ctx.QuarantineId}", IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/quarantine", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/quarantine"));
 
+        // ---- Healing (08.6.3-T1) -----------------------------------------------------------------------------
+        // The switch routes carry no path id: the read answers the three scope rows of the caller's org, and the
+        // write sets the org row (a shape-valid body of the closed `healing-switch-set.v1` schema, with the
+        // mandatory Idempotency-Key of 00 §9.1). The matrices only assert the authz outcome.
+        Add("GET", "/v1/healing/switch", _ => new(HttpMethod.Get, "/v1/healing/switch"));
+        Add("PUT", "/v1/healing/switch", _ => new(HttpMethod.Put, "/v1/healing/switch",
+            new JsonObject { ["scope"] = "tenant", ["mode"] = "shadow" }, IdempotencyKey: Key()));
+
         // ---- Evidence ----------------------------------------------------------------------------------------
         Add("POST", "/v1/artifacts/upload-url", _ => new(HttpMethod.Post, "/v1/artifacts/upload-url",
             UploadUrl(), IdempotencyKey: Key()));
