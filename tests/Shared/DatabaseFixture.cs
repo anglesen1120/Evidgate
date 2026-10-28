@@ -48,15 +48,17 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// </summary>
     public static readonly TimeSpan SuiteBudget = TimeSpan.FromMinutes(10);
 
+    /// <summary>Upper bound of the lazy start (image pull, boot, migrations).</summary>
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromMinutes(5);
+
     private const string DatabaseOwnerRole = "evidgate_owner";
     private const string ApplicationRole = "evidgate_app";
     private const string HarnessDatabase = "evidgate_harness";
 
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(ContainerImages.Postgres)
-        .WithDatabase("evidgate")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    // Built inside the lazy start, not here: building a container resolves the Docker
+    // endpoint and throws when there is no daemon, which would fail the assembly
+    // fixture's construction for tests that never need a container.
+    private PostgreSqlContainer? _container;
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
@@ -65,6 +67,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
     private NpgsqlDataSource? _appDataSource;
     private ServiceProvider? _services;
     private RespawnCheckpoint? _checkpoint;
+    private readonly object _startLock = new();
+    private Task? _start;
     private int _resets;
 
     /// <summary>
@@ -86,24 +90,42 @@ public sealed class DatabaseFixture : IAsyncLifetime
     public static string ExpectedHead => ExpectedMigrationHead.Value;
 
     /// <summary>The app-role connection string every test body must use (AC3).</summary>
-    public string AppConnectionString => Build(ApplicationRole, _appPassword, HarnessDatabase);
+    public string AppConnectionString
+    {
+        get
+        {
+            EnsureStarted();
+            return Build(ApplicationRole, _appPassword, HarnessDatabase);
+        }
+    }
 
     /// <summary>The migration-owner connection string, for the seeding seam only (00 §5.5 C3).</summary>
-    public string OwnerConnectionString => Build(DatabaseOwnerRole, _ownerPassword, HarnessDatabase);
+    public string OwnerConnectionString
+    {
+        get
+        {
+            EnsureStarted();
+            return Build(DatabaseOwnerRole, _ownerPassword, HarnessDatabase);
+        }
+    }
 
     /// <summary>The app-role data source the tenant scope factory borrows its connections from.</summary>
-    public NpgsqlDataSource AppDataSource =>
-        _appDataSource ?? throw new InvalidOperationException("The harness is not initialised yet.");
+    public NpgsqlDataSource AppDataSource
+    {
+        get
+        {
+            EnsureStarted();
+            return _appDataSource!;
+        }
+    }
 
     /// <summary>The app-role scope factory of the production registration (01.4.2).</summary>
     public ITenantScopeFactory Scopes =>
-        (_services ?? throw new InvalidOperationException("The harness is not initialised yet."))
-        .GetRequiredService<ITenantScopeFactory>();
+        StartedServices().GetRequiredService<ITenantScopeFactory>();
 
     /// <summary>The Dapper read path of the production registration: throws without an open scope (C3).</summary>
     public ITenantDb Db =>
-        (_services ?? throw new InvalidOperationException("The harness is not initialised yet."))
-        .GetRequiredService<ITenantDb>();
+        StartedServices().GetRequiredService<ITenantDb>();
 
     /// <summary>
     /// The EF Core command guard of the production registration (01.4.2-T1.5): a
@@ -112,11 +134,55 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// module context (there is none in this project).
     /// </summary>
     public TenantCommandInterceptor Interceptor =>
-        (_services ?? throw new InvalidOperationException("The harness is not initialised yet."))
-        .GetRequiredService<TenantCommandInterceptor>();
+        StartedServices().GetRequiredService<TenantCommandInterceptor>();
 
     /// <summary>How many <see cref="ResetAsync"/> calls this assembly has made.</summary>
     public int Resets => _resets;
+
+    /// <summary>
+    /// Starts the suite clock only. The container is booted lazily by the first
+    /// accessor or method that needs the database (<see cref="EnsureStarted"/>), so an
+    /// assembly whose tests never touch it — for example the file-loading tests of
+    /// <c>Foundation.IntegrationTests</c> — never starts a container and runs where
+    /// no Docker daemon exists (the clean-build smoke, <c>scripts/smoke-clean-build.sh</c>).
+    /// </summary>
+    public ValueTask InitializeAsync()
+    {
+        // The clock covers container start, migrations and every test of the
+        // assembly: the budget of 01.6.1 §8 is a suite budget, not a per-test one.
+        _suiteClock.Start();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Single-flight start: the first caller boots the harness, every other caller
+    /// (including concurrent ones) awaits the same task, and a failed start is
+    /// rethrown to each of them. The work runs on the thread pool and is not bound
+    /// to the first test's cancellation token, so one test ending does not abort the
+    /// shared start.
+    /// </summary>
+    private Task EnsureStartedAsync()
+    {
+        lock (_startLock)
+        {
+            return _start ??= Task.Run(StartAsync);
+        }
+    }
+
+    /// <summary>
+    /// Synchronous accessors (<see cref="AppConnectionString"/>, <see cref="Scopes"/>
+    /// …) cannot await; the start runs on the pool, so blocking here cannot deadlock
+    /// on the test's synchronization context.
+    /// </summary>
+#pragma warning disable VSTHRD002 // the start runs on the pool via Task.Run, see above
+    private void EnsureStarted() => EnsureStartedAsync().GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
+
+    private ServiceProvider StartedServices()
+    {
+        EnsureStarted();
+        return _services!;
+    }
 
     /// <summary>
     /// Boots the container, creates the owner role exactly as the dev/bootstrap
@@ -125,15 +191,18 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// the real <c>Evidgate.Migrator</c>, then enables the app login. Once per
     /// assembly, so the per-test cost is a Respawn reset, not a migration run.
     /// </summary>
-    public async ValueTask InitializeAsync()
+    private async Task StartAsync()
     {
-        // The clock covers container start, migrations and every test of the
-        // assembly: the budget of 01.6.1 §8 is a suite budget, not a per-test one.
-        _suiteClock.Start();
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await _container.StartAsync(cancellationToken);
+        _container = new PostgreSqlBuilder(ContainerImages.Postgres)
+            .WithDatabase("evidgate")
+            .WithUsername("postgres")
+            .WithPassword("postgres")
+            .Build();
+        using var timeout = new CancellationTokenSource(StartTimeout);
+        var cancellationToken = timeout.Token;
+        await _container.StartAsync(cancellationToken).ConfigureAwait(false);
 
-        await using (var connection = await OpenSuperuserAsync("evidgate", cancellationToken))
+        await using (var connection = await OpenSuperuserCoreAsync("evidgate", cancellationToken).ConfigureAwait(false))
         {
             // The container is fresh, so the owner role does not exist yet; migration
             // 0001 creates the three application roles, and the superuser is the only
@@ -155,7 +224,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         var outcome = MigratorRunner.Run(
             new MigratorOptions
             {
-                ConnectionString = OwnerConnectionString,
+                ConnectionString = Build(DatabaseOwnerRole, _ownerPassword, HarnessDatabase),
                 MigrationsPath = MigrationsPath,
             },
             MigrationCommand.Apply,
@@ -168,7 +237,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 + string.Join(" | ", outcome.Messages));
         }
 
-        await using (var connection = await OpenSuperuserAsync(HarnessDatabase, cancellationToken))
+        await using (var connection = await OpenSuperuserCoreAsync(HarnessDatabase, cancellationToken).ConfigureAwait(false))
         {
             await ExecuteAsync(
                 connection,
@@ -176,7 +245,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 cancellationToken);
         }
 
-        _appDataSource = NpgsqlDataSource.Create(AppConnectionString);
+        _appDataSource = NpgsqlDataSource.Create(Build(ApplicationRole, _appPassword, HarnessDatabase));
 
         // The production registration under test (00 §5.5 C3, 01.4.2): the scope
         // factory and the Dapper path over the app-role data source, exactly as
@@ -188,7 +257,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
         // Respawn is set up once (it reads the FK graph then); resets only replay the
         // delete plan.
-        _checkpoint = await RespawnCheckpoint.CreateAsync(OwnerConnectionString, cancellationToken);
+        _checkpoint = await RespawnCheckpoint.CreateAsync(
+            Build(DatabaseOwnerRole, _ownerPassword, HarnessDatabase),
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -208,17 +279,42 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 $"[evidgate harness] suite wall time {elapsed.TotalSeconds:F1}s of a {SuiteBudget.TotalMinutes:F0} min budget "
                 + $"after {_resets} Respawn reset(s); database '{HarnessDatabase}'."));
 
-        if (_services is not null)
+        Task? start;
+
+        lock (_startLock)
         {
-            await _services.DisposeAsync();
+            start = _start;
         }
 
-        if (_appDataSource is not null)
+        // Never started (no test needed the database): nothing to tear down. A
+        // start that failed already surfaced to the tests that asked for it.
+        if (start is not null)
         {
-            await _appDataSource.DisposeAsync();
-        }
+            try
+            {
+                await start.ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Already reported through the accessor that triggered it; disposal
+                // below still releases whatever was created.
+            }
 
-        await _container.DisposeAsync();
+            if (_services is not null)
+            {
+                await _services.DisposeAsync();
+            }
+
+            if (_appDataSource is not null)
+            {
+                await _appDataSource.DisposeAsync();
+            }
+
+            if (_container is not null)
+            {
+                await _container.DisposeAsync();
+            }
+        }
 
         if (elapsed > SuiteBudget)
         {
@@ -242,12 +338,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// </summary>
     public async Task ResetAsync(CancellationToken cancellationToken = default)
     {
-        if (_checkpoint is null)
-        {
-            throw new InvalidOperationException("The harness is not initialised yet.");
-        }
-
-        await _checkpoint.ResetAsync(cancellationToken);
+        await EnsureStartedAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+        await _checkpoint!.ResetAsync(cancellationToken).ConfigureAwait(false);
         _resets++;
     }
 
@@ -459,6 +551,12 @@ public sealed class DatabaseFixture : IAsyncLifetime
         string database,
         CancellationToken cancellationToken = default)
     {
+        await EnsureStartedAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+        return await OpenSuperuserCoreAsync(database, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<NpgsqlConnection> OpenSuperuserCoreAsync(string database, CancellationToken cancellationToken)
+    {
         var connection = new NpgsqlConnection(SuperuserConnectionString(database));
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         return connection;
@@ -508,11 +606,11 @@ public sealed class DatabaseFixture : IAsyncLifetime
     }
 
     private string SuperuserConnectionString(string database) =>
-        new NpgsqlConnectionStringBuilder(_container.GetConnectionString()) { Database = database }.ConnectionString;
+        new NpgsqlConnectionStringBuilder(_container!.GetConnectionString()) { Database = database }.ConnectionString;
 
     private string Build(string username, string password, string database)
     {
-        var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        var builder = new NpgsqlConnectionStringBuilder(_container!.GetConnectionString())
         {
             Database = database,
             Username = username,

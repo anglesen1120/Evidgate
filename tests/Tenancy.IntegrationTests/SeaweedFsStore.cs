@@ -3,6 +3,7 @@
 // SeaweedFsFixture is copied (the digest-pinned image, the mounted local-only identity file, the
 // S3 gateway command and the HTTP readiness probe); the lifecycle-rule half of that fixture
 // belongs to 01.8.1-T1 (AC7) and is not needed here.
+using System.Net;
 using System.Text.Json;
 using Amazon.Runtime;
 using Amazon.S3;
@@ -28,6 +29,25 @@ public sealed class SeaweedFsStore : IAsyncLifetime
 
     private const string ContainerConfigPath = "/etc/seaweedfs/s3-config.json";
     private const string Region = "us-east-1";
+
+    /// <summary>
+    /// How long a freshly started gateway may keep refusing its first writes before the fixture gives up. A
+    /// healthy start accepts the first write within ~4 s (measured on the reference host), so the budget is
+    /// only spent on a start that really is unhealthy; it bounds the extra wall time instead of retrying
+    /// without limit.
+    /// </summary>
+    private static readonly TimeSpan StartupBudget = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// One attempt's ceiling. AWSSDK v4 has no settable request timeout on the client config
+    /// (<c>IClientConfig.Timeout</c> is read-only there), so the attempt is bounded with its own cancellation
+    /// token; the SDK's own retries are off for these calls (<c>MaxErrorRetry = 0</c>), which leaves
+    /// <see cref="StartupBudget"/> as the only backoff in play.
+    /// </summary>
+    private static readonly TimeSpan StartupAttemptTimeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>The probe object of the warm-up (written and deleted inside the retry loop).</summary>
+    private const string WarmUpKey = "warm-up/probe";
 
     /// <summary>The bucket every 06.1.2-T2 test uploads into (created before the first test).</summary>
     internal const string BucketName = "evidgate-evidence-complete";
@@ -79,43 +99,129 @@ public sealed class SeaweedFsStore : IAsyncLifetime
         AccessKey = identity.AccessKey;
         SecretKey = identity.SecretKey;
 
-        using var client = CreateClient();
+        // Both first S3 calls of a fresh gateway run under this retry, and until F59 neither was protected:
+        // the bucket creation had no retry and the warm-up that followed retried only AmazonServiceException.
+        // A starting gateway is not writable yet — in the container-log capture taken while its mapped port
+        // already answered, the master was still electing itself ("raft.Server: Not current leader") and S3
+        // calls were refused with a reset connection. That window is the suspected cause of the F59 500
+        // "S3 internal error" that failed all 12 cases of the class at fixture init (the 500 itself was not
+        // reproduced locally). Retrying both calls, transiently only, keeps every later write ordinary.
+        await RetryWhileStartingAsync(async cancellationToken =>
+        {
+            await CreateBucketAsync(cancellationToken);
+            await WarmUpAsync(cancellationToken);
+        });
+    }
+
+    /// <summary>
+    /// Runs <paramref name="step"/> until it succeeds, retrying only what a starting SeaweedFS produces, each
+    /// attempt bounded by its own cancellation token: a 5xx or 408 answer (the gateway's "S3 internal error"),
+    /// the transport failures measured against this image (<see cref="HttpRequestException"/> for a refused
+    /// connection, <see cref="IOException"/> for one closed mid-request), and the attempt's own timeout. An
+    /// auth, 404 or other 4xx answer is a real fault and is rethrown at once, so a wrong credential or a
+    /// missing bucket is never retried away. When the budget is spent the last error is rethrown with the
+    /// container's log tail, so the next flake carries its own cause instead of a bare 500.
+    /// </summary>
+    private async Task RetryWhileStartingAsync(Func<CancellationToken, Task> step)
+    {
+        var deadline = DateTime.UtcNow + StartupBudget;
+        Exception? lastError = null;
+
+        while (true)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                throw new InvalidOperationException(
+                    "the SeaweedFS store refused its first writes for "
+                    + $"{(int)StartupBudget.TotalSeconds}s after the container started (last error: "
+                    + $"{(lastError is null ? "none" : lastError.GetType().Name + ": " + lastError.Message)})"
+                    + $". Container log tail:{Environment.NewLine}{await ContainerLogTailAsync()}",
+                    lastError);
+            }
+
+            using var attempt = new CancellationTokenSource(
+                remaining < StartupAttemptTimeout ? remaining : StartupAttemptTimeout);
+
+            try
+            {
+                await step(attempt.Token);
+                return;
+            }
+            catch (Exception exception) when (IsTransientStartupFailure(exception, attempt.IsCancellationRequested))
+            {
+                lastError = exception;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+        }
+    }
+
+    /// <summary>
+    /// True for the failures a starting store produces and never for a real fault. A 4xx (bad credential,
+    /// missing bucket, wrong signature) is a real fault; a 5xx or 408 is the gateway's own "S3 internal error";
+    /// and the transport arms are the shapes AWSSDK v4 actually throws here (measured: <see cref="HttpRequestException"/>
+    /// wrapping a <see cref="System.Net.Sockets.SocketException"/> for a refused connection, <see cref="IOException"/>
+    /// for one closed before the response). <see cref="OperationCanceledException"/> counts only when this
+    /// loop's own per-attempt token fired, so a cancelled run is never retried away.
+    /// </summary>
+    private static bool IsTransientStartupFailure(Exception exception, bool attemptTimedOut) =>
+        exception switch
+        {
+            OperationCanceledException => attemptTimedOut,
+            AmazonServiceException service => IsTransientStatus(service.StatusCode),
+            HttpRequestException or IOException or WebException => true,
+            _ => false,
+        };
+
+    private static bool IsTransientStatus(HttpStatusCode status) =>
+        status == HttpStatusCode.RequestTimeout || (int)status >= 500;
+
+    /// <summary>The container's log tail, so a refused start reports the store's own reason.</summary>
+    private async Task<string> ContainerLogTailAsync()
+    {
+        if (_container is null)
+        {
+            return "(the container was never created)";
+        }
+
         try
         {
-            await client.PutBucketAsync(new PutBucketRequest { BucketName = BucketName });
+            var (stdout, stderr) = await _container.GetLogsAsync(DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow);
+            var log = stdout + stderr;
+            const int tailLength = 4000;
+            return log.Length <= tailLength ? log : log[^tailLength..];
+        }
+        catch (Exception exception)
+        {
+            return $"(reading the container log failed: {exception.Message})";
+        }
+    }
+
+    /// <summary>The bucket every 06.1.2-T2 test uploads into; a reused container already owning it is fine.</summary>
+    private async Task CreateBucketAsync(CancellationToken cancellationToken)
+    {
+        using var client = CreateStartupClient();
+        try
+        {
+            await client.PutBucketAsync(new PutBucketRequest { BucketName = BucketName }, cancellationToken);
         }
         catch (AmazonS3Exception exception)
             when (exception.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists")
         {
             // Reused container state is fine — it is the same bucket.
         }
-
-        await WarmUpAsync();
     }
 
     /// <summary>
-    /// SeaweedFS allocates its first volume lazily, and under a loaded full gate the very first write can
-    /// answer 500 after a long wait ("no writable volumes") — which would fail whichever test happens to
-    /// upload first. One probe write, retried until the store accepts it, makes every later write ordinary.
+    /// One probe write and delete. SeaweedFS allocates its first volume lazily, so this call pays that
+    /// allocation once, inside the retry loop, instead of letting whichever test uploads first pay it.
     /// </summary>
-    private async Task WarmUpAsync()
+    private async Task WarmUpAsync(CancellationToken cancellationToken)
     {
-        const string probeKey = "warm-up/probe";
-        var deadline = DateTime.UtcNow.AddSeconds(120);
-
-        while (true)
-        {
-            try
-            {
-                await PutAsync(probeKey, [1]);
-                await DeleteAsync(probeKey);
-                return;
-            }
-            catch (AmazonServiceException) when (DateTime.UtcNow < deadline)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(1));
-            }
-        }
+        using var client = CreateStartupClient();
+        await PutAsync(client, WarmUpKey, [1], cancellationToken);
+        await DeleteAsync(client, WarmUpKey, cancellationToken);
     }
 
     public async ValueTask DisposeAsync()
@@ -127,15 +233,25 @@ public sealed class SeaweedFsStore : IAsyncLifetime
     }
 
     /// <summary>A signed client for the arrange/assert steps that bypass the presigned URL.</summary>
-    internal AmazonS3Client CreateClient() =>
-        new(
-            new BasicAWSCredentials(AccessKey, SecretKey),
-            new AmazonS3Config
-            {
-                ServiceURL = Endpoint,
-                ForcePathStyle = true,
-                AuthenticationRegion = Region,
-            });
+    internal AmazonS3Client CreateClient() => new(new BasicAWSCredentials(AccessKey, SecretKey), ClientConfig());
+
+    /// <summary>
+    /// A client for the start-up retry loop: no SDK-side retries and no SDK-side waits, so the loop's
+    /// per-attempt token is the whole bound and <see cref="StartupBudget"/> is the only backoff in play.
+    /// </summary>
+    private AmazonS3Client CreateStartupClient()
+    {
+        var config = ClientConfig();
+        config.MaxErrorRetry = 0;
+        return new AmazonS3Client(new BasicAWSCredentials(AccessKey, SecretKey), config);
+    }
+
+    private AmazonS3Config ClientConfig() => new()
+    {
+        ServiceURL = Endpoint,
+        ForcePathStyle = true,
+        AuthenticationRegion = Region,
+    };
 
     /// <summary>
     /// Writes <paramref name="body"/> straight to <paramref name="key"/>, bypassing the presigned
@@ -148,6 +264,12 @@ public sealed class SeaweedFsStore : IAsyncLifetime
     internal async Task PutAsync(string key, byte[] body)
     {
         using var client = CreateClient();
+        await PutAsync(client, key, body, CancellationToken.None);
+    }
+
+    private static async Task PutAsync(
+        AmazonS3Client client, string key, byte[] body, CancellationToken cancellationToken)
+    {
         var request = new PutObjectRequest
         {
             BucketName = BucketName,
@@ -159,15 +281,19 @@ public sealed class SeaweedFsStore : IAsyncLifetime
         request.Headers["x-amz-checksum-sha256"] = Convert.ToBase64String(
             System.Security.Cryptography.SHA256.HashData(body));
 
-        await client.PutObjectAsync(request);
+        await client.PutObjectAsync(request, cancellationToken);
     }
 
     /// <summary>Deletes one object (simulating the 24 h lifecycle or the staging-delete task).</summary>
     internal async Task DeleteAsync(string key)
     {
         using var client = CreateClient();
-        await client.DeleteObjectAsync(new DeleteObjectRequest { BucketName = BucketName, Key = key });
+        await DeleteAsync(client, key, CancellationToken.None);
     }
+
+    private static async Task DeleteAsync(AmazonS3Client client, string key, CancellationToken cancellationToken) =>
+        await client.DeleteObjectAsync(
+            new DeleteObjectRequest { BucketName = BucketName, Key = key }, cancellationToken);
 
     /// <summary>True when the object exists (a HEAD that does not 404).</summary>
     internal async Task<bool> ExistsAsync(string key)
@@ -178,7 +304,7 @@ public sealed class SeaweedFsStore : IAsyncLifetime
             await client.GetObjectMetadataAsync(new GetObjectMetadataRequest { BucketName = BucketName, Key = key });
             return true;
         }
-        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
             return false;
         }
@@ -195,7 +321,7 @@ public sealed class SeaweedFsStore : IAsyncLifetime
             await response.ResponseStream.CopyToAsync(buffer);
             return buffer.ToArray();
         }
-        catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
         }
