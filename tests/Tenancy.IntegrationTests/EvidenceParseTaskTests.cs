@@ -296,16 +296,19 @@ public sealed class EvidenceParseTaskTests(PostgresTenancyFixture fixture, Seawe
 
     /// <summary>
     /// Defence in depth over the 0028 shape CHECK: a <c>ready</c> row whose <c>object_key</c> is not the final key its
-    /// own coordinates mint (here the staging key, which the CHECK's other arm admits) is never read. The attempt
-    /// throws the fixed first line, so the queue retries and an operator sees the corrupt row.
+    /// own coordinates mint (here the staging key <c>pending/&lt;org&gt;/&lt;id&gt;</c>, which the CHECK's other arm
+    /// admits, built from the row's own id so the row itself is legal) is never read. The attempt throws the fixed first
+    /// line, so the queue retries and an operator sees the corrupt row.
     /// </summary>
     [Fact]
     public async Task Parse_Row_Whose_Key_Is_Not_Its_Minted_Final_Key_Is_Not_Read()
     {
         await using var world = await StartAsync();
-        var artifactId = Guid.CreateVersion7();
-        var stagingKey = $"pending/{world.Org:D}/{artifactId:D}";
-        var seeded = await SeedAsync(world, ArtifactState.Ready, failureCode: null, objectKey: stagingKey);
+        var seeded = await SeedAsync(
+            world,
+            ArtifactState.Ready,
+            failureCode: null,
+            objectKey: id => $"pending/{world.Org:D}/{id:D}");
         var runner = new StubParseRunner
         {
             Result = new ParseRunFailed(ParseRunFailureKind.ExitedAbnormally, 152, 0, 0),
@@ -668,17 +671,22 @@ public sealed class EvidenceParseTaskTests(PostgresTenancyFixture fixture, Seawe
     /// <param name="state">The row's <c>artifact.state</c>.</param>
     /// <param name="failureCode">The reason code a rejected row carries.</param>
     /// <param name="objectKey">
-    /// The <c>object_key</c> the row carries instead of its minted final key, for the defence-in-depth case; the bytes
-    /// are put at the store only for the default (minted) key, so a test that overrides it proves the handler refused
-    /// before reading anything.
+    /// Mints the <c>object_key</c> the row carries instead of its own final key, for the defence-in-depth case. It is a
+    /// function of the row's id because the id is minted here and the 0028 shape CHECK keys on it; the bytes are put at
+    /// the store only for the default (minted) key, so a test that overrides it proves the handler refused before
+    /// reading anything.
     /// </param>
-    private async Task<Seeded> SeedAsync(World world, string state, string? failureCode, string? objectKey = null)
+    private async Task<Seeded> SeedAsync(
+        World world,
+        string state,
+        string? failureCode,
+        Func<Guid, string>? objectKey = null)
     {
         var artifactId = Guid.CreateVersion7();
 
         // The final-key shape the table's own check constraint states (0028:81-84), so the row is the real promotion
         // target rather than a key only this test agrees with.
-        var key = objectKey ?? MintedKey(world, artifactId);
+        var key = objectKey is null ? MintedKey(world, artifactId) : objectKey(artifactId);
 
         if (objectKey is null)
         {

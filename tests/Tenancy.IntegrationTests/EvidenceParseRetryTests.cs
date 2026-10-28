@@ -90,6 +90,12 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
             settings,
             services =>
             {
+                // The Api host composes neither the queue mechanism nor the out-of-process runner (both are the
+                // Worker's), so the test registers the mechanism here over the host's own app-role data source — the
+                // composition ReconcileRunTests and IngestTraceCorrelationTests use. It also binds the options set
+                // above (one second of visibility and backoff), so the redelivery below is the queue's own path.
+                services.AddEvidgateTasks(configuration);
+
                 // The extension registers the handler and its queue route, so the consumer can claim the row at all;
                 // the fake replaces the runner it registered (the last registration wins) so the attempt can be
                 // cancelled mid-run without spawning a child.

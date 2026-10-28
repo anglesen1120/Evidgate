@@ -30,13 +30,9 @@ public sealed class ObjectStorageReadTests(SeaweedFsFixture fixture) : IDisposab
     public async Task Get_Of_An_Object_Within_The_Cap_Returns_Every_Byte()
     {
         var body = RandomNumberGenerator.GetBytes(2048);
-        var key = FinalKey();
         using var adapter = Adapter();
 
-        using var response = await PutAsync(
-            adapter.PresignPut(new PresignPutRequest(key, body.LongLength, Sha256Hex(body))), body);
-        response.IsSuccessStatusCode.ShouldBeTrue(
-            $"the signed PUT must be accepted; status={(int)response.StatusCode}");
+        var key = await SeedFinalObjectAsync(adapter, body);
 
         var bytes = await adapter.GetAsync(key, body.LongLength, CancellationToken.None);
 
@@ -54,13 +50,9 @@ public sealed class ObjectStorageReadTests(SeaweedFsFixture fixture) : IDisposab
     public async Task Get_Of_An_Object_Arriving_In_Several_Reads_Returns_Every_Byte()
     {
         var body = RandomNumberGenerator.GetBytes(512 * 1024);
-        var key = FinalKey();
         using var adapter = Adapter();
 
-        using var response = await PutAsync(
-            adapter.PresignPut(new PresignPutRequest(key, body.LongLength, Sha256Hex(body))), body);
-        response.IsSuccessStatusCode.ShouldBeTrue(
-            $"the signed PUT must be accepted; status={(int)response.StatusCode}");
+        var key = await SeedFinalObjectAsync(adapter, body);
 
         var bytes = await adapter.GetAsync(key, body.LongLength, CancellationToken.None);
 
@@ -77,13 +69,9 @@ public sealed class ObjectStorageReadTests(SeaweedFsFixture fixture) : IDisposab
     public async Task Get_Of_An_Object_Over_The_Cap_Throws_And_Names_No_Key()
     {
         var body = RandomNumberGenerator.GetBytes(4096);
-        var key = FinalKey();
         using var adapter = Adapter();
 
-        using var response = await PutAsync(
-            adapter.PresignPut(new PresignPutRequest(key, body.LongLength, Sha256Hex(body))), body);
-        response.IsSuccessStatusCode.ShouldBeTrue(
-            $"the signed PUT must be accepted; status={(int)response.StatusCode}");
+        var key = await SeedFinalObjectAsync(adapter, body);
 
         var exception = await Should.ThrowAsync<InvalidOperationException>(
             () => adapter.GetAsync(key, 1024, CancellationToken.None));
@@ -107,13 +95,9 @@ public sealed class ObjectStorageReadTests(SeaweedFsFixture fixture) : IDisposab
     [Fact]
     public async Task Get_Of_A_ZeroByte_Object_Is_An_Empty_Array()
     {
-        var key = FinalKey();
         using var adapter = Adapter();
 
-        using var response = await PutAsync(
-            adapter.PresignPut(new PresignPutRequest(key, 0, Sha256Hex([]))), []);
-        response.IsSuccessStatusCode.ShouldBeTrue(
-            $"the signed PUT of an empty body must be accepted; status={(int)response.StatusCode}");
+        var key = await SeedFinalObjectAsync(adapter, []);
 
         var bytes = await adapter.GetAsync(key, 1024, CancellationToken.None);
 
@@ -189,6 +173,25 @@ public sealed class ObjectStorageReadTests(SeaweedFsFixture fixture) : IDisposab
         + $"{Guid.NewGuid():N}{Guid.NewGuid():N}/1/{Guid.NewGuid():D}";
 
     private static string Sha256Hex(byte[] body) => Convert.ToHexStringLower(SHA256.HashData(body));
+
+    /// <summary>
+    /// Seeds one object the way the writer does (06.1.2 §5, decision 7): a signed PUT to a fresh staging key, then the
+    /// promotion copy, so the read under test names the final key a <c>ready</c> row carries.
+    /// </summary>
+    private async Task<string> SeedFinalObjectAsync(S3ObjectStorage adapter, byte[] body)
+    {
+        var staging = StagingKey();
+        var final = FinalKey();
+
+        using var response = await PutAsync(
+            adapter.PresignPut(new PresignPutRequest(staging, body.LongLength, Sha256Hex(body))), body);
+        response.IsSuccessStatusCode.ShouldBeTrue(
+            $"the signed PUT of {body.LongLength} bytes must be accepted; status={(int)response.StatusCode}");
+
+        await adapter.CopyAsync(staging, final, CancellationToken.None);
+
+        return final;
+    }
 
     /// <summary>
     /// Sends the request a customer client sends: the signed headers verbatim, with
