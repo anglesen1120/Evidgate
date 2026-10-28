@@ -180,7 +180,7 @@ app-error-pattern {
   outline-offset: var(--eg-focus-offset);
   border-radius: var(--eg-radius-sm);
 }
-/* AC-F63-a: the 429 wait is prose beside the refusal, so it takes the muted text role and wraps
+/* AC-F63-a: the read's wait is prose beside the refusal, so it takes the muted text role and wraps
    instead of widening the page at 360 px. */
 .read-wait {
   color: var(--eg-text-muted);

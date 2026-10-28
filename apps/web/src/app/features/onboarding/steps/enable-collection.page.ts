@@ -165,21 +165,24 @@ export class EnableCollectionPage {
   /** True while the failed read's window is open: both read controls stay disabled. */
   protected readonly readWaitOpen = computed(() => this.readWaitSeconds() !== null);
   /**
-   * The wait as the panel states it: the time left and the interval the server itself named, so a
-   * reader can tell a countdown from a guess about a missing interval.
+   * The wait as the panel states it: neutral about *why* the server closed the read (the page shows
+   * it for any answer that names an interval, not only a `429`), the time left, and the interval the
+   * server itself named — so a reader can tell a countdown from a guess about a missing interval.
    */
   protected readonly readWaitText = computed<string | null>(() => {
     const remaining = this.readWaitSeconds();
     if (remaining === null) return null;
     const supplied = this.readWaitSupplied() ?? remaining;
-    return $localize`:@@onboarding.enable.read-wait:Rate limited. Read the activation again in ${remaining}:remaining: s — the server asked for ${supplied}:supplied: s.`;
+    return $localize`:@@onboarding.enable.read-wait:The server asked you to wait before reading the activation again: ${remaining}:remaining: s left of the ${supplied}:supplied: s it named.`;
   });
   /**
-   * AC-F63-b: set by this page's own re-read, so the answer that replaces the pressed control can
-   * hand focus to the named failure target. The first read, a scope change and the shell's reload
-   * never set it, which is what keeps the page from moving focus on a render nobody asked for.
+   * AC-F63-b: the generation of the re-read this page's own press started, so only *that* read's
+   * answer may hand focus to the named failure target. The first read, a scope change and the
+   * shell's reload leave it `null`, which is what keeps the page from moving focus on a render
+   * nobody asked for — and a press whose read was lost to a scope change cannot refocus the answer
+   * of a different read.
    */
-  private refocusReadFailure = false;
+  private refocusGeneration: number | null = null;
   private readonly readFailureHeadingRef = viewChild<ElementRef<HTMLElement>>('readFailureHeading');
   private readonly readAgainRef = viewChild<ElementRef<HTMLButtonElement>>('readAgainControl');
   /** The shared pattern's title is a sibling of the page's own heading once a read has failed. */
@@ -349,16 +352,19 @@ export class EnableCollectionPage {
     // the pass that mounts the target re-runs this with a resolved element.
     effect(() => {
       const read = this.activationRead();
-      if (!this.refocusReadFailure || read.kind === 'loading') return;
+      // Only the read this page's own press started may move focus, and only while it is still the
+      // current one: a scope change bumps `readGeneration`, so a lost press stops qualifying here.
+      if (this.refocusGeneration === null || this.refocusGeneration !== this.readGeneration) return;
+      if (read.kind === 'loading') return;
       if (read.kind === 'active' || read.kind === 'none') {
-        this.refocusReadFailure = false;
+        this.refocusGeneration = null;
         return;
       }
       const target = read.kind === 'error' ? this.readFailureHeadingRef() : this.readAgainRef();
       // A target that has not mounted yet leaves the request open: reading the ref keeps it tracked,
       // so the pass that mounts it re-runs this with a resolved element.
       if (target === undefined) return;
-      this.refocusReadFailure = false;
+      this.refocusGeneration = null;
       target.nativeElement.focus();
     });
     this.destroyRef.onDestroy(() => {
@@ -378,8 +384,7 @@ export class EnableCollectionPage {
   protected async retry(): Promise<void> {
     if (this.retryDisabled()) return;
     if (this.readFailure() !== null) {
-      this.refocusReadFailure = true;
-      await this.readActivation();
+      await this.readActivation(true);
       return;
     }
     if (!this.retryEligible()) return;
@@ -393,8 +398,7 @@ export class EnableCollectionPage {
    */
   protected async readAgain(): Promise<void> {
     if (this.reading()) return;
-    this.refocusReadFailure = true;
-    await this.readActivation();
+    await this.readActivation(true);
   }
 
   /**
@@ -430,9 +434,16 @@ export class EnableCollectionPage {
     this.readWaitSupplied.set(null);
   }
 
-  /** A generation invalidates late answers, including an org change that keeps the project id. */
-  protected async readActivation(): Promise<void> {
+  /**
+   * A generation invalidates late answers, including an org change that keeps the project id.
+   *
+   * `refocus` is set only by this page's own re-read controls: it arms the answer of *this* read to
+   * take focus, and every other read — the first one, a scope change, the shell's reload — clears
+   * the arm, so a press can never make a later render focus anything.
+   */
+  protected async readActivation(refocus = false): Promise<void> {
     const generation = ++this.readGeneration;
+    this.refocusGeneration = refocus ? generation : null;
     const orgId = this.orgId();
     const projectId = this.projectId();
     // A new attempt abandons the previous failure's window, as `attempt()` does for the runner.
@@ -469,8 +480,10 @@ export class EnableCollectionPage {
             retryAfterSeconds: null,
           };
       // AC-F63-a: the answer's own interval opens the read's window; an absent one opens it not at
-      // all, so the control is usable at once (the runner's own rule for the confirm).
-      this.startReadWait(failure.retryAfterSeconds);
+      // all, so the control is usable at once (the runner's own rule for the confirm). A `403` is a
+      // refusal, not a throttled attempt: it offers the read-only recovery instead, so nothing this
+      // answer carries may close that control for an interval nobody asked the user to wait.
+      if (failure.status !== 403) this.startReadWait(failure.retryAfterSeconds);
       this.activationRead.set(
         failure.status === 403 ? { kind: 'forbidden' } : { kind: 'error', error: failure },
       );

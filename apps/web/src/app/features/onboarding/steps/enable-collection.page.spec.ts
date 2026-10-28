@@ -876,10 +876,12 @@ describe('EnableCollectionPage activation read', () => {
       const wait = (): string => text(root, '[data-testid="enable-collection-read-wait"]');
 
       // The window is open: the Retry says so natively, and the wait names both numbers — the time
-      // left and the interval the server supplied.
+      // left and the interval the server supplied — with copy that is neutral about the reason (the
+      // same wait is shown for any answer that names an interval, not only a `429`).
       expect(retryButton(root)!.disabled).toBe(true);
-      expect(wait()).toContain('30');
-      expect(wait()).toContain('server asked for 30');
+      expect(wait()).toContain('The server asked you to wait');
+      expect(wait()).toContain('30 s left of the 30 s it named');
+      expect(wait()).not.toContain('Rate limited');
       // The countdown is text, never a live region: the sheet asks for the interval, not a
       // per-second announcement.
       const waitNode = root.querySelector('[data-testid="enable-collection-read-wait"]')!;
@@ -890,8 +892,7 @@ describe('EnableCollectionPage activation read', () => {
       await vi.advanceTimersByTimeAsync(29_000);
       await drain(fixture);
       expect(retryButton(root)!.disabled).toBe(true);
-      expect(wait()).toContain('in 1 s');
-      expect(wait()).toContain('server asked for 30');
+      expect(wait()).toContain('1 s left of the 30 s it named');
 
       // The window elapses: the control opens, the wait goes, and the read is the only request.
       await vi.advanceTimersByTimeAsync(1_000);
@@ -951,6 +952,30 @@ describe('EnableCollectionPage activation read', () => {
     expect(createPolicyRevision).not.toHaveBeenCalled();
     expect(activatePolicy).not.toHaveBeenCalled();
     expect(confirmButton(root)!.disabled).toBe(true);
+  });
+
+  it('never opens a wait window for a refused read, whatever the answer carries (AC-F63-c)', async () => {
+    // A `403` is a refusal, not a throttled attempt: an answer that still carries a `Retry-After`
+    // must not close the one recovery a refused read offers, or the page would strand the user for
+    // an interval nobody asked them to wait.
+    readPolicyActivation.mockRejectedValue(
+      failure('forbidden', 403, { retryable: false, retryAfterSeconds: 30 }),
+    );
+    const fixture = await createPage();
+    const root = fixture.nativeElement as HTMLElement;
+
+    const readAgain = readAgainButton(root);
+    expect(readAgain).not.toBeNull();
+    expect(readAgain!.disabled).toBe(false);
+    expect(root.querySelector('[data-testid="enable-collection-read-wait"]')).toBeNull();
+
+    readAgain!.click();
+    await drain(fixture);
+    expect(readPolicyActivation).toHaveBeenCalledTimes(2);
+    expect(readAgainButton(root)!.disabled).toBe(false);
+    expect(root.querySelector('[data-testid="enable-collection-read-wait"]')).toBeNull();
+    expect(createPolicyRevision).not.toHaveBeenCalled();
+    expect(activatePolicy).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1253,5 +1278,46 @@ describe('EnableCollectionPage scope changes', () => {
     expect(enabled!.textContent).toContain('project-2');
     expect(enabled!.textContent).not.toContain('project-1');
     expect(confirmButton(hostRoot)).toBeNull();
+  });
+
+  it('keeps a lost re-read’s focus request out of the next scope’s failure (AC-F63-b)', async () => {
+    // A read the user pressed Retry for, left in flight while the scope moves: its focus request
+    // belongs to a press that no longer exists, so the new scope's *first* failure — an answer to
+    // nobody's press — must leave focus where it is.
+    readPolicyActivation.mockReset().mockRejectedValue(failure('unavailable', 503));
+    host.componentInstance.projectId.set('project-2');
+    await drainHost();
+    const heading = hostRoot.querySelector<HTMLElement>('#enable-read-failed-heading');
+    expect(heading).not.toBeNull();
+    expect(document.activeElement).not.toBe(heading);
+
+    const inFlight = deferredResult<PolicyActivationStateDto | null>();
+    readPolicyActivation
+      .mockReset()
+      .mockResolvedValue(null)
+      .mockImplementationOnce(() => inFlight.promise)
+      .mockRejectedValueOnce(failure('unavailable', 503));
+
+    retryButton(hostRoot)!.click();
+    await drainHost();
+    expect(readPolicyActivation).toHaveBeenCalledExactlyOnceWith('project-2');
+
+    // The scope moves before that answer arrives; the new scope's own read fails, and only then does
+    // the answer the lost generation was waiting for arrive.
+    host.componentInstance.projectId.set('project-3');
+    await drainHost();
+    expect(readPolicyActivation).toHaveBeenLastCalledWith('project-3');
+    inFlight.resolve(null);
+    await drainHost();
+
+    const latest = hostRoot.querySelector<HTMLElement>('#enable-read-failed-heading');
+    expect(latest).not.toBeNull();
+    expect(document.activeElement).not.toBe(latest);
+    expect(
+      hostRoot.contains(document.activeElement),
+      'a failure nobody pressed for took focus',
+    ).toBe(false);
+    expect(createPolicyRevision).not.toHaveBeenCalled();
+    expect(activatePolicy).not.toHaveBeenCalled();
   });
 });
