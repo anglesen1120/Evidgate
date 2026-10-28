@@ -214,8 +214,8 @@ export interface FixtureCatalogRow {
  *                                 so the AC6 no-PASS/FAIL check runs on a failing run;
  *   `onboarding-run-complete`     that run's `getRun` has `current_evidence_revision_id: null`
  *                                 → step 4;
- *   `onboarding-evidence`         the same run with an evidence revision → step 5 (activation is
- *                                 not readable yet, so the wizard reports it as not done).
+ *   `onboarding-evidence`         the same run with an evidence revision → step 5 (its
+ *                                 `getPolicyActivation` pin answers 404, so step 5 is not done).
  *
  * `onboarding-forbidden` (403) and `onboarding-project-not-found` (404) answer both project reads,
  * so a failing progress read renders the T8 pattern instead of a wrong step whether the wizard was
