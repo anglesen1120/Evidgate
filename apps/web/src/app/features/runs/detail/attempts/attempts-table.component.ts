@@ -1,4 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  Injector,
+  input,
+  linkedSignal,
+  viewChild,
+} from '@angular/core';
 import {
   StatusPillComponent,
   type StatusTone,
@@ -42,6 +54,10 @@ export class AttemptsTableComponent {
     previous: $localize`:@@runs.detail.attempts.previous:Previous page`,
     next: $localize`:@@runs.detail.attempts.next:Next page`,
   };
+  private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
+  private readonly previousButton = viewChild<ElementRef<HTMLButtonElement>>('previous');
+  private readonly nextButton = viewChild<ElementRef<HTMLButtonElement>>('next');
 
   protected tone(status: string): StatusTone {
     switch (status) {
@@ -74,6 +90,31 @@ export class AttemptsTableComponent {
   }
 
   protected turnPage(delta: number): void {
+    const source = (delta < 0 ? this.previousButton() : this.nextButton())?.nativeElement;
+    // Only a control that actually held focus is replaced by its own activation: a pointer press
+    // that never moved focus leaves the visitor's place alone.
+    const owned = source !== undefined && this.document.activeElement === source;
     this.page.update((page) => Math.max(0, Math.min(this.pages().length - 1, page + delta)));
+    if (!owned) return;
+    // The pager disables the button that reaches the first or last page in the same render, and a
+    // disabled element cannot hold focus. Hand the place to the opposite button, the pager's other
+    // reachable control, instead of letting focus drop to `body`.
+    afterNextRender(
+      () => {
+        const active: unknown = this.document.activeElement;
+        // The browser moves focus to `body` when the focused element is disabled or removed; a
+        // test environment may leave it on that element, so both count as the same loss. Anything
+        // else means the visitor moved on, and their own focus wins.
+        const lost =
+          !(active instanceof HTMLElement) ||
+          active === this.document.body ||
+          !active.isConnected ||
+          (active === source && source !== undefined && source.disabled);
+        if (!lost) return;
+        const target = delta < 0 ? this.nextButton() : this.previousButton();
+        if (target !== undefined && !target.nativeElement.disabled) target.nativeElement.focus();
+      },
+      { injector: this.injector },
+    );
   }
 }

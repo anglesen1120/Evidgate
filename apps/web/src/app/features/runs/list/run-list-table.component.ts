@@ -57,8 +57,41 @@ export class RunListTableComponent {
    */
   protected readonly displayLabel = escapeFormatLabel;
   protected readonly trackRow = (_index: number, row: RunSummary) => row.run_id;
+  /**
+   * Scrolls the table's columns from the keyboard.
+   *
+   * Nothing in the row cells is focusable past the first column, so the wrapper that holds the
+   * horizontal overflow is the only keyboard entry to the rest of a row - and Chromium does not
+   * move a focused element that is not the page's scroller on an arrow key, so the movement is
+   * explicit. It acts only while the wrapper itself holds focus: a key pressed inside the virtual
+   * viewport (its own End/PageDown) or on a row link bubbles through here and must keep its meaning.
+   */
+  protected scrollColumns(event: KeyboardEvent): void {
+    const wrapper = event.currentTarget;
+    if (!(wrapper instanceof HTMLElement) || event.target !== wrapper) return;
+    const reach = wrapper.scrollWidth - wrapper.clientWidth;
+    if (reach <= 0) return;
+    const step = Math.max(80, Math.round(wrapper.clientWidth / 2));
+    const next: number | undefined =
+      event.key === 'ArrowRight'
+        ? Math.min(wrapper.scrollLeft + step, reach)
+        : event.key === 'ArrowLeft'
+          ? Math.max(wrapper.scrollLeft - step, 0)
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? reach
+              : undefined;
+    if (next === undefined || next === wrapper.scrollLeft) return;
+    event.preventDefault();
+    wrapper.scrollLeft = next;
+  }
+
   protected readonly copy = {
     caption: $localize`:@@runs.list.table-caption:Project runs`,
+    // The virtual viewport is a second keyboard stop inside the same table, so it needs its own
+    // name: two stops announcing "Project runs" would read as one table entered twice.
+    rows: $localize`:@@runs.list.table-rows:Project runs rows`,
     id: $localize`:@@runs.list.column-id:Run id`,
     state: $localize`:@@runs.list.column-state:State`,
     evidence: $localize`:@@runs.list.column-evidence:Evidence`,

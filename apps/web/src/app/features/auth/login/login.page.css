@@ -23,6 +23,14 @@ header {
   gap: var(--eg-space-3);
 }
 
+/* F-LOGIN-01/F-LOGIN-02: the heading is this page's programmatic focus target (`tabindex="-1"`),
+   so it carries the same ring every other focused control carries — the shell's
+   `a:focus-visible, button:focus-visible` rule covers the providers but never a heading. */
+#login-heading:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+
 .login-notice {
   min-width: 0;
   min-height: var(--eg-leading-sm);

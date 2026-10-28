@@ -308,6 +308,50 @@ describe('AttemptsTableComponent', () => {
     expect(rows(root)[0]?.textContent).toContain('execution-0');
     expect(previous().disabled).toBe(true);
   });
+  it('hands focus to the opposite pager button when a page turn disables the activated one', async () => {
+    const input = Array.from({ length: 120 }, (_, index) =>
+      row({ executionKey: `execution-${index}` }),
+    );
+    const { root, fixture } = await render(input);
+    const next = () => root.querySelector<HTMLButtonElement>('[data-attempts-next]')!;
+    const previous = () => root.querySelector<HTMLButtonElement>('[data-attempts-previous]')!;
+
+    // Reaching the last page disables Next in the render that follows its own activation, so a
+    // disabled element cannot keep holding focus: the place moves to the pager's other control.
+    next().focus();
+    next().click();
+    await fixture.whenStable();
+    next().click();
+    await fixture.whenStable();
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 3 / 3');
+    expect(next().disabled).toBe(true);
+    expect(document.activeElement).toBe(previous());
+
+    // The same on the way back: Previous disables itself at page 1 and Next takes the focus.
+    previous().click();
+    await fixture.whenStable();
+    previous().click();
+    await fixture.whenStable();
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 1 / 3');
+    expect(previous().disabled).toBe(true);
+    expect(document.activeElement).toBe(next());
+  });
+
+  it('leaves focus alone when the activated pager button never held it', async () => {
+    const input = Array.from({ length: 120 }, (_, index) =>
+      row({ executionKey: `execution-${index}` }),
+    );
+    const { root, fixture } = await render(input);
+    // A pointer press that did not move focus must not move it afterwards either.
+    expect(document.activeElement).toBe(document.body);
+    for (let page = 0; page < 2; page++) {
+      root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
+      await fixture.whenStable();
+    }
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 3 / 3');
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('resets synchronously when a later page shrinks to fewer pages or a single row', async () => {
     const input = Array.from({ length: 120 }, (_, index) =>
       row({ executionKey: `execution-${index}` }),

@@ -2600,6 +2600,7 @@
       <trans-unit id="runs.list.loaded-plain" datatype="html"><source>Loaded <x id="count" equiv-text="formatNumber(this.store.loadedCount(), this.locale)"/> runs.</source></trans-unit>
       <trans-unit id="runs.list.ref-invalid" datatype="html"><source>Ref name not applied: use 1 to 255 characters with no control characters.</source></trans-unit>
       <trans-unit id="runs.list.table-caption" datatype="html"><source>Project runs</source></trans-unit>
+      <trans-unit id="runs.list.table-rows" datatype="html"><source>Project runs rows</source></trans-unit>
       <trans-unit id="runs.list.column-id" datatype="html"><source>Run id</source></trans-unit>
       <trans-unit id="runs.list.column-state" datatype="html"><source>State</source></trans-unit>
       <trans-unit id="runs.list.column-evidence" datatype="html"><source>Evidence</source></trans-unit>
