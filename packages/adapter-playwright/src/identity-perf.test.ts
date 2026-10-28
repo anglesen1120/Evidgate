@@ -25,8 +25,13 @@ const SMALL = 1000;
 const LARGE = SMALL * 4;
 /** Allowed CPU growth for 4× the input. */
 const MAX_GROWTH = 8;
-/** CPU-time samples per size; the minimum is the least disturbed sample. */
-const SAMPLES = 3;
+/**
+ * CPU-time samples per size; the minimum is the least disturbed sample. Nine, not three: a
+ * three-sample minimum still read 8.05× against the 8× bound in the clean-build smoke (GC
+ * pauses landing in the large run on a busy container); the bound itself stays at 8× (a
+ * quadratic regression is 16×).
+ */
+const SAMPLES = 9;
 
 const project = {
   name: 'chromium',
