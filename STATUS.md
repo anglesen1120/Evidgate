@@ -247,7 +247,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
 | 10.7.1-T4 | M | Key rotation runbook | no | no | no | n/a | T4.1 and the written pepper section of T4.2 delivered by S106 (PR #222); remaining: T4.2 staging drill (AC5), see §6 rows |
-| 11.9.1-T2 | L | Breach runbook with the 72 h clock (unblocked by 11.5.1-T1, #219). T2.1–T2.3 are drafting; T2.4 needs counsel + on-call names. The plan has no four §8 DoR answers. | no | no | no | T2.1 ; T2.2 ; T2.3 ; T2.4 | yes for T2.1–T2.3; T2.4 needs counsel review |
+| 11.9.1-T2 | L | Breach runbook with the 72 h clock (unblocked by 11.5.1-T1, #219). PARTIAL: T2.1–T2.3 drafted in docs/runbooks/breach.md (PR #279; 4 h notice target ⚠️, OI-11-08); T2.4 (regulator support, on-call path, counsel review) stays open, see carried row "Breach runbook T2.4 open". | no | no | no | T2.1 ; T2.2 ; T2.3 ; T2.4 | yes for T2.1–T2.3; T2.4 needs counsel review |
 | 12.2.1-T2 | M | Baseline measurement kit (T2.1 kit merged in #277; T2.2 baseline remains) | no | no | no | n/a | yes for T2.1 kit; T2.2 needs signed pilots |
 | 11.8.1-T1 | L | DPA template + counsel review | no | no | no | T1.1-T1.2 ; T1.3-T1.4 | no — counsel engagement is external and the AC needs `approved` + counsel name in `manifest.yaml` |
 | 11.8.1-T2 | M | Privacy notice + counsel review | no | no | no | n/a | no — counsel review/approval is external |
