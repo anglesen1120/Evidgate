@@ -30,7 +30,8 @@ internal sealed record ListSecurityEventsQuery(Guid OrgId, string? Cursor, int L
 
 /// <summary>
 /// Handler of <see cref="ListSecurityEventsQuery"/>: a single statement per page (P3), served by
-/// <c>security_event_list_idx</c>. Another org's id is 404 and its rows are invisible to RLS.
+/// <c>security_event_org_created_idx</c> (unfiltered) or <c>security_event_list_idx</c> (filter-led). A
+/// path org other than the resolved tenant is 404 (a non-member is refused earlier with 403); RLS hides other rows.
 /// </summary>
 [Permission(Permissions.SecurityEvent.Read)]
 internal sealed class ListSecurityEventsQueryHandler(ITenantDb db, ITenantScopeAccessor scopes)

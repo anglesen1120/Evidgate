@@ -488,10 +488,23 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
   applies that predicate as `WITH CHECK`, and with no `TO` clause it applies to PUBLIC. The table is
   absent from `contracts/rls-exceptions.txt` on purpose: `org_id` is NOT NULL, so there is no
   NULL-org read row, and the boot self-check sees a plain scoped policy.
-- `security_event_list_idx (org_id, project_id, type, severity, created_at desc, id)` serves the list:
-  the route filters on the four leading columns and keysets on `(created_at, id)` descending, so one
-  statement per page is index-ordered (P3/P4). An emitter inserts `insert into public.security_event (id, org_id, project_id, type, severity, actor, details, request_id)` with `org_id` from the tenant scope, inside its own tenant transaction, and needs no definer, no trigger and no outbox row.
-- Privileges are the `0001` defaults and nothing else: `evidgate_app` gets full DML (`select, insert, update, delete`) and `evidgate_operator` `select`, because `evidgate_owner` creates the table in schema `public`. `0053` adds NO revoke and no column-level narrowing, so append-only is a convention here, not a grant: the app role can update or delete a row today. Whether immutability becomes real — a revoke, as `0015`/`0049` do — is an open decision for the emitter work, owned by a later migration.
+- Two indexes, one per read shape. `security_event_org_created_idx (org_id, created_at desc, id desc)`
+  serves the unfiltered page and the `from`/`to` window: those reads filter on `org_id` alone and
+  keyset on `(created_at, id)` descending, so the page is index-ordered (P3/P4).
+  `security_event_list_idx (org_id, project_id, type, severity, created_at desc, id desc)` narrows a
+  read that binds all three filter columns: those equalities come first and the cursor tuple follows,
+  so an index scan returns the page already ordered. Two planner choices still sort, legitimately: a
+  bitmap scan (cheaper for a small selective page, and it keeps no order) and a partial bind on the
+  three filters (an unbound column precedes `created_at` in the key). The plan test explains the
+  ordered path. An emitter inserts `insert into public.security_event (id, org_id, project_id, type, severity, actor, details, request_id)` with `org_id` from the tenant scope, inside its own tenant transaction, and needs no definer, no trigger and no outbox row.
+- Append-only by grant, the way `0049`'s `evidence_revision` is: the table rides `0001`'s default
+  privileges, so `evidgate_app` starts with full DML, and `0053` closes with
+  `revoke update, delete, truncate on public.security_event from evidgate_app;`. `select` and `insert`
+  remain — exactly what an emitter needs: the application role can record an event and read it back, but
+  cannot rewrite or remove one after the fact. `evidgate_operator` keeps `0001`'s default `select`. The
+  reason: a security record an ordinary tenant request could edit is not evidence, and no retention
+  sweep exists yet, so nothing legitimate updates or deletes a row today. (A future sweep, if any, is a
+  definer task of its own, like `0015`'s purge.)
 - `updated_at` and `version` are inert for now: no `set_updated_at_and_version()` trigger and no
   writer touch them, so both keep their defaults. They exist because the shape follows the house
   pattern; a reader must never treat `version` as a concurrency token.

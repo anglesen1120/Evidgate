@@ -15,6 +15,22 @@
 --
 -- RLS (DECISIONS F5, rulings T2/T3): ENABLE + FORCE, one policy over `evidgate.current_org_id()`,
 -- `unique (org_id, id)` as the target of any later composite tenant FK.
+--
+-- Indexes (00 §5.7 P3/P4): every page orders by `created_at desc, id desc`. The unfiltered read and the
+-- `from`/`to`-window read filter on `org_id` alone, so `security_event_org_created_idx
+-- (org_id, created_at desc, id desc)` answers them index-ordered. A read that binds `project_id`, `type`
+-- and `severity` is narrowed by `security_event_list_idx (org_id, project_id, type, severity, created_at
+-- desc, id desc)`: the equalities come first, the cursor tuple follows, so an index scan returns the page
+-- already ordered. Two planner choices still sort, legitimately: a bitmap scan (cheaper for a small
+-- selective page, and a bitmap keeps no order), and a partial bind on the three filters (an unbound column
+-- precedes `created_at` in the key).
+--
+-- Privileges: append-only for the application role. `0001`'s default privileges hand `evidgate_app`
+-- select/insert/update/delete on every table `evidgate_owner` creates; this table is a record of what
+-- already happened, not a mutable aggregate — emitters only insert, nothing rewrites or removes a row
+-- (no retention sweep yet) — so the revoke at the end of this file removes the three statements that
+-- could rewrite history (0015/0031/0049 precedent). select/insert survive; `evidgate_operator` keeps
+-- its default `select`.
 
 create table security_event (
   id          uuid primary key,
@@ -37,5 +53,18 @@ alter table security_event force row level security;
 create policy tenant_isolation on security_event
   using (org_id = evidgate.current_org_id());
 
+-- The unfiltered page and the `from`/`to` window: one keyset on (created_at, id) descending under one org.
+create index security_event_org_created_idx
+  on security_event (org_id, created_at desc, id desc);
+
+-- The filter-led page: a read binding all three filter columns is narrowed here, the equalities first and the
+-- cursor order (created_at, id) descending after them, so an index scan returns the page already ordered. A
+-- bitmap scan (cheap for a small selective page, order not preserved) and a partial bind (an unbound column
+-- precedes created_at in the key) both still sort. The plan test explains the ordered path.
 create index security_event_list_idx
-  on security_event (org_id, project_id, type, severity, created_at desc, id);
+  on security_event (org_id, project_id, type, severity, created_at desc, id desc);
+
+-- Append-only in SQL (0015:124, 0031, 0049 precedent): rows are inserted by emitters and never rewritten
+-- or removed by the application role, so the read side cannot lose or rewrite an event after the fact.
+-- `select` and `insert` stay from 0001's defaults.
+revoke update, delete, truncate on public.security_event from evidgate_app;

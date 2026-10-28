@@ -512,8 +512,11 @@ public static class IsolationRouteCases
         OrgCase("GET", "/v1/orgs/{o}/audit/export", o => new(HttpMethod.Get, $"/v1/orgs/{o}/audit/export")),
 
         // ---- Security events (SecurityEventEndpoints.cs:55-66; 11.5.1-T5.2) -------------------------------------
-        // {o} is the tenant the read runs in; another org's id is refused at tenant resolution (403 for a member,
-        // the same answer for an id that does not exist), and the rows are invisible to RLS besides.
+        // {o} is the tenant the read runs in, and both halves of the case are refused at tenant resolution before
+        // the handler runs: a member with no active membership in {o} is 403 `forbidden` (the same answer an org
+        // that does not exist gives, TenantResolver.cs:64-70), a service credential naming another org is 404
+        // `not_found` (TenantResolver.cs:84-85). The query's own org mismatch check adds the same 404 backstop for
+        // a resolved tenant that differs from {o}; the rows are invisible to RLS besides.
         OrgCase("GET", "/v1/orgs/{o}/security-events", o => new(HttpMethod.Get, $"/v1/orgs/{o}/security-events")),
 
         // ---- CI admin (CiAdminEndpoints.cs:30-55) --------------------------------------------------------------

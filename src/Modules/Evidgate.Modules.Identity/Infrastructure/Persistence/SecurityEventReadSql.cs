@@ -2,15 +2,22 @@ namespace Evidgate.Modules.Identity.Infrastructure.Persistence;
 
 /// <summary>
 /// Read SQL of the security-events API (11.5.1-T5.2): one statement per page (P3), keyset on
-/// <c>(created_at, id)</c> descending, served by <c>security_event_list_idx</c> (P4).
+/// <c>(created_at, id)</c> descending. Two indexes cover it (P4): an unfiltered read, or one narrowed
+/// only by <c>from</c>/<c>to</c>, is served by <c>security_event_org_created_idx</c> on
+/// <c>(org_id, created_at desc, id desc)</c>; a read that binds all three of <c>project_id</c>,
+/// <c>type</c> and <c>severity</c> is narrowed by <c>security_event_list_idx</c> on
+/// <c>(org_id, project_id, type, severity, created_at desc, id desc)</c>, whose equalities come first and
+/// whose key ends in the cursor tuple, so an index scan returns the page already ordered. A bitmap scan
+/// (cheap for a small selective page, keeps no order) and a partial bind on the three filters (an unbound
+/// column precedes <c>created_at</c>) still sort, legitimately.
 /// </summary>
 internal static class SecurityEventReadSql
 {
     /// <summary>
-    /// One page. Optional filters are <c>null</c>-tolerant; the cursor predicate is the tuple
-    /// comparison the <c>(org_id, project_id, type, severity, created_at desc, id)</c> index serves.
-    /// <c>@limit</c> is page size + 1. Only the 8 DTO columns are read: <c>org_id</c> and the
-    /// internals (<c>updated_at</c>, <c>version</c>) never leave the tenant boundary.
+    /// One page. Optional filters are <c>null</c>-tolerant; the cursor predicate is the tuple comparison
+    /// both indexes serve, in their <c>(created_at desc, id desc)</c> order. <c>@limit</c> is page size + 1.
+    /// Only the 8 DTO columns are read: <c>org_id</c> and the internals (<c>updated_at</c>, <c>version</c>)
+    /// never leave the tenant boundary.
     /// </summary>
     internal const string Page =
         """

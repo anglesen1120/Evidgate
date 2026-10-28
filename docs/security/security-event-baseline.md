@@ -12,7 +12,7 @@ Legend: ✅ verified with a file:line or link · ⚠️ unverified · `[INFERENC
 - **Action names are the shipped ones.** This page reuses `audit_log` action literals from [audit-taxonomy](audit-taxonomy.md) (§3–§4) and never renames or invents a second vocabulary; a security event *references* the action it accompanies, it does not duplicate the action catalogue.
 - **Emitters are per-module.** 11.5.1-T5 owns the schema and the read, not the emitters (`11.5.1` `:75`); modules 02/04/06/08/10 write rows. `audit-taxonomy.md:176-177` records the same split.
 - **Metadata rule for every type.** `actor` and `details` carry ids, closed enums and counts only — never a secret, credential, cookie, raw payload, foreign org/project name or other PII (`11.5.1` `:49-50`, `:96`; the web brief bars foreign targets, [33-security-events.md:22](../../docs/design/web-ui/prompts/33-security-events.md)).
-- **No row exists yet.** `security_event` has no table and no writer on `bdbad81` (`audit-taxonomy.md:176-177,194`); 11.5.1-T5.1 creates the table (`11.5.1` `:151`) and T5.2 the read (`:152`). Every "emit point" below is therefore a **detection** site, not an emitter, unless a task id is named. This is the control that [threat-model-v1](threat-model-v1.md) `:199` (TH-audit-6) dispositions as `[planned]`.
+- **No row exists yet.** The table exists since migration 0053 (11.5.1-T5) and T5.2 serves the read (`11.5.1` `:152`), but no emitter writes rows yet (`audit-taxonomy.md:176-177,194`). Every "emit point" below is therefore a **detection** site, not an emitter, unless a task id is named. This is the control that [threat-model-v1](threat-model-v1.md) `:199` (TH-audit-6) dispositions as `[planned]`.
 
 ## 2. Baseline table
 
