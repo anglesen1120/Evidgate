@@ -125,6 +125,7 @@ import runList250 from '../../../../../../fixtures/web-api/run-list-250/input.js
 import runListEmpty from '../../../../../../fixtures/web-api/run-list-empty/input.json';
 import runListNomatchPages from '../../../../../../fixtures/web-api/run-list-nomatch-pages/input.json';
 import runListPage1 from '../../../../../../fixtures/web-api/run-list-page-1/input.json';
+import runListPage1Full from '../../../../../../fixtures/web-api/run-list-page-1-full/input.json';
 import runListPage2 from '../../../../../../fixtures/web-api/run-list-page-2/input.json';
 import runListUnavailable from '../../../../../../fixtures/web-api/run-list-unavailable/input.json';
 import runState from '../../../../../../fixtures/web-api/run-state/input.json';
@@ -529,10 +530,18 @@ export interface FixtureCatalogRow {
  * are the paging pair. `run-list-page-2` declares that cursor (`08df2f51afe86800-…0083`, the keyset
  * position of page 1's last row) and `listRuns` declares `cursorQueryParameter: 'cursor'`, so a
  * browser `Load more` is answered with page 2 — the second cursor-keyed walk of the corpus after
- * `listCiBindings`' — and `fixture-contract.spec.ts` pins both explicitly, one per walk. The older
- * `runs-list` page ends the walk (`next_cursor: null`): its cursor was declared by no row, so a
- * follow-up answered the same page again, which the store refuses as a repeated cursor — the
- * screens that want a paged runs list take the pair above.
+ * `listCiBindings`' — and `fixture-contract.spec.ts` pins both explicitly, one per walk. A three-row
+ * first page is topped up inside the same trigger (`fill()` in
+ * `features/runs/list/run-list.store.ts` follows the cursor until the view holds
+ * `RUN_LIST_PAGE_LIMIT`), so on `page-1` the control is gone before a visitor can press it.
+ * `run-list-page-1-full` (`=page-1-full`, 09.8.1-T1.2) is that same first page at the wire's own
+ * page size — 47 deterministic rows (`…0052`–`…0080`, `2026-10-21T00:00`–`00:46`) ahead of
+ * `run-list-page-1`'s three unchanged rows — so the read holds all 50 rows it asked for and stops
+ * with the cursor still named: the browser keeps its `Load more` control, and following it is
+ * answered by `run-list-page-2` exactly as `page-1`'s cursor is. The older `runs-list` page ends the
+ * walk (`next_cursor: null`): its cursor was declared by no row, so a follow-up answered the same
+ * page again, which the store refuses as a repeated cursor — the screens that want a paged runs list
+ * take the pages above.
  * `run-list-unavailable` (`=unavailable`) is the same read's 503 `unavailable` (always
  * `Retry-After`, 00 §9.2), the state the list's error pattern renders with the server's retry hint.
  * Every `X-Request-Id` above (`…e10`–`…e17`) is distinct from the older `runs-list*` rows.
@@ -755,6 +764,7 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'run-list-empty', document: runListEmpty },
   { name: 'run-list-nomatch-pages', document: runListNomatchPages },
   { name: 'run-list-page-1', document: runListPage1 },
+  { name: 'run-list-page-1-full', document: runListPage1Full },
   {
     name: 'run-list-page-2',
     document: runListPage2,

@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  effect,
+  inject,
+  viewChild,
+} from '@angular/core';
+import { Router } from '@angular/router';
 
 import { AuthFlow } from '../auth-flow';
 
@@ -17,7 +25,7 @@ import { AuthFlow } from '../auth-flow';
     <main aria-labelledby="login-heading">
       <section class="login-card">
         <header>
-          <h1 id="login-heading">{{ heading }}</h1>
+          <h1 #loginHeading id="login-heading" tabindex="-1">{{ heading }}</h1>
           <p>{{ explanation }}</p>
         </header>
 
@@ -70,6 +78,48 @@ import { AuthFlow } from '../auth-flow';
 })
 export class LoginPage {
   protected readonly auth = inject(AuthFlow);
+  private readonly router = inject(Router);
+  /** The page's own focus target: `tabindex="-1"`, so it is reachable but never a Tab stop. */
+  private readonly headingTarget = viewChild<ElementRef<HTMLElement>>('loginHeading');
+
+  /**
+   * F-LOGIN-01 (09.8.1-T1.2): `/login` renders OUTSIDE the shell (`app.routes.ts` spreads
+   * `AUTH_ROUTES` at the top level), so the shell's path-change handoff
+   * (`shell.component.ts:78-89`) never runs for it. Every client-side entry — the callback's
+   * `failed`/`unavailable` redirect, the store's `expired`/`signed-out` redirect — would leave focus
+   * on `body`: the top of a document the visitor did not load, with nothing said about the new page.
+   *
+   * `Router.navigated` is the same marker the shell uses: false while the initial document
+   * navigation is still activating (a fresh load keeps the browser's own focus start, the visitor's
+   * first Tab reaches the first provider button), true once any navigation has ENDed — which is
+   * exactly "this page was reached from inside the app".
+   */
+  private readonly arrivedByNavigation = this.router.navigated;
+
+  constructor() {
+    // Reading the ref inside the effect keeps it tracked, so the pass that resolves the view query
+    // re-runs it with the mounted heading.
+    effect(() => {
+      if (!this.arrivedByNavigation) {
+        return;
+      }
+      this.headingTarget()?.nativeElement.focus();
+    });
+
+    // F-LOGIN-02 (09.8.1-T1.2): activating a provider disables the button that holds focus
+    // (`[disabled]="auth.redirecting()"`), and a disabled element cannot keep focus — the browser
+    // drops it to `body`, leaving the still-rendered page with no focus indicator at all until the
+    // document leaves, and a Back return re-enters it with focus on `body`. Focus moves to the
+    // page's own heading while the redirect is pending, so the ring stays visible and the browser
+    // restores the same element on a Back return. The live region (`role="status"`) still announces
+    // the state on its own.
+    effect(() => {
+      if (!this.auth.redirecting()) {
+        return;
+      }
+      this.headingTarget()?.nativeElement.focus();
+    });
+  }
 
   readonly heading = $localize`:@@auth.login.heading:Sign in to Evidgate`;
   readonly explanation = $localize`:@@auth.login.explanation:Choose your provider to continue.`;

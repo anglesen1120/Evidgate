@@ -6,9 +6,11 @@
       <dd data-manifest-hash>
         @if (summary().manifestHash !== null) {
           <bdi class="identifier">{{ display(summary().manifestHash!) }}</bdi>
-          <button type="button" (click)="copyHash()" [disabled]="copying()">
-            {{ copy.copyHash }}
-          </button>
+          <!-- Never disabled for the copy in flight: a disabled element cannot hold focus, so the
+               visitor's place would drop to `body` while the result is announced elsewhere. The
+               click handler refuses a second copy instead (`copying()`), so the button keeps its
+               focus and the live region below announces the outcome. -->
+          <button type="button" (click)="copyHash()">{{ copy.copyHash }}</button>
         } @else {
           <app-status-pill [tone]="'neutral'" label="" />
         }

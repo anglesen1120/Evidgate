@@ -139,6 +139,63 @@ describe('RunListTableComponent', () => {
     expect(root.textContent).toContain(name);
     expect(root.querySelector('[role="region"]')?.getAttribute('tabindex')).toBe('0');
   });
+  it('scrolls the columns from the keyboard while the wrapper holds focus', async () => {
+    const { fixture, root } = await render(Array.from({ length: 3 }, (_, index) => run(index)));
+    fixture.detectChanges();
+    const wrapper = root.querySelector<HTMLElement>('.table-scroll')!;
+    // jsdom does not lay out, so the scroll geometry the handler reads is supplied here.
+    Object.defineProperty(wrapper, 'scrollWidth', { value: 1600, configurable: true });
+    Object.defineProperty(wrapper, 'clientWidth', { value: 1000, configurable: true });
+    wrapper.focus();
+
+    const key = (name: string) =>
+      wrapper.dispatchEvent(
+        new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }),
+      );
+
+    key('ArrowRight');
+    expect(wrapper.scrollLeft).toBe(500);
+    key('End');
+    expect(wrapper.scrollLeft).toBe(600);
+    key('ArrowLeft');
+    expect(wrapper.scrollLeft).toBe(100);
+    key('Home');
+    expect(wrapper.scrollLeft).toBe(0);
+
+    // A key aimed at a control inside the table keeps its own meaning: it bubbles through the
+    // wrapper without being consumed there.
+    const link = root.querySelector<HTMLElement>('[data-run-row] a')!;
+    link.focus();
+    const inner = new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true });
+    link.dispatchEvent(inner);
+    expect(inner.defaultPrevented).toBe(false);
+    expect(wrapper.scrollLeft).toBe(0);
+  });
+
+  it('gives the table keyboard stops with different names in each mode', async () => {
+    const { fixture, root } = await render(Array.from({ length: 200 }, (_, index) => run(index)));
+    // The plain list scrolls in its wrapper, so the wrapper is the table's only stop.
+    expect(root.querySelector('.table-scroll')?.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+
+    fixture.componentRef.setInput(
+      'rows',
+      Array.from({ length: 250 }, (_, index) => run(index)),
+    );
+    await fixture.whenStable();
+    // Two stops, because the wrapper holds the horizontal overflow and the viewport the vertical
+    // one; neither can serve the other's axis. They must not share a name, or one table reads as
+    // two identical landmarks (F-RUN-04).
+    const wrapper = root.querySelector('.table-scroll');
+    const viewport = root.querySelector('cdk-virtual-scroll-viewport');
+    expect(wrapper?.getAttribute('tabindex')).toBe('0');
+    expect(viewport?.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelectorAll('[tabindex="0"]')).toHaveLength(2);
+    expect(wrapper?.getAttribute('aria-label')).toBe('Project runs');
+    expect(viewport?.getAttribute('aria-label')).toBe('Project runs rows');
+    expect(wrapper?.getAttribute('aria-label')).not.toBe(viewport?.getAttribute('aria-label'));
+  });
+
   it('keeps 200 rows nonvirtual and switches to a bounded CDK window for 250 rows', async () => {
     const rows = Array.from({ length: 250 }, (_, index) => run(index));
     const { fixture, root } = await render(rows.slice(0, 200));

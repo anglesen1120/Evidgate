@@ -101,6 +101,11 @@ app-shell-nav {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .theme-toggle {
+  /*
+   * Below 768px the scope group wraps to a second row, so this pushes the theme toggle to the end
+   * of the first row, beside the navigation toggle. It is inert above that width: the scope group
+   * grows, so no free space is left for the auto margin.
+   */
   margin-inline-start: auto;
 }
 .icon-button {
@@ -210,7 +215,10 @@ main {
     padding: var(--eg-space-3) var(--eg-space-4);
   }
   .topbar-scope {
-    order: 3;
+    /*
+     * No `order` here: the scope group is last in the DOM as well, so the flex order and the
+     * document order agree on both rows (WCAG 2.4.3 — the keyboard order must be the visual one).
+     */
     flex-basis: 100%;
   }
   main {

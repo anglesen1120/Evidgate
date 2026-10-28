@@ -70,6 +70,32 @@ describe('ShellComponent', () => {
     expect(root.textContent).not.toContain('QA engineer');
   });
 
+  // F-SWITCH-01 (09.8.1-T1.2, WCAG 2.4.3): below 768px the two scope selects sit on a second row
+  // while the theme toggle stays on the first, next to the navigation toggle. CSS `order` reorders
+  // paint only, so the header's document order is the browser's Tab order and must agree with what
+  // the topbar looks like at every width: navigation toggle → theme toggle → organization →
+  // project. jsdom has no sequential focus navigation, so the document order is what this pins; the
+  // geometry of the two rows is pinned in Chromium by `e2e/shell/a11y-keyboard-scope.spec.ts`.
+  it('keeps the topbar keyboard stops in the order the header reads', () => {
+    const topbar = root.querySelector<HTMLElement>('header.topbar')!;
+    const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button, select')).map(
+      (element) => element.className || element.tagName.toLowerCase(),
+    );
+    expect(stops).toEqual([
+      'icon-button nav-toggle',
+      'icon-button theme-toggle',
+      'select',
+      'select',
+    ]);
+
+    const theme = topbar.querySelector<HTMLElement>('button.theme-toggle')!;
+    const scope = topbar.querySelector<HTMLElement>('app-scope-switcher')!;
+    expect(theme.compareDocumentPosition(scope) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The CSS reorder that caused the finding is gone (the scope group is last in the document too),
+    // and nothing here can reintroduce one: jsdom does not evaluate the 767px media block, so the
+    // paint order at both widths is pinned in Chromium by `e2e/shell/a11y-keyboard-scope.spec.ts`.
+  });
+
   it('uses expanded/rail natural modes and preserves a user override on resize', async () => {
     expect(fixture.componentInstance.collapsed()).toBe(false);
     vi.stubGlobal('innerWidth', 768);
