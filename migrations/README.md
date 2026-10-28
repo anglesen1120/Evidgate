@@ -483,11 +483,14 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
 - `actor` is the closed `{kind, id}` object of whoever caused the event. `details` carries ids, hashes
   and counts only: never a raw payload, a secret or free-text reason. Neither rule is enforced in
   SQL, so an emitter that writes a payload is a defect its own review must catch (11.5.1 §8, S3).
-- RLS is the ordinary tenant shape: `ENABLE` + `FORCE ROW LEVEL SECURITY`, one default policy
-  `tenant_isolation` with `org_id = evidgate.current_org_id()` in `USING` — a `FOR ALL` policy also
-  applies that predicate as `WITH CHECK`, and with no `TO` clause it applies to PUBLIC. The table is
-  absent from `contracts/rls-exceptions.txt` on purpose: `org_id` is NOT NULL, so there is no
-  NULL-org read row, and the boot self-check sees a plain scoped policy.
+- RLS is the ordinary tenant shape: `ENABLE` + `FORCE ROW LEVEL SECURITY`. `tenant_isolation` is the
+  tenant policy — `org_id = evidgate.current_org_id()` in `USING`, applied as `WITH CHECK` too, and with
+  no `TO` clause it applies to PUBLIC, so the app role reaches only its own scope. `security_event_owner_backfill`
+  is the house second policy (`FOR ALL TO evidgate_owner USING (true) WITH CHECK (true)`,
+  `0004`/`0005`/`0028`/`0046`/`0049`/`0052` precedent): `FORCE` applies to the owner as well, so a
+  migration or fixture write would otherwise be refused. It names `evidgate_owner` only and grants the
+  app role nothing. The table is absent from `contracts/rls-exceptions.txt` on purpose: `org_id` is NOT
+  NULL, so there is no NULL-org read row, and the boot self-check sees a plain scoped tenant policy.
 - Two indexes, one per read shape. `security_event_org_created_idx (org_id, created_at desc, id desc)`
   serves the unfiltered page and the `from`/`to` window: those reads filter on `org_id` alone and
   keyset on `(created_at, id)` descending, so the page is index-ordered (P3/P4).
@@ -505,15 +508,16 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
   reason: a security record an ordinary tenant request could edit is not evidence, and no retention
   sweep exists yet, so nothing legitimate updates or deletes a row today. (A future sweep, if any, is a
   definer task of its own, like `0015`'s purge.)
-- `updated_at` and `version` are inert for now: no `set_updated_at_and_version()` trigger and no
-  writer touch them, so both keep their defaults. They exist because the shape follows the house
-  pattern; a reader must never treat `version` as a concurrency token.
+- `updated_at` and `version` belong to the database: `security_event_set_updated_at_and_version` is the
+  `0004` convention trigger (`BEFORE UPDATE … FOR EACH ROW`, `public.set_updated_at_and_version()`), so a
+  privileged backfill stamps the time and increments `version`. No route writes them — the app role may
+  not UPDATE at all (the revoke above) — and a reader must never treat `version` as a concurrency token.
 - Platform-scope events do NOT fit: `org_id` is NOT NULL, so neither the NULL-org system healing
   switch (`0052`, 08.6.3-T1) nor the verifier fault (G8, 02.7.1 AC6) has a row here. That stays an
   open hand-over recorded in the 11.5.1 plan Notes and `docs/status-carried.md`; a nullable `org_id`
   versus a separate platform table is a coordinator decision, and `0053` does not pre-empt it.
-- Rollback: `drop table if exists public.security_event;` — the policy and both indexes go with it, and
-  nothing else references the table.
+- Rollback: `drop table if exists public.security_event;` — the two policies, both indexes and the trigger
+  go with it, and nothing else references the table.
 
 ## Tests and fixtures
 

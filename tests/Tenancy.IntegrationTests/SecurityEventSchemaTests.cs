@@ -8,14 +8,15 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// 11.5.1-T5.1 SQL level: migration 0053's <c>security_event</c> as the database sees it — the contract shape
 /// of the table, the <c>(org_id, id)</c> composite key a later tenant FK targets, the two indexes the page reads
-/// are served by, the append-only grant of the application role, and the tenant boundary itself (ENABLE + FORCE
-/// row level security over <c>evidgate.current_org_id()</c>, 00 §5.4.6 / DECISIONS F5).
+/// are served by, the append-only grant of the application role, the <c>0004</c> version trigger, and the tenant
+/// boundary itself (ENABLE + FORCE row level security: the PUBLIC <c>tenant_isolation</c> policy plus the
+/// owner-only backfill policy, 00 §5.4.6 / DECISIONS F5).
 /// </summary>
 /// <remarks>
 /// The closed <c>type</c> and <c>severity</c> vocabularies are deliberately NOT database constraints: a new type
 /// is a docs decision owned elsewhere (11.1.1-T4.1, V2's <c>injection_attempt</c>), so the table carries no
 /// CHECK and no enum — asserted here so a later "helpful" constraint fails this test instead of shipping. The
-/// policy is declared without <c>TO</c>, so it applies to PUBLIC (<c>polroles = {0}</c>, which
+/// tenant policy is declared without <c>TO</c>, so it applies to PUBLIC (<c>polroles = {0}</c>, which
 /// <see cref="PostgresTenancyFixture.PoliciesAsync"/> cannot name), hence the local projection below.
 /// </remarks>
 [Collection(TenancySuite.Name)]
@@ -100,26 +101,38 @@ public sealed class SecurityEventSchemaTests
         rls.Forced.ShouldBeTrue("DECISIONS F5: FORCE is what makes the owner obey its own policies too");
 
         var policies = await PolicyRowsAsync(database);
-        var isolation = policies.ShouldHaveSingleItem();
-        isolation.ShouldStartWith(
-            "tenant_isolation:PUBLIC:*:(org_id = evidgate.current_org_id()):",
-            Case.Sensitive,
-            "the one policy is org_id = evidgate.current_org_id(), FOR ALL, for every role");
 
-        // The write half: an ALL policy with no explicit WITH CHECK answers the USING expression for inserted rows,
-        // so the row records no separate check ('-'). A later explicit WITH CHECK must be the same expression, or a
-        // tenant could write a row it can never read back.
+        // Two policies, and nothing else: the PUBLIC tenant predicate plus the owner-only backfill policy that
+        // FORCE makes necessary (0004/0005/0028/0046/0049/0052 precedent). The backfill policy names
+        // evidgate_owner only, so it must not widen what the app role can reach.
+        policies.ShouldBe(
+            [
+                "security_event_owner_backfill:evidgate_owner:*:true:true",
+                "tenant_isolation:PUBLIC:*:(org_id = evidgate.current_org_id()):-",
+            ],
+            Case.Sensitive,
+            $"{Table} declares exactly the tenant policy and the owner backfill policy");
+
+        // The write half of the tenant policy: an ALL policy with no explicit WITH CHECK answers the USING
+        // expression for inserted rows, so the row records no separate check ('-') — the exact-list assertion
+        // above pins that. A later explicit WITH CHECK must be the same expression, or a tenant could write a
+        // row it can never read back.
+        var isolation = policies[1];
         var withCheck = isolation[(isolation.LastIndexOf(':') + 1)..];
         (withCheck is "-" or "(org_id = evidgate.current_org_id())")
-            .ShouldBeTrue($"{Table}'s policy must not widen WITH CHECK beyond its USING expression, was '{withCheck}'");
+            .ShouldBeTrue($"{Table}'s tenant policy must not widen WITH CHECK beyond its USING expression, was '{withCheck}'");
     }
 
     /// <summary>
-    /// A transaction without a tenant context sees no row — for the application role and, because of FORCE, for
-    /// the owner too; the same statements inside a tenant scope see exactly that tenant's rows.
+    /// The two policies, observed from the wire. Without a tenant context the application role sees no row —
+    /// <c>current_org_id()</c> is NULL, so <c>tenant_isolation</c> matches nothing, never every row — and its
+    /// insert is refused by that policy's WITH CHECK, so it cannot write outside a tenant scope at all. The owner
+    /// is the deliberate exception: <c>security_event_owner_backfill</c> is <c>using (true)</c>, which is what
+    /// lets a migration or fixture write cross tenants. Inside a tenant scope the app role sees exactly that
+    /// tenant's rows.
     /// </summary>
     [Fact]
-    public async Task Query_WithoutTenantContext_ReturnsZeroRows()
+    public async Task Query_WithoutTenantContext_IsScopedPerPolicy()
     {
         var database = await _fixture.CreateDatabaseAsync();
         var mine = Guid.CreateVersion7();
@@ -153,12 +166,24 @@ public sealed class SecurityEventSchemaTests
         await using (var anonymous = await TenantScope.BeginAsync(_fixture.AppConnectionString(database)))
         {
             (await anonymous.ScalarAsync<long>("select count(*) from public.security_event")).ShouldBe(0);
+
+            // The same policy's WITH CHECK refuses the write, so the app role cannot create a row outside a
+            // tenant scope either — an emitter always writes inside one.
+            (await anonymous.CaptureErrorAsync(
+                    """
+                    insert into public.security_event (id, org_id, type, severity, actor)
+                    values (@id, @org_id, 'auth_failure', 'info', '{"kind":"system"}'::jsonb)
+                    """,
+                    ("id", Guid.CreateVersion7()),
+                    ("org_id", mine)))
+                .SqlState.ShouldBe("42501", "an insert outside a tenant scope is refused by the tenant policy");
         }
 
-        // FORCE: the owner obeys the same policy, so its tenant-less connection sees nothing either.
+        // FORCE applies to the owner too, which is exactly why the house backfill policy exists: it is the path a
+        // migration or fixture write takes, and it reaches every tenant's rows.
         await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
-            (await owner.ScalarAsync<long>("select count(*) from public.security_event")).ShouldBe(0);
+            (await owner.ScalarAsync<long>("select count(*) from public.security_event")).ShouldBe(2);
         }
 
         // Each tenant sees its own row and only its own.
@@ -170,6 +195,61 @@ public sealed class SecurityEventSchemaTests
                     ("id", theirs)))
                 .ShouldBe(0);
         }
+    }
+
+    /// <summary>
+    /// The <c>0004</c> convention trigger (00 §7) is installed: <c>updated_at</c> and <c>version</c> belong to the
+    /// database, not to a writer. The app role cannot UPDATE at all (the revoke), so the useful path is a
+    /// privileged write — exercised as the owner through its backfill policy: the statement is admitted, and the
+    /// trigger advances <c>version</c> and stamps <c>updated_at</c>.
+    /// </summary>
+    [Fact]
+    public async Task OwnerBackfill_UpdateBumpsVersionThroughTheConventionTrigger()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        var org = Guid.CreateVersion7();
+        var id = Guid.CreateVersion7();
+
+        (await _fixture.ScalarAsync<long>(
+                database,
+                """
+                select count(*)
+                  from pg_catalog.pg_trigger
+                 where tgrelid = 'public.security_event'::regclass
+                   and tgname = 'security_event_set_updated_at_and_version'
+                   and not tgisinternal
+                """))
+            .ShouldBe(1, "0053 installs the 0004 set_updated_at_and_version trigger");
+
+        await using (var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database), org))
+        {
+            await seed.ExecuteAsync(
+                """
+                insert into public.security_event (id, org_id, type, severity, actor)
+                values (@id, @org_id, 'auth_failure', 'info', '{"kind":"system"}'::jsonb)
+                """,
+                ("id", id),
+                ("org_id", org));
+            await seed.CommitAsync();
+        }
+
+        // No tenant context on purpose: the owner's backfill policy is what admits the write.
+        await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
+
+        (await owner.ExecuteAsync(
+                "update public.security_event set severity = 'critical' where id = @id",
+                ("id", id)))
+            .ShouldBe(1, "the owner-only backfill policy admits a privileged write with no tenant context");
+
+        (await owner.ScalarAsync<int>(
+                "select version from public.security_event where id = @id",
+                ("id", id)))
+            .ShouldBe(2, "the trigger increments version on every update");
+
+        (await owner.ScalarAsync<long>(
+                "select count(*) from public.security_event where id = @id and updated_at > created_at",
+                ("id", id)))
+            .ShouldBe(1, "the trigger stamps updated_at from now()");
     }
 
     /// <summary>

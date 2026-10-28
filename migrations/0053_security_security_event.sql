@@ -13,8 +13,11 @@
 -- `details` carries ids, hashes and counts only: never a raw payload, a secret or a reason text.
 -- `actor` is `{kind, id}`; no secrets.
 --
--- RLS (DECISIONS F5, rulings T2/T3): ENABLE + FORCE, one policy over `evidgate.current_org_id()`,
--- `unique (org_id, id)` as the target of any later composite tenant FK.
+-- RLS (DECISIONS F5, rulings T2/T3): ENABLE + FORCE, `unique (org_id, id)` as the target of any later
+-- composite tenant FK. Two policies: `tenant_isolation` (PUBLIC, the tenant predicate over
+-- `evidgate.current_org_id()`) and `security_event_owner_backfill` (FORCE applies to the owner too, so a
+-- migration or fixture write would otherwise be refused — 0004/0005/0028/0046/0049/0052 precedent; it
+-- names `evidgate_owner` only and grants the app role nothing).
 --
 -- Indexes (00 §5.7 P3/P4): every page orders by `created_at desc, id desc`. The unfiltered read and the
 -- `from`/`to`-window read filter on `org_id` alone, so `security_event_org_created_idx
@@ -47,6 +50,14 @@ create table security_event (
   unique (org_id, id)
 );
 
+-- The convention trigger of 0004 (00 §7): the database owns `updated_at` and the `version` increment,
+-- so any later privileged write (a backfill by the owner) advances the concurrency token. The app
+-- role cannot update the table at all (the revoke below).
+drop trigger if exists security_event_set_updated_at_and_version on public.security_event;
+create trigger security_event_set_updated_at_and_version
+  before update on public.security_event
+  for each row execute function public.set_updated_at_and_version();
+
 alter table security_event enable row level security;
 alter table security_event force row level security;
 
@@ -54,6 +65,14 @@ create policy tenant_isolation on security_event
   using (org_id = evidgate.current_org_id());
 
 -- The unfiltered page and the `from`/`to` window: one keyset on (created_at, id) descending under one org.
+-- `force row level security` applies to the table owner too: the migration role needs its own policy
+-- so a backfill or fixture write is not refused (0004/0005/0028/0046/0049/0052 precedent); explicit and
+-- permissive on purpose, BYPASSRLS is rejected (DECISIONS F5). It is owner-only: it grants the app role
+-- nothing.
+drop policy if exists security_event_owner_backfill on public.security_event;
+create policy security_event_owner_backfill on public.security_event
+  for all to evidgate_owner using (true) with check (true);
+
 create index security_event_org_created_idx
   on security_event (org_id, created_at desc, id desc);
 
