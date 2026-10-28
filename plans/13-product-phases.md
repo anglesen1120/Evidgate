@@ -198,7 +198,7 @@ Notes (S92): the generation flow screens of 13.4.1-T4 carry the role-profile sel
 |---|---|---|---|---|---|
 | 13.5.2-T1 | `evidgate run` command wrapping the Playwright reporter and the ingest path | L | V1 | G2 | 04.2.1-T1, 04.3.1-T1 |
 | 13.5.2-T2 | Quickstart and troubleshooting docs (vi + en) | S | V1 | G2 | 13.5.2-T1 |
-**Epic 13.5 total: 12.0**
+**Epic 13.5 total: 12.0** Feature plan for story 13.5.1 (S136, 2026-10-28): `plans/features/13-product-phases/13.5.1-bound-playwright-scripts.md` (23 sub-tasks of at most 0.5 d summing to the task sizes above, estimate unchanged; open items OI-13-510 to OI-13-529 and OI-13-540 to OI-13-543 in `plans/open-items/05-product-phases-g1.md`). Feature plan for story 13.5.2 (S136, 2026-10-28): `plans/features/13-product-phases/13.5.2-local-runs.md` (7 sub-tasks of at most 0.5 d summing to the task sizes above, estimate unchanged; open items OI-13-530 to OI-13-539 and OI-13-544 in the same register).
 
 ### Epic 13.6 Element memory (G2)
 #### Story 13.6.1 Element profiles — acceptance: each green run records a profile per bound step, keyed to the case revision and step; profiles hold structure, not content; the latest green profile per step is queryable; similarity is a versioned function with stability tests.
