@@ -139,13 +139,20 @@ export class RequestStateComponent {
       this.lastStatus = status;
       // A failure is the only place this component may claim focus: entering one starts with
       // nothing owned, so focus left on `body` at that point is the visitor's own choice.
-      if (status === 'error' && previous !== 'error') this.hadFocus = false;
+      if (status === 'error' && previous !== 'error') {
+        this.hadFocus = false;
+        // A failure reached from settled content is a fresh episode, not the one the visitor
+        // retried. The place borrowed in the earlier failure belongs to the page now, so the
+        // Retry that answers here must not take it back — only a failure the visitor asked for
+        // through `loading` inherits that loan.
+        if (previous === 'ready') this.parked = null;
+      }
+      // A settled recovery ends the loan: focus belongs to the page again.
+      if (status === 'ready') this.parked = null;
       if (previous !== 'error' || status === 'error') return;
       // Leaving `error` spends the claim, whether or not the handoff takes it.
       const claimed = this.hadFocus;
       this.hadFocus = false;
-      // A settled recovery ends the loan: focus belongs to the page again.
-      if (status === 'ready') this.parked = null;
       if (!claimed || this.focusElsewhere()) return;
       this.handoff = true;
       afterNextRender(() => this.finishHandoff(), { injector: this.injector });

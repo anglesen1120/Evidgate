@@ -388,6 +388,24 @@ describe('RequestStateComponent failure-panel focus handoff', () => {
     expect(heading.hasAttribute('tabindex')).toBe(false);
   });
 
+  it('keeps the loan of a settled recovery out of a later failure', async () => {
+    const retry = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
+    retry.focus();
+    retry.click();
+    // The retry succeeded, so the borrowed place settles with the recovered content.
+    await recover();
+    const heading = root.querySelector('h1')!;
+    expect(document.activeElement).toBe(heading);
+
+    // This failure was not asked for through a retry: its control answers, but the place the
+    // earlier failure borrowed belongs to the page, so focus must stay where the visitor left it.
+    host.error.set(failure({ message: 'Still offline.' }));
+    host.status.set('error');
+    await fixture.whenStable();
+    expect(root.querySelector<HTMLButtonElement>('app-error-pattern button')!.disabled).toBe(false);
+    expect(document.activeElement).toBe(heading);
+  });
+
   it('returns the place to the retry control of a host that never leaves the error status', async () => {
     // `create-project.page.ts` binds a constant `status="error"`; only its retry state moves.
     const retry = root.querySelector<HTMLButtonElement>('app-error-pattern button')!;
