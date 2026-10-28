@@ -136,7 +136,7 @@ internal sealed class ReconcileFinisher(
                 .FreezeAsync(new FreezeRequest(runId, required.Specs), cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (ArgumentException) when (!unsatisfiable && required.Specs.Count > 0)
+        catch (ArgumentException refused) when (!unsatisfiable && required.Specs.Count > 0 && refused.ParamName == "request")
         {
             unsatisfiable = true;
             frozen = await freeze
