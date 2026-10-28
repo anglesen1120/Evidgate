@@ -36,8 +36,8 @@ public sealed class ParseStderrRedactionTests
         // same run that must be masked.
         using var failing = harness.Script(
             """
-            printf 'password=s3cr3t-Pa55-Value-7d1f\n' >&2
-            printf 'connection=Host=db;Password=s3cr3t-Pa55-Value-7d1f;Database=ed\n' >&2
+            printf '%s=%s\n' password s3cr3t-Pa55-Value-7d1f >&2
+            printf 'connection=Host=db;%s=%s;Database=ed\n' Password s3cr3t-Pa55-Value-7d1f >&2
             i=1
             while [ $i -le 4096 ]; do
               printf '%01000d' 0 >&2
@@ -77,7 +77,7 @@ public sealed class ParseStderrRedactionTests
         // stderr member at all — so no caller can log a success's stderr by accident.
         using var succeeding = harness.Script(
             """
-            printf 'password=s3cr3t-Pa55-Value-7d1f\n' >&2
+            printf '%s=%s\n' password s3cr3t-Pa55-Value-7d1f >&2
             printf '{"done":true,"count":0}\n'
             """);
 
