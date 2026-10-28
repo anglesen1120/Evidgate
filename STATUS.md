@@ -9,14 +9,14 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 once merged): 182/656 tasks; 187.75/703.25 raw person-days; remaining 474 tasks / 515.5 d. Via merged PRs: 155 tasks / 162.75 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- Landed by phase (done tasks / raw d): G1 134 / 145.75; G2 42 / 36; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged): 183/656 tasks; 188.25/703.25 raw person-days; remaining 473 tasks / 515.0 d. Via merged PRs: 156 tasks / 163.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 135 / 146.25; G2 42 / 36; G3 0 / 0; G4 6 / 6.
 - Plan totals: 656 tasks / 703.25 raw / 843.9 buffered person-days (S130 F47 added 02.3.2-T3, S, V1, G1; the S93 canonical figures were 655 / 702.75 / 843.3). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
 - Next picks, web-only lane: 09.1.1-T5 is merged (#213) and 09.1.1-T9.2 is done (#209), so the web-only lane moves to G2 (§5).
 - Next picks, backend lane: refill order in `.omp/coordinator/prompts/held/README.md`; when a backend slot frees, 08.5.1-T1 (XL, split, migration lane) unless §5 ranks another G1 task higher, and 04.1.2-T1 only after S91 releases.
-- Next step: §5, 91 dependency-ready tasks / 102.0 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
+- Next step: §5, 90 dependency-ready tasks / 101.5 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
 - STATUS split (S126, 2026-10-28; merged #264, a9159257): §3-§4 delivered waves moved verbatim to `docs/status-archive.md` together with the closed §6 rows; the live §6 table is `docs/status-carried.md` (add new carried rows there, at the end).
 
 ## 2. Done
@@ -25,10 +25,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 182 | 187.75 |
-| Via merged PRs | 155 | 162.75 |
+| Fully landed on develop | 183 | 188.25 |
+| Via merged PRs | 156 | 163.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 474 | 515.5 |
+| Remaining | 473 | 515.0 |
 | Plan total | 656 | 703.25 |
 
 Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 09.2.1-T5 (T5.2 reload acceptance awaits the `apps/web` wire-up of the S116 activation read), 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764) and whose remainder is the T2.2 acceptance plus T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -46,21 +46,21 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
 | 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | 09 | 20 | 0 | 6 | 11 | 3 | 0 | 20 |
-| 10 | 4 | 0 | 1 | 2 | 1 | 0 | 4.5 |
+| 10 | 5 | 0 | 2 | 2 | 1 | 0 | 5 |
 | 11 | 10 | 1 | 4 | 4 | 1 | 0 | 8.25 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 182 | 3 | 50 | 97 | 31 | 1 | 187.75 |
+| TOTAL | 183 | 3 | 51 | 97 | 31 | 1 | 188.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 134 | 3 | 30 | 73 | 27 | 1 | 145.75 |
+| G1 | 135 | 3 | 31 | 73 | 27 | 1 | 146.25 |
 | G2 | 42 | 0 | 18 | 21 | 3 | 0 | 36 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 182 | 3 | 50 | 97 | 31 | 1 | 187.75 |
+| TOTAL | 183 | 3 | 51 | 97 | 31 | 1 | 188.25 |
 
 ### Landed task groups
 
@@ -194,6 +194,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 08.6.3 | 08.6.3-T1 (T1.1 + T1.2) | merged (#260, 569b538f) | `migrations/0052_healing_switch.sql`: `healing_switch` (mode CHECK excludes `unavailable`, `(scope='system') = (org_id is null)`, partial uniques per scope, composite project FK, FORCE RLS with the T72 NULL-org read policy, column-grant writes) plus the `evidgate.healing_switch_set_system` definer; `SetHealingSwitch`/`GetHealingSwitch`, pure `IHealingAvailabilityResolver` (most restrictive wins, no rows = `shadow`), V1 clamp on `Healing:Apply`, `PUT|GET /v1/healing/switch` with OpenAPI + SDK, operator system route behind the fail-closed gate. D-S124-Q1..Q3 (coordinator-decided, owner review non-blocking). Counts bumped at close-out. |
 | F47 | F47 (docs/contract, tier T0) | merged (#268, a1483914) | 00 §9.3 gains one block row for the four shipped session routes (`GET /v1/auth/sessions`, `DELETE /v1/auth/sessions/{s}`, `POST /v1/auth/sessions/revoke-all`, `POST /v1/auth/logout`, admin scope `X-Evidgate-Org`) and §15 one row; plan 02 story 02.3.2 gains `02.3.2-T3` (admin ends all sessions of one user, ASVS-GAP-14 7.4.5; planned only, not landed); totals 656 tasks / 703.25 raw / 843.9 buffered. A follow-up row, not a planned task: the landed counts (181 tasks / 187.25 d) do NOT change. |
 | 11.5.2 | 11.5.2-T1 (T1.1 + T1.2) | merged (#270, 142b4846) | Docs only (tier T0): `docs/adr/0010-audit-chain-keyed-hash-and-external-checkpoints.md` (`proposed`; AC1; HMAC-SHA-256 keyed chain with `chain_key_id`, secret-store custody, rotation without rewriting history, ECDSA P-256 checkpoints every 15 min, residual risk, three rejected alternatives), its index row, DECISIONS §6 F15-F22 (✅ F15, F16, F18; ✅ with ⚠️ residue F19-F21; ⚠️ F17, F22), the four labelled DoR answers in the 11.5.2 plan §8, the `[OPEN]` change request text for 00 §5.4/T8 and §15 (queued in the 11.5.2 plan Notes, 00 not edited) and the 02.7.1 gap note (`audit_log.chain_key_id`, `IAuditChainSigner`). The ASVS-GAP-24 row stays open until T2 and T3 ship. |
+| 10.11.1 | 10.11.1-T3 (T3.1) | open (#PRNUM) | Docs only (tier T0): `docs/decisions/10.11.1-waf-edge-decision-record.md` (`[OPEN]` O3, no vendor chosen): edge stance dependent on O3, what runs without a WAF (shipped throttle helpers vs AC1-AC8 planned, not merged), what is not covered, edge criteria E1-E10 for 10.8.1-T1, sources and prior art; Notes block appended to the 10.11.1 plan; two carried rows (forwarded-headers handling absent; WAF/edge stance `[OPEN]` on O3, both 10.11.1-T3, S132); D-S132-Q1..Q6 in `docs/phase-review.md`. |
 
 ## 3-4. Delivered waves
 
@@ -201,11 +202,11 @@ Moved verbatim to docs/status-archive.md
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **91 tasks / 102.0 d** (G1 38 / 40.5, G2 37 / 38.5, G3 6 / 9, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0051`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
+Dependency-ready: **90 tasks / 101.5 d** (G1 37 / 40.0, G2 37 / 38.5, G3 6 / 9, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0051`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
 
 Stricter variant that also requires every dependency task's whole story to be merged: **47 tasks / 51.0 d** (G1 16 / 18, G2 23 / 23, G3 0 / 0, G4 8 / 10), fully recomputed on `787f592` from the plan graph plus the landed set. This corrects the previous incremental 50 / 53.5 d claim (G1 19 / 20.5); 11.5.1-T3 and 11.5.1-T5 remain included because 11.1.1 is fully landed. S102 adds 02.1.2-T3 to the task-edge ready set but no strict-ready task: 02.1.2-T1's whole story still includes unbuilt T3.
 
-### G1: 38 tasks / 40.5 d (backend lane 28 / 28.0 d, web-only 0 / 0 d, docs-only 10 / 12.5 d)
+### G1: 37 tasks / 40.0 d (backend lane 28 / 28.0 d, web-only 0 / 0 d, docs-only 9 / 12.0 d)
 
 #### G1 backend lane
 
@@ -245,7 +246,6 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
 | 10.7.1-T4 | M | Key rotation runbook | no | no | no | n/a | T4.1 and the written pepper section of T4.2 delivered by S106 (PR #222); remaining: T4.2 staging drill (AC5), see §6 rows |
-| 10.11.1-T3 | S | WAF/edge decision record | no | no | no (plans Notes row only at close-out) | n/a | yes |
 | 11.9.1-T2 | L | Breach runbook with the 72 h clock (unblocked by 11.5.1-T1, #219). T2.1–T2.3 are drafting; T2.4 needs counsel + on-call names. The plan has no four §8 DoR answers. | no | no | no | T2.1 ; T2.2 ; T2.3 ; T2.4 | yes for T2.1–T2.3; T2.4 needs counsel review |
 | 12.2.1-T2 | M | Baseline measurement kit | no | no | no | n/a | yes for T2.1 kit; T2.2 needs signed pilots |
 | 11.8.1-T1 | L | DPA template + counsel review | no | no | no | T1.1-T1.2 ; T1.3-T1.4 | no — counsel engagement is external and the AC needs `approved` + counsel name in `manifest.yaml` |
