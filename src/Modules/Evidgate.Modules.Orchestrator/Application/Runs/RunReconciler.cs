@@ -11,6 +11,12 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// <c>collecting</c> is never compared, and nothing is read beyond its state (plan Notes, 05.3.2-T1 line 152: the
 /// finalize trigger is not evidence that the run is collectable). Read-only by construction — it never writes and never
 /// changes the run state; the only work after the lock is the slot list and the one grouped event aggregate.
+/// <para>
+/// The lock statement also answers the run's collection deadline (<c>deadline_passed</c>, the database clock), which
+/// decides between <see cref="ReconcileDisposition.Pending"/> and <see cref="ReconcileDisposition.Compared"/> when the
+/// plan still holds an open shard: before the deadline the attempt waits, past it the open shard is
+/// <c>missing_shard</c> and the attempt finishes.
+/// </para>
 /// </summary>
 /// <param name="db">The Dapper path over the ambient scope; it demands an active scope before it touches the database.</param>
 /// <param name="scopes">The tenant-scope accessor; <c>Require()</c> is the guard that throws before any statement.</param>
@@ -23,17 +29,17 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         var parameters = new { org_id = orgId, run_id = runId };
 
         // Statement 1: the run row, locked FOR NO KEY UPDATE (see ReconcileSql.LockRun for the lock mode).
-        var state = await db
-            .QuerySingleOrDefaultAsync<string>(ReconcileSql.LockRun, parameters, cancellationToken)
+        var locked = await db
+            .QuerySingleOrDefaultAsync<RunLockRow>(ReconcileSql.LockRun, parameters, cancellationToken)
             .ConfigureAwait(false);
 
-        if (state is null)
+        if (locked is null)
         {
             return new ReconcileOutcome(ReconcileDisposition.RunNotFound, Comparison: null);
         }
 
         // Statement 2 never runs for a run outside its collection state: nothing to compare, nothing to change.
-        if (!string.Equals(state, RunStates.Collecting, StringComparison.Ordinal))
+        if (!string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
         {
             return new ReconcileOutcome(ReconcileDisposition.NotCollectable, Comparison: null);
         }
@@ -74,7 +80,45 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 row.BlockedCount);
         }
 
-        return new ReconcileOutcome(ReconcileDisposition.Compared, ReconcileComparer.Compare(planned, seen));
+        var comparison = ReconcileComparer.Compare(planned, seen);
+
+        // An open shard before the collection deadline is not a verdict: the attempt waits (Pending) so the run stays
+        // collecting until the last slot closes or the deadline forces the decision (COORDINATOR-DECISION S123, F1).
+        // The open-shard decision reads the slot list taken AFTER the run-row lock, so two final finalizes serialise on
+        // that lock and decide exactly once. `deadline_passed` comes from the lock statement, evaluated by the database.
+        return new ReconcileOutcome(
+            HasOpenShard(comparison) && !locked.DeadlinePassed
+                ? ReconcileDisposition.Pending
+                : ReconcileDisposition.Compared,
+            comparison);
+    }
+
+    /// <summary>True when the comparison names an open planned shard (<c>missing_shard</c>).</summary>
+    /// <param name="comparison">The comparison of this attempt.</param>
+    private static bool HasOpenShard(ReconcileComparison comparison)
+    {
+        for (var index = 0; index < comparison.Missing.Count; index++)
+        {
+            var code = comparison.Missing[index].Code;
+            if (string.Equals(code, ReconcileMissingCodes.MissingShard, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// One row as <see cref="ReconcileSql.LockRun"/> returns it (snake_case → PascalCase, Dapper's underscore map): the
+    /// state the attempt decides on and the collection deadline the <b>database</b> evaluated.
+    /// </summary>
+    private sealed class RunLockRow
+    {
+        public string State { get; set; } = string.Empty;
+
+        /// <summary>True when <c>collection_deadline_at &lt;= now()</c>; a NULL deadline reads false (never "passed").</summary>
+        public bool DeadlinePassed { get; set; }
     }
 
     /// <summary>One row as <see cref="ReconcileSql.ListSlots"/> returns it (snake_case → PascalCase, Dapper's underscore map).</summary>

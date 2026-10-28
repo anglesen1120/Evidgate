@@ -42,10 +42,11 @@ internal interface IReconcileFinisher
     /// <exception cref="InvalidOperationException">
     /// Fail closed, never a partial revision: <see cref="IEvidenceFreeze.FreezeAsync"/> refused the freeze (an
     /// unresolved or vanished artifact, a short resolution <c>UPDATE</c>, a run above
-    /// <see cref="FreezeRequest.MaxReadyArtifacts"/>), the requirement set exceeds <see cref="FreezeRequest.MaxRequired"/>,
-    /// the run's manifest hash cannot be read, the pointer update touched no row, or the state transition failed. The
-    /// caller MUST let the exception escape so the consumer rolls the whole attempt back and retries it
-    /// (STATUS.md:588/589 fail-closed).
+    /// <see cref="FreezeRequest.MaxReadyArtifacts"/>), the run's manifest hash cannot be read, the pointer update
+    /// touched no row, or the state transition failed. The caller MUST let the exception escape so the consumer rolls
+    /// the whole attempt back and retries it (STATUS.md:588/589 fail-closed). A requirement set above
+    /// <see cref="FreezeRequest.MaxRequired"/> is NOT an exception: it resolves as unsatisfiable and becomes an
+    /// <c>artifact_missing</c> reason, so the attempt records an <c>incomplete</c> revision instead of retrying forever.
     /// </exception>
     ValueTask<ReconcileFinalization> FinishAsync(
         Guid runId,
@@ -62,10 +63,15 @@ internal interface IReconcileFinisher
 /// <c>incomplete</c> with no reason: nothing was proven, so nothing is claimed (fail closed).
 /// </para>
 /// <para>
-/// <b>missing[]</b>: the event-evidence codes in the order the comparer produced them (producer id, then code ordinal),
-/// followed by the freeze's own reasons in the order <see cref="FreezeResult.Missing"/> gives them (orphans first, then
-/// unmet requirements — <c>artifact_missing</c> for either, or the requirement's own code). No deduplication: the array is
-/// the evidence of what was looked at, and both halves are already deterministic.
+/// <b>missing[]</b>: the event-evidence codes in the order the comparer produced them (producer id, then code
+/// ordinal), followed by the freeze's own reasons in the order <see cref="FreezeResult.Missing"/> gives them (orphans
+/// first, then unmet requirements — <c>artifact_missing</c> for either, or the requirement's own code), and finally one
+/// <c>artifact_missing</c> when the requirement set was unsatisfiable (the plan times the policy exceeded the freeze
+/// bound, <see cref="RequiredSet.Unsatisfiable"/>).
+/// <b>Codes are de-duplicated, first occurrence kept</b> (PerfRev P3): the vocabulary is the closed 00 §8.5 list, so a
+/// hundred orphans or a requirement per execution all add up to the one code that says the same thing, while the
+/// revision's per-producer detail stays in the comparison the reconciler reports. The result is deterministic because
+/// both halves are.
 /// </para>
 /// </summary>
 /// <param name="db">The Dapper path over the ambient scope; it demands an active scope before it touches the database.</param>
@@ -109,24 +115,53 @@ internal sealed class ReconcileFinisher(
         // pipeline unit to inherit. A nested BeginUnit joins an open unit, and the flush below appends in this transaction.
         using var auditUnit = audit.BeginUnit();
 
-        // (a) The requirement set the pinned policy names for every planned execution. An empty set is legitimate.
+        // (a) The requirement set the pinned policy names for every planned execution. An empty set is legitimate; a set
+        // over the freeze bound arrives unsatisfiable with no specs, so the freeze below is asked for nothing and the
+        // reason list below names the one artifact_missing that keeps the revision incomplete (never a truncated set).
         var required = await requirements.ResolveAsync(runId, cancellationToken).ConfigureAwait(false);
 
         // (b) The freeze: one read, at most one resolution UPDATE, in this transaction. Its exceptions (a short UPDATE, a
         // vanished artifact, a run above MaxReadyArtifacts) are deliberately not caught: the attempt must roll back and
-        // retry, never persist a revision that disagrees with the rows (IEvidenceFreeze's fail-closed contract).
-        var frozen = await freeze.FreezeAsync(new FreezeRequest(runId, required), cancellationToken).ConfigureAwait(false);
+        // retry, never persist a revision that disagrees with the rows (IEvidenceFreeze's fail-closed contract). The one
+        // exception is a requirement set the freeze refuses by shape: Validate runs before the first statement, so the
+        // transaction is untouched when it throws, and the set cannot become satisfiable however the evidence arrives
+        // (an unknown artifact kind in the pinned policy body — the closed kind list lives in the Evidence module and is
+        // not exported, so this module cannot pre-filter). The attempt then freezes with no requirements and records the
+        // one artifact_missing marker below, instead of failing the attempt until the queue dead-letters it.
+        var unsatisfiable = required.Unsatisfiable;
+        FreezeResult frozen;
+        try
+        {
+            frozen = await freeze
+                .FreezeAsync(new FreezeRequest(runId, required.Specs), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (ArgumentException) when (!unsatisfiable && required.Specs.Count > 0)
+        {
+            unsatisfiable = true;
+            frozen = await freeze
+                .FreezeAsync(new FreezeRequest(runId, []), cancellationToken)
+                .ConfigureAwait(false);
+        }
 
-        // (c) The codes, in the stable order: event reasons first (as compared), then the freeze's own reasons.
-        var missing = new List<string>(comparison.Missing.Count + frozen.Missing.Count);
+        // (c) The codes, in the stable order: event reasons first (as compared), then the freeze's own reasons, then the
+        // unsatisfiable marker. De-duplicated with the first occurrence kept, because the vocabulary is the closed 00 §8.5
+        // list and a repeated code says nothing a single one does not (PerfRev P3).
+        var missing = new List<string>(comparison.Missing.Count + frozen.Missing.Count + 1);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var index = 0; index < comparison.Missing.Count; index++)
         {
-            missing.Add(comparison.Missing[index].Code);
+            AddCode(missing, seen, comparison.Missing[index].Code);
         }
 
         for (var index = 0; index < frozen.Missing.Count; index++)
         {
-            missing.Add(frozen.Missing[index].Code);
+            AddCode(missing, seen, frozen.Missing[index].Code);
+        }
+
+        if (unsatisfiable)
+        {
+            AddCode(missing, seen, ReconcileMissingCodes.ArtifactMissing);
         }
 
         var isComplete = missing.Count == 0
@@ -213,5 +248,20 @@ internal sealed class ReconcileFinisher(
         await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
 
         return new ReconcileFinalization(completeness, revisionId, revisionNo);
+    }
+
+    /// <summary>
+    /// Appends <paramref name="code"/> unless an equal code was already kept, so the stored <c>missing[]</c> is the
+    /// de-duplicated first-seen order of every reason this attempt named (PerfRev P3).
+    /// </summary>
+    /// <param name="missing">The codes kept so far, in order.</param>
+    /// <param name="seen">The set of the codes kept so far.</param>
+    /// <param name="code">The code this reason names (one of the closed 00 §8.5 literals).</param>
+    private static void AddCode(List<string> missing, HashSet<string> seen, string code)
+    {
+        if (seen.Add(code))
+        {
+            missing.Add(code);
+        }
     }
 }

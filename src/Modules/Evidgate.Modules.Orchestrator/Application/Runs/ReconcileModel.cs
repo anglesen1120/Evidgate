@@ -110,10 +110,11 @@ internal sealed record ReconcileMissing(string Code, string? ProducerId, string 
 /// <param name="ShardsClosed">Planned shards that finalized.</param>
 /// <param name="EventWatermark">
 /// Every stored event the comparison read: the sum of <see cref="ObservedShard.CountUpToDeclared"/> and
-/// <see cref="ObservedShard.CountBeyondDeclared"/> over the observed rows, one per producer of the run — a producer
-/// outside the plan is stored evidence and counts, while a repeated producer row is ignored like it is for the reasons,
-/// so it is never added twice. Events are immutable, so the value only grows: it is the
-/// <c>evidence_revision.event_watermark</c> T2.4 persists (COORDINATOR-DECISION S123, D-S123-Q2).
+/// <see cref="ObservedShard.CountBeyondDeclared"/> over the observed rows, one per producer of the run. Every observed
+/// producer is one the plan names — the aggregate starts from the run's slots and <c>event_slot_fk</c> ties every event
+/// to one of them, so an outside-plan producer is not merely ignored but cannot exist — and a repeated producer row is
+/// ignored like it is for the reasons, so it is never added twice. Events are immutable, so the value only grows: it is
+/// the <c>evidence_revision.event_watermark</c> T2.4 persists (COORDINATOR-DECISION S123, D-S123-Q2).
 /// </param>
 internal sealed record ReconcileComparison(
     IReadOnlyList<ReconcileMissing> Missing,
@@ -134,13 +135,31 @@ internal enum ReconcileDisposition
     /// <summary>The run is not <c>collecting</c> (terminal, canceled, or not yet finalized): nothing is compared, nothing changes.</summary>
     NotCollectable,
 
+    /// <summary>
+    /// The run is <c>collecting</c>, the comparison ran, and at least one planned shard is still open while the run's
+    /// <c>collection_deadline_at</c> has not passed: the attempt must <b>wait</b> instead of deciding, so nothing is
+    /// frozen, no <c>evidence_revision</c> is appended, the pointer does not move and the run stays <c>collecting</c>
+    /// (COORDINATOR-DECISION S123, F1). A finalize that closes the last open shard enqueues the next trigger, and the
+    /// deadline (05.3.2-T3.1) forces the decision when no shard ever closes.
+    /// <para>
+    /// The deadline is evaluated by the run-lock statement (<c>r.collection_deadline_at &lt;= now()</c>, the database
+    /// clock) so no application clock takes part; an open shard with a deadline still ahead of <c>now()</c> is exactly
+    /// this disposition, and an open shard past the deadline finishes as <c>incomplete</c> with <c>missing_shard</c>.
+    /// </para>
+    /// </summary>
+    Pending,
+
     /// <summary>The comparison ran; <see cref="ReconcileOutcome.Comparison"/> holds the result.</summary>
     Compared,
 }
 
 /// <summary>The result of one reconcile attempt; the run state is never changed by T2.1/T2.2.</summary>
 /// <param name="Disposition">What happened.</param>
-/// <param name="Comparison">Set only when <paramref name="Disposition"/> is <see cref="ReconcileDisposition.Compared"/>.</param>
+/// <param name="Comparison">
+/// Set when <paramref name="Disposition"/> is <see cref="ReconcileDisposition.Compared"/> — and also for
+/// <see cref="ReconcileDisposition.Pending"/>, whose comparison is the evidence a finished attempt would have decided on
+/// (its counts are the attempt's log line). A pending attempt finishes nothing: only <c>Compared</c> reaches the finisher.
+/// </param>
 internal sealed record ReconcileOutcome(ReconcileDisposition Disposition, ReconcileComparison? Comparison);
 
 /// <summary>Runs one reconcile attempt for a run inside the caller's tenant transaction.</summary>
@@ -148,7 +167,10 @@ internal interface IRunReconciler
 {
     /// <summary>
     /// Locks the run row <c>FOR NO KEY UPDATE</c>, lists the planned shards, reads the observed events per producer in
-    /// one statement and compares. Deterministic: the same rows give the same outcome.
+    /// one statement and compares. Deterministic for the same rows and the same clock reading: the comparison depends on
+    /// the rows alone, and the disposition additionally on the deadline the lock statement evaluated, so the same rows
+    /// answer <see cref="ReconcileDisposition.Pending"/> before <c>collection_deadline_at</c> and
+    /// <see cref="ReconcileDisposition.Compared"/> after it. The caller decides nothing on <c>Pending</c>.
     /// </summary>
     /// <param name="runId">The run to reconcile.</param>
     /// <param name="cancellationToken">Cancelled on shutdown or lease loss.</param>

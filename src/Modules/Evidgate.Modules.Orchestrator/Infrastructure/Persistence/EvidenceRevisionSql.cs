@@ -25,15 +25,16 @@ internal static class EvidenceRevisionSql
         """;
 
     /// <summary>
-    /// The run's planned execution keys, in the 00 §7 hex order (<c>collate "C"</c>, so the pair order does not depend on
-    /// the database's locale), bounded by <c>@limit</c>: one read for the whole plan (00 §5.7 P3), served by
-    /// <c>planned_execution_run_execution_key</c>'s <c>(org_id, run_id)</c> prefix (0031).
+    /// The run's planned execution keys, bounded by <c>@limit</c>: one read for the whole plan (00 §5.7 P3), served by
+    /// <c>planned_execution_run_execution_key</c>'s <c>(org_id, run_id)</c> prefix (0031). The statement deliberately
+    /// does <b>not</b> sort: the keys only index a requirement set whose order the freeze sorts itself, so an
+    /// <c>order by … collate "C"</c> over up to <see cref="FreezeRequest.MaxRequired"/> + 1 rows is cost without a
+    /// determinate reader (PerfRev P2).
     /// </summary>
     internal const string ListPlannedExecutionKeys = """
         select p.execution_key as execution_key
           from public.planned_execution p
          where p.org_id = @org_id and p.run_id = @run_id
-         order by p.execution_key collate "C"
          limit @limit
         """;
 

@@ -11,8 +11,9 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// enqueues when it newly closes a producer slot (<see cref="RunReconcileContract"/>). Tenant-bound, so the consumer
 /// opens the row's tenant transaction around it and commits it only when the attempt returns. The handler resolves and
 /// decides nothing itself: it hands the run id to <see cref="IRunReconciler"/> and, for a compared attempt, that attempt's
-/// comparison to <see cref="IReconcileFinisher"/>, which is why a run that is gone or not <c>collecting</c> is a normal
-/// completion — the task row is the record of what ran, and nothing changed.
+/// comparison to <see cref="IReconcileFinisher"/>, which is why a run that is gone, not <c>collecting</c>, or still
+/// <c>pending</c> (a planned shard is open and the collection deadline has not passed) is a normal completion — the task
+/// row is the record of what ran, and nothing changed.
 /// <para>
 /// <see cref="IServiceScopeFactory"/> is the plumbing that reaches the scoped <see cref="IRunReconciler"/>: the task
 /// queue registers every handler as a singleton (<c>AddTaskHandler</c>), and a scoped service must not be captured by a
@@ -71,10 +72,11 @@ internal sealed partial class ReconcileRunTaskHandler(
         LogReconciled(logger, payload.RunId, disposition, shardsPlanned, shardsClosed, missingCount);
 
         // T2.3/T2.4: a compared attempt is finished in the SAME ambient tenant transaction (the reconciler has already
-        // locked the run FOR NO KEY UPDATE and its comparison is this attempt's own read). NotCollectable and
-        // RunNotFound reach no finisher at all — nothing to freeze, nothing to append. An exception here is not caught:
-        // it must abort the attempt so the consumer rolls the transaction back and retries it.
-        if (comparison is null)
+        // locked the run FOR NO KEY UPDATE and its comparison is this attempt's own read). RunNotFound, NotCollectable
+        // and Pending reach no finisher at all — nothing to freeze, nothing to append, nothing to transition: a pending
+        // attempt waits for the open shard or for the collection deadline, so the run stays collecting. An exception here
+        // is not caught: it must abort the attempt so the consumer rolls the transaction back and retries it.
+        if (comparison is null || outcome.Disposition != ReconcileDisposition.Compared)
         {
             return;
         }
@@ -94,6 +96,7 @@ internal sealed partial class ReconcileRunTaskHandler(
     {
         ReconcileDisposition.RunNotFound => "run_not_found",
         ReconcileDisposition.NotCollectable => "not_collectable",
+        ReconcileDisposition.Pending => "pending",
         ReconcileDisposition.Compared => "compared",
         _ => "unknown",
     };

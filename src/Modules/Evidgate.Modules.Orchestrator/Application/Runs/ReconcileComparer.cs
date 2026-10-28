@@ -25,8 +25,10 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// </para>
 /// <para>
 /// A shard whose slot never closed is reported once as <see cref="ReconcileMissingCodes.MissingShard"/> and neither its
-/// events nor its flags are compared; observed rows for producers outside the plan never add a reason (the
-/// <c>event_slot_fk</c> makes them impossible) but do count towards the watermark.
+/// events nor its flags are compared. An observed row for a producer the plan does not name cannot exist — the aggregate
+/// starts from the run's own slots and <c>event_slot_fk</c> ties every event to one of them — so the observed rows are
+/// exactly the plan's producers; the watermark is their stored-event total and no producer can be counted twice (a
+/// repeated producer row, impossible from the grouped read, is still ignored rather than merged).
 /// </para>
 /// </remarks>
 internal static class ReconcileComparer
@@ -50,11 +52,10 @@ internal static class ReconcileComparer
         ArgumentNullException.ThrowIfNull(planned);
         ArgumentNullException.ThrowIfNull(observed);
 
-        // The one grouped statement returns at most one row per producer; a repeat is ignored rather than merged so the
-        // result stays a pure function of the input sequence, and the watermark follows the same rule: events are
-        // immutable, so the stored total only grows and is a watermark T2.4 can persist as it stands, summed over the
-        // rows the comparison actually read (one per producer) — a repeated producer row is not merged, so it is not
-        // added twice either.
+        // The grouped statement returns exactly one row per slot of the run, so an observed producer is one the plan
+        // names (<c>event_slot_fk</c> makes an outside-plan producer impossible); a repeated row is still ignored rather
+        // than merged, so the result stays a pure function of the input sequence. Events are immutable, so the stored
+        // total only grows and is a watermark T2.4 can persist as it stands, summed over the rows the comparison read.
         var observations = new Dictionary<string, ObservedShard>(observed.Count, StringComparer.Ordinal);
         long eventWatermark = 0;
         foreach (var row in observed)
@@ -178,8 +179,9 @@ internal static class ReconcileComparer
     /// <c>min_sequence</c>, <c>sequence_span</c> — the contiguity bound, checked for a declaration of at least one
     /// event: the gap rule of <c>contracts/events/ordering.md</c> §3, where the sequences in
     /// <c>[min stored sequence, declared_last_sequence]</c> must all be stored, so the stored count minus one equals
-    /// <c>sequence_span = declared_last_sequence - min_sequence</c> (no <c>+ 1</c>, which would wrap at long.MaxValue). A range that is empty or inverted (the producer started above
-    /// its declared last sequence) has no hole to report and is the count bound's business alone.
+    /// <c>sequence_span = declared_last_sequence - min_sequence</c> (no <c>+ 1</c>, which would wrap at
+    /// <c>long.MaxValue</c>). A range that is empty or inverted (the producer started above its declared last sequence)
+    /// has no hole to report and is the count bound's business alone.
     /// </description></item>
     /// </list>
     /// </summary>
@@ -212,7 +214,8 @@ internal static class ReconcileComparer
 
             if (seen.MinSequence is { } minSequence)
             {
-                // span = last - min cannot overflow (both are >= 0); comparing it with count - 1 avoids the `+ 1` that wraps at long.MaxValue.
+                // span = last - min cannot overflow (both are >= 0); comparing it with count - 1 avoids the `+ 1`
+                // that wraps at long.MaxValue.
                 var span = declaredLastSequence - minSequence;
                 if (span >= 0 && seen.CountUpToDeclared - 1 != span)
                 {

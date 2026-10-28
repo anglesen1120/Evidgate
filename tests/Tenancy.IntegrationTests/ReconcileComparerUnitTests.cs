@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
+using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Shouldly;
 using Xunit;
@@ -11,8 +13,8 @@ namespace Tenancy.IntegrationTests;
 /// fail-closed missing declaration, the three bounds a closed shard's declaration is checked against (count, end and the
 /// contiguity rule of <c>contracts/events/ordering.md</c> §3), the ordinal reason order, the planned/closed shard counts
 /// and the stored-event watermark — plus the pin that every literal is one of the closed list <c>migrations/0049</c>
-/// enforces. The database half (the one grouped aggregate, the run lock) is exercised by the reconcile integration
-/// suite.
+/// enforces, and the requirement set's freeze bound (<see cref="RequiredArtifactResolver.Compose"/>). The database half
+/// (the one grouped aggregate, the run lock) is exercised by the reconcile integration suite.
 /// </summary>
 public sealed class ReconcileComparerUnitTests
 {
@@ -686,6 +688,68 @@ public sealed class ReconcileComparerUnitTests
         result.ShardsPlanned.ShouldBe(3);
         result.ShardsClosed.ShouldBe(2);
     }
+
+    // ---- the requirement set's bound (RequiredArtifactResolver.Compose) --------------------
+
+    [Fact]
+    public void RequiredSet_AtTheBound_IsEveryPair()
+    {
+        var kinds = new[] { "trace", "video" };
+        var executions = Enumerable.Range(0, FreezeRequest.MaxRequired / 2).Select(Key).ToArray();
+
+        var set = RequiredArtifactResolver.Compose(executions, kinds);
+
+        set.Unsatisfiable.ShouldBeFalse();
+        set.Specs.Count.ShouldBe(FreezeRequest.MaxRequired);
+        set.Specs[0].ExecutionKey.ShouldBe(executions[0], "the pairs follow the read's execution order");
+        set.Specs.Select(spec => spec.Kind).Distinct().ShouldBe(["trace", "video"]);
+        set.Specs.ShouldAllBe(spec => spec.ReasonCode == ReconcileMissingCodes.ArtifactMissing);
+    }
+
+    [Fact]
+    public void RequiredSet_ProductOverTheBound_IsUnsatisfiableWithoutSpecs()
+    {
+        var kinds = new[] { "trace", "video" };
+        var executions = Enumerable.Range(0, (FreezeRequest.MaxRequired / 2) + 1).Select(Key).ToArray();
+
+        var set = RequiredArtifactResolver.Compose(executions, kinds);
+
+        set.Unsatisfiable.ShouldBeTrue();
+        set.Specs.ShouldBeEmpty("an over-bound set is never truncated into a satisfiable-looking subset");
+    }
+
+    [Fact]
+    public void RequiredSet_ExecutionCountOverTheBound_IsUnsatisfiable()
+    {
+        // One kind is enough: the executions alone are already past what one FreezeRequest accepts.
+        var executions = Enumerable.Range(0, FreezeRequest.MaxRequired + 1).Select(Key).ToArray();
+
+        var set = RequiredArtifactResolver.Compose(executions, ["trace"]);
+
+        set.Unsatisfiable.ShouldBeTrue();
+        set.Specs.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void RequiredSet_EmptyHalf_IsEmptyAndSatisfiable()
+    {
+        // A run with no planned execution, or a policy that requires no kind, has nothing to require — and nothing is
+        // unsatisfiable about it (the empty set is a legitimate answer, D-S123-Q3).
+        var noExecution = RequiredArtifactResolver.Compose([], ["trace"]);
+        noExecution.Unsatisfiable.ShouldBeFalse();
+        noExecution.Specs.ShouldBeEmpty();
+
+        var noKind = RequiredArtifactResolver.Compose([Key(0)], []);
+        noKind.Unsatisfiable.ShouldBeFalse();
+        noKind.Specs.ShouldBeEmpty();
+
+        RequiredSet.None.Unsatisfiable.ShouldBeFalse();
+        RequiredSet.None.Specs.ShouldBeEmpty();
+    }
+
+    /// <summary>An execution key of the 00 §7 shape: 64 lowercase hex characters, one per index.</summary>
+    /// <param name="index">The index to encode.</param>
+    private static string Key(int index) => index.ToString("x8", CultureInfo.InvariantCulture).PadLeft(64, '0');
 
     // ---- argument guards -----------------------------------------------------------------
 

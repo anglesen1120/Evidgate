@@ -26,9 +26,18 @@ internal static class ReconcileSql
     /// <see cref="RunEventScopeReader"/> rely on). An invisible run answers no row, which the reconciler reports as
     /// <c>RunNotFound</c>.
     /// </para>
+    /// <para>
+    /// <c>deadline_passed</c> is the collection deadline evaluated by the database, in the same statement and under the
+    /// same lock, so no application clock decides it and the flag cannot disagree with the row it was read from. It is
+    /// <c>coalesce(r.collection_deadline_at &lt;= now(), false)</c>: <c>0031</c> declares the column <c>NOT NULL</c>, so
+    /// the coalesce never fires today — it keeps a NULL (were the column ever relaxed) meaning "not passed", i.e. the
+    /// attempt waits for every planned shard instead of forcing a decision on an unset deadline (fail open on waiting,
+    /// never on completeness). A passed deadline is what 05.3.2-T3.1 needs to force the verdict.
+    /// </para>
     /// </summary>
     internal const string LockRun = """
-        select r.state as state
+        select r.state as state,
+               coalesce(r.collection_deadline_at <= now(), false) as deadline_passed
           from public.run r
          where r.org_id = @org_id and r.id = @run_id
            for no key update of r

@@ -17,6 +17,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
@@ -39,6 +40,9 @@ public sealed class ReconcileRunTests
 
     /// <summary>The second seeded shard, for the cases whose evidence spans producers.</summary>
     private const string SecondProducer = "shard-2";
+
+    /// <summary>The third seeded shard, for the pending rule's three-shard sequence.</summary>
+    private const string ThirdProducer = "shard-3";
 
     /// <summary>One stored, acknowledged event of the run (the columns the aggregate reads).</summary>
     /// <param name="ProducerId">The producer (shard) that sent it.</param>
@@ -123,6 +127,17 @@ public sealed class ReconcileRunTests
     /// <summary>Moves a run to <paramref name="state"/> (the migration role: a case seeds states the routes cannot reach).</summary>
     private Task SetRunStateAsync(IngestTestWorld world, Guid runId, string state) =>
         _fixture.ExecuteAsync(world.Database, $"update public.run set state = '{state}' where id = '{runId:D}'");
+
+    /// <summary>
+    /// Moves the run's collection deadline into the past (the migration role, on a column no route moves). The deadline is
+    /// decided by the run-lock statement (<c>coalesce(r.collection_deadline_at &lt;= now(), false)</c>), so this column is
+    /// the only clock a case has to set: with it in the past an open shard is <c>missing_shard</c> and the attempt
+    /// finishes, where the seeded future deadline makes the attempt wait (<see cref="ReconcileDisposition.Pending"/>).
+    /// </summary>
+    private Task PassCollectionDeadlineAsync(IngestTestWorld world, Guid runId) =>
+        _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.run set collection_deadline_at = now() - interval '1 second' where id = '{runId:D}'");
 
     /// <summary>
     /// Closes one slot the way 04.1.2-T5's <c>CloseSlotAsync</c> writes it: <c>closed_at</c> plus the two declared values
@@ -257,7 +272,7 @@ public sealed class ReconcileRunTests
             .BeginAsync(world.Org, null, false, Token);
         var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>().ReconcileAsync(runId, Token);
         ReconcileFinalization? finalization = null;
-        if (outcome.Comparison is { } comparison)
+        if (outcome.Disposition == ReconcileDisposition.Compared && outcome.Comparison is { } comparison)
         {
             finalization = await services.ServiceProvider.GetRequiredService<IReconcileFinisher>()
                 .FinishAsync(runId, comparison, Token);
@@ -281,7 +296,7 @@ public sealed class ReconcileRunTests
             .BeginAsync(world.Org, null, false, Token);
         var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>().ReconcileAsync(runId, Token);
         ReconcileFinalization? finalization = null;
-        if (outcome.Comparison is { } comparison)
+        if (outcome.Disposition == ReconcileDisposition.Compared && outcome.Comparison is { } comparison)
         {
             finalization = await services.ServiceProvider.GetRequiredService<IReconcileFinisher>()
                 .FinishAsync(runId, comparison, Token);
@@ -410,6 +425,61 @@ public sealed class ReconcileRunTests
     {
         public Task<FreezeResult> FreezeAsync(FreezeRequest request, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("a stored attempt_id disagrees with the pair it resolves to");
+    }
+
+    /// <summary>
+    /// The production freeze behind a call counter: the pending rule's witness that a waiting attempt never freezes
+    /// (a <c>Pending</c> outcome that reached the finisher would show up as a call), and the unsatisfiable case's witness
+    /// that the freeze is asked for an empty requirement list.
+    /// </summary>
+    private sealed class CountingFreeze(IEvidenceFreeze inner, FreezeCallCounter counter) : IEvidenceFreeze
+    {
+        public async Task<FreezeResult> FreezeAsync(FreezeRequest request, CancellationToken cancellationToken)
+        {
+            counter.Record(request);
+
+            return await inner.FreezeAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>How often the freeze ran, and how many requirements the last call carried.</summary>
+    private sealed class FreezeCallCounter
+    {
+        private int _calls;
+        private int _lastRequiredCount = -1;
+
+        public int Calls => Volatile.Read(ref _calls);
+
+        public int LastRequiredCount => Volatile.Read(ref _lastRequiredCount);
+
+        public void Record(FreezeRequest request)
+        {
+            Interlocked.Increment(ref _calls);
+            Volatile.Write(ref _lastRequiredCount, request.Required.Count);
+        }
+    }
+
+    /// <summary>
+    /// The host with the production freeze behind a <see cref="CountingFreeze"/>: the only way to count freeze calls,
+    /// because the <c>services</c> hook of <see cref="IngestTestWorld.StartAsync"/> reaches the principal-carrying host
+    /// alone (which is why the cases below run through <see cref="ReconcileAndFinishOnHostAsync"/>).
+    /// </summary>
+    private static void CountFreezeCalls(IServiceCollection services, FreezeCallCounter counter)
+    {
+        services.AddSingleton(counter);
+        services.RemoveAll<IEvidenceFreeze>();
+        services.AddScoped<IEvidenceFreeze>(provider => new CountingFreeze(
+            new EvidenceFreeze(
+                provider.GetRequiredService<ITenantDb>(),
+                provider.GetRequiredService<ITenantScopeAccessor>()),
+            counter));
+    }
+
+    /// <summary>A requirement seam with a fixed answer, so the finisher's unsatisfiable branch is exercised directly.</summary>
+    private sealed class FixedRequirements(RequiredSet set) : IRequiredArtifactResolver
+    {
+        public ValueTask<RequiredSet> ResolveAsync(Guid runId, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(set);
     }
 
     // ------------------------------------------------------------------ reads (the migration role: one database per test)
@@ -711,10 +781,37 @@ public sealed class ReconcileRunTests
 
     /// <summary>
     /// An open shard is reported once as <c>missing_shard</c> and its events are not compared — not even an unfinished
-    /// started attempt adds a second reason (the shard never declared anything to compare against).
+    /// started attempt adds a second reason (the shard never declared anything to compare against). The deadline has
+    /// passed here, so the attempt decides instead of waiting; the next case is the same run before the deadline.
     /// </summary>
     [Fact]
     public async Task Reconcile_OpenShardWithUnfinishedStarted_OnlyMissingShard()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await PassCollectionDeadlineAsync(world, runId);
+        await StoreEventsAsync(world, runId, new StoredEvent(Producer, 1, "test.started", null));
+
+        var outcome = await ReconcileAsync(world, runId);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
+        var comparison = outcome.Comparison.ShouldNotBeNull();
+        comparison.EventsMatch.ShouldBeFalse();
+        comparison.Missing.Count.ShouldBe(1, Describe(outcome));
+        comparison.Missing[0].Code.ShouldBe(ReconcileMissingCodes.MissingShard, Describe(outcome));
+        comparison.ShardsPlanned.ShouldBe(1);
+        comparison.ShardsClosed.ShouldBe(0);
+    }
+
+    /// <summary>
+    /// The pending rule at the reconciler (COORDINATOR-DECISION S123, F1): the same open shard <b>before</b> the
+    /// collection deadline is not a verdict — the attempt answers <see cref="ReconcileDisposition.Pending"/> and still
+    /// carries the comparison it made (its counts are the log line), so the run keeps collecting until the shard closes
+    /// or the deadline forces the decision.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_OpenShardBeforeDeadline_Pending()
     {
         await using var world = await StartAsync();
         var runId = world.RunId;
@@ -723,11 +820,9 @@ public sealed class ReconcileRunTests
 
         var outcome = await ReconcileAsync(world, runId);
 
-        var comparison = outcome.Comparison.ShouldNotBeNull();
-        comparison.EventsMatch.ShouldBeFalse();
-        comparison.Missing.Count.ShouldBe(1, Describe(outcome));
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Pending, Describe(outcome));
+        var comparison = outcome.Comparison.ShouldNotBeNull("a pending attempt still reports what it compared");
         comparison.Missing[0].Code.ShouldBe(ReconcileMissingCodes.MissingShard, Describe(outcome));
-        comparison.ShardsPlanned.ShouldBe(1);
         comparison.ShardsClosed.ShouldBe(0);
     }
 
@@ -797,8 +892,10 @@ public sealed class ReconcileRunTests
     {
         switch (scenario)
         {
-            // The slot never closed: the shard itself is missing, whatever its events say.
+            // The slot never closed and the deadline has passed: the shard itself is missing, whatever its events say.
+            // (Before the deadline the attempt would wait instead — see the pending-rule case below.)
             case "open_shard":
+                await PassCollectionDeadlineAsync(world, runId);
                 await StoreEventsAsync(world, runId, new StoredEvent(Producer, 1, "test.finished", "passed"));
                 break;
 
@@ -1508,7 +1605,8 @@ public sealed class ReconcileRunTests
     /// The requirement source of D-S123-Q3: the run pins an <c>active</c> policy revision whose body requires the
     /// <c>trace</c> artifact kind, so every planned execution of the run is required to have one. The event evidence
     /// itself matches and there is no artifact at all, so the freeze reports one unmet requirement per planned execution —
-    /// both mapped to <c>artifact_missing</c> — and the run ends <c>incomplete</c>.
+    /// both mapped to <c>artifact_missing</c>, which the revision stores <b>once</b> (the codes are de-duplicated,
+    /// PerfRev P3) — and the run ends <c>incomplete</c>.
     /// </summary>
     [Fact]
     public async Task Reconcile_PolicyRequiredKindMissing_IncompleteWithArtifactMissing()
@@ -1533,9 +1631,313 @@ public sealed class ReconcileRunTests
         var revision = await RevisionSummaryAsync(world, runId);
         revision.Completeness.ShouldBe("incomplete");
         revision.Missing.ShouldBe(
-            [ReconcileMissingCodes.ArtifactMissing, ReconcileMissingCodes.ArtifactMissing],
-            "one unmet requirement per planned execution");
+            [ReconcileMissingCodes.ArtifactMissing],
+            "one code names the gap however many executions it applies to");
         (await StateAsync(world, runId)).ShouldBe("incomplete");
+    }
+
+    /// <summary>
+    /// A pinned policy may require a kind outside the closed artifact-kind list: the body schema states only a
+    /// <c>lower_snake</c> pattern (<c>contracts/schemas/policy-revision.v1.json</c>) and the contract read forwards the
+    /// token, while the closed list lives inside the Evidence module. The freeze refuses such a set by shape — its
+    /// <c>Validate</c> runs before the first statement, so the attempt's transaction is untouched — and the finisher
+    /// then re-freezes with no requirements and records the one <c>artifact_missing</c> marker: the revision is
+    /// <c>incomplete</c> and the run leaves <c>collecting</c> instead of the attempt being retried until the queue
+    /// dead-letters it (SecRev F1/F2).
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_PolicyRequiresUnknownKind_IncompleteWithArtifactMissing()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.finished", "passed"),
+            new StoredEvent(Producer, 2, "test.finished", "passed"));
+        await SeedPinnedPolicyAsync(world, runId, requiredKind: "not_a_kind");
+
+        var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
+        outcome.Comparison!.Missing.ShouldBeEmpty("the event evidence itself agrees");
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Incomplete);
+
+        var revision = await RevisionSummaryAsync(world, runId);
+        revision.Completeness.ShouldBe("incomplete");
+        revision.Missing.ShouldBe(
+            [ReconcileMissingCodes.ArtifactMissing],
+            "a requirement the freeze refuses by shape is recorded once, not retried");
+        (await StateAsync(world, runId)).ShouldBe("incomplete");
+        (await PointerAsync(world, runId)).ShouldBe(revision.Id);
+        (await RevisionCountAsync(world)).ShouldBe(1, "the refused attempt persists exactly one revision");
+    }
+
+    // ------------------------------------------------------------------ the pending rule (F1)
+
+    /// <summary>
+    /// The pending rule, three shards at a time (COORDINATOR-DECISION S123, F1): after the first finalize and after the
+    /// second, a planned shard is still open and the collection deadline is still ahead, so each attempt answers
+    /// <see cref="ReconcileDisposition.Pending"/> and finishes <b>nothing</b> — the run stays <c>collecting</c> with no
+    /// revision, no pointer move, no audit row, and the freeze is never called. The third finalize closes the last slot,
+    /// the evidence matches, and the attempt decides <c>complete</c>: one freeze, one revision, one pointer, one audit
+    /// edge.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_OpenShardsBeforeDeadline_PendingUntilLastShardCloses()
+    {
+        var counter = new FreezeCallCounter();
+        await using var world = await StartAsync(slots: 3, services: services => CountFreezeCalls(services, counter));
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+
+        await CloseShardAsync(world, runId, Producer);
+        var first = await ReconcileAndFinishOnHostAsync(world, runId);
+        await AssertWaitingAsync(world, runId, first, counter);
+
+        await CloseShardAsync(world, runId, SecondProducer);
+        var second = await ReconcileAndFinishOnHostAsync(world, runId);
+        await AssertWaitingAsync(world, runId, second, counter);
+
+        await CloseShardAsync(world, runId, ThirdProducer);
+        var third = await ReconcileAndFinishOnHostAsync(world, runId);
+
+        third.Outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(third.Outcome));
+        third.Outcome.Comparison!.Missing.ShouldBeEmpty(Describe(third.Outcome));
+        third.Finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Complete);
+        counter.Calls.ShouldBe(1, "only the deciding attempt freezes the evidence");
+
+        var revision = await RevisionSummaryAsync(world, runId);
+        revision.Completeness.ShouldBe(ReconcileFinisher.Complete);
+        revision.RevisionNo.ShouldBe(1);
+        (await StateAsync(world, runId)).ShouldBe("complete");
+        (await PointerAsync(world, runId)).ShouldBe(revision.Id);
+        (await RevisionCountAsync(world)).ShouldBe(1, "the two pending attempts appended nothing");
+        (await StateChangeAuditCountAsync(world, runId)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The complete verdict is reachable from a pending attempt: the shard that made the first attempt wait closes and
+    /// the next trigger decides <c>complete</c> on the matching evidence — one revision, the pointer on it, the run out of
+    /// <c>collecting</c>.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_OpenShardBeforeDeadline_ThenClosingShardCompletes()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+
+        var waiting = await ReconcileAndFinishAsync(world, runId);
+
+        waiting.Outcome.Disposition.ShouldBe(ReconcileDisposition.Pending, Describe(waiting.Outcome));
+        waiting.Finalization.ShouldBeNull("a pending attempt never reaches the finisher");
+        (await StateAsync(world, runId)).ShouldBe("collecting", "the run keeps collecting while a shard is open");
+        (await RevisionCountAsync(world)).ShouldBe(0);
+        (await PointerAsync(world, runId)).ShouldBeNull();
+        (await StateChangeAuditCountAsync(world, runId)).ShouldBe(0, "a pending attempt writes no audit row");
+
+        await CloseShardAsync(world, runId, Producer);
+        var deciding = await ReconcileAndFinishAsync(world, runId);
+
+        deciding.Outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(deciding.Outcome));
+        deciding.Finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Complete);
+        var revision = await RevisionSummaryAsync(world, runId);
+        revision.RevisionNo.ShouldBe(1);
+        (await StateAsync(world, runId)).ShouldBe("complete");
+        (await PointerAsync(world, runId)).ShouldBe(revision.Id);
+    }
+
+    /// <summary>
+    /// An open shard past the collection deadline is decided, not waited on: <c>missing_shard</c> makes the revision
+    /// <c>incomplete</c> and moves the run out of <c>collecting</c> (the verdict 05.3.2-T3.1 forces when no shard ever
+    /// closes). The deadline comes from the database clock in the run-lock statement, so the case only moves the column.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_OpenShardPastDeadline_IncompleteWithMissingShard()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await PassCollectionDeadlineAsync(world, runId);
+        await StoreEventsAsync(world, runId, new StoredEvent(Producer, 1, "test.finished", "passed"));
+
+        var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Incomplete);
+
+        var revision = await RevisionSummaryAsync(world, runId);
+        revision.Completeness.ShouldBe("incomplete");
+        revision.Missing.ShouldBe([ReconcileMissingCodes.MissingShard], Describe(outcome));
+        (await StateAsync(world, runId)).ShouldBe("incomplete");
+        (await PointerAsync(world, runId)).ShouldBe(revision.Id);
+    }
+
+    /// <summary>
+    /// Two attempts for the same run, started together after its last shard closed: the run-row lock serialises them, so
+    /// exactly one compares and finishes (<c>complete</c>, revision 1) and the other, whose lock statement re-reads the
+    /// committed row, answers <c>NotCollectable</c> — one revision however many consumers race (at-least-once, A10).
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_TwoConcurrentAttempts_AppendExactlyOneRevision()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.finished", "passed"),
+            new StoredEvent(Producer, 2, "test.finished", "passed"));
+
+        // Both attempts start now, in their own execution flows: each opens its own tenant scope (a second scope in this
+        // flow would be refused as "already open", NpgsqlTenantScopeFactory), and they meet on the run row's lock.
+        var attempts = await Task.WhenAll(
+            Detached(() => ReconcileAndFinishAsync(world, runId), Token),
+            Detached(() => ReconcileAndFinishAsync(world, runId), Token));
+
+        attempts.Count(attempt => attempt.Finalization is not null)
+            .ShouldBe(1, "the two attempts serialise on the run row: one decides, the other arrives after the verdict");
+        attempts.Single(attempt => attempt.Finalization is null).Outcome.Disposition
+            .ShouldBe(ReconcileDisposition.NotCollectable, "the loser finds the run out of collecting");
+        (await RevisionCountAsync(world)).ShouldBe(1);
+        (await RevisionSummaryAsync(world, runId)).Completeness.ShouldBe(ReconcileFinisher.Complete);
+        (await StateAsync(world, runId)).ShouldBe("complete");
+        (await StateChangeAuditCountAsync(world, runId)).ShouldBe(1);
+    }
+
+    // ------------------------------------------------------------------ required-set bounds (PerfRev P1, P3)
+
+    /// <summary>
+    /// An unsatisfiable requirement set (the plan times the policy exceeds <see cref="FreezeRequest.MaxRequired"/>) is not
+    /// retried forever and never truncated into a shorter list that could look satisfied: the finisher freezes with the
+    /// empty spec list it was given and records <b>one</b> <c>artifact_missing</c> after the freeze's own reasons, so the
+    /// revision is <c>incomplete</c> and the run leaves <c>collecting</c>.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_UnsatisfiableRequirementSet_IncompleteWithArtifactMissing()
+    {
+        var counter = new FreezeCallCounter();
+        await using var world = await StartAsync(services: services =>
+        {
+            CountFreezeCalls(services, counter);
+            services.RemoveAll<IRequiredArtifactResolver>();
+            services.AddScoped<IRequiredArtifactResolver>(
+                _ => new FixedRequirements(new RequiredSet([], Unsatisfiable: true)));
+        });
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.finished", "passed"),
+            new StoredEvent(Producer, 2, "test.finished", "passed"));
+
+        var (outcome, finalization) = await ReconcileAndFinishOnHostAsync(world, runId);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Incomplete);
+        counter.Calls.ShouldBe(1, "the attempt still freezes, with the specs it has");
+        counter.LastRequiredCount.ShouldBe(0, "an over-bound set is never truncated into a requirement list");
+
+        var revision = await RevisionSummaryAsync(world, runId);
+        revision.Completeness.ShouldBe("incomplete");
+        revision.Missing.ShouldBe([ReconcileMissingCodes.ArtifactMissing], Describe(outcome));
+        (await StateAsync(world, runId)).ShouldBe("incomplete");
+        (await PointerAsync(world, runId)).ShouldBe(revision.Id);
+    }
+
+    /// <summary>
+    /// Two orphan artifacts (each a <c>MissingReason</c> of the freeze) name the same code: the revision stores
+    /// <c>artifact_missing</c> once, keeping the first-seen order of every reason the attempt named, while the comparison
+    /// the reconciler reports keeps its own per-producer detail (PerfRev P3).
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_DuplicateMissingCodes_StoredOnce()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.finished", "passed"),
+            new StoredEvent(Producer, 2, "test.finished", "passed"));
+        await SeedReadyArtifactAsync(world, runId, Digest("orphan", 1), attemptNo: 1, kind: "trace");
+        await SeedReadyArtifactAsync(world, runId, Digest("orphan", 2), attemptNo: 1, kind: "trace");
+
+        var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
+
+        outcome.Comparison!.Missing.ShouldBeEmpty("the event evidence agrees; the orphans come from the freeze");
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Incomplete);
+
+        var revision = await RevisionSummaryAsync(world, runId);
+        revision.Missing.ShouldBe(
+            [ReconcileMissingCodes.ArtifactMissing],
+            "two orphan artifacts are one code in the revision");
+    }
+
+    /// <summary>
+    /// Closes one shard and stores the two matching events it declared (the pending rule's per-shard step, i.e. what one
+    /// finalize plus its batch commits).
+    /// </summary>
+    /// <param name="world">The world whose slots are seeded.</param>
+    /// <param name="runId">The run to close the shard of.</param>
+    /// <param name="producer">The producer id of the shard.</param>
+    private async Task CloseShardAsync(IngestTestWorld world, Guid runId, string producer)
+    {
+        await CloseSlotAsync(world, runId, producer, declaredLastSequence: 2, declaredCount: 2);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(producer, 1, "test.finished", "passed"),
+            new StoredEvent(producer, 2, "test.finished", "passed"));
+    }
+
+    /// <summary>
+    /// Runs <paramref name="work"/> in a fresh execution flow: <see cref="ExecutionContext.SuppressFlow"/> keeps this
+    /// flow's ambient tenant scope (an <c>AsyncLocal</c>) out of the child, so a racing attempt opens its own scope
+    /// instead of being refused a second one here (the pattern of <c>RunStateTransitionTests.Detached</c>).
+    /// </summary>
+    /// <typeparam name="T">The result of the work.</typeparam>
+    /// <param name="work">The work to run in its own flow.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private static Task<T> Detached<T>(Func<Task<T>> work, CancellationToken cancellationToken)
+    {
+        using (ExecutionContext.SuppressFlow())
+        {
+            return Task.Run(work, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Asserts a waiting attempt: <c>Pending</c> with its comparison, no finisher, no freeze call, and a run left exactly
+    /// as it was — <c>collecting</c>, no revision, no pointer, no audit row.
+    /// </summary>
+    /// <param name="world">The world the attempt ran against.</param>
+    /// <param name="runId">The run of the attempt.</param>
+    /// <param name="attempt">The attempt's outcome and (absent) finalization.</param>
+    /// <param name="counter">The freeze call counter of the host.</param>
+    private static async Task AssertWaitingAsync(
+        IngestTestWorld world,
+        Guid runId,
+        (ReconcileOutcome Outcome, ReconcileFinalization? Finalization) attempt,
+        FreezeCallCounter counter)
+    {
+        attempt.Outcome.Disposition.ShouldBe(ReconcileDisposition.Pending, Describe(attempt.Outcome));
+        attempt.Outcome.Comparison.ShouldNotBeNull("a pending attempt still reports what it compared");
+        attempt.Finalization.ShouldBeNull("a pending attempt never reaches the finisher");
+        counter.Calls.ShouldBe(0, "a pending attempt must not freeze the evidence");
+        (await StateAsync(world, runId)).ShouldBe("collecting", "the run keeps collecting while a shard is open");
+        (await RevisionCountAsync(world)).ShouldBe(0);
+        (await PointerAsync(world, runId)).ShouldBeNull();
+        (await StateChangeAuditCountAsync(world, runId)).ShouldBe(0, "a pending attempt writes no audit row");
     }
 
     // ------------------------------------------------------------------ T2.4: bounded statements
