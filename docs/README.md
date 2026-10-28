@@ -20,6 +20,7 @@ Where each kind of documentation lives (plan 01.9.1-T3). A path not listed here 
 | Web UI design mockups | [`design/web-ui/output/`](design/web-ui/output/) — page index [`NAV.md`](design/web-ui/output/NAV.md), run log [`RUNS.md`](design/web-ui/output/RUNS.md); generation prompts in [`design/web-ui/prompts/`](design/web-ui/prompts/) and [`design/web-ui/prompts-crd2/`](design/web-ui/prompts-crd2/) | Static HTML reference for plan 09 screens (v2, S50): 47 pages plus a component gallery sharing one `assets/evidgate.css` and one `assets/evidgate.js`; how they map into the app is in [`../apps/web/README.md`](../apps/web/README.md) |
 | Source design | [`source/`](source/) | Original Vietnamese design the plan set supersedes where DECISIONS.md §9 lists a delta |
 | Repo guide | [`../AGENTS.md`](../AGENTS.md) | Authority order, editing rules, legend |
+| Pilot measurement kit | [`pilots/`](pilots/) — [`pilots/metric-definitions.md`](pilots/metric-definitions.md) (v1 frozen metric definitions), [`pilots/baseline-worksheet.md`](pilots/baseline-worksheet.md) (template) | 12.2.1-T2.1; per-pilot folders (agreement, baseline, reviews) come with 12.2.1-T1/T4; raw customer exports never enter the repo |
 
 ## Link checking (`scripts/check-links.sh`)
 
