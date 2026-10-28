@@ -387,7 +387,7 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   `POST /internal/operator/healing/switch` (behind 02.8.1's fail-closed `RequireOperatorFilter`),
   which writes a structured operator log event (mode, set_by, version — never the reason text) on
   every write, plus the `security_event` row 11.5.1-T5 will add once that table lands (an open
-  receiver; `security_event` does not exist yet).
+  receiver; the `security_event` table has existed since `0053`, no emitter yet).
 - The app role holds `select`, `insert (id, scope, org_id, project_id, mode, reason, set_by, at)` and
   `update (mode, reason, set_by, at, updated_at, version)`: INSERT is column-level on purpose, so a
   caller cannot name `created_at`, `updated_at` or `version` and backdate a switch change or pin its
@@ -512,7 +512,7 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
   switch (`0052`, 08.6.3-T1) nor the verifier fault (G8, 02.7.1 AC6) has a row here. That stays an
   open hand-over recorded in the 11.5.1 plan Notes and `docs/status-carried.md`; a nullable `org_id`
   versus a separate platform table is a coordinator decision, and `0053` does not pre-empt it.
-- Rollback: `drop table if exists public.security_event;` — the policy and the index go with it, and
+- Rollback: `drop table if exists public.security_event;` — the policy and both indexes go with it, and
   nothing else references the table.
 
 ## Tests and fixtures
