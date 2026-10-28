@@ -6,7 +6,7 @@ How rows get here (owner rule 2026-10-11, coordinator flow):
 
 - A PR on the owner path is merged by the coordinator after the 5-minute owner wait if the owner has not merged it. Every `[DECISION]`, contract change or security-posture change it carries is added below in the same turn.
 - A panel choice decided by the coordinator (`PANEL-CHOICE`, decided with a jev choice call) is added below, with the jev label and confidence.
-- When the owner confirms or overrides a row, it moves to **Closed** with the date, or the override task/PR; a row the owner has decided but whose follow-up is still queued stays in **Open** with state `owner-decided <date> (<what>; see DECISIONS §8.2)` until the follow-up lands.
+- When the owner confirms or overrides a row, it moves verbatim to `docs/phase-review-archive.md` (**Closed**) with the date, or the override task/PR; a row the owner has decided but whose follow-up is still queued stays in **Open** with state `owner-decided <date> (<what>; see DECISIONS §8.2)` until the follow-up lands.
 
 Columns: Id · Date · Source (session/task or PR) · Question · Decided · How decided · Where recorded (file:line in the repo) · State (`open`, `owner-decided <date> (<what>; see DECISIONS.md §8.2)`, `owner-confirmed <date>`, `override → <task/PR>`).
 
