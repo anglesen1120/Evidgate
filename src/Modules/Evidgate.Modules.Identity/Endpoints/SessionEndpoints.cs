@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Sessions;
@@ -199,6 +201,14 @@ internal static class SessionEndpoints
     /// caller's pair keeps authenticating.
     /// </para>
     /// <para>
+    /// <b>The row carries the call's correlation ids (F58).</b> The request id the edge put in the
+    /// <see cref="AuditTrail.RequestIdBaggage"/> baggage item and the request activity's W3C trace id are handed to
+    /// the definer from the SAME two sources <see cref="AuditTrail.Record"/> reads, so the SQL row and the
+    /// application rows of one request agree on both. Nothing is validated here: the definer stores a value only
+    /// when it is a bounded printable request id or a 32-hex trace id, and writes null for anything else, so a
+    /// caller-supplied id can never abort a revoke.
+    /// </para>
+    /// <para>
     /// <b>Own or administered, and audited, all inside the definer (F48, F55).</b> The handler names the org and
     /// nothing else: <c>evidgate_resolve.session_revoke_one</c> resolves the acting user from the proof, checks
     /// <c>membership:write</c> and the target's membership in that same org, decides whether the addressed row is
@@ -251,9 +261,18 @@ internal static class SessionEndpoints
         SessionRouteStatus status;
         try
         {
-            // The named org (or null) travels to the definer, which authorises the admin path and writes its row.
+            // The named org (or null) travels to the definer, which authorises the admin path and writes its row;
+            // so do the call's correlation ids, read from the same two sources AuditTrail.Record reads (F58).
+            var activity = Activity.Current;
+
             status = await store
-                .RevokeOneAsync(proof, sessionId, OrgOf(context), cancellationToken)
+                .RevokeOneAsync(
+                    proof,
+                    sessionId,
+                    OrgOf(context),
+                    activity?.GetBaggageItem(AuditTrail.RequestIdBaggage),
+                    activity?.TraceId.ToString(),
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (NpgsqlException) when (!cancellationToken.IsCancellationRequested)

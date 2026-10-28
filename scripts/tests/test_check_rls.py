@@ -176,6 +176,44 @@ class DefinerRules(unittest.TestCase):
         self.assertEqual(run(sql), [])
 
 
+EXEMPT_DEFINER = """
+create or replace function {name}(p_key text) returns uuid
+  language sql security definer set search_path = '' as $$
+  select p_key::uuid
+$$;
+"""
+
+
+class AuditExemptions(unittest.TestCase):
+    """F28/`0051`: the audit exemptions are exact, qualified and reasoned, and they do not blanket.
+
+    `DEFINER_AUDIT_EXEMPT` re-points the 02.7.1-T2.2 deferrals of the session family, whose
+    receiver task is merged (the reason is now the shape of the call, not a pending task). The
+    set is keyed by the EXACT qualified name the migration defines, so these cases pin both
+    halves: a listed definer needs no row, and an unlisted one — including a same-spelling
+    function in another schema — still fails.
+    """
+
+    def test_every_exempt_definer_is_accepted_and_reasoned(self):
+        self.assertNotIn("evidgate_resolve.session_revoke_one", check_rls.DEFINER_AUDIT_EXEMPT,
+                         "the administrative revoke owes a per-call row (0050/0051): it is not exempt")
+
+        for name, reason in check_rls.DEFINER_AUDIT_EXEMPT.items():
+            with self.subTest(name=name):
+                self.assertIn(".", name, "an exemption is keyed by `schema.function`, never a bare name")
+                self.assertNotIn("*", name, "an exemption is an exact name, never a pattern")
+                self.assertTrue(reason.strip(), f"{name} carries its reason")
+                self.assertEqual(run(EXEMPT_DEFINER.format(name=name)), [], f"{name} is exempt from definer_audit")
+
+    def test_a_new_unlisted_definer_still_needs_its_audit_row(self):
+        findings = run(EXEMPT_DEFINER.format(name="evidgate_resolve.brand_new_definer"))
+        self.assertEqual(rules(findings), {"definer_audit"})
+
+    def test_an_exemption_does_not_cover_another_schema(self):
+        findings = run(EXEMPT_DEFINER.format(name="evidgate.session_list"))
+        self.assertEqual(rules(findings), {"definer_audit"}, "the key is the qualified name, not the bare one")
+
+
 class RealRepository(unittest.TestCase):
     def test_migrations_of_this_repository_are_clean(self):
         root = Path(__file__).resolve().parent.parent.parent

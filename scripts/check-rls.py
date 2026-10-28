@@ -31,12 +31,89 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # Definers whose audit trail is something other than a per-call audit row. Adding a name
-# here is a review decision, so each entry carries its reason.
+# here is a review decision, so each entry carries its reason. Keys are EXACT qualified
+# names (`schema.function`), never patterns: `lint_definers` compares the name the migration
+# defines, so a function in another schema with the same spelling stays linted.
+#
+# The session family below is the re-point of the 02.7.1-T2.2 deferral that 0042/0044/0045/
+# 0048 carried (F28, migration 0051). Those markers named a task that is now merged, which is
+# no longer a reason; the real reasons are recorded here instead. The one member that DOES owe
+# a per-call row — `evidgate_resolve.session_revoke_one`, the administrative revoke — is
+# deliberately absent: 0050 has it append its own chain row, and 0051 keeps that.
 DEFINER_AUDIT_EXEMPT = {
     "evidgate.purge_expired_idempotency": "T80 sweep: bounded delete of expired rows, observed via the task row",
     "evidgate.purge_expired_ci_token_issue": "T7 sweep: bounded delete of expired replay-cache rows, observed via the task row",
     "evidgate.expire_pending_invites": "T80 sweep: bounded expiry of past-due pending invites, observed via the task row",
     "evidgate.audit_org_ids": "T80 sweep: lists org ids for the chain-verification task, which records its own findings",
+    "evidgate_resolve.login_upsert_identity": (
+        "created 0042_identity_login_resolvers.sql:95 (text, text, text, text, uuid, uuid): pre-tenant, no org chain to "
+        "write into — a federated login resolves a person before any tenant scope exists; the org-scoped `auth.login` "
+        "row is written after it by `IdentityAuditWriter` (src/Modules/Evidgate.Modules.Identity/Login/Audit/"
+        "IdentityAuditWriter.cs:59-95, called from Login/Completion/CompleteLoginCommandHandler.cs:137), and "
+        "pre-tenant refusals are security_event (11.5.1-T5)"
+    ),
+    "evidgate_resolve.session_create": (
+        "created 0045_identity_session_hardening.sql:253 (uuid, uuid, bytea, integer, text, text, timestamptz, "
+        "timestamptz, bytea[] default null, timestamptz default null; the 8-argument 0042:181 and the 9-argument "
+        "form were dropped at 0045:250-251): pre-tenant, no org "
+        "chain to write into — a session is the credential of a person, not of an org; the `auth.login` row that "
+        "names the sign-in is written by `IdentityAuditWriter` (Login/Audit/IdentityAuditWriter.cs:59-95, "
+        "Login/Completion/CompleteLoginCommandHandler.cs:137)"
+    ),
+    "evidgate_resolve.session_user": (
+        "created 0044_identity_login_linking.sql:198 (bytea, integer) and dropped again by 0045:729: pre-tenant, no "
+        "org chain to write into — a read-only lookup whose first column is the acting person, not a tenant; the "
+        "entry exists only because the lint replays `create` statements without their drops"
+    ),
+    "evidgate_resolve.login_link_identity": (
+        "created 0045_identity_session_hardening.sql:603 (bytea[], timestamptz, text, text, text, uuid; the 5-argument "
+        "0044:222 was dropped at 0045:601): pre-tenant, no org chain to write into — linking moves identities between "
+        "users before any tenant scope exists; the org-scoped `auth.link` row is written by `IdentityAuditWriter` "
+        "(Login/Audit/IdentityAuditWriter.cs:59-95, called from Endpoints/LinkEndpoints.cs:496)"
+    ),
+    "evidgate_resolve.session_authenticate": (
+        "created 0045_identity_session_hardening.sql:338 (bytea[], bytea, integer, timestamptz, integer): pre-tenant, "
+        "no org chain to write into — the authenticator runs before a tenant is known and answers a rotation "
+        "result, not an organisational act"
+    ),
+    "evidgate_resolve.session_rotate": (
+        "created 0045_identity_session_hardening.sql:456 (uuid, uuid, bytea, integer, timestamptz, integer, text, "
+        "text): pre-tenant, no org chain to write into — rotating one's own credential is the session lifecycle, not "
+        "an act inside an org"
+    ),
+    "evidgate_resolve.session_revoke_all_for_user": (
+        "created 0045_identity_session_hardening.sql:548 (uuid, timestamptz): the membership-lifecycle seam "
+        "`ISessionRevocation` (src/Modules/Evidgate.Modules.Identity.Contracts/ISessionRevocation.cs:3-20) ends "
+        "ANOTHER member's live sessions when an org-scoped membership command removes or disables them, so the "
+        "calling command's own audit row — `[AuditedAction]` membership.remove / membership.update — covers the "
+        "effect (Sessions/SessionRevocationStore.cs:30-42); there is no C# caller yet (RemoveMember.cs:131-134 "
+        "records the call as 02.1.2-T3's and deliberately does not make it), hence no per-call row of its own"
+    ),
+    "evidgate_resolve.session_require_rotation": (
+        "created 0045_identity_session_hardening.sql:572 (uuid, timestamptz): a side effect of a membership or role "
+        "change, run inside the org-scoped command's own transaction through `ISessionPrivilegeChange` "
+        "(Sessions/SessionRevocationStore.cs:45-53), called from RemoveMember.cs:137, UpdateMembership.cs:160, "
+        "RevokeRole.cs:146 and GrantRole.cs:170 — the calling command's own `[AuditedAction]` row "
+        "(membership.remove / membership.update / membership.role_revoke / membership.role_grant) covers the effect"
+    ),
+    "evidgate_resolve.session_list": (
+        "created 0048_identity_session_routes.sql:138 (bytea[], timestamptz): pre-tenant and read-only, no org chain "
+        "to write into — the caller's own sign-in history, projected from the presented cookie hash"
+    ),
+    "evidgate_resolve.session_revoke_current": (
+        "created 0048_identity_session_routes.sql:206 (bytea[], timestamptz): no per-call audit row by owner decision "
+        "D-S102-Q3 — a self revoke is every caller's own logout, and logout / self revoke / revoke-all will emit a "
+        "security_event once 11.5.1-T5 lands (open receiver)"
+    ),
+    "evidgate_resolve.session_revoke_others": (
+        "created 0048_identity_session_routes.sql:398 (bytea[], boolean, timestamptz): no per-call audit row by owner "
+        "decision D-S102-Q3 — a self-service revoke of one's own other sessions, never an act on another member; a "
+        "security_event will cover it once 11.5.1-T5 lands (open receiver)"
+    ),
+    "evidgate.session_cleanup": (
+        "created 0048_identity_session_routes.sql:479 (timestamptz, integer): T80 sweep — a bounded bulk delete of "
+        "expired and past-retention sessions, observed via the task row, exactly like `purge_expired_idempotency`"
+    ),
 }
 
 # Roles a definer function may be granted EXECUTE to.

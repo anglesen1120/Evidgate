@@ -328,17 +328,19 @@ public sealed class MigrationTests : SessionHardeningTestBase
         """;
 
     /// <summary>
-    /// F55 (0050): the administrative revoke's audit row is appended inside the definer, and the
-    /// SIGNATURE is unchanged — same arguments, same `table (status text)` — so 0048's owner and grants
-    /// still apply. The file is additive and idempotent (`create or replace` plus re-stated grants), so
-    /// applying it again is a no-op, and what the append depends on is still in force: `audit_log` keeps
-    /// FORCE row level security (the owner INSERT policy of 0015 is what lets the definer append),
-    /// PUBLIC holds no EXECUTE, and the body carries the audit statement itself.
+    /// F58 (0051): the administrative revoke's audit row now carries the caller's correlation ids, which the
+    /// SIGNATURE gained as two trailing defaulted arguments — same owner, same `table (status text)`, and
+    /// `drop function` before `create` means the grants must be re-stated (they are). The file is idempotent:
+    /// the only `drop` names the four-argument predecessor, and the six-argument definition is
+    /// `create or replace`, so re-applying it re-states the same body in place and the catalogue keeps exactly
+    /// ONE function, never an overload. What the append depends on is still in force: `audit_log` keeps FORCE
+    /// row level security (the owner INSERT policy of 0015 is what lets the definer append), PUBLIC holds no
+    /// EXECUTE, and the body carries the audit statement itself.
     /// </summary>
     [Fact]
     public async Task The_Revoke_Audit_Definer_Keeps_Its_Grant_And_Reapplies_As_A_NoOp()
     {
-        await AssertRevokeDefinerAsync("0050 re-creates the same function, not a new one");
+        await AssertRevokeDefinerAsync("0051 re-creates the function with its two defaulted id arguments");
 
         (await HasExecuteAsync("evidgate_app", "evidgate_resolve", "session_revoke_one"))
             .ShouldBeTrue("the app role calls the route");
@@ -389,14 +391,23 @@ public sealed class MigrationTests : SessionHardeningTestBase
         await AssertRevokeDefinerAsync("a re-apply keeps the definer hygiene and its bounded wait");
         (await HasExecuteAsync("evidgate_app", "evidgate_resolve", "session_revoke_one"))
             .ShouldBeTrue("the re-stated grant still names the app role");
+
+        (await OwnerScalarAsync<long>(
+            """
+            select count(*)
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """)).ShouldBe(1L, "the re-apply replaced the definition; a leftover four-argument copy would be an overload");
     }
 
     /// <summary>
-    /// QA-F3: the upgrade PATH, not only the file. A database that sat at 0049 already holds the org's
-    /// application-written chain, so 0050 has to be a pure definition change over it: 0048's body (what a 0049
-    /// database runs, re-stated from the shipped file because the harness migrates straight to head) is
-    /// replaced, no privilege moves, every existing row still verifies, and the next admin revoke continues
-    /// the SAME chain at <c>tip + 1</c>.
+    /// QA-F3 / F58: the upgrade PATH, not only the file. A database that sat at 0050 already holds the org's
+    /// application-written chain AND the four-argument revoke definer, so 0051 has to be a pure definition
+    /// change over it: 0050's definition (what a 0050 database runs, re-stated from the shipped file because
+    /// the harness migrates straight to head) is replaced by the six-argument one, no privilege moves, every
+    /// existing row still verifies, and the next admin revoke continues the SAME chain at <c>tip + 1</c> — now
+    /// carrying the correlation ids the route passes.
     /// </summary>
     [Fact]
     public async Task The_Upgrade_Over_A_Populated_Chain_Keeps_It_Verifying_And_Appends_At_The_Tip()
@@ -419,14 +430,54 @@ public sealed class MigrationTests : SessionHardeningTestBase
         var before = await ChainAsync(org);
         before.Select(row => row.Seq).ShouldBe([1L, 2L], "two application rows are the pre-upgrade chain");
 
-        // 2. 0049's state: the revoke definer still carries 0048's body, which appends nothing.
-        await Fixture.SeedAsync(PredecessorRevokeBody(), [], Token);
+        try
+        {
+            await UpgradeOverAPopulatedChainAsync(clock, org, adminTicket, memberTicket, before);
+        }
+        finally
+        {
+            // Restore head even when a step below failed (repo precedent: 02.3.1:191, LinkResolverTests):
+            // the database is shared by every case in this class, so a 0050-shaped definer left behind
+            // would make each later case fail for the wrong reason. Re-applying the file is safe when it
+            // is already applied — it drops no live signature and `create or replace`s the same body.
+            await Fixture.SeedAsync(
+                await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, MigrationFile), Token),
+                [],
+                Token);
+        }
+    }
+
+    /// <summary>
+    /// Steps 2-4 of the upgrade case: re-state the 0050 state, apply `0051` over the populated chain, then
+    /// revoke once on the upgraded definer and read the row back. Split out so the caller can restore head in
+    /// a <c>finally</c>.
+    /// </summary>
+    /// <param name="clock">The clock the store stamps with.</param>
+    /// <param name="org">The org whose chain is used.</param>
+    /// <param name="adminTicket">The admin session that performs the revoke.</param>
+    /// <param name="memberTicket">The member session that is revoked.</param>
+    /// <param name="before">The chain as it stood before the upgrade.</param>
+    private async Task UpgradeOverAPopulatedChainAsync(
+        TimeProvider clock,
+        Guid org,
+        SessionTicket adminTicket,
+        SessionTicket memberTicket,
+        IReadOnlyList<(long Seq, string PrevHash, string EntryHash, string Action)> before)
+    {
+        // 2. 0050's state: the revoke definer is the FOUR-argument definition — it appends its chain row but
+        // cannot see the caller's correlation ids. The harness migrates straight to head, so the six-argument
+        // definition is dropped first and 0050's grants are re-stated, which is exactly what 0050 left behind.
+        await Fixture.SeedAsync(PredecessorStmts(), [], Token);
 
         (await OwnerScalarAsync<string>(RevokeBodySql))
-            .ShouldNotContain("insert into public.audit_log", Case.Sensitive,
-                "the predecessor body re-stated above is what a database migrated to 0049 runs");
+            .ShouldNotContain("p_request_id", Case.Sensitive,
+                "the predecessor definition re-stated above is what a database migrated to 0050 runs");
 
-        var grantsAt0049 = await RevokeGrantsAsync();
+        (await OwnerScalarAsync<string>(RevokeIdentityArgsSql))
+            .ShouldBe("p_cookie_hmacs bytea[], p_session_id uuid, p_org_id uuid, p_now timestamp with time zone",
+                "the predecessor is the four-argument form");
+
+        var grantsAt0050 = await RevokeGrantsAsync();
 
         // 3. The upgrade itself, over the populated chain.
         await Fixture.SeedAsync(
@@ -434,15 +485,17 @@ public sealed class MigrationTests : SessionHardeningTestBase
             [],
             Token);
 
-        (await RevokeGrantsAsync()).ShouldBe(grantsAt0049,
-            "0050 re-states 0048's grants, so the upgrade moves no privilege");
-        await AssertRevokeDefinerAsync("the upgraded definer carries 0050's posture");
+        (await RevokeGrantsAsync()).ShouldBe(grantsAt0050,
+            "0051 re-states 0050's grants for the new signature, so the upgrade moves no privilege");
+        await AssertRevokeDefinerAsync("the upgraded definer carries 0051's posture");
 
         (await ChainAsync(org)).ShouldBe(before, "the upgrade touches no row");
         (await VerifyAsync(org)).ShouldBeNull("the chain written before the upgrade still verifies after it");
 
-        // 4. The first admin revoke on the upgraded definer extends the SAME chain.
-        (await CreateRoutes(clock).RevokeOneAsync(ProofOf(adminTicket), memberTicket.SessionId, org, Token))
+        // 4. The first admin revoke on the upgraded definer extends the SAME chain, with its ids.
+        (await CreateRoutes(clock).RevokeOneAsync(
+                ProofOf(adminTicket), memberTicket.SessionId, org,
+                MigrationRequestId, MigrationTraceId, Token))
             .ShouldBe(SessionRouteStatus.Done);
 
         var after = await ChainAsync(org);
@@ -451,12 +504,24 @@ public sealed class MigrationTests : SessionHardeningTestBase
         after[2].Action.ShouldBe("auth.session_revoke_admin", "the appended row is the administrative act");
         after[2].PrevHash.ShouldBe(after[1].EntryHash, "the new row links onto the tip the application wrote");
         (await VerifyAsync(org)).ShouldBeNull("the definer's row verifies with the production verifier");
+
+        var stored = await OwnerRowAsync(
+            """
+            select request_id, trace_id
+              from public.audit_log
+             where org_id = @org_id and seq = 3
+            """,
+            ("org_id", org));
+
+        stored[0].ShouldBe(MigrationRequestId, "the upgraded definer stores the request id the route passed");
+        stored[1].ShouldBe(MigrationTraceId, "and the trace id");
     }
 
     /// <summary>
-    /// 0050's posture of the revoke definer, in one place: still a <c>SECURITY DEFINER</c> owned by
+    /// 0051's posture of the revoke definer, in one place: still a <c>SECURITY DEFINER</c> owned by
     /// <c>evidgate_owner</c>, still pinned to the empty <c>search_path</c> (TL T80), plus exactly one more
-    /// function setting — the writer's bounded wait (<c>AuditTrail.cs</c> <c>AuditSql.LockTimeout</c>, 2000 ms).
+    /// function setting — the writer's bounded wait (<c>AuditTrail.cs</c> <c>AuditSql.LockTimeout</c>, 2000 ms)
+    /// — and now the six-argument signature whose two trailing ids are defaulted.
     /// The values come from <c>pg_proc.proconfig</c> and are compared quote-stripped, because PostgreSQL may
     /// spell a numeric value as <c>"2000"</c>.
     /// </summary>
@@ -465,6 +530,19 @@ public sealed class MigrationTests : SessionHardeningTestBase
     {
         (await DefinerSignatureAsync("evidgate_resolve", "session_revoke_one"))
             .ShouldStartWith("true|evidgate_owner|", Case.Sensitive, because);
+
+        (await OwnerScalarAsync<string>(RevokeIdentityArgsSql)).ShouldBe(
+            "p_cookie_hmacs bytea[], p_session_id uuid, p_org_id uuid, p_now timestamp with time zone, "
+            + "p_request_id text, p_trace_id text",
+            $"{because}: the correlation ids are the trailing text arguments (0051)");
+
+        (await OwnerScalarAsync<long>(
+            """
+            select p.pronargdefaults::bigint
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+            """)).ShouldBe(2L, $"{because}: both ids are defaulted, so the four-argument call keeps binding");
 
         var settings = await RevokeSettingsAsync();
 
@@ -494,11 +572,17 @@ public sealed class MigrationTests : SessionHardeningTestBase
             .ToArray();
     }
 
-    /// <summary>0050, the file this case re-applies; it is the additive half of F55.</summary>
-    private const string MigrationFile = "0050_identity_session_revoke_audit.sql";
+    /// <summary>0051, the file this case re-applies; it is the correlation-id half of F58.</summary>
+    private const string MigrationFile = "0051_identity_session_revoke_audit_ids.sql";
 
-    /// <summary>The migration 0050 supersedes for this one function: the body a database at 0049 runs.</summary>
-    private const string PredecessorMigrationFile = "0048_identity_session_routes.sql";
+    /// <summary>The migration 0051 supersedes for this one function: the body a database at 0050 runs.</summary>
+    private const string PredecessorMigrationFile = "0050_identity_session_revoke_audit.sql";
+
+    /// <summary>A request id the edge accepts, used by the upgrade case (<c>CorrelationNames.IsSafeRequestId</c>).</summary>
+    private const string MigrationRequestId = "req-upgrade-0051";
+
+    /// <summary>A W3C trace id: 32 lowercase hex digits, not all zero.</summary>
+    private const string MigrationTraceId = "0af7651916cd43dd8448eb211c80319c";
 
     /// <summary>The revoke definer's stored source, as the upgrade cases read it.</summary>
     private const string RevokeBodySql = """
@@ -508,10 +592,35 @@ public sealed class MigrationTests : SessionHardeningTestBase
          where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
         """;
 
+    /// <summary>The revoke definer's argument types, as the catalogue spells them.</summary>
+    private const string RevokeIdentityArgsSql = """
+        select pg_catalog.pg_get_function_identity_arguments(p.oid)
+          from pg_catalog.pg_proc p
+          join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'evidgate_resolve' and p.proname = 'session_revoke_one'
+        """;
+
     /// <summary>
-    /// The text of 0048's <c>session_revoke_one</c>, extracted from the shipped migration file so the "before"
+    /// The statements that leave the database in the state 0050 shipped: 0051's six-argument definition is
+    /// dropped (the harness migrates straight to head, so it has to be), 0050's four-argument definition is
+    /// re-stated from its own shipped file, and 0050's grants are re-applied — `drop function` would otherwise
+    /// leave the predecessor with no ACL, which is not the state an upgrade starts from.
+    /// </summary>
+    private static string PredecessorStmts() =>
+        """
+        drop function if exists evidgate_resolve.session_revoke_one(bytea[], uuid, uuid, timestamptz, text, text);
+        """
+        + PredecessorRevokeBody()
+        + """
+
+        revoke all on function evidgate_resolve.session_revoke_one(bytea[], uuid, uuid, timestamptz) from public;
+        grant execute on function evidgate_resolve.session_revoke_one(bytea[], uuid, uuid, timestamptz) to evidgate_app;
+        """;
+
+    /// <summary>
+    /// The text of 0050's <c>session_revoke_one</c>, extracted from the shipped migration file so the "before"
     /// side of the upgrade is the real definition and not a hand-kept copy. The harness migrates straight to
-    /// head, so re-stating this body is how a case reaches the state a 0049 database is in; 0050 then replaces
+    /// head, so re-stating this body is how a case reaches the state a 0050 database is in; 0051 then replaces
     /// it exactly as the upgrade does.
     /// </summary>
     private static string PredecessorRevokeBody()
