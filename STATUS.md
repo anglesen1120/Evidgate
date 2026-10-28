@@ -17,7 +17,7 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Next picks, web-only lane: 09.1.1-T5 is merged (#213) and 09.1.1-T9.2 is done (#209), so the web-only lane moves to G2 (§5).
 - Next picks, backend lane: refill order in `.omp/coordinator/prompts/held/README.md`; when a backend slot frees, 08.5.1-T1 (XL, split, migration lane) unless §5 ranks another G1 task higher, and 04.1.2-T1 only after S91 releases.
 - Next step: §5, 90 dependency-ready tasks / 101.0 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
-- STATUS split (S126, 2026-10-28): §3-§4 delivered waves moved verbatim to `docs/status-archive.md` together with the closed §6 rows; the live §6 table is `docs/status-carried.md` (add new carried rows there, at the end).
+- STATUS split (S126, 2026-10-28; merged #264, a9159257): §3-§4 delivered waves moved verbatim to `docs/status-archive.md` together with the closed §6 rows; the live §6 table is `docs/status-carried.md` (add new carried rows there, at the end).
 
 ## 2. Done
 
