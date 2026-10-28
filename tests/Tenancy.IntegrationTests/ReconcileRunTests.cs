@@ -1496,7 +1496,7 @@ public sealed class ReconcileRunTests
     /// <summary>
     /// The revision, the pointer move and the state edge share the attempt's one transaction: an attempt whose consumer
     /// never commits leaves no revision row, no pointer and a run still <c>collecting</c>, so a retry starts clean instead
-    /// of finding half a revision (00 §5.5 C1/C7, the fail-closed rule of STATUS.md:588/589).
+    /// of finding half a revision (00 §5.5 C1/C7, the fail-closed rule of docs/status-carried.md:116/117).
     /// </summary>
     [Fact]
     public async Task Reconcile_RolledBackAttempt_LeavesNoRevisionAndRunCollecting()

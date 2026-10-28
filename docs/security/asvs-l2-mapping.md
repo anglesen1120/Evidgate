@@ -87,7 +87,7 @@ Every receiver id resolves in `python3 scripts/plan_graph.py --json` (655 tasks)
 | ASVS-GAP-28 | V13 (13.2, 13.4) | Nothing asserts that a Development environment cannot select production configuration, and no test targets startup-time configuration logs (request-path redaction is covered) | `[OPEN]` (nearest: 11.7.1-T2) | solo founder (Tech Lead, O2) | G4 |
 | ASVS-GAP-29 | V14 (14.1) | No data map or data-protection documentation; `docs/compliance/` does not exist | 11.8.1-T3 | solo founder (Tech Lead, O2) | G1 |
 | ASVS-GAP-30 | V14 (14.2) | No retention-policy table and no deletion report, and nothing verifies that a previously issued URL stops working | 06.4.1-T1 | solo founder (Tech Lead, O2) | G1 |
-| ASVS-GAP-31 | V14 (14.2) | Sensitivity classification is not enforced on read, list or download-url; kind defaults and override precedence ship, the remainder is open (`STATUS.md:409`) | 06.2.1-T2 | solo founder (Tech Lead, O2) | G2 |
+| ASVS-GAP-31 | V14 (14.2) | Sensitivity classification is not enforced on read, list or download-url; kind defaults and override precedence ship, the remainder is open (`STATUS.md:279`) | 06.2.1-T2 | solo founder (Tech Lead, O2) | G2 |
 | ASVS-GAP-32 | V14 (14.2) | No data-subject request intake, routing or deadline handling | 11.9.2-T1 | solo founder (Tech Lead, O2) | G1 |
 | ASVS-GAP-33 | V15 (no direct requirement — observation, not counted) | No SAST or DAST stage in `scripts/verify.sh`; the only CodeQL mention is a reserved hook (`.github/workflows/ci.yml:20-21`). ASVS 5.0.0 states no requirement that mandates SAST or DAST — the nearest L2 asks are 15.1.1 (documented remediation time frames) and 15.2.1 (components inside them), both met by the vulnerability and SBOM stages — so this row is kept as an observation for 11.7.1-T2 | 11.7.1-T2 | solo founder (Tech Lead, O2) | G4 |
 | ASVS-GAP-34 | V15 (15.1.2) | The SBOM is produced but not attached to a release | 11.6.1-T3 | solo founder (Tech Lead, O2) | G1 |
@@ -98,7 +98,7 @@ Every receiver id resolves in `python3 scripts/plan_graph.py --json` (655 tasks)
 | ASVS-GAP-39 | V7 (7.5.1) | No full re-authentication before a sensitive account-attribute change: nothing forces a re-auth before a new provider is linked, and no sensitive-attribute change route re-challenges the factor | `[OPEN]` (nearest: 02.3.2) | solo founder (Tech Lead, O2) | G4 |
 | ASVS-GAP-40 | V7 (7.1.2) | No documented or enforced concurrent-session limit: how many sessions one account may hold, and what happens at the limit, is neither written down nor implemented | `[OPEN]` (nearest: 11.7.1-T5, alongside ASVS-GAP-16) | solo founder (Tech Lead, O2) | G4 |
 
-A gap leaves this table only when the receiver lands the control and §3 is updated in the same change set. A gap that a receiver declines moves back to `[OPEN]` with the reason written in `STATUS.md` §6; it is never deleted quietly.
+A gap leaves this table only when the receiver lands the control and §3 is updated in the same change set. A gap that a receiver declines moves back to `[OPEN]` with the reason written in `docs/status-carried.md`; it is never deleted quietly.
 
 ## 5. How to keep this current
 

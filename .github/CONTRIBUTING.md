@@ -32,7 +32,7 @@ A PR with a failing stage fails CI. Required status checks (so a red PR
 cannot be merged at all) are 01.7.1-T3.1: they need the repository to be public
 or on a paid plan — on this private repo the GitHub API answers 403 'Upgrade to
 GitHub Pro or make this repository public', so until the owner decides, the
-reviewer convention is what blocks a red PR (see STATUS.md §6).
+reviewer convention is what blocks a red PR (see `docs/status-carried.md`).
 
 Every dependency you add (NuGet `PackageVersion`/`GlobalPackageReference` or
 npm `dependencies`/`devDependencies`) must be registered in
