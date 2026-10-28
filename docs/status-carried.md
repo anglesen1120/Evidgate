@@ -1,6 +1,6 @@
 # Blocked / carried items
 
-Moved verbatim from STATUS.md §6 on 2026-10-28 (PR #TBD); add new carried rows at the END of the table; cite rows by title, not by line number.
+Moved verbatim from STATUS.md §6 on 2026-10-28 (PR #264); add new carried rows at the END of the table; cite rows by title, not by line number.
 
 | Item | Blocker | Owner |
 |---|---|---|
