@@ -14,7 +14,8 @@
 // always described by the button. policy:write remains required, with ask-approver copy otherwise.
 //
 // Read and command answers render their actual mode; only advisory gets the not-gating copy.
-// Terminal metadata is interpolated, ids are sanitised, and the hash is sanitised before shortening.
+// Terminal metadata is interpolated, ids and the mode are sanitised, and the hash is sanitised
+// before shortening.
 // The heading takes focus after either a successful read or confirm. Refusals use app-error-pattern
 // so the typed server message, code and request id are preserved rather than replaced by fixed copy.
 
@@ -32,7 +33,11 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import type { PolicyActivationDto, PolicyActivationStateDto, PolicyRevisionDto } from '@evidgate/sdk';
+import type {
+  PolicyActivationDto,
+  PolicyActivationStateDto,
+  PolicyRevisionDto,
+} from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
@@ -115,7 +120,8 @@ export class EnableCollectionPage {
   });
   /** Only a failure the contract calls retryable offers the same-intent retry action. */
   protected readonly retryEligible = computed(
-    () => this.permitted() && this.activationRead().kind === 'none' && this.activation.retryEligible(),
+    () =>
+      this.permitted() && this.activationRead().kind === 'none' && this.activation.retryEligible(),
   );
   /**
    * R5: a retryable failure whose `Retry-After` window is still open disables the confirm natively —
@@ -162,7 +168,9 @@ export class EnableCollectionPage {
    */
   protected readonly retryDisabled = computed(() =>
     this.readFailure() !== null ? this.busy() : !this.retryEligible() || this.busy(),
-  );  /**
+  );
+
+  /**
    * A read is side-effect free, so reading it again is always safe — but the shared pattern renders
    * its Retry only for a failure the contract calls retryable, and a 401 or a 5xx is not one. Rather
    * than claim a retryable refusal, the page offers its own re-read action for exactly those.
@@ -171,7 +179,9 @@ export class EnableCollectionPage {
     const failure = this.readFailure();
     return failure !== null && !failure.retryable;
   });
-  protected readonly enabledProject = computed(() => sanitizedIdentifier(this.enabled()?.project_id));
+  protected readonly enabledProject = computed(() =>
+    sanitizedIdentifier(this.enabled()?.project_id),
+  );
   protected readonly enabledRevision = computed(() =>
     sanitizedIdentifier(this.enabled()?.policy_revision_id),
   );
@@ -299,9 +309,11 @@ export class EnableCollectionPage {
         this.activationRead.set(state === null ? { kind: 'none' } : { kind: 'active', state });
       }
     } catch (error: unknown) {
+      // A scope change or a destroyed page already invalidated this generation, abort or not, so
+      // nothing is written for it. Everything else — including a cancellation that reached a read
+      // this page still owns, whatever its class or realm — is an absent answer, not an absence of
+      // activation: it becomes a rendered state with a way back, never a stuck loading panel.
       if (!current()) return;
-      // A cancelled request is not a failure: the scope moved, or the page went away.
-      if (error instanceof DOMException && error.name === 'AbortError') return;
       // A throw that is not the gateway's typed failure is a bug in the call path, not an absence of
       // activation: it still becomes a rendered state with a way back, never a stuck loading panel.
       const failure: ApiError = isApiRequestError(error)
@@ -322,9 +334,13 @@ export class EnableCollectionPage {
     }
   }
 
-  /** Advisory has a translated label; every other server mode is rendered verbatim. */
+  /**
+   * Advisory has a translated label; every other server mode is rendered verbatim — as a sanitised
+   * wire value, because the enum is closed but the answer is still server text, and an invisible
+   * character in it could reorder the row that identifies the mode.
+   */
   protected modeText(mode: PolicyActivationStateDto['mode']): string {
-    return mode === 'advisory' ? this.advisoryModeLabel : mode;
+    return mode === 'advisory' ? this.advisoryModeLabel : sanitizeLabel(mode);
   }
 
   /**

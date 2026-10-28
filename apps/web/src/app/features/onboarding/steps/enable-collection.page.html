@@ -68,7 +68,9 @@
         </div>
         <div>
           <dt>{{ modeLabel }}</dt>
-          <dd>{{ modeText(activation.mode) }}</dd>
+          <dd>
+            <bdi>{{ modeText(activation.mode) }}</bdi>
+          </dd>
         </div>
         <div>
           <dt>{{ activatedByLabel }}</dt>
@@ -151,30 +153,28 @@
       </dl>
     </section>
 
-    <!-- AC-T5.2-3: the confirm exists only beside a read that permits it. It is native-disabled
-         until the read settles, remains disabled for an unreadable (403) state, and disappears
-         once the read answers 200 or fails in any other way. -->
-    @if (enabled() === null) {
-      <form (ngSubmit)="confirm()">
-        @if (!permitted()) {
-          <p id="enable-permission" data-testid="enable-collection-ask-approver">{{ askApprover }}</p>
-        }
-        @if (activationRead().kind === 'forbidden') {
-          <p id="enable-activation-unreadable" data-testid="enable-collection-unreadable">
-            {{ activationUnreadable }}
-          </p>
-        }
-        <button
-          class="state-panel__action primary"
-          data-testid="enable-collection-confirm"
-          type="submit"
-          [disabled]="confirmDisabled()"
-          [attr.aria-describedby]="confirmDescribedBy()"
-        >
-          {{ busy() ? confirmingLabel : confirmLabel }}
-        </button>
-      </form>
-    }
+    <!-- AC-T5.2-3: the confirm exists only beside a read that permits it, i.e. inside this branch. It
+       is native-disabled until the read settles and stays disabled for an unreadable (403) state;
+       the read answering 200 or failing in any other way removes the whole preview section. -->
+    <form (ngSubmit)="confirm()">
+      @if (!permitted()) {
+        <p id="enable-permission" data-testid="enable-collection-ask-approver">{{ askApprover }}</p>
+      }
+      @if (activationRead().kind === 'forbidden') {
+        <p id="enable-activation-unreadable" data-testid="enable-collection-unreadable">
+          {{ activationUnreadable }}
+        </p>
+      }
+      <button
+        class="state-panel__action primary"
+        data-testid="enable-collection-confirm"
+        type="submit"
+        [disabled]="confirmDisabled()"
+        [attr.aria-describedby]="confirmDescribedBy()"
+      >
+        {{ busy() ? confirmingLabel : confirmLabel }}
+      </button>
+    </form>
   }
 
   @if (failureView(); as error) {
@@ -184,7 +184,8 @@
         [headingLevel]="3"
         [retryDisabled]="retryDisabled()"
         (retry)="retry()"
-      />      <!-- A read is side-effect free, but the shared pattern only offers Retry for a retryable
+      />
+      <!-- A read is side-effect free, but the shared pattern only offers Retry for a retryable
            failure; a 401/5xx read therefore gets this page-owned re-read action instead. -->
       @if (readRetryWithoutAction()) {
         <button

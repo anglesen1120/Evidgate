@@ -791,7 +791,17 @@ describe('OnboardingStore on the terminal screen (09.2.1-T1.1)', () => {
   const ENABLED: OnboardingProgress = {
     project: PROJECT,
     done: { 1: true, 2: true, 3: true, 4: true, 5: true },
-    activation: { kind: 'none' },
+    activation: {
+      kind: 'active',
+      state: {
+        project_id: PROJECT.id,
+        policy_revision_id: 'policy-revision-1',
+        hash: 'a'.repeat(64),
+        mode: 'advisory',
+        activated_by: 'user-1',
+        activated_at: '2026-10-20T09:00:00Z',
+      },
+    },
     sampleRun: null,
     bindings: [BINDING],
     tokens: [],

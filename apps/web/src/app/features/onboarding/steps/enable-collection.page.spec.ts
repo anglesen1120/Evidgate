@@ -84,7 +84,10 @@ type ReadActivation = (projectId: string) => Promise<PolicyActivationStateDto | 
  * A promise whose settlement this spec controls. `Promise.withResolvers` is not in the web
  * project's `lib` target, so the executor is spelled out here once instead of at each use.
  */
-function deferredResult<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {
+function deferredResult<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {
     resolve = done;
@@ -92,11 +95,23 @@ function deferredResult<T>(): { readonly promise: Promise<T>; readonly resolve: 
   return { promise, resolve };
 }
 
+/**
+ * The statuses `mapApiError` marks retryable when the answer carries no envelope — the 00 §9.2
+ * backoff pair (429/503) and the transient gateway pair (502/504); `core/http/error-mapper.ts`.
+ * A spec must not build an error shape the client cannot produce, so the helper derives the same
+ * default and a caller overrides it only to pin the envelope's own `retryable` field.
+ */
+const RETRYABLE_STATUSES: readonly number[] = [429, 502, 503, 504];
+
 /** One typed refusal, shaped as `mapApiError` would build it. */
 function failure(
   kind: ApiError['kind'],
   status: number,
-  options: { retryable?: boolean; details?: ApiError['details'] } = {},
+  options: {
+    retryable?: boolean;
+    retryAfterSeconds?: number | null;
+    details?: ApiError['details'];
+  } = {},
 ): ApiRequestError {
   return new ApiRequestError({
     kind,
@@ -104,9 +119,9 @@ function failure(
     code: kind,
     message: `Exact server refusal for ${kind}.`,
     requestId: 'request-1',
-    retryable: options.retryable ?? false,
+    retryable: options.retryable ?? RETRYABLE_STATUSES.includes(status),
     details: options.details ?? [],
-    retryAfterSeconds: null,
+    retryAfterSeconds: options.retryAfterSeconds ?? null,
   });
 }
 
@@ -641,6 +656,58 @@ describe('EnableCollectionPage activation read', () => {
     expect(activatePolicy).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['a right-to-left override', '\u202E'],
+    ['a C1 control', '\u009B'],
+  ])(
+    'strips %s a malformed mode carries before it reaches the mode row',
+    async (_shape, invisible) => {
+      // A closed enum cannot carry this, so the value is cast: the page still renders the answer,
+      // and an invisible character in it could reorder the row that names the mode.
+      const hostileMode = `audit${invisible}` as PolicyActivationStateDto['mode'];
+      readPolicyActivation.mockResolvedValue({ ...ACTIVATION_STATE, mode: hostileMode });
+      const fixture = await createPage();
+      const root = fixture.nativeElement as HTMLElement;
+
+      const enabled = root.querySelector('[data-testid="enable-collection-enabled"]')!;
+      expect(enabled.textContent).not.toContain(invisible);
+      expect(enabled.textContent).not.toContain('\u202E');
+      expect(enabled.textContent).not.toContain('\u009B');
+      // The sanitised wire value is reported, not a translated label claiming a mode we do not
+      // offer, and it is isolated in its own `<bdi>` so it cannot reorder the row around it.
+      const modeRow = Array.from(enabled.querySelectorAll('div')).find(
+        (row) => row.querySelector('dt')?.textContent?.trim() === 'Mode',
+      );
+      expect(modeRow?.querySelector('bdi')?.textContent?.trim()).toBe('audit');
+      expect(enabled.textContent).not.toContain('Not gating yet');
+    },
+  );
+
+  it('never renders bidi or control characters an activation read carries (D4, T47 precedent)', async () => {
+    // Every server-provided member of the read is hostile at once: the digest (sanitised before it
+    // is abbreviated), the actor, and the revision id.
+    readPolicyActivation.mockResolvedValue({
+      ...ACTIVATION_STATE,
+      hash: 'sha256:9f2c\u202E\u009B1d7b4a6e8f0a',
+      activated_by: 'user-\u202E1\u009B',
+      policy_revision_id: '018f\u202E0000-0000-7000-8000-00000000a004\u009B',
+    });
+    const fixture = await createPage();
+    const root = fixture.nativeElement as HTMLElement;
+
+    const enabled = root.querySelector('[data-testid="enable-collection-enabled"]')!;
+    expect(enabled.textContent).not.toContain('\u202E');
+    expect(enabled.textContent).not.toContain('\u009B');
+    // Stripped, not replaced by "unavailable": the identifying values survive without the invisible
+    // characters that could make one revision read as another.
+    expect(enabled.textContent).toContain('sha256:9f2c1d7b4a6e…');
+    expect(enabled.textContent).toContain('user-1');
+    expect(enabled.textContent).toContain('018f0000-0000-7000-8000-00000000a004');
+    // Interpolated text, never markup — and isolated so no member can reorder the row it sits in.
+    expect(Array.from(enabled.querySelectorAll('code > bdi')).length).toBeGreaterThanOrEqual(3);
+    expect(enabled.querySelector('code')?.innerHTML).not.toContain('&lt;');
+  });
+
   it('keeps the confirm disabled until the read settles (AC-T5.2-3)', async () => {
     const deferred = deferredResult<PolicyActivationStateDto | null>();
     readPolicyActivation.mockImplementation(() => deferred.promise);
@@ -748,15 +815,15 @@ describe('EnableCollectionPage activation read', () => {
   });
 
   it.each([
-    ['unauthenticated', 401],
-    ['rate_limited', 429],
-    ['unavailable', 503],
-    ['unexpected', 500],
+    ['rate_limited', 429, 60],
+    ['unavailable', 503, null],
   ] as const)(
-    'never treats a %s read failure as "no active policy" (AC-T5.2-3)',
-    async (kind, status) => {
+    're-reads a retryable %s read failure through the shared Retry action (AC-T5.2-3)',
+    async (kind, status, retryAfterSeconds) => {
+      // The shape the client produces (`core/http/error-mapper.ts`): a 429 or 503 read is retryable,
+      // and a 429 carries the `Retry-After` interval the answer named.
       readPolicyActivation
-        .mockRejectedValueOnce(failure(kind, status))
+        .mockRejectedValueOnce(failure(kind, status, { retryable: true, retryAfterSeconds }))
         .mockResolvedValueOnce(null);
       const fixture = await createPage();
       const root = fixture.nativeElement as HTMLElement;
@@ -764,16 +831,52 @@ describe('EnableCollectionPage activation read', () => {
       expect(root.querySelector('[data-testid="enable-collection-error"]')).not.toBeNull();
       expect(confirmButton(root)).toBeNull();
       expect(root.querySelector('[data-testid="enable-collection-enabled"]')).toBeNull();
-      // The contract calls none of these retryable, so the shared action is absent and the page's own
-      // re-read control is what offers the way back (AC-T5.2-3: a retry that re-reads).
-      expect(retryButton(root)).toBeNull();
-      const reRead = readRetryAction(root);
-      expect(reRead).not.toBeNull();
-      expect(reRead!.disabled).toBe(false);
       submit(root);
       await drain(fixture);
       expect(createPolicyRevision).not.toHaveBeenCalled();
       expect(activatePolicy).not.toHaveBeenCalled();
+
+      // The shared pattern renders its Retry for a retryable failure, and it re-reads: the page adds
+      // no second way back beside it.
+      const retry = retryButton(root);
+      expect(retry).not.toBeNull();
+      expect(retry!.disabled).toBe(false);
+      expect(readRetryAction(root)).toBeNull();
+
+      retry!.click();
+      await drain(fixture);
+      expect(readPolicyActivation).toHaveBeenCalledTimes(2);
+      expect(root.querySelector('[data-testid="enable-collection-error"]')).toBeNull();
+      expect(confirmButton(root)).not.toBeNull();
+    },
+  );
+
+  it.each([
+    ['unauthenticated', 401],
+    ['unexpected', 500],
+  ] as const)(
+    'never treats a non-retryable %s read failure as "no active policy" (AC-T5.2-3)',
+    async (kind, status) => {
+      // A 401 and a 500 are not retryable in the contract, so the shared pattern renders no Retry and
+      // the page's own re-read control is the action — still never read as "no active policy".
+      readPolicyActivation
+        .mockRejectedValueOnce(failure(kind, status, { retryable: false }))
+        .mockResolvedValueOnce(null);
+      const fixture = await createPage();
+      const root = fixture.nativeElement as HTMLElement;
+
+      expect(root.querySelector('[data-testid="enable-collection-error"]')).not.toBeNull();
+      expect(confirmButton(root)).toBeNull();
+      expect(root.querySelector('[data-testid="enable-collection-enabled"]')).toBeNull();
+      expect(retryButton(root)).toBeNull();
+      submit(root);
+      await drain(fixture);
+      expect(createPolicyRevision).not.toHaveBeenCalled();
+      expect(activatePolicy).not.toHaveBeenCalled();
+
+      const reRead = readRetryAction(root);
+      expect(reRead).not.toBeNull();
+      expect(reRead!.disabled).toBe(false);
 
       reRead!.click();
       await drain(fixture);
@@ -805,6 +908,46 @@ describe('EnableCollectionPage activation read', () => {
     expect(createPolicyRevision).not.toHaveBeenCalled();
     expect(activatePolicy).not.toHaveBeenCalled();
   });
+
+  /**
+   * A cancellation is not a scope change: nothing on this page aborts its own read, so one that
+   * arrives belongs to the read in hand. Dropping it silently would leave the panel reading
+   * forever, so it becomes the unexpected-error state — whatever class or realm the rejection
+   * carries, which is why nothing here asks what the error is an instance of. The abort of a stale
+   * scope never reaches this branch: the generation check returns for it first.
+   */
+  const cancellations: readonly (readonly [string, () => unknown])[] = [
+    ['a DOM abort', () => new DOMException('The request was aborted.', 'AbortError')],
+    [
+      'a foreign-realm abort',
+      () => Object.assign(new Error('The request was aborted.'), { name: 'AbortError' }),
+    ],
+  ];
+
+  it.each(cancellations)(
+    'renders the unexpected-error state when %s cancels a read this page still owns',
+    async (_shape, cancellation) => {
+      readPolicyActivation.mockRejectedValueOnce(cancellation()).mockResolvedValueOnce(null);
+      const fixture = await createPage();
+      const root = fixture.nativeElement as HTMLElement;
+
+      const error = root.querySelector('[data-testid="enable-collection-error"]');
+      expect(error).not.toBeNull();
+      expect(error!.textContent).toContain('The activation could not be read.');
+      expect(root.querySelector('[data-testid="enable-collection-enabled"]')).toBeNull();
+      expect(confirmButton(root)).toBeNull();
+      // The unexpected failure is retryable: re-reading a read that wrote nothing is always safe.
+      const retry = retryButton(root);
+      expect(retry).not.toBeNull();
+      retry!.click();
+      await drain(fixture);
+      expect(readPolicyActivation).toHaveBeenCalledTimes(2);
+      expect(root.querySelector('[data-testid="enable-collection-error"]')).toBeNull();
+      expect(confirmButton(root)).not.toBeNull();
+      expect(createPolicyRevision).not.toHaveBeenCalled();
+      expect(activatePolicy).not.toHaveBeenCalled();
+    },
+  );
 
   it('has no acknowledgement control in any read state (AC-F18-a)', async () => {
     readPolicyActivation.mockResolvedValue(null);
@@ -896,7 +1039,9 @@ describe('EnableCollectionPage scope changes', () => {
 
   it('re-reads the activation when the scope moves and shows what the new read answers (AC-T5.2-3)', async () => {
     // The first read (the host's initial project) already answered 404 during setup.
-    readPolicyActivation.mockReset().mockResolvedValue({ ...ACTIVATION_STATE, project_id: 'project-2' });
+    readPolicyActivation
+      .mockReset()
+      .mockResolvedValue({ ...ACTIVATION_STATE, project_id: 'project-2' });
     host.componentInstance.projectId.set('project-2');
     await drainHost();
 
@@ -936,5 +1081,36 @@ describe('EnableCollectionPage scope changes', () => {
     expect(hostRoot.querySelector('[data-testid="enable-collection-enabled"]')).toBeNull();
     expect(confirmButton(hostRoot)).not.toBeNull();
     expect(confirmButton(hostRoot)!.disabled).toBe(false);
+  });
+
+  it('drops the late answer of the project a project change left behind (D9)', async () => {
+    // The setup read for project-1 already answered 404; this test owns the next two reads.
+    const deferred = deferredResult<PolicyActivationStateDto | null>();
+    readPolicyActivation
+      .mockReset()
+      .mockResolvedValue(null)
+      .mockImplementationOnce(() => deferred.promise)
+      .mockResolvedValueOnce({ ...ACTIVATION_STATE, project_id: 'project-2' });
+
+    // An org move starts a read for project-1 that is still in flight when the project moves.
+    host.componentInstance.orgId.set('org-2');
+    await drainHost();
+    expect(readPolicyActivation).toHaveBeenCalledTimes(1);
+    expect(readPolicyActivation).toHaveBeenLastCalledWith('project-1');
+
+    host.componentInstance.projectId.set('project-2');
+    await drainHost();
+    expect(readPolicyActivation).toHaveBeenCalledTimes(2);
+    expect(readPolicyActivation).toHaveBeenLastCalledWith('project-2');
+
+    // The deferred answer belongs to project-1, and the page now shows project-2's.
+    deferred.resolve(ACTIVATION_STATE);
+    await drainHost();
+
+    const enabled = hostRoot.querySelector('[data-testid="enable-collection-enabled"]');
+    expect(enabled).not.toBeNull();
+    expect(enabled!.textContent).toContain('project-2');
+    expect(enabled!.textContent).not.toContain('project-1');
+    expect(confirmButton(hostRoot)).toBeNull();
   });
 });
