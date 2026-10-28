@@ -5,12 +5,12 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 ## 1. Snapshot
 
 ### Resume here
-- Develop: `787f592` (PR #228, S102 02.3.2-T2, merged); 220 first-parent PR merges into develop. Migration `0048_identity_session_routes.sql` is merged in #228. S115 (05.3.2-T5) is in review with `0049_orchestration_evidence_revision.sql` (PR number in the delivery row below); the migration lane is held by S115 until it merges, next free migration `0051`.
+- S124 (08.6.3-T1, `0052_healing_switch.sql`) is merged (#260, 569b538f); the migration lane is free, next free number `0053`. Older line: Develop: `787f592` (PR #228, S102 02.3.2-T2, merged); 220 first-parent PR merges into develop. Migration `0048_identity_session_routes.sql` is merged in #228. S115 (05.3.2-T5) is in review with `0049_orchestration_evidence_revision.sql` (PR number in the delivery row below); the migration lane is held by S115 until it merges, next free migration `0051`.
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop (counting S115 05.3.2-T5 and S123 05.3.2-T2 once merged): 180/655 tasks; 186.25/702.75 raw person-days; remaining 475 tasks / 516.5 d. Via merged PRs: 153 tasks / 161.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- Landed by phase (done tasks / raw d): G1 132 / 144.25; G2 42 / 36; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop (counting S115 05.3.2-T5 and S123 05.3.2-T2 once merged): 181/655 tasks; 187.25/702.75 raw person-days; remaining 474 tasks / 515.5 d. Via merged PRs: 154 tasks / 162.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 133 / 145.25; G2 42 / 36; G3 0 / 0; G4 6 / 6.
 - Plan totals: 655 tasks / 702.75 raw / 843.3 buffered person-days (canonical S93 figures). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -24,10 +24,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 180 | 186.25 |
-| Via merged PRs | 153 | 161.25 |
+| Fully landed on develop | 181 | 187.25 |
+| Via merged PRs | 154 | 162.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 475 | 516.5 |
+| Remaining | 474 | 515.5 |
 | Plan total | 655 | 702.75 |
 
 Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 09.2.1-T5 (T5.2 reload acceptance awaits the `apps/web` wire-up of the S116 activation read), 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764) and whose remainder is the T2.2 acceptance plus T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -43,23 +43,23 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 05 | 19 | 0 | 5 | 9 | 5 | 0 | 21.5 |
 | 06 | 12 | 0 | 4 | 8 | 0 | 0 | 10 |
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
-| 08 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | 09 | 20 | 0 | 6 | 11 | 3 | 0 | 20 |
 | 10 | 4 | 0 | 1 | 2 | 1 | 0 | 4.5 |
 | 11 | 9 | 1 | 3 | 4 | 1 | 0 | 7.75 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 180 | 3 | 49 | 96 | 31 | 1 | 186.25 |
+| TOTAL | 181 | 3 | 49 | 97 | 31 | 1 | 187.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 132 | 3 | 29 | 72 | 27 | 1 | 144.25 |
+| G1 | 133 | 3 | 29 | 73 | 27 | 1 | 145.25 |
 | G2 | 42 | 0 | 18 | 21 | 3 | 0 | 36 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 180 | 3 | 49 | 96 | 31 | 1 | 186.25 |
+| TOTAL | 181 | 3 | 49 | 97 | 31 | 1 | 187.25 |
 
 ### Landed task groups
 
@@ -190,7 +190,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 05.5.2 | 05.5.2-T1 (T1.1 + T1.2) | merged (#236, 148bc06) | CI re-run contract change (docs only, tier T0, proposed, owner confirmation pending): 00 §8.1 gains `rerun_scope = ci_attempt` and the attempt rule (triple identity, new run per higher attempt with parent = highest stored lower attempt, `stale_attempt`, partial-attempt label), §9.4 binds the whole triple; 00 §15 row, plan 05 FR-05-7/§4/producer-binding line, DECISIONS §6 F10–F13 (GitHub facts ✅, one ⚠️ kept), OI-05-05 reworded, OI-05-16 added. No claim, wire field, code or contract file changed. |
 | 05.3.2 | 05.3.2-T5 (T5.1 + T5.2) | merged (#239, `64318718`) | `migrations/0049_orchestration_evidence_revision.sql`: append-only `evidence_revision` (app role SELECT + INSERT, FORCE RLS, closed `missing[]` codes incl. `setup_error`, gap-free `revision_no` trigger), `evidence_revision_run_idx`, composite pointer FK `run_current_evidence_revision_fk`, `update (current_evidence_revision_id)` grant and `run_evidence_pointer_guard` (latest revision of the same run only, never cleared by the app role (the owner erasure sweep may)). `GetRun` unchanged. D-S115-Q1 (proposed): lock order run row first, then insert, then pointer. |
 | 05.3.2 | 05.3.2-T2 (T2.1–T2.4) | merged (#257, e9edb866); T2.1+T2.2 in (#253, 8f3c3eed) | Reconciler, whole. T2.1+T2.2 (#253): `ReconcileRunTaskHandler` claims `orchestrator.run.reconcile` through the task queue (`SKIP LOCKED`), locks the run row `FOR NO KEY UPDATE` first (S115 lock order) and compares declared `(last_sequence, count)` with the acknowledged events in one grouped statement, reporting `missing_shard`, `count_mismatch` and `unknown_status`. T2.3+T2.4 (#257, S123): the requirement set (the pinned policy's `required_artifacts` kinds × every planned execution, read through the new additive `IPolicyContracts.GetRequiredArtifactKindsAsync`), `setup_error` (a `blocked` `test.finished` in a closed shard, 00 §8.3) and `stale_epoch` (a closed shard holding a stale event) join the reason list; then `IEvidenceFreeze.FreezeAsync` → one `evidence_revision` insert → `run.current_evidence_revision_id` → `IRunStateTransition` `collecting → complete\|incomplete`, all in the consumer's tenant transaction; a `Pending` attempt (a planned shard still open, `collection_deadline_at` evaluated in the run-lock statement) freezes, inserts, points and transitions nothing. No migration, no route, no OpenAPI. D-S123-Q1..Q4 (coordinator-decided, owner confirmation pending) in plan 05.3.2 Notes. Acceptance executed at the merged head 8a12963b (after the N1 narrowing commit 1a7a6abe): `ReconcileRunTests` 51 passed / 0 failed, `ReconcileComparerUnitTests` 46/0, `PolicyContractsTests` 12/0, build and format stages exit 0 (built runner through `locked-run.sh`), and re-executed at the head on top of 8a12963b that carries the new positive case: `ReconcileRunTests` 52/0 (including `Reconcile_PolicyRequiredKindReady_WritesCompleteRevision` at `ReconcileRunTests.cs:2016`, 1/0), `ReconcileComparerUnitTests` 46/0, `PolicyContractsTests` 12/0, `Architecture` `ModuleBoundariesTests` 8/0, build and format exit 0; the earlier 94ff7db3 QA run (43/0, 42/0, 12/0) covered the smaller suite. Whole L task: this row is its §2 credit (+1 task / +2.0 d). T2.4's Done-when (plan row `:162`) is "AC4, AC5 pass" and both hold inside T2: AC4 (a `complete` revision once every planned shard has closed) by `Reconcile_AllShardsMatch_WritesCompleteRevision`, `Reconcile_OpenShardBeforeDeadline_ThenClosingShardCompletes` and the required-artifact positive `Reconcile_PolicyRequiredKindReady_WritesCompleteRevision` (`ReconcileRunTests.cs:2016`, executed in the 52-case run), with `Reconcile_PolicyRequiredKindMissing_IncompleteWithArtifactMissing` and the artifact cases of `Reconcile_EachMissingReason_IncompleteWithCode` as the negatives; AC5 (incomplete with the matching `missing[]` reason plus `collecting → incomplete`) by `Reconcile_EachMissingReason_IncompleteWithCode` and `Reconcile_OpenShardPastDeadline_IncompleteWithMissingShard`. The forced verdict at `collection_deadline_at`, "retried until the deadline" and AC7's finalize-before-events retry are 05.3.2-T3.1 / T4.1 scope (plan rows `:170`, `:177`), not T2.1–T2.4. |
-| 08.6.3 | 08.6.3-T1 (T1.1 + T1.2) | PR #260 open (S124) | `migrations/0052_healing_switch.sql`: `healing_switch` (mode CHECK excludes `unavailable`, `(scope='system') = (org_id is null)`, partial uniques per scope, composite project FK, FORCE RLS with the T72 NULL-org read policy, column-grant writes) plus the `evidgate.healing_switch_set_system` definer; `SetHealingSwitch`/`GetHealingSwitch`, pure `IHealingAvailabilityResolver` (most restrictive wins, no rows = `shadow`), V1 clamp on `Healing:Apply`, `PUT|GET /v1/healing/switch` with OpenAPI + SDK, operator system route behind the fail-closed gate. D-S124-Q1..Q3 (coordinator-decided, owner review non-blocking). Counts bumped at close-out. |
+| 08.6.3 | 08.6.3-T1 (T1.1 + T1.2) | merged (#260, 569b538f) | `migrations/0052_healing_switch.sql`: `healing_switch` (mode CHECK excludes `unavailable`, `(scope='system') = (org_id is null)`, partial uniques per scope, composite project FK, FORCE RLS with the T72 NULL-org read policy, column-grant writes) plus the `evidgate.healing_switch_set_system` definer; `SetHealingSwitch`/`GetHealingSwitch`, pure `IHealingAvailabilityResolver` (most restrictive wins, no rows = `shadow`), V1 clamp on `Healing:Apply`, `PUT|GET /v1/healing/switch` with OpenAPI + SDK, operator system route behind the fail-closed gate. D-S124-Q1..Q3 (coordinator-decided, owner review non-blocking). Counts bumped at close-out. |
 
 ## 3. Wave 4 (delivered on `feature/m1-wave4`; merged PR #9)
 
@@ -329,11 +329,11 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **90 tasks / 101.0 d** (G1 39 / 41.5, G2 36 / 37.5, G3 5 / 8, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0051`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
+Dependency-ready: **90 tasks / 101.0 d** (G1 38 / 40.5, G2 36 / 37.5, G3 6 / 9, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. Each phase is split by lane on the paths its diff may list: the **backend lane** runs the two-phase gate and takes the Docker gate lock in phase 2, with one migration lane at a time (next free number `0051`); the **web-only lane** covers a diff listing only `apps/web/**`, `fixtures/web-api/**`, `docs/**`, `plans/**`, `STATUS.md` or `AGENTS.md`, runs phase 1 plus `npm run e2e -w apps/web` and never takes the lock (docs-only rows run under that gate). The **Lock** column is `yes` exactly when the task's own work reaches any other path (`src/`, `tests/`, `migrations/`, `contracts/`, `infra/`, `packages/`, `scripts/`, `.github/`, root build files, or fixtures outside `fixtures/web-api/`), i.e. when phase 2 and its lock are required. Every lane also writes its STATUS/AGENTS/plan rows at close-out, so those writes serialise against S100 whatever the columns say. Owner pick rule (2026-10-26): the next pick needs no Docker lock, no migration lane and no file shared with a running lane, is size M or smaller (L/XL must name their split), and web/UI plus docs come first. Inside each list the non-blocking rows come first.
 
 Stricter variant that also requires every dependency task's whole story to be merged: **47 tasks / 51.0 d** (G1 16 / 18, G2 23 / 23, G3 0 / 0, G4 8 / 10), fully recomputed on `787f592` from the plan graph plus the landed set. This corrects the previous incremental 50 / 53.5 d claim (G1 19 / 20.5); 11.5.1-T3 and 11.5.1-T5 remain included because 11.1.1 is fully landed. S102 adds 02.1.2-T3 to the task-edge ready set but no strict-ready task: 02.1.2-T1's whole story still includes unbuilt T3.
 
-### G1: 39 tasks / 41.5 d (backend lane 28 / 28.5 d, web-only 0 / 0 d, docs-only 11 / 13.0 d)
+### G1: 38 tasks / 40.5 d (backend lane 27 / 27.5 d, web-only 0 / 0 d, docs-only 11 / 13.0 d)
 
 #### G1 backend lane
 
@@ -428,7 +428,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 10.7.1-T1 | M | Dead-letter runbook | no | no | no (docs/runbooks) | n/a | no |
 | 13.7.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | n/a | no |
 
-### G3: 5 tasks / 8 d (backend lane 4 / 6 d = 3 code + 1 web writing `.github/`, web-only 1 / 2 d, docs-only 0 / 0 d)
+### G3: 6 tasks / 9 d (backend lane 4 / 6 d = 3 code + 1 web writing `.github/`, web-only 2 / 3 d, docs-only 0 / 0 d) Newly ready after S124: 09.5.2-T3 (M, web-only; its only dependency 08.6.3-T1 landed), counted in this header; its row is added when the lane picks it up (a row insert would shift every STATUS.md:N cite below).
 
 #### G3 backend lane
 
@@ -821,3 +821,4 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 08.6.3-T1 `dependency_health` (S124) | `GET /v1/healing/switch` returns `dependency_health: {llm: null, knowledge_store: null}` (null = not observed) and never resolves `unavailable` until `IHealingDependencyHealth` lands. Receiver: 08.6.3-T2 (plan `plans/features/08-healing-learning/08.6.3-kill-switches-and-degradation.md` §12 Notes). |
 | 08.6.3-T1 system-scope switch change has no audit_log/outbox row (S124) | The NULL-org system row has no org chain, so `audit_log` and the outbox (both org-scoped) cannot carry it; each operator write emits a structured information log (mode, set_by, version; no reason text) and `scripts/check-rls.py` carries a `DEFINER_AUDIT_EXEMPT` entry for `evidgate.healing_switch_set_system`. The operator route has no `Idempotency-Key` (D-S124-Q4, plan Notes). Receiver: 11.5.1-T5 (`security_event` receiver for platform-scope changes), with the real gate in 02.8.1-T1; `08.6.3-kill-switches-and-degradation.md` §12 Notes. |
 | 08.6.3-T1 delta items (S124) | Operator route body hardening (non-JSON content type, oversize body, `BadHttpRequestException`) — delta N1/SD-1, unreachable while `DenyAllOperatorGate` denies all: receiver 02.8.1-T1. Resolver does not clamp a stored `enabled` while `Healing:Apply` is off (SD-2): receiver 08.6.1-T1. Project-scoped credential can write the org-wide tenant switch (SD-3, owner decision): receiver 08.6.3-T2. P3 nits N2–N6: receiver 08.6.3-T2. All in `08.6.3-kill-switches-and-degradation.md` §12 Notes. Perf P-1/P-2: closed, won't fix, accepted by the performance reviewer. |
+| Merge debt (#260) | S124 08.6.3-T1 (T1.1 + T1.2: `0052_healing_switch.sql`, `SetHealingSwitch`/`GetHealingSwitch`, `IHealingAvailabilityResolver`, V1 clamp, `PUT` and `GET /v1/healing/switch`, T3) merged under coordinator-review 6c after one docs/report send-back (D-S124-M1 in `docs/phase-review.md`; jev r1 acceptance 0.90, reviews 0.72, clean 0.88, handed_over 0.52); merged as `569b538f`; reviews on 10230658 (S124QA, S124CodeReview, S124PerfReview, S124SecReview), one fix round to 6f28e4a6, deltas S124DeltaCode, S124DeltaSec, S124FinalDelta closed every original finding; full gate phases 1+2 exit 0 on 4669ae66, smoke exit 2 only for the pre-existing FixtureLoaderTests. Receivers: STATUS rows "08.6.3-T1 system write gate (S124)" and "08.6.3-T1 delta items (S124)" (02.8.1-T1, 08.6.1-T1, 08.6.3-T2), "08.6.3-T1 `dependency_health` (S124)" (08.6.3-T2), "08.6.3-T1 system-scope switch change has no audit_log/outbox row (S124)" (11.5.1-T5); hand-over Notes are in the four receiver feature plans. Perf P-1/P-2 closed, won't fix. |

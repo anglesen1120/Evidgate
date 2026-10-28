@@ -104,7 +104,7 @@ public sealed class CatalogueTests
         new(
             "support:read",
             "02.8.1",
-            "plans/features/02-identity-tenancy/02.8.1-time-boxed-operator-access.md:109 — 02.8.1-T1.2 `ListSupportGrants`"),
+            "plans/features/02-identity-tenancy/02.8.1-time-boxed-operator-access.md:114 — 02.8.1-T1.2 `ListSupportGrants`"),
         new(
             "webhook:read",
             "07.6.2",
