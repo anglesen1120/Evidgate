@@ -182,6 +182,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # check-review-blockers reads commits: the diff scan ranges over
+          # base...HEAD and the U1 ratchet over the head tree. A shallow clone
+          # has no base commit and no history, and the stage fails closed.
+          fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # FR-01-2: the Node version (26) comes from .nvmrc, not a floating range.
@@ -205,6 +209,96 @@ jobs:
       # fails on any diff — the spec is the only thing humans edit.
       - name: 'Contract drift gate'
         run: ./scripts/verify.sh --stage check-codegen-drift --stage check-permissions-drift --stage check-rls
+      # The REVIEW.md blocking rules a grep can see, on the lines this change set
+      # adds, plus the U1 comment-id ratchet over the whole head tree. The diff
+      # scan runs only for a landing on develop: on a pull request to main or a
+      # push to main only the ratchet runs, because develop's own debt that the
+      # scan tolerates (the 0053/0054 D1 policies) is not that event's change set
+      # and would fail every promotion for it. On a pull request the base is the
+      # merge commit's first parent — the base tip the merge was computed from,
+      # never a payload sha that a merge in the branch has left behind; on a push
+      # it is the ref the push started from, and an all-zero ref (a new branch)
+      # makes the scanner fall back to origin/develop.
+      - name: 'Review-blocker gate — verify.sh stage (diff scan on develop landings)'
+        env:
+          EVIDGATE_REVIEW_BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before }}
+          EVIDGATE_REVIEW_DIFF: ${{ ((github.event_name == 'pull_request' && github.base_ref == 'develop') || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) && 'on' || 'off' }}
+        run: ./scripts/verify.sh --stage check-review-blockers
+      # The stage above runs the checkout's copy. A pull request's ci.yml,
+      # scripts/verify.sh and this step all come from the pull request, so this
+      # step protects the scanner and its baseline — not the workflow: it
+      # archives the entry file, the `scripts/review_blockers` package that holds
+      # the rules and the baseline from the base revision into a clean
+      # $RUNNER_TEMP directory and runs them from there, and the workflow's own
+      # copy stays the coordinator's check (origin/develop) plus the gate-file
+      # WARN. The two shas have separate jobs: the payload base sha names the
+      # trusted copy, because the scanner and baseline must be a commit of the
+      # base branch and checking it exists first keeps that choice stable, while
+      # the diff range comes from the merge commit's first parent so a branch
+      # that merged develop cannot re-scan base-side changes as its own. A base
+      # commit that is not in the clone is a hard failure, not a fallback. The
+      # first pull request to carry the gate has no base copy of the scanner, so
+      # it runs its own and says so; that bootstrap disappears as soon as develop
+      # carries the scanner.
+      - name: 'Review-blocker gate from the base revision'
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REVIEW_DIFF: ${{ github.base_ref == 'develop' && 'on' || 'off' }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${BASE_SHA}" ]] || ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "::error::check-review-blockers: the base commit '${BASE_SHA:-<none>}' is not in this clone (fetch-depth: 0 should have it); refusing to judge this pull request without it"
+            exit 2
+          fi
+          work="${RUNNER_TEMP}/review-blockers-base"
+          # A clean directory per run: a stale module left by an earlier
+          # checkout must never be imported beside this base's entry file.
+          rm -rf "$work"
+          mkdir -p "$work"
+          entry='scripts/check-review-blockers.py'
+          package='scripts/review_blockers'
+          baseline_rel='scripts/check-review-blockers.baseline.json'
+          if git cat-file -e "${BASE_SHA}:${entry}" 2>/dev/null; then
+            # No fallback when the base has a scanner but no baseline: judging
+            # with the pull request's number is the hole this step closes.
+            if ! git cat-file -e "${BASE_SHA}:${baseline_rel}" 2>/dev/null; then
+              echo "::error::check-review-blockers: the base revision ${BASE_SHA} carries a scanner but no baseline; refusing to judge with this pull request's number"
+              exit 2
+            fi
+            paths=("$entry" "$baseline_rel")
+            # The rules live in a package beside the entry; a base that predates
+            # the split has only the self-contained entry file.
+            if git cat-file -e "${BASE_SHA}:${package}/__init__.py" 2>/dev/null; then
+              paths+=("$package")
+            fi
+            # One archive into a clean directory: the entry imports its package
+            # from its own directory, and pipefail makes a failed archive fail
+            # the step instead of leaving an empty tree behind.
+            git archive "$BASE_SHA" -- "${paths[@]}" | tar -x -C "$work"
+            scanner="${work}/${entry}"
+            baseline="${work}/${baseline_rel}"
+            echo "::notice::check-review-blockers: running the base revision's scanner and baseline (${BASE_SHA})"
+          else
+            scanner="${entry}"
+            baseline="${baseline_rel}"
+            echo "::warning::check-review-blockers: the base revision ${BASE_SHA} has no scanner yet; running this pull request's own copy and baseline (bootstrap; it ends as soon as the base branch carries the gate)"
+          fi
+          # HEAD is the merge commit, so its first parent is the base tip the
+          # merge was computed from; a checkout that is not a merge commit has no
+          # second parent and falls back to the payload base, loudly.
+          if git rev-parse --verify --quiet HEAD^2 >/dev/null; then
+            diff_base='HEAD^1'
+          else
+            diff_base="${BASE_SHA}"
+            echo "::warning::check-review-blockers: HEAD is not a merge commit; scanning against the payload base ${BASE_SHA}"
+          fi
+          if [[ "${REVIEW_DIFF}" == "on" ]]; then
+            PYTHONDONTWRITEBYTECODE=1 python3 "$scanner" "${diff_base}" HEAD
+          else
+            echo "check-review-blockers: promotion to ${GITHUB_BASE_REF:-main}; U1 ratchet only, no diff scan"
+          fi
+          PYTHONDONTWRITEBYTECODE=1 python3 "$scanner" --baseline "$baseline" --u1-ratchet HEAD
       # Web build (AC1): `apps/web` gains a build script in 09.1.1; until then
       # --if-present keeps this step a no-op instead of a failure.
       - name: 'Web build — activates with apps/web build script (09.1.1)'
