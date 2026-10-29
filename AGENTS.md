@@ -29,7 +29,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 | `docs/source/` | Original Vietnamese system design (working name "ReleaseHub") and its .docx |
 | `docs/status-carried.md` | Live blocked / carried items table (moved verbatim from STATUS §6 on 2026-10-28); add new carried rows at the end, cite rows by title |
 | `docs/status-archive.md` | Delivered waves (old STATUS §3-§4) and closed carried rows, moved verbatim and never edited |
-| `docs/phase-review-archive.md` | Closed owner-review rows moved verbatim from `docs/phase-review.md` (S127); never edited; a row moves here in the commit that closes it |
+| `docs/phase-review-archive.md` | Closed owner-review rows moved verbatim from `docs/phase-review.md` (S127) — only the State cell records the closing outcome — and never edited afterwards; a row moves here in the commit that closes it |
 
 ## Authority and editing rules
 
