@@ -9,8 +9,8 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged): 184/656 tasks; 189.25/703.25 raw person-days; remaining 472 tasks / 514.0 d. Via merged PRs: 157 tasks / 164.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- Landed by phase (done tasks / raw d): G1 135 / 146.25; G2 43 / 37; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged): 185/656 tasks; 190.25/703.25 raw person-days; remaining 471 tasks / 513.0 d. Via merged PRs: 158 tasks / 165.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 135 / 146.25; G2 44 / 38; G3 0 / 0; G4 6 / 6.
 - Plan totals: 656 tasks / 703.25 raw / 843.9 buffered person-days (S130 F47 added 02.3.2-T3, S, V1, G1; the S93 canonical figures were 655 / 702.75 / 843.3). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -25,13 +25,13 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 184 | 189.25 |
-| Via merged PRs | 157 | 164.25 |
+| Fully landed on develop | 185 | 190.25 |
+| Via merged PRs | 158 | 165.25 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 472 | 514.0 |
+| Remaining | 471 | 513.0 |
 | Plan total | 656 | 703.25 |
 
-Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, open) and whose remainder is T2.3 and T2.4; and 09.8.1-T1, whose T1.1 + T1.2 landed in #284 and whose remainder is T1.3 + T1.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
+Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, fbb2fe91) and whose remainder is T2.3 and T2.4; and 09.8.1-T1, whose T1.1 + T1.2 landed in #284 and whose remainder is T1.3 + T1.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
 
 ### Done by area
 
@@ -45,22 +45,22 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 06 | 12 | 0 | 4 | 8 | 0 | 0 | 10 |
 | 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
 | 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
-| 09 | 21 | 0 | 6 | 12 | 3 | 0 | 21 |
+| 09 | 22 | 0 | 6 | 13 | 3 | 0 | 22 |
 | 10 | 5 | 0 | 2 | 2 | 1 | 0 | 5 |
 | 11 | 10 | 1 | 4 | 4 | 1 | 0 | 8.25 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 184 | 3 | 51 | 98 | 31 | 1 | 189.25 |
+| TOTAL | 185 | 3 | 51 | 99 | 31 | 1 | 190.25 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
 | G1 | 135 | 3 | 31 | 73 | 27 | 1 | 146.25 |
-| G2 | 43 | 0 | 18 | 22 | 3 | 0 | 37 |
+| G2 | 44 | 0 | 18 | 23 | 3 | 0 | 38 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 184 | 3 | 51 | 98 | 31 | 1 | 189.25 |
+| TOTAL | 185 | 3 | 51 | 99 | 31 | 1 | 190.25 |
 
 ### Landed task groups
 
@@ -181,7 +181,7 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 12.3.1 | 12.3.1-T1 (T1.1–T1.4) | merged (#198, 2f66be8) | Append-only `usage_ledger_entry` and `usage_rollup` (0046/0047), `IUsageLedger`/`IQuotaGate` contracts, idempotent `RecordUsageBatch` (one unnest statement, `ON CONFLICT DO NOTHING`). The operator route `POST /internal/operator/billing/usage` and its SDK drift gate stay with 12.3.1-T2.4 (COORDINATOR-DECISION S94); open hand-overs: N-1 probabilistic deadlock test (T5), `egress_gb` null quantity (T2.2), P-3 index include and F4 payload-mismatch (T5), price resolution (T3), `IQuotaGate` implementation (T4.2). |
 | 10.3.1 | 10.3.1-T1.1–T1.4 | merged (#203, a9b2d09) | OpenTelemetry in Api and Worker: HTTP→Mediator→Npgsql trace with `request_id`; `run_id`/`job_id`/`trace_id` correlation on spans and logs, carried through the outbox/task row (`_evidgate_correlation`); resource attributes + head sampling with errors always kept; log redaction (`SecretRedactor`, fail closed) before the OTLP exporter; web-vitals intake schema `docs/runbooks/web-vitals-intake.md`. No migration. Residual hardening N1–N9 is in the §6 row "Telemetry redaction/baggage residuals (10.3.1-T1 delivery, S91, PR #203)". |
 | 09.3.1 | 09.3.1-T1 (T1.1 + T1.2) | merged (#212, 408f9a8) | Run list at `features/runs/list/`: `RunListStore` (cursor paging, `ref_name` server filter, state/decision/rerun-scope URL filters applied to loaded rows with a 5-page/1000-row auto-load bound), `RunDataService`, virtual-scroll table with `EvidenceBadge` (unavailable) and `DecisionChip` columns, escaped `ref_name`/rerun labels, vi + en strings, review route `dev/run-list`. Decisions D-S101-Q1/Q2 (plan 09.3.1 Notes). |
-| 09.3.1 | 09.3.1-T2.1, T2.2 (S103 UI, wire S146); 09.3.1-T4 (UI S111 #232, wire swap S146) | T2.1 merged (#216, 1742764); T2.2 + T4 wire in S146 PR #302 (open; completes T4, parent T2 stays partial) | Run detail at `features/runs/detail/` (`RunDetailPage`, `RunDetailStore`, run header, `ManifestPanelComponent`), route `runs/:runId`, run-list row link, `fixtures/web-api/run-detail*`, review routes `dev/run-detail` and its `dev/run-list` children, e2e `run-detail.spec.ts`, vi + en strings. S146 (#302) reads the manifest members and `listRunAttempts` from the wire; healing marker, decision, rerun labels stay unavailable (carried row 'Run detail web remainders (S146)'). detail: carried row '09.3.1-T2.1/T4 detail' (S144 F61).|
+| 09.3.1 | 09.3.1-T2.1, T2.2 (S103 UI, wire S146); 09.3.1-T4 (UI S111 #232, wire swap S146) | T2.1 merged (#216, 1742764); T2.2 + T4 wire merged in S146 PR #302 (fbb2fe91; 09.3.1-T4 complete, M, G2, counted in the S146 close-out; parent T2 stays partial) | Run detail at `features/runs/detail/` (`RunDetailPage`, `RunDetailStore`, run header, `ManifestPanelComponent`), route `runs/:runId`, run-list row link, `fixtures/web-api/run-detail*`, review routes `dev/run-detail` and its `dev/run-list` children, e2e `run-detail.spec.ts`, vi + en strings. S146 (#302) reads the manifest members and `listRunAttempts` from the wire; healing marker, decision, rerun labels stay unavailable (carried row 'Run detail web remainders (S146)'). detail: carried row '09.3.1-T2.1/T4 detail' (S144 F61).|
 | 11.5.1 | 11.5.1-T1 (T1.1 + T1.2) | merged (#219, a905754) | `docs/security/audit-taxonomy.md`: event fields, 64 emitted actions with file:line, planned-not-emitted table, retention per class (`[OPEN]`), T8 chain design with 10.6.1 AC2; written review of 02.7.1 enforcement against `migrations/0015_identity_audit_log.sql` with gaps G1–G9 in §6. T1.2 verifier and tests shipped with 02.7.1. |
 | 09.2.1 | 09.2.1-T5.1 + T5.2 (09.2.1-T5) | merged (#218, 9a0051f; #272, 5c69ba9a); 09.2.1-T5 complete, M, G2, counted in the S129 close-out | Onboarding step 5 `features/onboarding/steps/enable-collection.page.*`: read-only constant default advisory policy (`default-policy.ts`, T62 24 h late window, validated against the createPolicyRevision schema), `policy:write` gate with disabled confirm + "ask your release approver", confirm = createPolicyRevision then activatePolicyRevision (mode advisory, one Idempotency-Key per confirm intent), terminal panel from the response, fixtures `policy-activation-*`, e2e `onboarding-enable-collection.spec.ts`. detail: carried row '09.2.1-T5 onboarding step 5 detail' (S144 F61).|
 | 11.1.1 | 11.1.1-T3, 11.1.1-T4 | merged (#224, aa42d7a) | ASVS 5.0.0 L2 level statement and a 17-chapter mapping with 39 published gap rows — 34 L2 gaps plus five traceability observations that ASVS 5.0.0 does not require at L2 (`docs/security/asvs-l2-mapping.md`), plus the V1 security-event baseline: five types with severity, detection point and consumer per row (`docs/security/security-event-baseline.md`). Closes area plan open question 1 (D-S107-Q1); counts bumped in the close-out, and every gap is carried by a §6 row titled "ASVS L2 gaps: …" or by the §6 row "Security-event baseline contradictions and gaps (11.1.1-T4)". |
@@ -297,9 +297,9 @@ Stricter variant that also requires every dependency task's whole story to be me
 
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
-| 09.3.1-T2 | L | Run detail: manifest summary, release components + digests, environment, pinned `manifest_hash`/suite/policy revision (T2.1 merged #216, 1742764; T2.2 S146 #302 open) | no | no | no | T2.1+T2.2 \| T2.3+T2.4 | yes |
+| 09.3.1-T2 | L | Run detail: manifest summary, release components + digests, environment, pinned `manifest_hash`/suite/policy revision (T2.1 merged #216, 1742764; T2.2 S146 #302 fbb2fe91) | no | no | no | T2.1+T2.2 \| T2.3+T2.4 | yes |
 | 09.3.1-T3 | L | Evidence panel: completeness verdict, `missing[]` reasons with deep links, immutable evidence-revision selector | no | no | no | T3.1+T3.2 \| T3.3+T3.4 | yes |
-| 09.3.1-T4 | M | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible. Delivered: UI component S111 (PR #232); wire swap + wire fixtures S146 (PR #302, open); healing marker stays unavailable until 08.3.1 (§6 row "Run detail web remainders (S146)") | no | no | no | n/a | yes |
+| 09.3.1-T4 | M | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible. Delivered: UI component S111 (PR #232); wire swap + wire fixtures S146 (PR #302, fbb2fe91); healing marker stays unavailable until 08.3.1 (§6 row "Run detail web remainders (S146)") | no | no | no | n/a | yes |
 | 09.3.1-T6 | M | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events | no | no | no — consumes the 03.2.1 suite-composition/slot API that S97 is building (dependency, not a shared file) | n/a | yes |
 | 10.7.1-T1 | M | Dead-letter runbook | no | no | no (docs/runbooks) | n/a | no |
 | 13.7.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | n/a | no |
