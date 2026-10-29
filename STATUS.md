@@ -241,7 +241,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 10.1.1-T4 | M | Isolated artifact-viewer origin | yes | no | no | n/a | no — needs a distinct registrable domain + DNS record + TLS certificate (registrar/DNS action) |
 | 10.3.2-T1 | S | ADR: observability backend for M1 with retention and cost limits, plus the compose profile; unblocks 10.3.1-T2 (T1 merged in #203) | yes | no | no | n/a | yes |
 | 10.8.1-T2 | L | Hands-on spike on two candidates | yes | no | no | T2.1-T2.2 (candidate A) ; T2.3-T2.4 (candidate B) | no — needs two managed-provider accounts/credentials to provision and measure |
-| 11.9.2-T2 | S | Reconcile the audit chain with deletion; LANDED by S147 (#304, a36bccf5, awaiting the next count refresh of this section): T2.1 written rule, T2.2 audit payload schema plus an erasure-then-verify test | yes | no | no | n/a | yes |
+| 11.9.2-T2 | S | Reconcile the audit chain with deletion; LANDED by S147 (#304, a36bccf5; counted in the section 2 totals, its Landed task groups row is added at a later close-out because an insert shifts STATUS.md:N cites): T2.1 written rule, T2.2 audit payload schema plus an erasure-then-verify test | yes | no | no | n/a | yes |
 
 #### G1 web-only lane
 
