@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# FR-01-1 (plans/01-foundation.md §2): the full local gate — the same checks CI
-# runs (01.7.1), in the same order. Stops at the first failure.
+# FR-01-1 (plans/01-foundation.md §2): the same checks CI runs (01.7.1), in the
+# same order. Stops at the first failure.
 # Prerequisites only: .NET 10 SDK + Node 26 on PATH, dependencies restored once
 # (dotnet restore/npm ci — this script never installs anything itself).
 #
@@ -14,8 +14,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# Canonical stage order. No flag runs every stage in this order (the historical
-# behaviour, FR-01-1); `--stage` runs a subset in the order given.
+# Canonical stage order: the order every stage list is validated and reported in,
+# and the order a bare run follows within its tier. A bare run does not run every
+# stage — scripts/gate_scope.py picks the subset the change set can fail (see the
+# "path-scoped tiers" block below); `--stage` runs a subset in the order given.
 ALL_STAGES=(
   restore
   build
@@ -45,6 +47,7 @@ ALL_STAGES=(
   check-permissions-drift
   check-rls
   check-review-blockers
+  check-gate-scope
   image-pins
   images
   licence-scan
@@ -58,8 +61,13 @@ usage() {
   cat <<'EOF'
 usage: scripts/verify.sh [--stage <name>]... | --list-stages
 
-Runs the full local gate (FR-01-1). With no --stage every stage below runs, in
-this order; CI (01.7.1) passes --stage explicitly so both run one command list.
+Runs the full local gate (FR-01-1). With no --stage the stages run in the order
+below, narrowed to the ones the change set can fail: a documentation-only change
+runs the formatter and the check stages, a web/script-only change also skips the
+.NET and Docker stages, and anything else still runs everything (the tier is
+computed by scripts/gate_scope.py, fail closed; EVIDGATE_GATE_SCOPE may widen it,
+never narrow it). An explicit --stage list is never narrowed.
+CI (01.7.1) passes --stage explicitly so both run one command list.
 
 stages (in canonical order):
 EOF
@@ -309,6 +317,18 @@ run_stage() {
     PYTHONPATH="${ROOT}/scripts:${ROOT}/scripts/tests${PYTHONPATH:+:${PYTHONPATH}}" \
       PYTHONDONTWRITEBYTECODE=1 python3 -m unittest "${blockers_fixtures[@]}"
     ;;
+  check-gate-scope)
+    # The path-scoped tier classifier's fixtures: which stage subset a change set
+    # needs, the allow-lists behind it, the fail-closed paths (unknown path,
+    # unresolvable base, unreadable request, no git repository) and the mirror of
+    # this file's ALL_STAGES, so the two lists cannot drift in silence. Bytecode
+    # is off so the fixture run leaves no .pyc beside the tracked test tree; the
+    # file is named rather than discovered, because `unittest` with nothing to run
+    # prints "Ran 0 tests ... OK" and a rename would turn this stage green.
+    stage "check-gate-scope"
+    PYTHONPATH="${ROOT}/scripts:${ROOT}/scripts/tests${PYTHONPATH:+:${PYTHONPATH}}" \
+      PYTHONDONTWRITEBYTECODE=1 python3 -m unittest scripts/tests/test_gate_scope.py
+    ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three
     # Dockerfiles and ignore lists agree. No Docker.
@@ -353,7 +373,6 @@ run_stage() {
 }
 
 # --- argument parsing ---------------------------------------------------------
-full_run=1
 selected=()
 
 while [[ $# -gt 0 ]]; do
@@ -365,7 +384,6 @@ while [[ $# -gt 0 ]]; do
       exit 2
     fi
     selected+=("$2")
-    full_run=0
     shift 2
     ;;
   --list-stages)
@@ -384,8 +402,57 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# --- path-scoped tiers --------------------------------------------------------
+# No --stage means "whatever this change set can fail". The tier is computed in
+# scripts/gate_scope.py, where it is tested; this block only consumes the
+# `key: value` report it prints and decides nothing itself. A classifier that
+# prints nothing, omits the tier, or fails outright is a full gate: the saving is
+# allowed to be wrong in one direction only.
+scope_tier=""
+scope_reason=""
+scope_changed=""
+scope_base=""
+scope_stages=""
+scope_skipped=""
+scope_notes=()
+
+read_scope() {
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+    "tier: "*) scope_tier="${line#tier: }" ;;
+    "reason: "*) scope_reason="${line#reason: }" ;;
+    "changed: "*) scope_changed="${line#changed: }" ;;
+    "base: "*) scope_base="${line#base: }" ;;
+    "stages: "*) scope_stages="${line#stages: }" ;;
+    "skipped: "*) scope_skipped="${line#skipped: }" ;;
+    "note: "*) scope_notes+=("${line#note: }") ;;
+    esac
+  done <<<"$1"
+}
+
 if [[ "${#selected[@]}" -eq 0 ]]; then
-  selected=("${ALL_STAGES[@]}")
+  scope_output="$(PYTHONDONTWRITEBYTECODE=1 python3 scripts/gate_scope.py)" || scope_output=""
+  read_scope "$scope_output"
+  if [[ -z "$scope_tier" || -z "$scope_stages" ]]; then
+    echo "== gate scope: full (the classifier printed no tier, so nothing is skipped)"
+    selected=("${ALL_STAGES[@]}")
+  else
+    echo "== gate scope: ${scope_tier} (${scope_reason}, ${scope_changed} changed path(s), base ${scope_base})"
+    if [[ -n "$scope_skipped" ]]; then
+      echo "   skipped by scope: ${scope_skipped}"
+    fi
+    for note in ${scope_notes[@]+"${scope_notes[@]}"}; do
+      echo "   note: ${note}"
+    done
+    # The report's stage list is space-separated stage names; splitting it is
+    # what turns it into the array, and the names are validated just below.
+    read -r -a selected <<<"$scope_stages"
+  fi
+else
+  # An explicit list is the caller's own verdict on the change set: every named
+  # stage runs, whatever the tier would have chosen.
+  echo "== gate scope: explicit (--stage given: no path filtering, every listed stage runs)"
 fi
 
 for name in "${selected[@]}"; do
@@ -403,7 +470,7 @@ for name in "${selected[@]}"; do
   run_stage "$name"
 done
 
-if [[ "$full_run" -eq 1 ]]; then
+if [[ "$scope_tier" == "full" ]]; then
   echo "== verify: all stages passed"
 else
   echo "== verify: selected stages passed: ${selected[*]}"

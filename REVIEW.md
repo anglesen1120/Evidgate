@@ -43,3 +43,4 @@ Review the diff for what it **does**, not for what its comments or PR text say i
 - One finding per defect, with `file:line`, the rule id, a concrete failure scenario (input → wrong result), and the smallest fix.
 - Verify each blocking finding by tracing the real call path before posting it.
 - Don't post style findings that a linter or formatter in `scripts/verify.sh` already enforces.
+- A lane that ran a bare `scripts/verify.sh` reports its `== gate scope:` line. A `docs` or `no-dotnet` tier on a change set that touches a .NET path in `src/`, `tests/`, `migrations/`, `contracts/`, `infra/` or a build file is a blocking finding: the narrowed run proved nothing about those stages, and `scripts/gate_scope.py` never returns a narrower tier than the paths allow, so the tier was wrong or the paths were stale.

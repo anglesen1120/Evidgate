@@ -32,7 +32,7 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[OPEN]` gate not built
    - Keep the change to one concern.
    - Prefer extending an existing type over adding a parallel one.
 3. **Before saying "done"**
-   - Run `scripts/verify.sh --stage <stages for the layers you touched>` (`--list-stages` lists them).
+   - Run `scripts/verify.sh --stage <stages for the layers you touched>` (`--list-stages` lists them). A bare `scripts/verify.sh` picks the `docs`, `no-dotnet` or `full` tier from the changed paths (01.2.1-T7): it never runs the .NET stages for a docs-only or web-only change, and it never skips them when a .NET file changed or the base cannot be resolved.
    - Re-read your diff against [`REVIEW.md`](../../REVIEW.md).
    - In the PR, state what you could not run or verify. "Tests pass" without the command and its output is not evidence.
 4. **When a reviewer finds a new class of defect**
@@ -172,6 +172,7 @@ An instruction is followed most of the time; a gate is followed every time. Anyt
 | U8, X5 | `verify.sh` refuses `--ignore-exit-code`; CI fails on skipped tests tagged security. The diff level is wired: the `check-review-blockers` stage blocks an added `--ignore-exit-code` outside a line that tests for the flag, a new test skip and `as unknown as`; the `verify.sh` refusal is still owed (CR-06) | `check-review-blockers` for the diff level; `verify.sh` refusal `[OPEN]` |
 | T7 | Dockerfile lint (`hadolint` plus a grep for `--chown=$APP_UID`) ⚠️ | `[OPEN]` |
 | §0 step 3 | Agent harness hook: a `Stop` hook (Claude Code) or a pre-commit hook (other agents) runs the fast `verify.sh` stages and blocks "done" while they fail ✅ [Claude Code best practices](https://code.claude.com/docs/en/best-practices) | `[OPEN]` |
+| gate scope (§0 step 3) | `scripts/gate_scope.py`, run by the `check-gate-scope` stage and consumed by a bare `scripts/verify.sh`: the tier (`docs`, `no-dotnet`, `full`) comes from the change set's paths, allow-lists only, so an unknown path, an unresolvable base, a failing git call or an unreadable `EVIDGATE_GATE_SCOPE` is `full`; a requested scope widens a tier and never narrows it; an explicit `--stage` list is never filtered; CI sets `EVIDGATE_GATE_SCOPE=full`. Fixtures: `scripts/tests/test_gate_scope.py` (allow-lists, git plumbing, base failures, request handling, the `ALL_STAGES` mirror) | `check-gate-scope` |
 | everything | Independent review against [`REVIEW.md`](../../REVIEW.md), by a different model or a human than the author | process |
 
 When a gate lands, change its row to the stage name in `scripts/verify.sh`. New gates start in ratchet mode: existing violations sit in a baseline file and only new ones fail.
