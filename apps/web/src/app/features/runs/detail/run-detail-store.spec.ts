@@ -211,7 +211,7 @@ describe('RunDetailStore', () => {
       listAttempts
         .mockResolvedValueOnce({ items: first.items, next_cursor: 'cycle-b' })
         .mockResolvedValueOnce({ items: second.items, next_cursor: 'cycle-c' })
-        .mockResolvedValueOnce({ items: first.items, next_cursor: null });
+        .mockResolvedValueOnce({ items: first.items, next_cursor: 'cycle-d' });
       const store = TestBed.inject(RunDetailStore);
       await store.load(run.run_id);
       await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
@@ -230,6 +230,19 @@ describe('RunDetailStore', () => {
       expect(store.hasMoreAttempts()).toBe(false);
       await store.loadMoreAttempts();
       expect(listAttempts).toHaveBeenCalledTimes(3);
+    });
+    it('ends the walk quietly on an empty terminal page', async () => {
+      get.mockResolvedValue(run);
+      listAttempts
+        .mockResolvedValueOnce({ items: first.items, next_cursor: 'tail' })
+        .mockResolvedValueOnce({ items: [], next_cursor: null });
+      const store = TestBed.inject(RunDetailStore);
+      await store.load(run.run_id);
+      await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
+      await store.loadMoreAttempts();
+      expect(store.attemptsError()).toBeNull();
+      expect(store.hasMoreAttempts()).toBe(false);
+      expect(store.attempts()).toHaveLength(first.items.length);
     });
     it('appends only the attempts a follow-up page has not shown yet', async () => {
       const freshRow = {

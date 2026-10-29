@@ -133,8 +133,9 @@ export const RunDetailStore = signalStore(
         }
         const seen = new Set(first ? [] : loadedAttemptIds);
         const fresh = takeFreshAttempts(seen, page.items);
-        // A follow-up page that adds no attempt cannot advance the walk: refuse it the same way.
-        if (!first && fresh.length === 0) {
+        // A follow-up page that adds no attempt yet promises another page cannot advance the walk:
+        // refuse it the same way. An empty terminal page (no cursor) simply ends the walk.
+        if (!first && fresh.length === 0 && page.next_cursor !== null) {
           throw new ApiRequestError(ATTEMPTS_PAGE_WITHOUT_NEW_ROWS);
         }
         loadedAttemptIds = seen;
