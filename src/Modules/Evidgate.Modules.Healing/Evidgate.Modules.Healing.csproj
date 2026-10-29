@@ -4,6 +4,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Mediator.Abstractions" />
+    <!-- 08.5.1-T1: the provider adapter's bounded time budget and retry (Microsoft.Extensions.Http.Resilience), the same
+         composition the GitHub login client uses. Version pinned centrally in Directory.Packages.props. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>
   <!-- 08.6.3-T1: the healing kill-switch routes (00 §5.5 `Endpoints/`). -->
   <ItemGroup>

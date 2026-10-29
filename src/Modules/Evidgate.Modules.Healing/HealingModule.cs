@@ -3,6 +3,9 @@ using Evidgate.Modules.Healing.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Options;
+using Polly;
 
 namespace Evidgate.Modules.Healing;
 
@@ -36,6 +39,48 @@ internal static class HealingModule
         // 08.6.3: the operator's only writer of the platform row, resolved by the operator ingress route.
         services.TryAddSingleton<HealingSystemSwitchWriter>();
 
+        AddHealingLlmGateway(services);
+
         return services;
+    }
+
+    /// <summary>
+    /// 08.5.1-T1: the provider-adapter seam and its gateway. The mock is the default <see cref="IHealingLlmProvider"/>
+    /// because O4 (provider, region, egress) has not closed and no real provider call may run before it does (plan §11);
+    /// the HTTP adapter is composed as a typed client a host resolves explicitly once that decision lands, so swapping it
+    /// in is a registration, not a contract change.
+    /// </summary>
+    private static void AddHealingLlmGateway(IServiceCollection services)
+    {
+        // Defaults live in code: there is no configuration key for this slice.
+        services.AddOptions<HealingLlmOptions>();
+
+        services.TryAddSingleton<IHealingLlmProvider, MockHealingLlmProvider>();
+
+        // Every attempt is recorded through the module's tenant Dapper path, so both are scoped like the switch store.
+        services.TryAddScoped<HealingLlmCallRecorder>();
+        services.TryAddScoped<HealingLlmGateway>();
+
+        // The time budget lives in the pipeline, so the client timeout is infinite: a finite client timeout would abort
+        // the whole pipeline — including a retry — before the per-attempt timeout inside it could ever fire.
+        services
+            .AddHttpClient<HttpHealingLlmProvider>((_, client) => client.Timeout = Timeout.InfiniteTimeSpan)
+            .AddResilienceHandler(HealingLlmHttpClients.Pipeline, (builder, context) =>
+            {
+                var options = context.ServiceProvider.GetRequiredService<IOptions<HealingLlmOptions>>().Value;
+
+                // Order is outermost first: the total budget wraps the retry, and the per-attempt timeout sits inside
+                // it, so a slow attempt is bounded on its own and the whole call is bounded on top (AC2).
+                builder.AddTimeout(options.TotalTimeout);
+
+                builder.AddRetry(new HttpRetryStrategyOptions
+                {
+                    MaxRetryAttempts = options.MaxTransportRetries,
+                    Delay = TimeSpan.FromMilliseconds(200),
+                    BackoffType = DelayBackoffType.Constant,
+                });
+
+                builder.AddTimeout(options.AttemptTimeout);
+            });
     }
 }
