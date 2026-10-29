@@ -387,9 +387,9 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   `POST /internal/operator/healing/switch` (behind 02.8.1's fail-closed `RequireOperatorFilter`),
   which writes a structured operator log event (mode, set_by, version — never the reason text) on
   every write, plus the `security_event` row that is still owed: `0053` ships the table, and its
-  `org_id` is NOT NULL, so a platform-scope (no-tenant) write has no row; D-S137-OWNER (owner,
-  2026-10-29, DECISIONS §8.2) puts such events in a separate `platform_security_event` table, never
-  a nullable `org_id`, and that table and its emitter are still owed.
+  `org_id` is NOT NULL, so a platform-scope (no-tenant) write has no row — where such an event is
+  stored is the open owner decision D-S137-OWNER (nullable `org_id` or a separate platform table),
+  and no emitter exists yet.
 - The app role holds `select`, `insert (id, scope, org_id, project_id, mode, reason, set_by, at)` and
   `update (mode, reason, set_by, at, updated_at, version)`: INSERT is column-level on purpose, so a
   caller cannot name `created_at`, `updated_at` or `version` and backdate a switch change or pin its
@@ -516,9 +516,8 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
   not UPDATE at all (the revoke above) — and a reader must never treat `version` as a concurrency token.
 - Platform-scope events do NOT fit: `org_id` is NOT NULL, so neither the NULL-org system healing
   switch (`0052`, 08.6.3-T1) nor the verifier fault (G8, 02.7.1 AC6) has a row here. That stays an
-  open hand-over recorded in the 11.5.1 plan Notes and `docs/status-carried.md`; the owner decision
-  D-S137-OWNER (2026-10-29, DECISIONS §8.2) keeps `org_id` NOT NULL and puts those events in a
-  separate `platform_security_event` table instead, which is still owed and not pre-empted here.
+  open hand-over recorded in the 11.5.1 plan Notes and `docs/status-carried.md`; a nullable `org_id`
+  versus a separate platform table is a coordinator decision, and `0053` does not pre-empt it.
 - Rollback: `drop table if exists public.security_event;` — the two policies, both indexes and the trigger
   go with it, and nothing else references the table.
 
