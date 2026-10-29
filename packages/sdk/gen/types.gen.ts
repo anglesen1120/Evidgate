@@ -2385,7 +2385,7 @@ export type RunIsFork = boolean;
 export type RunState = 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
 
 /**
- * The run's evaluation decision (F43, S143). Only `pending` is accepted today: no `evaluation` row exists until 07.2.2 persists one, so every run is `pending` and the filter matches every run in the page. Any other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page, because no stored decision exists to filter on. Receiver: 07.2.2 (stored decision) with 07.5.2 (the read), which widens this enum.
+ * The run's evaluation decision (F43, S143). Only `pending` is accepted today, and that value stores nothing: no `evaluation` row exists until 07.2.2 persists one, so there is no stored decision to narrow the page with and `pending` matches every run in it, while the `RunSummary.decision` member stays `null` in every item until the evaluator stores one (07.2.2 stores it, 07.5.2 serves the read). Any other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page. Receiver: 07.2.2 (stored decision) with 07.5.2 (the read), which widens this enum.
  */
 export type RunDecision = 'pending';
 
@@ -3226,7 +3226,7 @@ export type ListRunsData = {
          */
         state?: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
         /**
-         * The run's evaluation decision (F43, S143). Only `pending` is accepted today: no `evaluation` row exists until 07.2.2 persists one, so every run is `pending` and the filter matches every run in the page. Any other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page, because no stored decision exists to filter on. Receiver: 07.2.2 (stored decision) with 07.5.2 (the read), which widens this enum.
+         * The run's evaluation decision (F43, S143). Only `pending` is accepted today, and that value stores nothing: no `evaluation` row exists until 07.2.2 persists one, so there is no stored decision to narrow the page with and `pending` matches every run in it, while the `RunSummary.decision` member stays `null` in every item until the evaluator stores one (07.2.2 stores it, 07.5.2 serves the read). Any other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page. Receiver: 07.2.2 (stored decision) with 07.5.2 (the read), which widens this enum.
          */
         decision?: 'pending';
         /**

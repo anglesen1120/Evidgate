@@ -52,7 +52,8 @@ public sealed class ListRunsFilterTests
     }
 
     /// <summary>
-    /// F43: <c>decision=pending</c> matches every run — no <c>evaluation</c> row exists, so every run is pending —
+    /// F43: <c>decision=pending</c> matches every run, because no <c>evaluation</c> row exists — no decision is
+    /// stored, so every item's <c>decision</c> member is <c>null</c> —
     /// and it therefore narrows nothing: the page is the unfiltered one, in the same order.
     /// </summary>
     [Fact]
@@ -75,7 +76,7 @@ public sealed class ListRunsFilterTests
     }
 
     /// <summary>
-    /// F43, openapi <c>RunDecision</c>: only <c>pending</c> is a stored-state answer today, so every other value is
+    /// F43, openapi <c>RunDecision</c>: only <c>pending</c> is an accepted value today, so every other value is
     /// 422 <c>request_invalid</c> (<c>decision</c>, <c>invalid_value</c>) — never an empty page, which would read as
     /// "no run has that verdict".
     /// </summary>

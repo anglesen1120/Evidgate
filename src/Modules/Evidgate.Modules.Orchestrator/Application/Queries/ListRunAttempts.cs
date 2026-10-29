@@ -48,10 +48,11 @@ internal sealed record ListRunAttemptsQuery(Guid RunId, string? Cursor, int Limi
 /// attempts answers <c>200</c> with an empty page.
 /// </para>
 /// <para>
-/// The artifact count is computed in the same statement: one lateral aggregate per page row over the run's
-/// <c>artifact</c> rows in state <c>ready</c> (0028), matched on <c>(execution_key, attempt_no)</c> — no per-row
-/// round trip (00 §5.5 C5). <c>healing_candidate</c> is <c>null</c> on every row: no candidate row exists until the
-/// 08.3.1 candidate model (shadow rows 08.3.3), so it is reported null rather than fabricated.
+/// The artifact count is computed in the same statement: one grouped pass over the run's <c>artifact</c> rows in state
+/// <c>ready</c> (0028), counted per <c>(execution_key, attempt_no)</c> and left-joined to the page rows — the run's
+/// artifacts are read once for the whole page, never once per page row (00 §5.5 C5). <c>healing_candidate</c> is
+/// <c>null</c> on every row: no candidate row exists until the 08.3.1 candidate model (shadow rows 08.3.3), so it is
+/// reported null rather than fabricated.
 /// </para>
 /// </summary>
 [Permission(Permissions.Run.Read)]
@@ -155,10 +156,11 @@ internal sealed class ListRunAttemptsQueryHandler(
 /// <summary>
 /// The Dapper statements of the attempts page (00 §5.5 C5): one parameterised statement per page shape, keyset-paged
 /// on <c>(execution_key, attempt_no)</c> — the order the unique constraint <c>case_attempt_run_execution_attempt_key</c>
-/// keys on — with the attempt's ready-artifact count as one lateral aggregate in the same statement, never a per-row
-/// round trip. <c>org_id</c> is left to RLS (forced on <c>case_attempt</c> and <c>artifact</c>), so the run predicate
-/// is the only extra filter and an invisible run's rows are unreachable. Both page shapes are <c>internal</c> so a plan
-/// test can run <c>EXPLAIN</c> over the exact statement the handler executes.
+/// keys on — with the attempt's ready-artifact count as one grouped aggregate over the run's artifacts in the same
+/// statement, never a per-row round trip. <c>org_id</c> is left to RLS (forced on <c>case_attempt</c> and
+/// <c>artifact</c>), so the run predicate is the only extra filter and an invisible run's rows are unreachable. The
+/// members are <c>internal</c> as this module's statement surface: nothing outside this assembly binds them, and no
+/// plan test runs <c>EXPLAIN</c> over them today.
 /// </summary>
 internal static class ListRunAttemptsSql
 {
@@ -172,23 +174,30 @@ internal static class ListRunAttemptsSql
                a.started_at,
                a.finished_at,
                a.duration_ms,
-               art.artifact_count
+               coalesce(art.artifact_count, 0) as artifact_count
         """;
 
     /// <summary>
-    /// The one aggregate of the page: the attempt's artifacts in state <c>ready</c>, matched on the run and the
-    /// <c>(execution_key, attempt_no)</c> slot the artifact's own key carries (0028/0032). A lateral aggregate always
-    /// yields one row, so the join never multiplies or drops a page row; an attempt with no ready artifact counts 0.
+    /// The one aggregate of the page: the run's artifacts in state <c>ready</c> counted per
+    /// <c>(execution_key, attempt_no)</c> — the slot the artifact's own key carries (0028/0032) — in a single grouped
+    /// pass over the run's rows, left-joined to the page rows on that same pair. One scan serves the whole page
+    /// instead of one aggregate per page row, the group by makes at most one row per slot so the join never
+    /// multiplies a page row, and <see cref="Columns"/>'s <c>coalesce</c> keeps an attempt with no ready artifact at
+    /// 0 rather than null. <c>org_id</c> is left to RLS exactly as in the page statements.
     /// </summary>
     private const string ReadyArtifacts = """
-        cross join lateral (
-            select count(*)::int as artifact_count
+        left join (
+            select ar.execution_key,
+                   ar.attempt_no,
+                   count(*)::int as artifact_count
               from public.artifact ar
-             where ar.run_id = a.run_id
-               and ar.execution_key = a.execution_key
-               and ar.attempt_no = a.attempt_no
+             where ar.run_id = @run_id
                and ar.state = 'ready'
+             group by ar.execution_key,
+                      ar.attempt_no
         ) art
+               on art.execution_key = a.execution_key
+              and art.attempt_no = a.attempt_no
         """;
 
     /// <summary>The run's visibility row, for the existence check (unknown, other tenant → no row → 404).</summary>
