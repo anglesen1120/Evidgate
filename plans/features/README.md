@@ -203,7 +203,7 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | Milestone | Wave | Stories (placed at their earliest task milestone; bundles in brackets) | Story raw days (all milestones) |
 |---|---|---|---|
 | G1 | 1 | 01.1.1, 01.9.1, 10.8.1, 12.6.1 | 11.25 |
-| G1 | 2 | 01.1.2, 01.2.1, 01.3.1, 01.4.1 | 17 |
+| G1 | 2 | 01.1.2, 01.2.1, 01.3.1, 01.4.1 | 18 |
 | G1 | 3 | 01.3.2, 01.6.1, [02.1.1 + 02.2.1], 04.7.1, 10.1.1, 10.2.1 | 27 |
 | G1 | 4 | [01.4.2 + 01.5.1], 01.7.1, [02.1.2 + 02.3.1 + 02.3.2], 02.6.1, 03.1.1, 10.5.1 | 37 |
 | G1 | 5 | 02.4.1, 02.6.2, 02.7.1, 03.1.3, 06.1.1, 09.1.1 | 21.5 |
@@ -267,18 +267,18 @@ Generated from the task dependency graph by `scripts/feature_index.py` (`--order
 | G4 | 22 | 08.9.1 | 3 |
 | G4 | 23 | 08.9.2 | 2 |
 
-Checked 2026-10-26 against `scripts/plan_graph.py --json`: every story of §7 appears in exactly one row as a placement (the bundle rosters repeated after the em dash are names, not placements; a bracket's `+`-joined stories are placed in the row that carries the bracket), each row's day figure is the story's full size, and the rows sum to 703.25 raw person-days (the graph's 656-task total), split 352.75 G1 · 168.25 G2 · 93.75 G3 · 88.5 G4. That split counts each story once, in the phase of its earliest task; the task-level split in `plans/13-product-phases.md` §4.4 is 281.75 · 195.5 · 106.75 · 119.25 because it counts every task in its own Milestone cell, and the two agree only in their sum (703.25).
+Checked 2026-10-26 against `scripts/plan_graph.py --json`: every story of §7 appears in exactly one row as a placement (the bundle rosters repeated after the em dash are names, not placements; a bracket's `+`-joined stories are placed in the row that carries the bracket), each row's day figure is the story's full size, and the rows sum to 704.25 raw person-days (the graph's 657-task total), split 353.75 G1 · 168.25 G2 · 93.75 G3 · 88.5 G4. That split counts each story once, in the phase of its earliest task; the task-level split in `plans/13-product-phases.md` §4.4 is 282.75 · 195.5 · 106.75 · 119.25 because it counts every task in its own Milestone cell, and the two agree only in their sum (704.25).
 
 ### 5.2 Critical chain (task level)
 
 | Up to | Work in this milestone (raw d) | Longest dependency chain from start (d) | Chain |
 |---|---|---|---|
-| G1 | 281.75 | 29 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 06.1.2-T1 → 06.1.2-T3 → 13.3.1-T1 → 13.3.1-T2 → 13.3.1-T3 → 13.2.2-T2 → 13.2.2-T5 → 13.2.2-T6 |
+| G1 | 282.75 | 29 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 06.1.2-T1 → 06.1.2-T3 → 13.3.1-T1 → 13.3.1-T2 → 13.3.1-T3 → 13.2.2-T2 → 13.2.2-T5 → 13.2.2-T6 |
 | G2 | 195.5 | 39.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.4.1-T1 → 08.4.1-T2 → 13.5.1-T2 → 13.5.1-T7 |
 | G3 | 106.75 | 52.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 → 08.8.3-T2 |
 | G4 | 119.25 | 57.5 | 01.1.1-T1 → 01.1.1-T2 → 01.1.1-T3 → 01.4.1-T1 → 01.4.1-T2 → 01.4.1-T3 → 02.1.1-T1 → 03.1.1-T1 → 03.1.3-T1 → 03.2.1-T1 → 03.2.1-T2 → 05.1.1-T2 → 05.1.1-T4 → 05.1.2-T1 → 05.2.1-T1 → 05.3.2-T1 → 05.3.2-T5 → 08.1.1-T1 → 08.1.2-T1 → 08.1.2-T3 → 08.2.1-T1 → 08.2.1-T2 → 08.2.1-T3 → 08.3.1-T1 → 08.3.2-T1 → 08.4.3-T1 → 11.2.1-T6 → 08.4.3-T2 → 08.4.3-T3 → 08.6.1-T1 → 08.6.1-T2 → 08.6.2-T1 → 08.6.2-T2 → 08.7.1-T2 → 08.8.2-T1 → 08.8.2-T2 → 08.8.3-T1 → 08.8.3-T2 → 08.9.1-T1 → 08.9.1-T2 → 08.9.2-T1 → 08.9.2-T2 |
 
-Reading [INFERENCE] (arithmetic over the graph): the longest dependency chain to the end of G1 is 29 raw days (28 before story 13.2.2; the role-profile chain through 13.2.2-T6 is now the longest) while G1 holds 281.75 raw days of work (G2: 39.5 against 195.5; both totals include work already merged), so the schedule is **capacity-bound, not dependency-bound**: adding engineers shortens the calendar almost linearly up to roughly 8–10 parallel lanes. The G3 chain runs through tenancy (01.4.1 → 02.1.1) → catalog (03.1–03.2) → manifest/run (05.1–05.2) → ingest/attempts bundle → evidence freeze → healing (08.1–08.4): these tasks get the most senior owner and are never blocked on review. Re-checked 2026-10-26 against `scripts/plan_graph.py --json` as the longest weighted path over the dependency edges restricted to each phase prefix: 29 / 39.5 / 52.5 / 57.5 with the chains above unchanged, and 28 with the 13.2.2 tasks removed.
+Reading [INFERENCE] (arithmetic over the graph): the longest dependency chain to the end of G1 is 29 raw days (28 before story 13.2.2; the role-profile chain through 13.2.2-T6 is now the longest) while G1 holds 282.75 raw days of work (G2: 39.5 against 195.5; both totals include work already merged), so the schedule is **capacity-bound, not dependency-bound**: adding engineers shortens the calendar almost linearly up to roughly 8–10 parallel lanes. The G3 chain runs through tenancy (01.4.1 → 02.1.1) → catalog (03.1–03.2) → manifest/run (05.1–05.2) → ingest/attempts bundle → evidence freeze → healing (08.1–08.4): these tasks get the most senior owner and are never blocked on review. Re-checked 2026-10-26 against `scripts/plan_graph.py --json` as the longest weighted path over the dependency edges restricted to each phase prefix: 29 / 39.5 / 52.5 / 57.5 with the chains above unchanged, and 28 with the 13.2.2 tasks removed.
 
 ### 5.3 Bundles (build together, ordered by task)
 
@@ -362,7 +362,7 @@ Generated by `scripts/regen_docs.py`; one row per story. Check with `scripts/che
 |---|---|---|---|---|---|---|---|
 | [01.1.1](01-foundation/01.1.1-toolchain-and-workspace.md) | Toolchain and workspace | G1 | 1 | — | 2.75 | — | 01.1.2, 01.2.1, 01.3.1, 01.3.2, 01.4.1, 01.6.1, 04.2.1, 09.1.1, 11.6.1 |
 | [01.1.2](01-foundation/01.1.2-two-process-skeleton.md) | Two-process skeleton | G1 | 2 | — | 4.5 | 01.1.1 | 02.3.1, 10.1.1, 10.2.1 |
-| [01.2.1](01-foundation/01.2.1-analyzers-format-types-and-architecture.md) | Analyzers, format, types and architecture | G1 | 2 | — | 3 | 01.1.1 | — |
+| [01.2.1](01-foundation/01.2.1-analyzers-format-types-and-architecture.md) | Analyzers, format, types and architecture | G1 | 2 | — | 4 | 01.1.1 | — |
 | [01.3.1](01-foundation/01.3.1-spec-and-schemas.md) | Spec and schemas | G1 | 2 | — | 3.5 | 01.1.1 | 01.3.2, 04.1.1, 04.7.1, 05.1.1, 07.5.2 |
 | [01.3.2](01-foundation/01.3.2-generated-sdk-validators-and-contract-tests.md) | Generated SDK, validators and contract tests | G1 | 3 | — | 6 | 01.1.1, 01.3.1 | 01.5.1, 09.1.1 |
 | [01.4.1](01-foundation/01.4.1-migrations-roles-and-rls.md) | Migrations, roles and RLS | G1 | 2 | — | 6 | 01.1.1 | 01.4.2, 01.6.1, 02.1.1, 03.1.1, 04.1.2, 06.1.1, 07.1.1, 10.2.2, 13.1.1 |

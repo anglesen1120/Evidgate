@@ -9,9 +9,9 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged): 186/656 tasks; 190.75/703.25 raw person-days; remaining 470 tasks / 512.5 d. Via merged PRs: 159 tasks / 165.75 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged): 186/657 tasks; 190.75/704.25 raw person-days; remaining 471 tasks / 513.5 d. Via merged PRs: 159 tasks / 165.75 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
 - Landed by phase (done tasks / raw d): G1 136 / 146.75; G2 44 / 38; G3 0 / 0; G4 6 / 6.
-- Plan totals: 656 tasks / 703.25 raw / 843.9 buffered person-days (S130 F47 added 02.3.2-T3, S, V1, G1; the S93 canonical figures were 655 / 702.75 / 843.3). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
+- Plan totals: 657 tasks / 704.25 raw / 845.1 buffered person-days (S130 F47 added 02.3.2-T3, S, V1, G1; the owner decision of 2026-10-30 added 01.2.1-T6, M, V1, G1; the S93 canonical figures were 655 / 702.75 / 843.3). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
 - Next picks, web-only lane: 09.1.1-T5 is merged (#213) and 09.1.1-T9.2 is done (#209), so the web-only lane moves to G2 (§5).
@@ -28,8 +28,8 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 | Fully landed on develop | 186 | 190.75 |
 | Via merged PRs | 159 | 165.75 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 470 | 512.5 |
-| Plan total | 656 | 703.25 |
+| Remaining | 471 | 513.5 |
+| Plan total | 657 | 704.25 |
 
 Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, fbb2fe91) and whose remainder is T2.3 and T2.4; and 09.8.1-T1, whose T1.1 + T1.2 landed in #284 and whose remainder is T1.3 + T1.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
 
@@ -204,7 +204,7 @@ Moved verbatim to docs/status-archive.md
 
 ## 5. Ready next (dependencies met; includes partial remainders)
 
-Dependency-ready: **90 tasks / 101.5 d** (G1 37 / 40.0, G2 37 / 38.5, G3 6 / 9, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. detail: carried row 'STATUS §7 dependency-ready and lanes' (S144 F61).
+Dependency-ready: **91 tasks / 102.5 d** (G1 38 / 41.0, G2 37 / 38.5, G3 6 / 9, G4 10 / 14), computed by expanding the `plan_graph.py` task dependencies and removing the tasks landed in §2; sizes XS .25 S .5 M 1 L 2 XL 3. This is not owner approval: non-graph blockers (owner decisions, legal/counsel, external accounts, missing feature plans) stay in §6 and are marked in the rows. 01.2.1-T6 (M, G1) joins the set in this count: its only dependency, 01.2.1-T1, is landed. detail: carried row 'STATUS §7 dependency-ready and lanes' (S144 F61).
 
 Stricter variant that also requires every dependency task's whole story to be merged: **47 tasks / 51.0 d** (G1 16 / 18, G2 23 / 23, G3 0 / 0, G4 8 / 10), fully recomputed on `787f592` from the plan graph plus the landed set. This corrects the previous incremental 50 / 53.5 d claim (G1 19 / 20.5); 11.5.1-T3 and 11.5.1-T5 remain included because 11.1.1 is fully landed. S102 adds 02.1.2-T3 to the task-edge ready set but no strict-ready task: 02.1.2-T1's whole story still includes unbuilt T3.
 

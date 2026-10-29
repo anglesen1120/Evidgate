@@ -4,7 +4,7 @@
 > Level: high-level plan; each story gets a detailed plan in `plans/features/01-foundation/` (00 §12) before build.
 > Compatibility evidence (2026-09-25, NuGet nuspec + npm registry; full table in DECISIONS §4.1–§4.3): .NET 10.0.12 LTS (EOL 2028-11-14) ✅; `Mediator.Abstractions`/`Mediator.SourceGenerator` 3.0.2 MIT ✅; `Microsoft.EntityFrameworkCore` 10.0.12 MIT ✅; `Npgsql` / `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 PostgreSQL licence ✅; Dapper 2.1.89 Apache-2.0 ✅; `dbup-postgresql` 7.0.1 MIT ✅; `Corvus.Json.Validator` 5.6.1 Apache-2.0 ✅; FluentValidation 12.1.1 Apache-2.0 ✅; Cronos 0.13.0 MIT ✅; `AWSSDK.S3` 4.0.103.4 Apache-2.0 ✅; xunit.v3 4.0.1 Apache-2.0 ✅; Shouldly 4.3.0 BSD-3-Clause ✅; Testcontainers.PostgreSQL 4.15.0 MIT ✅; Respawn 7.0.0 Apache-2.0 ✅; `@angular/build` 22.2.0 peer `typescript >=6.0 <6.1` ✅; `typescript-eslint` 8.70.1 peer `typescript >=4.8.4 <6.1.0` ✅; `vitest` 5.0.1 MIT ✅. Rejected on licence: MediatR 14.2.0 (RPL-1.5), JsonSchema.Net 9.4.0 (maintenance-fee EULA), FluentAssertions 8.11.0 (non-commercial) ✅.
 
-> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 53.75 · G2 3.5 person-days.
+> **Phases (CR-D-2):** the Milestone column holds the CR-D-2 phase (G1–G4) from [13 §4.4](13-product-phases.md); M0–M5 in this plan's prose refers to the pre-CR-D-2 sequence. Phase totals (raw): G1 54.75 · G2 3.5 person-days.
 
 ## 1. Purpose and scope
 
@@ -148,7 +148,7 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 
 ### Epic 01.2 Quality gates (M0-M1)
 
-#### Story 01.2.1 Analyzers, format, types and architecture — acceptance: `scripts/verify.sh` fails on a module-boundary violation, an unformatted file, an un-awaited task, a nullable warning and a TS type error under `strict`
+#### Story 01.2.1 Analyzers, format, types and architecture — acceptance: `scripts/verify.sh` fails on a module-boundary violation, an unformatted file, an un-awaited task, a nullable warning and a TS type error under `strict`, and its `check-review-blockers` stage fails on a blocked pattern in an added diff line or a U1 count above the baseline (01.2.1-T6)
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 01.2.1-T1 | .NET analyzers (`latest-recommended`, security rules, `CA2007`/`VSTHRD`-style async rules ⚠️ package licence checked in 01.1.1-T1) + `Architecture.Tests` (xUnit): module refs only via `.Contracts`, `Domain` ↛ `Infrastructure`, no `public` types outside `.Contracts`/`Endpoints`, every handler declares a permission (T47); ESLint 10 flat config + typescript-eslint 8 for `apps/web`/`packages/*` with `no-floating-promises`, `--max-warnings 0` | M | V1 | G1 | 01.1.1-T3 |
@@ -156,6 +156,7 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 | 01.2.1-T3 | Strict types: nullable reference types as errors across the solution; `tsc -b` across TS project references with `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` | M | V1 | G1 | 01.1.1-T3 |
 | 01.2.1-T4 | Pre-commit hooks: husky 9 + lint-staged 17 on staged files (Prettier/ESLint; `dotnet format` on staged `.cs`) | XS | V1 | G1 | 01.2.1-T1 |
 | 01.2.1-T5 | Commit/PR conventions: Conventional Commits, PR template, CODEOWNERS draft | XS | V1 | G1 | — |
+| 01.2.1-T6 | Review-blocker diff gate: port the coordinator scan to `scripts/check-review-blockers.py`, wire stage `check-review-blockers` into `verify.sh` and CI, and add the U1 comment-id ratchet (owner decision 2026-10-30) | M | V1 | G1 | 01.2.1-T1 |
 
 ### Epic 01.3 Contract-first pipeline (M0-M1)
 
@@ -277,7 +278,7 @@ Units: person-days of one senior full-stack .NET + Angular developer (00 §6, CR
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
 | 01.1 Stack compatibility and repository bootstrap | 7.0 | 0 | 0.25 | 7.25 |
-| 01.2 Quality gates | 3.0 | 0 | 0 | 3.0 |
+| 01.2 Quality gates | 4.0 | 0 | 0 | 4.0 |
 | 01.3 Contract-first pipeline | 9.5 | 0 | 0 | 9.5 |
 | 01.4 Database foundation and CQRS pipeline | 12.5 | 0 | 0 | 12.5 |
 | 01.5 Outbox and task queue | 7.0 | 0 | 0 | 7.0 |
@@ -286,9 +287,9 @@ Units: person-days of one senior full-stack .NET + Angular developer (00 §6, CR
 | 01.8 Local dev stack | 3.0 | 0 | 0 | 3.0 |
 | 01.9 ADRs and engineering docs | 2.0 | 0 | 0 | 2.0 |
 | 01.10 Dogfooding | 3.0 | 0.5 | 0 | 3.5 |
-| **Total** | **56.5** | **0.5** | **0.25** | **57.25** |
+| **Total** | **57.5** | **0.5** | **0.25** | **58.25** |
 
-→ with 20 % buffer **68.7** person-days
+→ with 20 % buffer **69.9** person-days
 
 ## 13. Contract change requests
 
