@@ -9,8 +9,8 @@ Updated 2026-10-27. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a web-only lane (diff only `apps/web/**`, `fixtures/web-api/**`, `docs/`, `plans/`, `STATUS.md`, `AGENTS.md`) runs phase 1 + `npm run e2e -w apps/web` and never takes the Docker gate lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
-- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged): 185/656 tasks; 190.25/703.25 raw person-days; remaining 471 tasks / 513.0 d. Via merged PRs: 158 tasks / 165.25 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
-- Landed by phase (done tasks / raw d): G1 135 / 146.25; G2 44 / 38; G3 0 / 0; G4 6 / 6.
+- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged): 186/656 tasks; 190.75/703.25 raw person-days; remaining 470 tasks / 512.5 d. Via merged PRs: 159 tasks / 165.75 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 136 / 146.75; G2 44 / 38; G3 0 / 0; G4 6 / 6.
 - Plan totals: 656 tasks / 703.25 raw / 843.9 buffered person-days (S130 F47 added 02.3.2-T3, S, V1, G1; the S93 canonical figures were 655 / 702.75 / 843.3). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -25,10 +25,10 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 185 | 190.25 |
-| Via merged PRs | 158 | 165.25 |
+| Fully landed on develop | 186 | 190.75 |
+| Via merged PRs | 159 | 165.75 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 471 | 513.0 |
+| Remaining | 470 | 512.5 |
 | Plan total | 656 | 703.25 |
 
 Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, fbb2fe91) and whose remainder is T2.3 and T2.4; and 09.8.1-T1, whose T1.1 + T1.2 landed in #284 and whose remainder is T1.3 + T1.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
@@ -47,20 +47,20 @@ Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6,
 | 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | 09 | 22 | 0 | 6 | 13 | 3 | 0 | 22 |
 | 10 | 5 | 0 | 2 | 2 | 1 | 0 | 5 |
-| 11 | 10 | 1 | 4 | 4 | 1 | 0 | 8.25 |
+| 11 | 11 | 1 | 5 | 4 | 1 | 0 | 8.75 |
 | 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
-| TOTAL | 185 | 3 | 51 | 99 | 31 | 1 | 190.25 |
+| TOTAL | 186 | 3 | 52 | 99 | 31 | 1 | 190.75 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 135 | 3 | 31 | 73 | 27 | 1 | 146.25 |
+| G1 | 136 | 3 | 32 | 73 | 27 | 1 | 146.75 |
 | G2 | 44 | 0 | 18 | 23 | 3 | 0 | 38 |
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
-| TOTAL | 185 | 3 | 51 | 99 | 31 | 1 | 190.25 |
+| TOTAL | 186 | 3 | 52 | 99 | 31 | 1 | 190.75 |
 
 ### Landed task groups
 
@@ -241,7 +241,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 10.1.1-T4 | M | Isolated artifact-viewer origin | yes | no | no | n/a | no — needs a distinct registrable domain + DNS record + TLS certificate (registrar/DNS action) |
 | 10.3.2-T1 | S | ADR: observability backend for M1 with retention and cost limits, plus the compose profile; unblocks 10.3.1-T2 (T1 merged in #203) | yes | no | no | n/a | yes |
 | 10.8.1-T2 | L | Hands-on spike on two candidates | yes | no | no | T2.1-T2.2 (candidate A) ; T2.3-T2.4 (candidate B) | no — needs two managed-provider accounts/credentials to provision and measure |
-| 11.9.2-T2 | S | Reconcile the audit chain with deletion (unblocked by 11.5.2-T1, S131 PR #270): T2.1 written rule, T2.2 audit payload schema plus an erasure-then-verify test | yes | no | no | n/a | yes |
+| 11.9.2-T2 | S | Reconcile the audit chain with deletion; LANDED by S147 (#304, a36bccf5; counted in the section 2 totals, its Landed task groups row is added at a later close-out because an insert shifts STATUS.md:N cites): T2.1 written rule, T2.2 audit payload schema plus an erasure-then-verify test | yes | no | no | n/a | yes |
 
 #### G1 web-only lane
 
