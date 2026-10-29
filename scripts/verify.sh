@@ -269,19 +269,45 @@ run_stage() {
     ;;
   check-review-blockers)
     # The REVIEW.md blocking rules a grep can see, read on the lines a change set
-    # ADDS, so debt already on the base never fails a local run. The base is
-    # EVIDGATE_REVIEW_BASE when CI sets it (a pull request's base sha, or the ref
-    # a push started from) and otherwise the first of origin/develop, develop,
-    # origin/main, main that resolves — the clean-clone smoke build has only a
-    # local `develop`. No candidate at all makes the scan exit 2, which fails
-    # this stage: a shallow clone is a red gate, never a green one.
+    # ADDS, so debt already on the base never fails a local run. It reads commits
+    # (`git diff base...HEAD`), never the working tree: commit before running it,
+    # or the change is not the one being scanned. The base is
+    # EVIDGATE_REVIEW_BASE when CI sets it (the merge commit's first parent, or
+    # the ref a push started from) and otherwise the first of origin/develop,
+    # develop, origin/main, main that resolves — the clean-clone smoke build has
+    # only a local `develop`. No candidate at all makes the scan exit 2, which
+    # fails this stage: a shallow clone is a red gate, never a green one.
+    # EVIDGATE_REVIEW_DIFF=off skips the diff scan and keeps the ratchet: CI sets
+    # it for a landing that is not on develop, because develop's own debt (the
+    # 0053/0054 D1 policies) is not a promotion's change set and would fail every
+    # promotion for it.
     # The U1 half is a ratchet over the whole head tree against a committed
     # baseline, because those comment ids predate the rule. Bytecode is off so
     # the fixture run leaves no .pyc beside the tracked test tree.
     stage "check-review-blockers"
-    PYTHONDONTWRITEBYTECODE=1 python3 scripts/check-review-blockers.py "${EVIDGATE_REVIEW_BASE:-}" HEAD
+    if [[ "${EVIDGATE_REVIEW_DIFF:-on}" == "off" ]]; then
+      echo "check-review-blockers: diff scan off (EVIDGATE_REVIEW_DIFF=off): not a landing on develop, so the ratchet runs alone"
+    else
+      PYTHONDONTWRITEBYTECODE=1 python3 scripts/check-review-blockers.py "${EVIDGATE_REVIEW_BASE:-}" HEAD
+    fi
     PYTHONDONTWRITEBYTECODE=1 python3 scripts/check-review-blockers.py --u1-ratchet HEAD
-    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest scripts/tests/test_check_review_blockers.py
+    # Name the fixture files instead of discovering them: `unittest discover`
+    # with no match prints "Ran 0 tests ... OK", so a renamed split would turn
+    # this stage into a silent green. The pattern must not match the shared
+    # helper, which is deliberately not named test_*.
+    shopt -s nullglob
+    blockers_fixtures=(scripts/tests/test_*blockers*.py)
+    shopt -u nullglob
+    if (( ${#blockers_fixtures[@]} == 0 )); then
+      echo "check-review-blockers: no scripts/tests/test_*blockers*.py fixtures found; the split was renamed or deleted" >&2
+      exit 2
+    fi
+    # PYTHONPATH names both directories a fixture imports from — the
+    # `review_blockers` package and the shared helper — because `unittest` given
+    # file paths imports them by module name from cwd; else the verdict would
+    # depend on import order or fail outright.
+    PYTHONPATH="${ROOT}/scripts:${ROOT}/scripts/tests${PYTHONPATH:+:${PYTHONPATH}}" \
+      PYTHONDONTWRITEBYTECODE=1 python3 -m unittest "${blockers_fixtures[@]}"
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three
