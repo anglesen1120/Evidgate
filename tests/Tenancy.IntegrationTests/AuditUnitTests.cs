@@ -73,6 +73,31 @@ public sealed class AuditUnitTests
         AuditMetadata.Validate(new Dictionary<string, string> { ["slug"] = "acme", ["count"] = "3" }).ShouldNotBeNull();
 
     [Fact]
+    public void AuditPayload_DenyList_IsOneListAndMatchesNormalisedKeys()
+    {
+        // 11.9.2-T2.2 (AC10): the one list, mirrored in docs/security/audit-and-deletion-rule.md.
+        AuditMetadata.ForbiddenKeys.ShouldBe(
+        [
+            "email",
+            "name",
+            "ip",
+            "user_agent",
+            "message",
+            "reason_text",
+            "comment",
+            "note",
+            "description",
+            "free_text",
+        ], ignoreOrder: true);
+
+        AuditMetadata.NormalizeKey("user_agent").ShouldBe("USERAGENT");
+        AuditMetadata.NormalizeKey("User-Agent").ShouldBe("USERAGENT");
+        AuditMetadata.NormalizeKey("userAgent").ShouldBe("USERAGENT");
+        AuditMetadata.NormalizeKey("USER  AGENT").ShouldBe("USERAGENT");
+        AuditMetadata.NormalizeKey("email_domain").ShouldBe("EMAILDOMAIN");
+    }
+
+    [Fact]
     public void Metadata_Null_Or_Empty_IsNull()
     {
         AuditMetadata.Validate(null).ShouldBeNull();

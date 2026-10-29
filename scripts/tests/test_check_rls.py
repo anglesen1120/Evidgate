@@ -252,8 +252,8 @@ class AuditExemptions(unittest.TestCase):
         """11.5.1-T5/`0053`: `security_event` exists, so a reason must not deny it.
 
         `0053` shipped the table with `org_id` NOT NULL, so a platform-scope (no-tenant) event has
-        no row yet — but that is the open owner decision D-S137-OWNER (nullable `org_id` or a
-        separate platform table), never a table that is still to be created. A reason carrying
+        no row there; D-S137-OWNER (DECISIONS §8.2, decided 2026-10-29) sends it to the separate
+        `platform_security_event` table, never a table that is still to be created. A reason carrying
         "does not exist", "not exist yet" or "once that table lands" next to `security_event`
         describes a state `0053` ended and would send the next reader to wait for a table that is
         already there.
