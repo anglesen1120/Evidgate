@@ -696,6 +696,13 @@ public static class IsolationRouteCases
         // probe's allowed: [403, 404] below.
         ObjectCase("GET", "/v1/runs/{r}", p => [("run", p.RunId)], id =>
             new(HttpMethod.Get, $"/v1/runs/{id}"), ownControl: true),
+        // F52 (S143): the run's attempts page is the same read shape — the run is addressed by id alone, so another
+        // org's run is the 404 not_found of GET /v1/runs/{r} (never a 403), and a project-scoped credential asking
+        // for a sibling project's run is that same 404 (the handler maps OrchestratorScope.Project's mismatch to it,
+        // OrchestratorEndpoints.cs). The own-project control answers 200 with an empty page because the world seeds no
+        // case_attempt row, which also proves the probe URL matches a served route.
+        ObjectCase("GET", "/v1/runs/{r}/attempts", p => [("run", p.RunId)], id =>
+            new(HttpMethod.Get, $"/v1/runs/{id}/attempts"), ownControl: true),
         // 05.2.2-T2: the project-scoped run list. As a list, its positive control is the full-pagination walk
         // (Lists); the extra probes pin the ref_name filter, which must not widen tenancy.
         ProjectCase("GET", "/v1/projects/{p}/runs", p => new(HttpMethod.Get, $"/v1/projects/{p}/runs"), list: true,

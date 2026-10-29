@@ -229,14 +229,18 @@ public sealed class ListRunsQaTests
         answer.ErrorCode.ShouldBe("unauthenticated");
     }
 
-    /// <summary>AC6: an unknown query parameter is ignored (the waiver-list precedent), so the page is the unfiltered one.</summary>
+    /// <summary>
+    /// AC6: an unknown query parameter is ignored (the waiver-list precedent), so the page is the unfiltered one.
+    /// <c>decision</c> is no longer an example — F43 (S143) serves it, and any value but <c>pending</c> is a 422
+    /// (see <c>ListRunsFilterTests</c>) — so the unknown members used here are the still-unserved labels.
+    /// </summary>
     [Fact]
     public async Task ListRunsQa_UnknownQueryParameter_Ignored()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var run = await CreateRefRunAsync(world, Branch("main", ShaOne));
 
-        var answer = await ListAsync(world, "decision=pass&rerun_label=x");
+        var answer = await ListAsync(world, "rerun_label=x&reprocess_label=y");
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         OrderedIds(answer).ShouldBe(new[] { run });

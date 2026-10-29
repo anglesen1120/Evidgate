@@ -3,10 +3,17 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// <summary>
 /// The body of <c>GET /v1/runs/{r}</c> (05.3.1 §5, AC7; identity block added by 05.2.2-T1, 00 §8.1): where one run
 /// stands in the state machine, which evidence revision its current verdict was frozen from, its optimistic-concurrency
-/// token, its purpose, and the identity it permanently records. The wire names are <c>run_id</c>, <c>state</c>,
-/// <c>current_evidence_revision_id</c>, <c>version</c>, <c>purpose</c>, <c>ref</c> and <c>unverified_ref</c> (the host's
+/// token, its purpose, the identity it permanently records, and — since F44 (S143) — the release inputs its creation
+/// locked (the pinned manifest, its suite and policy revisions, its environment revision and the producer slots it
+/// registered). The wire names are <c>run_id</c>, <c>state</c>, <c>current_evidence_revision_id</c>, <c>version</c>,
+/// <c>purpose</c>, <c>ref</c>, <c>unverified_ref</c>, <c>manifest_hash</c>, <c>suite_revision_id</c>,
+/// <c>policy_revision_id</c>, <c>environment</c>, <c>shard_count</c> and <c>declared_producers</c> (the host's
 /// <c>SnakeCaseLower</c> policy). Another tenant's — or, for a project-scoped credential, another project's — run is
 /// <c>404 not_found</c>, the same code and body as an unknown id (00 §5.4).
+/// <para>
+/// Every member is required and comes from a stored column: nothing here is a placeholder. Evidence
+/// <c>completeness</c>/<c>missing[]</c> are a later, separate read (09.3.1-T3 with 07.5.2), not part of this body.
+/// </para>
 /// </summary>
 /// <param name="RunId">The run.</param>
 /// <param name="State">Its state, one of the 00 §8.1 vocabulary.</param>
@@ -29,6 +36,26 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// claim, i.e. the identity is advisory input and never a gating one (05.2.2 §8, AC2). False when every value was
 /// verified, and false when the run records no identity at all.
 /// </param>
+/// <param name="ManifestHash">
+/// The pinned manifest's <c>manifest_hash</c> (F44, S143), joined from <c>manifest</c> through the run's
+/// <c>manifest_id</c>. Never null on a stored run: the column and its foreign key are not nullable (0031).
+/// </param>
+/// <param name="SuiteRevisionId">
+/// The suite revision the run locked at creation — the run's own column (0031), not a re-read of the manifest.
+/// </param>
+/// <param name="PolicyRevisionId">
+/// The policy revision the run pinned (07.1.1-T4.2); null for a run created while its project had no active
+/// revision, and never moved by a later activation.
+/// </param>
+/// <param name="Environment">The environment revision the run locked; its identity only, never its content.</param>
+/// <param name="ShardCount">
+/// How many producer slots the run registered — one per manifest shard (0029/0031); zero for a run whose slots were
+/// never registered.
+/// </param>
+/// <param name="DeclaredProducers">
+/// The run's producer slot ids in <c>shard_index</c> order, the values the manifest's shards declare
+/// (<c>shard-&lt;n&gt;</c>, written at run creation, 0029).
+/// </param>
 public sealed record RunStateDto(
     Guid RunId,
     string State,
@@ -36,7 +63,35 @@ public sealed record RunStateDto(
     int Version,
     string Purpose,
     RunRef Ref,
-    bool UnverifiedRef);
+    bool UnverifiedRef,
+    string ManifestHash,
+    Guid SuiteRevisionId,
+    Guid? PolicyRevisionId,
+    RunEnvironmentRef Environment,
+    int ShardCount,
+    IReadOnlyList<string> DeclaredProducers);
+
+/// <summary>
+/// The run's pinned environment revision (<c>GET /v1/runs/{r}</c>, F44, S143): the identity of the
+/// <c>environment_revision</c> row the run locked, joined through <c>run.environment_revision_id</c> (not null, FK
+/// <c>run_environment_revision_fk</c>, 0031), plus the environment's own key. The wire names are <c>revision_id</c>,
+/// <c>environment_id</c>, <c>environment_key</c>, <c>revision_no</c> and <c>revision_hash</c>, and every one is
+/// required. No <c>secret_refs</c>, no <c>base_urls</c>, no <c>dependency_versions</c>: the run detail names the
+/// revision, it does not re-publish its content (<c>GET /v1/environment-revisions/{id}</c> does that).
+/// </summary>
+/// <param name="RevisionId"><c>environment_revision.id</c>.</param>
+/// <param name="EnvironmentId"><c>environment_revision.environment_id</c>.</param>
+/// <param name="EnvironmentKey">The environment's key (<c>environment.environment_key</c>, 0024).</param>
+/// <param name="RevisionNo"><c>environment_revision.revision_no</c>, 1-based per environment.</param>
+/// <param name="RevisionHash">
+/// <c>environment_revision.revision_hash</c> — the RFC 8785 content hash pinned by the run.
+/// </param>
+public sealed record RunEnvironmentRef(
+    Guid RevisionId,
+    Guid EnvironmentId,
+    string EnvironmentKey,
+    int RevisionNo,
+    string RevisionHash);
 
 /// <summary>
 /// The identity a run records (05.2.2 §4–§5): the seven wire members <c>kind</c>, <c>name</c>, <c>pr_number</c>,

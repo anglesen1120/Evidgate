@@ -38,16 +38,39 @@ internal sealed class GetRunQueryHandler(
     /// <summary>
     /// The one statement of the read: the run's own columns by id, including the identity block 05.2.2-T1 adds
     /// (<c>ref_kind</c>, <c>ref_name</c>, <c>pr_number</c>, <c>head_sha</c>, <c>base_sha</c>, <c>trigger_event</c>,
-    /// <c>is_fork</c>, <c>unverified_ref</c>). <c>org_id</c> is left to RLS (the row is readable only inside the
-    /// caller's tenant scope, and the policy is <c>FORCE</c>d, 0031), so an unknown id and another tenant's id take the
-    /// same branch. The <c>project</c> join of the environment-revision read is deliberately absent: the run's other
-    /// readers (<c>RunPlanReader</c>, <c>RunEventScopeReader</c>) resolve a run without filtering a deleted project
-    /// either.
+    /// <c>is_fork</c>, <c>unverified_ref</c>), and the release inputs F44 pins to the same body: the manifest's
+    /// <c>manifest_hash</c> through <c>run.manifest_id</c>, the run's own <c>suite_revision_id</c> and
+    /// <c>policy_revision_id</c>, the environment revision it locked (<c>environment_revision</c> +
+    /// <c>environment</c> through <c>run.environment_revision_id</c>), and the one <c>producer_slot</c> aggregate the
+    /// run registered — its count and its ids in <c>shard_index</c> order, both in the same statement, so the detail
+    /// read is never N+1 and its producer order never depends on the heap order the slots happen to have.
+    /// <para>
+    /// <c>org_id</c> is left to RLS (the row is readable only inside the caller's tenant scope, and the policy is
+    /// <c>FORCE</c>d, 0031), so an unknown id and another tenant's id take the same branch. Every join is on the
+    /// composite tenant key its foreign key already uses (0031), so a join can neither widen the row set nor read
+    /// another tenant's parent. The <c>project</c> join of the environment-revision read is deliberately absent: the
+    /// run's other readers (<c>RunPlanReader</c>, <c>RunEventScopeReader</c>) resolve a run without filtering a
+    /// deleted project either.
+    /// </para>
     /// </summary>
     private const string RunStateById = """
         select r.id as run_id, r.project_id, r.state, r.current_evidence_revision_id, r.version, r.purpose,
-               r.ref_kind, r.ref_name, r.pr_number, r.head_sha, r.base_sha, r.trigger_event, r.is_fork, r.unverified_ref
+               r.ref_kind, r.ref_name, r.pr_number, r.head_sha, r.base_sha, r.trigger_event, r.is_fork, r.unverified_ref,
+               m.manifest_hash,
+               r.suite_revision_id, r.policy_revision_id,
+               er.id as environment_revision_id, er.environment_id, e.environment_key, er.revision_no, er.revision_hash,
+               coalesce(slots.shard_count, 0) as shard_count,
+               coalesce(slots.declared_producers, '{}') as declared_producers
           from public.run r
+          join public.manifest m on m.org_id = r.org_id and m.id = r.manifest_id
+          join public.environment_revision er on er.org_id = r.org_id and er.id = r.environment_revision_id
+          join public.environment e on e.org_id = er.org_id and e.id = er.environment_id
+          left join lateral (
+              select count(*)::integer as shard_count,
+                     array_agg(p.producer_id order by p.shard_index) as declared_producers
+                from public.producer_slot p
+               where p.org_id = r.org_id and p.run_id = r.id
+          ) slots on true
          where r.id = @run_id
         """;
 
@@ -80,7 +103,18 @@ internal sealed class GetRunQueryHandler(
                 row.BaseSha,
                 row.TriggerEvent,
                 row.IsFork),
-            row.UnverifiedRef));
+            row.UnverifiedRef,
+            row.ManifestHash,
+            row.SuiteRevisionId,
+            row.PolicyRevisionId,
+            new RunEnvironmentRef(
+                row.EnvironmentRevisionId,
+                row.EnvironmentId,
+                row.EnvironmentKey,
+                row.RevisionNo,
+                row.RevisionHash),
+            row.ShardCount,
+            [.. row.DeclaredProducers]));
     }
 
     /// <summary>
@@ -121,5 +155,25 @@ internal sealed class GetRunQueryHandler(
         public bool IsFork { get; set; }
 
         public bool UnverifiedRef { get; set; }
+
+        public string ManifestHash { get; set; } = string.Empty;
+
+        public Guid SuiteRevisionId { get; set; }
+
+        public Guid? PolicyRevisionId { get; set; }
+
+        public Guid EnvironmentRevisionId { get; set; }
+
+        public Guid EnvironmentId { get; set; }
+
+        public string EnvironmentKey { get; set; } = string.Empty;
+
+        public int RevisionNo { get; set; }
+
+        public string RevisionHash { get; set; } = string.Empty;
+
+        public int ShardCount { get; set; }
+
+        public string[] DeclaredProducers { get; set; } = [];
     }
 }

@@ -473,6 +473,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/policies/head"] = $"/v1/projects/{project}/policies/head",
             ["/v1/projects/{p}/policy-activation"] = $"/v1/projects/{project}/policy-activation",
             ["/v1/runs/{r}"] = $"/v1/runs/{seeded.RunId}",
+            // F52 (S143): the run's attempts page; the seeded run has no attempt row, so the page is a clean 200 with
+            // `items: []` — no secret, and the scan is not vacuous about the route.
+            ["/v1/runs/{r}/attempts"] = $"/v1/runs/{seeded.RunId}/attempts",
         };
 
     /// <summary>

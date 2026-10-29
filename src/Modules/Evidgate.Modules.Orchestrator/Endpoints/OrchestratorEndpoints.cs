@@ -78,6 +78,10 @@ public static class OrchestratorEndpoints
             .Produces<RunStateDto>(StatusCodes.Status200OK)
             .WithSummary("One run's state, current evidence revision, version and purpose (05.3.1)");
 
+        group.MapGet("/runs/{r}/attempts", ListRunAttemptsAsync)
+            .Produces<RunAttemptPage>(StatusCodes.Status200OK)
+            .WithSummary("Cursor list of a run's attempts: raw and normalised status, retry chain, ready artifacts (F52)");
+
         // The route answers 202 only, but the framework infers a 200 from the bodiless Result the delegate returns
         // (the shared-kernel type, whose Error/SuccessValue members would then appear as contract schemas the spec does
         // not declare — ServedDocumentTests' invariant). Declaring the status with no type pins that slot to "no body",
@@ -96,7 +100,7 @@ public static class OrchestratorEndpoints
 
         group.MapGet("/projects/{p}/runs", ListRunsAsync)
             .Produces<RunPage>(StatusCodes.Status200OK)
-            .WithSummary("Cursor list of a project's runs, filtered by the recorded branch/PR/commit identity (05.2.2)");
+            .WithSummary("Cursor list of a project's runs, filtered by the recorded branch/PR/commit identity plus state, decision, rerun scope and parent run (05.2.2, F43)");
 
         return group;
     }
@@ -244,6 +248,30 @@ public static class OrchestratorEndpoints
         await mediator.Send(new GetRunQuery(r), cancellationToken).ConfigureAwait(false);
 
     /// <summary>
+    /// <c>GET /v1/runs/{r}/attempts</c> (F52/S143; 09.3.1-T4's attempts table): the run's <c>case_attempt</c> rows in
+    /// <c>(execution_key, attempt_no)</c> order. The delegate only binds and validates the 00 §9.1 query parameters —
+    /// <c>limit</c> (1–200) and an opaque <c>cursor</c> — and the handler owns the run lookup, the project scope and
+    /// the keyset page; a cursor this endpoint did not issue, and an out-of-range <c>limit</c>, are the handler's (and
+    /// this delegate's) <c>422 request_invalid</c> with <c>details[].path</c> = <c>cursor</c> / <c>limit</c>. An
+    /// unknown query parameter is ignored, as on every other list.
+    /// </summary>
+    private static async Task<Result<RunAttemptPage>> ListRunAttemptsAsync(
+        Guid r,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (LimitError(context.Request.Query["limit"], out var limit) is { } error)
+        {
+            return Result.Failure<RunAttemptPage>(error);
+        }
+
+        return await mediator.Send(
+            new ListRunAttemptsQuery(r, Blank(context.Request.Query["cursor"]), limit),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// <c>POST /v1/runs/{r}/finalize</c> (05.3.2 §5): a CI shard declares it has sent everything; the body is read
     /// with a hard 8 KiB cap and handed to the handler as bytes, because the five member shapes are the handler's.
     /// The read happens <b>before</b> <c>mediator.Send</c>, so up to 8 KiB is buffered for any resolved principal —
@@ -292,10 +320,11 @@ public static class OrchestratorEndpoints
     }
 
     /// <summary>
-    /// <c>GET /v1/projects/{p}/runs</c> (05.2.2 §5, AC6): the project's runs in <c>(created_at, id)</c> order,
-    /// narrowed by the run's recorded identity. The delegate only binds and validates the 00 §9.1 query
-    /// parameters — <c>limit</c> (1–200), an opaque <c>cursor</c>, and the five identity filters
-    /// <c>ref_name</c>, <c>pr_number</c>, <c>head_sha</c>, <c>trigger_event</c>, <c>is_fork</c>; the handler owns
+    /// <c>GET /v1/projects/{p}/runs</c> (05.2.2 §5, AC6; F43 filters S143): the project's runs in <c>(created_at, id)</c>
+    /// order, narrowed by the run's recorded identity and its state/decision/rerun labels. The delegate only binds and
+    /// validates the 00 §9.1 query parameters — <c>limit</c> (1–200), an opaque <c>cursor</c>, and the five identity
+    /// filters <c>ref_name</c>, <c>pr_number</c>, <c>head_sha</c>, <c>trigger_event</c>, <c>is_fork</c> plus the four
+    /// F43 filters <c>state</c>, <c>decision</c>, <c>rerun_scope</c>, <c>parent_run_id</c>; the handler owns
     /// the project check, the tenant scope and the keyset page. An unknown query parameter is ignored (as on every
     /// other list), a present-but-invalid filter value is <c>422 request_invalid</c> with
     /// <c>details[].path</c> = the parameter name and reason <c>invalid_value</c> (a blank value is invalid, not
@@ -369,10 +398,58 @@ public static class OrchestratorEndpoints
             isFork = rawIsFork == "true";
         }
 
+        // F43 (S143): the four further exact-match filters. Each value is checked against the closed vocabulary its
+        // column admits, so a present-but-invalid value is 422 with details[].path = the parameter — never a silently
+        // narrowed (or widened) page. `decision` accepts only `pending` today (no `evaluation` row exists until
+        // 07.2.2), and `parent_run_id` is the one filter only this binding can refuse, because it binds to a Guid.
+        string? state = null;
+        if (Present(query, "state", out var rawState))
+        {
+            if (!RunListFilterRules.IsKnownState(rawState))
+            {
+                return Result.Failure<RunPage>(InvalidFilter("state"));
+            }
+
+            state = rawState;
+        }
+
+        string? decision = null;
+        if (Present(query, "decision", out var rawDecision))
+        {
+            if (!RunListFilterRules.Decisions.Contains(rawDecision, StringComparer.Ordinal))
+            {
+                return Result.Failure<RunPage>(InvalidFilter("decision"));
+            }
+
+            decision = rawDecision;
+        }
+
+        string? rerunScope = null;
+        if (Present(query, "rerun_scope", out var rawRerunScope))
+        {
+            if (!RunListFilterRules.RerunScopes.Contains(rawRerunScope, StringComparer.Ordinal))
+            {
+                return Result.Failure<RunPage>(InvalidFilter("rerun_scope"));
+            }
+
+            rerunScope = rawRerunScope;
+        }
+
+        Guid? parentRunId = null;
+        if (Present(query, "parent_run_id", out var rawParentRunId))
+        {
+            if (!Guid.TryParse(rawParentRunId, out var parsedParentRunId))
+            {
+                return Result.Failure<RunPage>(InvalidFilter("parent_run_id"));
+            }
+
+            parentRunId = parsedParentRunId;
+        }
+
         return await mediator.Send(
             new ListRunsQuery(
                 p,
-                new RunListFilters(refName, prNumber, headSha, triggerEvent, isFork),
+                new RunListFilters(refName, prNumber, headSha, triggerEvent, isFork, state, decision, rerunScope, parentRunId),
                 Blank(query["cursor"]),
                 limit),
             cancellationToken).ConfigureAwait(false);
