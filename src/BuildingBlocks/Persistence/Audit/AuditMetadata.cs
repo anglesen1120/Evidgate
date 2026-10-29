@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -14,9 +15,12 @@ namespace Evidgate.BuildingBlocks.Persistence.Audit;
 /// <para>
 /// It also holds the personal-data deny list of 11.9.2-T2.2 (AC9/AC10): <see cref="ForbiddenKeys"/>
 /// is the one list, mirrored in <c>docs/security/audit-and-deletion-rule.md</c>, and
-/// <see cref="EnsureNoForbiddenKeys"/> walks a payload of any shape (dictionaries, objects,
-/// arrays, <see cref="JsonElement"/>/<see cref="JsonNode"/>) and refuses a key on it before the
-/// entry is queued, so no hash, advisory lock or insert ever sees that payload.
+/// <see cref="EnsureNoForbiddenKeys"/> walks a payload of any shape (dictionaries, sequences,
+/// public properties and fields, <see cref="ValueTuple"/> items, key/value pairs,
+/// <see cref="JsonElement"/>/<see cref="JsonNode"/>) and refuses a key on it before the entry is
+/// queued, so no hash, advisory lock or insert ever sees that payload. A key that still holds a
+/// non-ASCII letter or digit after <see cref="NormalizeKey"/>'s Unicode form is refused too, so a
+/// homoglyph cannot pass for an ASCII name.
 /// </para>
 /// </summary>
 public static partial class AuditMetadata
@@ -71,6 +75,15 @@ public static partial class AuditMetadata
         "note",
         "description",
         "free_text",
+        // 11.9.2-T2.2: the identifying field names the erasure path tombstones (email, display name, address,
+        // phone, account name). Matching is whole-key, so `email_domain` and allowlisted `reason` survive.
+        "display_name",
+        "email_address",
+        "ip_address",
+        "full_name",
+        "phone",
+        "address",
+        "username",
     };
 
     private static readonly HashSet<string> ForbiddenNormalized =
@@ -80,8 +93,9 @@ public static partial class AuditMetadata
     public const int MaxPayloadDepth = 16;
 
     /// <summary>
-    /// The comparison form of a key: letters and digits only, upper-cased, so case, <c>-</c>,
-    /// <c>_</c>, spaces and camelCase boundaries do not hide a forbidden key.
+    /// The comparison form of a key: the key in Unicode compatibility form (KC), then its letters
+    /// and digits only, upper-cased, so case, <c>-</c>, <c>_</c>, spaces, camelCase boundaries and a
+    /// compatibility variant (<c>ｅｍａｉｌ</c>) do not hide a forbidden key.
     /// </summary>
     /// <param name="key">The key name.</param>
     /// <returns>The normalised form.</returns>
@@ -89,9 +103,10 @@ public static partial class AuditMetadata
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        var buffer = new char[key.Length];
+        var normalized = key.Normalize(NormalizationForm.FormKC);
+        var buffer = new char[normalized.Length];
         var length = 0;
-        foreach (var character in key)
+        foreach (var character in normalized)
         {
             if (char.IsLetterOrDigit(character))
             {
@@ -104,33 +119,34 @@ public static partial class AuditMetadata
 
     /// <summary>
     /// Throws if <paramref name="payload"/> carries a <see cref="ForbiddenKeys"/> key anywhere —
-    /// top level, nested object, array element or JSON node. The message names the key path only,
-    /// never a value. Called by <see cref="Validate"/> and again by the writer before its
-    /// advisory lock (11.9.2-T2.2).
+    /// top level, nested object, sequence element, public field, tuple item or JSON node. The
+    /// message names the offending key, its normalised form and the nesting depth only: never an
+    /// ancestor key and never a value, because either may be personal data. Called by
+    /// <see cref="Validate"/> and again by the writer before its advisory lock (11.9.2-T2.2).
     /// </summary>
     /// <param name="payload">The payload, metadata dictionary or any object/array/JSON shape.</param>
-    /// <param name="parameterName">The caller's expression, for the exception's parameter.</param>
-    public static void EnsureNoForbiddenKeys(
-        object? payload,
-        [CallerArgumentExpression(nameof(payload))] string? parameterName = null)
+    /// <param name="parameterName">
+    /// The caller's own name for the payload, for the exception's parameter. Deliberately not a
+    /// <see cref="CallerArgumentExpressionAttribute"/>: that would copy the caller's argument text — an inline
+    /// dictionary literal included its values — into <see cref="ArgumentException.ParamName"/>.
+    /// </param>
+    public static void EnsureNoForbiddenKeys(object? payload, string? parameterName = null)
     {
         if (payload is null)
         {
             return;
         }
 
-        var root = parameterName ?? "payload";
-        new ForbiddenKeyWalker(root).Walk(payload, root, 0);
+        new ForbiddenKeyWalker(parameterName ?? "payload").Walk(payload, 0);
     }
 
     /// <summary>Throws if <paramref name="metadata"/> breaks the allowlist; returns it otherwise.</summary>
     /// <param name="metadata">The candidate metadata.</param>
     public static IReadOnlyDictionary<string, string>? Validate(IReadOnlyDictionary<string, string>? metadata)
     {
-        // The personal-data deny list is checked first so a key like `Email` is reported as what it
-        // is, not as "not on the allowlist" (11.9.2-T2.2).
-        EnsureNoForbiddenKeys(metadata, nameof(metadata));
-
+        // The bounded checks need no traversal, so they run before the walk (a payload of 17 keys is
+        // refused without visiting them). The personal-data deny list then runs before the allowlist
+        // so a key like `Email` is reported as what it is, not as "not on the allowlist" (11.9.2-T2.2).
         if (metadata is null || metadata.Count == 0)
         {
             return null;
@@ -140,6 +156,8 @@ public static partial class AuditMetadata
         {
             throw new ArgumentException($"audit metadata carries more than {MaxKeys} keys", nameof(metadata));
         }
+
+        EnsureNoForbiddenKeys(metadata, nameof(metadata));
 
         foreach (var (key, value) in metadata)
         {
@@ -168,19 +186,30 @@ public static partial class AuditMetadata
 
     /// <summary>
     /// One walk over a payload of unknown shape. Every key it meets is compared with
-    /// <see cref="ForbiddenNormalized"/>; the path it reports is built from keys and indexes only,
-    /// so a value never appears in the exception (11.9.2-T2.2: never log or echo personal data).
+    /// <see cref="ForbiddenNormalized"/>; the refusal reports the offending key, its normalised form
+    /// and the depth, never an ancestor key or a value — either may be personal data
+    /// (11.9.2-T2.2: never log or echo personal data). No path string is built: it would only be
+    /// allocated to be withheld.
+    /// <para>
+    /// The walk descends into dictionaries, sequences, public properties, public fields (which is
+    /// how a <see cref="ValueTuple"/> item is reached), <see cref="KeyValuePair{TKey,TValue}"/>
+    /// pairs whose key is any string-convertible object, <see cref="JsonElement"/> and
+    /// <see cref="JsonNode"/>. A reference-type container already open on the current path is a
+    /// cycle and is refused instead of recursing forever; the same instance reached twice on
+    /// different paths is not one.
+    /// </para>
     /// </summary>
     private sealed class ForbiddenKeyWalker(string rootName)
     {
-        private readonly HashSet<object> _seen = new(ReferenceEqualityComparer.Instance);
+        /// <summary>Containers open on the current walk path; allocated only once a walk needs it.</summary>
+        private HashSet<object>? _openPath;
 
-        public void Walk(object? value, string path, int depth)
+        public void Walk(object? value, int depth)
         {
             if (depth > MaxPayloadDepth)
             {
                 throw new ArgumentException(
-                    $"audit payload nests deeper than {MaxPayloadDepth} levels at '{path}'", rootName);
+                    $"audit payload nests deeper than {MaxPayloadDepth} levels (depth {depth})", rootName);
             }
 
             switch (value)
@@ -190,16 +219,33 @@ public static partial class AuditMetadata
                 case byte[]:
                     return;
                 case JsonElement element:
-                    WalkElement(element, path, depth);
+                    WalkElement(element, depth);
                     return;
                 case JsonNode node:
-                    WalkNode(node, path, depth);
+                    Open(node, depth);
+                    try
+                    {
+                        WalkNode(node, depth);
+                    }
+                    finally
+                    {
+                        Close(node);
+                    }
+
                     return;
                 case IDictionary dictionary:
                     // Dictionary<string, string> and friends: keys are names, values may nest.
-                    foreach (DictionaryEntry entry in dictionary)
+                    Open(dictionary, depth);
+                    try
                     {
-                        WalkEntry(entry.Key, entry.Value, path, depth);
+                        foreach (DictionaryEntry entry in dictionary)
+                        {
+                            WalkEntry(entry.Key, entry.Value, depth);
+                        }
+                    }
+                    finally
+                    {
+                        Close(dictionary);
                     }
 
                     return;
@@ -212,54 +258,116 @@ public static partial class AuditMetadata
                 return;
             }
 
-            if (AsSequence(value) is { } sequence)
+            if (value is ITuple tuple)
             {
-                if (IsStringKeyedPairs(type))
+                // A ValueTuple's items are fields with positional names, not a key/value map: descend into
+                // the items, so a dictionary nested in a tuple is still walked (a named element is not a key).
+                for (var index = 0; index < tuple.Length; index++)
                 {
-                    // Dictionary<string, T> and IReadOnlyDictionary<string, T> (any value type).
-                    WalkPairs(sequence, path, depth);
-
-                    return;
-                }
-
-                var index = 0;
-                foreach (var item in sequence)
-                {
-                    Walk(item, $"{path}[{index++}]", depth + 1);
+                    Walk(tuple[index], depth + 1);
                 }
 
                 return;
             }
 
-            if (type.IsClass && !_seen.Add(value))
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(KeyValuePair<,>))
             {
+                // One pair, not a sequence of them (a value held in a dictionary): its Key is the name,
+                // whatever the key type, and its Value may nest. The property walk alone would read the
+                // harmless name `Key` and never compare the key itself.
+                WalkEntry(
+                    type.GetProperty("Key")?.GetValue(value),
+                    type.GetProperty("Value")?.GetValue(value),
+                    depth);
+
                 return;
             }
 
-            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            if (value is IEnumerable sequence)
             {
-                if (!property.CanRead || property.GetIndexParameters().Length != 0)
+                Open(value, depth);
+                try
                 {
-                    continue;
+                    if (IsPairSequence(type))
+                    {
+                        // KeyValuePair<TKey, TValue> with any key type: the key name is whatever the key
+                        // renders as, so an enum or an int key is read as a name too, never skipped.
+                        WalkPairs(sequence, depth);
+
+                        return;
+                    }
+
+                    foreach (var item in sequence)
+                    {
+                        Walk(item, depth + 1);
+                    }
+                }
+                finally
+                {
+                    Close(value);
                 }
 
-                var propertyPath = $"{path}.{property.Name}";
-                ThrowIfForbidden(property.Name, propertyPath);
-                Walk(property.GetValue(value), propertyPath, depth + 1);
+                return;
+            }
+
+            Open(value, depth);
+            try
+            {
+                foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    if (!property.CanRead || property.GetIndexParameters().Length != 0)
+                    {
+                        continue;
+                    }
+
+                    ThrowIfForbidden(property.Name, depth + 1);
+                    Walk(property.GetValue(value), depth + 1);
+                }
+
+                foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
+                {
+                    ThrowIfForbidden(field.Name, depth + 1);
+                    Walk(field.GetValue(value), depth + 1);
+                }
+            }
+            finally
+            {
+                Close(value);
             }
         }
 
-        private static IEnumerable? AsSequence(object value) => value as IEnumerable;
+        /// <summary>Marks a reference-type container open, and refuses a container already on the path.</summary>
+        private void Open(object reference, int depth)
+        {
+            if (reference.GetType().IsValueType)
+            {
+                return;
+            }
 
-        private static bool IsStringKeyedPairs(Type type) =>
+            _openPath ??= new HashSet<object>(ReferenceEqualityComparer.Instance);
+            if (!_openPath.Add(reference))
+            {
+                throw new ArgumentException(
+                    $"audit payload contains a self-referencing structure at depth {depth}", rootName);
+            }
+        }
+
+        private void Close(object reference)
+        {
+            if (!reference.GetType().IsValueType)
+            {
+                _openPath?.Remove(reference);
+            }
+        }
+
+        private static bool IsPairSequence(Type type) =>
             type.GetInterfaces().Any(@interface =>
                 @interface.IsGenericType
                 && @interface.GetGenericTypeDefinition() == typeof(IEnumerable<>)
                 && @interface.GetGenericArguments()[0] is { IsGenericType: true } pair
-                && pair.GetGenericTypeDefinition() == typeof(KeyValuePair<,>)
-                && pair.GetGenericArguments()[0] == typeof(string));
+                && pair.GetGenericTypeDefinition() == typeof(KeyValuePair<,>));
 
-        private void WalkPairs(IEnumerable sequence, string path, int depth)
+        private void WalkPairs(IEnumerable sequence, int depth)
         {
             foreach (var item in sequence)
             {
@@ -269,41 +377,41 @@ public static partial class AuditMetadata
                 }
 
                 var pair = item.GetType();
-                var key = pair.GetProperty("Key")?.GetValue(item) as string;
+                var key = pair.GetProperty("Key")?.GetValue(item);
                 var value = pair.GetProperty("Value")?.GetValue(item);
-                WalkEntry(key, value, path, depth);
+                WalkEntry(key, value, depth);
             }
         }
 
-        private void WalkEntry(object? key, object? value, string path, int depth)
+        private void WalkEntry(object? key, object? value, int depth)
         {
+            // Any string-convertible key is a key name: a string as it is, an enum or an int by its
+            // rendering, so `KeyValuePair<SomeEnum, string>` is read as a name instead of a value.
             var name = key as string ?? key?.ToString();
             if (name is null)
             {
                 return;
             }
 
-            var entryPath = $"{path}.{name}";
-            ThrowIfForbidden(name, entryPath);
-            Walk(value, entryPath, depth + 1);
+            ThrowIfForbidden(name, depth + 1);
+            Walk(value, depth + 1);
         }
 
-        private void WalkElement(JsonElement element, string path, int depth)
+        private void WalkElement(JsonElement element, int depth)
         {
             switch (element.ValueKind)
             {
                 case JsonValueKind.Object:
                     foreach (var property in element.EnumerateObject())
                     {
-                        WalkEntry(property.Name, property.Value, path, depth);
+                        WalkEntry(property.Name, property.Value, depth);
                     }
 
                     return;
                 case JsonValueKind.Array:
-                    var index = 0;
                     foreach (var item in element.EnumerateArray())
                     {
-                        Walk(item, $"{path}[{index++}]", depth + 1);
+                        Walk(item, depth + 1);
                     }
 
                     return;
@@ -312,22 +420,21 @@ public static partial class AuditMetadata
             }
         }
 
-        private void WalkNode(JsonNode node, string path, int depth)
+        private void WalkNode(JsonNode node, int depth)
         {
             switch (node)
             {
                 case JsonObject jsonObject:
                     foreach (var (name, child) in jsonObject)
                     {
-                        WalkEntry(name, child, path, depth);
+                        WalkEntry(name, child, depth);
                     }
 
                     return;
                 case JsonArray jsonArray:
-                    var index = 0;
                     foreach (var item in jsonArray)
                     {
-                        Walk(item, $"{path}[{index++}]", depth + 1);
+                        Walk(item, depth + 1);
                     }
 
                     return;
@@ -336,14 +443,31 @@ public static partial class AuditMetadata
             }
         }
 
-        private void ThrowIfForbidden(string key, string path)
+        private void ThrowIfForbidden(string key, int depth)
         {
-            if (ForbiddenNormalized.Contains(NormalizeKey(key)))
+            var normalized = NormalizeKey(key);
+
+            // Fail closed on a key that still holds a non-ASCII letter or digit after Unicode form KC:
+            // `еmail` with a Cyrillic `е` is not `EMAIL`, so it must be refused rather than waved through.
+            if (ForbiddenNormalized.Contains(normalized) || ContainsNonAsciiLetterOrDigit(key))
             {
                 throw new ArgumentException(
-                    $"audit payload key '{path}' is forbidden: an audit row never carries personal data or free text",
+                    $"audit payload key '{key}' (normalised '{normalized}') at depth {depth} is forbidden: an audit row never carries personal data or free text",
                     rootName);
             }
+        }
+
+        private static bool ContainsNonAsciiLetterOrDigit(string key)
+        {
+            foreach (var character in key.Normalize(NormalizationForm.FormKC))
+            {
+                if (char.IsLetterOrDigit(character) && !char.IsAscii(character))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

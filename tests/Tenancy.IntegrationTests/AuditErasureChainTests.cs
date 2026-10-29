@@ -16,7 +16,15 @@ namespace Tenancy.IntegrationTests;
 /// <c>prev_hash</c> and <c>entry_hash</c>, i.e. the input of any checkpoint) is byte-identical.
 /// <para>
 /// 11.5.2-T2's signed external checkpoints are not delivered yet (ADR-0010 is <c>proposed</c>), so the
-/// "checkpoint" this test pins is the chain itself: the tuple a checkpoint would attest.
+/// "checkpoint" this test pins is the chain itself: the tuple a checkpoint would attest. Read
+/// "checkpoint" here as the chain anchors — each row's <c>seq</c>, <c>prev_hash</c> and <c>entry_hash</c> —
+/// not a signed checkpoint, which does not exist in code yet.
+/// </para>
+/// <para>
+/// The audit chain is not the only personal-data store: <c>public.user_identity</c> (the provider address,
+/// <c>email_at_provider</c>) and <c>membership.invited_email</c> hold addresses too. Erasing those is the
+/// erasure executor's job (11.9.2-T1.4, on the 11.9.1-T1 verified-deletion path), not this test's: this
+/// test erases only the <c>"user"</c> row's personal fields and proves the chain never carried any.
 /// </para>
 /// </summary>
 [Collection(TenancySuite.Name)]
@@ -48,6 +56,12 @@ public sealed class AuditErasureChainTests
         before.Select(row => row.ActorId).Distinct().ShouldBe([user.ToString("D")]);
         (await VerifyAsync(api, org)).ShouldBeNull();
 
+        // Before erasure the chain already carries no personal data — nothing personal is summed into the
+        // entry hash (audit-and-deletion-rule.md §3), which is exactly why erasure has nothing to rewrite
+        // (§5). The values are the ones written above and in CreateOrgAsync's resolved claim.
+        (await PersonalDataInAuditAsync(database, org, "person@example.test", "acme@example.test", "Person Name"))
+            .ShouldBe(0, "no audit row of the org may carry the person's address or display name before erasure");
+
         // Erasure: the personal fields go, the id stays as the tombstone (11.9.2 AC8/AC9) — no audit row
         // is written or removed by the erasure itself.
         await _fixture.ExecuteAsync(
@@ -62,6 +76,11 @@ public sealed class AuditErasureChainTests
             database,
             $"select count(*) from public.\"user\" where id = '{user}' and (display_name is not null or email like '%@%')"))
             .ShouldBe(0);
+
+        // And the chain is exactly as clean after the erasure: erasure writes and removes no audit row, so
+        // the negative-content count must not have moved either.
+        (await PersonalDataInAuditAsync(database, org, "person@example.test", "acme@example.test", "Person Name"))
+            .ShouldBe(0, "erasure leaves the chain without the person's address or display name, as it was before");
 
         (await VerifyAsync(api, org)).ShouldBeNull();
 
@@ -89,6 +108,40 @@ public sealed class AuditErasureChainTests
         }
 
         return rows;
+    }
+
+    /// <summary>
+    /// Audit rows of <paramref name="org"/> that carry the person's personal data: any of
+    /// <paramref name="personalValues"/> (the addresses and the display name the person's record and the
+    /// resolved claim are written with) anywhere in <c>metadata</c>, or an email-shaped
+    /// <c>actor_id</c>/<c>object_id</c>. The contract is zero, before and after the erasure: the chain keeps
+    /// the pseudonymous id only, so there is no personal field for an erasure to rewrite (11.9.2-T2.2,
+    /// AC9; audit-and-deletion-rule.md §3, §5).
+    /// </summary>
+    private async Task<long> PersonalDataInAuditAsync(
+        string database,
+        Guid org,
+        params string[] personalValues)
+    {
+        await using var connection = await _fixture.OpenSuperuserAsync(database);
+        await using var command = new NpgsqlCommand(
+            """
+            select count(*)
+              from public.audit_log
+             where org_id = @org
+               and (metadata::text ilike any(@patterns)
+                    or actor_id ilike '%@%'
+                    or object_id ilike '%@%')
+            """,
+            connection);
+        command.Parameters.AddWithValue("org", org);
+        command.Parameters.AddWithValue("patterns", Array.ConvertAll(personalValues, value => $"%{value}%"));
+
+        var token = TestContext.Current.CancellationToken;
+        await using var reader = await command.ExecuteReaderAsync(token);
+        await reader.ReadAsync(token);
+
+        return await reader.GetFieldValueAsync<long>(0, token);
     }
 
     private static async Task<AuditChainFinding?> VerifyAsync(TenancyApiFactory api, Guid org)

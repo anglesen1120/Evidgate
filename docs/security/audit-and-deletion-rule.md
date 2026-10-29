@@ -65,7 +65,7 @@ What each payload field may hold, and what it may not:
 | `object_type` / `object_id` | an id (`project:<uuid>`, an artifact, a request id) | a name, an address, a title a person wrote |
 | `before_hash` / `after_hash` | a content address (RFC 8785 + SHA-256 of the object) | the object itself, or a personal field in clear |
 | `request_id` / `trace_id` | an opaque request/trace identifier | a session cookie, a bearer token |
-| `metadata` | an allowlisted key with a short enumerated value (`AuditMetadata.cs:31-54`) | any key on the forbidden list (§4), free text (§6) |
+| `metadata` | an allowlisted key with a short enumerated value (`AuditMetadata.cs:35-57`) | any key on the forbidden list (§4), free text (§6) |
 
 Two consequences a reader should not miss:
 
@@ -78,38 +78,58 @@ Two consequences a reader should not miss:
 
 ## 4. Forbidden keys and how they are matched
 
-The list lives once, as `AuditMetadata.ForbiddenKeys` (`src/BuildingBlocks/Persistence/Audit/AuditMetadata.cs:62-74`),
+The list lives once, as `AuditMetadata.ForbiddenKeys` (`src/BuildingBlocks/Persistence/Audit/AuditMetadata.cs:66-87`),
 and this section mirrors it. A key is refused when it means one of:
 
-`email`, `name`, `ip`, `user_agent`, `message`, `reason_text`, `comment`, `note`, `description`, `free_text`.
+`email`, `name`, `ip`, `user_agent`, `message`, `reason_text`, `comment`, `note`, `description`, `free_text`, and the
+identifying field names `display_name`, `email_address`, `ip_address`, `full_name`, `phone`, `address`, `username`.
 
-Matching is on the **whole key**, never a substring: the comparison form is the key's letters and digits only,
-upper-cased (`AuditMetadata.NormalizeKey`, `AuditMetadata.cs:88-103`), so `Email`, `e-mail`, `E_MAIL`, `USER-AGENT`,
-`userAgent` and `USER AGENT` are all the same forbidden key, while `email_domain` survives as `EMAILDOMAIN`, is not
-equal to `EMAIL`, and stays allowlisted (`AuditMetadata.cs:33`) — a domain is not a person. The walk is recursive
-through dictionaries, object properties, array elements and `JsonElement`/`JsonNode`, depth-capped at
-`MaxPayloadDepth = 16` (`AuditMetadata.cs:80`; `EnsureNoForbiddenKeys`, `AuditMetadata.cs:113`). A refusal names the
-key path and never the value, because the value is the thing that must not reach a log line.
+Matching is on the **whole key**, never a substring: the comparison form is the key in Unicode compatibility form
+(KC), then its letters and digits only, upper-cased (`AuditMetadata.NormalizeKey`, `AuditMetadata.cs:102-118`), so
+`Email`, `e-mail`, `E_MAIL`, `USER-AGENT`, `userAgent` and `USER AGENT` are all the same forbidden key, while
+`email_domain` survives as `EMAILDOMAIN`, is not equal to `EMAIL`, and stays allowlisted (`AuditMetadata.cs:37`) — a
+domain is not a person. A key that still holds a non-ASCII letter or digit after form KC is refused as forbidden
+without consulting the list (fail closed): `еmail` with a Cyrillic `е` normalises to `ЕMAIL`, not `EMAIL`, while a
+fullwidth `ｅｍａｉｌ` normalises to `EMAIL` and matches the list normally.
+
+The walk is recursive through dictionaries and `KeyValuePair<TKey, TValue>` pairs (any key type, the key rendered as
+its name), object properties, public instance fields (which is how a `ValueTuple` item is reached), sequences, and
+`JsonElement`/`JsonNode`, depth-capped at `MaxPayloadDepth = 16` (`AuditMetadata.cs:93`; `EnsureNoForbiddenKeys`,
+`AuditMetadata.cs:133`). A reference-type container already open on the current path is a cycle and is refused instead
+of recursing without bound; the same instance reached twice on different paths is not a cycle. A refusal names the
+offending key, its normalised form and the depth only — never an ancestor key and never a value, because either may be
+the personal data that must not reach a log line. The exception's parameter name is the caller's fixed name for the
+payload (`metadata`, `audit entry`, or `payload`), never a caller-expression capture: capturing the call site would copy
+an inline dictionary literal — its values included — into the message.
 
 Enforcement entry points:
 
 - `AuditMetadata.Validate` runs the deny list **before** the allowlist, so `Email` is reported as a forbidden
-  personal-data key rather than as "not on the allowlist" (`AuditMetadata.cs:130-132`).
+  personal-data key rather than as "not on the allowlist" (`AuditMetadata.cs:145-160`); the bounded null/count checks
+  run first because they need no traversal.
 - The writer runs it twice, and both gates are before the chain. `AuditTrail.Describe`
   (`src/BuildingBlocks/Persistence/Audit/AuditTrail.cs:65-74`) validates the payload when the entry is described, so a
-  forbidden key throws before it is queued; `AuditTrail.FlushAsync` (`AuditTrail.cs:124-130`) walks every queued entry
-  again as the last gate before `lock_timeout`, the advisory lock, the hash and the inserts, so a payload that bypassed
-  `Describe` still cannot enter the permanent record (11.9.2-T2.2).
+  forbidden key throws before it is queued; `AuditTrail.FlushAsync` (`AuditTrail.cs:124-132`) walks the metadata of
+  every queued entry again as the last gate before `lock_timeout`, the advisory lock, the hash and the inserts, so a
+  payload mutated after `Describe` (the same dictionary instance, changed in place) still cannot enter the permanent
+  record (11.9.2-T2.2). `AuditPayload_MutatedAfterDescribe_RefusedAtFlush` proves that second gate.
 - The guard is a C# guard: a payload built as a JSON literal inside SQL is invisible to it (§8).
 
-Proven by `AuditPayload_ForbiddenKeys_Rejected` (AC10). Adding a key to the list is a review decision, like adding one
-to the allowlist (`AuditMetadata.cs:30`), and the list and this section move together.
+Proven by `AuditPayload_ForbiddenKeys_Rejected` and `AuditPayload_MutatedAfterDescribe_RefusedAtFlush` (AC10), with the
+pure walker cases in `AuditUnitTests`. Adding a key to the list is a review decision, like adding one to the allowlist
+(`AuditMetadata.cs:34`), and the list and this section move together.
 
 ## 5. Erasure is a tombstone, not a row deletion
 
 A data-subject erasure never touches `audit_log`. What it changes is the person's own record: the personal fields of
 the `"user"` row — `email`, `display_name`, `last_login_at` (`migrations/0041_identity_user.sql:71-82`) — plus the
 person's data in the stores the 11.9.1-T1 verified-deletion path owns (artifacts and their metadata, 11.9.2 AC8).
+
+The rest of the person belongs to the executor of 11.9.2-T1.4 on that path: the provider-reported address on each
+identity row (`user_identity.email_at_provider`, `migrations/0041_identity_user.sql:109`) and the address on a pending
+invite (`membership.invited_email`, `migrations/0011_identity_membership.sql:60`). The AC10 test
+`Erasure_ThenChainVerify_Ok_CheckpointsUnchanged` erases only the three `"user"` columns and then asserts the chain, so
+it does not erase those two columns — the executor does.
 
 What stays behind, and must:
 
@@ -143,12 +163,12 @@ verification, which must answer `ok`, and no checkpoint must change.
 
 A free-text key is an unbounded write into an immutable table: a handler can put a name, an address, a complaint
 narrative or a support thread into it, nobody can review that content at the call site, and it can never be removed.
-The deny list therefore carries the usual spellings of it — `message`, `reason_text`, `comment`, `note`, `description`,
-`free_text` (§4) — and the metadata allowlist is meant to admit enumerated values only
-([audit-taxonomy](./audit-taxonomy.md) §8 item 5).
+The deny list therefore carries the free-text spellings `message`, `reason_text`, `comment`, `note`, `description`
+and `free_text` (§4) — those six, and no compound of them, because matching is whole-key (§4) — and the metadata
+allowlist is meant to admit enumerated values only ([audit-taxonomy](./audit-taxonomy.md) §8 item 5).
 
 One allowlisted key is still free text today, and this page does not pretend otherwise: `reason`, up to 256 characters
-with only the credential-shape regex applied (`AuditMetadata.cs:43,28`; gap **G7** in
+with only the credential-shape regex applied (`AuditMetadata.cs:47,32`; gap **G7** in
 [audit-taxonomy](./audit-taxonomy.md) §7.2). Receiver: 02.7.1-T2.2 (drop the key or close its vocabulary to an
 enumerated set). Until that lands, an emitter that writes `reason` must pass a code, never prose — and a review that
 sees prose in a `reason` value treats it as the defect it is, not as a grey area.
@@ -178,7 +198,7 @@ them; their fixed key sets are reviewed here instead:
 
 | Path | What it writes | Review |
 |---|---|---|
-| `evidgate_resolve.session_revoke_one` — the admin session revoke, `migrations/0050_identity_session_revoke_audit.sql`, re-created with ids by `0051_identity_session_revoke_audit_ids.sql` | a complete canonical row built in SQL, including `metadata = {"target_user_id": "<the member>"}` (`0050:257-274`, `0051:265-285`) | ✅ ids only: no identifying field, no free text, satisfies §3/§4 by construction (`0050:21` states the same) |
+| `evidgate_resolve.session_revoke_one` — the admin session revoke, `migrations/0050_identity_session_revoke_audit.sql`, re-created with ids by `0051_identity_session_revoke_audit_ids.sql` | a complete canonical row built in SQL, including `metadata = {"target_user_id": "<the member>"}` (`0050:257-279`, `0051:265-290`) | ✅ ids only: no identifying field, no free text, satisfies §3/§4 by construction (`0050:21` states the same) |
 | the pre-tenant login/link definers of `0042_identity_login_resolvers.sql` and `0044_identity_login_linking.sql` | **no audit row at all** — `audit_log` is org-scoped and these run before a tenant scope exists; each carries the explicit marker `-- lint: audit-deferred 02.7.1-T2.2` (`0042:65`, `0044:144`) | ✅ a deferral, not an omission; adding a row there is 02.7.1-T2.2's change and must follow §3/§4 |
 
 The control that remains is review: `scripts/check-rls.py` lints the definer's hardening (search path, grants, RLS),
@@ -196,8 +216,8 @@ it holds no chain rows, and it is not built by this PR.
 
 | Rule | Enforced by | Where |
 |---|---|---|
-| No identifying key or free-text key in a payload | `AuditMetadata.ForbiddenKeys` + recursive walk, called from `AuditTrail.Describe` and again in `FlushAsync` before the chain | `src/BuildingBlocks/Persistence/Audit/AuditMetadata.cs:62-74,113`; test `AuditPayload_ForbiddenKeys_Rejected` |
-| Enumerated metadata only, short values, no credential-shaped value | allowlist, `MaxKeys`, `MaxValueLength`, credential regex | `AuditMetadata.cs:31-54,128-166` |
+| No identifying key or free-text key in a payload | `AuditMetadata.ForbiddenKeys` + recursive walk, called from `AuditTrail.Describe` and again on the metadata in `FlushAsync` before the chain | `src/BuildingBlocks/Persistence/Audit/AuditMetadata.cs:66-87,133`; tests `AuditPayload_ForbiddenKeys_Rejected`, `AuditPayload_MutatedAfterDescribe_RefusedAtFlush` |
+| Enumerated metadata only, short values, no credential-shaped value | allowlist, `MaxKeys`, `MaxValueLength`, credential regex | `AuditMetadata.cs:35-57,145-181` |
 | The actor is an opaque id | `AuditActorResolver` | `AuditActorResolver.cs:13-17`; column check `migrations/0015_identity_audit_log.sql:47` |
 | Erasure leaves the chain and checkpoints unchanged | rule (§5); the executor must not touch `audit_log` | test `Erasure_ThenChainVerify_Ok_CheckpointsUnchanged` |
 | Immutability of written rows | `revoke update, delete, truncate` from the app role; owner has SELECT/INSERT policies only | `migrations/0015_identity_audit_log.sql:124` and its policy block |
@@ -207,7 +227,8 @@ it holds no chain rows, and it is not built by this PR.
 Claim summary:
 
 - **Met:** a chain payload cannot carry a forbidden key through the C# writer — the deny list is recursive,
-  whole-key and case/separator-insensitive, and it is checked before the entry is queued; the actor is an opaque id;
+  whole-key, case/separator-insensitive in Unicode form KC and refuses a non-ASCII homoglyph outright, and it is
+  checked before the entry is queued and again on the metadata at flush; the actor is an opaque id;
   audit rows cannot be updated or deleted; the fixed SQL key set is ids only; the platform-scope shape is decided.
 - **Met as a rule, not as code:** erasure tombstones the person and leaves the chain and any checkpoint unchanged —
   the executor is 11.9.2-T1.4 / 11.9.1-T1.
@@ -217,6 +238,6 @@ Claim summary:
 
 How the claims were checked: the writer, the hashing, the actor resolver, the metadata guard and the verifier were
 located with codebase-memory (`search_graph` on `AuditMetadata`, `AuditActorResolver`, the audit writer path) and read
-at the cited lines in the S147 worktree; the migration cites were read from `migrations/0015`, `0041`, `0042`, `0044`,
-`0050` and `0051`. No build, test, lint or formatter was run for this page — it is documentation; the one code claim
-this page makes about enforcement is the test named in AC10, which runs in the `test` stage.
+at the cited lines in the S147 worktree; the migration cites were read from `migrations/0015`, `0011`, `0041`, `0042`,
+`0044`, `0050` and `0051`. No build, test, lint or formatter was run for this page — it is documentation; the one code
+claim this page makes about enforcement is the test named in AC10, which runs in the `test` stage.

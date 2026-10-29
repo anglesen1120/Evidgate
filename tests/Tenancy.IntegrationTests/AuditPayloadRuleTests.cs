@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -31,33 +32,54 @@ public sealed class AuditPayloadRuleTests
     [Fact]
     public async Task AuditPayload_ForbiddenKeys_Rejected()
     {
-        // Every shape the guard must walk, with the value that must never appear in the message.
-        var rejected = new (string Path, object Payload, string Leak)[]
+        // Every shape the guard must walk: the key it must name, that key's depth, the value that must
+        // never appear in the message, and an ancestor key name that must not appear either (a nested
+        // key may itself be personal data, so the message names only the offending key and its depth).
+        using var document = JsonDocument.Parse("""{"wrapper":{"email":"person@example.test"}}""");
+
+        var rejected = new (string Key, int Depth, string Leak, string? Ancestor, object Payload)[]
         {
-            ("payload.email", new Dictionary<string, object?> { ["email"] = "person@example.test" }, "person@example.test"),
-            ("payload.Name", new Dictionary<string, object?> { ["Name"] = "Person Name" }, "Person Name"),
-            ("payload.nested.email", new Dictionary<string, object?>
+            ("email", 1, "person@example.test", null, new Dictionary<string, object?> { ["email"] = "person@example.test" }),
+            ("Name", 1, "Person Name", null, new Dictionary<string, object?> { ["Name"] = "Person Name" }),
+            ("email", 2, "person@example.test", "wrapper", new Dictionary<string, object?>
             {
-                ["nested"] = new Dictionary<string, object?> { ["email"] = "person@example.test" },
-            }, "person@example.test"),
-            ("payload.items[0].user_agent", new Dictionary<string, object?>
+                ["wrapper"] = new Dictionary<string, object?> { ["email"] = "person@example.test" },
+            }),
+            ("user_agent", 3, "Mozilla/5.0", "items", new Dictionary<string, object?>
             {
                 ["items"] = new object?[] { new Dictionary<string, object?> { ["user_agent"] = "Mozilla/5.0" } },
-            }, "Mozilla/5.0"),
-            ("payload[0].ip", new Dictionary<string, object?>[] { new() { ["ip"] = "203.0.113.7" } }, "203.0.113.7"),
-            ("payload.free-text", new Dictionary<string, object?> { ["free-text"] = "asked us to stop" }, "asked us to stop"),
-            ("payload.USER_AGENT", new Dictionary<string, object?> { ["USER_AGENT"] = "Mozilla/5.0" }, "Mozilla/5.0"),
-            ("payload.UserAgent", new Dictionary<string, object?> { ["UserAgent"] = "Mozilla/5.0" }, "Mozilla/5.0"),
-            ("payload.reasonText", new { reasonText = "asked for a correction" }, "asked for a correction"),
-            ("payload.comment", JsonNode.Parse("""{"comment":"please delete my data"}""")!, "please delete my data"),
-            ("payload[0].description", JsonNode.Parse("""[{"description":"please remove the record"}]""")!, "please remove the record"),
+            }),
+            ("ip", 2, "203.0.113.7", null, new Dictionary<string, object?>[] { new() { ["ip"] = "203.0.113.7" } }),
+            ("free-text", 1, "asked us to stop", null, new Dictionary<string, object?> { ["free-text"] = "asked us to stop" }),
+            ("USER_AGENT", 1, "Mozilla/5.0", null, new Dictionary<string, object?> { ["USER_AGENT"] = "Mozilla/5.0" }),
+            ("UserAgent", 1, "Mozilla/5.0", null, new Dictionary<string, object?> { ["UserAgent"] = "Mozilla/5.0" }),
+            ("reasonText", 1, "asked for a correction", null, new { reasonText = "asked for a correction" }),
+            ("comment", 1, "please delete my data", null, JsonNode.Parse("""{"comment":"please delete my data"}""")!),
+            ("description", 2, "please remove the record", null, JsonNode.Parse("""[{"description":"please remove the record"}]""")!),
+            // Unicode: the fullwidth spelling normalises to EMAIL; the Cyrillic homoglyph keeps a non-ASCII
+            // letter after form KC and is refused by the fail-closed rule instead of matching the deny list.
+            ("\uFF45\uFF4D\uFF41\uFF49\uFF4C", 1, "person@example.test", null, new Dictionary<string, object?>
+            {
+                ["\uFF45\uFF4D\uFF41\uFF49\uFF4C"] = "person@example.test",
+            }),
+            ("\u0435mail", 1, "person@example.test", null, new Dictionary<string, object?>
+            {
+                ["\u0435mail"] = "person@example.test",
+            }),
+            // A parsed JsonElement is walked like any other object.
+            ("email", 2, "person@example.test", "wrapper", document.RootElement),
         };
 
-        foreach (var (path, payload, leak) in rejected)
+        foreach (var (key, depth, leak, ancestor, payload) in rejected)
         {
             var exception = Should.Throw<ArgumentException>(() => AuditMetadata.EnsureNoForbiddenKeys(payload));
-            exception.Message.ShouldContain(path);
-            exception.Message.ShouldNotContain(leak, Case.Sensitive, "the message names the key path only, never a value");
+            exception.Message.ShouldContain(key);
+            exception.Message.ShouldContain($"at depth {depth}");
+            exception.Message.ShouldNotContain(leak, Case.Sensitive, "the message names the key and its depth only, never a value");
+            if (ancestor is not null)
+            {
+                exception.Message.ShouldNotContain(ancestor, Case.Sensitive, "an ancestor key name may itself be personal data");
+            }
         }
 
         // The allowlist still passes, including keys that merely contain a term of the deny list.
@@ -118,6 +140,50 @@ public sealed class AuditPayloadRuleTests
             database,
             $"select metadata::text from public.audit_log where org_id = '{org}' and seq = 2")).ShouldBe(
             """{"slug": "acme", "email_domain": "example.test"}""");
+        (await VerifyAsync(api, org)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task AuditPayload_MutatedAfterDescribe_RefusedAtFlush()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        using var client = api.CreateClient();
+        var user = Guid.CreateVersion7();
+        var org = await CreateOrgAsync(client, user, "acme");
+
+        // The org creation wrote seq 1; that is the chain head this unit must leave alone.
+        var before = await CheckpointAsync(database, org);
+        before.Count.ShouldBe(1);
+
+        await using (var attempt = await WriterScope.BeginAsync(api, org))
+        {
+            // Describe validates the metadata and Record keeps the same dictionary instance, so mutating that
+            // instance afterwards is the only route past the first gate — and the flush gate must catch it.
+            var metadata = new Dictionary<string, string>
+            {
+                ["slug"] = "acme",
+                ["email_domain"] = "example.test",
+            };
+            attempt.Audit.Describe(new AuditObject(
+                "project",
+                Guid.CreateVersion7().ToString("D"),
+                Metadata: metadata));
+            attempt.Audit.Record("project.create", new AuditActor(AuditActorTypes.User, user.ToString("D")));
+
+            metadata["email"] = "person@example.test";
+
+            var exception = await Should.ThrowAsync<ArgumentException>(() => attempt.FlushAuditAsync());
+
+            exception.Message.ShouldContain("email");
+            exception.Message.ShouldContain("at depth 1");
+            exception.Message.ShouldNotContain("person@example.test", Case.Sensitive, "never echo the value of a personal field");
+        }
+
+        // The guard runs before lock_timeout, the advisory lock, the hash and the insert: no row, no delta.
+        var after = await CheckpointAsync(database, org);
+        after.ShouldBe(before);
+        (await _fixture.ScalarAsync<long>(database, $"select count(*) from public.audit_log where org_id = '{org}'")).ShouldBe(1);
         (await VerifyAsync(api, org)).ShouldBeNull();
     }
 
