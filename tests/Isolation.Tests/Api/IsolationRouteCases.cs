@@ -2404,8 +2404,8 @@ public sealed class RouteProbeRunner
 
     /// <summary>
     /// The <c>id::text</c> values an owner-connection query returns for <paramref name="org"/> (<c>@org</c>), read
-    /// inside that org's tenant scope: a FORCE-RLS table (migration 0053's <c>security_event</c>) hides every row
-    /// from a tenant-less owner connection, so the GUC is set in the same transaction the query runs in.
+    /// inside that org's tenant scope: 0053's owner backfill policy (<c>security_event_owner_backfill</c>) lets a tenant-less
+    /// owner read past FORCE RLS, so the query keeps the tenant scope on purpose; the GUC is set in the same transaction.
     /// </summary>
     public async Task<IReadOnlyCollection<string>> TenantIdsAsync(string sql, Guid org)
     {

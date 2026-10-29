@@ -248,6 +248,25 @@ class AuditExemptions(unittest.TestCase):
         self.assertIn("structured operator log event", reason)
         self.assertIn("11.5.1-T5", reason)
 
+    def test_no_exemption_still_claims_the_security_event_table_is_missing(self):
+        """11.5.1-T5/`0053`: `security_event` exists, so a reason must not deny it.
+
+        `0053` shipped the table with `org_id` NOT NULL, so a platform-scope (no-tenant) event has
+        no row yet — but that is the open owner decision D-S137-OWNER (nullable `org_id` or a
+        separate platform table), never a table that is still to be created. A reason carrying
+        "does not exist", "not exist yet" or "once that table lands" next to `security_event`
+        describes a state `0053` ended and would send the next reader to wait for a table that is
+        already there.
+        """
+        stale = ("does not exist", "not exist yet", "once that table lands")
+
+        for name, reason in check_rls.DEFINER_AUDIT_EXEMPT.items():
+            if "security_event" not in reason:
+                continue
+            with self.subTest(name=name):
+                for phrase in stale:
+                    self.assertNotIn(phrase, reason.lower(), f"{name} still claims the table is missing")
+
 
 class RealRepository(unittest.TestCase):
     def test_migrations_of_this_repository_are_clean(self):

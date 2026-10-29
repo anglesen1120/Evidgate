@@ -50,9 +50,9 @@ public sealed class AuditChainBrokenException(IReadOnlyList<(Guid OrgId, AuditCh
 /// the task is retried and finally dead-lettered where operators see it.
 /// </summary>
 /// <remarks>
-/// The plan also names a <c>security_event</c> row (11.5.1's surface). That table does not exist
-/// yet, so the finding is carried by the log line, the counter and the dead-letter row; 11.5.1
-/// adds the row when it creates the table.
+/// The plan also names a <c>security_event</c> row (AC6, 11.5.1's surface): <c>0053</c> (11.5.1-T5.1) ships the table, but
+/// the closed V1 type set has no verifier-fault type (11.1.1-T4.1; carried row "G8 verifier fault has no `security_event` type
+/// (11.5.1-T5, S137)") and <c>org_id</c> is NOT NULL (platform scope open, D-S137-OWNER): log line, counter, dead letter.
 /// </remarks>
 public sealed partial class VerifyAuditChainTaskHandler(
     IWorkerSchedDataSource sweep,
