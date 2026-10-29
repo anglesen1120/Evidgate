@@ -26,7 +26,9 @@ namespace Tenancy.IntegrationTests;
 /// owner/provisioning path's to set, owed to 08.5.1-T1.4/T1.7) and the trigger-owned
 /// <c>updated_at</c>/<c>version</c> are outside every app-role grant — so neither table can be
 /// rewritten, re-targeted or removed by the application role, and no app statement can provision a
-/// budget row or raise a cap.
+/// budget row or raise a cap. The ledger carries the 00 §7 <c>updated_at</c>/<c>version</c> columns and
+/// the shared version trigger because the convention requires them on every table; they are outside
+/// every app grant and inert here, since no app statement updates a call row (asserted below).
 /// </description></item>
 /// </list>
 /// <para>
@@ -204,10 +206,12 @@ public sealed class HealingLlmSchemaTests
 
         // The exact column list, in order — which is AC6 as well: there is no secret, key, prompt text,
         // model response or payload column to fill, and an added one fails here before it can be written.
+        // `updated_at`/`version` are the 00 §7 convention columns (see the trigger assertion below and the
+        // grant case): required on every table, outside every app-role grant, inert on an append-only row.
         ColumnNames(await _fixture.ColumnsAsync(database, CallTable)).ShouldBe(
             "id,org_id,project_id,incident_id,candidate_id,purpose,model,prompt_version,tokens,cost,status,attempt,"
-            + "redaction_report_hash,created_at",
-            "AC6: the call ledger's whole content is attribution, counts and a redaction hash");
+            + "redaction_report_hash,created_at,updated_at,version",
+            "AC6: the call ledger's whole content is attribution, counts, a redaction hash and the 00 §7 audit columns");
 
         ColumnNames(await _fixture.ColumnsAsync(database, BudgetTable)).ShouldBe(
             "id,org_id,project_id,period,period_start,period_cap_cost,period_cap_tokens,used_cost,used_tokens,"
@@ -227,6 +231,8 @@ public sealed class HealingLlmSchemaTests
             "attempt:integer:int4:NO:",
             "redaction_report_hash:text:text:YES:",
             "created_at:timestamp with time zone:timestamptz:NO:",
+            "updated_at:timestamp with time zone:timestamptz:NO:",
+            "version:integer:int4:NO:",
         })
         {
             callColumns.ShouldContain(
@@ -234,11 +240,17 @@ public sealed class HealingLlmSchemaTests
                 $"{CallTable} needs the 0054 contract column shape '{prefix}'");
         }
 
-        // An attempt row is history: no updated_at, no version, nothing to update in place.
-        callColumns.ShouldNotContain(
-            column => column.StartsWith("updated_at:", StringComparison.Ordinal)
-                || column.StartsWith("version:", StringComparison.Ordinal),
-            "a call row is append-only: the audit columns of a mutable row must not exist on it");
+        // An attempt row is history, and the two 00 §7 columns say so by staying at their defaults: they
+        // exist because §7 (M1W3-01) requires the shape — columns plus the shared trigger — on every
+        // table, and no app statement can name them (the grant case) or update the row at all.
+        (await _fixture.ColumnAsync<string>(
+                database,
+                "select t.tgname from pg_catalog.pg_trigger t "
+                + "join pg_catalog.pg_class c on c.oid = t.tgrelid "
+                + "where not t.tgisinternal and c.relname = 'healing_llm_call' order by 1"))
+            .ShouldBe(
+                ["healing_llm_call_set_updated_at_and_version"],
+                $"{CallTable} carries exactly the shared version trigger, as 00 §7 (M1W3-01) requires");
 
         var budgetColumns = await _fixture.ColumnsAsync(database, BudgetTable);
         foreach (var prefix in new[]
@@ -283,6 +295,7 @@ public sealed class HealingLlmSchemaTests
             "c:healing_llm_call_authoring_attribution_check:",
             "c:healing_llm_call_incident_required_check:",
             "c:healing_llm_call_candidate_incident_check:",
+            "c:healing_llm_call_version_check:",
         })
         {
             callConstraints.ShouldContain(
@@ -719,6 +732,21 @@ public sealed class HealingLlmSchemaTests
                 $"select has_column_privilege('evidgate_app', 'public.{CallTable}', 'created_at', 'INSERT')"))
             .ShouldBeFalse("`created_at` belongs to the column default, not to the caller");
 
+        // The 00 §7 convention columns exist for the shape and are outside every app grant: no INSERT, so
+        // a caller cannot set the token, and no UPDATE (the table-level refusal above is the whole story,
+        // this pins the column-level one too).
+        foreach (var column in new[] { "updated_at", "version" })
+        {
+            (await _fixture.ScalarAsync<bool>(
+                    world.Database,
+                    $"select has_column_privilege('evidgate_app', 'public.{CallTable}', '{column}', 'INSERT')"))
+                .ShouldBeFalse($"`{column}` is outside the app-role INSERT grant (00 §7 convention column)");
+            (await _fixture.ScalarAsync<bool>(
+                    world.Database,
+                    $"select has_column_privilege('evidgate_app', 'public.{CallTable}', '{column}', 'UPDATE')"))
+                .ShouldBeFalse($"`{column}` is outside every app-role grant: the ledger is append-only");
+        }
+
         // The recorder's write: one attempt row inside the caller's tenant transaction (T1.2 seam).
         await using (var recorder = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA))
         {
@@ -748,6 +776,11 @@ public sealed class HealingLlmSchemaTests
 
         (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{CallTable}"))
             .ShouldBe(1, "the refused statements left the ledger alone");
+
+        // The convention token is inert on this table: the recorder's insert left it at the default and
+        // nothing the app role can issue moves it (there is no UPDATE grant at all).
+        (await _fixture.ScalarAsync<int>(world.Database, $"select version from public.{CallTable}"))
+            .ShouldBe(1, "the 00 §7 token stays at the column default 0054 gives it");
     }
 
     [Fact]

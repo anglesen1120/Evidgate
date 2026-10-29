@@ -536,16 +536,23 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
   nothing binds to them before the file is applied (**migrate before app**).
 - `healing_llm_call` shape: `id uuid primary key`, `org_id uuid not null`, `project_id uuid not null`,
   `incident_id`/`candidate_id uuid` (nullable), `purpose text not null`, `model text not null`,
-  `prompt_version text not null`, `tokens int not null default 0`, `cost numeric(12,6) not null
-default 0`, `status text not null`, `attempt int not null default 1`, `redaction_report_hash text`,
-  `created_at timestamptz not null default now()`. One row per ATTEMPT, not per invocation: AC1's
-  schema-violation retry and AC2's timeout abort are facts about one provider call, so attempt 1 and
-  attempt 2 of a failing invocation are two rows. `attempt` is the ordinal inside one invocation and
-  is in no unique key (two invocations of one incident both have an attempt 1).
-- The ledger is append-only by shape and by grant: no `updated_at`, no `version`, no UPDATE and no
-  DELETE for the application role. A row is written once, with the status the attempt ended in (the
-  recorder inserts after the attempt), so nothing has to be corrected in place. `tokens`/`cost` are
-  the loss-free replacement for the payload, and the budget and the cost report sum them.
+  `prompt_version text not null`, `tokens int not null default 0`,
+  `cost numeric(12,6) not null default 0`, `status text not null`, `attempt int not null default 1`,
+  `redaction_report_hash text`, `created_at timestamptz not null default now()`, plus the 00 §7
+  convention columns `updated_at timestamptz not null default now()` and
+  `version int not null default 1` (with `healing_llm_call_version_check`, the shape `0052` gives
+  `healing_switch`). One row per ATTEMPT, not per invocation: AC1's schema-violation retry and AC2's
+  timeout abort are facts about one provider call, so attempt 1 and attempt 2 of a failing
+  invocation are two rows. `attempt` is the ordinal inside one invocation and is in no unique key
+  (two invocations of one incident both have an attempt 1).
+- The ledger is append-only by GRANT, not by shape: no UPDATE and no DELETE for the application role,
+  and `created_at`/`updated_at`/`version` are all outside its column-level INSERT. The 00 §7 audit
+  columns and the shared `set_updated_at_and_version` trigger exist because §7 requires them on every
+  table (the convention scan enforces it), and they are inert here: no app statement names them, so
+  they stay at their defaults and the trigger only fires if a privileged backfill ever moves a row. A
+  row is written once, with the status the attempt ended in (the recorder inserts after the attempt
+  ends), so nothing has to be corrected in place. `tokens`/`cost` are the loss-free replacement for
+  the payload, and the budget and the cost report sum them.
 - AC6 (S3) is a column-count rule here: there is NO secret, API-key, prompt-text, model-response or
   payload column at all, only `redaction_report_hash` (a hash of the 08.5.3 report, nullable until
   that task lands) and the model/prompt-version labels. The schema test pins the exact column list,
@@ -596,7 +603,8 @@ evidgate_owner USING (true) WITH CHECK (true)`) that `FORCE` makes necessary for
   the caller's tenant transaction (00 §5.5 C6 prefers a grant to a definer).
 - Grants (the revoke first, because `0001`'s default privileges hand `evidgate_app` full DML):
   `healing_llm_call` = `select` + `insert` of exactly its thirteen writable columns (no `created_at`,
-  so an attempt cannot be backdated) and nothing else. `healing_llm_budget` = `select` + `insert` of
+  no `updated_at`, no `version`, so an attempt can neither be backdated nor carry a caller-chosen
+  token) and nothing else. `healing_llm_budget` = `select` + `insert` of
   the five identity/period columns (`id`, `org_id`, `project_id`, `period`, `period_start`) + `update`
   of exactly the two columns the consume and reset statements move (`used_cost`, `used_tokens`) — two
   columns, not the four-plus-two an earlier revision of this note counted. The identity columns and
@@ -621,10 +629,15 @@ evidgate_owner USING (true) WITH CHECK (true)`) that `FORCE` makes necessary for
   `0027`'s `waiver` and `0028`'s `artifact` also do. A consume that sets only
   `used_cost`/`used_tokens` therefore still stamps `updated_at` and increments `version`, while the
   caller itself can never write the token it is validated against.
-- Rollback: `drop table if exists public.healing_llm_budget; drop table if exists
-public.healing_llm_call;` — the policies, indexes, the trigger and the grants go with them, and
-  both tables hold derived telemetry (calls made, budget consumed), so a rollback loses cost
-  attribution history and nothing that the provider's own billing cannot re-derive.
+- Both tables carry the trigger, and on `healing_llm_call` it is INERT by design: 00 §7 (`M1W3-01`)
+  requires it on every table with a `version` column, so the convention scan cannot be satisfied by
+  the columns alone, but no statement any role may issue updates a call row (there is no UPDATE grant
+  at all). Its `updated_at`/`version` therefore stay at the defaults `0054` gives them; the trigger
+  exists for the shape and only fires if a privileged backfill ever moves a row.
+- Rollback: `drop table if exists public.healing_llm_budget;` then
+  `drop table if exists public.healing_llm_call;` — the policies, indexes, the trigger and the grants
+  go with them, and both tables hold derived telemetry (calls made, budget consumed), so a rollback
+  loses cost attribution history and nothing that the provider's own billing cannot re-derive.
 
 ## Tests and fixtures
 

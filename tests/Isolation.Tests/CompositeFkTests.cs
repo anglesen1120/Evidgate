@@ -22,9 +22,17 @@ namespace Isolation.Tests;
 /// Every insert goes through <c>evidgate_app</c> inside an
 /// <c>ITenantScope</c> transaction (00 §5.5 C3), never the owner: with FORCE row
 /// level security the owner's policy is permissive, so an owner insert would prove
-/// nothing about the path the API uses. The corrupt insert is filed under org B
+/// nothing about the path the API uses. The one exception is a table in
+/// <see cref="TenantRowFactory.OwnerProvisionedTables"/> (<c>healing_llm_budget</c>,
+/// whose NOT NULL caps <c>0054</c> keeps outside the app role's INSERT grant): its
+/// rows are generated on the owner connection, because the app role cannot insert
+/// them at all. That does not weaken the case — a composite foreign key is a schema
+/// constraint, so its rejection is the same statement for either role, and the
+/// corrupt row still differs from the valid one only in which org's parent it names.
+/// The corrupt insert is filed under org B
 /// <em>while the tenant setting is org B</em>, so the row-level-security
-/// <c>with check</c> passes and the rejection can only be the composite foreign key
+/// <c>with check</c> passes (the tenant setting for the app role, the owner backfill
+/// policy on the owner path) and the rejection can only be the composite foreign key
 /// — asserted by SQLSTATE and by the constraint's own name.
 /// <para>
 /// That ordering is load-bearing and must not be "simplified": with the tenant
@@ -117,7 +125,7 @@ public sealed class CompositeFkTests : HarnessTest
                 // No tenant parent: nothing to corrupt. Both orgs' rows are still
                 // generated and inserted, which is what proves the generator resolves
                 // this table's NOT NULL columns, checks and FK parents at all.
-                await using var scope = await TenantScope.BeginAsync(Fixture.AppConnectionString, OrgA);
+                await using var scope = await TenantScope.BeginAsync(ConnectionFor(table), OrgA);
                 var factory = new TenantRowFactory(scan.Schema, (sql, parameters) => scope.ExecuteAsync(sql, parameters));
                 await factory.CreateAsync(table, OrgA, Token);
                 await scope.SetAsync(TenantSetting, OrgB.ToString("D", CultureInfo.InvariantCulture));
@@ -133,7 +141,7 @@ public sealed class CompositeFkTests : HarnessTest
 
                 // One transaction per attempt: the rejected insert aborts its
                 // transaction (25P02), so each corruption gets its own.
-                await using var scope = await TenantScope.BeginAsync(Fixture.AppConnectionString, OrgA);
+                await using var scope = await TenantScope.BeginAsync(ConnectionFor(table), OrgA);
                 var factory = new TenantRowFactory(scan.Schema, (sql, parameters) => scope.ExecuteAsync(sql, parameters));
 
                 // A nullable key is left null in a valid row (it may close a cycle, project <-> environment),
@@ -156,7 +164,8 @@ public sealed class CompositeFkTests : HarnessTest
                     PostgresErrorCodes.ForeignKeyViolation,
                     $"{table}: a row filed under org {OrgB} pointing at org {OrgA}'s {tenantParent.PrincipalTable} row must be "
                     + $"rejected by the composite foreign key '{tenantParent.Name}' (SQLSTATE 23503), got {error.SqlState} "
-                    + $"({error.MessageText}) — the row-level-security with check passed because the tenant setting was org {OrgB}, "
+                    + $"({error.MessageText}) — row level security passed on the seeding path (the tenant setting was org {OrgB} "
+                    + "for the app role, the owner backfill policy on the owner path of an owner-provisioned table), "
                     + "so this rejection can only be the foreign key");
                 error.ConstraintName.ShouldBe(
                     tenantParent.Name,
@@ -180,6 +189,18 @@ public sealed class CompositeFkTests : HarnessTest
             RlsExceptionList.PathInRepo,
             string.Join(", ", scan.Excluded.Select(entry => $"{entry.Table} ({entry.Kind})")));
     }
+
+    /// <summary>
+    /// The connection one table's generated rows run on: <c>evidgate_app</c> for every tenant table whose
+    /// INSERT grant covers the NOT NULL columns the generator fills, and <c>evidgate_owner</c> for a table
+    /// in <see cref="TenantRowFactory.OwnerProvisionedTables"/> — <c>0054</c> keeps
+    /// <c>healing_llm_budget</c>'s caps outside the app role's grant, so only the provisioning path can
+    /// create its row. The composite FK asserted above is a schema constraint, unaffected by the role.
+    /// </summary>
+    private string ConnectionFor(string table) =>
+        TenantRowFactory.OwnerProvisionedTables.Contains(table)
+            ? Fixture.OwnerConnectionString
+            : Fixture.AppConnectionString;
 
     /// <summary>
     /// T2.2, first negative fixture: a scratch tenant table whose foreign key to

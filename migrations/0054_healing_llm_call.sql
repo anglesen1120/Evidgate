@@ -14,13 +14,19 @@
 -- ordinal inside one invocation (`1`, `2`, …); it is deliberately not part of any unique key: two
 -- invocations of the same incident both have an attempt 1, and they are different calls.
 --
--- APPEND-ONLY. A call row has `created_at` and nothing else: no `updated_at`, no `version`, no UPDATE
--- and no DELETE grant for the application role (0015/0031/0049/0053 precedent). The status a row
--- carries is final — the recorder inserts the attempt after it ends (T1.2's `HealingLlmCallRecorder`,
--- one INSERT per attempt inside the caller's tenant transaction), so "correct the optimistic row
--- afterwards" never has to be expressed as a write on history. A privileged backfill by the owner is
--- still possible under the owner policy, which is why the audit columns' absence is a grant decision
--- as well as a shape decision.
+-- APPEND-ONLY, BY GRANT. A call row carries the 00 §7 audit columns — `created_at`, `updated_at`,
+-- `version` and the shared `set_updated_at_and_version` trigger — because 00 §7 requires all three of
+-- them on EVERY table and `Persistence.IntegrationTests.SchemaConventionTests` enforces that shape
+-- table by table; a call row is no exception to a convention rule it cannot use. What makes the ledger
+-- history is the grant, not the absence of a column: `evidgate_app` holds no UPDATE and no DELETE on
+-- this table (0015/0031/0049/0053 precedent), and none of the three audit columns is in its
+-- column-level INSERT either, so no app statement can name or move them. The convention columns are
+-- therefore convention-only and inert here: `updated_at`/`version` stay at their defaults, the trigger
+-- fires only if a future privileged path ever updates a row, and the owner backfill policy stays the
+-- only way a row could be corrected. The status a row carries is final — the recorder inserts the
+-- attempt after it ends (T1.2's `HealingLlmCallRecorder`, one INSERT per attempt inside the caller's
+-- tenant transaction), so "correct the optimistic row afterwards" never has to be expressed as a write
+-- on history.
 --
 -- NO SECRET, PROMPT OR RESPONSE COLUMN (AC6, S3). Provider credentials are read from the secret store
 -- by the worker identity and never reach this table, and neither does the prompt text, the raw model
@@ -86,9 +92,10 @@
 -- creates in `public`, so each grant below would be an additive no-op without the revoke first
 -- (0006/0009/0027/0033/0052 precedent). After it:
 --   * `healing_llm_call`: SELECT and a column-level INSERT of exactly the thirteen columns an attempt
---     row is made of. `created_at` is excluded so a caller cannot backdate an attempt (a table-level
---     INSERT would let it name the column, so the grant is per column). No UPDATE, no DELETE: the row
---     is history.
+--     row is made of. `created_at`, `updated_at` and `version` are excluded so a caller can neither
+--     backdate an attempt nor set its convention token (a table-level INSERT would let it name those
+--     columns, so the grant is per column). No UPDATE, no DELETE: the row is history, and the two
+--     00 §7 columns above it never move.
 --   * `healing_llm_budget`: SELECT, a column-level INSERT of the five identity/period columns (`id`,
 --     `org_id`, `project_id`, `period`, `period_start`) and an UPDATE of exactly the two columns the
 --     consume/reset statements move (`used_cost`, `used_tokens`) — two, not the six an earlier revision
@@ -148,6 +155,10 @@ create table if not exists public.healing_llm_call (
   attempt integer not null default 1,
   redaction_report_hash text,
   created_at timestamptz not null default now(),
+  -- 00 §7 convention columns: required on every table, outside every app-role grant, and never moved by
+  -- an app statement (there is no UPDATE grant at all). See APPEND-ONLY above.
+  updated_at timestamptz not null default now(),
+  version integer not null default 1,
   constraint healing_llm_call_pkey primary key (id),
   constraint healing_llm_call_org_id_key unique (org_id, id),
   constraint healing_llm_call_project_fk
@@ -159,6 +170,8 @@ create table if not exists public.healing_llm_call (
   constraint healing_llm_call_tokens_check check (tokens >= 0),
   constraint healing_llm_call_cost_check check (cost >= 0),
   constraint healing_llm_call_attempt_check check (attempt >= 1),
+  -- 00 §7 shape of the convention token, the same rule 0052 gives healing_switch (M1W3-01).
+  constraint healing_llm_call_version_check check (version >= 1),
   -- AC7: an authoring generation serves a project, never an incident and never a candidate.
   constraint healing_llm_call_authoring_attribution_check
     check (purpose <> 'authoring_generation' or (incident_id is null and candidate_id is null)),
@@ -220,6 +233,17 @@ create trigger healing_llm_budget_set_updated_at_and_version
   before update on public.healing_llm_budget
   for each row execute function public.set_updated_at_and_version();
 
+-- The same trigger on the ledger, where it is INERT by design: 00 §7 (M1W3-01) requires the trigger on
+-- every table that carries a `version` column, so the convention scan cannot be satisfied by columns
+-- alone, but no statement any role may issue updates a call row — `evidgate_app` holds no UPDATE grant
+-- and no INSERT/DELETE either, so `updated_at`/`version` stay at the defaults this file gives them. It
+-- exists for the shape, not for a write path; if a privileged backfill ever moves a row it stamps the
+-- token exactly as it does for the budget counter above.
+drop trigger if exists healing_llm_call_set_updated_at_and_version on public.healing_llm_call;
+create trigger healing_llm_call_set_updated_at_and_version
+  before update on public.healing_llm_call
+  for each row execute function public.set_updated_at_and_version();
+
 alter table public.healing_llm_call enable row level security;
 alter table public.healing_llm_call force row level security;
 alter table public.healing_llm_budget enable row level security;
@@ -249,8 +273,8 @@ create policy healing_llm_budget_owner_backfill on public.healing_llm_budget
   for all to evidgate_owner using (true) with check (true);
 
 -- Append-only ledger (0015/0031/0049/0053 precedent): the app role inserts attempts and reads them
--- back, but can neither rewrite nor remove one. `created_at` is outside the column grant so an attempt
--- cannot be backdated.
+-- back, but can neither rewrite nor remove one. `created_at`, `updated_at` and `version` are outside
+-- the column grant, so an attempt cannot be backdated and its convention token stays at the default.
 revoke insert, update, delete on public.healing_llm_call from evidgate_app;
 grant select on public.healing_llm_call to evidgate_app;
 grant insert (id, org_id, project_id, incident_id, candidate_id, purpose, model, prompt_version,
