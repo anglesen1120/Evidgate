@@ -45,8 +45,8 @@ def placed():
     return {r["id"]: r["wave"] for r in json.loads(run("scripts/feature_index.py", "--json"))}
 
 
-def report_line(prefix):
-    return next(line for line in run("scripts/plan_graph.py").splitlines() if line.startswith(prefix))
+def report_line(prefix, seed=None):
+    return next(line for line in run("scripts/plan_graph.py", seed=seed).splitlines() if line.startswith(prefix))
 
 
 class Determinism(unittest.TestCase):
@@ -64,7 +64,7 @@ class Determinism(unittest.TestCase):
             self.assertEqual(differing, {}, f"story waves differ for PYTHONHASHSEED={seed}")
 
     def test_totals_do_not_move_with_the_seed(self):
-        totals = {seed: (report_line("TOTAL "), report_line("by milestone:")) for seed in SEEDS}
+        totals = {seed: (report_line("TOTAL ", seed), report_line("by milestone:", seed)) for seed in SEEDS}
         self.assertEqual(len(set(totals.values())), 1, totals)
 
 
@@ -74,7 +74,6 @@ class WaveSemantics(unittest.TestCase):
         deps = {s: {d for d in graph[s]["deps"] if d in graph} for s in graph}
         # Condense the story graph (Tarjan) here, so the expectation does not reuse the script's own
         # grouping; every member of one component shares the component's longest-path wave.
-        sys.setrecursionlimit(10000)
         index, low, stack, on, comp, counter = {}, {}, [], set(), {}, [0]
 
         def visit(v):

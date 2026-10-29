@@ -318,8 +318,8 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   `IdentityAuditWriter`; the lifecycle and privilege-change definers (`session_revoke_all_for_user`,
   `session_require_rotation`) because the calling org-scoped command's own `[AuditedAction]` row
   (`membership.remove`, `membership.update` or a role change) already covers the effect they
-  cause; a `security_event` for self-service revokes under D-S102-Q3, which will be emitted once
-  11.5.1-T5 lands (open receiver); or a T80 sweep observed via the task row). The ADMIN revoke is
+  cause; a `security_event` for self-service revokes under D-S102-Q3 (the table exists since `0053`;
+  its emitter is an open receiver); or a T80 sweep observed via the task row). The ADMIN revoke is
   not exempt: `0050` has
   `session_revoke_one` append its own `auth.session_revoke_admin` row inside the same
   transaction, so the revocation and its record commit or roll back together, and `0051` keeps

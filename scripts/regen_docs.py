@@ -2,7 +2,7 @@
 """Regenerate the generated parts of the plan set from the task graph:
 
 - plans/00-overview.md §14 estimate table + milestone line + calendar numbers
-- plans/features/README.md §5.1 waves, §5.2 critical chain, §7 index
+- plans/features/README.md §5.1 waves, §5.2 critical chain, §5.3, §7 index
 
 Run after any change to a task row (size, version, milestone, Depends on). Idempotent.
 """
