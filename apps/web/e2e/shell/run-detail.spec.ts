@@ -1,5 +1,6 @@
 // 09.3.1-T2: fixture-backed real page, both locale bundles and theme token sets.
 import { expect, test, type Page } from '@playwright/test';
+import attemptsFixture from '../../../../fixtures/web-api/run-attempts/input.json';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
 import {
@@ -16,13 +17,13 @@ import {
 
 const RUN = readyFixture.body;
 const GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
-function path(locale: ShellLocale, variant = 'detail-ready', id = RUN.run_id) {
+function path(locale: ShellLocale, variant = 'detail-ready', id = RUN.run_id, attempts = 'ok') {
   return withVariants(
     localePath(
       locale,
       `/dev/run-detail/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/runs/${id}`,
     ),
-    [GRANT, `?fixture.variant.getRun=${variant}`],
+    [GRANT, `?fixture.variant.getRun=${variant}`, `?fixture.variant.listRunAttempts=${attempts}`],
   );
 }
 async function ready(page: Page) {
@@ -32,7 +33,7 @@ async function ready(page: Page) {
   );
 }
 for (const locale of LOCALES) {
-  test(`deep link reload retains stored identity and unavailable metadata (${locale})`, async ({
+  test(`deep link reload retains stored identity, manifest and attempts (${locale})`, async ({
     page,
   }) => {
     await page.goto(path(locale));
@@ -43,14 +44,23 @@ for (const locale of LOCALES) {
     await expect(page.locator('[data-run-evidence-revision]')).toHaveText(
       RUN.current_evidence_revision_id,
     );
-    await expect(page.locator('[data-run-environment] app-status-pill')).toBeVisible();
+    await expect(page.locator('[data-run-environment] bdi')).toHaveText(
+      RUN.environment.environment_key,
+    );
     await expect(page.locator('[data-run-environment]')).toHaveJSProperty('tagName', 'DD');
     await expect(page.locator('app-run-header [data-run-policy]')).toHaveCount(0);
     await expect(page.locator('[data-run-fork]')).toHaveText(locale === 'vi' ? 'Không' : 'No');
-    await expect(page.locator('app-manifest-panel app-status-pill')).toHaveCount(5);
-    await expect(page.locator('app-attempts-table [data-attempts-unavailable]')).toHaveText(
-      locale === 'vi' ? 'Chưa có trạng thái' : 'Status unavailable',
+    await expect(page.locator('app-manifest-panel [data-manifest-hash] bdi')).toHaveText(
+      RUN.manifest_hash,
     );
+    await expect(page.locator('app-manifest-panel li bdi')).toHaveText(RUN.declared_producers);
+    await expect(page.locator('app-manifest-panel app-status-pill')).toHaveCount(0);
+    await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(
+      attemptsFixture.body.items.length,
+    );
+    await expect(
+      page.locator('app-attempts-table [data-attempts-healing-unavailable] app-status-pill'),
+    ).toHaveText(locale === 'vi' ? 'Chưa có trạng thái' : 'Status unavailable');
     await expect(page.locator('app-run-detail-page h1')).toHaveCount(1);
     await expect(
       page.locator('app-run-detail-page app-decision-chip, app-run-detail-page app-outcome-pill'),
@@ -62,6 +72,42 @@ for (const locale of LOCALES) {
     await expect(page.locator('[data-run-evidence-revision]')).toHaveText(
       RUN.current_evidence_revision_id,
     );
+  });
+  test(`attempts keyset walk appends the second page and keeps the retry chain together (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(path(locale, 'detail-ready', RUN.run_id, 'page-1'));
+    await ready(page);
+    const rows = page.locator('app-attempts-table [data-attempt-row]');
+    await expect(rows).toHaveCount(4);
+    const more = page.locator('[data-attempts-load-more]');
+    await more.focus();
+    await page.keyboard.press('Enter');
+    await expect(rows).toHaveCount(7);
+    await expect(more).toHaveCount(0);
+    const chainKey = attemptsFixture.body.items.find(
+      (item) => item.attempt_no === 2,
+    )!.execution_key;
+    const chain = page.locator('app-attempts-table tbody').filter({ hasText: chainKey });
+    await expect(chain.locator('[data-attempt-row]')).toHaveCount(2);
+    await expect(chain.locator('[data-attempt-normalised]').first()).toContainText('failed');
+    await expect(chain.locator('[data-attempt-normalised]').last()).toContainText('passed');
+    await expect(
+      page
+        .locator('[data-attempt-row]', { hasText: 'BLOCKED_BY_ENV' })
+        .locator('[data-attempt-normalised]'),
+    ).not.toContainText('passed');
+  });
+  test(`empty and unavailable attempts reads render their own states (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(path(locale, 'detail-ready', RUN.run_id, 'empty'));
+    await ready(page);
+    await expect(page.locator('app-attempts-table app-empty-pattern')).toBeVisible();
+    await page.goto(path(locale, 'detail-ready', RUN.run_id, 'unavailable'));
+    await ready(page);
+    await expect(page.locator('app-attempts-table app-error-pattern')).toBeVisible();
+    await expect(page.locator('app-run-header')).toBeVisible();
   });
   test(`foreign and missing ids share one 404 view; 403 is separate (${locale})`, async ({
     page,

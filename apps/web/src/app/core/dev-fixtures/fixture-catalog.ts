@@ -115,6 +115,11 @@ import projectsListOnboardingForbidden from '../../../../../../fixtures/web-api/
 import projectsListUnauthenticated from '../../../../../../fixtures/web-api/projects-list-unauthenticated/input.json';
 import projectsListOnboardingProjectNotFound from '../../../../../../fixtures/web-api/projects-list-onboarding-project-not-found/input.json';
 import rolesList from '../../../../../../fixtures/web-api/roles-list/input.json';
+import runAttempts from '../../../../../../fixtures/web-api/run-attempts/input.json';
+import runAttemptsEmpty from '../../../../../../fixtures/web-api/run-attempts-empty/input.json';
+import runAttemptsPage1 from '../../../../../../fixtures/web-api/run-attempts-page-1/input.json';
+import runAttemptsPage2 from '../../../../../../fixtures/web-api/run-attempts-page-2/input.json';
+import runAttemptsUnavailable from '../../../../../../fixtures/web-api/run-attempts-unavailable/input.json';
 import runDetail from '../../../../../../fixtures/web-api/run-detail/input.json';
 import runDetailForbidden from '../../../../../../fixtures/web-api/run-detail-forbidden/input.json';
 import runDetailNotFound from '../../../../../../fixtures/web-api/run-detail-not-found/input.json';
@@ -542,6 +547,13 @@ export interface FixtureCatalogRow {
  * walk (`next_cursor: null`): its cursor was declared by no row, so a follow-up answered the same
  * page again, which the store refuses as a repeated cursor — the screens that want a paged runs list
  * take the pages above.
+ * 09.3.1-T4 adds the run detail's attempts read (`listRunAttempts`, `GET /v1/runs/{r}/attempts`).
+ * `run-attempts` (`ok`) is seven attempts of six executions (a failed-then-passed retry chain,
+ * `blocked`, `timed_out`, `error`, `skipped`, `healing_candidate: null` on every row as on the wire
+ * today); `run-attempts-page-1`/`-page-2` are the keyset pair (`listRunAttempts` declares
+ * `cursorQueryParameter: 'cursor'`, page 2 declares page 1's `next_cursor`), `run-attempts-empty`
+ * is a run with no attempts and `run-attempts-unavailable` the retryable 503.
+ *
  * `run-list-unavailable` (`=unavailable`) is the same read's 503 `unavailable` (always
  * `Retry-After`, 00 §9.2), the state the list's error pattern renders with the server's retry hint.
  * Every `X-Request-Id` above (`…e10`–`…e17`) is distinct from the older `runs-list*` rows.
@@ -754,6 +766,15 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
     document: projectsListOnboardingProjectNotFound,
   },
   { name: 'roles-list', document: rolesList },
+  { name: 'run-attempts', document: runAttempts },
+  { name: 'run-attempts-empty', document: runAttemptsEmpty },
+  { name: 'run-attempts-page-1', document: runAttemptsPage1 },
+  {
+    name: 'run-attempts-page-2',
+    document: runAttemptsPage2,
+    cursor: 'attempts-cursor-after-checkout-2',
+  },
+  { name: 'run-attempts-unavailable', document: runAttemptsUnavailable },
   { name: 'run-detail', document: runDetail },
   { name: 'run-detail-forbidden', document: runDetailForbidden },
   { name: 'run-detail-not-found', document: runDetailNotFound },
