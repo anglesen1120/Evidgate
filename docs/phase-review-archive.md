@@ -1,6 +1,6 @@
 # Phase review archive
 
-Closed owner-review rows moved verbatim from docs/phase-review.md; never edited; closed rows move here in the same commit that closes them.
+Closed owner-review rows moved verbatim from docs/phase-review.md (only the State cell records the closing outcome); never edited afterwards; closed rows move here in the same commit that closes them.
 
 ## Closed
 
