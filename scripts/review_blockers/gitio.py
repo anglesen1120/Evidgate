@@ -81,6 +81,20 @@ def effective_base(base: str) -> str:
     )
 
 
+def changed_names(base: str, head: str, *selectors: str) -> list[str]:
+    """Every path base...head touches, renames kept as their old and their new path.
+
+    The output is split on NUL only and decoded with `surrogateescape`, so a
+    name git hands back verbatim stays verbatim. Rename detection stays off so
+    the old path is always part of the change set: a gate file that moves is
+    still a gate file, and a deleted story file is not read as if it were still
+    in the head tree. `selectors` are the `git diff` options that narrow the
+    list (`--diff-filter=D` for the paths the change set removes).
+    """
+    raw = run_git("diff", "--name-only", "--no-renames", "-z", *selectors, f"{base}...{head}").stdout
+    return [name for name in (field.decode("utf-8", "surrogateescape") for field in raw.split(b"\0")) if name]
+
+
 def diff_path(header: str) -> str | None:
     """Decode Git's C-quoted header paths, including escaped quotes and tabs."""
     path = header.removesuffix("\t")

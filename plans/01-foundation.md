@@ -18,7 +18,7 @@
 
 ## 2. Requirements
 
-- **FR-01-1** A clean clone restores with `dotnet restore --locked-mode` and `npm ci`; `scripts/verify.sh` = build + analyzers + format check + unit + integration + architecture + contract drift for both ecosystems, and is what CI runs.
+- **FR-01-1** A clean clone restores with `dotnet restore --locked-mode` and `npm ci`; `scripts/verify.sh` = build + analyzers + format check + unit + integration + architecture + contract drift for both ecosystems, and is what CI runs. A run with no `--stage` selects the `docs`, `no-dotnet` or `full` tier its changed paths need (01.2.1-T7); CI runs the full set regardless.
 - **FR-01-2** .NET SDK 10.0.x is pinned by `global.json`; NuGet versions live only in `Directory.Packages.props` with committed `packages.lock.json`; Node 26 LTS and TypeScript 6.0.x are pinned for `apps/web` and `packages/*`; no floating range on a runtime dependency in either ecosystem.
 - **FR-01-3** `contracts/openapi.yaml` (OpenAPI 3.1) is the only source of wire shapes; the TS SDK is generated from it, the server validates payloads against the same schema files, and the document served by `Evidgate.Api` is diffed against it; any drift fails CI.
 - **FR-01-4** The event envelope v1 (00 §9.4) and adapter protocol v1 (00 §10) exist as versioned JSON Schemas in `contracts/`; the server (Corvus.Json.Validator) and the CLI (Ajv 8) are held to identical accept/reject behaviour by the shared corpus `fixtures/contracts/` run in both test suites (T42).
@@ -148,7 +148,7 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 
 ### Epic 01.2 Quality gates (M0-M1)
 
-#### Story 01.2.1 Analyzers, format, types and architecture — acceptance: `scripts/verify.sh` fails on a module-boundary violation, an unformatted file, an un-awaited task, a nullable warning and a TS type error under `strict`, and its `check-review-blockers` stage fails on a blocked pattern in an added diff line or a U1 count above the baseline (01.2.1-T6)
+#### Story 01.2.1 Analyzers, format, types and architecture — acceptance: `scripts/verify.sh` fails on a module-boundary violation, an unformatted file, an un-awaited task, a nullable warning and a TS type error under `strict`, its `check-review-blockers` stage fails on a blocked pattern in an added diff line or a U1 count above the baseline (01.2.1-T6), and a run with no `--stage` selects the gate tier its changed paths need (`docs`, `no-dotnet` or `full`) and runs only that tier's stages (01.2.1-T7)
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
 | 01.2.1-T1 | .NET analyzers (`latest-recommended`, security rules, `CA2007`/`VSTHRD`-style async rules ⚠️ package licence checked in 01.1.1-T1) + `Architecture.Tests` (xUnit): module refs only via `.Contracts`, `Domain` ↛ `Infrastructure`, no `public` types outside `.Contracts`/`Endpoints`, every handler declares a permission (T47); ESLint 10 flat config + typescript-eslint 8 for `apps/web`/`packages/*` with `no-floating-promises`, `--max-warnings 0` | M | V1 | G1 | 01.1.1-T3 |
@@ -157,6 +157,7 @@ Schema `evidgate` also holds the NULL-safe helper functions the RLS policies rea
 | 01.2.1-T4 | Pre-commit hooks: husky 9 + lint-staged 17 on staged files (Prettier/ESLint; `dotnet format` on staged `.cs`) | XS | V1 | G1 | 01.2.1-T1 |
 | 01.2.1-T5 | Commit/PR conventions: Conventional Commits, PR template, CODEOWNERS draft | XS | V1 | G1 | — |
 | 01.2.1-T6 | Review-blocker diff gate: port the coordinator scan to `scripts/check-review-blockers.py`, wire stage `check-review-blockers` into `verify.sh` and CI, and add the U1 comment-id ratchet (owner decision 2026-10-30) | M | V1 | G1 | 01.2.1-T1 |
+| 01.2.1-T7 | Path-scoped gate tiers: a classifier reads the changed paths (committed range plus uncommitted work) and picks `docs`, `no-dotnet` or `full`; `verify.sh` prints the chosen tier and runs only that tier's stages; `EVIDGATE_GATE_SCOPE` can only widen the tier, CI forces `full`, and a `check-gate-scope` stage tests the classifier (owner decision 2026-10-30) | M | V1 | G1 | 01.2.1-T6 |
 
 ### Epic 01.3 Contract-first pipeline (M0-M1)
 
@@ -278,7 +279,7 @@ Units: person-days of one senior full-stack .NET + Angular developer (00 §6, CR
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
 | 01.1 Stack compatibility and repository bootstrap | 7.0 | 0 | 0.25 | 7.25 |
-| 01.2 Quality gates | 4.0 | 0 | 0 | 4.0 |
+| 01.2 Quality gates | 5.0 | 0 | 0 | 5.0 |
 | 01.3 Contract-first pipeline | 9.5 | 0 | 0 | 9.5 |
 | 01.4 Database foundation and CQRS pipeline | 12.5 | 0 | 0 | 12.5 |
 | 01.5 Outbox and task queue | 7.0 | 0 | 0 | 7.0 |
@@ -287,9 +288,9 @@ Units: person-days of one senior full-stack .NET + Angular developer (00 §6, CR
 | 01.8 Local dev stack | 3.0 | 0 | 0 | 3.0 |
 | 01.9 ADRs and engineering docs | 2.0 | 0 | 0 | 2.0 |
 | 01.10 Dogfooding | 3.0 | 0.5 | 0 | 3.5 |
-| **Total** | **57.5** | **0.5** | **0.25** | **58.25** |
+| **Total** | **58.5** | **0.5** | **0.25** | **59.25** |
 
-→ with 20 % buffer **69.9** person-days
+→ with 20 % buffer **71.1** person-days
 
 ## 13. Contract change requests
 

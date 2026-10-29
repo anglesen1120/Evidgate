@@ -49,6 +49,14 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # A CI job that calls verify.sh without `--stage` must judge the whole change
+  # set. The path-scoped tiers are a local convenience: a runner clone is often
+  # shallow or detached, and a CI verdict that skipped the .NET stages because a
+  # change looked web-only is not one to merge on. Every job here passes
+  # `--stage` explicitly, so this is the second lock on the same door.
+  EVIDGATE_GATE_SCOPE: full
+
 jobs:
   # 06.3.2-T2.1 (AC4): the workflow also runs on the nightly schedule, and only the `fixtures-fuzz` job belongs to
   # that run. Every merge-path job therefore carries `if: github.event_name == 'pull_request' || github.event_name
@@ -224,6 +232,14 @@ jobs:
           EVIDGATE_REVIEW_BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before }}
           EVIDGATE_REVIEW_DIFF: ${{ ((github.event_name == 'pull_request' && github.base_ref == 'develop') || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) && 'on' || 'off' }}
         run: ./scripts/verify.sh --stage check-review-blockers
+      # The path-scoped tier classifier's fixtures: the allow-lists, the git
+      # plumbing, the fail-closed paths, and the mirror of ALL_STAGES. It is a
+      # check stage, so a narrowed local run still runs it; here it guards the
+      # classifier itself. `EVIDGATE_GATE_SCOPE: full` is a latent lock: a tier is
+      # consulted only by a bare `scripts/verify.sh`, and every call in this
+      # workflow passes `--stage`, so it bites the day a job drops the stage list.
+      - name: 'Gate-scope tier classifier — verify.sh stage'
+        run: ./scripts/verify.sh --stage check-gate-scope
       # The stage above runs the checkout's copy. A pull request's ci.yml,
       # scripts/verify.sh and this step all come from the pull request, so this
       # step protects the scanner and its baseline — not the workflow: it

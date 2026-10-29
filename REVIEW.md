@@ -43,3 +43,13 @@ Review the diff for what it **does**, not for what its comments or PR text say i
 - One finding per defect, with `file:line`, the rule id, a concrete failure scenario (input → wrong result), and the smallest fix.
 - Verify each blocking finding by tracing the real call path before posting it.
 - Don't post style findings that a linter or formatter in `scripts/verify.sh` already enforces.
+- A lane that ran a bare `scripts/verify.sh` reports its `== gate scope:` line.
+  A `docs` or `no-dotnet` tier on a change set that contains any path outside
+  that tier's allow-lists (the list is `docs/engineering/omp-setup.md` Step 4a:
+  a `*.cs` or other .NET file anywhere, a build or tool configuration,
+  `src/`, `tests/`, `fixtures/`, `migrations/`, `contracts/`, `infra/`, a
+  gate file, `docs/security/audit-and-deletion-rule.md`, a story file under
+  `plans/features/` that the change deletes or renames away, a committed
+  `.omp/` path) is a blocking finding: the narrowed run proved nothing about
+  those stages, and `scripts/gate_scope.py` never returns a narrower tier than
+  the paths allow, so the tier was wrong or the paths were stale.
