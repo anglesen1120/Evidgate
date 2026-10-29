@@ -54,6 +54,9 @@ const EXPECTED = [
   ['/projects/{p}/manifests', 'post', 'run:create', 'v1'],
   ['/projects/{p}/runs', 'post', 'run:create', 'v1'],
   ['/runs/{r}', 'get', 'run:read', 'v1'],
+  // F52 (S143, 09.3.1-T4): the run's attempts read. 00 §9.3 carries it in a row of
+  // its own directly under the run read.
+  ['/runs/{r}/attempts', 'get', 'run:read', 'v1'],
   ['/runs/{r}/cancel', 'post', 'run:cancel', 'v1'],
   ['/runs/{r}/events', 'post', 'event:write', 'v1'],
   ['/runs/{r}/finalize', 'post', 'event:write', 'v1'],

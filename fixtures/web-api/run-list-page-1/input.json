@@ -22,7 +22,10 @@
           "is_fork": false
         },
         "unverified_ref": false,
-        "decision": "PASS"
+        "completeness": "complete",
+        "decision": "PASS",
+        "parent_run_id": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000082",
@@ -38,7 +41,10 @@
           "is_fork": false
         },
         "unverified_ref": false,
-        "decision": null
+        "completeness": "complete",
+        "decision": null,
+        "parent_run_id": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000083",
@@ -54,7 +60,10 @@
           "is_fork": false
         },
         "unverified_ref": false,
-        "decision": null
+        "completeness": null,
+        "decision": null,
+        "parent_run_id": null,
+        "rerun_scope": null
       }
     ],
     "next_cursor": "08df2f51afe86800-018f0000-0000-7000-8000-000000000083"

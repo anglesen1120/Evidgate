@@ -22,7 +22,10 @@
           "is_fork": false
         },
         "unverified_ref": false,
-        "decision": "PASS"
+        "completeness": "complete",
+        "decision": "PASS",
+        "parent_run_id": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000072",
@@ -38,7 +41,10 @@
           "is_fork": false
         },
         "unverified_ref": false,
-        "decision": null
+        "completeness": null,
+        "decision": null,
+        "parent_run_id": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000073",
@@ -54,9 +60,11 @@
           "is_fork": false
         },
         "unverified_ref": false,
+        "completeness": "complete",
         "decision": "FAIL",
         "parent_run_id": "018f0000-0000-7000-8000-000000000071",
-        "rerun_label": "subset:smoke"
+        "rerun_label": "subset:smoke",
+        "rerun_scope": "failed_subset"
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000074",
@@ -72,9 +80,11 @@
           "is_fork": false
         },
         "unverified_ref": true,
+        "completeness": "incomplete",
         "decision": null,
         "parent_run_id": "018f0000-0000-7000-8000-000000000071",
-        "reprocess_label": "evidence:reprocess"
+        "reprocess_label": "evidence:reprocess",
+        "rerun_scope": "full"
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000075",
@@ -89,7 +99,10 @@
           "trigger_event": null,
           "is_fork": false
         },
-        "unverified_ref": false
+        "unverified_ref": false,
+        "completeness": null,
+        "parent_run_id": null,
+        "rerun_scope": null
       }
     ],
     "next_cursor": null

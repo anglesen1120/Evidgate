@@ -29,6 +29,9 @@ const run: RunSummary = {
   },
   unverified_ref: false,
   decision: null,
+  completeness: 'complete',
+  parent_run_id: null,
+  rerun_scope: null,
 };
 const failure: ApiError = {
   kind: 'unavailable',

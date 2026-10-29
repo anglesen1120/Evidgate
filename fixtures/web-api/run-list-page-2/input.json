@@ -22,7 +22,10 @@
           "is_fork": false
         },
         "unverified_ref": false,
-        "decision": "FAIL"
+        "completeness": "complete",
+        "decision": "FAIL",
+        "parent_run_id": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000085",
@@ -38,7 +41,10 @@
           "is_fork": false
         },
         "unverified_ref": false,
-        "decision": null
+        "completeness": null,
+        "decision": null,
+        "parent_run_id": null,
+        "rerun_scope": null
       }
     ],
     "next_cursor": null
