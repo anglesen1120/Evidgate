@@ -2,7 +2,8 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import type { RunStateDto } from '@evidgate/sdk';
+import type { RunAttemptPage, RunStateDto } from '@evidgate/sdk';
+import attemptsOk from '../../../../../../../fixtures/web-api/run-attempts/input.json';
 import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
 import formatted from '../../../../../../../fixtures/web-api/run-detail-ref-format/input.json';
 import { RunsDataService } from '../../../core/data/runs-data.service';
@@ -13,15 +14,18 @@ import { routes } from '../runs.routes';
 // Both bodies are validated against the current RunStateDto by fixture-contract.spec.ts.
 const run = ready.body as RunStateDto;
 const refRun = formatted.body as RunStateDto;
+const attemptPage = attemptsOk.body as RunAttemptPage;
 describe('RunDetailPage', () => {
   const get = vi.fn<(id: string) => Promise<RunStateDto>>();
+  const listAttempts = vi.fn<(id: string, query?: object) => Promise<RunAttemptPage>>();
   beforeEach(() => {
     get.mockReset().mockResolvedValue(run);
+    listAttempts.mockReset().mockResolvedValue(attemptPage);
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: 'projects/:projectId/runs', children: routes }]),
-        { provide: RunsDataService, useValue: { get } },
+        { provide: RunsDataService, useValue: { get, listAttempts } },
       ],
     });
   });
@@ -43,8 +47,11 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('[data-run-evidence-revision] bdi')?.textContent).toBe(
       run.current_evidence_revision_id,
     );
-    expect(root.querySelector('[data-run-environment]')?.textContent).toContain(
-      'Status unavailable',
+    expect(root.querySelector('[data-run-environment] bdi')?.textContent).toBe(
+      run.environment.environment_key,
+    );
+    expect(root.querySelector('[data-run-environment-revision]')?.textContent).toBe(
+      `Revision ${run.environment.revision_no}`,
     );
     expect(root.querySelector('app-run-header [data-run-policy]')).toBeNull();
     expect(root.querySelector('[data-run-environment]')?.previousElementSibling?.textContent).toBe(
@@ -56,14 +63,58 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
   });
-  it('renders attempts as unavailable when the read contract supplies no attempt data', async () => {
+  it('renders the manifest panel verbatim from the run read', async () => {
     const { root } = await open();
-    const attempts = root.querySelector('app-attempts-table');
-    expect(
-      attempts?.querySelector('[data-attempts-unavailable] app-status-pill')?.textContent,
-    ).toContain('Status unavailable');
-    expect(attempts?.querySelector('table')).toBeNull();
-    expect(attempts?.querySelector('app-empty-pattern')).toBeNull();
+    const panel = root.querySelector('app-manifest-panel')!;
+    expect(panel.querySelector('[data-manifest-hash] bdi')?.textContent).toBe(run.manifest_hash);
+    expect(panel.querySelector('[data-manifest-suite] bdi')?.textContent).toBe(
+      run.suite_revision_id,
+    );
+    expect(panel.querySelector('[data-manifest-policy] bdi')?.textContent).toBe(
+      run.policy_revision_id,
+    );
+    expect([...panel.querySelectorAll('li bdi')].map((n) => n.textContent)).toEqual(
+      run.declared_producers,
+    );
+  });
+  it('renders attempts from the wire: statuses verbatim, retry chain grouped, no decision', async () => {
+    const { root } = await open();
+    expect(listAttempts).toHaveBeenCalledExactlyOnceWith(run.run_id, { limit: 200 });
+    const attempts = root.querySelector('app-attempts-table')!;
+    const rows = [...attempts.querySelectorAll('[data-attempt-row]')];
+    expect(rows).toHaveLength(attemptPage.items.length);
+    const chain = rows.filter((r) => r.querySelector('th')?.textContent?.includes('Attempt 2'));
+    expect(chain).toHaveLength(1);
+    expect(chain[0]!.querySelector('[data-attempt-normalised]')?.textContent).toContain('passed');
+    const blocked = rows.find((r) => r.textContent?.includes('BLOCKED_BY_ENV'))!;
+    expect(blocked.querySelector('[data-attempt-normalised]')?.textContent).toContain('blocked');
+    expect(blocked.querySelector('[data-attempt-normalised]')?.textContent).not.toContain('passed');
+    expect(attempts.querySelector('[data-attempts-healing-unavailable]')).not.toBeNull();
+    expect(attempts.querySelector('[data-attempts-unavailable]')).toBeNull();
+    expect(root.textContent).not.toContain('PASS');
+  });
+  it('renders an empty attempts read as the empty state, not unavailable', async () => {
+    listAttempts.mockResolvedValueOnce({ items: [], next_cursor: null });
+    const { root } = await open();
+    expect(root.querySelector('app-attempts-table app-empty-pattern')).not.toBeNull();
+    expect(root.querySelector('[data-attempts-unavailable]')).toBeNull();
+  });
+  it('renders a failed attempts read as a retryable error beside the run header', async () => {
+    listAttempts.mockRejectedValueOnce(
+      new ApiRequestError({
+        kind: 'unavailable',
+        status: 503,
+        code: 'unavailable',
+        message: '',
+        requestId: null,
+        retryable: true,
+        details: [],
+        retryAfterSeconds: null,
+      }),
+    );
+    const failed = await open();
+    expect(failed.root.querySelector('app-run-header')).not.toBeNull();
+    expect(failed.root.querySelector('app-attempts-table app-error-pattern')).not.toBeNull();
   });
   it.each([
     [true, 'Yes'],

@@ -42,6 +42,10 @@ export class RunDetailPage {
         ? 'ready'
         : 'error';
   });
+  protected readonly attemptsStatus = computed<'loading' | 'ready' | 'error'>(() => {
+    const status = this.store.attemptsStatus();
+    return status === 'idle' || status === 'loading' ? 'loading' : status;
+  });
   protected readonly copy = {
     title: $localize`:@@runs.detail.title:Run detail`,
     back: $localize`:@@runs.detail.back:Back to runs`,
@@ -63,6 +67,12 @@ export class RunDetailPage {
         onCleanup(() => clearTimeout(timer));
       }
     });
+  }
+  protected retryAttempts(): void {
+    void this.store.retryAttempts();
+  }
+  protected loadMoreAttempts(): void {
+    void this.store.loadMoreAttempts();
   }
   protected reload(): void {
     if (this.runId && this.retryEligible()) void this.store.load(this.runId);
