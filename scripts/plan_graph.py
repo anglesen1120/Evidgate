@@ -63,12 +63,36 @@ for t, d in tasks.items():
 sms = {}
 for t, d in tasks.items():
     s = d["story"]; sms[s] = min(sms.get(s, 9), int(d["ms"][1]))
-wave = {}
-def w(s, seen=()):
-    if s in wave: return wave[s]
-    if s in seen: return 0
-    wave[s] = 1 + max([w(x, seen + (s,)) for x in sdeps[s]] or [0]); return wave[s]
-for s in sms: w(s)
+# Stories whose tasks interleave depend on each other at story level, so the story
+# graph is not a DAG. Condense its strongly connected components (the "[a + b]" cells
+# of plans/features/README.md §5.1) and take the longest path over the condensation,
+# as scripts/feature_index.py does: a wave has one value per story and must not move
+# with set iteration order (memoising the raw graph stored cycle-truncated values).
+si, sl, ss, son, scomp, sc = {}, {}, [], set(), {}, [0]
+def scc(v):
+    si[v] = sl[v] = sc[0]; sc[0] += 1; ss.append(v); son.add(v)
+    for x in sorted(sdeps[v]):
+        if x not in si: scc(x); sl[v] = min(sl[v], sl[x])
+        elif x in son: sl[v] = min(sl[v], si[x])
+    if sl[v] == si[v]:
+        members = []
+        while True:
+            x = ss.pop(); son.discard(x); members.append(x)
+            if x == v: break
+        cid = "+".join(sorted(members))
+        for m in members: scomp[m] = cid
+for s in sorted(sms):
+    if s not in si: scc(s)
+cdeps = defaultdict(set)
+for s in sms:
+    for x in sdeps[s]:
+        if scomp[x] != scomp[s]: cdeps[scomp[s]].add(scomp[x])
+cwave = {}
+def cw(c):
+    if c not in cwave:
+        cwave[c] = 1 + max([cw(x) for x in sorted(cdeps[c])] or [0])
+    return cwave[c]
+wave = {s: cw(scomp[s]) for s in sms}
 if "--json" in sys.argv:
     json.dump(dict(stories={s: dict(stories.get(s, {}), ms=f"G{sms[s]}", wave=wave[s], deps=sorted(sdeps[s]),
         size=sum(SIZE[d['size']] for d in tasks.values() if d['story'] == s),

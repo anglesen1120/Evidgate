@@ -103,12 +103,16 @@ DEFINER_AUDIT_EXEMPT = {
     "evidgate_resolve.session_revoke_current": (
         "created 0048_identity_session_routes.sql:206 (bytea[], timestamptz): no per-call audit row by owner decision "
         "D-S102-Q3 — a self revoke is every caller's own logout, and logout / self revoke / revoke-all will emit a "
-        "security_event once 11.5.1-T5 lands (open receiver)"
+        "security_event from inside the 0048 definers once the session-lifecycle emitter lands: `security_event` "
+        "exists since 0053 and is tenant-scoped, so that emitter is a new migration, not a route-side writer "
+        "(11.5.1-T5 handed it over; open receiver)"
     ),
     "evidgate_resolve.session_revoke_others": (
         "created 0048_identity_session_routes.sql:398 (bytea[], boolean, timestamptz): no per-call audit row by owner "
         "decision D-S102-Q3 — a self-service revoke of one's own other sessions, never an act on another member; a "
-        "security_event will cover it once 11.5.1-T5 lands (open receiver)"
+        "security_event from inside the 0048 definer will cover it once the session-lifecycle emitter lands "
+        "(`security_event` exists since 0053; 11.5.1-T5 handed the emitter over, and the closed V1 type set has no "
+        "session type yet — 11.1.1-T4.1; open receiver)"
     ),
     "evidgate.session_cleanup": (
         "created 0048_identity_session_routes.sql:479 (timestamptz, integer): T80 sweep — a bounded bulk delete of "
@@ -123,9 +127,12 @@ DEFINER_AUDIT_EXEMPT = {
         "02.8.1's fail-closed `RequireOperatorFilter`), which writes a structured operator log event on "
         "every system write — mode, set_by and version, never the reason text — through "
         "`HealingSystemSwitchWriter` (src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs), "
-        "and the 11.5.1-T5 security_event receiver adds its own row once that table lands — an open "
-        "receiver, exactly like the D-S102-Q3 entries above (`security_event` does not exist yet). No "
-        "per-call audit row is possible here, which is why the exemption is recorded rather than the row"
+        "and a security_event row would be the durable record but does not fit it yet: 11.5.1-T5 "
+        "shipped `security_event` (0053) and handed the platform-scope record over, because its org_id is "
+        "NOT NULL, so a no-tenant write has no row; where such an event is stored is the open owner "
+        "decision D-S137-OWNER (nullable org_id or a separate platform table) — an open receiver, "
+        "exactly like the D-S102-Q3 entries above. No per-call audit row is possible here, which is why "
+        "the exemption is recorded rather than the row"
     ),
 }
 

@@ -105,7 +105,9 @@ if "--critical" in sys.argv:
                 b = max([lp(x) for x in T[t]["deps"] if x in ok] or [(0, [])])
                 memo[t] = (b[0] + SIZE[T[t]["size"]], b[1] + [t])
             return memo[t]
-        top = max(ok, key=lambda t: lp(t)[0]); d, path = lp(top)
+        # `ok` is a set: iterating it makes the pick between two equal-length chains depend on the
+        # hash seed, so an exact tie goes to the smallest task id.
+        top = max(sorted(ok), key=lambda t: lp(t)[0]); d, path = lp(top)
         work = sum(SIZE[T[t]["size"]] for t in ok if int(T[t]["ms"][1]) == M)
         print(f"| G{M} | {work:g} | {d:g} | " + " → ".join(path) + " |")
     sys.exit()

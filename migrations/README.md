@@ -318,8 +318,8 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   `IdentityAuditWriter`; the lifecycle and privilege-change definers (`session_revoke_all_for_user`,
   `session_require_rotation`) because the calling org-scoped command's own `[AuditedAction]` row
   (`membership.remove`, `membership.update` or a role change) already covers the effect they
-  cause; a `security_event` for self-service revokes under D-S102-Q3, which will be emitted once
-  11.5.1-T5 lands (open receiver); or a T80 sweep observed via the task row). The ADMIN revoke is
+  cause; a `security_event` for self-service revokes under D-S102-Q3 (the table exists since `0053`;
+  its emitter is an open receiver); or a T80 sweep observed via the task row). The ADMIN revoke is
   not exempt: `0050` has
   `session_revoke_one` append its own `auth.session_revoke_admin` row inside the same
   transaction, so the revocation and its record commit or roll back together, and `0051` keeps
@@ -386,8 +386,10 @@ conflict` arbiter. The all-zero UUID cannot collide with a real project: ids
   before it touches a row. What attests a system write instead of an audit row is the operator route
   `POST /internal/operator/healing/switch` (behind 02.8.1's fail-closed `RequireOperatorFilter`),
   which writes a structured operator log event (mode, set_by, version — never the reason text) on
-  every write, plus the `security_event` row 11.5.1-T5 will add once that table lands (an open
-  receiver; the `security_event` table has existed since `0053`, no emitter yet).
+  every write, plus the `security_event` row that is still owed: `0053` ships the table, and its
+  `org_id` is NOT NULL, so a platform-scope (no-tenant) write has no row — where such an event is
+  stored is the open owner decision D-S137-OWNER (nullable `org_id` or a separate platform table),
+  and no emitter exists yet.
 - The app role holds `select`, `insert (id, scope, org_id, project_id, mode, reason, set_by, at)` and
   `update (mode, reason, set_by, at, updated_at, version)`: INSERT is column-level on purpose, so a
   caller cannot name `created_at`, `updated_at` or `version` and backdate a switch change or pin its
