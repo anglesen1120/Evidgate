@@ -130,7 +130,14 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   definer runs as the owner and row level security cannot confine it
   (`contracts/rls-exceptions.txt` lists the table because of its NULL-org row);
   and `0053` is 11.5.1-T5's `security_event` (shape and emitter contract in its own notes below);
-  the next free number is `0054`; a gap means two branches invented the same sequence and neither history can be trusted.
+  and `0054` is 08.5.1-T1.1's LLM gateway tables — `healing_llm_call` (one append-only row per provider
+  attempt: the `(org_id, project_id) → project (org_id, id)` composite FK, the closed
+  `purpose`/`status` vocabularies and the authoring-versus-incident attribution CHECKs) and
+  `healing_llm_budget` (one counter row per project, day and period, whose unique key is the atomic
+  consume target, with both caps deliberately outside the app role's grant and an owner/definer
+  provisioning path owed to 08.5.1-T1.4/T1.7) — shape, grants and the deferred incident/candidate FKs
+  in its own notes below;
+  the next free number is `0055`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -521,6 +528,117 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
   the 11.5.1 plan Notes and the carried row "Platform security event table (D-S137-OWNER)".
 - Rollback: `drop table if exists public.security_event;` — the two policies, both indexes and the trigger
   go with it, and nothing else references the table.
+
+## Notes on `healing_llm_call` / `healing_llm_budget` (08.5.1-T1.1, `0054`)
+
+- Two tables in one file, because the recorder and the budget gate are one command's transaction
+  (08.5.1-T1.4): `healing_llm_call` is the ledger of every provider ATTEMPT and `healing_llm_budget`
+  is the rolling daily cap a project consumes before a call is placed. Both are new in this story, so
+  nothing binds to them before the file is applied (**migrate before app**).
+- `healing_llm_call` shape: `id uuid primary key`, `org_id uuid not null`, `project_id uuid not null`,
+  `incident_id`/`candidate_id uuid` (nullable), `purpose text not null`, `model text not null`,
+  `prompt_version text not null`, `tokens int not null default 0`,
+  `cost numeric(12,6) not null default 0`, `status text not null`, `attempt int not null default 1`,
+  `redaction_report_hash text`, `created_at timestamptz not null default now()`, plus the 00 §7
+  convention columns `updated_at timestamptz not null default now()` and
+  `version int not null default 1` (with `healing_llm_call_version_check`, the shape `0052` gives
+  `healing_switch`). One row per ATTEMPT, not per invocation: AC1's schema-violation retry and AC2's
+  timeout abort are facts about one provider call, so attempt 1 and attempt 2 of a failing
+  invocation are two rows. `attempt` is the ordinal inside one invocation and is in no unique key
+  (two invocations of one incident both have an attempt 1).
+- The ledger is append-only by GRANT, not by shape: no UPDATE and no DELETE for the application role,
+  and `created_at`/`updated_at`/`version` are all outside its column-level INSERT. The 00 §7 audit
+  columns and the shared `set_updated_at_and_version` trigger exist because §7 requires them on every
+  table (the convention scan enforces it), and they are inert here: no app statement names them, so
+  they stay at their defaults and the trigger only fires if a privileged backfill ever moves a row. A
+  row is written once, with the status the attempt ended in (the recorder inserts after the attempt
+  ends), so nothing has to be corrected in place. `tokens`/`cost` are the loss-free replacement for
+  the payload, and the budget and the cost report sum them.
+- AC6 (S3) is a column-count rule here: there is NO secret, API-key, prompt-text, model-response or
+  payload column at all, only `redaction_report_hash` (a hash of the 08.5.3 report, nullable until
+  that task lands) and the model/prompt-version labels. The schema test pins the exact column list,
+  so an added content column fails a test instead of passing review.
+- Attribution (AC4, AC7, T30): `project_id` is NOT NULL on both tables — every call is attributable
+  to a project and therefore to a tenant, and it is the column the budget and the cost report read.
+  `purpose` is closed: `authoring_generation` (13.3.1-T2's generation, a project generation and not
+  an incident), `triage_hypothesis` (08.2.2) and `candidate_generation` (08.5.4).
+  `healing_llm_call_authoring_attribution_check` keeps an authoring row free of incident and
+  candidate; `healing_llm_call_incident_required_check` makes every other purpose name its incident;
+  `healing_llm_call_candidate_incident_check` keeps a candidate inside an incident-scoped call (it is
+  implied by the other two and kept so a future purpose cannot introduce the shape by omission).
+- `status` is closed: `ok`, `timeout`, `llm_schema_violation`, `budget_exceeded`, `error` — the same
+  five values 08.5.1-T1.2's seam constants carry. The plan §4 shorthand `schema_violation` is not
+  storable; the retry outcome is `llm_schema_violation`.
+- DEFERRED FOREIGN KEYS: `incident_id` and `candidate_id` carry NO key yet, because `incident` and
+  `healing_candidate` do not exist. The migration that creates each table owes the composite
+  `(org_id, incident_id) → incident (org_id, id)` and `(org_id, candidate_id) → healing_candidate
+(org_id, id)` keys, so a call can only ever name an incident/candidate of its OWN org — the same
+  reason `(org_id, project_id) → project (org_id, id)` is composite today. Until then the
+  attribution CHECKs still bound the row and only application code could write a dangling id.
+- Keys and indexes: `unique (org_id, id)` is the composite tenant-FK target every business table
+  declares (TL T3). `healing_llm_call_project_created_idx (org_id, project_id, created_at)` serves
+  the budget-window sum and `healing_llm_call_project_purpose_created_idx (org_id, project_id,
+purpose, created_at)` the per-purpose cost report; both are range scans over a window, not keyset
+  pages, so `created_at` is ascending. The project reference cascades on delete, as 0052 does: a
+  project row is hard-deleted only by the tenant-erasure path (06.4.4, and the app role holds no
+  DELETE), and a ledger or budget row must not block that delete with a `23503`.
+- `healing_llm_budget` shape: `id`, `org_id`, `project_id`, `period text not null`, `period_start
+date not null`, `period_cap_cost numeric(12,6)`, `period_cap_tokens int`, `used_cost numeric(12,6)
+default 0`, `used_tokens int default 0`, `created_at`/`updated_at`/`version`, all NOT NULL.
+  `healing_llm_budget_period_key unique (org_id, project_id, period, period_start)` IS the
+  atomic-consume target of AC3: T1.4's hard stop is one `update … set used_cost = used_cost + @cost,
+used_tokens = used_tokens + @tokens where org_id = … and project_id = … and period = 'daily' and
+period_start = … and used_cost + @cost <= period_cap_cost and used_tokens + @tokens <=
+period_cap_tokens returning id`, whose zero-row result means no call is placed (the `healing_quota`
+  T32 pattern). No consumption code ships in this slice — the key and the column grants are the plan
+  that statement needs. `period` is `'daily'` alone: a second value is a new value in the vocabulary
+  and a migration, which is what T1.7's reset schedule and the consume statement both spell.
+  `period_start` is a `date` because the boundary is a calendar day the caller resolves.
+- RLS is the ordinary tenant shape on both tables: `ENABLE` + `FORCE ROW LEVEL SECURITY`,
+  `tenant_isolation` as `org_id = evidgate.current_org_id()` in USING and as WITH CHECK, declared
+  without `TO` so it applies to PUBLIC, plus the house `_owner_backfill` policy (`FOR ALL TO
+evidgate_owner USING (true) WITH CHECK (true)`) that `FORCE` makes necessary for a migration or
+  fixture write. Neither table is in `contracts/rls-exceptions.txt`: `org_id` is NOT NULL on both, so
+  there is no NULL-org read row and the boot self-check sees a plain scoped tenant policy. There is
+  no `SECURITY DEFINER` on either table — the tenant write path is a plain app-role statement inside
+  the caller's tenant transaction (00 §5.5 C6 prefers a grant to a definer).
+- Grants (the revoke first, because `0001`'s default privileges hand `evidgate_app` full DML):
+  `healing_llm_call` = `select` + `insert` of exactly its thirteen writable columns (no `created_at`,
+  no `updated_at`, no `version`, so an attempt can neither be backdated nor carry a caller-chosen
+  token) and nothing else. `healing_llm_budget` = `select` + `insert` of
+  the five identity/period columns (`id`, `org_id`, `project_id`, `period`, `period_start`) + `update`
+  of exactly the two columns the consume and reset statements move (`used_cost`, `used_tokens`) — two
+  columns, not the four-plus-two an earlier revision of this note counted. The identity columns and
+  the period stay unwritable, so a consume cannot re-target or backdate the row it matched, and
+  neither table has a DELETE. `evidgate_operator` keeps a read-only `select` (TL T76) and
+  `evidgate_worker_sched` holds nothing — the gateway runs in a tenant context, never as a sweep.
+- THE CAP WRITER IS OWED, NOT GRANTED: `period_cap_cost`/`period_cap_tokens` are in neither the
+  app-role INSERT nor its UPDATE grant, because a tenant transaction able to write either one could
+  raise its own ceiling. Both caps are NOT NULL, so the residual app-role INSERT (the five
+  identity/period columns) cannot complete a row either: it fails `23502` on `period_cap_cost`, which
+  is the intended state and not a gap. The row is provisioned by the OWNER/definer path owed to
+  `08.5.1-T1.4` (the budget gate and its atomic hard stop) and `T1.7` (the reset schedule), tracked as
+  the carried row `healing_llm_budget cap writer owed (S145)`. Until that path lands no budget row
+  exists, so nothing can be consumed — the hard stop itself is T1.4's to implement, not this
+  migration's.
+- `updated_at`/`version` are outside the app-role grant on purpose and the trigger still runs:
+  `set_updated_at_and_version()` (`0004`) is invoker-rights plpgsql (no `SECURITY DEFINER`) with
+  EXECUTE granted to `evidgate_app`, and PostgreSQL checks column privileges against the columns a
+  statement NAMES, never against the columns a trigger assigns to NEW. `0039`'s `feature_node` is the
+  exact precedent — it carries both the `version` column and this trigger while its app-role grant
+  (`update (parent_id, kind, title, position, deleted_at)`) leaves `updated_at`/`version` out, as
+  `0027`'s `waiver` and `0028`'s `artifact` also do. A consume that sets only
+  `used_cost`/`used_tokens` therefore still stamps `updated_at` and increments `version`, while the
+  caller itself can never write the token it is validated against.
+- Both tables carry the trigger, and on `healing_llm_call` it is INERT by design: 00 §7 (`M1W3-01`)
+  requires it on every table with a `version` column, so the convention scan cannot be satisfied by
+  the columns alone, but no statement any role may issue updates a call row (there is no UPDATE grant
+  at all). Its `updated_at`/`version` therefore stay at the defaults `0054` gives them; the trigger
+  exists for the shape and only fires if a privileged backfill ever moves a row.
+- Rollback: `drop table if exists public.healing_llm_budget;` then
+  `drop table if exists public.healing_llm_call;` — the policies, indexes, the trigger and the grants
+  go with them, and both tables hold derived telemetry (calls made, budget consumed), so a rollback
+  loses cost attribution history and nothing that the provider's own billing cannot re-derive.
 
 ## Tests and fixtures
 

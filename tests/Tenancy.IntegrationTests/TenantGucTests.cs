@@ -575,6 +575,29 @@ public sealed class TenantGucTests
             ("org_id", orgId),
             ("project_id", projectId));
 
+        // The 08.5.1-T1.1 tables (migration 0054): the owner is the only role that can complete either
+        // row — the app role's INSERT grant omits both NOT NULL caps — which is why this seed runs on the
+        // owner connection this method opened. One call attempt and one budget counter for the org, so
+        // the fail-closed-zero assertions below have a row to hide.
+        await scope.ExecuteAsync(
+            """
+            insert into public.healing_llm_call
+                (id, org_id, project_id, purpose, model, prompt_version, status)
+            values (@id, @org_id, @project_id, 'authoring_generation', 'probe-model', 'v1', 'ok')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.healing_llm_budget
+                (id, org_id, project_id, period, period_start, period_cap_cost, period_cap_tokens)
+            values (@id, @org_id, @project_id, 'daily', current_date, 1, 1)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
+
         await scope.CommitAsync();
     }
 }

@@ -828,7 +828,8 @@
           "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Healing.Contracts": "[1.0.0, )",
-          "Mediator.Abstractions": "[3.0.2, )"
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.Extensions.Http.Resilience": "[10.10.0, )"
         }
       },
       "evidgate.modules.healing.contracts": {

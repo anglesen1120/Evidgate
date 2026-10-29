@@ -72,7 +72,9 @@ internal sealed class GeneratedRow
 /// <b>NOT NULL without a default</b>: the column is filled by store type —
 /// <c>uuid</c> from <c>Guid.CreateVersion7()</c> (00 §7, application-generated
 /// UUIDv7), text from a lowercase-alphanumeric candidate, timestamps in the near
-/// future, and the common scalar types from a fixed value. Columns with a default
+/// future, and the common scalar types from a fixed value. A type modifier is
+/// dropped before the match, so <c>numeric(12,6)</c> is the <c>numeric</c> rule and
+/// <c>character varying(64)</c> the <c>character varying</c> one. Columns with a default
 /// or identity clause are omitted so the database fills them, which keeps the
 /// generated row inside the 00 §7 conventions (<c>created_at</c>, <c>version</c>).
 /// </description></item>
@@ -92,12 +94,19 @@ internal sealed class GeneratedRow
 /// </description></item>
 /// </list>
 /// <para>
-/// The insert runs through the caller's executor — always the <c>evidgate_app</c>
-/// connection inside an <c>ITenantScope</c> transaction (00 §5.5 C3), never the
+/// The insert runs through the caller's executor — normally the <c>evidgate_app</c>
+/// connection inside an <c>ITenantScope</c> transaction (00 §5.5 C3), not the
 /// owner: with FORCE row level security the owner policy is permissive, so a
 /// generated row that is only "valid" for the owner would prove nothing about the
-/// path the API uses. A generated row is committed only by the caller's
-/// <c>CommitAsync</c>; the suite never commits.
+/// path the API uses. The one exception is a table in
+/// <see cref="OwnerProvisionedTables"/>: <c>0054</c> keeps both NOT NULL caps of
+/// <c>healing_llm_budget</c> outside the app role's INSERT grant (its header's "the
+/// cap writer is owed"), so the generated row can only be provisioned by the owner
+/// path and a suite that needs it must pass the owner connection for that table —
+/// its reads stay app-role. A generated row is committed only by the caller's
+/// <c>CommitAsync</c>; the RLS suite is the one place that commits (an owner seed has
+/// to be visible to the app-role read in another transaction) and it deletes the
+/// seeded rows again before the case ends.
 /// </para>
 /// </summary>
 internal sealed class TenantRowFactory
@@ -133,6 +142,20 @@ internal sealed class TenantRowFactory
     private readonly TenantSchema _schema;
     private readonly TenantInsertExecutor _insert;
     private readonly Dictionary<(string Table, Guid Org), GeneratedRow> _created = [];
+
+    /// <summary>
+    /// The tenant tables whose generated row only the owner can provision, because a NOT NULL column
+    /// the generator must fill is outside <c>evidgate_app</c>'s INSERT grant. <c>0054</c> is the first:
+    /// it grants the app role INSERT on the five identity/period columns of
+    /// <c>healing_llm_budget</c> and deliberately leaves both NOT NULL caps out (its header's "the cap
+    /// writer is owed"), so its generated row is refused for the app role and exists only on the owner
+    /// path. A suite that derives its tables from the catalogue passes the owner connection for these
+    /// tables (an ordinal lookup on this set) and keeps its
+    /// reads on <c>evidgate_app</c>; the moment the provisioning path lands with an app-callable seam,
+    /// this entry is what has to be removed.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> OwnerProvisionedTables =
+        new HashSet<string>(StringComparer.Ordinal) { "public.healing_llm_budget" };
 
     // The rows currently being built, outermost first: a foreign-key cycle that reaches the same
     // (table, org) twice must fail one test instead of recursing until the host's stack dies.
@@ -476,6 +499,14 @@ internal sealed class TenantRowFactory
             // trigger would answer 23514 before the composite FK under test is reached.
             ("public.evidence_revision", "completeness") => "complete",
             ("public.evidence_revision", "revision_no") => 1,
+            // The LLM gateway tables (0054) close `purpose`, `status` and `period` in CHECKs the generic
+            // text candidate cannot satisfy. `purpose` is deliberately the one value whose row needs NO
+            // incident: `incident_id`/`candidate_id` are nullable and therefore left unset, so
+            // healing_llm_call_incident_required_check holds (it demands an incident only for the other
+            // purposes) together with the authoring CHECK that wants both attribution columns null.
+            ("public.healing_llm_call", "purpose") => "authoring_generation",
+            ("public.healing_llm_call", "status") => "ok",
+            ("public.healing_llm_budget", "period") => "daily",
             // planned_execution's execution_key is the 00 §7 sha256 hex and its unique key is
             // (org_id, run_id, execution_key), so a constant would collide with the valid row the
             // corrupt attempt inserts just before it: a fresh 64-hex value per generated row.
@@ -516,7 +547,7 @@ internal sealed class TenantRowFactory
             return special;
         }
 
-        return column.StoreType switch
+        return WithoutTypeModifier(column.StoreType) switch
         {
             "bytea" => new byte[32],
             "uuid" => Guid.CreateVersion7(),
@@ -534,5 +565,25 @@ internal sealed class TenantRowFactory
                 $"TenantRowFactory has no value rule for {table}.{column.Name} of type '{column.StoreType}', which is NOT NULL "
                 + "without a default: add its store type to the generator instead of skipping the table"),
         };
+    }
+
+    /// <summary>
+    /// The store type without its modifier, so one rule covers every precision and length:
+    /// <c>numeric(12,6)</c> (0054's caps and costs) and the parameterised <c>character varying(64)</c> or
+    /// <c>timestamp(3) with time zone</c> forms match the <c>numeric</c>/<c>character varying</c>/
+    /// <c>timestamp with time zone</c> arms instead of falling through to the "no value rule" error.
+    /// </summary>
+    private static string WithoutTypeModifier(string storeType)
+    {
+        var open = storeType.IndexOf('(', StringComparison.Ordinal);
+        if (open < 0)
+        {
+            return storeType;
+        }
+
+        var close = storeType.IndexOf(')', open);
+        return close < 0
+            ? storeType
+            : (storeType[..open] + storeType[(close + 1)..]).Trim();
     }
 }

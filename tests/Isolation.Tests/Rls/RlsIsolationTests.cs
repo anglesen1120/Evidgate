@@ -25,6 +25,14 @@ namespace Isolation.Tests;
 /// turning the suite into a false pass.
 /// </para>
 /// <para>
+/// One seeding exception, and it is a grant fact rather than a shortcut: the tables in
+/// <see cref="TenantRowFactory.OwnerProvisionedTables"/> cannot be inserted by the app role at all
+/// (<c>0054</c> keeps both NOT NULL caps of <c>healing_llm_budget</c> outside its INSERT grant), so
+/// their rows are provisioned on the owner connection, committed (the app-role read below is a
+/// different transaction) and removed again before the case ends. Every read still runs as
+/// <c>evidgate_app</c>.
+/// </para>
+/// <para>
 /// The exception list's kinds are shape-checked against <c>pg_catalog</c>, not trusted: a
 /// <c>platform</c> entry must have no <c>org_id</c> column, a <c>catalogue</c> entry a nullable
 /// one, and the <c>mechanism</c> kind is pinned to the three 01 tables — so a kind is a claim the
@@ -115,7 +123,7 @@ public sealed class RlsIsolationTests : HarnessTest
         var failures = new List<string>();
         var checkedTables = new List<string>();
 
-        foreach (var table in scan.TenantTables)
+        foreach (var table in AppSeedableTables(scan))
         {
             // One transaction per table, rolled back on dispose: the factory creates the parent
             // rows it needs (the tenant root above all), and a shared transaction would both
@@ -127,56 +135,83 @@ public sealed class RlsIsolationTests : HarnessTest
             await scope.SetAsync(RlsTableCatalog.TenantSetting, OrgB.ToString("D", CultureInfo.InvariantCulture));
             var rowB = await factory.CreateAsync(table, OrgB, Token);
 
-            var idA = (Guid)rowA.Values[TenantFkScan.TenantKeyColumn];
-            var idB = (Guid)rowB.Values[TenantFkScan.TenantKeyColumn];
+            failures.AddRange(await CheckUnsetThenScopedAsync(scope, table, IdOf(rowA), IdOf(rowB)));
+            checkedTables.Add(table);
+        }
 
-            // 1. The setting reset to its default: the fail-closed "no tenant" read.
-            await RlsTableCatalog.ResetTenantAsync(scope);
-            var unset = await VisibleIdsAsync(scope, table);
-            if (unset.Count != 0)
+        // The owner-provisioned tables are seeded last: theirs is the only transaction that commits, and
+        // the organization/project rows it creates would collide with the inserts of the app-role loops
+        // above if it ran first. The reads below — the only thing this case proves — are the same
+        // evidgate_app scope as every other table's, so the case still proves what it names.
+        foreach (var table in OwnerProvisionedTables(scan))
+        {
+            var (idA, idB, cleanup) = await SeedAsOwnerAsync(scan, table);
+            await using (cleanup)
             {
-                failures.Add(
-                    $"{table}: {unset.Count} row(s) visible with the tenant setting reset to its default "
-                    + $"(expected 0) — the policy must scope every read through evidgate.current_org_id()");
-            }
-
-            // 2. The setting present but blank: NULLIF(…, '') must map it to NULL, not to a tenant.
-            await scope.SetAsync(RlsTableCatalog.TenantSetting, string.Empty);
-            var empty = await VisibleIdsAsync(scope, table);
-            if (empty.Count != 0)
-            {
-                failures.Add(
-                    $"{table}: {empty.Count} row(s) visible with an empty tenant setting (expected 0) — "
-                    + "a blank setting must not open the scope");
-            }
-
-            // 3. Non-vacuity: the seeded org-A row is visible under org A, and org B's row is not.
-            await scope.SetAsync(RlsTableCatalog.TenantSetting, OrgA.ToString("D", CultureInfo.InvariantCulture));
-            var scoped = await VisibleIdsAsync(scope, table);
-            if (!scoped.SequenceEqual([idA]))
-            {
-                failures.Add(
-                    $"{table}: with the tenant setting at org {OrgA} the visible ids were [{Ids(scoped)}], "
-                    + $"expected exactly the seeded org-A row {idA} — the zero above is only meaningful when the row exists");
-            }
-
-            if (scoped.Contains(idB))
-            {
-                failures.Add($"{table}: org {OrgB}'s row {idB} is visible under the tenant setting of org {OrgA}");
+                await using var scope = await TenantScope.BeginAsync(Fixture.AppConnectionString, OrgA);
+                failures.AddRange(await CheckUnsetThenScopedAsync(scope, table, idA, idB));
             }
 
             checkedTables.Add(table);
-            _output.WriteLine(
-                "{0}: reset -> 0, empty -> 0, org A -> 1 ({1}); org B row {2} hidden",
-                table,
-                idA,
-                idB);
         }
 
         failures.ShouldBeEmpty(
             $"the unset-GUC rule is broken for {failures.Count} tenant table(s):{Environment.NewLine}"
             + string.Join(Environment.NewLine, failures));
         checkedTables.Count.ShouldBe(scan.TenantTables.Count);
+    }
+
+    /// <summary>
+    /// The "unset then scoped" half of AC3 for one table and the row it has for each org: zero rows
+    /// with the tenant setting reset, zero with it blank, then exactly the org-A row under org A and the
+    /// org-B row hidden.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> CheckUnsetThenScopedAsync(TenantScope scope, string table, Guid idA, Guid idB)
+    {
+        var failures = new List<string>();
+
+        // 1. The setting reset to its default: the fail-closed "no tenant" read.
+        await RlsTableCatalog.ResetTenantAsync(scope);
+        var unset = await VisibleIdsAsync(scope, table);
+        if (unset.Count != 0)
+        {
+            failures.Add(
+                $"{table}: {unset.Count} row(s) visible with the tenant setting reset to its default "
+                + $"(expected 0) — the policy must scope every read through evidgate.current_org_id()");
+        }
+
+        // 2. The setting present but blank: NULLIF(…, '') must map it to NULL, not to a tenant.
+        await scope.SetAsync(RlsTableCatalog.TenantSetting, string.Empty);
+        var empty = await VisibleIdsAsync(scope, table);
+        if (empty.Count != 0)
+        {
+            failures.Add(
+                $"{table}: {empty.Count} row(s) visible with an empty tenant setting (expected 0) — "
+                + "a blank setting must not open the scope");
+        }
+
+        // 3. Non-vacuity: the seeded org-A row is visible under org A, and org B's row is not.
+        await scope.SetAsync(RlsTableCatalog.TenantSetting, OrgA.ToString("D", CultureInfo.InvariantCulture));
+        var scoped = await VisibleIdsAsync(scope, table);
+        if (!scoped.SequenceEqual([idA]))
+        {
+            failures.Add(
+                $"{table}: with the tenant setting at org {OrgA} the visible ids were [{Ids(scoped)}], "
+                + $"expected exactly the seeded org-A row {idA} — the zero above is only meaningful when the row exists");
+        }
+
+        if (scoped.Contains(idB))
+        {
+            failures.Add($"{table}: org {OrgB}'s row {idB} is visible under the tenant setting of org {OrgA}");
+        }
+
+        _output.WriteLine(
+            "{0}: reset -> 0, empty -> 0, org A -> 1 ({1}); org B row {2} hidden",
+            table,
+            idA,
+            idB);
+
+        return failures;
     }
 
     /// <summary>
@@ -193,7 +228,7 @@ public sealed class RlsIsolationTests : HarnessTest
         var failures = new List<string>();
         var checkedTables = new List<string>();
 
-        foreach (var table in scan.TenantTables)
+        foreach (var table in AppSeedableTables(scan))
         {
             // One transaction per table (see Guc_Unset_ZeroRows).
             await using var scope = await TenantScope.BeginAsync(Fixture.AppConnectionString, OrgA);
@@ -203,35 +238,121 @@ public sealed class RlsIsolationTests : HarnessTest
             await scope.SetAsync(RlsTableCatalog.TenantSetting, OrgB.ToString("D", CultureInfo.InvariantCulture));
             var rowB = await factory.CreateAsync(table, OrgB, Token);
 
-            var idA = (Guid)rowA.Values[TenantFkScan.TenantKeyColumn];
-            var idB = (Guid)rowB.Values[TenantFkScan.TenantKeyColumn];
+            failures.AddRange(await CheckScopedExactlyAsync(scope, table, IdOf(rowA), IdOf(rowB)));
+            checkedTables.Add(table);
+        }
 
-            await scope.SetAsync(RlsTableCatalog.TenantSetting, OrgA.ToString("D", CultureInfo.InvariantCulture));
-            var underA = await VisibleIdsAsync(scope, table);
-            if (!underA.SequenceEqual([idA]))
+        // See Guc_Unset_ZeroRows for why the owner-provisioned tables are seeded last, on the owner
+        // connection, and only for the seeding half.
+        foreach (var table in OwnerProvisionedTables(scan))
+        {
+            var (idA, idB, cleanup) = await SeedAsOwnerAsync(scan, table);
+            await using (cleanup)
             {
-                failures.Add(
-                    $"{table}: with the tenant setting at org {OrgA} the visible ids were [{Ids(underA)}], "
-                    + $"expected exactly [{idA}] (org {OrgB}'s row {idB} must not appear)");
-            }
-
-            await scope.SetAsync(RlsTableCatalog.TenantSetting, OrgB.ToString("D", CultureInfo.InvariantCulture));
-            var underB = await VisibleIdsAsync(scope, table);
-            if (!underB.SequenceEqual([idB]))
-            {
-                failures.Add(
-                    $"{table}: with the tenant setting at org {OrgB} the visible ids were [{Ids(underB)}], "
-                    + $"expected exactly [{idB}] (org {OrgA}'s row {idA} must not appear)");
+                await using var scope = await TenantScope.BeginAsync(Fixture.AppConnectionString, OrgA);
+                failures.AddRange(await CheckScopedExactlyAsync(scope, table, idA, idB));
             }
 
             checkedTables.Add(table);
-            _output.WriteLine("{0}: org A -> {1}, org B -> {2}", table, idA, idB);
         }
 
         failures.ShouldBeEmpty(
             $"the set-GUC rule is broken for {failures.Count} tenant table(s):{Environment.NewLine}"
             + string.Join(Environment.NewLine, failures));
         checkedTables.Count.ShouldBe(scan.TenantTables.Count);
+    }
+
+    /// <summary>
+    /// The "set → exact" half of AC3 for one table and the row it has for each org: org A's setting
+    /// returns exactly the org-A row and org B's exactly the org-B row.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> CheckScopedExactlyAsync(TenantScope scope, string table, Guid idA, Guid idB)
+    {
+        var failures = new List<string>();
+
+        await scope.SetAsync(RlsTableCatalog.TenantSetting, OrgA.ToString("D", CultureInfo.InvariantCulture));
+        var underA = await VisibleIdsAsync(scope, table);
+        if (!underA.SequenceEqual([idA]))
+        {
+            failures.Add(
+                $"{table}: with the tenant setting at org {OrgA} the visible ids were [{Ids(underA)}], "
+                + $"expected exactly [{idA}] (org {OrgB}'s row {idB} must not appear)");
+        }
+
+        await scope.SetAsync(RlsTableCatalog.TenantSetting, OrgB.ToString("D", CultureInfo.InvariantCulture));
+        var underB = await VisibleIdsAsync(scope, table);
+        if (!underB.SequenceEqual([idB]))
+        {
+            failures.Add(
+                $"{table}: with the tenant setting at org {OrgB} the visible ids were [{Ids(underB)}], "
+                + $"expected exactly [{idB}] (org {OrgA}'s row {idA} must not appear)");
+        }
+
+        _output.WriteLine("{0}: org A -> {1}, org B -> {2}", table, idA, idB);
+        return failures;
+    }
+
+    /// <summary>The discovered tenant tables the app role can insert, in discovery order.</summary>
+    private static IEnumerable<string> AppSeedableTables(TenantFkScanResult scan) =>
+        scan.TenantTables.Where(table => !TenantRowFactory.OwnerProvisionedTables.Contains(table));
+
+    /// <summary>
+    /// The discovered tenant tables only the owner can provision
+    /// (<see cref="TenantRowFactory.OwnerProvisionedTables"/>), in discovery order.
+    /// </summary>
+    private static IEnumerable<string> OwnerProvisionedTables(TenantFkScanResult scan) =>
+        scan.TenantTables.Where(TenantRowFactory.OwnerProvisionedTables.Contains);
+
+    /// <summary>The row's own id — the generated tenant key column.</summary>
+    private static Guid IdOf(GeneratedRow row) => (Guid)row.Values[TenantFkScan.TenantKeyColumn];
+
+    /// <summary>
+    /// Seeds one row per org for an owner-provisioned table, on the owner connection, and commits it:
+    /// the case's read half is a separate <c>evidgate_app</c> transaction, so an uncommitted seed would
+    /// be invisible. Returns the cleanup that removes the rows (and the organization/project rows the
+    /// generator created with them) once the read assertions have run.
+    /// </summary>
+    private async Task<(Guid IdA, Guid IdB, IAsyncDisposable Cleanup)> SeedAsOwnerAsync(
+        TenantFkScanResult scan,
+        string table)
+    {
+        Guid idA, idB;
+        Guid[] projects;
+        await using (var owner = await TenantScope.BeginAsync(Fixture.OwnerConnectionString))
+        {
+            var factory = new TenantRowFactory(scan.Schema, (sql, parameters) => owner.ExecuteAsync(sql, parameters));
+            var rowA = await factory.CreateAsync(table, OrgA, Token);
+            var rowB = await factory.CreateAsync(table, OrgB, Token);
+
+            idA = IdOf(rowA);
+            idB = IdOf(rowB);
+            projects = [(Guid)rowA.Values["project_id"], (Guid)rowB.Values["project_id"]];
+            await owner.CommitAsync();
+        }
+
+        return (idA, idB, new SeededRowCleanup(Fixture.OwnerConnectionString, table, [idA, idB], projects, [OrgA, OrgB]));
+    }
+
+    /// <summary>
+    /// Removes a committed owner seed child first — the seeded rows, their projects, then the two
+    /// organization roots the generator created — so the case leaves the shared harness database as it
+    /// found it and the later <c>organization</c> assertions see only the rows they expect.
+    /// </summary>
+    private sealed class SeededRowCleanup(
+        string connectionString,
+        string table,
+        Guid[] rowIds,
+        Guid[] projectIds,
+        Guid[] orgIds) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            await using var owner = await TenantScope.BeginAsync(connectionString);
+            await owner.ExecuteAsync($"delete from {table} where id = any(@ids)", ("ids", rowIds));
+            await owner.ExecuteAsync("delete from public.project where id = any(@ids)", ("ids", projectIds));
+            await owner.ExecuteAsync("delete from public.organization where id = any(@ids)", ("ids", orgIds));
+            await owner.CommitAsync();
+        }
     }
 
     /// <summary>
