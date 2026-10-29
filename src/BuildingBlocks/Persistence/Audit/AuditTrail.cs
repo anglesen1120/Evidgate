@@ -121,6 +121,16 @@ public sealed class AuditTrail : IAuditTrail
             return 0;
         }
 
+        // 11.9.2-T2.2 (AC10): the last gate before the chain. Only the metadata is walked — the other
+        // AuditObject fields are ids and hashes, and reflecting over the record would allocate a walk
+        // that cannot find a key. A payload naming a personal-data key is refused here too, so no hash
+        // is computed, no advisory lock is taken and no row is inserted for it — a programming error
+        // fails the unit instead of entering the permanent record.
+        foreach (var entry in unit.Entries)
+        {
+            AuditMetadata.EnsureNoForbiddenKeys(entry.Subject?.Metadata, "audit entry");
+        }
+
         // The lock comes after every business statement and before the chain read: it is held
         // from here to the commit, i.e. for about the length of these inserts (T8, P5). A bounded
         // wait keeps a burst on one org from parking every pooled connection behind the lock.

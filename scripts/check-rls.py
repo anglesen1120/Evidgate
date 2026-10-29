@@ -129,8 +129,9 @@ DEFINER_AUDIT_EXEMPT = {
         "`HealingSystemSwitchWriter` (src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs), "
         "and a security_event row would be the durable record but does not fit it yet: 11.5.1-T5 "
         "shipped `security_event` (0053) and handed the platform-scope record over, because its org_id is "
-        "NOT NULL, so a no-tenant write has no row; where such an event is stored is the open owner "
-        "decision D-S137-OWNER (nullable org_id or a separate platform table) — an open receiver, "
+        "NOT NULL, so a no-tenant write has no row; D-S137-OWNER (DECISIONS §8.2, decided 2026-10-29) "
+        "puts such an event in the separate `platform_security_event` table, never a nullable org_id, "
+        "and that table plus its emitter are still owed — an open receiver, "
         "exactly like the D-S102-Q3 entries above. No per-call audit row is possible here, which is why "
         "the exemption is recorded rather than the row"
     ),

@@ -6,9 +6,9 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 
 **Current state (2026-10-27).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next) and `docs/status-carried.md` (blocked / carried items, formerly STATUS §6), not here.
 
-- Landed on `develop` (#260, S124 08.6.3-T1; the figures below include S131 11.5.2-T1, PR #270, counted from its merge): 184 of 656 planned tasks = 189.25 of 703.25 raw person-days (≈28 % of tasks, ≈27 % of effort); 472 tasks / 514.0 d remain.
-- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 135 / 146.25 of 281.75 · G2 43 / 37 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
-- Landed by area plan (tasks / planned): 01 45/53 · 02 29/49 · 03 8/40 · 04 22/53 · 05 19/53 · 06 12/36 · 07 6/42 · 08 1/69 · 09 21/72 · 10 5/54 · 11 10/51 · 12 1/30 · 13 5/54.
+- Landed on `develop` (#260, S124 08.6.3-T1; the figures below include S131 11.5.2-T1, PR #270, and S146 09.3.1-T4, PR #302, and S147 11.9.2-T2, PR #304, counted from their merges): 186 of 656 planned tasks = 190.75 of 703.25 raw person-days (≈28 % of tasks, ≈27 % of effort); 470 tasks / 512.5 d remain.
+- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 136 / 146.75 of 281.75 · G2 44 / 38 of 195.5 · G3 0 / 0 of 106.75 · G4 6 / 6 of 119.25.
+- Landed by area plan (tasks / planned): 01 45/53 · 02 29/49 · 03 8/40 · 04 22/53 · 05 19/53 · 06 12/36 · 07 6/42 · 08 1/69 · 09 22/72 · 10 5/54 · 11 11/51 · 12 1/30 · 13 5/54.
 - Delivered substrate: M1 foundation (toolchain pins, contracts pipeline + generated SDK drift gate, CI running `scripts/verify.sh`, dev stack, licence/SBOM/action-pin gates) and the Stage A waves (FORCE-RLS tenancy, orgs/projects/memberships, permissions, audit chain, CI tokens).
 - Delivered modules: catalog case/suite identity and revisions (03.1.1/03.1.3/03.2.1), runs manifest upload (05.1.1), the run reconciler with evidence revisions and the freeze seam (05.3.2-T1/T2/T5), evidence upload + safe parsing (06.1/06.3.1–06.3.2), policy revisions and waiver/quarantine lifecycles (07.1.1/07.3.1), sessions with list/revoke/revoke-all/logout and the cleanup sweep (02.3.2-T1/T2), and the Angular 22 web app with scaffold, app shell, shared state components and generated-SDK data layer (09.1.1-T1/T3/T4/T5/T7/T8/T9/T10/T12).
 - Migrations `0001`–`0052` are contiguous; highest is `0052_healing_switch.sql` (merged in #260), the migration lane is free and the next free number is `0053`.
