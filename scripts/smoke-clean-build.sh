@@ -63,7 +63,10 @@ git init -q
 git add -A
 git -c user.name=smoke -c user.email=smoke@localhost commit -q -m "clean clone"
 git branch develop
-EVIDGATE_VERIFY_SKIP_DOCKER=1 scripts/verify.sh
+# The tier is pinned to `full`: this copy's single commit is its own base, so a
+# bare run would ask the classifier about an empty change set instead of running
+# the gate the clone exists to prove.
+EVIDGATE_VERIFY_SKIP_DOCKER=1 EVIDGATE_GATE_SCOPE=full scripts/verify.sh
 INNER
 
 # The container entry runs as root only for one apt step: verify.sh calls

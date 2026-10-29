@@ -13,11 +13,12 @@ from review_blockers import gitio, ratchet, rules, sql
 def scan_change_set(base: str, head: str) -> tuple[list[rules.Finding], int]:
     """Every finding of base...head, plus the number of added lines examined.
 
-    Rename detection stays off so `git mv` reports the old path as deleted and
-    the new one as added: a gate file that moves is still a gate file change,
-    and a deleted migration is not read as if it were still in the head tree.
+    `gitio.changed_names` keeps rename detection off so `git mv` reports the old
+    path as deleted and the new one as added: a gate file that moves is still a
+    gate file change, and a deleted migration is not read as if it were still in
+    the head tree.
     """
-    names = [path for path in gitio.git("diff", "--name-only", "-z", "--no-renames", f"{base}...{head}").split("\0") if path]
+    names = gitio.changed_names(base, head)
     in_head = {path for path in gitio.git("ls-tree", "-r", "-z", "--name-only", head).split("\0") if path}
     found = rules.gate_findings(names)
     for path in names:

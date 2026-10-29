@@ -235,8 +235,9 @@ jobs:
       # The path-scoped tier classifier's fixtures: the allow-lists, the git
       # plumbing, the fail-closed paths, and the mirror of ALL_STAGES. It is a
       # check stage, so a narrowed local run still runs it; here it guards the
-      # classifier itself, and the `EVIDGATE_GATE_SCOPE: full` above keeps CI
-      # itself narrowed to nothing.
+      # classifier itself. `EVIDGATE_GATE_SCOPE: full` is a latent lock: a tier is
+      # consulted only by a bare `scripts/verify.sh`, and every call in this
+      # workflow passes `--stage`, so it bites the day a job drops the stage list.
       - name: 'Gate-scope tier classifier — verify.sh stage'
         run: ./scripts/verify.sh --stage check-gate-scope
       # The stage above runs the checkout's copy. A pull request's ci.yml,

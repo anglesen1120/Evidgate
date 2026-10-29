@@ -4,7 +4,9 @@ Two layers are tested apart. `tier_of_path`/`tier_of_paths` name the class of a
 path and of a whole change set with no git involved, which is where the
 allow-lists live; the `ChangeSet` cases then drive the real classifier over a
 disposable repository so the git plumbing (committed range, working tree,
-untracked files, base resolution) is exercised too, not just the tables.
+untracked files, deleted paths, base resolution) is exercised too. The
+`ReverseCoverage` case closes the loop the other way: a path the .NET sources
+name must never be narrowed away.
 
 The fixture repository comes from `review_blockers_fixtures` (the
 `check-review-blockers` gate's helper): one disposable repo per test, no
@@ -12,6 +14,7 @@ dependence on user git config.
 """
 import io
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -19,6 +22,11 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+
+# `python3 -m unittest scripts.tests.test_gate_scope` from the repository root
+# must find the classifier and the shared fixture helper: verify.sh's stage sets
+# PYTHONPATH, a caller may not.
+sys.path[:0] = [str(Path(__file__).resolve().parent.parent), str(Path(__file__).resolve().parent)]
 
 import gate_scope
 from review_blockers import gitio
@@ -44,11 +52,9 @@ class PathClasses(unittest.TestCase):
         "apps/web/src/app/app.component.ts",
         "apps/web/package.json",
         "packages/sdk/src/client.ts",
-        "fixtures/web-api/requests.json",
         "scripts/check-rls.py",
         "scripts/tests/test_check_rls.py",
         "scripts/check-review-blockers.baseline.json",
-        "scripts/review_blockers/rules.py",
         "package.json",
         "package-lock.json",
         "tsconfig.json",
@@ -57,19 +63,26 @@ class PathClasses(unittest.TestCase):
         ".prettierrc",
         ".prettierrc.json",
         ".prettierignore",
+        "docs/adr/0002-compatibility-and-licence-matrix.md",
+        "docs/adr/README.md",
     )
     FULL = (
         ".github/workflows/ci.yml",
-        "scripts/verify.sh",
-        "scripts/locked-run.sh",
-        "scripts/gate_scope.py",
-        "scripts/tests/test_gate_scope.py",
+        "scripts/review_blockers/gitio.py",
+        "scripts/review_blockers/rules.py",
         "scripts/dev/down.sh",
         "Directory.Build.props",
         "Directory.Packages.props",
         "global.json",
         "nuget.config",
         "Evidgate.slnx",
+        "Evidgate.slnf",
+        "Legacy.sln",
+        ".globalconfig",
+        "style.ruleset",
+        "tools/Legacy.fsproj",
+        "tools/Legacy.vbproj",
+        "src/Generated.cs",
         "src/Evidgate.Api/Program.cs",
         "tests/Isolation.Tests/Harness.cs",
         "migrations/0055_x.sql",
@@ -83,6 +96,9 @@ class PathClasses(unittest.TestCase):
         "artifacts/licence-report.json",
         "docs/design/landing-page.html",
         "docs/README.txt",
+        "docs/security/audit-and-deletion-rule.md",
+        "fixtures/web-api/requests.json",
+        ".omp/coordinator/prompt.md",
         "unknown-root-file",
     )
 
@@ -103,14 +119,14 @@ class PathClasses(unittest.TestCase):
                 tier, why = gate_scope.tier_of_path(path)
                 self.assertEqual(tier, "full", why)
 
-    def test_the_classifier_its_own_files_are_gate_files(self):
+    def test_every_gate_file_needs_the_full_gate(self):
         # The gate files are full-tier even though they sit under scripts/.
-        for path in gate_scope.GATE_PATHS:
+        for path in sorted(gate_scope.GATE_PATHS):
             with self.subTest(path=path):
                 self.assertEqual(gate_scope.tier_of_path(path)[0], "full")
 
-    def test_untracked_harness_state_is_not_a_change(self):
-        self.assertEqual(gate_scope.tier_of_path(".omp/coordinator/prompt.md")[0], "skip")
+    def test_untracked_harness_state_is_skipped(self):
+        self.assertEqual(gate_scope.tier_of_path(".omp/x.md", untracked={".omp/x.md"})[0], "skip")
 
     def test_one_documentation_path_is_the_docs_tier(self):
         self.assertEqual(gate_scope.tier_of_paths(["docs/a.md"]), ("docs", gate_scope.DOCS_REASON))
@@ -214,6 +230,89 @@ class ChangeSet(RepoTest):
         self.repo.commit()
         return base
 
+    def tier_of(self, *pairs):
+        """Commit the pairs as one change set, then report its scope."""
+        self.change(*pairs)
+        return self.scope()
+
+    def test_each_new_full_rule_needs_the_full_gate(self):
+        for path in (
+            "tools/Legacy.fsproj", "Legacy.sln", ".globalconfig", "style.ruleset",
+            "fixtures/web-api/requests.json", "docs/security/audit-and-deletion-rule.md",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.tier_of((path, "// x\n")).tier, "full")
+
+    def test_a_control_character_a_commit_carries_keeps_the_report_on_one_line(self):
+        # Not `printable` alone: git's -z diff and status must not inject a newline.
+        self.change(("src/Evidgate.Api/we\nird.cs", "// x\n"))
+        report = gate_scope.render(self.scope())
+        self.assertEqual(len(report.splitlines()), 5)
+        self.assertIn("reason: src/Evidgate.Api/we\\nird.cs", report)
+
+    def test_an_adr_commit_skips_the_dotnet_stages(self):
+        for path in ("docs/adr/0002-compatibility-and-licence-matrix.md", "docs/adr/README.md"):
+            with self.subTest(path=path):
+                self.assertEqual(self.tier_of((path, "# adr\n")).tier, "no-dotnet")
+
+    def test_a_deleted_story_file_needs_the_full_gate(self):
+        story = "plans/features/01-foundation/01.2.1-x.md"
+        self.change((story, "story\n"))
+        base = self.repo.head()  # the commit that still holds the story
+        self.repo.remove(story)
+        uncommitted = gate_scope.evaluate({"EVIDGATE_REVIEW_BASE": base})
+        self.repo.commit()
+        committed = gate_scope.evaluate({"EVIDGATE_REVIEW_BASE": base})
+        self.assertEqual((uncommitted.tier, committed.tier), ("full", "full"))
+        self.assertIn("catalogue test", committed.reason)
+
+    def test_a_story_file_renamed_away_needs_the_full_gate(self):
+        story = "plans/features/01-foundation/01.2.1-x.md"
+        self.change((story, "story\n"), ("docs/keep.md", "keep\n"))
+        base = self.repo.head()
+        git(self.repo.path, "mv", story, "docs/moved-story.md")
+        self.repo.commit()
+        scope = gate_scope.evaluate({"EVIDGATE_REVIEW_BASE": base})
+        self.assertEqual(scope.tier, "full")
+        self.assertIn("catalogue test", scope.reason)
+
+    def test_a_story_file_edited_in_place_stays_docs(self):
+        story = "plans/features/01-foundation/01.2.1-x.md"
+        self.change((story, "story\n"))
+        self.repo.write(story, "story, edited\n")
+        self.repo.commit()
+        self.assertEqual(self.scope().tier, "docs")
+
+    def test_a_source_file_moved_into_docs_is_still_a_full_change(self):
+        self.change(("src/Evidgate.Api/a.cs", "// x\n"), ("docs/keep.md", "keep\n"))
+        base = self.repo.head()
+        git(self.repo.path, "mv", "src/Evidgate.Api/a.cs", "docs/a.md")
+        self.repo.commit()
+        scope = gate_scope.evaluate({"EVIDGATE_REVIEW_BASE": base})
+        self.assertEqual(scope.tier, "full")
+        self.assertIn("src/Evidgate.Api/a.cs", scope.reason)
+
+    def test_untracked_harness_state_is_not_counted(self):
+        self.change(("docs/a.md", "text\n"))
+        self.repo.write(".omp/coordinator/prompt.md", "x\n")
+        scope = self.scope()
+        self.assertEqual(scope.tier, "docs")
+        self.assertEqual(scope.changed, 1)
+        self.assertNotIn(".omp/coordinator/prompt.md", scope.paths)
+
+    def test_a_review_base_widens_the_change_set_and_never_narrows_it(self):
+        first = self.change(("src/Evidgate.Api/Program.cs", "// x\n"))
+        git(self.repo.path, "branch", "-f", "develop", self.repo.head())
+        self.change(("docs/a.md", "text\n"))
+        self.assertEqual(self.scope().tier, "docs")
+        widened = self.scope(EVIDGATE_REVIEW_BASE=first)
+        self.assertEqual(widened.tier, "full")
+        self.assertIn("src/Evidgate.Api/Program.cs", widened.paths)
+        self.assertTrue(any("EVIDGATE_REVIEW_BASE" in note for note in widened.notes))
+        # A base at HEAD adds nothing, and an all-zero base is not a base at all.
+        self.assertEqual(self.scope(EVIDGATE_REVIEW_BASE=self.repo.head()).tier, "docs")
+        self.assertEqual(self.scope(EVIDGATE_REVIEW_BASE="0" * 40).tier, "docs")
+
     def test_a_documentation_only_commit_is_the_docs_tier(self):
         base = self.change(("docs/note.md", "text\n"), ("STATUS.md", "row\n"))
         scope = gate_scope.evaluate({"EVIDGATE_REVIEW_BASE": base})
@@ -263,10 +362,6 @@ class ChangeSet(RepoTest):
         self.repo.commit()
         self.assertEqual(gate_scope.evaluate({"EVIDGATE_REVIEW_BASE": base}).tier, "docs")
 
-    def test_the_develop_branch_is_the_default_base(self):
-        self.change(("apps/web/src/x.ts", "export const x = 1;\n"))
-        self.assertEqual(self.scope().tier, "no-dotnet")
-
     def test_an_unresolvable_base_is_a_full_gate(self):
         self.change(("docs/a.md", "text\n"))
         scope = gate_scope.evaluate({"EVIDGATE_REVIEW_BASE": "nosuchref"})
@@ -304,6 +399,42 @@ class ChangeSet(RepoTest):
         self.assertEqual(keys[:5], ["tier", "reason", "changed", "base", "stages"])
         self.assertIn("tier: docs", report)
         self.assertIn("skipped: restore", report)
+
+
+class ReverseCoverage(unittest.TestCase):
+    """Every repository path the .NET sources name must survive narrowing.
+
+    A test that opens `docs/…` or `fixtures/…` fails when that path changes, so
+    the path cannot be prose-only: every such literal the repository's own C#
+    sources name must classify `full`, or a new test reading one shrinks a lane.
+    """
+
+    TREES = ("src", "tests")
+    LITERAL = re.compile(r'"((?:docs|plans|fixtures|apps|packages|scripts)/[^"\\\n]*)"')
+    # A literal with whitespace or a glob is not a path: a citation
+    # (`path:N — note`, which CatalogueTests uses) or a pattern. A citation is
+    # prose here — only a deleted or renamed-away story file is judged full, so
+    # an in-place edit above a cited line is a residual this test does not catch.
+    NOT_A_PATH = set(" \t{}*?[")
+
+    def path_literals(self):
+        found = set()
+        for tree in self.TREES:
+            for source in (ROOT / tree).rglob("*.cs"):
+                text = source.read_text(encoding="utf-8", errors="replace")
+                for match in self.LITERAL.finditer(text):
+                    found.add(match.group(1))
+        return sorted(literal for literal in found if not set(literal) & self.NOT_A_PATH)
+
+    def test_every_path_a_dotnet_source_names_needs_the_full_gate(self):
+        literals = self.path_literals()
+        # The audit rule page is the one the docs tier had to exempt: a scan that
+        # cannot see it is looking in the wrong place.
+        self.assertIn("docs/security/audit-and-deletion-rule.md", literals)
+        for literal in literals:
+            with self.subTest(literal=literal):
+                tier, why = gate_scope.tier_of_path(literal)
+                self.assertEqual(tier, "full", f"{literal} is named by a .NET source ({why})")
 
 
 class CommandLine(RepoTest):

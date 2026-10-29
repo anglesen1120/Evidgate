@@ -11,8 +11,9 @@
 # and not wired into ci.yml fails the parity gate.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT"
+# BASH_SOURCE, not $0: the stage-selection tests source this file, and $0 there
+# is the test's own shell, not this script.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Canonical stage order: the order every stage list is validated and reported in,
 # and the order a bare run follows within its tier. A bare run does not run every
@@ -318,16 +319,17 @@ run_stage() {
       PYTHONDONTWRITEBYTECODE=1 python3 -m unittest "${blockers_fixtures[@]}"
     ;;
   check-gate-scope)
-    # The path-scoped tier classifier's fixtures: which stage subset a change set
-    # needs, the allow-lists behind it, the fail-closed paths (unknown path,
-    # unresolvable base, unreadable request, no git repository) and the mirror of
-    # this file's ALL_STAGES, so the two lists cannot drift in silence. Bytecode
-    # is off so the fixture run leaves no .pyc beside the tracked test tree; the
-    # file is named rather than discovered, because `unittest` with nothing to run
-    # prints "Ran 0 tests ... OK" and a rename would turn this stage green.
+    # The path-scoped tier classifier's fixtures (test_gate_scope.py): which
+    # stage subset a change set needs, the allow-lists, the fail-closed paths and
+    # the mirror of ALL_STAGES; and the consumer's (test_verify_scope.py): only a
+    # docs/no-dotnet tier with a known, non-empty list may narrow a bare run.
+    # Bytecode is off so the run leaves no .pyc in the tracked test tree; the
+    # files are named rather than discovered, because `unittest` with nothing to
+    # run prints "Ran 0 tests ... OK" and a rename would turn this stage green.
     stage "check-gate-scope"
     PYTHONPATH="${ROOT}/scripts:${ROOT}/scripts/tests${PYTHONPATH:+:${PYTHONPATH}}" \
-      PYTHONDONTWRITEBYTECODE=1 python3 -m unittest scripts/tests/test_gate_scope.py
+      PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+      scripts/tests/test_gate_scope.py scripts/tests/test_verify_scope.py
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three
@@ -373,105 +375,122 @@ run_stage() {
 }
 
 # --- argument parsing ---------------------------------------------------------
-selected=()
+# Everything below is a function and the run is guarded at the end of the file,
+# so sourcing this script defines the selection without executing a stage.
+selected=() scope_tier="" scope_reason="" scope_changed="" scope_base=""
+scope_stages="" scope_skipped="" scope_notes=()
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-  --stage)
-    if [[ $# -lt 2 ]]; then
-      echo "verify: --stage needs a stage name" >&2
-      usage >&2
-      exit 2
-    fi
-    selected+=("$2")
-    shift 2
-    ;;
-  --list-stages)
-    printf '%s\n' "${ALL_STAGES[@]}"
-    exit 0
-    ;;
-  -h | --help)
-    usage
-    exit 0
-    ;;
-  *)
-    echo "verify: unknown argument '$1'" >&2
-    usage >&2
-    exit 2
-    ;;
-  esac
-done
+# `in_list <name> <names...>`: membership over an explicit list.
+in_list() {
+  local needle="$1" item
+  shift
+  for item in "$@"; do [[ "$item" == "$needle" ]] && return 0; done
+  return 1
+}
+
+fail_usage() {
+  echo "verify: $1" >&2
+  usage >&2
+  exit 2
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --stage)
+      if [[ $# -lt 2 ]]; then fail_usage "--stage needs a stage name"; fi
+      # An explicit list is the caller's own verdict: every named stage runs,
+      # whatever the tier would have chosen; an unknown name is a caller typo.
+      if ! in_list "$2" "${ALL_STAGES[@]}"; then fail_usage "unknown stage '$2'"; fi
+      selected+=("$2")
+      shift 2
+      ;;
+    --list-stages) printf '%s\n' "${ALL_STAGES[@]}"; exit 0 ;;
+    -h | --help) usage; exit 0 ;;
+    *) fail_usage "unknown argument '$1'" ;;
+    esac
+  done
+}
 
 # --- path-scoped tiers --------------------------------------------------------
-# No --stage means "whatever this change set can fail". The tier is computed in
-# scripts/gate_scope.py, where it is tested; this block only consumes the
-# `key: value` report it prints and decides nothing itself. A classifier that
-# prints nothing, omits the tier, or fails outright is a full gate: the saving is
-# allowed to be wrong in one direction only.
-scope_tier=""
-scope_reason=""
-scope_changed=""
-scope_base=""
-scope_stages=""
-scope_skipped=""
-scope_notes=()
-
+# No --stage means "whatever this change set can fail": scripts/gate_scope.py is
+# the only decider (and where it is tested), this block just consumes its report.
+# A classifier that crashes, prints nothing or omits the tier is the full gate.
+#
+# The FIRST line for a key wins: a duplicate may repeat a fact, never replace it.
 read_scope() {
   local line
   while IFS= read -r line; do
     case "$line" in
-    "tier: "*) scope_tier="${line#tier: }" ;;
-    "reason: "*) scope_reason="${line#reason: }" ;;
-    "changed: "*) scope_changed="${line#changed: }" ;;
-    "base: "*) scope_base="${line#base: }" ;;
-    "stages: "*) scope_stages="${line#stages: }" ;;
-    "skipped: "*) scope_skipped="${line#skipped: }" ;;
+    "tier: "*) if [[ -z "$scope_tier" ]]; then scope_tier="${line#tier: }"; fi ;;
+    "reason: "*) if [[ -z "$scope_reason" ]]; then scope_reason="${line#reason: }"; fi ;;
+    "changed: "*) if [[ -z "$scope_changed" ]]; then scope_changed="${line#changed: }"; fi ;;
+    "base: "*) if [[ -z "$scope_base" ]]; then scope_base="${line#base: }"; fi ;;
+    "stages: "*) if [[ -z "$scope_stages" ]]; then scope_stages="${line#stages: }"; fi ;;
+    "skipped: "*) if [[ -z "$scope_skipped" ]]; then scope_skipped="${line#skipped: }"; fi ;;
     "note: "*) scope_notes+=("${line#note: }") ;;
     esac
   done <<<"$1"
 }
 
-if [[ "${#selected[@]}" -eq 0 ]]; then
-  scope_output="$(PYTHONDONTWRITEBYTECODE=1 python3 scripts/gate_scope.py)" || scope_output=""
-  read_scope "$scope_output"
-  if [[ -z "$scope_tier" || -z "$scope_stages" ]]; then
-    echo "== gate scope: full (the classifier printed no tier, so nothing is skipped)"
-    selected=("${ALL_STAGES[@]}")
-  else
-    echo "== gate scope: ${scope_tier} (${scope_reason}, ${scope_changed} changed path(s), base ${scope_base})"
-    if [[ -n "$scope_skipped" ]]; then
-      echo "   skipped by scope: ${scope_skipped}"
-    fi
-    for note in ${scope_notes[@]+"${scope_notes[@]}"}; do
-      echo "   note: ${note}"
-    done
-    # The report's stage list is space-separated stage names; splitting it is
-    # what turns it into the array, and the names are validated just below.
-    read -r -a selected <<<"$scope_stages"
-  fi
-else
-  # An explicit list is the caller's own verdict on the change set: every named
-  # stage runs, whatever the tier would have chosen.
-  echo "== gate scope: explicit (--stage given: no path filtering, every listed stage runs)"
-fi
-
-for name in "${selected[@]}"; do
-  case " ${ALL_STAGES[*]} " in
-  *" $name "*) ;;
-  *)
-    echo "verify: unknown stage '$name'" >&2
-    usage >&2
-    exit 2
-    ;;
+# Turn the parsed report into the run list. Only a `docs` or `no-dotnet` tier
+# with a non-empty list of known stages may narrow a bare run; an unknown tier,
+# an empty or invented stage list, or a missing key is the full gate.
+plan_selection() {
+  local name narrowed="" candidates=()
+  case "$scope_tier" in
+  docs | no-dotnet) if [[ -n "$scope_stages" ]]; then narrowed=1; fi ;;
   esac
-done
+  if [[ -n "$narrowed" ]]; then
+    read -r -a candidates <<<"$scope_stages" || true
+    for name in ${candidates[@]+"${candidates[@]}"}; do
+      if ! in_list "$name" "${ALL_STAGES[@]}"; then narrowed=""; fi
+    done
+    if [[ "${#candidates[@]}" -eq 0 ]]; then narrowed=""; fi
+  fi
+  if [[ -n "$narrowed" ]]; then
+    selected=("${candidates[@]}")
+    echo "== gate scope: ${scope_tier} (${scope_reason}, ${scope_changed} changed path(s), base ${scope_base})"
+    if [[ -n "$scope_skipped" ]]; then echo "   skipped by scope: ${scope_skipped}"; fi
+    for note in ${scope_notes[@]+"${scope_notes[@]}"}; do echo "   note: ${note}"; done
+  else
+    scope_tier="full"
+    echo "== gate scope: no usable tier/stage list (full gate)"
+    selected=("${ALL_STAGES[@]}")
+  fi
+}
 
-for name in "${selected[@]}"; do
-  run_stage "$name"
-done
-
-if [[ "$scope_tier" == "full" ]]; then
+# The success line is a claim about the whole gate, so it is made only when every
+# canonical stage is in the run list.
+report_result() {
+  local name
+  for name in "${ALL_STAGES[@]}"; do
+    if ! in_list "$name" ${selected[@]+"${selected[@]}"}; then
+      echo "== verify: selected stages passed: ${selected[*]}"
+      return 0
+    fi
+  done
   echo "== verify: all stages passed"
-else
-  echo "== verify: selected stages passed: ${selected[*]}"
+}
+
+main() {
+  local name report
+  cd "$ROOT"
+  parse_args "$@"
+  if [[ "${#selected[@]}" -eq 0 ]]; then
+    report="$(PYTHONDONTWRITEBYTECODE=1 python3 scripts/gate_scope.py)" || report=""
+    read_scope "$report"
+    plan_selection
+  else
+    echo "== gate scope: explicit (--stage given: no path filtering, every listed stage runs)"
+  fi
+  for name in "${selected[@]}"; do
+    run_stage "$name"
+  done
+  report_result
+}
+
+# Run only when executed: a sourced copy stops after defining the selection.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
 fi

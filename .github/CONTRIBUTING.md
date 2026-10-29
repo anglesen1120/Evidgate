@@ -28,6 +28,13 @@ scripts/verify.sh
 `verify.sh` is the local gate that CI (01.7.1) runs verbatim: restore, build
 with warnings-as-errors, `dotnet format` and Prettier checks, unit +
 architecture tests, `tsc -b`, ESLint and the contract/layout/ADR check scripts.
+A bare `scripts/verify.sh` (no `--stage`) narrows by changed paths to the
+`docs`, `no-dotnet` or `full` tier (01.2.1-T7), prints one
+`== gate scope: <tier> (<reason>, N changed path(s), base <sha>)` line and runs
+only that tier's stages; a path outside the allow-lists, an unresolvable base
+or a git error selects `full`. Pass the `--stage` names you need, or
+`EVIDGATE_GATE_SCOPE=full` for the whole gate, and paste the `== gate scope:`
+line into the PR; CI always runs with `EVIDGATE_GATE_SCOPE=full`.
 A PR with a failing stage fails CI. Required status checks (so a red PR
 cannot be merged at all) are 01.7.1-T3.1: they need the repository to be public
 or on a paid plan — on this private repo the GitHub API answers 403 'Upgrade to
