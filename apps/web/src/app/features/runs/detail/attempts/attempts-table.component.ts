@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import {
   afterNextRender,
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
@@ -10,6 +11,7 @@ import {
   input,
   linkedSignal,
   output,
+  untracked,
   viewChild,
 } from '@angular/core';
 import type { ApiError } from '../../../../core/http/api-error';
@@ -83,6 +85,7 @@ export class AttemptsTableComponent {
     healing: $localize`:@@runs.detail.attempts.healing-candidates:Healing candidates`,
     more: $localize`:@@runs.detail.attempts.more:Load more attempts`,
     loadingMore: $localize`:@@runs.detail.attempts.loading-more:Loading more attempts`,
+    moreLoaded: $localize`:@@runs.detail.attempts.more-loaded:More attempts loaded`,
     empty: $localize`:@@runs.detail.attempts.empty:No attempts recorded`,
     preHealing: $localize`:@@runs.detail.attempts.pre-healing:Pre-healing failure`,
     candidate: $localize`:@@runs.detail.attempts.candidate:Healing candidate`,
@@ -93,9 +96,121 @@ export class AttemptsTableComponent {
     next: $localize`:@@runs.detail.attempts.next:Next page`,
   };
   private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private readonly previousButton = viewChild<ElementRef<HTMLButtonElement>>('previous');
   private readonly nextButton = viewChild<ElementRef<HTMLButtonElement>>('next');
+  private readonly loadMoreButton = viewChild<ElementRef<HTMLButtonElement>>('loadMore');
+  private readonly tableRegion = viewChild<ElementRef<HTMLElement>>('tableRegion');
+  private readonly heading = viewChild.required<ElementRef<HTMLElement>>('heading');
+  /** The control whose activation started a read; the render that settles it can remove it. */
+  private focusAnchor: HTMLElement | null = null;
+  private restoreFocusPending = false;
+  private restoreKind: 'more' | 'retry' = 'more';
+  /**
+   * Follow-up page phases: `loading` while one is being added, `done` for the settled read that
+   * kept rows. A failed read reports through the error panel's own alert, not as a completion.
+   */
+  private readonly followUpPhase = linkedSignal<
+    { loading: boolean; failed: boolean },
+    'idle' | 'loading' | 'done'
+  >({
+    source: computed(() => ({ loading: this.loadingMore(), failed: this.error() !== null })),
+    computation: (next, previous) => {
+      if (next.loading) return 'loading';
+      if (previous?.value !== 'loading') return previous?.value ?? 'idle';
+      return next.failed ? 'idle' : 'done';
+    },
+  });
+  /** A live region kept out of the busy region: AT defers changes inside `aria-busy`. */
+  protected readonly followUpStatus = computed(() => {
+    switch (this.followUpPhase()) {
+      case 'loading':
+        return this.copy.loadingMore;
+      case 'done':
+        return this.copy.moreLoaded;
+      default:
+        return '';
+    }
+  });
+
+  /** Which follow-up controls this render keeps: the place is only spent once the control the
+   * visitor activated is gone. Load more survives a busy read; an error block does not. */
+  private readonly presentControls = computed(() => ({
+    more: this.hasMore(),
+    failure: this.error() !== null,
+  }));
+
+  constructor() {
+    // A settled read can remove the control that had focus: the last page clears Load more and a
+    // retry clears the error block. The document then drops focus to `body` (WCAG 2.4.3), so the
+    // place moves on in the render that removes the control — not only once the read settles,
+    // because the retry's own block is gone for the whole request. A surviving control or a place
+    // the visitor moved to keeps the focus, so nothing is pulled back from a chosen element.
+    afterRenderEffect(() => {
+      const present = this.presentControls();
+      untracked(() => {
+        if (!this.restoreFocusPending) return;
+        if (this.restoreKind === 'more' ? present.more : present.failure) return;
+        const anchor = this.focusAnchor;
+        if (anchor !== null && anchor.isConnected) return;
+        this.restoreFocusPending = false;
+        this.focusAnchor = null;
+        const active: unknown = this.document.activeElement;
+        // A removed control can still be `activeElement` in a test environment, and the browser
+        // leaves it on `body` or `documentElement`: all of those are the same loss (see turnPage).
+        if (
+          active instanceof HTMLElement &&
+          active !== this.document.body &&
+          active !== this.document.documentElement &&
+          active.isConnected
+        ) {
+          return;
+        }
+        this.focusTarget().focus();
+      });
+    });
+  }
+
+  protected requestLoadMore(): void {
+    this.armFocusRestore('more');
+    this.loadMore.emit();
+  }
+
+  protected requestFollowUpRetry(): void {
+    this.armFocusRestore('retry');
+    this.loadMore.emit();
+  }
+
+  protected requestFirstPageRetry(): void {
+    this.armFocusRestore('retry');
+    this.retry.emit();
+  }
+
+  /** Arms the restore for the control that asked: only a control inside this panel that actually
+   * holds focus is handed off, so a pointer press that never moved focus leaves the place alone. */
+  private armFocusRestore(kind: 'more' | 'retry'): void {
+    const active: unknown = this.document.activeElement;
+    this.focusAnchor =
+      active instanceof HTMLElement && this.host.nativeElement.contains(active) ? active : null;
+    this.restoreKind = kind;
+    this.restoreFocusPending = this.focusAnchor !== null;
+  }
+
+  /** The forward pager when the page grew, the append control when a retry left it, else the
+   * table's own region and the panel heading, which always exist. */
+  private focusTarget(): HTMLElement {
+    const next = this.nextButton()?.nativeElement;
+    const more = this.loadMoreButton()?.nativeElement;
+    const preferred = this.restoreKind === 'more' ? [next, more] : [more, next];
+    const usable = preferred.find(
+      (element) => element !== undefined && element.isConnected && !element.disabled,
+    );
+    if (usable !== undefined) return usable;
+    const region = this.tableRegion()?.nativeElement;
+    if (region !== undefined && region.isConnected) return region;
+    return this.heading().nativeElement;
+  }
 
   protected tone(status: string): StatusTone {
     switch (status) {

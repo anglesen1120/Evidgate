@@ -183,7 +183,7 @@ describe('RunDetailStore', () => {
       await store.loadMoreAttempts();
       expect(listAttempts).toHaveBeenCalledTimes(2);
     });
-    it('refuses a repeated cursor instead of looping and keeps the rows it has', async () => {
+    it('refuses a repeated cursor with typed copy and ends the walk with its rows kept', async () => {
       get.mockResolvedValue(run);
       listAttempts
         .mockResolvedValueOnce(first)
@@ -193,9 +193,69 @@ describe('RunDetailStore', () => {
       await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
       await store.loadMoreAttempts();
       expect(store.attempts()).toHaveLength(first.items.length);
-      expect(store.attemptsError()?.kind).toBe('unexpected');
+      // A plain Error would reach the panel as UNRESOLVED_FAILURE: blank message and code.
+      expect(store.attemptsError()).toMatchObject({
+        kind: 'unexpected',
+        code: 'attempts_cursor_repeated',
+        message: 'The attempts list returned the same page cursor again.',
+        retryable: false,
+      });
       expect(store.attemptsStatus()).toBe('ready');
-      expect(store.hasMoreAttempts()).toBe(true);
+      expect(store.hasMoreAttempts()).toBe(false);
+      // The refused cursor is gone, so Load more cannot ask for it again.
+      await store.loadMoreAttempts();
+      expect(listAttempts).toHaveBeenCalledTimes(2);
+    });
+    it('drops the rows of a page a cursor cycle serves again (A → B → A) and ends the walk', async () => {
+      get.mockResolvedValue(run);
+      listAttempts
+        .mockResolvedValueOnce({ items: first.items, next_cursor: 'cycle-b' })
+        .mockResolvedValueOnce({ items: second.items, next_cursor: 'cycle-c' })
+        .mockResolvedValueOnce({ items: first.items, next_cursor: null });
+      const store = TestBed.inject(RunDetailStore);
+      await store.load(run.run_id);
+      await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
+      await store.loadMoreAttempts();
+      expect(store.attempts()).toHaveLength(first.items.length + second.items.length);
+      await store.loadMoreAttempts();
+      expect(store.attempts()).toHaveLength(first.items.length + second.items.length);
+      expect(store.attempts()!.map((row) => `${row.executionKey}/${row.attemptNo}`)).toEqual(
+        [...first.items, ...second.items].map((item) => `${item.execution_key}/${item.attempt_no}`),
+      );
+      expect(store.attemptsError()).toMatchObject({
+        code: 'attempts_page_without_new_rows',
+        message: 'The attempts list returned a follow-up page with no new attempts.',
+        retryable: false,
+      });
+      expect(store.hasMoreAttempts()).toBe(false);
+      await store.loadMoreAttempts();
+      expect(listAttempts).toHaveBeenCalledTimes(3);
+    });
+    it('appends only the attempts a follow-up page has not shown yet', async () => {
+      const freshRow = {
+        ...first.items[0]!,
+        attempt_id: '018f0000-0000-7000-8000-0000000c1009',
+        execution_key: 'f'.repeat(64),
+        attempt_no: 9,
+      };
+      get.mockResolvedValue(run);
+      listAttempts
+        .mockResolvedValueOnce({ items: first.items, next_cursor: 'overlap-b' })
+        .mockResolvedValueOnce({
+          items: [first.items[1]!, freshRow, { ...freshRow }],
+          next_cursor: null,
+        });
+      const store = TestBed.inject(RunDetailStore);
+      await store.load(run.run_id);
+      await vi.waitFor(() => expect(store.attemptsStatus()).toBe('ready'));
+      await store.loadMoreAttempts();
+      expect(store.attempts()).toHaveLength(first.items.length + 1);
+      expect(store.attempts()!.at(-1)).toMatchObject({
+        executionKey: freshRow.execution_key,
+        attemptNo: 9,
+      });
+      expect(store.attemptsError()).toBeNull();
+      expect(store.hasMoreAttempts()).toBe(false);
     });
     it('a first-page failure is its own error state and retry re-reads only attempts', async () => {
       get.mockResolvedValue(run);

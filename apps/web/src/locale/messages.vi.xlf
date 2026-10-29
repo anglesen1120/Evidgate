@@ -2690,8 +2690,9 @@
       <trans-unit id="runs.detail.attempts.previous" datatype="html"><source>Previous page</source><target>Trang trước</target></trans-unit>
       <trans-unit id="runs.detail.attempts.next" datatype="html"><source>Next page</source><target>Trang sau</target></trans-unit>
       <trans-unit id="runs.detail.attempts.healing-candidates" datatype="html"><source>Healing candidates</source><target>Ứng viên tự sửa</target></trans-unit>
-      <trans-unit id="runs.detail.attempts.more" datatype="html"><source>Load more attempts</source><target>Tải thêm lượt chạy</target></trans-unit>
-      <trans-unit id="runs.detail.attempts.loading-more" datatype="html"><source>Loading more attempts</source><target>Đang tải thêm lượt chạy</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.more" datatype="html"><source>Load more attempts</source><target>Tải thêm lần thử</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.loading-more" datatype="html"><source>Loading more attempts</source><target>Đang tải thêm lần thử</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.more-loaded" datatype="html"><source>More attempts loaded</source><target>Đã tải thêm lần thử</target></trans-unit>
       <trans-unit id="runs.detail.environment-revision" datatype="html"><source>Revision</source><target>Bản sửa đổi</target></trans-unit>
     </body>
   </file>

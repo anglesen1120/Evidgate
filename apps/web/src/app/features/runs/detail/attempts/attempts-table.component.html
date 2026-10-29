@@ -1,9 +1,9 @@
 <section class="attempts-panel" aria-labelledby="attempts-title">
-  <h2 id="attempts-title">{{ copy.title }}</h2>
+  <h2 #heading id="attempts-title" tabindex="-1">{{ copy.title }}</h2>
   @if (status() === 'loading') {
     <app-loading-pattern />
   } @else if (status() === 'error') {
-    <app-error-pattern [error]="error()" [headingLevel]="3" (retry)="retry.emit()" />
+    <app-error-pattern [error]="error()" [headingLevel]="3" (retry)="requestFirstPageRetry()" />
   } @else if (attempts() === null) {
     <p data-attempts-unavailable><app-status-pill [tone]="'neutral'" [label]="''" /></p>
   } @else if (attempts()?.length === 0) {
@@ -15,7 +15,14 @@
         <app-status-pill [tone]="'neutral'" [label]="''" />
       </p>
     }
-    <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="copy.scrollRegion">
+    <div
+      #tableRegion
+      class="table-scroll"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="copy.scrollRegion"
+      [attr.aria-busy]="loadingMore() ? 'true' : null"
+    >
       <table>
         <caption>
           {{
@@ -113,17 +120,20 @@
       </nav>
     }
     @if (error(); as failure) {
-      <app-error-pattern [error]="failure" [headingLevel]="3" (retry)="loadMore.emit()" />
+      <app-error-pattern [error]="failure" [headingLevel]="3" (retry)="requestFollowUpRetry()" />
     }
     @if (hasMore()) {
       <button
+        #loadMore
         type="button"
         data-attempts-load-more
         [attr.aria-busy]="loadingMore()"
-        (click)="loadMore.emit()"
+        (click)="requestLoadMore()"
       >
         {{ loadingMore() ? copy.loadingMore : copy.more }}
       </button>
     }
   }
+  <!-- Outside the busy region and every state branch: the live region must exist in every phase. -->
+  <p class="attempts-status" role="status" data-attempts-status>{{ followUpStatus() }}</p>
 </section>

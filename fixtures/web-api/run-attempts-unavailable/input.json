@@ -3,7 +3,7 @@
   "variant": "unavailable",
   "status": 503,
   "headers": {
-    "X-Request-Id": "018f0000-0000-7000-8000-000000000ea14",
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000ea14",
     "Retry-After": "5"
   },
   "latency_ms": 0,
@@ -11,7 +11,7 @@
     "error": {
       "code": "unavailable",
       "message": "the attempts service is unavailable for this request",
-      "request_id": "018f0000-0000-7000-8000-000000000ea14",
+      "request_id": "018f0000-0000-7000-8000-00000000ea14",
       "retryable": true,
       "details": []
     }

@@ -135,3 +135,11 @@ button:focus-visible,
   min-block-size: 44px;
   margin-block-start: var(--eg-space-3);
 }
+/* The follow-up live region: no box of its own while it has nothing to announce. */
+.attempts-status {
+  margin-block-start: var(--eg-space-3);
+  color: var(--eg-text-muted);
+}
+.attempts-status:empty {
+  display: none;
+}

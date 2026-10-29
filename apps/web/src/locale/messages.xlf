@@ -2697,6 +2697,7 @@
       <trans-unit id="runs.detail.attempts.healing-candidates" datatype="html"><source>Healing candidates</source></trans-unit>
       <trans-unit id="runs.detail.attempts.more" datatype="html"><source>Load more attempts</source></trans-unit>
       <trans-unit id="runs.detail.attempts.loading-more" datatype="html"><source>Loading more attempts</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.more-loaded" datatype="html"><source>More attempts loaded</source></trans-unit>
       <trans-unit id="runs.detail.environment-revision" datatype="html"><source>Revision</source></trans-unit>
     </body>
   </file>

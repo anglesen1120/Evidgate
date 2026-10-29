@@ -1,8 +1,8 @@
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
-import type { RunStateDto } from '@evidgate/sdk';
+import type { RunAttemptSummary, RunStateDto } from '@evidgate/sdk';
 import { RunsDataService } from '../../../core/data/runs-data.service';
-import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
+import { ApiRequestError, isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { manifestFromRun, UNAVAILABLE_MANIFEST, type ManifestSummary } from './manifest-summary';
 import { toAttemptRow, type AttemptRow } from './attempts/attempt-summary';
 
@@ -20,7 +20,7 @@ interface RunDetailState {
   attempts: AttemptRow[] | null;
   attemptsStatus: AttemptsStatus;
   attemptsError: ApiError | null;
-  /** The opaque `next_cursor` of the last page; `null` once the keyset walk is complete. */
+  /** The opaque `next_cursor` of the last page; `null` once the walk is complete or refused. */
   attemptsCursor: string | null;
   attemptsLoadingMore: boolean;
 }
@@ -37,6 +37,58 @@ const UNRESOLVED_FAILURE: ApiError = {
 };
 function toApiError(failure: unknown): ApiError {
   return isApiRequestError(failure) ? failure.error : UNRESOLVED_FAILURE;
+}
+
+/**
+ * The two ways a keyset walk reads itself into a loop: the server hands back the cursor it was
+ * given, or a follow-up page adds no attempt that is not already loaded. Both end the walk with
+ * a TYPED failure — a plain `Error` would reach `toApiError` as `UNRESOLVED_FAILURE` and leave
+ * the panel with empty copy — and neither is retryable, because the same request would be
+ * refused the same way. The cursor is dropped with the failure, so Load more cannot re-request it.
+ */
+const ATTEMPTS_CURSOR_REPEATED: ApiError = {
+  kind: 'unexpected',
+  status: 0,
+  code: 'attempts_cursor_repeated',
+  message: 'The attempts list returned the same page cursor again.',
+  requestId: null,
+  retryable: false,
+  details: [],
+  retryAfterSeconds: null,
+};
+const ATTEMPTS_PAGE_WITHOUT_NEW_ROWS: ApiError = {
+  kind: 'unexpected',
+  status: 0,
+  code: 'attempts_page_without_new_rows',
+  message: 'The attempts list returned a follow-up page with no new attempts.',
+  requestId: null,
+  retryable: false,
+  details: [],
+  retryAfterSeconds: null,
+};
+const ATTEMPTS_WALK_REFUSALS: ReadonlySet<string> = new Set([
+  ATTEMPTS_CURSOR_REPEATED.code,
+  ATTEMPTS_PAGE_WITHOUT_NEW_ROWS.code,
+]);
+
+/**
+ * The incoming page without the attempts already loaded, in page order, with the first copy
+ * kept. A write between two keyset reads shifts the window, and a server repeating an entry is
+ * not forbidden, so a row can arrive twice; a cursor cycle (`A → B → A`) serves a whole earlier
+ * page again. Rendering it twice would give one attempt two rows. Every attempt_id seen —
+ * loaded before this read or new here — is added to `seen`, which the caller keeps for the walk.
+ */
+function takeFreshAttempts(
+  seen: Set<string>,
+  incoming: readonly RunAttemptSummary[],
+): RunAttemptSummary[] {
+  const fresh: RunAttemptSummary[] = [];
+  for (const attempt of incoming) {
+    if (seen.has(attempt.attempt_id)) continue;
+    seen.add(attempt.attempt_id);
+    fresh.push(attempt);
+  }
+  return fresh;
 }
 
 /** Page-local, newest-read-wins. Neither a failed read nor route reuse retains old run data. */
@@ -57,6 +109,8 @@ export const RunDetailStore = signalStore(
     const data = inject(RunsDataService);
     let generation = 0;
     let attemptsGeneration = 0;
+    /** `attempt_id`s already shown; only an accepted page updates it, `load()` clears it. */
+    let loadedAttemptIds = new Set<string>();
     /** One read of the attempts keyset: the first page replaces, a later page appends. */
     async function readAttempts(runId: string, cursor: string | null): Promise<void> {
       const read = ++attemptsGeneration;
@@ -73,11 +127,18 @@ export const RunDetailStore = signalStore(
           ...(cursor === null ? {} : { cursor }),
         });
         if (read !== attemptsGeneration) return;
-        // A cursor the server repeats would loop forever: refuse it as a failure.
+        // A cursor the server repeats would loop forever: refuse it as a typed failure.
         if (page.next_cursor !== null && page.next_cursor === cursor) {
-          throw new Error('repeated attempts cursor');
+          throw new ApiRequestError(ATTEMPTS_CURSOR_REPEATED);
         }
-        const rows = page.items.map(toAttemptRow);
+        const seen = new Set(first ? [] : loadedAttemptIds);
+        const fresh = takeFreshAttempts(seen, page.items);
+        // A follow-up page that adds no attempt cannot advance the walk: refuse it the same way.
+        if (!first && fresh.length === 0) {
+          throw new ApiRequestError(ATTEMPTS_PAGE_WITHOUT_NEW_ROWS);
+        }
+        loadedAttemptIds = seen;
+        const rows = fresh.map(toAttemptRow);
         patchState(store, {
           attempts: first ? rows : [...(store.attempts() ?? []), ...rows],
           attemptsStatus: 'ready',
@@ -86,10 +147,13 @@ export const RunDetailStore = signalStore(
         });
       } catch (failure: unknown) {
         if (read !== attemptsGeneration) return;
+        const error = toApiError(failure);
         patchState(store, {
           attemptsStatus: first ? 'error' : 'ready',
-          attemptsError: toApiError(failure),
+          attemptsError: error,
           attemptsLoadingMore: false,
+          // A refused walk ends here: the rows stay, and Load more goes away with the cursor.
+          ...(ATTEMPTS_WALK_REFUSALS.has(error.code) ? { attemptsCursor: null } : {}),
         });
       }
     }
@@ -97,6 +161,7 @@ export const RunDetailStore = signalStore(
       async load(runId: string): Promise<void> {
         const read = ++generation;
         ++attemptsGeneration;
+        loadedAttemptIds = new Set<string>();
         patchState(store, {
           run: null,
           manifest: UNAVAILABLE_MANIFEST,
