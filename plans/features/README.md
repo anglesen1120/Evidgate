@@ -2,7 +2,7 @@
 
 > Authority: `DECISIONS.md` and `plans/00-overview.md` win; this file's §3 rulings (T-rows) were written into 00 on 2026-09-25 (00 §15) and **override older text in `plans/01`–`13` and in any feature plan**. A feature plan refines its area plan and never silently contradicts it.
 > Legend: ✅ verified · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`.
-> Review evidence (all findings with file:line quotes and the ruling applied): `REVIEW-2026-09-25.md` in this folder.
+> Review evidence (all findings with file:line quotes and the ruling applied): `REVIEW-2026-09-25.md` in this folder. Code-review fix register for `develop` @ `98738803` (prioritised P0/P1/P2, owner 2026-10-29): `REVIEW-2026-10-29.md`.
 
 ## 1. Status
 

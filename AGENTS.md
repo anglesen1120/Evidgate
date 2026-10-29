@@ -25,7 +25,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 | `plans/00-overview.md` | Shared contracts: glossary, milestones, architecture, IDs, state machines, API, NFRs, feature-plan process, estimate roll-up |
 | `plans/01`–`13` | High-level area plans (epics → stories → tasks with sizes); 656 tasks, 703.25 raw / 843.9 buffered person-days (00 §14; story 13.2.2 added 8 tasks / 9.5 d on 2026-10-26, task 02.3.2-T3 added 0.5 d on 2026-10-28). `13-product-phases.md` is the CR-D-2 master plan (authoring, script generation, element memory, drift classification); the Milestone column in every plan holds the CR-D-2 phase G1–G4 (13 §4.4) |
 | `plans/open-items/` | Register of every `[OPEN]`/⚠️ with a recommended default, the information needed and the task it must precede |
-| `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T101), findings register (`REVIEW-2026-09-25.md`), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
+| `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T101), findings registers (`REVIEW-2026-09-25.md` plans; `REVIEW-2026-10-29.md` code-review fix register, **P0 rows fixed before new feature work**), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
 | `docs/source/` | Original Vietnamese system design (working name "ReleaseHub") and its .docx |
 | `docs/status-carried.md` | Live blocked / carried items table (moved verbatim from STATUS §6 on 2026-10-28); add new carried rows at the end, cite rows by title |
 | `docs/status-archive.md` | Delivered waves (old STATUS §3-§4) and closed carried rows, moved verbatim and never edited |
