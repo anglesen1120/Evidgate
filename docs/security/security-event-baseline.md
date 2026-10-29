@@ -1,6 +1,6 @@
 # Security-event baseline (V1)
 
-Owner: 11.1.1-T4.1 (task [11.1.1](../../plans/features/11-security-compliance/11.1.1-a-living-threat-model-acceptance-v1.md) `:116`, AC6). This page fixes the V1 `security_event` type set: what each type means, its severity, where the condition is detected in code today, and who consumes the row. The table (`migrations/NNNN_security_security_event.sql`) and the read endpoint are [11.5.1](../../plans/features/11-security-compliance/11.5.1-who-saw-what-provably-acceptance-audit.md)-T5's, not this page's.
+Owner: 11.1.1-T4.1 (task [11.1.1](../../plans/features/11-security-compliance/11.1.1-a-living-threat-model-acceptance-v1.md) `:116`, AC6). This page fixes the V1 `security_event` type set: what each type means, its severity, where the condition is detected in code today, and who consumes the row. The table (`migrations/0053_security_security_event.sql`, shipped) and the read endpoint are [11.5.1](../../plans/features/11-security-compliance/11.5.1-who-saw-what-provably-acceptance-audit.md)-T5's, not this page's.
 
 Version: v1 · Last review: 2026-10-27 (S107, develop `bdbad81`)
 Legend: ✅ verified with a file:line or link · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`
