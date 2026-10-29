@@ -44,6 +44,7 @@ ALL_STAGES=(
   check-codegen-drift
   check-permissions-drift
   check-rls
+  check-review-blockers
   image-pins
   images
   licence-scan
@@ -265,6 +266,22 @@ run_stage() {
     stage "check-rls"
     python3 scripts/check-rls.py
     python3 -m unittest scripts/tests/test_check_rls.py
+    ;;
+  check-review-blockers)
+    # The REVIEW.md blocking rules a grep can see, read on the lines a change set
+    # ADDS, so debt already on the base never fails a local run. The base is
+    # EVIDGATE_REVIEW_BASE when CI sets it (a pull request's base sha, or the ref
+    # a push started from) and otherwise the first of origin/develop, develop,
+    # origin/main, main that resolves — the clean-clone smoke build has only a
+    # local `develop`. No candidate at all makes the scan exit 2, which fails
+    # this stage: a shallow clone is a red gate, never a green one.
+    # The U1 half is a ratchet over the whole head tree against a committed
+    # baseline, because those comment ids predate the rule. Bytecode is off so
+    # the fixture run leaves no .pyc beside the tracked test tree.
+    stage "check-review-blockers"
+    PYTHONDONTWRITEBYTECODE=1 python3 scripts/check-review-blockers.py "${EVIDGATE_REVIEW_BASE:-}" HEAD
+    PYTHONDONTWRITEBYTECODE=1 python3 scripts/check-review-blockers.py --u1-ratchet HEAD
+    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest scripts/tests/test_check_review_blockers.py
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three

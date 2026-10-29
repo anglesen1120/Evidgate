@@ -5,7 +5,7 @@
 
 The binding rules for coding agents live in [`agent-code-rules.md`](agent-code-rules.md), the review rules in [`../../REVIEW.md`](../../REVIEW.md), and the prioritised fix register in [`../../plans/features/REVIEW-2026-10-29.md`](../../plans/features/REVIEW-2026-10-29.md). omp discovers the root `AGENTS.md` by itself ✅ ([oh-my-pi README](https://github.com/can1357/oh-my-pi): "gitignore + AGENTS.md discovery in one pass"). That file carries only a summary. The task and review prompts under `.omp/` are not in git, so this file says what to add to them.
 
-Every step is idempotent. Before inserting a block, search the target file for the marker line `<!-- evidgate-code-rules v1 -->` followed by that block's first line (one file, such as `PROJECT.md`, can hold several blocks), and check that the block's last line is there too. If both are there, skip the insertion; if only part of the block is there, replace it with the whole block. Change only the files named below, and report a diff of each change to the owner at the end.
+Every step is idempotent. Before inserting a block, search the target file for the marker line `<!-- evidgate-code-rules v2 -->` followed by that block's first line (one file, such as `PROJECT.md`, can hold several blocks), and check that the block's last line is there too. If both are there, skip the insertion; if only part of the block is there, replace it with the whole block. Change only the files named below, and report a diff of each change to the owner at the end.
 
 ## Step 1: Find the prompt files
 
@@ -22,7 +22,7 @@ Every step is idempotent. Before inserting a block, search the target file for t
 Append this block to every coder template outside `prompts/archive/` (in the panel prompts: just before `## 11. Final report`), after the task description and before any output-format section:
 
 ```markdown
-<!-- evidgate-code-rules v1 -->
+<!-- evidgate-code-rules v2 -->
 ## Code rules (binding)
 - Before writing code, read `docs/engineering/agent-code-rules.md` §0 and §1, plus the section for each layer you touch: §2 .NET, §3 SQL, §4 TypeScript, §5 Angular, §6 tests. Search §7 (helper catalogue) and `rg` before writing any helper.
 - Priority: while `plans/features/REVIEW-2026-10-29.md` has a P0 row in state `open`, P0 rows come before this task unless the owner says otherwise. A P1 row comes before the task named in its "Must precede" cell. When you fix a row, set its State cell to `fixed (PR, commit)`.
@@ -45,7 +45,7 @@ Append this block to every coder template outside `prompts/archive/` (in the pan
 Append this block to every reviewer template. If the coordinator has no reviewer template (Evidgate's does not: the reviewers are briefed from `PROJECT.md`), append it at the end of `PROJECT.md` §Merge check questions instead:
 
 ```markdown
-<!-- evidgate-code-rules v1 -->
+<!-- evidgate-code-rules v2 -->
 ## Review rules (binding)
 - Review against `REVIEW.md` at the repo root. Cite the rule id from `docs/engineering/agent-code-rules.md`, `file:line`, and a concrete failure scenario for each finding.
 - Any item in REVIEW.md "Blocking" that is present in the diff caps `clean_of_blockers` below 0.8 and is a send-back.
@@ -58,31 +58,31 @@ Append this block to every reviewer template. If the coordinator has no reviewer
 In the gate section of `PROJECT.md`, add one line under the merge conditions:
 
 ```markdown
-<!-- evidgate-code-rules v1 -->
+<!-- evidgate-code-rules v2 -->
 - A PR that fixes a row of `plans/features/REVIEW-2026-10-29.md` updates that row's State cell in the same PR. A PR that adds a rule violation listed in `REVIEW.md` "Blocking" is not merged under coordinator review.
 ```
 
 ## Step 5: Queue order
 
-If the coordinator keeps a refill or queue file (for example `.omp/coordinator/prompts/held/README.md` or `next-wave-queue.md`), put the P0 rows CR-01…CR-06 of `plans/features/REVIEW-2026-10-29.md` at the head of the backend lane. That matches the owner priority recorded in `STATUS.md` §1 on 2026-10-29. Use the register's sizes and skip rows whose State is already fixed. While CR-03 is open, the next free migration number (`0055` on 2026-10-30) is reserved for it. CR-03 and CR-06 also carry the D1 and U8 gates of `agent-code-rules.md` §8. After CR-06, queue `GATE-1`: the repo gate `scripts/check-review-blockers.py` (the Step 5a table: D1, U8, test skips and `as unknown as` fail; U4 and gate-file changes reported; U1 comment ids in ratchet mode) as a `verify.sh` stage wired into `ci.yml`. It edits `scripts/verify.sh` like CR-06, so it runs after it, and it needs an owner-approved task row (suggested 01.2.1-T6).
+If the coordinator keeps a refill or queue file (for example `.omp/coordinator/prompts/held/README.md` or `next-wave-queue.md`), put the P0 rows CR-01…CR-06 of `plans/features/REVIEW-2026-10-29.md` at the head of the backend lane. That matches the owner priority recorded in `STATUS.md` §1 on 2026-10-29. Use the register's sizes and skip rows whose State is already fixed. While CR-03 is open, the next free migration number (`0055` on 2026-10-30) is reserved for it. CR-03 and CR-06 also carry the D1 and U8 gates of `agent-code-rules.md` §8. `GATE-1` landed on 2026-10-30 as task `01.2.1-T6`: `scripts/check-review-blockers.py` runs as the `check-review-blockers` stage of `scripts/verify.sh`, wired into `ci.yml` beside `check-rls`, with its fixtures in `scripts/tests/test_check_review_blockers.py` and the U1 ratchet baseline in `scripts/check-review-blockers.baseline.json`. It touched `scripts/verify.sh` like CR-06, so it was queued after it.
 
 ## Step 5a: Coordinator rules in PROJECT.md
 
 The kit template `panel-prompt.md` under `~/.omp/agent/managed-skills/tern-parallel-wave-coordinator/kit/` is shared by every project, so Evidgate rules must not go there. Without the lines below, every prompt the coordinator writes after this setup misses the Step 2 block. Append this block at the end of `PROJECT.md` §Active rules:
 
 ```markdown
-<!-- evidgate-code-rules v1 -->
-- Code rules in every new panel prompt (owner 2026-10-30): the kit template `panel-prompt.md` is project-agnostic, so when writing a prompt copy the Step 2 block of `docs/engineering/omp-setup.md` (marker `<!-- evidgate-code-rules v1 -->`) verbatim just before `## 11. Final report`.
+<!-- evidgate-code-rules v2 -->
+- Code rules in every new panel prompt (owner 2026-10-30): the kit template `panel-prompt.md` is project-agnostic, so when writing a prompt copy the Step 2 block of `docs/engineering/omp-setup.md` (marker `<!-- evidgate-code-rules v2 -->`) verbatim just before `## 11. Final report`.
 - Reviewer brief (owner 2026-10-30): §5 of every new panel prompt says "every QA, reviewer and security-reviewer subagent prompt includes `REVIEW.md` and `docs/engineering/agent-code-rules.md`, and each finding cites the rule id, `file:line` and a concrete failure scenario".
 ```
 
 Then add this line to the Step 4 block in §Gate. The coordinator's merge checks (kit §6.1) only check process, and jev reads the panel's report, not the diff; this scan reads the diff:
 
 ```markdown
-- Blocker scan (owner 2026-10-30, hard check after kit §6.1 items 1-2, before jev): `git fetch origin`, then `python3 .omp/coordinator/check-review-blockers.py origin/develop <head-sha>` from the main checkout. Exit 2 = the scan did not run = failed check. Exit 1 (any `BLOCK` line: D1 policy without `TO <role>` or `TO public`, U8 `--ignore-exit-code` used as an argument, a new test skip, `as unknown as` anywhere) = no jev, send the lines to the panel as `Coordinator review of PR #N (not merged yet)`. `WARN U4` = open the line, block unless it sits inside `IsDevelopment()`. `WARN gate-file` = block unless the task file names that file. `WARN U1` = note in the merge note, not a block. This check overrides 6c: a `BLOCK` still present after the one send-back goes to the owner, not to a debt row. A line the coordinator proves is a false positive (regex hit that is not the pattern) is waived in the merge note with the line and the reason. When the repo gate `scripts/check-review-blockers.*` lands, run the origin/develop copy of it (`git show origin/develop:<path>`) instead and delete the `.omp` script.
+- Blocker scan (owner 2026-10-30, hard check after kit §6.1 items 1-2, before jev): `git fetch origin`, then `git show origin/develop:scripts/check-review-blockers.py | python3 - origin/develop <head-sha>` from the main checkout. Run the develop copy, never the branch's own file: a PR must not weaken the gate that judges it. The ratchet half is `git show origin/develop:scripts/check-review-blockers.py | python3 - --u1-ratchet <head-sha>`. Exit 2 = the scan did not run = failed check. Exit 1 (any `BLOCK` line: D1 policy without `TO <role>` or `TO public`, U8 `--ignore-exit-code` used as an argument, a new test skip, `as unknown as` anywhere, or a U1 count above the committed baseline) = no jev, send the lines to the panel as `Coordinator review of PR #N (not merged yet)`. `WARN U4` = open the line, block unless it sits inside `IsDevelopment()`. `WARN gate-file` = block unless the task file names that file. `WARN U1` = note in the merge note, not a block. This check overrides 6c: a `BLOCK` still present after the one send-back goes to the owner, not to a debt row. A line the coordinator proves is a false positive (regex hit that is not the pattern) is waived in the merge note with the line and the reason.
 ```
 
-`.omp/coordinator/check-review-blockers.py` is a coordinator-local stop-gap. It reads `git diff base...head` and checks only the lines the PR adds, so debt already on `develop` never fails a PR (and the scan cannot prove that something was removed). The queue row `GATE-1` (Step 5) ports it into the repo as a `verify.sh` stage with tests, after CR-06; from then on the repo copy is the only pattern list. Until then this table is the specification; if the `.omp` script is missing, write it from here:
+`scripts/check-review-blockers.py` is the specification; the table below is its human-readable summary, and where the two disagree the script wins. It reads `git diff base...head` and checks only the lines the PR adds, so debt already on `develop` never fails a PR (and the scan cannot prove that something was removed). The `check-review-blockers` stage of `scripts/verify.sh` runs the scan with `EVIDGATE_REVIEW_BASE` (CI sets the pull request's base sha) or, unset, the first of `origin/develop`, `develop`, `origin/main`, `main` that resolves, then the U1 ratchet over the whole head tree against `scripts/check-review-blockers.baseline.json`, and the fixtures in `scripts/tests/test_check_review_blockers.py`; `--u1-count <ref>` prints the count a lowered baseline should carry. On a pull request CI does not trust the checkout's copy: a second step materialises the base sha's `scripts/check-review-blockers.py` and `…baseline.json` into `$RUNNER_TEMP` and runs that copy for both the scan and the ratchet (`--baseline <file>`), so editing a rule or raising the ceiling in the pull request's own copy cannot pass it; it falls back to the pull request's copy, with a `::warning::`, only when the base revision has no scanner at all (the bootstrap, which is the PR that introduces the gate), and a base that has the scanner but no baseline fails the step instead of borrowing the pull request's number. A change to the scanner or its baseline therefore shows up in that diff as a `WARN gate-file` line the coordinator weighs against the task file, exactly as for any other gate file, while the rules and the ceiling the change set is judged by stay the base's; the same diff cannot let the change set raise them. The retired `.omp/coordinator/check-review-blockers.py` stop-gap must not be run once the repo copy is on `develop`.
 
 |Rule|Files|Pattern on an added line|Level|
 |---|---|---|---|
@@ -92,9 +92,11 @@ Then add this line to the Step 4 block in §Gate. The coordinator's merge checks
 |ts-cast|`*.ts`, `*.tsx`, `*.mts`, `*.cts`|`as unknown as`|BLOCK|
 |U4|`src/`|`(Try)Add{Singleton,Scoped,Transient,HostedService}` with an `InMemory`/`Mock`/`Fake`/`Stub`/`Slice`/`Demo`/`Noop` type, on that line or across two lines|WARN|
 |gate-file|`scripts/verify.sh`, `scripts/check-*`, `scripts/check_*`, `.github/workflows/*`|any change|WARN|
-|U1|`src/**/*.cs`, `apps/web/src/**/*.ts`, `packages/*/src/**/*.ts`|a comment carrying `NN.E.S-Tn`, `CR-nn` or `D-Snnn`|one WARN with the count|
+|U1|`src/**/*.cs`, `apps/web/src/**/*.ts`, `packages/*/src/**/*.ts`|a comment carrying `NN.E.S-Tn`, `CR-nn` or `D-Snnn`|one WARN with the count in a diff scan; `--u1-ratchet` counts the whole head tree and fails above the baseline|
 
-Exit codes: 1 on any BLOCK, 0 otherwise, 2 when the scan could not run.
+Exit codes: 1 on any BLOCK or a U1 count above the baseline, 0 otherwise, 2 when the scan could not run.
+
+The scanner, its fixture file and its baseline are exempt from the line rules: they carry the patterns by design. Every edit to them is still a `gate-file` warning, because an edit to the gate must always be visible and raising the baseline is the one way to disarm the ratchet from inside the change set it judges. The ratchet reads the baseline of the working tree it runs in, so the coordinator's run from the main checkout (on `develop`) judges a PR's baseline edit against develop's number, not the PR's.
 
 Also fix the next free migration number in `PROJECT.md` §Shared files when it is stale (`ls migrations`).
 
@@ -113,6 +115,6 @@ Do not commit anything under `.omp/`: it stays local.
 
 ## Maintenance
 
-When `agent-code-rules.md`, `REVIEW.md` or the register changes in a way that changes the blocks above, edit this file and bump the marker to `v2`. Re-running the setup then replaces each `v1` block with the `v2` one, rather than skipping it: delete from the `v1` marker line to the next blank line or heading, then insert the `v2` block at the same place.
+When `agent-code-rules.md`, `REVIEW.md` or the register changes in a way that changes the blocks above, edit this file and bump the marker to the next version. Re-running the setup then replaces each older block with the new one, rather than skipping it: delete from the old marker line to the next blank line or heading, then insert the new block at the same place. `v2` (2026-10-30) replaced the Step 4 blocker-scan line with the repo gate's command, so the prompt blocks written for `v1` must be replaced once.
 
 After each wave, move the prompts of released sessions (SESSION-CLAIMS `Released`) from `.omp/coordinator/prompts/` and `held/` into `prompts/archive/` (`archive/held/` for held ones). Step 2 skips `archive/`, so a re-run touches only live prompts.

@@ -1,0 +1,11 @@
+{
+  "u1_comment_lines": 1547,
+  "counted_on": "origin/develop 528e3951 (2026-10-30)",
+  "counted_by": "scripts/check-review-blockers.py --u1-count origin/develop",
+  "paths": [
+    "src/**/*.cs",
+    "apps/web/src/**/*.ts",
+    "packages/*/src/**/*.ts"
+  ],
+  "note": "Ceiling, not a target: the comments counted here predate the ratchet. A change set may not raise the count, and a lower count updates this number in the same change set."
+}
