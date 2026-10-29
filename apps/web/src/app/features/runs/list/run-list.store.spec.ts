@@ -65,6 +65,9 @@ function run(index: number, overrides: Partial<RunSummary> = {}): RunSummary {
       is_fork: false,
     },
     unverified_ref: false,
+    completeness: 'complete',
+    parent_run_id: null,
+    rerun_scope: null,
     ...overrides,
   };
 }

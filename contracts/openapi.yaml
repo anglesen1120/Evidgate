@@ -1007,7 +1007,18 @@ paths:
         project and tenant by the query, so a well-formed cursor only moves the
         page position inside those rows; a cursor this endpoint did not issue is
         422 `request_invalid`. An unknown project (or another tenant's) is 404
-        `not_found`, the same body as an unknown one.
+        `not_found`, the same body as an unknown one. Since F43 (S143) the four
+        further optional, AND-combined, exact-match filters `state`, `decision`,
+        `rerun_scope` and `parent_run_id` narrow the same page, and every item
+        carries `completeness` (from the run's current evidence revision),
+        `parent_run_id` and `rerun_scope`. `decision` accepts only `pending`
+        today — no `evaluation` row exists until 07.2.2, so no decision is
+        stored to narrow the page with and `pending` matches every run in it,
+        while the `RunSummary.decision` member stays `null` in every item until
+        the evaluator stores one (07.2.2, served by 07.5.2); any other value is
+        422 `request_invalid`, and `rerun_label` and `reprocess_label` are
+        `null` in every item until 05.5.1/05.5.2 serve them. Only `ref_name` is
+        index-served, so the new filters scan the project's rows (05.2.2 note).
       x-permission: run:read
       x-version: v1
       parameters:
@@ -1019,6 +1030,10 @@ paths:
         - $ref: '#/components/parameters/RunHeadSha'
         - $ref: '#/components/parameters/RunTriggerEvent'
         - $ref: '#/components/parameters/RunIsFork'
+        - $ref: '#/components/parameters/RunState'
+        - $ref: '#/components/parameters/RunDecision'
+        - $ref: '#/components/parameters/RunRerunScope'
+        - $ref: '#/components/parameters/RunParentRunId'
       responses:
         '200':
           description: Page of runs
@@ -1124,7 +1139,16 @@ paths:
         `ref` (branch/tag/PR, 05.2.2-T1) is returned with all members present,
         `null` where unknown, plus `unverified_ref` (`true` when any stored
         identity value came from the request body rather than a verified CI
-        claim). Another tenant's run —
+        claim). Since F44 (S143) the same body pins the manifest and its
+        release inputs, every member required: `manifest_hash` (joined from
+        `manifest` through `run.manifest_id`), `suite_revision_id` and
+        `policy_revision_id` (`policy_revision_id` is `null` until a revision
+        is pinned), `environment` (the pinned environment revision's identity,
+        joined from `environment_revision` + `environment` through
+        `run.environment_revision_id`), and `shard_count` plus
+        `declared_producers` (the run's `producer_slot` rows in `shard_index`
+        order, `shard-<n>`). Evidence `completeness`/`missing[]` are a later,
+        separate read (09.3.1-T3 with 07.5.2). Another tenant's run —
         or, for a project-scoped credential, another project's — is 404, the same
         `not_found` body as an unknown id.
       x-permission: run:read
@@ -1133,7 +1157,7 @@ paths:
         - $ref: '#/components/parameters/RunId'
       responses:
         '200':
-          description: Run state, current evidence revision, version and purpose
+          description: Run state, current evidence revision, version, purpose and manifest identity
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -1147,6 +1171,60 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /runs/{r}/attempts:
+    get:
+      operationId: listRunAttempts
+      tags: [runs]
+      summary: Cursor list of a run's attempts (raw and normalised status, retry chain)
+      description: >-
+        Cursor list (00 §9.1) of one run's rows of `case_attempt` (0032),
+        ordered `(execution_key, attempt_no)` ascending, so the attempts of one
+        planned execution are adjacent and in attempt order. There is no
+        `retry_of` column: the retry chain is the pair `(execution_key,
+        attempt_no)` — unique per run by
+        `case_attempt_run_execution_attempt_key` — and `attempt_no` ≥ 2 is a
+        retry of the previous attempt of the same `execution_key`. Items carry
+        the producer's `raw_status` verbatim beside the server's
+        `normalized_status` (00 §8.5 vocabulary), the row's own
+        `started_at`/`finished_at`/`duration_ms` (`null` where unrecorded), the
+        attempt's artifact count (its `artifact` rows in state `ready`) and
+        `healing_candidate`, which is `null` until the candidate model exists
+        (08.3.1; shadow rows 08.3.3). The opaque `cursor` is not signed and is
+        bound to the caller's own run and tenant by the query; a cursor this
+        endpoint did not issue is 422 `request_invalid`
+        (`details[].path` = `cursor`), as is an out-of-range `limit`
+        (`limit`). An unknown run, another tenant's run and, for a
+        project-scoped credential, a sibling project's run are the one 404
+        `not_found` body of `GET /v1/runs/{r}` — no existence oracle (00 §5.4);
+        a run with no attempts answers 200 with `items: []`.
+      x-permission: run:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/RunId'
+        - $ref: '#/components/parameters/RunAttemptCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of the run's attempts
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunAttemptPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -6757,6 +6835,69 @@ components:
         `request_invalid` with `details[].path` = `is_fork`.
       schema:
         type: boolean
+    RunState:
+      name: state
+      in: query
+      required: false
+      description: >-
+        Exact `run.state` (00 §8.1) — one of the seven run states (F43, S143).
+        AND-combined with every other present filter. A present but
+        out-of-vocabulary value is 422 `request_invalid` with `details[].path` =
+        `state`; the filter is not index-served, so it scans the project's rows
+        (05.2.2 note).
+      schema:
+        type: string
+        enum: [created, queued, running, collecting, complete, incomplete, canceled]
+    RunDecision:
+      name: decision
+      in: query
+      required: false
+      description: >-
+        The run's evaluation decision (F43, S143). Only `pending` is accepted
+        today, and that value stores nothing: no `evaluation` row exists until
+        07.2.2 persists one, so there is no stored decision to narrow the page
+        with and `pending` matches every run in it, while the
+        `RunSummary.decision` member stays `null` in every item until the
+        evaluator stores one (07.2.2 stores it, 07.5.2 serves the read). Any
+        other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422
+        `request_invalid` (`details[].path` = `decision`, reason
+        `invalid_value`) rather than an empty page. Receiver: 07.2.2 (stored
+        decision) with 07.5.2 (the read), which widens this enum.
+      schema:
+        type: string
+        enum: [pending]
+    RunRerunScope:
+      name: rerun_scope
+      in: query
+      required: false
+      description: >-
+        Exact `run.rerun_scope` (0031; F43, S143): `full` or `failed_subset`. A
+        plain run stores `null` and never matches. A present but invalid value
+        is 422 `request_invalid` (`details[].path` = `rerun_scope`).
+      schema:
+        type: string
+        enum: [full, failed_subset]
+    RunParentRunId:
+      name: parent_run_id
+      in: query
+      required: false
+      description: >-
+        Exact `run.parent_run_id` (0031; F43, S143) — the run a rerun was
+        created from. A present but non-UUID value is 422 `request_invalid`
+        (`details[].path` = `parent_run_id`).
+      schema:
+        type: string
+        format: uuid
+    RunAttemptCursor:
+      name: cursor
+      in: query
+      required: false
+      description: >-
+        Opaque cursor from `next_cursor` of `GET /v1/runs/{r}/attempts`;
+        ordering `(execution_key, attempt_no)` (00 §9.1, F52/S143). A value this
+        endpoint did not issue is 422 `request_invalid`.
+      schema:
+        type: string
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -7371,7 +7512,22 @@ components:
           type: [string, 'null']
     RunStateDto:
       type: object
-      required: [run_id, state, current_evidence_revision_id, version, purpose, ref, unverified_ref]
+      required:
+        [
+          run_id,
+          state,
+          current_evidence_revision_id,
+          version,
+          purpose,
+          ref,
+          unverified_ref,
+          manifest_hash,
+          suite_revision_id,
+          policy_revision_id,
+          environment,
+          shard_count,
+          declared_producers,
+        ]
       properties:
         run_id:
           type: string
@@ -7400,15 +7556,58 @@ components:
             True when at least one stored identity value came from the request
             body instead of a verified CI claim (05.2.2-T1); false for a
             verified CI caller and for a run with no identity at all.
+        manifest_hash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: >-
+            The pinned manifest's `manifest_hash` (F44, S143), joined from
+            `manifest` through the run's `manifest_id`. Not null for any stored
+            run: `run.manifest_id` is not null and its FK targets `manifest`.
+        suite_revision_id:
+          type: string
+          format: uuid
+          description: >-
+            The suite revision the run locked at creation — the run's own
+            `suite_revision_id` column (0031), not a re-read of the manifest.
+        policy_revision_id:
+          type: [string, 'null']
+          format: uuid
+          description: >-
+            The policy revision the run pinned; `null` for a run created before
+            a revision was activated (`run.policy_revision_id` is nullable,
+            0031).
+        environment:
+          $ref: '#/components/schemas/RunEnvironmentRef'
+        shard_count:
+          type: integer
+          minimum: 0
+          description: >-
+            How many producer slots the run registered — one per manifest shard
+            (`count(*)` of the run's `producer_slot` rows, 0029/0031).
+        declared_producers:
+          type: array
+          description: >-
+            The run's producer slot ids in `shard_index` order, the values the
+            manifest's shards declare (`producer_slot.producer_id`, written as
+            `shard-<n>` at run creation, 0029). Empty only for a run whose slots
+            were never registered.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'
     RunSummary:
       type: object
       description: >-
         One row of `GET /v1/projects/{p}/runs` (05.2.2 §5). Since 05.2.2-T2 the
         list serves the run's state, `created_at`, the recorded identity `ref`
-        and `unverified_ref`; `decision`, `parent_run_id`, `rerun_label` and
-        `reprocess_label` remain optional here until 07 and 05.5.1/05.5.2 add
-        them.
-      required: [run_id, state, created_at, ref, unverified_ref]
+        and `unverified_ref`; since F43 (S143) it also serves `completeness`
+        (from the run's current evidence revision), `parent_run_id` and
+        `rerun_scope`, while `decision`, `rerun_label` and `reprocess_label`
+        stay `null` until 07.5.2 and 05.5.1/05.5.2 serve them — every value of
+        the row comes from a stored column, never from a placeholder.
+      required:
+        [run_id, state, created_at, ref, unverified_ref, completeness, parent_run_id, rerun_scope]
       properties:
         run_id:
           type: string
@@ -7428,17 +7627,41 @@ components:
             True when at least one stored identity value came from the request
             body instead of a verified CI claim (05.2.2-T1); false for a
             verified CI caller and for a run with no identity at all.
-        decision:
+        completeness:
           type: [string, 'null']
-          enum: [PASS, FAIL, INCONCLUSIVE, null]
-          description: null while pending (00 §9.3); UPPER per 00 §7
+          enum: [complete, incomplete, null]
+          description: >-
+            The evidence completeness of the run's current evidence revision —
+            `evidence_revision.completeness` of `run.current_evidence_revision_id`
+            (0049; the `EvidenceBadge` verdict, 00 §8.5). `null` while the run
+            has no evidence revision yet, i.e. still pending: it is never
+            reported as `incomplete` without a stored row. `GetCompleteness` is
+            the in-process stub of the sprint-1 slice and is not this source.
         parent_run_id:
           type: [string, 'null']
           format: uuid
+          description: >-
+            The run this one was created from by a rerun (`run.parent_run_id`,
+            0031); `null` for an original run. Served since F43 (S143).
+        rerun_scope:
+          type: [string, 'null']
+          enum: [full, failed_subset, null]
+          description: >-
+            The rerun scope the run was created with (`run.rerun_scope`, 0031);
+            `null` for an original run. The filterable form of the rerun label —
+            `rerun_label` itself has no stored column yet.
+        decision:
+          type: [string, 'null']
+          enum: [PASS, FAIL, INCONCLUSIVE, null]
+          description: null while pending (00 §9.3); UPPER per 00 §7. Every item is `null` today — no `evaluation` row exists until 07.2.2 stores one (07.5.2 serves the read).
         rerun_label:
           type: [string, 'null']
+          description: >-
+            Always `null` until 05.5.1/05.5.2 serve a label; the column-backed
+            `parent_run_id` and `rerun_scope` are what a caller can rely on.
         reprocess_label:
           type: [string, 'null']
+          description: Always `null` until the reprocess path of 04/05.5.2 serves a label.
     RunPage:
       type: object
       description: 00 §9.1 cursor page of `RunSummary`, keyset-ordered on `(created_at, id)` ascending (05.2.2-T2).
@@ -7447,6 +7670,152 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/RunSummary' }
+        next_cursor: { type: [string, 'null'] }
+    RunEnvironmentRef:
+      type: object
+      additionalProperties: false
+      description: >-
+        The run's pinned environment revision (05.1.2), read by
+        `GET /v1/runs/{r}` since F44 (S143): `environment_revision` joined
+        through `run.environment_revision_id` (not null, FK
+        `run_environment_revision_fk`, 0031) plus the environment's own key. No
+        `secret_refs`, no `base_urls`, no `dependency_versions`: the run detail
+        names the revision, it does not re-publish its content
+        (`GET /v1/environment-revisions/{id}` does that).
+      required: [revision_id, environment_id, environment_key, revision_no, revision_hash]
+      properties:
+        revision_id:
+          type: string
+          format: uuid
+          description: '`environment_revision.id`.'
+        environment_id:
+          type: string
+          format: uuid
+          description: '`environment_revision.environment_id`.'
+        environment_key:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9_-]{0,63}$'
+          description: '`environment.environment_key` (0024).'
+        revision_no:
+          type: integer
+          minimum: 1
+          description: '`environment_revision.revision_no`, 1-based per environment.'
+        revision_hash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: '`environment_revision.revision_hash` — the content hash pinned by the run.'
+    RunAttemptSummary:
+      type: object
+      additionalProperties: false
+      description: >-
+        One row of `GET /v1/runs/{r}/attempts` (F52, S143), read from
+        `case_attempt` (0032). The raw/normalised pair is kept verbatim: the
+        producer's `raw_status` and the server's `normalized_status` are shown
+        separately, and `blocked` is never reported as `passed` (00 §8.5, AC3).
+        The retry chain is `(execution_key, attempt_no)` — there is no
+        `retry_of` column — so `attempt_no` >= 2 is a retry of the previous
+        attempt of the same `execution_key`.
+      required:
+        [
+          attempt_id,
+          execution_key,
+          case_id,
+          attempt_no,
+          raw_status,
+          normalized_status,
+          started_at,
+          finished_at,
+          duration_ms,
+          artifact_count,
+          healing_candidate,
+        ]
+      properties:
+        attempt_id:
+          type: string
+          format: uuid
+          description: '`case_attempt.id` — the stable key of one attempt row.'
+        execution_key:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: '`case_attempt.execution_key` — the planned execution (case revision + variant + target env).'
+        case_id:
+          type: string
+          format: uuid
+          description: '`case_attempt.case_id`.'
+        attempt_no:
+          type: integer
+          minimum: 1
+          description: >-
+            `case_attempt.attempt_no`, 1-based within the execution; 2 or more
+            is a retry of the previous attempt of the same `execution_key`.
+        raw_status:
+          type: string
+          minLength: 0
+          maxLength: 64
+          description: '`case_attempt.raw_status` exactly as the producer sent it.'
+        normalized_status:
+          type: string
+          enum: [passed, failed, skipped, timed_out, error, blocked]
+          description: '`case_attempt.normalized_status` (00 §8.5 vocabulary).'
+        started_at:
+          type: [string, 'null']
+          format: date-time
+          description: '`case_attempt.started_at`; null when the producer sent no start.'
+        finished_at:
+          type: [string, 'null']
+          format: date-time
+          description: '`case_attempt.finished_at`; null when the producer sent no finish.'
+        duration_ms:
+          type: [integer, 'null']
+          minimum: 0
+          description: '`case_attempt.duration_ms`; null when unrecorded.'
+        artifact_count:
+          type: integer
+          minimum: 0
+          description: >-
+            How many artifacts this attempt has: `count(*)` of the run's
+            `artifact` rows matching `(execution_key, attempt_no)` in state
+            `ready` (0028). A rejected, deleted or still-staged artifact is not
+            counted.
+        healing_candidate:
+          oneOf:
+            - $ref: '#/components/schemas/RunHealingCandidate'
+            - type: 'null'
+          description: >-
+            The healing candidate attached to this attempt, or `null` — which is
+            every row today: no candidate table exists until the 08.3.1
+            candidate model (shadow rows with 08.3.3). Never a fabricated
+            marker.
+    RunHealingCandidate:
+      type: object
+      additionalProperties: false
+      description: >-
+        The candidate a healed attempt points at (08.3.1). Shape reserved by
+        F52/S143 so the attempts read does not need a second change when the
+        candidate model lands; it is always `null` on the wire today.
+      required: [candidate_hash, mode]
+      properties:
+        candidate_hash:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: "The candidate's `sha256:` hash (00 §7, RFC 8785)."
+        mode:
+          type: string
+          enum: [shadow, official]
+          description: >-
+            `shadow` for a V1 shadow-only candidate (08.3.3), `official` once an
+            approval bound it (08.6.1).
+    RunAttemptPage:
+      type: object
+      description: >-
+        00 §9.1 cursor page of `RunAttemptSummary`, keyset-ordered on
+        `(execution_key, attempt_no)` ascending (F52, S143).
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RunAttemptSummary' }
         next_cursor: { type: [string, 'null'] }
     CreateRunRequest:
       type: object

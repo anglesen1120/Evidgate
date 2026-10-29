@@ -156,7 +156,16 @@ function runPage(items: readonly RunSummary[]): RunPage {
 }
 
 function runSummary(runId: string, createdAt: string, state: RunSummary['state']): RunSummary {
-  return { run_id: runId, state, created_at: createdAt, ref: RUN_REF, unverified_ref: false };
+  return {
+    run_id: runId,
+    state,
+    created_at: createdAt,
+    ref: RUN_REF,
+    unverified_ref: false,
+    completeness: state === 'complete' ? 'complete' : null,
+    parent_run_id: null,
+    rerun_scope: null,
+  };
 }
 
 function runState(
@@ -172,6 +181,18 @@ function runState(
     purpose: 'regular',
     ref: RUN_REF,
     unverified_ref: false,
+    manifest_hash: 'sha256:018f000000000000000000000000000000000000000000000000000000000000',
+    suite_revision_id: '018f0000-0000-7000-8000-00000000b001',
+    policy_revision_id: '018f0000-0000-7000-8000-00000000a004',
+    environment: {
+      revision_id: '018f0000-0000-7000-8000-00000000e001',
+      environment_id: '018f0000-0000-7000-8000-00000000e000',
+      environment_key: 'staging',
+      revision_no: 3,
+      revision_hash: 'sha256:018f000100000000000000000000000000000000000000000000000000000000',
+    },
+    shard_count: 2,
+    declared_producers: ['shard-1', 'shard-2'],
   };
 }
 

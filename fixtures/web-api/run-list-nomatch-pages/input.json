@@ -21,7 +21,10 @@
           "trigger_event": "push",
           "is_fork": false
         },
-        "unverified_ref": false
+        "unverified_ref": false,
+        "completeness": null,
+        "parent_run_id": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000091",
@@ -36,7 +39,10 @@
           "trigger_event": "push",
           "is_fork": false
         },
-        "unverified_ref": false
+        "unverified_ref": false,
+        "completeness": null,
+        "parent_run_id": null,
+        "rerun_scope": null
       }
     ],
     "next_cursor": null

@@ -45,10 +45,31 @@ export type RunStateDto = {
      * True when at least one stored identity value came from the request body instead of a verified CI claim (05.2.2-T1); false for a verified CI caller and for a run with no identity at all.
      */
     unverified_ref: boolean;
+    /**
+     * The pinned manifest's `manifest_hash` (F44, S143), joined from `manifest` through the run's `manifest_id`. Not null for any stored run: `run.manifest_id` is not null and its FK targets `manifest`.
+     */
+    manifest_hash: string;
+    /**
+     * The suite revision the run locked at creation — the run's own `suite_revision_id` column (0031), not a re-read of the manifest.
+     */
+    suite_revision_id: string;
+    /**
+     * The policy revision the run pinned; `null` for a run created before a revision was activated (`run.policy_revision_id` is nullable, 0031).
+     */
+    policy_revision_id: string | null;
+    environment: RunEnvironmentRef;
+    /**
+     * How many producer slots the run registered — one per manifest shard (`count(*)` of the run's `producer_slot` rows, 0029/0031).
+     */
+    shard_count: number;
+    /**
+     * The run's producer slot ids in `shard_index` order, the values the manifest's shards declare (`producer_slot.producer_id`, written as `shard-<n>` at run creation, 0029). Empty only for a run whose slots were never registered.
+     */
+    declared_producers: Array<string>;
 };
 
 /**
- * One row of `GET /v1/projects/{p}/runs` (05.2.2 §5). Since 05.2.2-T2 the list serves the run's state, `created_at`, the recorded identity `ref` and `unverified_ref`; `decision`, `parent_run_id`, `rerun_label` and `reprocess_label` remain optional here until 07 and 05.5.1/05.5.2 add them.
+ * One row of `GET /v1/projects/{p}/runs` (05.2.2 §5). Since 05.2.2-T2 the list serves the run's state, `created_at`, the recorded identity `ref` and `unverified_ref`; since F43 (S143) it also serves `completeness` (from the run's current evidence revision), `parent_run_id` and `rerun_scope`, while `decision`, `rerun_label` and `reprocess_label` stay `null` until 07.5.2 and 05.5.1/05.5.2 serve them — every value of the row comes from a stored column, never from a placeholder.
  */
 export type RunSummary = {
     run_id: string;
@@ -63,11 +84,28 @@ export type RunSummary = {
      */
     unverified_ref: boolean;
     /**
-     * null while pending (00 §9.3); UPPER per 00 §7
+     * The evidence completeness of the run's current evidence revision — `evidence_revision.completeness` of `run.current_evidence_revision_id` (0049; the `EvidenceBadge` verdict, 00 §8.5). `null` while the run has no evidence revision yet, i.e. still pending: it is never reported as `incomplete` without a stored row. `GetCompleteness` is the in-process stub of the sprint-1 slice and is not this source.
+     */
+    completeness: 'complete' | 'incomplete' | null;
+    /**
+     * The run this one was created from by a rerun (`run.parent_run_id`, 0031); `null` for an original run. Served since F43 (S143).
+     */
+    parent_run_id: string | null;
+    /**
+     * The rerun scope the run was created with (`run.rerun_scope`, 0031); `null` for an original run. The filterable form of the rerun label — `rerun_label` itself has no stored column yet.
+     */
+    rerun_scope: 'full' | 'failed_subset' | null;
+    /**
+     * null while pending (00 §9.3); UPPER per 00 §7. Every item is `null` today — no `evaluation` row exists until 07.2.2 stores one (07.5.2 serves the read).
      */
     decision?: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
-    parent_run_id?: string | null;
+    /**
+     * Always `null` until 05.5.1/05.5.2 serve a label; the column-backed `parent_run_id` and `rerun_scope` are what a caller can rely on.
+     */
     rerun_label?: string | null;
+    /**
+     * Always `null` until the reprocess path of 04/05.5.2 serves a label.
+     */
     reprocess_label?: string | null;
 };
 
@@ -76,6 +114,104 @@ export type RunSummary = {
  */
 export type RunPage = {
     items: Array<RunSummary>;
+    next_cursor: string | null;
+};
+
+/**
+ * The run's pinned environment revision (05.1.2), read by `GET /v1/runs/{r}` since F44 (S143): `environment_revision` joined through `run.environment_revision_id` (not null, FK `run_environment_revision_fk`, 0031) plus the environment's own key. No `secret_refs`, no `base_urls`, no `dependency_versions`: the run detail names the revision, it does not re-publish its content (`GET /v1/environment-revisions/{id}` does that).
+ */
+export type RunEnvironmentRef = {
+    /**
+     * `environment_revision.id`.
+     */
+    revision_id: string;
+    /**
+     * `environment_revision.environment_id`.
+     */
+    environment_id: string;
+    /**
+     * `environment.environment_key` (0024).
+     */
+    environment_key: string;
+    /**
+     * `environment_revision.revision_no`, 1-based per environment.
+     */
+    revision_no: number;
+    /**
+     * `environment_revision.revision_hash` — the content hash pinned by the run.
+     */
+    revision_hash: string;
+};
+
+/**
+ * One row of `GET /v1/runs/{r}/attempts` (F52, S143), read from `case_attempt` (0032). The raw/normalised pair is kept verbatim: the producer's `raw_status` and the server's `normalized_status` are shown separately, and `blocked` is never reported as `passed` (00 §8.5, AC3). The retry chain is `(execution_key, attempt_no)` — there is no `retry_of` column — so `attempt_no` >= 2 is a retry of the previous attempt of the same `execution_key`.
+ */
+export type RunAttemptSummary = {
+    /**
+     * `case_attempt.id` — the stable key of one attempt row.
+     */
+    attempt_id: string;
+    /**
+     * `case_attempt.execution_key` — the planned execution (case revision + variant + target env).
+     */
+    execution_key: string;
+    /**
+     * `case_attempt.case_id`.
+     */
+    case_id: string;
+    /**
+     * `case_attempt.attempt_no`, 1-based within the execution; 2 or more is a retry of the previous attempt of the same `execution_key`.
+     */
+    attempt_no: number;
+    /**
+     * `case_attempt.raw_status` exactly as the producer sent it.
+     */
+    raw_status: string;
+    /**
+     * `case_attempt.normalized_status` (00 §8.5 vocabulary).
+     */
+    normalized_status: 'passed' | 'failed' | 'skipped' | 'timed_out' | 'error' | 'blocked';
+    /**
+     * `case_attempt.started_at`; null when the producer sent no start.
+     */
+    started_at: string | null;
+    /**
+     * `case_attempt.finished_at`; null when the producer sent no finish.
+     */
+    finished_at: string | null;
+    /**
+     * `case_attempt.duration_ms`; null when unrecorded.
+     */
+    duration_ms: number | null;
+    /**
+     * How many artifacts this attempt has: `count(*)` of the run's `artifact` rows matching `(execution_key, attempt_no)` in state `ready` (0028). A rejected, deleted or still-staged artifact is not counted.
+     */
+    artifact_count: number;
+    /**
+     * The healing candidate attached to this attempt, or `null` — which is every row today: no candidate table exists until the 08.3.1 candidate model (shadow rows with 08.3.3). Never a fabricated marker.
+     */
+    healing_candidate: RunHealingCandidate | null;
+};
+
+/**
+ * The candidate a healed attempt points at (08.3.1). Shape reserved by F52/S143 so the attempts read does not need a second change when the candidate model lands; it is always `null` on the wire today.
+ */
+export type RunHealingCandidate = {
+    /**
+     * The candidate's `sha256:` hash (00 §7, RFC 8785).
+     */
+    candidate_hash: string;
+    /**
+     * `shadow` for a V1 shadow-only candidate (08.3.3), `official` once an approval bound it (08.6.1).
+     */
+    mode: 'shadow' | 'official';
+};
+
+/**
+ * 00 §9.1 cursor page of `RunAttemptSummary`, keyset-ordered on `(execution_key, attempt_no)` ascending (F52, S143).
+ */
+export type RunAttemptPage = {
+    items: Array<RunAttemptSummary>;
     next_cursor: string | null;
 };
 
@@ -2244,6 +2380,31 @@ export type RunTriggerEvent = 'push' | 'pull_request' | 'schedule' | 'manual' | 
 export type RunIsFork = boolean;
 
 /**
+ * Exact `run.state` (00 §8.1) — one of the seven run states (F43, S143). AND-combined with every other present filter. A present but out-of-vocabulary value is 422 `request_invalid` with `details[].path` = `state`; the filter is not index-served, so it scans the project's rows (05.2.2 note).
+ */
+export type RunState = 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
+
+/**
+ * The run's evaluation decision (F43, S143). Only `pending` is accepted today, and that value stores nothing: no `evaluation` row exists until 07.2.2 persists one, so there is no stored decision to narrow the page with and `pending` matches every run in it, while the `RunSummary.decision` member stays `null` in every item until the evaluator stores one (07.2.2 stores it, 07.5.2 serves the read). Any other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page. Receiver: 07.2.2 (stored decision) with 07.5.2 (the read), which widens this enum.
+ */
+export type RunDecision = 'pending';
+
+/**
+ * Exact `run.rerun_scope` (0031; F43, S143): `full` or `failed_subset`. A plain run stores `null` and never matches. A present but invalid value is 422 `request_invalid` (`details[].path` = `rerun_scope`).
+ */
+export type RunRerunScope = 'full' | 'failed_subset';
+
+/**
+ * Exact `run.parent_run_id` (0031; F43, S143) — the run a rerun was created from. A present but non-UUID value is 422 `request_invalid` (`details[].path` = `parent_run_id`).
+ */
+export type RunParentRunId = string;
+
+/**
+ * Opaque cursor from `next_cursor` of `GET /v1/runs/{r}/attempts`; ordering `(execution_key, attempt_no)` (00 §9.1, F52/S143). A value this endpoint did not issue is 422 `request_invalid`.
+ */
+export type RunAttemptCursor = string;
+
+/**
  * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
  */
 export type IdempotencyKey = string;
@@ -3060,6 +3221,22 @@ export type ListRunsData = {
          * Exact `is_fork` of the run's recorded identity (05.2.2 §5, AC6); the literal `true` or `false`. A present but invalid value is 422 `request_invalid` with `details[].path` = `is_fork`.
          */
         is_fork?: boolean;
+        /**
+         * Exact `run.state` (00 §8.1) — one of the seven run states (F43, S143). AND-combined with every other present filter. A present but out-of-vocabulary value is 422 `request_invalid` with `details[].path` = `state`; the filter is not index-served, so it scans the project's rows (05.2.2 note).
+         */
+        state?: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
+        /**
+         * The run's evaluation decision (F43, S143). Only `pending` is accepted today, and that value stores nothing: no `evaluation` row exists until 07.2.2 persists one, so there is no stored decision to narrow the page with and `pending` matches every run in it, while the `RunSummary.decision` member stays `null` in every item until the evaluator stores one (07.2.2 stores it, 07.5.2 serves the read). Any other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page. Receiver: 07.2.2 (stored decision) with 07.5.2 (the read), which widens this enum.
+         */
+        decision?: 'pending';
+        /**
+         * Exact `run.rerun_scope` (0031; F43, S143): `full` or `failed_subset`. A plain run stores `null` and never matches. A present but invalid value is 422 `request_invalid` (`details[].path` = `rerun_scope`).
+         */
+        rerun_scope?: 'full' | 'failed_subset';
+        /**
+         * Exact `run.parent_run_id` (0031; F43, S143) — the run a rerun was created from. A present but non-UUID value is 422 `request_invalid` (`details[].path` = `parent_run_id`).
+         */
+        parent_run_id?: string;
     };
     url: '/projects/{p}/runs';
 };
@@ -3203,12 +3380,65 @@ export type GetRunError = GetRunErrors[keyof GetRunErrors];
 
 export type GetRunResponses = {
     /**
-     * Run state, current evidence revision, version and purpose
+     * Run state, current evidence revision, version, purpose and manifest identity
      */
     200: RunStateDto;
 };
 
 export type GetRunResponse = GetRunResponses[keyof GetRunResponses];
+
+export type ListRunAttemptsData = {
+    body?: never;
+    path: {
+        r: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor` of `GET /v1/runs/{r}/attempts`; ordering `(execution_key, attempt_no)` (00 §9.1, F52/S143). A value this endpoint did not issue is 422 `request_invalid`.
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/runs/{r}/attempts';
+};
+
+export type ListRunAttemptsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListRunAttemptsError = ListRunAttemptsErrors[keyof ListRunAttemptsErrors];
+
+export type ListRunAttemptsResponses = {
+    /**
+     * Page of the run's attempts
+     */
+    200: RunAttemptPage;
+};
+
+export type ListRunAttemptsResponse = ListRunAttemptsResponses[keyof ListRunAttemptsResponses];
 
 export type CancelRunData = {
     body?: never;

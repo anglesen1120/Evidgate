@@ -19,6 +19,9 @@ function run(index: number, changes: Partial<RunSummary> = {}): RunSummary {
       is_fork: false,
     },
     unverified_ref: false,
+    completeness: 'complete',
+    parent_run_id: null,
+    rerun_scope: null,
     ...changes,
   };
 }

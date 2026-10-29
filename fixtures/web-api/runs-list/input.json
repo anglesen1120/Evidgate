@@ -22,10 +22,12 @@
           "is_fork": false
         },
         "unverified_ref": false,
+        "completeness": "complete",
         "decision": "PASS",
         "parent_run_id": null,
         "rerun_label": null,
-        "reprocess_label": null
+        "reprocess_label": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000022",
@@ -41,10 +43,12 @@
           "is_fork": false
         },
         "unverified_ref": true,
+        "completeness": "incomplete",
         "decision": "FAIL",
         "parent_run_id": null,
         "rerun_label": null,
-        "reprocess_label": null
+        "reprocess_label": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000023",
@@ -60,10 +64,12 @@
           "is_fork": false
         },
         "unverified_ref": false,
+        "completeness": null,
         "decision": null,
         "parent_run_id": null,
         "rerun_label": null,
-        "reprocess_label": null
+        "reprocess_label": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000024",
@@ -79,10 +85,12 @@
           "is_fork": false
         },
         "unverified_ref": false,
+        "completeness": null,
         "decision": null,
         "parent_run_id": null,
         "rerun_label": null,
-        "reprocess_label": null
+        "reprocess_label": null,
+        "rerun_scope": null
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000025",
@@ -98,10 +106,12 @@
           "is_fork": false
         },
         "unverified_ref": true,
+        "completeness": "complete",
         "decision": null,
         "parent_run_id": "018f0000-0000-7000-8000-000000000022",
         "rerun_label": "failed_subset",
-        "reprocess_label": null
+        "reprocess_label": null,
+        "rerun_scope": "full"
       },
       {
         "run_id": "018f0000-0000-7000-8000-000000000026",
@@ -117,10 +127,12 @@
           "is_fork": true
         },
         "unverified_ref": true,
+        "completeness": null,
         "decision": null,
         "parent_run_id": null,
         "rerun_label": null,
-        "reprocess_label": null
+        "reprocess_label": null,
+        "rerun_scope": null
       }
     ],
     "next_cursor": null
