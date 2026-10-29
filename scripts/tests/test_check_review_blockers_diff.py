@@ -125,6 +125,14 @@ class GateFiles(RepoTest):
         found = scan.scan(base, self.repo.commit())
         self.assertEqual(self.gate_warnings(found), ["scripts/check-helper.py"])
 
+    def test_a_file_moved_into_a_scanned_path_is_line_scanned(self):
+        self.repo.write("docs/x.md", "run --ignore-exit-code 8\n")
+        self.repo.write("scripts/keep.sh", "echo ok\n")
+        self.repo.commit("doc")
+        base = self.repo.head()
+        git(self.repo.path, "mv", "docs/x.md", "scripts/x.sh")
+        self.assertEqual(blocks(scan.scan(base, self.repo.commit())), {"U8"})
+
     def test_a_deleted_gate_file_warns_and_its_migration_is_not_read(self):
         self.repo.write("scripts/verify.sh", "echo ok\n")
         self.repo.write("migrations/0100_gone.sql", "create policy gone on public.widget using (true);\n")

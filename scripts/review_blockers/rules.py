@@ -42,7 +42,9 @@ U8_REFUSALS = (
         r"""(?:^|[;&|(]|\bif\s+!?\s*)\s*(?:grep|rg)\s+(?:-[\w-]+\s+)*(?:--\s+)?"""
         r"""(?:["'][^"'\n]*--ignore-exit-code|--ignore-exit-code\b)"""
     ),
-    re.compile(r"""\[\[?[^\]\n]{0,1000}--ignore-exit-code[^\]\n]{0,1000}\]\]?"""),
+    # A test expression compares the flag (`[ "$1" = … ]`, `[[ … == *…* ]]`);
+    # an array literal such as `["test", "--ignore-exit-code"]` passes it on.
+    re.compile(r"""\[\[?\s[^\]\n]{0,1000}(?:=|!=|=~|-[zn]\s)[^\]\n]{0,1000}--ignore-exit-code[^\]\n]{0,1000}\s\]\]?"""),
     re.compile(
         r"""(?:^|[;|]|\bin\s)\s*(?:["']?[^|;\s)"']+["']?\s*\|\s*)*["']?--ignore-exit-code["']?(?:\s*\|\s*["']?[^|;\s)"']+["']?)*\s*\)"""
     ),

@@ -157,6 +157,15 @@ class IgnoreExitCode(RepoTest):
             with self.subTest(line=line):
                 self.assertEqual(blocks(self.scan_change(("scripts/verify.sh", line))), set())
 
+    def test_the_flag_inside_an_array_literal_blocks(self):
+        for path, line in (
+            ("scripts/run.ts", 'spawn("dotnet", ["test", "--ignore-exit-code", "8"]);\n'),
+            ("scripts/x.py", 'subprocess.run(["dotnet", "test", "--ignore-exit-code"])\n'),
+            ("scripts/a.sh", "args=( [0]=test --ignore-exit-code )\n"),
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(blocks(self.scan_change((path, line))), {"U8"})
+
 
 class TestSkips(RepoTest):
     def test_attribute_and_runtime_skips_block(self):

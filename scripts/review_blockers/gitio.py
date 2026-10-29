@@ -116,6 +116,7 @@ def added_lines(base: str, head: str) -> Iterator[tuple[str, int, str]]:
         "--text",
         "--no-textconv",
         "--no-ext-diff",
+        "--no-renames",
         "--src-prefix=a/",
         "--dst-prefix=b/",
         f"{base}...{head}",
