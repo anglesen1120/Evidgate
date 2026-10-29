@@ -537,7 +537,7 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
 - `healing_llm_call` shape: `id uuid primary key`, `org_id uuid not null`, `project_id uuid not null`,
   `incident_id`/`candidate_id uuid` (nullable), `purpose text not null`, `model text not null`,
   `prompt_version text not null`, `tokens int not null default 0`, `cost numeric(12,6) not null
-  default 0`, `status text not null`, `attempt int not null default 1`, `redaction_report_hash text`,
+default 0`, `status text not null`, `attempt int not null default 1`, `redaction_report_hash text`,
   `created_at timestamptz not null default now()`. One row per ATTEMPT, not per invocation: AC1's
   schema-violation retry and AC2's timeout abort are facts about one provider call, so attempt 1 and
   attempt 2 of a failing invocation are two rows. `attempt` is the ordinal inside one invocation and
@@ -564,24 +564,24 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
 - DEFERRED FOREIGN KEYS: `incident_id` and `candidate_id` carry NO key yet, because `incident` and
   `healing_candidate` do not exist. The migration that creates each table owes the composite
   `(org_id, incident_id) → incident (org_id, id)` and `(org_id, candidate_id) → healing_candidate
-  (org_id, id)` keys, so a call can only ever name an incident/candidate of its OWN org — the same
+(org_id, id)` keys, so a call can only ever name an incident/candidate of its OWN org — the same
   reason `(org_id, project_id) → project (org_id, id)` is composite today. Until then the
   attribution CHECKs still bound the row and only application code could write a dangling id.
 - Keys and indexes: `unique (org_id, id)` is the composite tenant-FK target every business table
   declares (TL T3). `healing_llm_call_project_created_idx (org_id, project_id, created_at)` serves
   the budget-window sum and `healing_llm_call_project_purpose_created_idx (org_id, project_id,
-  purpose, created_at)` the per-purpose cost report; both are range scans over a window, not keyset
+purpose, created_at)` the per-purpose cost report; both are range scans over a window, not keyset
   pages, so `created_at` is ascending. The project reference cascades on delete, as 0052 does: a
   project row is hard-deleted only by the tenant-erasure path (06.4.4, and the app role holds no
   DELETE), and a ledger or budget row must not block that delete with a `23503`.
 - `healing_llm_budget` shape: `id`, `org_id`, `project_id`, `period text not null`, `period_start
-  date not null`, `period_cap_cost numeric(12,6)`, `period_cap_tokens int`, `used_cost numeric(12,6)
-  default 0`, `used_tokens int default 0`, `created_at`/`updated_at`/`version`, all NOT NULL.
+date not null`, `period_cap_cost numeric(12,6)`, `period_cap_tokens int`, `used_cost numeric(12,6)
+default 0`, `used_tokens int default 0`, `created_at`/`updated_at`/`version`, all NOT NULL.
   `healing_llm_budget_period_key unique (org_id, project_id, period, period_start)` IS the
   atomic-consume target of AC3: T1.4's hard stop is one `update … set used_cost = used_cost + @cost,
-  used_tokens = used_tokens + @tokens where org_id = … and project_id = … and period = 'daily' and
-  period_start = … and used_cost + @cost <= period_cap_cost and used_tokens + @tokens <=
-  period_cap_tokens returning id`, whose zero-row result means no call is placed (the `healing_quota`
+used_tokens = used_tokens + @tokens where org_id = … and project_id = … and period = 'daily' and
+period_start = … and used_cost + @cost <= period_cap_cost and used_tokens + @tokens <=
+period_cap_tokens returning id`, whose zero-row result means no call is placed (the `healing_quota`
   T32 pattern). No consumption code ships in this slice — the key and the column grants are the plan
   that statement needs. `period` is `'daily'` alone: a second value is a new value in the vocabulary
   and a migration, which is what T1.7's reset schedule and the consume statement both spell.
@@ -589,7 +589,7 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
 - RLS is the ordinary tenant shape on both tables: `ENABLE` + `FORCE ROW LEVEL SECURITY`,
   `tenant_isolation` as `org_id = evidgate.current_org_id()` in USING and as WITH CHECK, declared
   without `TO` so it applies to PUBLIC, plus the house `_owner_backfill` policy (`FOR ALL TO
-  evidgate_owner USING (true) WITH CHECK (true)`) that `FORCE` makes necessary for a migration or
+evidgate_owner USING (true) WITH CHECK (true)`) that `FORCE` makes necessary for a migration or
   fixture write. Neither table is in `contracts/rls-exceptions.txt`: `org_id` is NOT NULL on both, so
   there is no NULL-org read row and the boot self-check sees a plain scoped tenant policy. There is
   no `SECURITY DEFINER` on either table — the tenant write path is a plain app-role statement inside
@@ -622,7 +622,7 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
   `used_cost`/`used_tokens` therefore still stamps `updated_at` and increments `version`, while the
   caller itself can never write the token it is validated against.
 - Rollback: `drop table if exists public.healing_llm_budget; drop table if exists
-  public.healing_llm_call;` — the policies, indexes, the trigger and the grants go with them, and
+public.healing_llm_call;` — the policies, indexes, the trigger and the grants go with them, and
   both tables hold derived telemetry (calls made, budget consumed), so a rollback loses cost
   attribution history and nothing that the provider's own billing cannot re-derive.
 
