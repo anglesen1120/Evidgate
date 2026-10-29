@@ -53,7 +53,7 @@ Enforcement moves from the header to two places that fail earlier: the lint rule
 
 Two things are deliberately **not** settled here. (i) The bridge page's own policy: whether the isolated 06 viewer origin needs `angular#unsafe-bypass` at all is decided against 06.3.3/09.4.1 when that component exists, because the viewer content lives on the isolated origin, not on the app origin. (ii) The Evidence section is left as recorded: the spike header `trusted-types angular angular#unsafe-bypass` stays readable there as the spike's own configuration and is not the shipped app-origin policy.
 
-Shipped artefacts (D-S66-Q3): `apps/web/scripts/app-origin-csp.json` is the single policy source (10.2.1-T1.4's edge consumes it), `apps/web/scripts/csp.mjs` builds the header from it and injects the per-response nonce, `apps/web/src/index.html` carries `ngCspNonce="__CSP_NONCE__"`, and `apps/web/e2e/csp.spec.ts` is AC7's proof on both locales. Recorded for owner review (non-blocking) as D-S66-Q1 in `docs/phase-review.md`.
+Shipped artefacts (D-S66-Q3): `apps/web/scripts/app-origin-csp.json` is the single policy source (10.2.1-T1.4's edge consumes it), `apps/web/scripts/csp.mjs` builds the header from it and injects the per-response nonce, `apps/web/src/index.html` carries `ngCspNonce="__CSP_NONCE__"`, and `apps/web/e2e/csp.spec.ts` is AC7's proof on both locales. Recorded for owner review (non-blocking) as D-S66-Q1 in `docs/phase-review-archive.md`.
 
 ### Fallbacks (each ⚠️ that did not come out fully yes)
 
