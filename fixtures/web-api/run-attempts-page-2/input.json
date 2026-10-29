@@ -1,0 +1,53 @@
+{
+  "operation_id": "listRunAttempts",
+  "variant": "page-2",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000ea12"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "attempt_id": "018f0000-0000-7000-8000-0000000c1002",
+        "execution_key": "79676a0227f9834503d06de2e7496b272892dcec0345d8e0a2cea2aec337a80f",
+        "case_id": "018f0000-0000-7000-8000-0000000c0001",
+        "attempt_no": 2,
+        "raw_status": "passed",
+        "normalized_status": "passed",
+        "started_at": "2026-10-21T07:00:00Z",
+        "finished_at": "2026-10-21T07:00:01Z",
+        "duration_ms": 1520,
+        "artifact_count": 1,
+        "healing_candidate": null
+      },
+      {
+        "attempt_id": "018f0000-0000-7000-8000-0000000c1004",
+        "execution_key": "96f23f32d456876874027651ab72fca0a47d5de0032b005d2c22f08e5f7a8ac4",
+        "case_id": "018f0000-0000-7000-8000-0000000c0004",
+        "attempt_no": 1,
+        "raw_status": "BLOCKED_BY_ENV",
+        "normalized_status": "blocked",
+        "started_at": null,
+        "finished_at": null,
+        "duration_ms": null,
+        "artifact_count": 0,
+        "healing_candidate": null
+      },
+      {
+        "attempt_id": "018f0000-0000-7000-8000-0000000c1003",
+        "execution_key": "d65dcbae30b90e0687ddb424b73f6a4c85d8453c193bcf23ed651f416c301938",
+        "case_id": "018f0000-0000-7000-8000-0000000c0003",
+        "attempt_no": 1,
+        "raw_status": "passed",
+        "normalized_status": "passed",
+        "started_at": "2026-10-21T07:00:00Z",
+        "finished_at": "2026-10-21T07:00:01Z",
+        "duration_ms": 420,
+        "artifact_count": 0,
+        "healing_candidate": null
+      }
+    ],
+    "next_cursor": null
+  }
+}

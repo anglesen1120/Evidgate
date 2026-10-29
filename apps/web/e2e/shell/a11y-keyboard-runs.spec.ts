@@ -3,13 +3,11 @@
 // the element that holds focus by its own identity (role + accessible name, id, data hook), never by
 // counting Tab stops.
 //
-// Two runs findings stay at component level, and the reason is this build's wire, not the corpus:
-// `getRun` exposes no manifest member and no attempts read exists at all — `run-detail.store.ts`
-// publishes `UNAVAILABLE_MANIFEST` and `attempts: computed(() => null)` (D-S111-Q1/D-S103-Q1), so
-// neither the manifest copy button (F-RUN-01) nor the attempts pager (F-RUN-02) can be rendered
-// from any fixture variant. `manifest-panel.spec.ts:85` ("keeps the copy button enabled and focused
-// while the copy is in flight") and `attempts-table.spec.ts:311` ("hands focus to the opposite pager
-// button when a page turn disables the activated one") pin those two.
+// Since S146 (09.3.1-T4/T2.2) the run detail reads the manifest members and the attempts keyset from
+// the wire, so the manifest copy button (F-RUN-01) is a real stop of this walk. The attempts pager
+// (F-RUN-02) needs more than 50 rows to appear, which no corpus page has, so it stays pinned at
+// component level: `attempts-table.spec.ts` ("hands focus to the opposite pager button when a page
+// turn disables the activated one"); the load-more control is walked in `run-detail.spec.ts`.
 // Everything the browser can render is walked here: the list, its filters, the virtual table, the
 // paging error, and the `Load more` append (F-RUN-03).
 import { expect, test, type Locator, type Page } from '@playwright/test';
@@ -111,19 +109,18 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(back).toBeFocused();
   expect((await back.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
-  // Neither flow opens an overlay, and "Back to runs" is the page's last in-page stop: one more Tab
-  // leaves the document rather than landing somewhere inside it unnamed.
-  //
-  // The two panels that could add a stop here cannot be rendered from the wire in this build, which
-  // is why F-RUN-01 (the manifest copy button) and F-RUN-02 (the attempts pager) are pinned at
-  // component level instead of walked: `RunStateDto` has no manifest member and
-  // `RunDetailStore.load()` publishes `UNAVAILABLE_MANIFEST` whatever the read answers
-  // (`run-detail.store.ts:43`), and `attempts` is `computed(() => null)` because the contract has no
-  // attempts read at all (`run-detail.store.ts:26`, D-S111-Q1/D-S103-Q1). No corpus document can
-  // change either — `fixture-contract.spec.ts` would refuse a member `getRun` does not declare.
-  await expect(page.locator('app-manifest-panel [data-manifest-hash] button')).toHaveCount(0);
-  await expect(page.locator('app-attempts-table [data-attempts-unavailable]')).toBeVisible();
+  // The manifest panel's copy button follows "Back to runs", then the attempts table's scroll region
+  // (a named stop); the default attempts page (seven rows, no further cursor) has no pager or
+  // load-more button, so one more Tab after the region leaves the document.
+  await page.keyboard.press('Tab');
+  const copy = page.getByRole('button', { name: 'Copy full manifest hash' });
+  await expect(copy).toBeFocused();
+  expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
   await expect(page.locator('app-attempts-table button')).toHaveCount(0);
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('region', { name: 'Attempts table' })).toBeFocused();
 
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');

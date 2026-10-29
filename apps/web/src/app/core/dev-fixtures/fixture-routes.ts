@@ -168,6 +168,13 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   },
   // 09.3.1-T2: detail states are selected explicitly by variant, not inferred from the run id.
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
+  // 09.3.1-T4: the attempts keyset walk; `run-attempts-page-2` declares page 1's cursor.
+  {
+    operationId: 'listRunAttempts',
+    method: 'GET',
+    path: '/runs/{r}/attempts',
+    cursorQueryParameter: 'cursor',
+  },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
   { operationId: 'createPolicyRevision', method: 'POST', path: '/projects/{p}/policies' },
   {
