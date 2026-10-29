@@ -25,7 +25,7 @@ Evidgate collects automated test results (web, API, mobile, unit) from customer 
 | `plans/00-overview.md` | Shared contracts: glossary, milestones, architecture, IDs, state machines, API, NFRs, feature-plan process, estimate roll-up |
 | `plans/01`–`13` | High-level area plans (epics → stories → tasks with sizes); 656 tasks, 703.25 raw / 843.9 buffered person-days (00 §14; story 13.2.2 added 8 tasks / 9.5 d on 2026-10-26, task 02.3.2-T3 added 0.5 d on 2026-10-28). `13-product-phases.md` is the CR-D-2 master plan (authoring, script generation, element memory, drift classification); the Milestone column in every plan holds the CR-D-2 phase G1–G4 (13 §4.4) |
 | `plans/open-items/` | Register of every `[OPEN]`/⚠️ with a recommended default, the information needed and the task it must precede |
-| `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T101), findings register (`REVIEW-2026-09-25.md`), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
+| `plans/features/` | TL review + binding rulings (`README.md` §3, T1–T101), findings registers (`REVIEW-2026-09-25.md` plans; `REVIEW-2026-10-29.md` code-review fix register, **P0 rows fixed before new feature work**), one detailed feature plan per story in `<NN>-<area>/` (00 §12) |
 | `docs/source/` | Original Vietnamese system design (working name "ReleaseHub") and its .docx |
 | `docs/status-carried.md` | Live blocked / carried items table (moved verbatim from STATUS §6 on 2026-10-28); add new carried rows at the end, cite rows by title |
 | `docs/status-archive.md` | Delivered waves (old STATUS §3-§4) and closed carried rows, moved verbatim and never edited |
@@ -52,6 +52,21 @@ Server/worker: .NET 10 LTS · ASP.NET Core minimal APIs · CQRS (`Mediator` 3, E
 - Manifests, revisions, evaluations are immutable; late evidence creates a new revision.
 - Events are acknowledged only after commit; dedupe by `event_id` + payload hash; order by producer sequence.
 - Healing never removes/weakens assertions, never skips, never overwrites the original failure; runtime auto-apply is off in V1–V2; kill switches exist before any apply feature.
+
+## Code rules for agents (binding)
+
+Full rules, evidence and gates: [`docs/engineering/agent-code-rules.md`](docs/engineering/agent-code-rules.md). Review rules: [`REVIEW.md`](REVIEW.md). The ones broken most often:
+
+- **Comments say why, in about 3 lines.** No plan/task/review ids in source code; those go in the commit and PR. Update or delete the comments your change makes false.
+- **Search before you write.** Check the helper catalogue (rules §7) and `rg`. A second copy of security, protocol or format logic is a defect: extract it.
+- **Framework first.** No hand-rolled HTTP server, redactor, regex parser, gzip, dialog or store without an ADR.
+- **No scaffolding in production.** No `InMemory*`, `Mock*` or `Slice*` registered outside `IsDevelopment()`. Delete the skeleton when the real code lands.
+- **Fail closed.** No check may be skipped because of a return type or a missing attribute; every `[Permission]` handler returns `Result`.
+- **An invariant ships with the code that triggers it and a test that makes it fire.** A reason code nothing can set is not done.
+- **Database.** Every policy has `TO <role>`. State columns get transition triggers. References get FKs. Dedupe compares a payload hash.
+- **Size.** File ≤ 500 lines, method ≤ 60. Split by responsibility.
+- **Never bend a gate:** no `--ignore-exit-code`, `Skip`, `as unknown as`, or logging a secret for a test. Never claim "idempotent/safe/atomic" without a test.
+- **Before "done",** run `scripts/verify.sh --stage …` for the layers you touched. In the PR, state what you could not run.
 
 ## Definition of Done
 
