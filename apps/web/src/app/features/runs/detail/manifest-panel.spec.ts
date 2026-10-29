@@ -1,9 +1,11 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ManifestPanelComponent } from './manifest-panel.component';
-import { UNAVAILABLE_MANIFEST, type ManifestSummary } from './manifest-summary';
+import type { RunStateDto } from '@evidgate/sdk';
+import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
+import { manifestFromRun, UNAVAILABLE_MANIFEST, type ManifestSummary } from './manifest-summary';
 
-/** Component presentation fixture only: these members do NOT exist on RunStateDto. */
+/** Presentation fixture for the component-level cases (copy, escaping, string shard ids). */
 const manifest: ManifestSummary = {
   manifestHash: 'sha256:' + '0123456789abcdef'.repeat(4),
   suiteRevisionId: 'suite-revision-exact',
@@ -44,6 +46,32 @@ describe('ManifestPanelComponent', () => {
       'shard-3',
     ]);
     expect(root.querySelector('app-status-pill')).toBeNull();
+  });
+  it('renders the getRun fixture manifest verbatim, shard names as declared on the wire', async () => {
+    const run = ready.body as RunStateDto;
+    const { root } = await render(manifestFromRun(run));
+    expect(root.querySelector('[data-manifest-hash] bdi')?.textContent).toBe(run.manifest_hash);
+    expect(root.querySelector('[data-manifest-suite] bdi')?.textContent).toBe(
+      run.suite_revision_id,
+    );
+    expect(root.querySelector('[data-manifest-policy] bdi')?.textContent).toBe(
+      run.policy_revision_id,
+    );
+    expect(root.querySelector('[data-manifest-shards]')?.textContent?.trim()).toBe(
+      String(run.shard_count),
+    );
+    expect([...root.querySelectorAll('li bdi')].map((node) => node.textContent)).toEqual(
+      run.declared_producers,
+    );
+    expect(root.querySelector('app-status-pill')).toBeNull();
+  });
+  it('renders a null policy revision as unavailable while the other members stay values', async () => {
+    const run = { ...(ready.body as RunStateDto), policy_revision_id: null };
+    const { root } = await render(manifestFromRun(run));
+    expect(root.querySelector('[data-manifest-policy] app-status-pill')?.textContent).toContain(
+      'Status unavailable',
+    );
+    expect(root.querySelectorAll('app-status-pill')).toHaveLength(1);
   });
   it('renders each absent member as the shared unavailable state, never a value-like placeholder', async () => {
     const { root } = await render(UNAVAILABLE_MANIFEST);

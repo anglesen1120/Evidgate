@@ -34,5 +34,6 @@ export class RunHeaderComponent {
     none: $localize`:@@runs.detail.none:None recorded`,
     context: $localize`:@@runs.detail.context:Execution context`,
     environment: $localize`:@@runs.detail.environment:Environment`,
+    revision: $localize`:@@runs.detail.environment-revision:Revision`,
   };
 }

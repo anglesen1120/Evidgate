@@ -11,9 +11,12 @@ import { inject, Injectable } from '@angular/core';
 import {
   createRun,
   getRun,
+  listRunAttempts,
   listRuns,
   type CreateRunRequest,
+  type ListRunAttemptsData,
   type ListRunsData,
+  type RunAttemptPage,
   type RunCreated,
   type RunPage,
   type RunStateDto,
@@ -24,6 +27,8 @@ import { intentHeaders, type Intent } from '../http/intent';
 
 /** The query object of `listRuns` without its optionality, so the parameter can default to `{}`. */
 type RunListQuery = NonNullable<ListRunsData['query']>;
+
+type RunAttemptsQuery = NonNullable<ListRunAttemptsData['query']>;
 
 @Injectable({ providedIn: 'root' })
 export class RunsDataService {
@@ -37,6 +42,11 @@ export class RunsDataService {
   /** One run's state and current evidence revision (`GET /v1/runs/{r}`). */
   get(runId: string): Promise<RunStateDto> {
     return this.gateway.call((client) => getRun({ client, path: { r: runId } }));
+  }
+
+  /** One page of a run's attempts (`GET /v1/runs/{r}/attempts`, keyset `(execution_key, attempt_no)`). */
+  listAttempts(runId: string, query: RunAttemptsQuery = {}): Promise<RunAttemptPage> {
+    return this.gateway.call((client) => listRunAttempts({ client, path: { r: runId }, query }));
   }
 
   /**

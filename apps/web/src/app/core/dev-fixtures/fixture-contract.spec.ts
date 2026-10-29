@@ -59,6 +59,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 
 import { createOpenApiResponseValidator, type ContractValidationError } from '@evidgate/cli';
+import type { RunAttemptPage } from '@evidgate/sdk';
 import { loadAllFixtures, type Fixture } from '@evidgate/test-fixtures';
 import { parse as parseYaml } from 'yaml';
 
@@ -1007,8 +1008,8 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.cursorQueryParameter !== undefined);
     expect(
       keyed.map((route) => route.operationId),
-      'listCiBindings and listRuns are cursor-keyed; a third row needs its own pin here',
-    ).toEqual(['listCiBindings', 'listRuns']);
+      'listCiBindings, listRuns and listRunAttempts are cursor-keyed; a fourth row needs its own pin here',
+    ).toEqual(['listCiBindings', 'listRuns', 'listRunAttempts']);
     for (const route of keyed) {
       expect(
         route.cursorQueryParameter,
@@ -1020,7 +1021,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(
       paged.map((entry) => entry.name),
       'each cursor-keyed walk has exactly one catalog row declaring the request cursor it answers',
-    ).toEqual(['ci-bindings-list-settings-page-2', 'run-list-page-2']);
+    ).toEqual(['ci-bindings-list-settings-page-2', 'run-attempts-page-2', 'run-list-page-2']);
     const secondPageRow = paged.find((entry) => entry.name === 'ci-bindings-list-settings-page-2');
     if (secondPageRow === undefined || secondPageRow.cursor === undefined) {
       throw new Error(
@@ -1152,6 +1153,21 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       new Set(runIds).size,
       'a run appears on both pages, so the store would drop the second copy silently',
     ).toBe(runIds.length);
+
+    // 09.3.1-T4: the third cursor-keyed walk, the run detail's attempts keyset.
+    const attemptsSecondRow = paged.find((entry) => entry.name === 'run-attempts-page-2');
+    const attemptsFirst = corpusDocument('run-attempts-page-1').body as RunAttemptPage;
+    const attemptsSecond = corpusDocument('run-attempts-page-2').body as RunAttemptPage;
+    expect(attemptsFirst.next_cursor, 'page 1 must name the cursor page 2 answers').toBe(
+      attemptsSecondRow?.cursor,
+    );
+    expect(attemptsSecond.next_cursor, 'the last attempts page must end the walk').toBeNull();
+    const attemptKeys = [...attemptsFirst.items, ...attemptsSecond.items].map(
+      (item) => `${item.execution_key}/${item.attempt_no}`,
+    );
+    expect(new Set(attemptKeys).size, 'an attempt appears on both pages').toBe(attemptKeys.length);
+    // The keyset order is (execution_key, attempt_no) ascending across both pages.
+    expect(attemptKeys, 'attempts are not in keyset order').toEqual([...attemptKeys].sort());
   });
 
   it('gives every cursor a catalog row that answers it (09.3.1-T1)', () => {

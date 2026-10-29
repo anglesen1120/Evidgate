@@ -2694,6 +2694,10 @@
       <trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page</source></trans-unit>
       <trans-unit id="runs.detail.attempts.previous" datatype="html"><source>Previous page</source></trans-unit>
       <trans-unit id="runs.detail.attempts.next" datatype="html"><source>Next page</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.healing-candidates" datatype="html"><source>Healing candidates</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.more" datatype="html"><source>Load more attempts</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.loading-more" datatype="html"><source>Loading more attempts</source></trans-unit>
+      <trans-unit id="runs.detail.environment-revision" datatype="html"><source>Revision</source></trans-unit>
     </body>
   </file>
 </xliff>

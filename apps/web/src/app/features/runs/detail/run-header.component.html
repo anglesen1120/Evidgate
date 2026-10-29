@@ -111,7 +111,12 @@
   <dl>
     <div>
       <dt>{{ copy.environment }}</dt>
-      <dd data-run-environment><app-status-pill [tone]="'neutral'" label="" /></dd>
+      <dd data-run-environment>
+        <bdi class="identifier">{{ display(run().environment.environment_key) }}</bdi>
+        <span data-run-environment-revision
+          >{{ copy.revision }} {{ run().environment.revision_no }}</span
+        >
+      </dd>
     </div>
   </dl>
 </section>

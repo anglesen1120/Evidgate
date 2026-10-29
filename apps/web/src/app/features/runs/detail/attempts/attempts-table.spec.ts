@@ -6,7 +6,7 @@ import { AttemptsTableComponent } from './attempts-table.component';
 
 type AttemptStatus = 'passed' | 'failed' | 'skipped' | 'timed_out' | 'error' | 'blocked';
 
-/** Presentation fixtures only, not wire responses: attempts have no current OpenAPI read. */
+/** Presentation rows (the wire mapping is pinned by run-detail-store.spec.ts). */
 function row(overrides: Partial<AttemptRow> = {}): AttemptRow {
   return {
     executionKey: 'checkout',
@@ -265,6 +265,75 @@ describe('AttemptsTableComponent', () => {
     const { root } = await render([]);
     expect(root.querySelector('app-empty-pattern')?.textContent).toContain('No attempts recorded');
     expect(root.querySelector('[data-attempts-unavailable], table')).toBeNull();
+  });
+  it('renders the healing marker as the shared unavailable state while no row has a candidate', async () => {
+    const { root } = await render([row()]);
+    expect(
+      root.querySelector('[data-attempts-healing-unavailable] app-status-pill')?.textContent,
+    ).toContain('Status unavailable');
+    expect(root.querySelector('[data-pre-healing], [data-healing-candidate]')).toBeNull();
+  });
+  it('renders loading and a retryable first-page failure instead of a table or unavailable', async () => {
+    const { root, fixture } = await render(null);
+    fixture.componentRef.setInput('status', 'loading');
+    await fixture.whenStable();
+    expect(root.querySelector('app-loading-pattern')).not.toBeNull();
+    expect(root.querySelector('table, [data-attempts-unavailable]')).toBeNull();
+    fixture.componentRef.setInput('status', 'error');
+    fixture.componentRef.setInput('error', {
+      kind: 'unavailable',
+      status: 503,
+      code: 'unavailable',
+      message: '',
+      requestId: null,
+      retryable: true,
+      details: [],
+      retryAfterSeconds: null,
+    });
+    await fixture.whenStable();
+    const retried = vi.fn();
+    fixture.componentInstance.retry.subscribe(retried);
+    expect(root.querySelector('app-error-pattern')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('app-error-pattern button')!.click();
+    expect(retried).toHaveBeenCalledTimes(1);
+  });
+  it('offers one bounded load-more only while a cursor remains and keeps the page on append', async () => {
+    const input = Array.from({ length: 120 }, (_, index) =>
+      row({ executionKey: 'execution-' + index }),
+    );
+    const { root, fixture } = await render(input.slice(0, 100));
+    const more = vi.fn();
+    fixture.componentInstance.loadMore.subscribe(more);
+    expect(root.querySelector('[data-attempts-load-more]')).toBeNull();
+    fixture.componentRef.setInput('hasMore', true);
+    await fixture.whenStable();
+    root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
+    await fixture.whenStable();
+    root.querySelector<HTMLButtonElement>('[data-attempts-load-more]')!.click();
+    expect(more).toHaveBeenCalledTimes(1);
+    fixture.componentRef.setInput('attempts', [...input]);
+    fixture.componentRef.setInput('hasMore', false);
+    await fixture.whenStable();
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 2 / 3');
+    expect(root.querySelector('[data-attempts-load-more]')).toBeNull();
+  });
+  it('shows a failed follow-up page beside the rows already loaded', async () => {
+    const { root, fixture } = await render([row()]);
+    fixture.componentRef.setInput('hasMore', true);
+    fixture.componentRef.setInput('error', {
+      kind: 'network',
+      status: 0,
+      code: '',
+      message: '',
+      requestId: null,
+      retryable: true,
+      details: [],
+      retryAfterSeconds: null,
+    });
+    await fixture.whenStable();
+    expect(rows(root)).toHaveLength(1);
+    expect(root.querySelector('app-error-pattern')).not.toBeNull();
+    expect(root.querySelector('[data-attempts-load-more]')).not.toBeNull();
   });
   it('uses a caption and scoped column/row headers', async () => {
     const { root } = await render([row()]);

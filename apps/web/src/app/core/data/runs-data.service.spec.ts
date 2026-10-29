@@ -119,6 +119,18 @@ describe('RunsDataService (09.1.1-T3.1)', () => {
     expect(state.version).toBe(3);
   });
 
+  it('listAttempts() calls GET on the run attempts URL with the cursor query', async () => {
+    const page = service.listAttempts('r-1', { cursor: 'c9', limit: 200 });
+    const request = await takeRequest(httpMock, (candidate) =>
+      candidate.url.startsWith(`${API_BASE_URL}/runs/r-1/attempts`),
+    );
+    expect(request.request.method).toBe('GET');
+    expect(request.request.urlWithParams).toContain('cursor=c9');
+    expect(request.request.urlWithParams).toContain('limit=200');
+    request.flush(JSON.stringify({ items: [], next_cursor: null }), { headers: JSON_HEADERS });
+    await expect(page).resolves.toEqual({ items: [], next_cursor: null });
+  });
+
   it('create() posts the body with the intent key', async () => {
     const intent = createIntent();
     const created = service.create('p-1', { manifest_id: 'mf-1' }, intent);

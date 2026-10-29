@@ -124,3 +124,14 @@ button:focus-visible,
     min-width: calc(var(--eg-rail-width) * 3);
   }
 }
+.healing-unavailable {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-2);
+  align-items: center;
+  margin-block-end: var(--eg-space-3);
+}
+[data-attempts-load-more] {
+  min-block-size: 44px;
+  margin-block-start: var(--eg-space-3);
+}
