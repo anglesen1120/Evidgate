@@ -52,7 +52,7 @@ public sealed class AuditChainBrokenException(IReadOnlyList<(Guid OrgId, AuditCh
 /// <remarks>
 /// The plan also names a <c>security_event</c> row (AC6, 11.5.1's surface): <c>0053</c> (11.5.1-T5.1) ships the table, but
 /// the closed V1 type set has no verifier-fault type (11.1.1-T4.1; carried row "G8 verifier fault has no `security_event` type
-/// (11.5.1-T5, S137)") and <c>org_id</c> is NOT NULL (platform scope open, D-S137-OWNER): log line, counter, dead letter.
+/// (11.5.1-T5, S137)") and <c>org_id</c> is NOT NULL (D-S137-OWNER, DECISIONS §8.2: an org-less event goes to a separate, still-owed <c>platform_security_event</c> table, never a nullable <c>org_id</c>): log line, counter, dead letter.
 /// </remarks>
 public sealed partial class VerifyAuditChainTaskHandler(
     IWorkerSchedDataSource sweep,

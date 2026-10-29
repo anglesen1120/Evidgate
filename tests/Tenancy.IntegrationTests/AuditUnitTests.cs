@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Shouldly;
@@ -71,6 +72,141 @@ public sealed class AuditUnitTests
     [Fact]
     public void Metadata_AcceptsAllowlistedPlainValues() =>
         AuditMetadata.Validate(new Dictionary<string, string> { ["slug"] = "acme", ["count"] = "3" }).ShouldNotBeNull();
+
+    [Fact]
+    public void AuditPayload_DenyList_IsOneListAndMatchesNormalisedKeys()
+    {
+        // 11.9.2-T2.2 (AC10): the one list, mirrored in docs/security/audit-and-deletion-rule.md §4.
+        AuditMetadata.ForbiddenKeys.ShouldBe(
+        [
+            "email",
+            "name",
+            "ip",
+            "user_agent",
+            "message",
+            "reason_text",
+            "comment",
+            "note",
+            "description",
+            "free_text",
+            "display_name",
+            "email_address",
+            "ip_address",
+            "full_name",
+            "phone",
+            "address",
+            "username",
+        ], ignoreOrder: true);
+
+        AuditMetadata.NormalizeKey("user_agent").ShouldBe("USERAGENT");
+        AuditMetadata.NormalizeKey("User-Agent").ShouldBe("USERAGENT");
+        AuditMetadata.NormalizeKey("userAgent").ShouldBe("USERAGENT");
+        AuditMetadata.NormalizeKey("USER  AGENT").ShouldBe("USERAGENT");
+        AuditMetadata.NormalizeKey("email_domain").ShouldBe("EMAILDOMAIN");
+
+        // Unicode compatibility form KC first: a fullwidth spelling normalises to the ASCII key, while a
+        // Cyrillic homoglyph is a different letter and only the fail-closed non-ASCII rule refuses it.
+        AuditMetadata.NormalizeKey("\uFF45\uFF4D\uFF41\uFF49\uFF4C").ShouldBe("EMAIL");
+        AuditMetadata.NormalizeKey("\u0435mail").ShouldNotBe("EMAIL");
+    }
+
+    [Fact]
+    public void AuditPayload_RefusesForbiddenKeysInFieldsTuplesAndConvertiblePairs()
+    {
+        // A public instance field is a key name too (a ValueTuple item is reached the same way).
+        Should.Throw<ArgumentException>(() => AuditMetadata.EnsureNoForbiddenKeys(new FieldOnlyPayload()))
+            .Message.ShouldContain("Email");
+
+        // A ValueTuple's items are walked, so a dictionary nested in a tuple is still refused.
+        Should.Throw<ArgumentException>(() => AuditMetadata.EnsureNoForbiddenKeys(
+            new ValueTuple<object?, string>(new Dictionary<string, object?> { ["Email"] = "a@b.test" }, "tail")))
+            .Message.ShouldContain("Email");
+
+        // A KeyValuePair<TKey, TValue> with a non-string key: the key renders as a name, never skipped.
+        Should.Throw<ArgumentException>(() => AuditMetadata.EnsureNoForbiddenKeys(
+            new[] { KeyValuePair.Create(PayloadKey.Email, "a@b.test") }))
+            .Message.ShouldContain("Email");
+
+        // One such pair held as a plain value (not inside a sequence) is read as a name too.
+        Should.Throw<ArgumentException>(() => AuditMetadata.EnsureNoForbiddenKeys(
+            new Dictionary<string, object?> { ["holder"] = KeyValuePair.Create(PayloadKey.Email, "a@b.test") }))
+            .Message.ShouldContain("Email");
+
+        // The same instance on two paths is not a cycle, so it must still be accepted.
+        var shared = new Dictionary<string, object?> { ["slug"] = "acme" };
+        AuditMetadata.EnsureNoForbiddenKeys(new object?[] { shared, shared });
+    }
+
+    [Fact]
+    public void AuditPayload_RefusesNonAsciiKeyThatIsNotTheAsciiName()
+    {
+        // `еmail` with U+0435 (Cyrillic small ie) normalises to `ЕMAIL`, not `EMAIL`, so the deny list alone
+        // would miss it: the walk refuses any key still carrying a non-ASCII letter or digit after form KC.
+        var exception = Should.Throw<ArgumentException>(() => AuditMetadata.EnsureNoForbiddenKeys(
+            new Dictionary<string, object?> { ["\u0435mail"] = "person@example.test" }));
+
+        exception.Message.ShouldContain("is forbidden");
+        exception.Message.ShouldNotContain("person@example.test", Case.Sensitive, "the message never echoes a value");
+    }
+
+    [Fact]
+    public void AuditPayload_RefusesSelfReferencingCollectionsInsteadOfRecursing()
+    {
+        var list = new List<object?>();
+        list.Add(list);
+        Should.Throw<ArgumentException>(() => AuditMetadata.EnsureNoForbiddenKeys(list))
+            .Message.ShouldContain("self-referencing");
+
+        var dictionary = new Dictionary<string, object?>();
+        dictionary["self"] = dictionary;
+        Should.Throw<ArgumentException>(() => AuditMetadata.EnsureNoForbiddenKeys(dictionary))
+            .Message.ShouldContain("self-referencing");
+    }
+
+    [Fact]
+    public void AuditPayload_RefusesPayloadDeeperThanTheCap()
+    {
+        AuditMetadata.EnsureNoForbiddenKeys(Nest(AuditMetadata.MaxPayloadDepth));
+
+        Should.Throw<ArgumentException>(() =>
+                AuditMetadata.EnsureNoForbiddenKeys(Nest(AuditMetadata.MaxPayloadDepth + 1)))
+            .Message.ShouldContain($"deeper than {AuditMetadata.MaxPayloadDepth} levels");
+
+        static Dictionary<string, object?> Nest(int levels)
+        {
+            object? inner = "leaf";
+            for (var index = 0; index < levels; index++)
+            {
+                inner = new Dictionary<string, object?> { [$"level{index}"] = inner };
+            }
+
+            return (Dictionary<string, object?>)inner!;
+        }
+    }
+
+    [Fact]
+    public void AuditPayload_WalkReachesJsonElementAndNamesTheKeyNotItsAncestors()
+    {
+        using var document = JsonDocument.Parse("""{"wrapper":{"email":"person@example.test"}}""");
+
+        var exception = Should.Throw<ArgumentException>(() =>
+            AuditMetadata.EnsureNoForbiddenKeys(document.RootElement));
+
+        exception.Message.ShouldContain("email");
+        exception.Message.ShouldContain("at depth 2");
+        exception.Message.ShouldNotContain("wrapper", Case.Sensitive, "an ancestor key name may itself be personal data");
+        exception.Message.ShouldNotContain("person@example.test", Case.Sensitive, "never echo the value of a personal field");
+    }
+
+    private enum PayloadKey
+    {
+        Email,
+    }
+
+    private sealed class FieldOnlyPayload
+    {
+        public string Email = "person@example.test";
+    }
 
     [Fact]
     public void Metadata_Null_Or_Empty_IsNull()
