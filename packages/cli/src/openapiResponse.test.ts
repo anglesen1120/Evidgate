@@ -44,6 +44,9 @@ const runSummary = {
   created_at: '2026-10-24T00:00:00Z',
   ref: runRef,
   unverified_ref: false,
+  completeness: null,
+  parent_run_id: null,
+  rerun_scope: null,
 };
 
 /** A minimal valid `RunPage` body for `GET /v1/projects/{p}/runs` (200). */
@@ -55,6 +58,9 @@ const runSummaryWithoutId = {
   created_at: '2026-10-24T00:00:00Z',
   ref: runRef,
   unverified_ref: false,
+  completeness: null,
+  parent_run_id: null,
+  rerun_scope: null,
 };
 
 /** The 00 §9.2 envelope body a 403 carries. */
