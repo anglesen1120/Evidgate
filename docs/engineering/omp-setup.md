@@ -86,9 +86,9 @@ Then add this line to the Step 4 block in §Gate. The coordinator's merge checks
 
 |Rule|Files|Pattern on an added line|Level|
 |---|---|---|---|
-|D1|`migrations/*.sql` changed by the PR (whole head file)|a `CREATE POLICY` statement with no `TO <role>` outside its parentheses, or `TO public`; comments and quoted text removed first|BLOCK|
-|U8|every path except `docs/`, `plans/`, `*.md`; not `#` comment lines|`--ignore-exit-code` used as an argument (a quoted occurrence, as in a refusal check, does not count)|BLOCK|
-|skip|`tests/`, `*.spec.ts`, `*.test.ts`, `/e2e/`|`[Fact(Skip…=` / `[Theory(SkipUnless…=`, `Skip.If(`, `Assert.Skip(`, `it/test/describe.skip`/`.skipIf`/`.fixme`, `xit(`/`xdescribe(`/`xtest(`|BLOCK|
+|D1|`migrations/*.sql` changed by the PR (whole head file)|a `CREATE POLICY` statement whose role list (the `TO` clause outside its parentheses) is missing or contains `public`, quoted or not; comments and quoted text removed first|BLOCK|
+|U8|every path except `docs/`, `plans/`, `*.md`; not `#` comment lines|any `--ignore-exit-code`, quoted or not, except on a line that tests for it (`grep`, `rg`, `case`, `[[ ]]`, `in <name>:`, `.contains(`/`.includes(`)|BLOCK|
+|skip|`tests/`, `*.spec.ts`, `*.test.ts`, `/e2e/`|`Skip`/`SkipUnless`/`SkipWhen` `=` inside a `[…Fact(`/`[…Theory(` attribute (custom names too), `Skip.If(`, `Assert.Skip(`, `it/test/describe.skip`/`.skipIf`/`.fixme`, `xit(`/`xdescribe(`/`xtest(`|BLOCK|
 |ts-cast|`*.ts`, `*.tsx`, `*.mts`, `*.cts`|`as unknown as`|BLOCK|
 |U4|`src/`|`(Try)Add{Singleton,Scoped,Transient,HostedService}` with an `InMemory`/`Mock`/`Fake`/`Stub`/`Slice`/`Demo`/`Noop` type, on that line or across two lines|WARN|
 |gate-file|`scripts/verify.sh`, `scripts/check-*`, `scripts/check_*`, `.github/workflows/*`|any change|WARN|
@@ -113,6 +113,6 @@ Do not commit anything under `.omp/`: it stays local.
 
 ## Maintenance
 
-When `agent-code-rules.md`, `REVIEW.md` or the register changes in a way that changes the blocks above, edit this file and bump the marker to `v2`. Re-running the setup then replaces each `v1` block with the `v2` one, rather than skipping it: delete from the `v1` marker line through the block's last line (the closing line of the old block as printed in this file's git history), then insert the `v2` block at the same place.
+When `agent-code-rules.md`, `REVIEW.md` or the register changes in a way that changes the blocks above, edit this file and bump the marker to `v2`. Re-running the setup then replaces each `v1` block with the `v2` one, rather than skipping it: delete from the `v1` marker line to the next blank line or heading, then insert the `v2` block at the same place.
 
 After each wave, move the prompts of released sessions (SESSION-CLAIMS `Released`) from `.omp/coordinator/prompts/` and `held/` into `prompts/archive/` (`archive/held/` for held ones). Step 2 skips `archive/`, so a re-run touches only live prompts.
