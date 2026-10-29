@@ -68,7 +68,7 @@ has no `unshare`).
 | Gap | Receiver | Why it is not code |
 |---|---|---|
 | A runtime guarantee that an outbound attempt from the Worker's process tree fails (and the network-namespace deny, if it is ever bought with a capability or a separate pod) | **10.2.1-T1.1** (image runtime contract; the concrete run-time policy lands with the deploy pipeline 10.2.2-T1) | Namespace creation is refused by the container profile (§1) and the Worker genuinely needs network for PostgreSQL, object storage and its queue, so a blanket `--network none` on the Worker is wrong. The shaped answer is an egress-deny network policy limited to the endpoints the Worker needs, or a dedicated parser runtime that can be network-isolated — both are deployment artefacts. |
-| A security event for a blocked (or even attempted) outbound connection | **11.5.1-T5.1** (creates `security_event`) with the type set owned by 11.1.1-T4.1 | The `security_event` table exists since `0053` (11.5.1-T5) but no emitter writes it (`docs/security/security-event-baseline.md`), and the V1 closed type set has no "parse network attempt" member. AC4's "logged as a security event" half therefore cannot be met by 06.3.6 and must not be claimed. |
+| A security event for a blocked (or even attempted) outbound connection | **11.1.1-T4.1** (owns the V1 type set, so the missing type comes first; emitters are per-module, not 11.5.1-T5's), and the `security_event` table and its read already exist (11.5.1-T5 / T5.2, migration `0053`) | The `security_event` table exists since `0053` (11.5.1-T5) but no emitter writes it (`docs/security/security-event-baseline.md`), and the V1 closed type set has no "parse network attempt" member. AC4's "logged as a security event" half therefore cannot be met by 06.3.6 and must not be claimed. |
 
 Where the runtime half *can* be asserted today is a container started with `--network none`:
 `ChildNetworkTests.A_Process_Started_Like_The_Child_Reaches_Loopback_But_Has_No_Egress_Path` spawns a process
@@ -89,9 +89,13 @@ AC4's "and the attempt is logged as a security event" clause is a **contract gap
 site it would need — `ChildProcessParseRunner`, which is the only place that observes a failed or blocked attempt —
 emits nothing today, and the V1 `security_event` type set (`docs/security/security-event-baseline.md`) is a closed
 enumeration with no member for a blocked outbound attempt, while no emitter writes the table (it exists since `0053`). This page
-therefore records the gap rather than inventing a sixth type:
-`11.5.1-T5.1` creates the table and the emitter, and `11.1.1-T4.1` owns the type set and the baseline revision; when
-both exist, wiring the runner's failed attempt to that emitter is a small change in
+therefore records the gap rather than inventing a sixth type.
+The `security_event` table and its read exist since migration `0053` (11.5.1-T5, read T5.2); emitters are per-module
+and none writes this table yet (`docs/security/security-event-baseline.md` `:13`, `:15`), so what unblocks this event is the
+type: `11.1.1-T4.1` owns the V1 type set and the baseline revision and must add one first, and a platform-scope
+(no-tenant) event has no row yet because the table's `org_id` is `NOT NULL` — such events go to a separate platform table
+(D-S137-OWNER; no schema fixed here). When a type and its module
+emitter exist, wiring the runner's failed attempt to it is a small change in
 `src/Modules/Evidgate.Modules.Evidence/Infrastructure/Parsing/Runner/`, with the reason code the runner already
 computes (`parse_crashed`/`parse_timeout` distinguish an attempt from a resource kill only if the child reports it,
 `[INFERENCE]`).
@@ -106,4 +110,4 @@ computes (`parse_crashed`/`parse_timeout` distinguish an attempt from a resource
   runner's own path fails in a `--network none` container. The egress half of that test exercises that scripted
   child, not the real `Evidgate.Parser` child; it is the shape this repository can test, not the production shape.
 - **Not met (deployment, 10.2.1-T1.1):** a runtime guarantee for the production Worker container.
-- **Not met (11.5.1-T5.1 / 11.1.1-T4.1):** the security event for the attempt.
+- **Not met (type set 11.1.1-T4.1; the table exists since `0053`, 11.5.1-T5, and no per-module emitter writes it):** the security event for the attempt.
