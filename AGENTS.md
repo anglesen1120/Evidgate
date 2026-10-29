@@ -55,7 +55,7 @@ Server/worker: .NET 10 LTS · ASP.NET Core minimal APIs · CQRS (`Mediator` 3, E
 
 ## Code rules for agents (binding)
 
-Full rules, evidence and gates: [`docs/engineering/agent-code-rules.md`](docs/engineering/agent-code-rules.md). Review rules: [`REVIEW.md`](REVIEW.md). omp harness: after pulling, run the steps in [`docs/engineering/omp-setup.md`](docs/engineering/omp-setup.md) to wire these rules into the local `.omp/` prompts. The ones broken most often:
+Full rules, evidence and gates: [`docs/engineering/agent-code-rules.md`](docs/engineering/agent-code-rules.md). Review rules: [`REVIEW.md`](REVIEW.md). omp harness: only the coordinator, and only when the owner asks, runs [`docs/engineering/omp-setup.md`](docs/engineering/omp-setup.md) to wire these rules into the local `.omp/` prompts; panels and subagents never edit `.omp/`. The ones broken most often:
 
 - **Comments say why, in about 3 lines.** No plan/task/review ids in source code; those go in the commit and PR. Update or delete the comments your change makes false.
 - **Search before you write.** Check the helper catalogue (rules §7) and `rg`. A second copy of security, protocol or format logic is a defect: extract it.
