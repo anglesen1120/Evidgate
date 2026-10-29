@@ -15,12 +15,17 @@ internal sealed class HealingLlmOptions
     /// <summary>Budget of one attempt: the per-call timeout AC2 aborts on. An LLM answer is slow, so this is generous.</summary>
     internal TimeSpan AttemptTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
-    /// <summary>Transport retries the bounded resilience policy may add on top of the first attempt (0 or 1 are sane).</summary>
-    internal int MaxTransportRetries { get; set; } = 1;
+    /// <summary>
+    /// Transport retries the bounded resilience policy may add on top of the first attempt. The default is 0: the
+    /// provider call is a POST, which is not idempotent, so nothing is retried unless a host opts in with a positive
+    /// value — the pipeline then adds the retry strategy, because Polly's retry strategy requires at least one attempt.
+    /// </summary>
+    internal int MaxTransportRetries { get; set; }
 
     /// <summary>
-    /// Budget of one whole call: every attempt plus the retry delays and a little slack. The client's own
-    /// <c>Timeout</c> is infinite, so this — not a shorter client timeout — is what bounds the call.
+    /// Budget of one whole call: one attempt per allowed retry, plus the retry delays and a little slack — with the
+    /// default 0 retries that is a single attempt. The client's own <c>Timeout</c> is infinite, so this — not a shorter
+    /// client timeout — is what bounds the call.
     /// </summary>
     internal TimeSpan TotalTimeout => (AttemptTimeout * (MaxTransportRetries + 1)) + TimeSpan.FromSeconds(2);
 }
@@ -30,6 +35,12 @@ internal static class HealingLlmHttpClients
 {
     /// <summary>Name of the resilience pipeline wrapped around the client.</summary>
     internal const string Pipeline = "healing-llm";
+
+    /// <summary>
+    /// Hard ceiling on the response body the client buffers. An answer is a small JSON envelope, so anything above
+    /// this is a fault: the read fails and the adapter maps that failure to <c>error</c> instead of buffering it.
+    /// </summary>
+    internal const int MaxResponseBytes = 1024 * 1024;
 
     /// <summary>
     /// The path the adapter posts to, relative to the client's base address. The base address is deployment configuration
@@ -48,8 +59,9 @@ internal static class HealingLlmHttpClients
 /// <remarks>
 /// The adapter maps its own transport failure, time budget and non-success status into
 /// <see cref="HealingLlmStatuses"/> instead of throwing, so the gateway records every attempt; only the caller's own
-/// cancellation propagates. It holds no API key, logs nothing, and never puts the payload in an exception message (S3,
-/// AC6).
+/// cancellation propagates. A response body above the client's buffer ceiling fails the read, and that failure — like
+/// any other read fault — is an <c>error</c> result, never an exception. It holds no API key, logs nothing, and never
+/// puts the payload or the response in an exception message (S3, AC6).
 /// </remarks>
 internal sealed class HttpHealingLlmProvider(HttpClient client) : IHealingLlmProvider
 {
@@ -77,8 +89,8 @@ internal sealed class HttpHealingLlmProvider(HttpClient client) : IHealingLlmPro
 
             if (!response.IsSuccessStatusCode)
             {
-                // 408/429/5xx are the resilience policy's to retry; whatever status survives it is a failure to record,
-                // never content to validate.
+                // With retries opted in, 408/429/5xx are the resilience policy's to retry; whatever status survives it —
+                // and any status at all when the retry count is 0 — is a failure to record, never content to validate.
                 return Failure(HealingLlmStatuses.Error);
             }
 
@@ -102,6 +114,18 @@ internal sealed class HttpHealingLlmProvider(HttpClient client) : IHealingLlmPro
         }
         catch (HttpRequestException)
         {
+            // A transport fault, or the response buffer ceiling the client enforces: nothing to validate, nothing spent.
+            return Failure(HealingLlmStatuses.Error);
+        }
+        catch (InvalidOperationException)
+        {
+            // HttpClient refuses a request it cannot send or a body it cannot hand over the same way; the gateway must
+            // still record an attempt, so that refusal is an error result rather than an exception out of the adapter.
+            return Failure(HealingLlmStatuses.Error);
+        }
+        catch (IOException)
+        {
+            // The body read broke mid-stream: a partial body is not an answer, so it is never parsed.
             return Failure(HealingLlmStatuses.Error);
         }
     }

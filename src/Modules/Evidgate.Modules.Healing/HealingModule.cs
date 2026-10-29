@@ -62,9 +62,21 @@ internal static class HealingModule
         services.TryAddScoped<HealingLlmGateway>();
 
         // The time budget lives in the pipeline, so the client timeout is infinite: a finite client timeout would abort
-        // the whole pipeline — including a retry — before the per-attempt timeout inside it could ever fire.
+        // the whole pipeline — including a retry — before the per-attempt timeout inside it could ever fire. The
+        // handler follows the Identity precedent: no redirect (a redirect would leave the configured endpoint) and a
+        // connection lifetime that keeps DNS fresh in a client that lives as long as the host. The response buffer is
+        // capped, so a runaway body fails the read instead of being buffered.
         services
-            .AddHttpClient<HttpHealingLlmProvider>((_, client) => client.Timeout = Timeout.InfiniteTimeSpan)
+            .AddHttpClient<HttpHealingLlmProvider>((_, client) =>
+            {
+                client.Timeout = Timeout.InfiniteTimeSpan;
+                client.MaxResponseContentBufferSize = HealingLlmHttpClients.MaxResponseBytes;
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+            })
             .AddResilienceHandler(HealingLlmHttpClients.Pipeline, (builder, context) =>
             {
                 var options = context.ServiceProvider.GetRequiredService<IOptions<HealingLlmOptions>>().Value;
@@ -73,12 +85,21 @@ internal static class HealingModule
                 // it, so a slow attempt is bounded on its own and the whole call is bounded on top (AC2).
                 builder.AddTimeout(options.TotalTimeout);
 
-                builder.AddRetry(new HttpRetryStrategyOptions
+                // The call is a POST, and the strategy itself has no method filter, so nothing is retried by default:
+                // it is added only when a host opts in with a positive count (Polly's retry strategy requires at least
+                // one attempt). Its ShouldHandle covers only the transient failures — HttpRequestException,
+                // TimeoutRejectedException, 408/429/5xx — so a permanent status is never sent twice. Jitter has no
+                // effect on a constant delay; it is set so a later exponential backoff is jittered without a second edit.
+                if (options.MaxTransportRetries > 0)
                 {
-                    MaxRetryAttempts = options.MaxTransportRetries,
-                    Delay = TimeSpan.FromMilliseconds(200),
-                    BackoffType = DelayBackoffType.Constant,
-                });
+                    builder.AddRetry(new HttpRetryStrategyOptions
+                    {
+                        MaxRetryAttempts = options.MaxTransportRetries,
+                        Delay = TimeSpan.FromMilliseconds(200),
+                        BackoffType = DelayBackoffType.Constant,
+                        UseJitter = true,
+                    });
+                }
 
                 builder.AddTimeout(options.AttemptTimeout);
             });

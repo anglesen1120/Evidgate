@@ -81,12 +81,40 @@ internal static class HealingLlmRequestRules
 }
 
 /// <summary>
+/// 08.5.1-T1: the bounds the ledger puts on a provider's own numbers, applied before the first row is written, so a
+/// provider that reports nonsense cannot fail the INSERT (<c>tokens</c> CHECK, <c>numeric(12,6)</c> overflow) or write a
+/// <c>status</c> the CHECK refuses.
+/// </summary>
+internal static class HealingLlmResultRules
+{
+    /// <summary>The largest cost <c>healing_llm_call.cost numeric(12,6)</c> can hold.</summary>
+    internal const decimal MaxRecordableCost = 999_999.999999m;
+
+    /// <summary>
+    /// The result as it may be recorded: unchanged when its status is one of <see cref="HealingLlmStatuses"/> and its
+    /// reported usage fits the column types, otherwise an <c>error</c> with no content and nothing spent.
+    /// </summary>
+    /// <param name="result">What the adapter reported for one attempt.</param>
+    /// <returns>The result the gateway records and counts.</returns>
+    internal static HealingLlmResult Recordable(HealingLlmResult result) =>
+        HealingLlmStatuses.IsKnown(result.Status) && result.Tokens >= 0 && IsRecordableCost(result.Cost)
+            ? result
+            : new HealingLlmResult(HealingLlmStatuses.Error, null, 0, 0m);
+
+    // Postgres rounds to the column's scale (6) before range-checking, so a cost just under one million can still
+    // overflow numeric(12,6); the rounding is repeated here with the same half-away-from-zero rule.
+    private static bool IsRecordableCost(decimal cost) =>
+        cost >= 0m && decimal.Round(cost, 6, MidpointRounding.AwayFromZero) <= MaxRecordableCost;
+}
+
+/// <summary>
 /// 08.5.1-T1: one gateway call's outcome. The gateway records every attempt and returns the last one, together with the
 /// id of that row — the value a generation stores as <c>authoring_version.ai_run_id</c> so the artefact it produced is
 /// attributable and costed (AC7).
 /// </summary>
 /// <param name="Result">
-/// The accepted answer, or the failing status with no content: a refused answer never leaves the gateway (AC1).
+/// The accepted answer, or the failing status with no content: a refused answer never leaves the gateway (AC1). Its
+/// tokens and cost are the totals over every attempt of the call, not the last attempt's alone.
 /// </param>
 /// <param name="CallId">The <c>healing_llm_call.id</c> of the attempt this outcome reports.</param>
 internal sealed record HealingLlmInvocation(HealingLlmResult Result, Guid CallId);
@@ -94,9 +122,16 @@ internal sealed record HealingLlmInvocation(HealingLlmResult Result, Guid CallId
 /// <summary>
 /// 08.5.1-T1: the provider-adapter gateway. It invokes the adapter, validates the answer against the caller-declared JSON
 /// Schema, retries a schema violation exactly once (AC1), fails closed, and records one row per attempt in the ambient
-/// tenant transaction (AC4, AC7). It never opens a transaction of its own: <c>P5</c> puts the provider call outside the
-/// database work of its callers, and the recorder then writes inside whichever tenant transaction the caller has open.
+/// tenant transaction (AC4, AC7). It opens no tenant scope and no transaction of its own: it records inside whichever
+/// tenant scope and transaction the caller already has open.
 /// </summary>
+/// <remarks>
+/// <c>P5</c> is not delivered by this slice. The provider call runs in the caller's tenant scope today, and the attempt
+/// rows are written on the same connection inside the caller's transaction, so a caller rollback discards them with the
+/// rest of that unit of work. 08.5.1-T1.4 owns the two-phase shape — reserve, call the provider outside the transaction,
+/// commit — that actually moves the provider call out of the caller's database work; until it lands, nothing here may be
+/// read as claiming that isolation.
+/// </remarks>
 internal sealed class HealingLlmGateway(IHealingLlmProvider provider, HealingLlmCallRecorder recorder)
 {
     /// <summary>Places the call and records every attempt.</summary>
@@ -119,9 +154,16 @@ internal sealed class HealingLlmGateway(IHealingLlmProvider provider, HealingLlm
         // keeps both the provider and the table out of a failure that has nothing to do with either.
         var schema = HealingLlmResponseSchema.Compile(request.ResponseSchema);
 
+        // The caller sees what the whole call spent, not only the attempt that happened to answer last (AC7).
+        var totalTokens = 0L;
+        var totalCost = 0m;
+
         for (var attempt = 1; ; attempt++)
         {
-            var result = await provider.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
+            // The provider's own numbers are brought inside the row's bounds before anything is recorded, so a provider
+            // that reports an unknown status or an impossible cost cannot fail the INSERT or label the ledger.
+            var result = HealingLlmResultRules.Recordable(
+                await provider.InvokeAsync(request, cancellationToken).ConfigureAwait(false));
 
             var status = result.Status;
             var content = result.Content;
@@ -137,6 +179,10 @@ internal sealed class HealingLlmGateway(IHealingLlmProvider provider, HealingLlm
                 .RecordAsync(request, attempt, status, result.Tokens, result.Cost, cancellationToken)
                 .ConfigureAwait(false);
 
+            // A token total that two attempts could push past int is clamped instead of wrapping negative.
+            totalTokens = Math.Min(totalTokens + result.Tokens, (long)int.MaxValue);
+            totalCost += result.Cost;
+
             // AC1: one fresh call answers a schema violation; a second refusal is final and the caller sees no content.
             if (status == HealingLlmStatuses.SchemaViolation && attempt < HealingLlmRequestRules.MaxAttempts)
             {
@@ -144,7 +190,11 @@ internal sealed class HealingLlmGateway(IHealingLlmProvider provider, HealingLlm
             }
 
             return new HealingLlmInvocation(
-                new HealingLlmResult(status, status == HealingLlmStatuses.Ok ? content : null, result.Tokens, result.Cost),
+                new HealingLlmResult(
+                    status,
+                    status == HealingLlmStatuses.Ok ? content : null,
+                    (int)totalTokens,
+                    totalCost),
                 callId);
         }
     }

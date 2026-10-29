@@ -21,11 +21,19 @@ namespace Tenancy.IntegrationTests;
 /// budget rows invisible to (and unwritable by) another tenant;
 /// </description></item>
 /// <item><description>
-/// the grants: the call ledger is select + a column-level insert and nothing else (append-only), the
-/// budget row is select + insert of its capacity + update of exactly the consumption columns, so
-/// neither table can be rewritten, re-targeted or removed by the application role.
+/// the grants: the call ledger is select + a column-level insert and nothing else (append-only); the
+/// budget row is select + an UPDATE of exactly <c>used_cost</c>/<c>used_tokens</c> — the caps (the
+/// owner/provisioning path's to set, owed to 08.5.1-T1.4/T1.7) and the trigger-owned
+/// <c>updated_at</c>/<c>version</c> are outside every app-role grant — so neither table can be
+/// rewritten, re-targeted or removed by the application role, and no app statement can provision a
+/// budget row or raise a cap.
 /// </description></item>
 /// </list>
+/// <para>
+/// The cap writer is OWED, not granted: a tenant transaction able to write <c>period_cap_cost</c> or
+/// <c>period_cap_tokens</c> could raise its own ceiling, so every test that needs a budget row seeds it
+/// through the owner connection and the app-role cases below prove the refusal (42501).
+/// </para>
 /// <para>
 /// The retry/timeout/budget behaviour itself is 08.5.1-T1.3/T1.4's (the gateway records the attempt
 /// rows); what this file pins is the shape those rows must satisfy. Both tenant policies are declared
@@ -51,7 +59,11 @@ public sealed class HealingLlmSchemaTests
                 'prompt-v1', @tokens, @cost, @status, @attempt, null)
         """;
 
-    /// <summary>The app role's budget INSERT: its capacity only — usage, timestamps and version are not its to name.</summary>
+    /// <summary>
+    /// A budget INSERT naming the caps. The app role holds no privilege on either cap column, so this
+    /// statement is refused (42501) for it; the rows these tests need are provisioned through the owner
+    /// connection, which is the path 08.5.1-T1.4/T1.7 owe.
+    /// </summary>
     private const string InsertCapacitySql =
         """
         insert into public.healing_llm_budget
@@ -628,7 +640,10 @@ public sealed class HealingLlmSchemaTests
             error.ConstraintName.ShouldBe("healing_llm_call_project_fk");
         }
 
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgB))
+        // The budget row is provisioned by the owner path (the app role holds no cap privilege, so it
+        // cannot raise the cross-tenant question at all); the composite key refuses the same reference
+        // for the owner, which is the enforcement this test is about.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
         {
             var error = await scope.CaptureErrorAsync(
                 InsertCapacitySql,
@@ -644,7 +659,9 @@ public sealed class HealingLlmSchemaTests
     {
         var world = await SeedTenantsAsync();
 
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA))
+        // Both rows are provisioned through the owner path: the caps are the owner's to set, and the key
+        // is about the tuple, not about which role writes it.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
         {
             (await scope.ExecuteAsync(
                     InsertCapacitySql,
@@ -655,7 +672,7 @@ public sealed class HealingLlmSchemaTests
 
         // AC3's consume statement matches exactly one row by (org, project, period, period start); a
         // second row for the same tuple would make "did the cap hold" ambiguous, so the key refuses it.
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA))
+        await using (var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
         {
             var error = await scope.CaptureErrorAsync(
                 InsertCapacitySql,
@@ -738,13 +755,15 @@ public sealed class HealingLlmSchemaTests
     {
         var world = await SeedTenantsAsync();
 
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA))
+        // Provisioning is the owner path's: the caps are NOT in the app role's INSERT grant, and a row
+        // that could name them would let a tenant raise its own ceiling (owed to 08.5.1-T1.4/T1.7).
+        await using (var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
         {
-            (await scope.ExecuteAsync(
+            (await seed.ExecuteAsync(
                     InsertCapacitySql,
                     CapacityParameters(Guid.CreateVersion7(), world.OrgA, world.ProjectA)))
-                .ShouldBe(1, "the capacity columns are the app role's INSERT grant");
-            await scope.CommitAsync();
+                .ShouldBe(1, "the owner provisions the cap row the consume runs against");
+            await seed.CommitAsync();
         }
 
         // AC3's consume: the update the hard stop runs, admitted on exactly the columns it moves.
@@ -761,19 +780,26 @@ public sealed class HealingLlmSchemaTests
                     """,
                     ("org_id", world.OrgA),
                     ("project_id", world.ProjectA)))
-                .ShouldBe(1, "the consumption columns are the app role's UPDATE grant");
+                .ShouldBe(1, "the consumption columns are the app role's whole UPDATE grant");
             await scope.CommitAsync();
         }
 
+        // `version` moved to 2 with no column privilege on it: the 0004 trigger assigns `updated_at` and
+        // `version` to NEW, and PostgreSQL checks the columns a statement names, not a trigger's writes.
         (await _fixture.ScalarAsync<string>(
                 world.Database,
                 $"select used_cost::text || ':' || used_tokens || ':' || version from public.{BudgetTable}"))
             .ShouldBe("0.000250:12:2", "the trigger moved version on the consume, as 0004 does");
 
-        // The row's identity and its period are outside the column grant: a consume cannot re-target or
-        // backdate the row it matched, and no DELETE exists at all.
+        // Everything else is outside the grant: the caps (raising one is exactly the ceiling escape this
+        // test refuses), the trigger-owned token, the identity, the period and the creation stamp. One
+        // scope per statement, because an ACL error aborts the transaction that caused it.
         foreach (var set in new[]
         {
+            "period_cap_cost = period_cap_cost + 1",
+            "period_cap_tokens = period_cap_tokens + 1",
+            "updated_at = now()",
+            "version = 1",
             "id = gen_random_uuid()",
             $"org_id = '{Guid.CreateVersion7()}'",
             "period = 'weekly'",
@@ -794,6 +820,88 @@ public sealed class HealingLlmSchemaTests
     }
 
     [Fact]
+    public async Task AppRole_CannotProvisionOrRaiseTheBudgetRow()
+    {
+        var world = await SeedTenantsAsync();
+
+        // The grant matrix, column by column: the app role may move the two usage counters and name the
+        // five identity/period columns on INSERT, and nothing else.
+        (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", BudgetTable, "select"))
+            .ShouldBeTrue();
+        (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", BudgetTable, "insert"))
+            .ShouldBeFalse("INSERT is granted per column, never on the table");
+        (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", BudgetTable, "update"))
+            .ShouldBeFalse("UPDATE is granted per column, never on the table");
+        (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", BudgetTable, "delete"))
+            .ShouldBeFalse("0054 grants no DELETE: the project cascade is the only delete path");
+
+        foreach (var column in new[] { "id", "org_id", "project_id", "period", "period_start" })
+        {
+            (await ColumnPrivilegeAsync(world.Database, BudgetTable, column, "INSERT"))
+                .ShouldBeTrue($"the app role names `{column}` on INSERT");
+        }
+
+        foreach (var column in new[]
+        {
+            "period_cap_cost", "period_cap_tokens", "used_cost", "used_tokens", "created_at",
+            "updated_at", "version",
+        })
+        {
+            (await ColumnPrivilegeAsync(world.Database, BudgetTable, column, "INSERT"))
+                .ShouldBeFalse($"`{column}` is not the caller's to name on INSERT");
+        }
+
+        foreach (var column in new[] { "used_cost", "used_tokens" })
+        {
+            (await ColumnPrivilegeAsync(world.Database, BudgetTable, column, "UPDATE"))
+                .ShouldBeTrue($"the consume moves `{column}`");
+        }
+
+        foreach (var column in new[]
+        {
+            "period_cap_cost", "period_cap_tokens", "updated_at", "version",
+            "id", "org_id", "project_id", "period", "period_start", "created_at",
+        })
+        {
+            (await ColumnPrivilegeAsync(world.Database, BudgetTable, column, "UPDATE"))
+                .ShouldBeFalse($"`{column}` is outside the app role's UPDATE grant");
+        }
+
+        // The cap INSERT the tenants' own path would need is refused at the ACL, so no tenant transaction
+        // can even reach the NOT NULL check with a cap it chose.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA))
+        {
+            var error = await scope.CaptureErrorAsync(
+                InsertCapacitySql,
+                CapacityParameters(Guid.CreateVersion7(), world.OrgA, world.ProjectA));
+
+            error.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, "the caps are not the app role's to name");
+        }
+
+        // And the residual INSERT grant cannot complete a row either: with the caps outside it, the NOT
+        // NULL cap column refuses a statement that names only what the app role may name.
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.OrgA))
+        {
+            var error = await scope.CaptureErrorAsync(
+                """
+                insert into public.healing_llm_budget
+                  (id, org_id, project_id, period, period_start)
+                values (@id, @org_id, @project_id, @period, @period_start)
+                """,
+                ("id", Guid.CreateVersion7()),
+                ("org_id", world.OrgA),
+                ("project_id", world.ProjectA),
+                ("period", "daily"),
+                ("period_start", PeriodStart));
+
+            error.SqlState.ShouldBe(PostgresErrorCodes.NotNullViolation, "no app-role statement can provision a budget row");
+        }
+
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{BudgetTable}"))
+            .ShouldBe(0, "the refused statements left no counter row behind");
+    }
+
+    [Fact]
     public async Task Tenants_SeeTheirOwnCallsAndBudget_AndNothingElse()
     {
         var world = await SeedTenantsAsync();
@@ -805,9 +913,6 @@ public sealed class HealingLlmSchemaTests
                     CallParameters(
                         Guid.CreateVersion7(), world.OrgA, world.ProjectA, "triage_hypothesis",
                         Guid.CreateVersion7()))).ShouldBe(1);
-            (await scope.ExecuteAsync(
-                    InsertCapacitySql,
-                    CapacityParameters(Guid.CreateVersion7(), world.OrgA, world.ProjectA))).ShouldBe(1);
             await scope.CommitAsync();
         }
 
@@ -818,10 +923,22 @@ public sealed class HealingLlmSchemaTests
                     CallParameters(
                         Guid.CreateVersion7(), world.OrgB, world.ProjectB, "candidate_generation",
                         Guid.CreateVersion7()))).ShouldBe(1);
-            (await scope.ExecuteAsync(
-                    InsertCapacitySql,
-                    CapacityParameters(Guid.CreateVersion7(), world.OrgB, world.ProjectB))).ShouldBe(1);
             await scope.CommitAsync();
+        }
+
+        // One cap row per project, provisioned through the owner path: the app role cannot name a cap, so
+        // the tenant's own scope only ever reads the row and moves its usage.
+        await using (var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            (await seed.ExecuteAsync(
+                    InsertCapacitySql,
+                    CapacityParameters(Guid.CreateVersion7(), world.OrgA, world.ProjectA)))
+                .ShouldBe(1);
+            (await seed.ExecuteAsync(
+                    InsertCapacitySql,
+                    CapacityParameters(Guid.CreateVersion7(), world.OrgB, world.ProjectB)))
+                .ShouldBe(1);
+            await seed.CommitAsync();
         }
 
         // Org A sees one call and one counter, both its own; org B's rows are invisible — and an UPDATE
@@ -851,6 +968,15 @@ public sealed class HealingLlmSchemaTests
         (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{CallTable}"))
             .ShouldBe(2, "both tenants' rows are there; only the policy hides them");
     }
+
+    /// <summary>
+    /// <c>has_column_privilege</c> for <c>evidgate_app</c> on one column of <paramref name="table"/>: the
+    /// form the app role's actually-reachable writes take, since both budget grants are per column.
+    /// </summary>
+    private Task<bool> ColumnPrivilegeAsync(string database, string table, string column, string privilege) =>
+        _fixture.ScalarAsync<bool>(
+            database,
+            $"select has_column_privilege('evidgate_app', 'public.{table}', '{column}', '{privilege}')");
 
     /// <summary>The table's column names in physical order, from the <see cref="PostgresTenancyFixture.ColumnsAsync"/> projection.</summary>
     private static string ColumnNames(IReadOnlyList<string> columns) =>

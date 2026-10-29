@@ -134,7 +134,9 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   attempt: the `(org_id, project_id) → project (org_id, id)` composite FK, the closed
   `purpose`/`status` vocabularies and the authoring-versus-incident attribution CHECKs) and
   `healing_llm_budget` (one counter row per project, day and period, whose unique key is the atomic
-  consume target) — shape, grants and the deferred incident/candidate FKs in its own notes below;
+  consume target, with both caps deliberately outside the app role's grant and an owner/definer
+  provisioning path owed to 08.5.1-T1.4/T1.7) — shape, grants and the deferred incident/candidate FKs
+  in its own notes below;
   the next free number is `0055`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
@@ -595,13 +597,30 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
 - Grants (the revoke first, because `0001`'s default privileges hand `evidgate_app` full DML):
   `healing_llm_call` = `select` + `insert` of exactly its thirteen writable columns (no `created_at`,
   so an attempt cannot be backdated) and nothing else. `healing_llm_budget` = `select` + `insert` of
-  its capacity (`id`, `org_id`, `project_id`, `period`, `period_start`, `period_cap_cost`,
-  `period_cap_tokens`) + `update` of the four columns the consume/reset statements move plus the two
-  the trigger owns (`used_cost`, `used_tokens`, `period_cap_cost`, `period_cap_tokens`, `updated_at`,
-  `version`). The identity columns and the period stay unwritable, so a consume cannot re-target or
-  backdate the row it matched, and neither table has a DELETE. `evidgate_operator` keeps a read-only
-  `select` (TL T76) and `evidgate_worker_sched` holds nothing — the gateway runs in a tenant context,
-  never as a sweep.
+  the five identity/period columns (`id`, `org_id`, `project_id`, `period`, `period_start`) + `update`
+  of exactly the two columns the consume and reset statements move (`used_cost`, `used_tokens`) — two
+  columns, not the four-plus-two an earlier revision of this note counted. The identity columns and
+  the period stay unwritable, so a consume cannot re-target or backdate the row it matched, and
+  neither table has a DELETE. `evidgate_operator` keeps a read-only `select` (TL T76) and
+  `evidgate_worker_sched` holds nothing — the gateway runs in a tenant context, never as a sweep.
+- THE CAP WRITER IS OWED, NOT GRANTED: `period_cap_cost`/`period_cap_tokens` are in neither the
+  app-role INSERT nor its UPDATE grant, because a tenant transaction able to write either one could
+  raise its own ceiling. Both caps are NOT NULL, so the residual app-role INSERT (the five
+  identity/period columns) cannot complete a row either: it fails `23502` on `period_cap_cost`, which
+  is the intended state and not a gap. The row is provisioned by the OWNER/definer path owed to
+  `08.5.1-T1.4` (the budget gate and its atomic hard stop) and `T1.7` (the reset schedule), tracked as
+  the carried row `healing_llm_budget cap writer owed (S145)`. Until that path lands no budget row
+  exists, so nothing can be consumed — the hard stop itself is T1.4's to implement, not this
+  migration's.
+- `updated_at`/`version` are outside the app-role grant on purpose and the trigger still runs:
+  `set_updated_at_and_version()` (`0004`) is invoker-rights plpgsql (no `SECURITY DEFINER`) with
+  EXECUTE granted to `evidgate_app`, and PostgreSQL checks column privileges against the columns a
+  statement NAMES, never against the columns a trigger assigns to NEW. `0039`'s `feature_node` is the
+  exact precedent — it carries both the `version` column and this trigger while its app-role grant
+  (`update (parent_id, kind, title, position, deleted_at)`) leaves `updated_at`/`version` out, as
+  `0027`'s `waiver` and `0028`'s `artifact` also do. A consume that sets only
+  `used_cost`/`used_tokens` therefore still stamps `updated_at` and increments `version`, while the
+  caller itself can never write the token it is validated against.
 - Rollback: `drop table if exists public.healing_llm_budget; drop table if exists
   public.healing_llm_call;` — the policies, indexes, the trigger and the grants go with them, and
   both tables hold derived telemetry (calls made, budget consumed), so a rollback loses cost

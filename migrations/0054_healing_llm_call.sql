@@ -89,16 +89,30 @@
 --     row is made of. `created_at` is excluded so a caller cannot backdate an attempt (a table-level
 --     INSERT would let it name the column, so the grant is per column). No UPDATE, no DELETE: the row
 --     is history.
---   * `healing_llm_budget`: SELECT, a column-level INSERT of the row's capacity (`id`, `org_id`,
---     `project_id`, `period`, `period_start`, `period_cap_cost`, `period_cap_tokens`) and an UPDATE of
---     the four columns the consume/reset statements move plus the two the trigger owns (`used_cost`,
---     `used_tokens`, `period_cap_cost`, `period_cap_tokens`, `updated_at`, `version`). The identity
---     columns stay unwritable, so a consume cannot re-target or backdate the row it just matched, and
---     there is no DELETE.
+--   * `healing_llm_budget`: SELECT, a column-level INSERT of the five identity/period columns (`id`,
+--     `org_id`, `project_id`, `period`, `period_start`) and an UPDATE of exactly the two columns the
+--     consume/reset statements move (`used_cost`, `used_tokens`) — two, not the six an earlier revision
+--     of this comment counted for the UPDATE alone. `period_cap_cost`/`period_cap_tokens` are in NEITHER
+--     grant (see THE CAP WRITER IS OWED below), and `updated_at`/`version` are not in the UPDATE grant
+--     either because the 0004 trigger assigns them without a column privilege (see the trigger note at
+--     its statement).
+--     The identity columns stay unwritable, so a consume cannot re-target or backdate the row it just
+--     matched, no app statement can raise a cap, and there is no DELETE.
 -- Neither table has a `SECURITY DEFINER`: the tenant write path is a plain app-role statement inside
 -- the caller's tenant transaction (00 §5.5 C6 prefers a grant to a definer), and `evidgate_operator`
 -- keeps a read-only SELECT exactly as 0052 records while `evidgate_worker_sched` holds nothing —
 -- the gateway runs inside a tenant context, never as a sweep.
+--
+-- THE CAP WRITER IS OWED, NOT GRANTED. The two caps are the ceiling a project's own traffic is held
+-- to, so a tenant transaction that could write either one would let that project raise its own limit:
+-- `period_cap_cost` and `period_cap_tokens` are therefore absent from BOTH the INSERT and the UPDATE
+-- grant. They are NOT NULL, so the app role's residual INSERT grant (the five identity/period columns)
+-- cannot complete a row either — the statement fails on `period_cap_cost` before any consume could
+-- read it, which is the intended state and not an oversight: provisioning is the OWNER/definer path
+-- owed to 08.5.1-T1.4 (the budget gate and its atomic hard stop) and T1.7 (the reset schedule), and is
+-- tracked as the carried row `healing_llm_budget cap writer owed (S145)`. The tenant transaction only
+-- ever moves `used_cost`/`used_tokens` against a cap it did not choose; until the provisioning path
+-- lands, no budget row exists and the hard stop is T1.4's to implement, not this migration's.
 --
 -- RLS (DECISIONS F5, rulings T2/T3). ENABLE + FORCE on both tables, `tenant_isolation` as the tenant
 -- policy (`org_id = evidgate.current_org_id()` in USING, applied as WITH CHECK too; no `TO` clause, so
@@ -192,6 +206,15 @@ create table if not exists public.healing_llm_budget (
 
 -- The convention trigger of 0004: the database owns `updated_at` and the `version` increment, so a
 -- consume by the app role and a reset by a later privileged sweep both advance the concurrency token.
+-- The app role holds NO column privilege on either — that is deliberate and it still works:
+-- `set_updated_at_and_version()` is invoker-rights plpgsql (no SECURITY DEFINER, and 0004 grants it
+-- EXECUTE to `evidgate_app`), and PostgreSQL checks column privileges against the columns a statement
+-- NAMES, never against the columns a trigger assigns to NEW. So `update ... set used_cost = ...` stamps
+-- `updated_at` and increments `version` exactly as 0039's `feature_node` does — a table that carries
+-- BOTH the `version` column and this trigger while `grant update (parent_id, kind, title, position,
+-- deleted_at)` leaves `updated_at`/`version` outside the app-role grant, the same shape as 0027's
+-- `waiver` and 0028's `artifact` — while the caller itself can never write the concurrency token it is
+-- validated against.
 drop trigger if exists healing_llm_budget_set_updated_at_and_version on public.healing_llm_budget;
 create trigger healing_llm_budget_set_updated_at_and_version
   before update on public.healing_llm_budget
@@ -234,15 +257,18 @@ grant insert (id, org_id, project_id, incident_id, candidate_id, purpose, model,
               tokens, cost, status, attempt, redaction_report_hash)
   on public.healing_llm_call to evidgate_app;
 
--- The budget row is mutable in place, but only where the consume and reset statements write: the
--- identity and the period stay unwritable, so a consume cannot re-target the row it matched, and no
--- DELETE exists (the project cascade is the only delete path).
+-- The budget row is mutable in place, but only where the consume and reset statements write, and only
+-- against a cap the app role cannot name: `used_cost`/`used_tokens` are the whole UPDATE grant, while
+-- the caps (the owner/provisioning path's to set) and the trigger-owned `updated_at`/`version` are
+-- outside every grant. The identity and the period stay unwritable, so a consume cannot re-target the
+-- row it matched, and no DELETE exists (the project cascade is the only delete path). The residual
+-- INSERT names the identity/period columns only; the NOT NULL caps refuse it, so no app statement can
+-- provision or raise a row — see THE CAP WRITER IS OWED in the header.
 revoke insert, update, delete on public.healing_llm_budget from evidgate_app;
 grant select on public.healing_llm_budget to evidgate_app;
-grant insert (id, org_id, project_id, period, period_start, period_cap_cost, period_cap_tokens)
+grant insert (id, org_id, project_id, period, period_start)
   on public.healing_llm_budget to evidgate_app;
-grant update (used_cost, used_tokens, period_cap_cost, period_cap_tokens, updated_at, version)
-  on public.healing_llm_budget to evidgate_app;
+grant update (used_cost, used_tokens) on public.healing_llm_budget to evidgate_app;
 
 -- TL T76: the operator's read is grant-gated with no operator policy until 02.8.1's
 -- `evidgate.operator_grant_ok` lands; the sweep role holds nothing, because it never calls a provider

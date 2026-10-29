@@ -38,8 +38,10 @@ internal static class HealingLlmResponseSchema
     /// </summary>
     /// <param name="responseSchema">The declared JSON Schema text, or null/blank for "no declared schema".</param>
     /// <exception cref="ArgumentException">
-    /// The declared text is not a JSON Schema document. It is thrown before the provider is called and before any row is
-    /// written: a malformed declaration is a caller bug, not a provider failure to budget for.
+    /// Any compilation failure of the declared text, whatever type the engine raised it as. It is thrown before the
+    /// provider is called and before any row is written: a malformed declaration is a caller bug, not a provider failure
+    /// to budget for. <see cref="OperationCanceledException"/> is the one exception that passes through unwrapped, and
+    /// the declaration's text never enters the message.
     /// </exception>
     internal static JsonSchema? Compile(string? responseSchema)
     {
@@ -52,8 +54,11 @@ internal static class HealingLlmResponseSchema
         {
             return JsonSchema.FromText(responseSchema, CanonicalUri(responseSchema), Options);
         }
-        catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
+            // The engine's failure types are not a closed set and a malformed declaration reaches them in many shapes, so
+            // every fault is the caller's argument being wrong — except the cancellation this method was never given.
+            // The schema text stays out of the message: it is caller content.
             throw new ArgumentException(
                 "the declared healing LLM response schema is not a valid JSON Schema document",
                 nameof(responseSchema),

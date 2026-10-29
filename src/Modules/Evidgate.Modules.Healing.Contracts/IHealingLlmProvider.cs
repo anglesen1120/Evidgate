@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace Evidgate.Modules.Healing.Contracts;
 
 /// <summary>
@@ -20,6 +23,15 @@ public static class HealingLlmStatuses
 
     /// <summary>The provider could not answer (transport failure, non-success status, unreadable body).</summary>
     public const string Error = "error";
+
+    /// <summary>
+    /// Whether <paramref name="status"/> is one of this closed vocabulary — the only values the DDL accepts. The verdict
+    /// lives next to the constants so a new status cannot be storable in SQL and rejected here, or the reverse.
+    /// </summary>
+    /// <param name="status">A status, as a provider or the gateway reported it.</param>
+    /// <returns><see langword="true"/> when the value may be written to <c>healing_llm_call.status</c>.</returns>
+    public static bool IsKnown(string? status) =>
+        status is Ok or Timeout or SchemaViolation or BudgetExceeded or Error;
 }
 
 /// <summary>
@@ -72,7 +84,34 @@ public sealed record HealingLlmRequest(
     string Model,
     string PromptVersion,
     string Payload,
-    string? ResponseSchema);
+    string? ResponseSchema)
+{
+    /// <summary>
+    /// The record's textual form without the two members that carry text (AC6). A request can reach a log line, an
+    /// exception message or a debugger through <see cref="object.ToString"/> alone, so the prompt body and the declared
+    /// schema are reported as their lengths and never as their content. <see cref="object.ToString"/> is built from this
+    /// method, so overriding it here redacts every form the record prints in.
+    /// </summary>
+    /// <param name="builder">The builder the record's text is written into.</param>
+    /// <returns><see langword="true"/>, because this method always writes members.</returns>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("ProjectId = ").Append(ProjectId);
+        builder.Append(", Purpose = ").Append(Purpose);
+        builder.Append(", IncidentId = ").Append(IncidentId);
+        builder.Append(", CandidateId = ").Append(CandidateId);
+        builder.Append(", Model = ").Append(Model);
+        builder.Append(", PromptVersion = ").Append(PromptVersion);
+        builder.Append(", Payload = ").Append(Describe(Payload));
+        builder.Append(", ResponseSchema = ").Append(Describe(ResponseSchema));
+        return true;
+    }
+
+    /// <summary>The length of a text member, or <c>null</c>, so the member's own text never leaves the request.</summary>
+    /// <param name="text">The member's value.</param>
+    private static string Describe(string? text) =>
+        text is null ? "null" : string.Concat(text.Length.ToString(CultureInfo.InvariantCulture), " chars");
+}
 
 /// <summary>
 /// 08.5.1-T1: one provider answer, before the gateway's schema verdict.
