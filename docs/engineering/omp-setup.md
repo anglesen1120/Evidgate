@@ -5,7 +5,7 @@
 
 The binding rules for coding agents live in [`agent-code-rules.md`](agent-code-rules.md), the review rules in [`../../REVIEW.md`](../../REVIEW.md), and the prioritised fix register in [`../../plans/features/REVIEW-2026-10-29.md`](../../plans/features/REVIEW-2026-10-29.md). omp discovers the root `AGENTS.md` by itself ✅ ([oh-my-pi README](https://github.com/can1357/oh-my-pi): "gitignore + AGENTS.md discovery in one pass"). That file carries only a summary. The task and review prompts under `.omp/` are not in git, so this file says what to add to them.
 
-Every step is idempotent. Before inserting a block, search the target file for the marker line `<!-- evidgate-code-rules v1 -->`. If the marker is there, skip the insertion. Change only the files named below, and report a diff of each change to the owner at the end.
+Every step is idempotent. Before inserting a block, search the target file for the marker line `<!-- evidgate-code-rules v1 -->` followed by that block's first line (one file, such as `PROJECT.md`, can hold several blocks). If that pair is there, skip the insertion. Change only the files named below, and report a diff of each change to the owner at the end.
 
 ## Step 1: Find the prompt files
 
@@ -19,7 +19,7 @@ Every step is idempotent. Before inserting a block, search the target file for t
 
 ## Step 2: Coder templates
 
-Append this block to every coder template, after the task description and before any output-format section:
+Append this block to every coder template outside `prompts/archive/` (in the panel prompts: just before `## 11. Final report`), after the task description and before any output-format section:
 
 ```markdown
 <!-- evidgate-code-rules v1 -->
@@ -64,11 +64,31 @@ In the gate section of `PROJECT.md`, add one line under the merge conditions:
 
 ## Step 5: Queue order
 
-If the coordinator keeps a refill or queue file (for example `.omp/coordinator/prompts/held/README.md` or `next-wave-queue.md`), put the P0 rows CR-01…CR-06 of `plans/features/REVIEW-2026-10-29.md` at the head of the backend lane. That matches the owner priority recorded in `STATUS.md` §1 on 2026-10-29. Use the register's sizes. The next free migration `0055` is reserved for CR-03.
+If the coordinator keeps a refill or queue file (for example `.omp/coordinator/prompts/held/README.md` or `next-wave-queue.md`), put the P0 rows CR-01…CR-06 of `plans/features/REVIEW-2026-10-29.md` at the head of the backend lane. That matches the owner priority recorded in `STATUS.md` §1 on 2026-10-29. Use the register's sizes. The next free migration `0055` is reserved for CR-03. CR-03 and CR-06 also carry the D1 and U8 gates of `agent-code-rules.md` §8. After CR-06, queue `GATE-1`: the repo gate `scripts/check-review-blockers.py` (D1, U8, new `Skip`, `as unknown as` fail; U4 and gate-file changes reported; U1 comment ids in ratchet mode) as a `verify.sh` stage wired into `ci.yml`. It edits `scripts/verify.sh` like CR-06, so it runs after it, and it needs an owner-approved task row (suggested 01.2.1-T6).
 
-## Step 6: Optional: an omp skill or rule
+## Step 5a: Coordinator rules in PROJECT.md
 
-omp supports skills and rules. Per its README, rules "sit dormant until the model goes off-script" and are injected when a regex matches. The exact file format and location are not verified here ⚠️. Only if the owner asks: create one skill or rule named `evidgate-code-rules` whose body points to `docs/engineering/agent-code-rules.md`. Do not copy the rules into it, so there is one source of truth. Steps 2–4 are the required part; this step is not.
+The kit template `panel-prompt.md` under `~/.omp/agent/managed-skills/tern-parallel-wave-coordinator/kit/` is shared by every project, so Evidgate rules must not go there. Without the lines below, every prompt the coordinator writes after this setup misses the Step 2 block. Append this block at the end of `PROJECT.md` §Active rules:
+
+```markdown
+<!-- evidgate-code-rules v1 -->
+- Code rules in every new panel prompt (owner 2026-10-30): the kit template `panel-prompt.md` is project-agnostic, so when writing a prompt copy the Step 2 block of `docs/engineering/omp-setup.md` (marker `<!-- evidgate-code-rules v1 -->`) verbatim just before `## 11. Final report`.
+- Reviewer brief (owner 2026-10-30): §5 of every new panel prompt says "every QA, reviewer and security-reviewer subagent prompt includes `REVIEW.md` and `docs/engineering/agent-code-rules.md`, and each finding cites the rule id, `file:line` and a concrete failure scenario".
+```
+
+Then add this line to the Step 4 block in §Gate. The coordinator's merge checks (kit §6.1) only check process, and jev reads the panel's report, not the diff; this scan reads the diff:
+
+```markdown
+- Blocker scan (owner 2026-10-30, hard check after kit §6.1 items 1-2, before jev): `python3 .omp/coordinator/check-review-blockers.py origin/develop <head-sha>` from the main checkout. Exit 1 (any `BLOCK` line: D1 policy without `TO`, U8 `--ignore-exit-code`, a new `Skip`, `as unknown as` outside tests) = no jev, send the lines to the panel as `Coordinator review of PR #N (not merged yet)`. `WARN U4` = open the line, block unless it sits inside `IsDevelopment()`. `WARN gate-file` = block unless the task file names that file. `WARN U1`/`ts-cast` in tests = note in the merge note, not a block. When the repo gate `scripts/check-review-blockers.*` lands, run the origin/develop copy of it (`git show origin/develop:<path>`) instead and delete the `.omp` script.
+```
+
+`.omp/coordinator/check-review-blockers.py` is a coordinator-local stop-gap (scans only the lines a PR adds; exit 1 on a block). The queue row `GATE-1` (Step 5) ports it into the repo as a `verify.sh` stage with tests, after CR-06; from then on the repo copy is the only pattern list. If the `.omp` script is missing, write it from the `GATE-1` row's rule list.
+
+Also fix the next free migration number in `PROJECT.md` §Shared files when it is stale (`ls migrations`).
+
+## Step 6: An omp rule (TTSR reminder)
+
+omp loads project rules from `<cwd>/.omp/rules/*.md` when the cwd's `.omp/` directory is not empty ✅ (omp docs, `rulebook-matching-pipeline.md` §native provider). Panels start omp in the main checkout, so the rule reaches them. Create `.omp/rules/evidgate-code-rules.md` with `interruptMode: never`, a `scope` of `tool:edit`/`tool:write` on `*.cs`, `*.ts`, `*.sql`, `*.sh`, `*.yml`, and a `condition` regex for the scan's patterns (scaffold registrations, `as unknown as`, `Skip =`, `.skip(`, `--ignore-exit-code`, `create policy`, task ids in comments). Its body names the rule ids and points to `docs/engineering/agent-code-rules.md` and `REVIEW.md`; do not copy the rules into it, so there is one source of truth.
 
 ## Step 7: Report to the owner
 
@@ -82,3 +102,5 @@ Do not commit anything under `.omp/`: it stays local.
 ## Maintenance
 
 When `agent-code-rules.md`, `REVIEW.md` or the register changes in a way that changes the blocks above, edit this file and bump the marker to `v2`. Re-running the setup then replaces each `v1` block with the `v2` one, rather than skipping it.
+
+After each wave, move the prompts of released sessions (SESSION-CLAIMS `Released`) from `.omp/coordinator/prompts/` and `held/` into `prompts/archive/` (`archive/held/` for held ones). Step 2 skips `archive/`, so a re-run touches only live prompts.
