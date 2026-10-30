@@ -46,7 +46,7 @@ const renderableProject = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 /** The pinned action SHAs, kept identical to `.github/workflows/ci.yml` (AC5). */
 const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1';
-const setupNodeAction = 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0';
+const setupNodeAction = 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0';
 
 export const quickstartCommand: CommandDefinition = {
   name: 'quickstart',
