@@ -4,7 +4,6 @@ using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Application.Commands;
 using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Ingestion.Domain;
-using Evidgate.Modules.Ingestion.Infrastructure;
 using Evidgate.Modules.Ingestion.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -20,13 +19,10 @@ namespace Evidgate.Modules.Ingestion;
 /// </summary>
 internal static class IngestionModule
 {
-    /// <summary>Registers the module's slice services in the calling host.</summary>
+    /// <summary>Registers the module's services in the calling host.</summary>
     public static IServiceCollection AddIngestionModule(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-
-        services.AddSingleton<IIngestion, InMemoryManifestStore>();
-        services.AddSingleton<InMemoryEventStore>();
 
         // 04.7.1-T2.1: the pure negotiation rule, one instance for the registration path (04.7.1-T2.2/T2.3) and
         // the 05.7.x claim path.

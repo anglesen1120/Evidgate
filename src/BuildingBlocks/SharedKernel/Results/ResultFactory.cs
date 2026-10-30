@@ -22,9 +22,9 @@ public static class ResultFactory
     private static readonly ConcurrentDictionary<Type, Func<object?, string>> ValueSerializers = new();
 
     /// <summary>
-    /// True when <paramref name="responseType"/> carries the C8 Result contract —
-    /// the pipeline's marker for a business message (00 §5.5 C8). The skeleton
-    /// slice's DTO messages (01.1.2-T3) are deliberately outside it.
+    /// True when <paramref name="responseType"/> carries the pipeline's Result contract,
+    /// the shape a business message answers so a stage can refuse it. A response outside
+    /// it only passes the pipeline when its handler names no authorization gate.
     /// </summary>
     public static bool IsResultContract(Type responseType)
     {

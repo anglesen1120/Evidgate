@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Contract.Tests;
 
@@ -14,9 +15,9 @@ namespace Contract.Tests;
 /// <remarks>
 /// The connection string points at a closed port on purpose: every path the
 /// contract suites exercise (the 00 §9.2 envelope and the served document) is
-/// answered before a handler reaches PostgreSQL. The slice chain's database
-/// cases stay in <c>tests/Hosts.IntegrationTests</c>, which owns the container
-/// fixture — this project stays Docker-free so <c>verify.sh</c> runs it everywhere.
+/// answered before a handler reaches PostgreSQL. The database-backed cases stay
+/// in <c>tests/Hosts.IntegrationTests</c>, which owns the container fixture —
+/// this project stays Docker-free so <c>verify.sh</c> runs it everywhere.
 /// </remarks>
 internal sealed class EvidgateApiFactory : WebApplicationFactory<Program>
 {
@@ -35,6 +36,11 @@ internal sealed class EvidgateApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Production");
+
+        // The response-vs-spec suite needs an anonymous JSON route whose bad body
+        // still answers the 00 §9.2 envelope; the host owns no such route.
+        builder.ConfigureServices(services =>
+            services.AddSingleton<IStartupFilter, Evidgate.Testing.TransportProbeStartupFilter>());
         builder.ConfigureAppConfiguration((_, configuration) =>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {

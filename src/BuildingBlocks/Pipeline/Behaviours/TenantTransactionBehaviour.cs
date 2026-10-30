@@ -22,13 +22,14 @@ namespace Evidgate.BuildingBlocks.Pipeline.Behaviours;
 /// row roll back together), and only a success reaches <see cref="ITenantScope.CommitAsync"/>.
 /// </para>
 /// <para>
-/// The skeleton slice's DTO messages (01.1.2-T3) carry no tenant scope and no
-/// permission (01.1.2 §8), so this stage and the two that follow pass them
-/// through; 04/05 replace those routes with Result-carrying commands, and
-/// Architecture.Tests keeps the exemption pinned meanwhile.
+/// A message whose response cannot carry a Result cannot run inside this stage: a
+/// failure could not roll the scope back. It passes through only when its handler
+/// names no authorization gate; a gated one is refused rather than run either
+/// unchecked or without its transaction.
 /// </para>
 /// </summary>
 public sealed class TenantTransactionBehaviour<TMessage, TResponse>(
+    IServiceProvider services,
     ITenantScopeFactory scopes,
     IRequestTenantContextAccessor tenant,
     IAuditTrail audit,
@@ -44,6 +45,8 @@ public sealed class TenantTransactionBehaviour<TMessage, TResponse>(
     {
         if (!ResultFactory.IsResultContract(typeof(TResponse)))
         {
+            HandlerLookup.EnsureAuthGateHasResultContract(services, typeof(TMessage), typeof(TResponse));
+
             return await next(message, cancellationToken).ConfigureAwait(false);
         }
 

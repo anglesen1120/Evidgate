@@ -214,12 +214,13 @@ public sealed class PipelineTests
     }
 
     /// <summary>
-    /// The pinned skeleton exemption, in behaviour: a DTO-answering message is
-    /// outside the C2 tenant stages (01.1.2 §8) — it runs with a denying checker,
-    /// no request tenant and no scope, exactly as the slice does.
+    /// A DTO-answering message that declares no permission, credential or membership
+    /// attribute keeps the recorded pass-through: no request tenant, no scope and no
+    /// evaluator call. A message that DOES declare one fails closed instead, which the
+    /// pipeline guard tests pin.
     /// </summary>
     [Fact]
-    public async Task Skeleton_Dto_Message_Bypasses_The_Tenant_Stages()
+    public async Task Unattributed_Dto_Message_Keeps_The_Recorded_Pass_Through()
     {
         var database = await _fixture.CreateDatabaseAsync();
         var permissions = new RecordingPermissionEvaluator(granted: false);

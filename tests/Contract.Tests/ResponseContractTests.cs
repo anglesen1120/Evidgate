@@ -14,28 +14,18 @@ namespace Contract.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The Api is booted in process on a closed port: these paths (the 00 §9.2
-/// envelope from the implemented slice route on both its mounts) answer before a
-/// handler reaches PostgreSQL.
+/// The Api is booted in process on a closed port: these paths answer before a
+/// handler reaches PostgreSQL. The bad-body cases post to the test-only probe
+/// route (<see cref="Evidgate.Testing.TransportProbeStartupFilter"/>), which the
+/// host pipeline drives exactly like a module route — request id, envelope
+/// middleware and <c>ResultEndpointFilter</c> included.
 /// </para>
 /// <para>
-/// The slice route is the sprint-1 dev surface and is deliberately absent from
-/// <c>contracts/openapi.yaml</c> (CR-01-4 keeps operational routes out; 01.1.2
-/// mounts <c>/v1/slice/run</c> only so a bad request proves the envelope on
-/// <c>/v1</c> until 04/05 replace it). The only spec-declared response reachable
-/// on an implemented route is therefore the 00 §9.2 error envelope —
-/// <c>#/components/schemas/ErrorEnvelope</c>, extracted by pointer from the spec
-/// and never re-typed here — which this suite validates on the live 400/422
-/// bodies of both mounts, plus the 00 §9.1 cursor-list shape the spec declares.
-/// </para>
-/// <para>
-/// Recorded gap (the 01.3.2-T3.2 fallback): the slice route's 200 success body
-/// cannot be validated against the spec, because the spec does not describe that
-/// route and <c>contracts/schemas/</c> holds only the event envelope and the
-/// adapter capability document. Its served schema (<c>SliceRunResponse</c>) is
-/// pinned by name in <see cref="ServedDocumentTests"/>, and its field-level shape
-/// — which needs PostgreSQL — by
-/// <c>tests/Hosts.IntegrationTests/SkeletonSliceTests</c> (Category=Docker).
+/// The only spec-declared response reachable without authentication is the
+/// 00 §9.2 error envelope — <c>#/components/schemas/ErrorEnvelope</c>, extracted
+/// by pointer from the spec and never re-typed here — which this suite validates
+/// on the live 400/422 bodies, plus the 00 §9.1 cursor-list shape the spec
+/// declares.
 /// </para>
 /// </remarks>
 public sealed class ResponseContractTests
@@ -83,7 +73,7 @@ public sealed class ResponseContractTests
 
         // Implemented route on /v1: a body that never parsed is 400 request_invalid.
         using (var malformed = await client.PostAsync(
-            "/v1/slice/run",
+            Evidgate.Testing.TransportProbeStartupFilter.Path,
             new StringContent("{ not json", Encoding.UTF8, "application/json"),
             cancellationToken))
         {
@@ -92,7 +82,7 @@ public sealed class ResponseContractTests
         }
 
         // Implemented route on /v1: a missing required field is 422 with a per-field detail.
-        using (var missing = await client.PostAsJsonAsync("/v1/slice/run", new { event_count = 2 }, cancellationToken))
+        using (var missing = await client.PostAsJsonAsync(Evidgate.Testing.TransportProbeStartupFilter.Path, new { }, cancellationToken))
         {
             using var error = await AssertSpecEnvelopeAsync(spec, missing, 422, "request_invalid");
             var detail = Assert.Single(error.RootElement.GetProperty("error").GetProperty("details").EnumerateArray());
@@ -101,14 +91,6 @@ public sealed class ResponseContractTests
             Assert.False(
                 detail.TryGetProperty("index", out _),
                 "index is omitted (never null) for document-level reasons — 00 §9.2 types it optional");
-        }
-
-        // The internal mount answers the same envelope: /internal is outside the
-        // served document (CR-01-4) but inside the wire contract.
-        using (var internalMissing = await client.PostAsJsonAsync("/internal/slice/run", new { project_ref = " " }, cancellationToken))
-        {
-            using var error = await AssertSpecEnvelopeAsync(spec, internalMissing, 422, "request_invalid");
-            Assert.Single(error.RootElement.GetProperty("error").GetProperty("details").EnumerateArray());
         }
     }
 

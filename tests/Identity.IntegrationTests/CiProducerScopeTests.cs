@@ -83,8 +83,6 @@ public sealed class CiProducerScopeTests(DatabaseFixture fixture) : CatalogueTes
                 "x-permission is 'none' (revoking the caller's own sessions, 02.3.2-T2: no catalogue permission exists for it)",
             [("POST", "/v1/auth/logout")] =
                 "x-permission is 'none' (logout revokes the caller's own session row, 02.3.2-T2: no catalogue permission exists for it)",
-            [("POST", "/v1/slice/run")] =
-                "01.1.2 run-only slice dev surface, absent from the spec (ServedRouteTable.ServedNotInSpec)",
         };
 
     /// <summary>AC4: a valid <c>ci_producer</c> token calling <c>membership:write</c> is 403 <c>forbidden</c>.</summary>

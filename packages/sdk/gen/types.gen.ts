@@ -84,7 +84,7 @@ export type RunSummary = {
      */
     unverified_ref: boolean;
     /**
-     * The evidence completeness of the run's current evidence revision — `evidence_revision.completeness` of `run.current_evidence_revision_id` (0049; the `EvidenceBadge` verdict, 00 §8.5). `null` while the run has no evidence revision yet, i.e. still pending: it is never reported as `incomplete` without a stored row. `GetCompleteness` is the in-process stub of the sprint-1 slice and is not this source.
+     * The evidence completeness of the run's current evidence revision — `evidence_revision.completeness` of `run.current_evidence_revision_id` (0049; the `EvidenceBadge` verdict, 00 §8.5). `null` while the run has no evidence revision yet, i.e. still pending: it is never reported as `incomplete` without a stored row.
      */
     completeness: 'complete' | 'incomplete' | null;
     /**
