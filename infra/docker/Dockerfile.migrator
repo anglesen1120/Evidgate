@@ -57,10 +57,14 @@ ENV EVIDGATE_MIGRATOR__MIGRATIONSPATH=/app/migrations
 # with the ownership of whichever USER is active. DbUp only reads the scripts (its journal is a database table) and
 # nothing else writes under the base directory, while a writable tree would let anything running in this job — which
 # holds the owner-role connection string — rewrite the migrations it is about to apply.
+# The chmod is explicit: this COPY reads the build context, i.e. a working
+# checkout, and BuildKit keeps the source modes — a clone made under umask 077
+# would ship 0600 scripts the non-root job cannot read. u=rwX,go=rX makes the
+# directories 0755 and the scripts 0644 whatever that umask; root ownership stays.
 USER root
 WORKDIR /app
 COPY --from=build /app ./
-COPY migrations/ /app/migrations/
+COPY --chmod=u=rwX,go=rX migrations/ /app/migrations/
 USER $APP_UID
 
 # Args append to the entry point, so `docker run <image> --status` runs

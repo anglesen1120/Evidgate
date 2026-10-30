@@ -282,6 +282,8 @@ class OperatorSelectReplay(unittest.TestCase):
             "org_id = current_setting('EVIDGATE.ORG_ID', true)::uuid",
             "org_id = evidgate.current_project_id()",
             "org_id = current_setting(setting_name)::uuid",
+            'org_id = "current_setting"(\'evidgate.org_id\')::uuid',
+            'org_id = evidgate."current_org_id"()',
         ):
             with self.subTest(predicate=predicate):
                 sql = OPERATOR_SELECT + create_table("widget") + tenant_policy("widget") + operator_read("widget", predicate)
@@ -293,10 +295,35 @@ class OperatorSelectReplay(unittest.TestCase):
             "org_id in (select g.org_id from public.support_grant g where g.revoked_at is null)",
             "org_id = any (array['00000000-0000-0000-0000-000000000000'::uuid])",
             "'00000000-0000-0000-0000-000000000000'::uuid = org_id::uuid",
+            "widget.org_id = '00000000-0000-0000-0000-000000000000'::uuid",
+            "(org_id = '00000000-0000-0000-0000-000000000000'::uuid)",
+            "(org_id) = '00000000-0000-0000-0000-000000000000'::uuid",
+            "((org_id = '00000000-0000-0000-0000-000000000000'::uuid))",
+            "(org_id = '00000000-0000-0000-0000-000000000000'::uuid or "
+            "org_id = '11111111-1111-1111-1111-111111111111'::uuid) and id is not null",
         ):
             with self.subTest(predicate=predicate):
                 sql = OPERATOR_SELECT + create_table("widget") + tenant_policy("widget") + operator_read("widget", predicate)
                 self.assertEqual(run(sql), [], "a predicate the session cannot set and that compares the tenant confines the read")
+
+    def test_a_tautology_or_an_open_arm_does_not_confine_the_tenant(self):
+        """A comparison of the tenant column with itself, or a top-level `or` arm that is simply
+        true, leaves every tenant's rows reachable; only a comparison against another value does."""
+        for predicate in (
+            "org_id = org_id",
+            "org_id::uuid = org_id",
+            "org_id is not distinct from org_id",
+            "org_id = org_id or true",
+            "org_id = '00000000-0000-0000-0000-000000000000'::uuid or true",
+            "org_id = '00000000-0000-0000-0000-000000000000'::uuid or 1 = 1",
+            "org_id = '00000000-0000-0000-0000-000000000000'::uuid or id is not null",
+            "((org_id = org_id or true))",
+            "((org_id = org_id or true) and id is not null)",
+            "(org_id = '00000000-0000-0000-0000-000000000000'::uuid or true) and id is not null",
+        ):
+            with self.subTest(predicate=predicate):
+                sql = OPERATOR_SELECT + create_table("widget") + tenant_policy("widget") + operator_read("widget", predicate)
+                self.assertEqual(rules(run(sql)), {"operator_select_no_policy"})
 
     def test_an_operator_policy_that_never_compares_the_tenant_gates_nothing(self):
         """A predicate that matches every row of every tenant, or none, is not a tenancy gate: the

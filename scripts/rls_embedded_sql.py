@@ -6,7 +6,8 @@ every statement in execution order, with dollar-quoted bodies returned beside th
 the definer lint still reads function bodies.
 
 What cannot be read from the file comes back as a note instead of silence: an `execute` of a
-variable, a `format(…)` template that builds DDL from its arguments. A lint that skipped those
+variable, a `||` chain with a part the file does not spell out, a `format(…)` template that builds
+DDL from its arguments, an `execute` carrying a `$n` placeholder. A lint that skipped those
 would report a clean tree it never saw, so the caller turns each note into a finding.
 """
 from __future__ import annotations
@@ -28,6 +29,12 @@ KEYWORD = re.compile(
 # recursing without a bound.
 MAX_DEPTH = 3
 ESCAPES = {"n": "\n", "t": "\t", "r": "\r"}
+# `grant execute on function …` names a privilege; only a bare `execute` is the PL/pgSQL command.
+PRIVILEGE_VERB = re.compile(r"(?:grant|revoke)\s*$", re.I)
+# The PL/pgSQL clauses that follow the SQL text: `EXECUTE … INTO target`, `EXECUTE … USING value`.
+EXECUTE_CLAUSE = re.compile(r"(?:into|using)\b", re.I)
+# `$1` is filled in by `USING`, so a statement carrying one is not the text that runs.
+PLACEHOLDER = re.compile(r"\$\d")
 
 
 @dataclass(frozen=True)
@@ -137,8 +144,11 @@ def _fragment(
     where it starts: the fragment is `;`-split already, so the text from there to the end is the
     statement PostgreSQL runs. `body` is the fragment's dollar-quoted text, which an `execute`
     written with `$tag$…$tag$` runs as its SQL."""
-    for match in KEYWORD.finditer(blank(text)):
+    code = blank(text)
+    for match in KEYWORD.finditer(code):
         if match.group(0).lower() == "execute":
+            if PRIVILEGE_VERB.search(code[: match.start()]):
+                continue  # a privilege on a function, not a command that runs SQL
             inner = _executed(text, body, match.end(), notes)
             if inner is not None:
                 _walk(inner, depth, ordered, notes)
@@ -166,36 +176,99 @@ def _executed(text: str, body: str, start: int, notes: list[str]) -> str | None:
             )
         return None
     if text[i : i + 2] == "$$" and body:
-        return body  # a `$tag$…$tag$` argument, split out with the dollar-quoted body
-    sql = _literal(text, i)
-    if sql is None:
+        rest = _space(text, i + 2)
+        if text[rest : rest + 2] != "||":
+            return _bound_sql(body, notes)  # a `$tag$…$tag$` argument, split out with the body
         notes.append(
-            f"`execute` of an expression the replay cannot read ({_snippet(text[start:])}); "
-            "write the SQL as a literal or a dollar-quoted string"
+            f"`execute` concatenates a dollar-quoted body with more text ({_snippet(text[start:])}); "
+            "write the SQL as one literal so the replay can read it"
         )
-    return sql
+        return None
+    sql = _concatenated(text, i, notes, start)
+    return None if sql is None else _bound_sql(sql, notes)
+
+
+def _bound_sql(sql: str, notes: list[str]) -> str | None:
+    """`sql` if it is the text that runs at all; a `$n` placeholder is filled in by `USING`."""
+    if not PLACEHOLDER.search(sql):
+        return sql
+    notes.append(
+        f"`execute` binds a parameter the replay cannot read ({_snippet(sql)}); "
+        "write the value into the statement text"
+    )
+    return None
+
+
+def _concatenated(text: str, i: int, notes: list[str], start: int) -> str | None:
+    """The SQL a `||` chain at `i` builds, when every part is a literal the file spells out.
+
+    PostgreSQL folds adjacent literals before it parses the result, so the folded text is the
+    statement that runs. Returning the literals alone when another part is an expression would
+    judge a prefix of a statement that never runs as written, so that case is a note instead."""
+    code = blank(text)
+    spans: list[tuple[int, int]] = []
+    left = i
+    while True:
+        right = code.find("||", left)
+        if right < 0:
+            right = len(text)
+        spans.append((left, right))
+        if right >= len(text):
+            break
+        left = right + 2
+    values = [_literal_span(text, begin, end) for begin, end in spans]
+    parts = [value for value in values if value is not None]
+    if parts and len(parts) == len(values):
+        return "".join(parts)
+    built = f"`execute` concatenates SQL the replay cannot read ({_snippet(text[start:])})"
+    unread = f"`execute` of an expression the replay cannot read ({_snippet(text[start:])})"
+    notes.append(f"{built if parts else unread}; write the SQL as a literal")
+    return None
+
+
+def _literal_span(text: str, left: int, right: int) -> str | None:
+    """The value of the `||` operand between `left` and `right` when it is one string literal.
+
+    A PL/pgSQL `into`/`using` clause may follow the last one; anything else after the closing
+    quote is a cast or an operator applied to the literal, so the operand is not a literal."""
+    start = _space(text, left)
+    value, end = _string_at(text, start)
+    if value is None:
+        return None
+    rest = text[end:right].strip()
+    return value if not rest or EXECUTE_CLAUSE.match(rest) else None
+
+
+def _string_at(text: str, i: int) -> tuple[str | None, int]:
+    """The value of the string literal at `i` — `'…'`, `E'…'` or `$tag$…$tag$` — and its end.
+
+    The end is the offset just past the closing quote, so a caller can tell a literal from an
+    expression that merely starts with one. (None, i) when no literal starts at `i`."""
+    at = i + 1 if text[i : i + 1] in "Ee" and text[i + 1 : i + 2] == "'" else i
+    if at >= len(text):
+        return None, i
+    if text[at] == "$":
+        tag = DOLLAR.match(text, at)
+        end = text.find(tag.group(0), tag.end()) if tag else -1
+        if not tag or end < 0:
+            return None, i
+        return text[tag.end() : end], end + len(tag.group(0))
+    if text[at] != "'":
+        return None, i
+    escape = _escape_prefixed(text, at)
+    end = quoted_end(text, at, "'", escape)
+    if text[end - 1 : end] != "'" or end - 1 <= at:
+        return None, i
+    raw = text[at + 1 : end - 1]
+    if escape:
+        raw = _unescape(raw)
+    return raw.replace("''", "'"), end
 
 
 def _literal(text: str, i: int) -> str | None:
     """The value of the string literal at `i` — `'…'`, `E'…'` or `$tag$…$tag$` — or None."""
-    if i < len(text) and text[i] in "Ee" and text[i + 1 : i + 2] == "'":
-        i += 1  # the escaped form; `_escape_prefixed` then reads the `E`
-    if i >= len(text):
-        return None
-    if text[i] == "$":
-        tag = DOLLAR.match(text, i)
-        end = text.find(tag.group(0), tag.end()) if tag else -1
-        return text[tag.end() : end] if tag and end >= 0 else None
-    if text[i] != "'":
-        return None
-    escape = _escape_prefixed(text, i)
-    end = quoted_end(text, i, "'", escape)
-    if text[end - 1 : end] != "'" or end - 1 <= i:
-        return None
-    raw = text[i + 1 : end - 1]
-    if escape:
-        raw = _unescape(raw)
-    return raw.replace("''", "'")
+    value, _ = _string_at(text, i)
+    return value
 
 
 def _unescape(raw: str) -> str:

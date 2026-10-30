@@ -43,6 +43,15 @@ def assignments():
     return found
 
 
+def assignment_index(lines, name):
+    """Line number of the mktemp assignment for `name`."""
+    for index, line in enumerate(lines):
+        match = ASSIGNMENT.match(line)
+        if match and match.group("name") == name:
+            return index
+    raise AssertionError(f"no mktemp assignment for {name} in {SMOKE}")
+
+
 def start(command, home, gate):
     """Start one child that waits for `gate` and then runs `mktemp`."""
     env = dict(os.environ, HOME=str(home), SMOKE_TEST_GATE=str(gate))
@@ -111,6 +120,33 @@ class SmokeCleanBuildTempPaths(unittest.TestCase):
         for name in ("WORKDIR", "INNER_SCRIPT"):
             with self.subTest(name=name):
                 self.assertIn(f'"${name}"', joined)
+
+    def test_trap_cleans_workdir_when_second_mktemp_fails(self):
+        # WORKDIR exists as soon as the first mktemp returns, so the trap has to
+        # be installed before the second one: otherwise that failure leaks the
+        # copied tree. The tail runs the real lines up to the trap and then
+        # fails the way a second mktemp (or an interrupt) does.
+        lines = SMOKE.read_text(encoding="utf-8").splitlines()
+        workdir = assignment_index(lines, "WORKDIR")
+        inner = assignment_index(lines, "INNER_SCRIPT")
+        trap = next((index for index, line in enumerate(lines) if TRAP.match(line)), None)
+        self.assertIsNotNone(trap, "the smoke must install an EXIT trap")
+        self.assertLess(workdir, trap)
+        self.assertLess(trap, inner, "the EXIT trap must be installed before INNER_SCRIPT's mktemp")
+        with tempfile.TemporaryDirectory(prefix="smoke-trap-") as sandbox:
+            home = Path(sandbox, "home")
+            home.mkdir()
+            script = "\n".join(["set -euo pipefail", *(lines[workdir:trap + 1]), "exit 1"])
+            result = subprocess.run(
+                ["bash", "-c", script],
+                env=dict(os.environ, HOME=str(home)),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                result.returncode, 1, f"expected the simulated failure: {result.stderr}"
+            )
+            self.assertEqual(list(home.iterdir()), [], "the trap left a temp path behind")
 
     def test_old_suffix_template_collides_on_second_creation(self):
         # The regression this file exists for: two lanes creating the rejected

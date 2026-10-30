@@ -158,6 +158,42 @@ class TableRules(unittest.TestCase):
         self.assertEqual(rules(run(sql)), {"missing_rls"})
 
 
+class CommentLexing(unittest.TestCase):
+    """Comment stripping reads SQL tokens: a `--` or `/*` inside a literal, a quoted identifier
+    or a dollar-quoted body is data, so it can neither hide nor invent a statement."""
+
+    def test_a_comment_marker_inside_a_literal_hides_no_later_ddl(self):
+        sql = GOOD_TABLE.replace(
+            "alter table public.widget force row level security;",
+            "select '--'; alter table public.widget disable row level security;",
+        )
+        self.assertEqual(rules(run(sql)), {"missing_rls"})
+
+    def test_literals_and_quoted_identifiers_survive_a_comment_sweep(self):
+        from rls_names import strip_comments
+
+        for kept in ("select '-- x';", 'select "--y";', "select '/* z */';", "select '\"/*';"):
+            with self.subTest(kept=kept):
+                self.assertEqual(strip_comments(kept), kept)
+
+    def test_a_dollar_body_keeps_its_statements_and_loses_only_its_own_comments(self):
+        from rls_names import strip_comments
+
+        swept = strip_comments(
+            "do $$ -- body note\ncreate policy p on public.t to evidgate_app using (true); $$;"
+        )
+        self.assertNotIn("body note", swept)
+        self.assertIn("create policy p on public.t", swept)
+        self.assertIn("$$", swept, "the tag stays so the body is still read as one statement")
+
+    def test_an_ordinary_or_nested_block_comment_is_removed(self):
+        from rls_names import strip_comments
+
+        self.assertNotIn("hidden", strip_comments("select 1; -- hidden\nselect 2;"))
+        self.assertNotIn("gone", strip_comments("select 1; /* gone /* nested */ also gone */ select 2;"))
+        self.assertIn("select 2", strip_comments("select 1; /* gone */ select 2;"))
+
+
 class DefinerRules(unittest.TestCase):
     def test_complete_definer_is_clean(self):
         self.assertEqual(run(GOOD_DEFINER), [])

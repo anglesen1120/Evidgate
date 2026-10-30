@@ -1,4 +1,4 @@
-# Per-image checks for scripts/build-images.sh (AC1/AC5, 10.2.1-T1.1/T1.2).
+# Per-image checks for scripts/build-images.sh.
 #
 # Sourced by scripts/build-images.sh after it defines its identity helpers
 # (prefix, assembly_of, child_assembly_of, child_directory_of, is_r2r), die and
@@ -6,6 +6,10 @@
 # check reads the built image and fails the run with a non-zero exit; none of
 # them builds anything. The chiseled runtime has no shell, so image contents are
 # read with `docker cp`/`docker export` from the host.
+#
+# A check that copies files out of an image runs its body in a subshell with an
+# EXIT trap for the scratch copy, so a failed copy or assertion removes it too;
+# a trap set in the driver's shell would replace its own EXIT cleanup trap.
 #
 # Ownership of the /app tree is asserted here too: the runtime user must not be
 # able to replace the assemblies it is about to execute.
@@ -56,10 +60,11 @@ copy_from_image() {
 # Api's image environment is checked too.
 invariant_of() { case "$(prefix "$1")" in api) echo 0 ;; *) echo 1 ;; esac; }
 
-check_p7() {
+check_p7() (
   local reference="$1" name="$2" assembly scratch
   assembly="$(assembly_of "$name")"
   scratch="$(mktemp -d)"
+  trap 'rm -rf "$scratch"' EXIT
   copy_from_image "$reference" "/app/$assembly" "$scratch/$assembly"
   copy_from_image "$reference" "/app/${assembly%.dll}.runtimeconfig.json" "$scratch/runtimeconfig.json"
   python3 - "$scratch/runtimeconfig.json" "$(invariant_of "$name")" \
@@ -100,8 +105,7 @@ if b"RTR\x00" not in data:
 print("   P7: ReadyToRun header present in %s" % sys.argv[1].rsplit("/", 1)[-1])
 PYEOF
   fi
-  rm -rf "$scratch"
-}
+)
 
 # 06.3.6-T1.3: the Worker image's second entry point. The parent runner launches
 # the child by path (`dotnet /app/parser/Evidgate.Parser.dll`), so three things
@@ -115,7 +119,7 @@ PYEOF
 # names the long-lived Api/Worker processes for both, and the child is a
 # short-lived process (the same reasoning Dockerfile.migrator states for its
 # one-shot tool) — the child's runtimeconfig.json carries neither.
-check_parse_child() {
+check_parse_child() (
   local reference="$1" name assembly directory stem scratch
   name="$(prefix "$2")"
   assembly="$(child_assembly_of "$name")"
@@ -123,6 +127,7 @@ check_parse_child() {
   [[ -n "$assembly" ]] || die "$name has no parse child: check_parse_child is called for the wrong image"
   stem="${assembly%.dll}"
   scratch="$(mktemp -d)"
+  trap 'rm -rf "$scratch"' EXIT
   copy_from_image "$reference" "/app/$directory/$assembly" "$scratch/$assembly"
   copy_from_image "$reference" "/app/$directory/$stem.runtimeconfig.json" "$scratch/runtimeconfig.json"
   copy_from_image "$reference" "/app/$directory/$stem.deps.json" "$scratch/deps.json"
@@ -159,9 +164,8 @@ print("   parse child: /app/parser/%s + runtimeconfig.json + deps.json "
       "(System.Globalization.Invariant=%s, framework=%s, no ReadyToRun header)"
       % (assembly, actual, options["framework"].get("name")))
 PYEOF
-  rm -rf "$scratch"
   echo "   published: $(child_project_of "$name") -> /app/$directory (no crossgen, 00 §5.7 P7)"
-}
+)
 
 # The end-to-end proof an "image missing the child" defect is caught by: run the
 # child the way the parent runner does, as the image's own non-root user, with no
@@ -207,7 +211,7 @@ check_parse_child_runs() {
 # bit — file and directory alike, since a root-owned file in a directory the app uid owns is just as replaceable,
 # which is why the Dockerfiles create the WORKDIR while USER is root — and each directory the runtime launches from
 # is exactly 0755 so it can still be read. The chiseled base has no shell or coreutils, so `docker export` is read.
-check_app_tree_ownership() {
+check_app_tree_ownership() (
   local reference="$1" image="$2" name archive container
   local -a required
   name="$(prefix "$image")"
@@ -217,6 +221,7 @@ check_app_tree_ownership() {
     migrator) required+=("d app/migrations 0755" "s app/migrations") ;;
   esac
   archive="$(mktemp)"
+  trap 'rm -f "$archive"' EXIT
   container="$(docker create --platform "$CHECK_PLATFORM" "$reference")"
   docker export --output "$archive" "$container" >/dev/null
   docker rm -f "$container" >/dev/null
@@ -265,19 +270,19 @@ summary = ["%s at %04o" % (d, m) for d, m in dir_modes.items()] + files + ["%s w
 print("   app tree: %d entries under /app, root-owned, no group/other write; required: %s"
       % (len(members), ", ".join(summary)))
 PYEOF
-  rm -f "$archive"
-}
+)
 
 # 01.1.2-T1.3: BuildingBlocks.Persistence globs migrations/*.sql at build time and
 # bakes the greatest file name into assembly metadata as the expected journal head.
 # A build context without migrations/ does not fail — it bakes the "(none)"
 # sentinel and every ready probe would then answer unready — so the baked value is
 # checked against the repository's head.
-check_migration_head() {
+check_migration_head() (
   local reference="$1" head scratch
   head="$(ls migrations/*.sql | sort | tail -1)"
   head="${head##*/}"
   scratch="$(mktemp -d)"
+  trap 'rm -rf "$scratch"' EXIT
   copy_from_image "$reference" "/app/Evidgate.BuildingBlocks.Persistence.dll" "$scratch/persistence.dll"
   python3 - "$scratch/persistence.dll" "$head" <<'PYEOF'
 import sys
@@ -290,8 +295,7 @@ if head.encode() not in data:
              "degraded (01.1.2-T1.3)" % (dll, head))
 print("   expected migration head baked in: %s" % head)
 PYEOF
-  rm -rf "$scratch"
-}
+)
 
 check_migrator_cli() {
   local reference="$1" output status

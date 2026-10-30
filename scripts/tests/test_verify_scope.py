@@ -194,6 +194,9 @@ class BareRun(unittest.TestCase):
         (self.tree / "scripts").mkdir()
         self.script = self.tree / "scripts" / "verify.sh"
         shutil.copy(VERIFY, self.script)
+        # verify.sh sources its guard/selection half from the same tree and
+        # refuses to start without it, so a copied script needs both files.
+        shutil.copy(VERIFY.with_name("verify-guards.sh"), self.tree / "scripts")
         (self.tree / "scripts" / "gate_scope.py").write_text(STUB_CLASSIFIER)
         self.marker = self.tree / "classifier-ran"
 

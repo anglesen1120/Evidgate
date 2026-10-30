@@ -125,6 +125,22 @@ class EmbeddedPolicyStatements(unittest.TestCase):
         body = "do $$ begin raise notice 'grant select on public.widget to evidgate_operator'; end $$;"
         self.assertEqual(run(TABLE + body), [])
 
+    def test_a_grant_of_execute_in_a_do_body_is_not_read_as_plpgsql_execute(self):
+        body = "do $$ begin grant execute on function public.fn() to evidgate_app; end $$;"
+        self.assertEqual(run(TABLE + body), [])
+        self.assertEqual(run(TABLE), [], "the control: the same file without the body is clean")
+
+    def test_a_revoke_of_execute_in_a_do_body_is_not_read_as_plpgsql_execute(self):
+        body = "do $$ begin revoke execute on function public.fn() from evidgate_app; end $$;"
+        self.assertEqual(run(TABLE + body), [])
+
+    def test_an_execute_command_beside_a_privilege_grant_is_still_reported(self):
+        body = (
+            "do $$ declare stmt text; begin grant execute on function public.fn() to evidgate_app; "
+            "execute stmt; end $$;"
+        )
+        self.assertEqual(rules(run(TABLE + body)), {"embedded_dynamic"})
+
 
 class UnreadableExecute(unittest.TestCase):
     """A statement the file does not spell out is reported, so an unreadable one cannot pass as
@@ -145,6 +161,43 @@ class UnreadableExecute(unittest.TestCase):
     def test_an_execute_format_template_without_ddl_is_clean(self):
         body = "do $$ begin execute format('delete from public.widget where id = %L', %L); end $$;"
         self.assertEqual(run(TABLE + body), [])
+
+    def test_an_execute_with_an_into_clause_is_read(self):
+        body = "do $$ declare n bigint; begin execute 'select count(*) from public.widget' into n; end $$;"
+        self.assertEqual(run(TABLE + body), [])
+
+    def test_an_execute_with_a_bound_parameter_is_reported(self):
+        body = (
+            "do $$ begin execute 'select id from public.widget where id = $1' "
+            "using '00000000-0000-0000-0000-000000000000'::uuid; end $$;"
+        )
+        self.assertEqual(rules(run(TABLE + body)), {"embedded_dynamic"})
+
+
+class ExecuteConcatenation(unittest.TestCase):
+    """PostgreSQL folds `'a' || 'b'` before it parses the result, so the replay reads the folded
+    text; a part the file does not spell out leaves the whole statement unread and reported."""
+
+    def test_a_literal_concatenation_is_read_as_one_statement(self):
+        body = (
+            "do $$ begin execute 'create policy widget_dyn on public.widget for all "
+            "to evidgate_operator ' || 'using (true)'; end $$;"
+        )
+        self.assertEqual(rules(run(TABLE + body)), {"open_policy"})
+        self.assertEqual(run(TABLE), [], "the control: the same file without the body is clean")
+
+    def test_a_concatenation_with_a_variable_is_reported(self):
+        body = "do $b$ begin execute 'grant select on ' || t || ' to evidgate_operator'; end $b$;"
+        findings = run(TABLE + body)
+        self.assertEqual(rules(findings), {"embedded_dynamic"})
+        self.assertEqual({f.subject for f in findings}, {"execute"})
+
+    def test_a_literal_concatenation_without_ddl_is_clean(self):
+        self.assertEqual(run(TABLE + "do $$ begin execute 'select ' || '1'; end $$;"), [])
+
+    def test_a_literal_with_a_cast_on_one_part_is_reported(self):
+        body = "do $$ begin execute 'select 1 ' || 'union all select 2'::text; end $$;"
+        self.assertEqual(rules(run(TABLE + body)), {"embedded_dynamic"})
 
 
 class EmbeddedReplayOrder(unittest.TestCase):

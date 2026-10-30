@@ -1,4 +1,4 @@
-# `--with-db` checks for scripts/build-images.sh (AC1/AC5, 10.2.1-T1.1/T1.2).
+# `--with-db` checks for scripts/build-images.sh.
 #
 # Sourced by scripts/build-images.sh after it creates the throwaway containers'
 # names (network, db_container, api_container) and installs its cleanup trap: the
@@ -6,7 +6,6 @@
 # against them. The images under test are the built ones, so every check fails
 # the run instead of skipping.
 #
-# The dev stack's PostgreSQL pin (infra/compose.dev.yml, tests/Shared/ContainerImages.cs).
 # The dev stack's PostgreSQL pin (infra/compose.dev.yml, tests/Shared/ContainerImages.cs).
 POSTGRES_IMAGE='postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722'
 OWNER_PASSWORD='imagecheck-owner'

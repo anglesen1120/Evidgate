@@ -138,10 +138,14 @@ FULL_NAME_PATTERNS = (
 GATE_PATHS = frozenset(
     {
         "scripts/verify.sh",
+        "scripts/verify-guards.sh",
         "scripts/locked-run.sh",
         "scripts/gate_scope.py",
         "scripts/tests/test_gate_scope.py",
+        "scripts/tests/test_gate_scope_reasons.py",
         "scripts/tests/test_verify_scope.py",
+        "scripts/tests/test_verify_refusal.py",
+        "scripts/tests/test_smoke_mktemp.py",
         "scripts/build-images.sh",
         "scripts/image-checks.sh",
         "scripts/image-db-checks.sh",

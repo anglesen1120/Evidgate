@@ -13,12 +13,9 @@ The fixture repository comes from `review_blockers_fixtures` (the
 dependence on user git config.
 """
 import io
-import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -100,6 +97,12 @@ class PathClasses(unittest.TestCase):
         "fixtures/web-api/requests.json",
         ".omp/coordinator/prompt.md",
         "unknown-root-file",
+        # The gate's own files: the sourced guard half, then the fixtures that
+        # exercise it — a change to any of them is judged by the whole gate.
+        "scripts/verify-guards.sh",
+        "scripts/tests/test_verify_refusal.py",
+        "scripts/tests/test_smoke_mktemp.py",
+        "scripts/tests/test_gate_scope_reasons.py",
     )
 
     def test_documentation_is_the_docs_tier(self):
@@ -211,8 +214,13 @@ class Requests(unittest.TestCase):
         self.assertIn("auto|docs|no-dotnet|full", note)
 
 
-class ChangeSet(RepoTest):
-    """The classifier over a disposable repository, one commit or file per case."""
+class Repository(RepoTest):
+    """A disposable repository on a `develop` base with the classifier helpers.
+
+    It holds no test, so `test_gate_scope_reasons` can import it for the cases
+    that read the reason strings and report lines: unittest collects it there
+    with nothing to run.
+    """
 
     def setUp(self):
         super().setUp()
@@ -234,6 +242,10 @@ class ChangeSet(RepoTest):
         """Commit the pairs as one change set, then report its scope."""
         self.change(*pairs)
         return self.scope()
+
+
+class ChangeSet(Repository):
+    """The classifier over a disposable repository, one commit or file per case."""
 
     def test_each_new_full_rule_needs_the_full_gate(self):
         for path in (
@@ -386,31 +398,10 @@ class ChangeSet(RepoTest):
         self.change(("docs/a.md", "text\n"))
         scope = self.scope(EVIDGATE_GATE_SCOPE="full")
         self.assertEqual(scope.tier, "full")
-        # The scope line prints this beside `full`: it must name the widening,
-        # not the tier the changed paths alone allowed.
-        self.assertIn("widened the docs tier", scope.reason)
-
-    def test_a_full_report_carries_what_the_scope_line_prints(self):
-        self.change(("src/Evidgate.Api/Program.cs", "// x\n"))
-        report = gate_scope.render(self.scope())
-        keys = [line.split(":", 1)[0] for line in report.splitlines()]
-        # A full tier runs every stage, so it has no `skipped:` line: the caller
-        # still has to be able to print `full (<reason>, N changed path(s), base)`.
-        self.assertEqual(keys, ["tier", "reason", "changed", "base", "stages"])
-        self.assertIn("tier: full", report)
-        self.assertIn("reason: src/Evidgate.Api/Program.cs", report)
 
     def test_the_lock_stage_file_is_a_gate_file(self):
         self.change(("scripts/locked-run.sh", "#!/usr/bin/env bash\n"))
         self.assertEqual(self.scope().tier, "full")
-
-    def test_the_report_carries_every_fact_verify_sh_parses(self):
-        self.change(("docs/a.md", "text\n"))
-        report = gate_scope.render(self.scope())
-        keys = [line.split(":", 1)[0] for line in report.splitlines()]
-        self.assertEqual(keys[:5], ["tier", "reason", "changed", "base", "stages"])
-        self.assertIn("tier: docs", report)
-        self.assertIn("skipped: restore", report)
 
 
 class ReverseCoverage(unittest.TestCase):
@@ -453,54 +444,6 @@ class ReverseCoverage(unittest.TestCase):
             with self.subTest(literal=literal):
                 tier, why = gate_scope.tier_of_path(literal)
                 self.assertEqual(tier, "full", f"{literal} is named by a .NET source ({why})")
-
-
-class CommandLine(RepoTest):
-    """The one entry point `scripts/verify.sh` calls: stdout lines, always exit 0."""
-
-    def setUp(self):
-        super().setUp()
-        git(self.repo.path, "branch", "develop")
-        self.repo.write("docs/note.md", "text\n")
-        self.repo.commit()
-
-    def run_cli(self, cwd=None, **env):
-        """Run the entry point the way verify.sh does: a plain `python3 scripts/gate_scope.py`."""
-        environment = {key: value for key, value in os.environ.items() if not key.startswith("EVIDGATE_")}
-        environment.update(env)
-        completed = subprocess.run(
-            [sys.executable, str(ROOT / "scripts/gate_scope.py")],
-            cwd=self.repo.path if cwd is None else cwd,
-            capture_output=True,
-            text=True,
-            env=environment,
-            check=False,
-        )
-        self.output = completed.stdout
-        return completed.returncode
-
-    def test_a_docs_change_prints_the_tier_and_its_stages(self):
-        self.assertEqual(self.run_cli(), 0)
-        self.assertIn("tier: docs", self.output)
-        self.assertIn("stages: prettier", self.output)
-        self.assertIn("check-gate-scope", self.output)
-        self.assertNotIn("restore", self.output.split("stages:", 1)[1].split("skipped:", 1)[0])
-
-    def test_a_requested_scope_reaches_the_report(self):
-        self.assertEqual(self.run_cli(EVIDGATE_GATE_SCOPE="docs"), 0)
-        self.assertIn("tier: docs", self.output)
-        self.assertEqual(self.run_cli(EVIDGATE_GATE_SCOPE="full"), 0)
-        self.assertIn("tier: full", self.output)
-        self.assertIn("reason: EVIDGATE_GATE_SCOPE=full widened the docs tier", self.output)
-
-    def test_outside_a_work_tree_the_report_is_a_full_gate(self):
-        # A caller in a directory that is not a work tree gets a red-by-default
-        # answer, not a traceback: git itself has nothing to read there.
-        outside = tempfile.mkdtemp(prefix="gate-scope-outside-")
-        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
-        self.assertEqual(self.run_cli(cwd=outside), 0)
-        self.assertIn("tier: full", self.output)
-        self.assertIn("not inside a git work tree", self.output)
 
 
 class MainFunction(unittest.TestCase):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime-base proof for scripts/build-images.sh (AC1, 10.2.1-T1.1).
+"""Runtime-base proof for scripts/build-images.sh.
 
 A stage can only add on top of its FROM, so the pinned runtime base's layers must
 be the built image's first layers. The comparison target is read from the registry
