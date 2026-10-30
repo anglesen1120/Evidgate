@@ -32,6 +32,9 @@ public sealed class EnvelopeTransportTests
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}",
                 ["DOTNET_ENVIRONMENT"] = "Production",
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                ["EVIDGATE__CI__SIGNINGKEY"] = Convert.ToBase64String(new byte[32]),
+                ["EVIDGATE__CI__PEPPER"] = Convert.ToBase64String(new byte[32]),
+                ["EVIDGATE__CI__PEPPERVERSION"] = "1",
                 [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
 
@@ -43,11 +46,10 @@ public sealed class EnvelopeTransportTests
             await socket.ConnectAsync(IPAddress.Loopback, port, TestContext.Current.CancellationToken);
             await using var stream = socket.GetStream();
 
-            // The path is arbitrary: the limit is enforced before routing, so the
-            // answer is the transport 413 whatever the route would have been.
+            // The only anonymous real route that reads a body; it needs the CI key material below to get that far.
             var head = string.Create(
                 System.Globalization.CultureInfo.InvariantCulture,
-                $"POST /v1/runs HTTP/1.1\r\nHost: probe\r\nContent-Type: application/json\r\nContent-Length: {OversizeLength}\r\nConnection: close\r\n\r\n");
+                $"POST /v1/ci/token HTTP/1.1\r\nHost: probe\r\nContent-Type: application/json\r\nContent-Length: {OversizeLength}\r\nConnection: close\r\n\r\n");
             await stream.WriteAsync(Encoding.ASCII.GetBytes(head), TestContext.Current.CancellationToken);
 
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
