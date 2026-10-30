@@ -1,7 +1,5 @@
 using System.Reflection;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
-using Evidgate.BuildingBlocks.SharedKernel.Results;
-using Mediator;
 
 namespace Architecture.Tests.Rules;
 
@@ -15,21 +13,6 @@ public static class ArchitectureRules
 {
     private const string ModulePrefix = "Evidgate.Modules.";
     private const string ContractsSuffix = ".Contracts";
-
-    // Mediator 3.0.2 handler interfaces (Mediator.Abstractions). Authorization is
-    // a pipeline concern for request-scoped work (00 §5.5 C2, §5.7 S2): command,
-    // query, request and stream handlers. INotificationHandler is deliberately
-    // excluded — published notifications are not request-scoped under C2, and
-    // integration events go through the outbox (C7), not user authorization.
-    private static readonly string[] HandlerInterfaceNames =
-    [
-        "ICommandHandler",
-        "IQueryHandler",
-        "IRequestHandler",
-        "IStreamCommandHandler",
-        "IStreamQueryHandler",
-        "IStreamRequestHandler",
-    ];
 
     /// <summary>
     /// AC1 / 00 §5.5: a project belonging to module <c>Evidgate.Modules.&lt;X&gt;</c>
@@ -212,8 +195,7 @@ public static class ArchitectureRules
     /// <summary>
     /// 02.7.1-T2.1: every command handler that answers a <c>Result</c> (a pipeline-managed
     /// mutation) carries <c>[AuditedAction]</c>, so a new mutation cannot ship without its
-    /// audit row. Queries are read-only and exempt; the sprint-1 skeleton slice does not
-    /// answer <c>Result</c> and is outside the C2 stages.
+    /// audit row. Queries are read-only and exempt.
     /// </summary>
     public static IReadOnlyList<string> EveryMutationDeclaresAnAuditedAction(IEnumerable<Type> types)
     {
@@ -278,17 +260,7 @@ public static class ArchitectureRules
 
         foreach (var type in Enumerate(types).OrderBy(t => t.FullName, StringComparer.Ordinal))
         {
-            if (type.IsAbstract || type.IsInterface)
-            {
-                continue;
-            }
-
-            var implementsHandler = type
-                .GetInterfaces()
-                .Any(i => i.Namespace == "Mediator"
-                    && HandlerInterfaceNames.Contains(i.Name.Split('`')[0]));
-
-            if (!implementsHandler)
+            if (type.IsAbstract || type.IsInterface || !PipelineHandlerRules.IsRequestHandler(type))
             {
                 continue;
             }
@@ -361,60 +333,6 @@ public static class ArchitectureRules
         }
 
         return violations;
-    }
-
-    /// <summary>
-    /// AC4 / 00 §5.5 C8 + 01.4.2-T4: every Mediator request handler must answer
-    /// <c>Result</c>/<c>Result&lt;T&gt;</c>. The C2 pipeline's tenant-bound stages
-    /// (tenant transaction, authorization, idempotency) run for messages carrying
-    /// that contract, so a handler returning a bare DTO would silently run outside
-    /// the tenant scope. The sprint-1 skeleton slice (01.1.2-T3) is the pinned
-    /// exception: 01.1.2 §8 records that its routes carry no tenant scope and no
-    /// permission, and 04/05 replace it with Result-carrying commands.
-    /// </summary>
-    /// <param name="types">Types to check (the real solution, or fixtures).</param>
-    /// <param name="exemptHandlerTypeNames">Full names exempted as the pinned skeleton slice.</param>
-    public static IReadOnlyList<string> EveryPipelineHandlerReturnsResult(
-        IEnumerable<Type> types,
-        IReadOnlyCollection<string> exemptHandlerTypeNames)
-    {
-        ArgumentNullException.ThrowIfNull(exemptHandlerTypeNames);
-
-        var violations = new List<string>();
-
-        foreach (var type in Enumerate(types).OrderBy(t => t.FullName, StringComparer.Ordinal))
-        {
-            if (type.IsAbstract || type.IsInterface || exemptHandlerTypeNames.Contains(type.FullName))
-            {
-                continue;
-            }
-
-            foreach (var face in type.GetInterfaces())
-            {
-                if (!face.IsGenericType)
-                {
-                    continue;
-                }
-
-                var definition = face.GetGenericTypeDefinition();
-                var response = definition == typeof(ICommandHandler<>) || definition == typeof(IRequestHandler<>)
-                    ? typeof(Unit)
-                    : definition == typeof(ICommandHandler<,>)
-                        || definition == typeof(IQueryHandler<,>)
-                        || definition == typeof(IRequestHandler<,>)
-                            ? face.GetGenericArguments()[1]
-                            : null;
-
-                if (response is not null && !typeof(Result).IsAssignableFrom(response))
-                {
-                    violations.Add(
-                        $"{type.FullName} handles a Mediator request but returns {response.Name}: a pipeline handler " +
-                        "must answer Result/Result<T> (00 §5.5 C8) so the C2 tenant stages run for it");
-                }
-            }
-        }
-
-        return violations.Distinct(StringComparer.Ordinal).ToList();
     }
 
     /// <summary>Returns the module name of a project, or null when it is not a module project.</summary>

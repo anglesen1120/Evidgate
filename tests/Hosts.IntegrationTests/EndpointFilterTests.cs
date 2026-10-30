@@ -15,7 +15,7 @@ namespace Hosts.IntegrationTests;
 /// 01.4.2-T4.4 / AC6: a pipeline Result becomes the 00 §9.2 response exactly once
 /// — success carries the body and the status the command declared, a failure is the
 /// envelope with the request id, and nothing is ever ProblemDetails (00 §5.5 C8) —
-/// and the mounted <c>/v1/slice</c> route really renders through that filter.
+/// and the mounted probe route really renders through that filter.
 /// </summary>
 public sealed class EndpointFilterTests
 {
@@ -61,19 +61,19 @@ public sealed class EndpointFilterTests
     }
 
     /// <summary>
-    /// The route the filter is mounted on: a client error renders the envelope
-    /// (not the framework's body-less 400, not ProblemDetails) and a good request
-    /// still answers the slice DTO — the filter unwraps the Result.
+    /// A route the filter is mounted on: a client error renders the envelope (not the
+    /// framework's body-less 400, not ProblemDetails) and a good request still answers
+    /// the route's DTO — the filter unwraps the Result.
     /// </summary>
     [Fact]
-    public async Task Slice_Route_Renders_Through_The_Result_Filter()
+    public async Task Route_Renders_Through_The_Result_Filter()
     {
         await using var factory = new EvidgateApiFactory(DeadConnectionString);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Request-Id", "req-filter-route");
 
         using var missing = await client.PostAsJsonAsync(
-            "/v1/slice/run",
+            Evidgate.Testing.TransportProbeStartupFilter.Path,
             new { },
             TestContext.Current.CancellationToken);
 
@@ -85,14 +85,13 @@ public sealed class EndpointFilterTests
         error.GetProperty("details")[0].GetProperty("path").GetString().ShouldBe("project_ref");
 
         using var ok = await client.PostAsJsonAsync(
-            "/v1/slice/run",
-            new { project_ref = "slice/test", event_count = 2 },
+            Evidgate.Testing.TransportProbeStartupFilter.Path,
+            new { project_ref = "probe/test" },
             TestContext.Current.CancellationToken);
 
         ok.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await ReadJsonAsync(ok);
-        body.GetProperty("completeness").GetString().ShouldBe("incomplete");
-        body.GetProperty("decision").GetString().ShouldBe("pending");
+        body.GetProperty("accepted").GetBoolean().ShouldBeTrue();
         body.TryGetProperty("error", out _).ShouldBeFalse();
     }
 

@@ -30,7 +30,7 @@ public sealed class EnvelopeTests
         client.DefaultRequestHeaders.Add("X-Request-Id", "req-envelope-1");
 
         // Missing required field → the endpoint's 422 envelope, with a detail.
-        using var emptyResponse = await client.PostAsJsonAsync("/v1/slice/run", new { }, TestContext.Current.CancellationToken);
+        using var emptyResponse = await client.PostAsJsonAsync(Evidgate.Testing.TransportProbeStartupFilter.Path, new { }, TestContext.Current.CancellationToken);
         var error = (await AssertEnvelopeAsync(emptyResponse, 422)).GetProperty("error");
         Assert.Equal("request_invalid", error.GetProperty("code").GetString());
         Assert.False(error.GetProperty("retryable").GetBoolean());
@@ -42,7 +42,7 @@ public sealed class EnvelopeTests
 
         // Malformed JSON → 400 request_invalid.
         using var malformed = await client.PostAsync(
-            "/v1/slice/run",
+            Evidgate.Testing.TransportProbeStartupFilter.Path,
             new StringContent("{ not json", Encoding.UTF8, "application/json"),
             TestContext.Current.CancellationToken);
         var malformedError = (await AssertEnvelopeAsync(malformed, 400)).GetProperty("error");
@@ -68,7 +68,7 @@ public sealed class EnvelopeTests
             content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         }
 
-        using var response = await client.PostAsync("/v1/slice/run", content, TestContext.Current.CancellationToken);
+        using var response = await client.PostAsync(Evidgate.Testing.TransportProbeStartupFilter.Path, content, TestContext.Current.CancellationToken);
         var error = (await AssertEnvelopeAsync(response, 400)).GetProperty("error");
         Assert.Equal("request_invalid", error.GetProperty("code").GetString());
         Assert.Equal("req-content-type-1", error.GetProperty("request_id").GetString());
@@ -86,7 +86,7 @@ public sealed class EnvelopeTests
         Assert.Equal("not_found", notFoundError.GetProperty("code").GetString());
         Assert.Equal("req-fallback-1", notFound.Headers.GetValues("X-Request-Id").Single());
 
-        using var wrongMethod = await client.GetAsync("/v1/slice/run", TestContext.Current.CancellationToken);
+        using var wrongMethod = await client.GetAsync(Evidgate.Testing.TransportProbeStartupFilter.Path, TestContext.Current.CancellationToken);
         var wrongMethodError = (await AssertEnvelopeAsync(wrongMethod, 405)).GetProperty("error");
         Assert.Equal("method_not_allowed", wrongMethodError.GetProperty("code").GetString());
         Assert.Equal("req-fallback-1", wrongMethod.Headers.GetValues("X-Request-Id").Single());

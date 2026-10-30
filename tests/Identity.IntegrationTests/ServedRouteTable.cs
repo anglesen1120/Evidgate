@@ -64,10 +64,8 @@ internal sealed record ServedRoute
 /// </para>
 /// <para>
 /// A served route the spec does not declare throws, naming it — the classification
-/// gate. The one recorded exception is the 01.1.2 <c>/v1/slice</c> dev surface, which
-/// is served but deliberately absent from the spec (the same allowlist
-/// <c>tests/Isolation.Tests/Api/CoverageTests.cs</c> carries); it is classified
-/// <c>none</c>.
+/// gate. Every served route must be classified, so the spec and the host cannot drift
+/// apart silently (the isolation suite carries the matching allowlist, now empty).
 /// </para>
 /// </remarks>
 internal static class ServedRouteTable
@@ -88,14 +86,9 @@ internal static class ServedRouteTable
 
     /// <summary>
     /// Served routes deliberately absent from the spec, each with the recorded reason the
-    /// classification cites. Mirrors <c>tests/Isolation.Tests/Api/CoverageTests.cs:17-21</c>.
+    /// classification cites. Mirrors the isolation suite's own allowlist.
     /// </summary>
-    internal static readonly Dictionary<(string Method, string Template), string> ServedNotInSpec =
-        new()
-        {
-            [("POST", "/v1/slice/run")] =
-                "01.1.2 run-only slice dev surface, recorded in tests/Contract.Tests/ServedDocumentTests.cs:59",
-        };
+    internal static readonly Dictionary<(string Method, string Template), string> ServedNotInSpec = new();
 
     /// <summary>The <c>/v1</c> routes of every endpoint data source registered in <paramref name="services"/>.</summary>
     /// <exception cref="InvalidOperationException">A served route is absent from the spec and not allowlisted.</exception>
@@ -881,10 +874,6 @@ internal static class RouteRequests
                 IdempotencyKey: Key()));
         Add("GET", "/v1/projects/{p}/authoring/export", ctx =>
             new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/export?format=csv"));
-
-        // ---- Dev surface (absent from the spec; allowlisted in ServedRouteTable) ------------------------------
-        Add("POST", "/v1/slice/run", ctx => new(HttpMethod.Post, "/v1/slice/run",
-            new JsonObject { ["project_ref"] = ctx.ProjectId.ToString() }));
 
         return builders;
     }

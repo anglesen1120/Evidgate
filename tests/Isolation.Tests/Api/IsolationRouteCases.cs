@@ -763,13 +763,6 @@ public static class IsolationRouteCases
         FinalizeShardCase(),
         EvidenceCompleteCase(),
 
-        // ---- Dev surface (SliceEndpoints.cs:29-40; recorded in ServedDocumentTests.cs:59) -------------------------
-        Case("POST", "/v1/slice/run", (route, w) =>
-        [
-            // No tenant filter and in-memory stubs (InMemoryManifestStore): naming org A's project must neither echo
-            // an org-A id nor write to org A (the mutation test's snapshot).
-            new(route, "naming org A's project echoes no org-A data", runner => runner.SliceNamingAsync(route, w.Acme.Projects[0].Id)),
-        ]),
     ];
 
     // ---------------------------------------------------------------------------------------------------- helpers
@@ -2310,22 +2303,6 @@ public sealed class RouteProbeRunner
         }
 
         violations.AddRange(ForeignIdsIn(named.Text).Select(id => Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {named} carrying org-A id {id}")));
-        return violations;
-    }
-
-    /// <summary><c>POST /v1/slice/run</c> naming org A's project: the answer carries no org-A id and is not a server error.</summary>
-    public async Task<IReadOnlyList<string>> SliceNamingAsync(ApiRoute route, Guid orgAProject)
-    {
-        const string name = "naming org A's project echoes no org-A data";
-        var request = new ProbeRequest(HttpMethod.Post, "/v1/slice/run", new JsonObject { ["project_ref"] = orgAProject.ToString() });
-        var response = await SendAsync(ProbeCaller.Anonymous, request).ConfigureAwait(false);
-        var violations = new List<string>();
-        if (response.Status >= 500)
-        {
-            violations.Add(Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {response}: {Brief(response)}"));
-        }
-
-        violations.AddRange(ForeignIdsIn(response.Text).Select(id => Describe(route, name, ProbeCaller.Anonymous, $"{request} answered {response} carrying org-A id {id}")));
         return violations;
     }
 

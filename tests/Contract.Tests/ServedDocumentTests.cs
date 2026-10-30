@@ -20,12 +20,10 @@ namespace Contract.Tests;
 /// </para>
 /// <para>
 /// <b>What the normalised diff covers today.</b> The served document carries the
-/// sprint-1 dev surface 01.1.2 mounts (<c>/v1/slice/run</c>, which
-/// <c>contracts/openapi.yaml</c> deliberately does not document: its paths are the
-/// 00 §9.3 V1 surface of 02–08, and CR-01-4 keeps operational routes out) plus the
-/// first real documented routes — <c>/v1/permissions</c> and <c>/v1/roles</c> of
-/// 02.2.1-T1.2, whose schemas <c>PermissionListResponse</c>/<c>PermissionView</c>/
-/// <c>RoleListResponse</c>/<c>RoleView</c> the spec now declares. The served path
+/// documented routes — <c>/v1/permissions</c> and <c>/v1/roles</c> of 02.2.1-T1.2,
+/// whose schemas <c>PermissionListResponse</c>/<c>PermissionView</c>/
+/// <c>RoleListResponse</c>/<c>RoleView</c> the spec declares — and no operational or
+/// scaffolding surface: the test-only probe route is excluded from the description. The served path
 /// keys are mounted route templates while the spec's <c>paths</c> keys are relative
 /// to <c>servers[0].url</c> (<c>/v1</c>), so the comparison strips the prefix
 /// before diffing. Operation <em>body</em> diffs (parameters, request/response
@@ -40,9 +38,7 @@ namespace Contract.Tests;
 /// rather than a wire shape, and pinning it would pin defaults): the served
 /// <c>info</c> is <c>{"title":"Evidgate.Api | v1","version":"1.0.0"}</c> against the
 /// spec's <c>Evidgate API</c>/<c>1.0.0</c>, its <c>servers</c> is
-/// <c>[{"url":"http://localhost/"}]</c> against the spec's <c>/v1</c>, and the
-/// slice operation documents only its 200 response with no request body (the
-/// handler reads the body from <c>HttpContext</c>, so ASP.NET cannot see it). The
+/// <c>[{"url":"http://localhost/"}]</c> against the spec's <c>/v1</c>. The
 /// only spec schema an implemented response can be validated against is
 /// <c>#/components/schemas/ErrorEnvelope</c>, which
 /// <see cref="ResponseContractTests"/> does against the live 400/422 bodies.
@@ -51,15 +47,10 @@ namespace Contract.Tests;
 public sealed class ServedDocumentTests
 {
     /// <summary>
-    /// Paths the served document may carry that the spec does not, in spec-relative
-    /// spelling (the spec's path keys are relative to <c>servers[0].url</c>): 01.1.2's
-    /// run-only slice dev surface. A new entry here must be a recorded decision — the
-    /// assertion below fails on any route added without one.
+    /// The scaffolding prefixes no served document may carry: a demo or operational route
+    /// belongs under neither mount, and the assertion below fails if one comes back.
     /// </summary>
-    private static readonly string[] RecordedDevSurfacePaths = ["/slice/run"];
-
-    /// <summary>The DTO the recorded dev surface documents (<c>Produces&lt;SliceRunResponse&gt;</c>).</summary>
-    private static readonly string[] RecordedDevSurfaceSchemas = ["SliceRunResponse"];
+    private static readonly string[] ForbiddenPathPrefixes = ["/v1/slice", "/internal/slice"];
 
     /// <summary>
     /// The spec's <c>servers[0].url</c> (00 §9.1: "Servers mount under /v1"). The
@@ -87,7 +78,7 @@ public sealed class ServedDocumentTests
     }
 
     [Fact]
-    public async Task Served_Document_Surface_Diff_Against_Spec_Is_Empty_Except_Recorded_Dev_Surface()
+    public async Task Served_Document_Surface_Diff_Against_Spec_Is_Empty()
     {
         var spec = OpenApiSpec.Load();
         using var document = await FetchServedDocumentAsync();
@@ -99,19 +90,15 @@ public sealed class ServedDocumentTests
                 ? MemberNames(schemas)
                 : [];
 
-        // Every route and DTO the host serves is either in the spec or recorded.
-        Assert.Empty(Unexplained(servedPaths, spec.PathKeys, RecordedDevSurfacePaths));
-        Assert.Empty(Unexplained(servedSchemas, spec.SchemaNames, RecordedDevSurfaceSchemas));
-
-        // The recorded deviation is exactly this, so it cannot silently grow.
-        Assert.Equal(RecordedDevSurfacePaths, Unexplained(servedPaths, spec.PathKeys, []));
-        Assert.Equal(RecordedDevSurfaceSchemas, Unexplained(servedSchemas, spec.SchemaNames, []));
+        // Every route and DTO the host serves is in the spec, and nothing is excused.
+        Assert.Empty(Unexplained(servedPaths, spec.PathKeys, []));
+        Assert.Empty(Unexplained(servedSchemas, spec.SchemaNames, []));
 
         // The prefix normalisation itself: the strip must be what makes a real route
         // match its spec key, or the two assertions above would pass vacuously for a
         // host that served no documented route at all.
         Assert.Equal("/permissions", SpecRelative("/v1/permissions"));
-        Assert.Equal("/slice/run", SpecRelative("/v1/slice/run"));
+        Assert.Equal("/roles", SpecRelative("/v1/roles"));
         Assert.Equal("/unmounted", SpecRelative("/unmounted"));
         Assert.Contains("/permissions", servedPaths);
         Assert.Contains("/roles", servedPaths);
@@ -119,6 +106,22 @@ public sealed class ServedDocumentTests
         // Non-vacuity: the same comparison fails on an undocumented route or DTO.
         Assert.Equal(["/undocumented"], Unexplained(["/undocumented"], spec.PathKeys, []));
         Assert.Equal(["UndocumentedDto"], Unexplained(["UndocumentedDto"], spec.SchemaNames, []));
+    }
+
+    /// <summary>
+    /// A demo surface must never reach production again: the served document carries no
+    /// path under the scaffolding prefixes, on either mount.
+    /// </summary>
+    [Fact]
+    public async Task Served_Document_Carries_No_Scaffolding_Route()
+    {
+        using var document = await FetchServedDocumentAsync();
+
+        var paths = MemberNames(document.RootElement.GetProperty("paths")).ToList();
+        Assert.NotEmpty(paths);
+        Assert.DoesNotContain(
+            paths,
+            path => ForbiddenPathPrefixes.Any(prefix => path.StartsWith(prefix, StringComparison.Ordinal)));
     }
 
     /// <summary>Strips the spec's server prefix from a served route template (00 §9.1).</summary>

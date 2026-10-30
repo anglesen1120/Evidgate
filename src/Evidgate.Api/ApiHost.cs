@@ -113,7 +113,7 @@ public static partial class ApiHost
         builder.Services.AddEvidgateTenancy();
         builder.Services.AddEvidgatePipeline();
 
-        // 00 §5.5: the composition root registers the modules' slice services;
+        // 00 §5.5: the composition root registers the modules' own services;
         // Mediator's source generator registered the handlers themselves.
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
@@ -156,7 +156,7 @@ public static partial class ApiHost
         return builder;
     }
 
-    /// <summary>Builds the application: pipeline, internal + slice routes, OpenAPI document.</summary>
+    /// <summary>Builds the application pipeline, module routes and OpenAPI document.</summary>
     public static WebApplication BuildApp(string[] args)
     {
         var app = CreateBuilder(args).Build();
@@ -191,7 +191,6 @@ public static partial class ApiHost
         app.UseMiddleware<SessionXsrfMiddleware>();
 
         app.MapInternalEndpoints();
-        app.MapSliceEndpoints();
         app.MapOperatorEndpoints();
         // 02.2.1-T1.2 (00 §5.5 C8): the module maps its /v1 read routes and the host
         // applies the envelope filter, so a Result becomes the 00 §9.2 body once.
