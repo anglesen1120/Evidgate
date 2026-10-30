@@ -49,12 +49,12 @@ public sealed class CorrelationTraceTests
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     /// <summary>
-    /// The HTTP → Mediator leg: the slice's request is one trace, the caller's request id
+    /// The HTTP → Mediator leg: one request is one trace, the caller's request id
     /// is on the server span, and the span names its own trace so an operator can pivot
     /// from a log line to the trace (AC1, AC2).
     /// </summary>
     [Fact]
-    public async Task Slice_Request_Is_One_Trace_Tagged_With_Its_RequestId()
+    public async Task Request_Is_One_Trace_Tagged_With_Its_RequestId()
     {
         var exported = new List<Activity>();
         await using var factory = Tracing(DeadConnectionString, exported);
@@ -62,8 +62,8 @@ public sealed class CorrelationTraceTests
         client.DefaultRequestHeaders.TryAddWithoutValidation(RequestIdHeader, "req-correlation-slice");
 
         using var response = await client.PostAsJsonAsync(
-            "/v1/slice/run",
-            new { project_ref = "slice/correlation", event_count = 2 },
+            Evidgate.Testing.TransportProbeStartupFilter.Path,
+            new { project_ref = "probe/correlation" },
             Token);
         response.EnsureSuccessStatusCode();
         response.Headers.GetValues(RequestIdHeader).ShouldHaveSingleItem()
@@ -142,9 +142,9 @@ public sealed class CorrelationTraceTests
         // header values with 400 before the middleware runs.
         foreach (var hostile in new[] { new string('a', 300), "req with space" })
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/slice/run")
+            using var request = new HttpRequestMessage(HttpMethod.Post, Evidgate.Testing.TransportProbeStartupFilter.Path)
             {
-                Content = JsonContent.Create(new { project_ref = "slice/hostile", event_count = 1 }),
+                Content = JsonContent.Create(new { project_ref = "probe/hostile" }),
             };
             request.Headers.TryAddWithoutValidation(RequestIdHeader, hostile);
 
@@ -177,9 +177,9 @@ public sealed class CorrelationTraceTests
         await using var factory = Tracing(DeadConnectionString, exported);
         using var client = factory.CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/slice/run")
+        using var request = new HttpRequestMessage(HttpMethod.Post, Evidgate.Testing.TransportProbeStartupFilter.Path)
         {
-            Content = JsonContent.Create(new { project_ref = "slice/traceparent", event_count = 1 }),
+            Content = JsonContent.Create(new { project_ref = "probe/traceparent" }),
         };
         request.Headers.TryAddWithoutValidation("traceparent", "00-not-a-trace-id-not-a-parent-01");
         request.Headers.TryAddWithoutValidation("tracestate", "malformed");
@@ -361,8 +361,8 @@ public sealed partial class CorrelationLogPipelineTests
         using var listener = Listen();
         using (var parent = StartProbeSpan("parent"))
         {
-            // Modules tag the run with the run's Guid object, not with its text (CreateRun,
-            // PlanExecutions), so reading the tag with `as string` dropped it entirely.
+            // Modules tag the run with the run's Guid object, not with its text (FinalizeShard,
+            // GetCase), so reading the tag with `as string` dropped it entirely.
             parent.SetTag(CorrelationNames.RunId, Guid.Parse(RunId));
 
             using var child = StartProbeSpan("child");

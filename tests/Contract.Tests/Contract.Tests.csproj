@@ -26,11 +26,13 @@
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The anonymous JSON probe the response-vs-spec suite POSTs to: a bad body must still answer the 00 §9.2 envelope. -->
+    <Compile Include="..\Shared\TransportProbeStartupFilter.cs" Link="TransportProbeStartupFilter.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- WebApplicationFactory for in-process Api tests (10.0.12, ADR-0002 row
          "Microsoft.AspNetCore.Mvc.Testing"). No container packages: the contract
-         surface under test answers before any handler reaches PostgreSQL — the
-         Docker-backed slice chain is pinned by
-         tests/Hosts.IntegrationTests/SkeletonSliceTests. -->
+         surface under test answers before any handler reaches PostgreSQL. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
   </ItemGroup>
   <!-- No fixture copy: fixtures/contracts/ is read from the repository

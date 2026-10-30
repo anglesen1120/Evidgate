@@ -37,7 +37,7 @@ public sealed record ErrorDetail(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? Index = null);
 
-/// <summary>Stable error codes of the 00 §9.2 envelope, shared by the skeleton slice, the C2 pipeline's Result mapping and the endpoint filter.</summary>
+/// <summary>Stable error codes shared by the pipeline's Result mapping and endpoint filters so failures use one wire vocabulary.</summary>
 public static class ApiErrorCode
 {
     /// <summary>The request itself is malformed or misses a required field.</summary>

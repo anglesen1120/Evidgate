@@ -61,6 +61,10 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
+            // The transport suites POST to an anonymous JSON route; the host owns no such
+            // route any more, so the probe joins the host pipeline (routing, envelope, filters).
+            services.AddSingleton<IStartupFilter, Evidgate.Testing.TransportProbeStartupFilter>();
+
             if (Capture is not null)
             {
                 var capture = Capture;

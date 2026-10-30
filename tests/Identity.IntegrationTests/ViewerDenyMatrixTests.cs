@@ -69,8 +69,6 @@ public sealed class ViewerDenyMatrixTests(DatabaseFixture fixture) : CatalogueTe
                 "x-permission is 'none' (revoking the caller's own sessions, 02.3.2-T2)",
             [("POST", "/v1/auth/logout")] =
                 "x-permission is 'none' (logout revokes the caller's own session row, 02.3.2-T2)",
-            [("POST", "/v1/slice/run")] =
-                "01.1.2 run-only slice dev surface, absent from the spec (ServedRouteTable.ServedNotInSpec)",
         };
 
     /// <summary>

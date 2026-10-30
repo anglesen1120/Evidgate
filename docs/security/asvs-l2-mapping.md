@@ -47,7 +47,7 @@ Status: `partial` = at least one control landed and at least one published gap; 
 ### 3.1 Chapters and sections that do not apply
 
 - **V17 WebRTC** — no media stack (search above). The chapter becomes applicable the day any peer-to-peer media feature is planned, and the mapping is then re-opened by the ritual in §5.
-- **V4.3 GraphQL and V4.4 WebSocket** — neither surface exists: the host maps internal, slice, operator, identity and membership routes only (`src/Evidgate.Api/ApiHost.cs:189-198`).
+- **V4.3 GraphQL and V4.4 WebSocket** — neither surface exists: the host maps internal, operator, identity and membership routes only (`src/Evidgate.Api/ApiHost.cs:189-198`).
 - **V6.2 Password Security** — there is no password credential anywhere (`[DECISION]` D1, [`plans/11-security-compliance.md:73`](../../plans/11-security-compliance.md); `plans/features/02-identity-tenancy/02.3.1-federated-login.md:11`).
 - **V1.4 Unmanaged code; V1.2.5–1.2.7 (OS command, LDAP, XPath)** — the solution is managed .NET and Angular only; the OS-command, LDAP and XPath absences are negative searches ⚠️, not proofs.
 - **V10.4 Authorization Server and V10.6 OpenID Provider** — Evidgate federates outbound and issues its own session cookie; it publishes no authorization-server or provider endpoint (route map `src/Modules/Evidgate.Modules.Identity/Endpoints/LoginEndpoints.cs:133-141`) `[INFERENCE]` from the route surface.

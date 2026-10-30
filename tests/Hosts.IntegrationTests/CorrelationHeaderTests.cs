@@ -45,9 +45,9 @@ public sealed class CorrelationHeaderTests
         await using var factory = Tracing(exported);
         using var client = factory.CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/slice/run")
+        using var request = new HttpRequestMessage(HttpMethod.Post, Evidgate.Testing.TransportProbeStartupFilter.Path)
         {
-            Content = JsonContent.Create(new { project_ref = "slice/baggage", event_count = 1 }),
+            Content = JsonContent.Create(new { project_ref = "probe/baggage" }),
         };
         request.Headers.TryAddWithoutValidation(RequestIdHeader, "req-baggage-edge");
         // A neutral key the edge does not own travels beside them: it proves the propagator
@@ -91,9 +91,9 @@ public sealed class CorrelationHeaderTests
         // as a whole and therefore has to be bounded here.
         var oversized = "vendor1=" + new string('a', 140) + ",vendor2=" + new string('b', 140);
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/slice/run")
+        using var request = new HttpRequestMessage(HttpMethod.Post, Evidgate.Testing.TransportProbeStartupFilter.Path)
         {
-            Content = JsonContent.Create(new { project_ref = "slice/tracestate", event_count = 1 }),
+            Content = JsonContent.Create(new { project_ref = "probe/tracestate" }),
         };
         request.Headers.TryAddWithoutValidation("traceparent", CallerTraceParent);
         request.Headers.TryAddWithoutValidation("tracestate", oversized);
@@ -120,9 +120,9 @@ public sealed class CorrelationHeaderTests
         await using var factory = Tracing(exported);
         using var client = factory.CreateClient();
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/slice/run")
+        using var request = new HttpRequestMessage(HttpMethod.Post, Evidgate.Testing.TransportProbeStartupFilter.Path)
         {
-            Content = JsonContent.Create(new { project_ref = "slice/tracestate-ok", event_count = 1 }),
+            Content = JsonContent.Create(new { project_ref = "probe/tracestate-ok" }),
         };
         request.Headers.TryAddWithoutValidation("traceparent", CallerTraceParent);
         request.Headers.TryAddWithoutValidation("tracestate", "vendor1=value1,vendor2=value2");

@@ -7,14 +7,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Evidgate.BuildingBlocks.Pipeline.Behaviours;
 
 /// <summary>
-/// Resolves the permission the handler of a closed (message, response) pair
-/// declares, through the same handler interface Mediator's generated
-/// <c>AddMediator</c> registers. The interface follows the message's own marker
-/// (<c>IBaseQuery</c>/<c>IBaseCommand</c>/<c>IBaseRequest</c>) rather than a probe
-/// of all three: each handler interface constrains its health message
-/// (<c>ICommandHandler&lt;TCommand,TResponse&gt;</c> demands <c>ICommand&lt;TResponse&gt;</c>),
-/// so closing the wrong one throws instead of answering "no handler". No assembly
-/// scan — the registrations are already there.
+/// Resolves handler attributes through Mediator's registered interfaces without an assembly scan.
+/// The message's own marker interface is tried first, then the other two contracts: a message that
+/// implements more than one Mediator marker is found through the contract it was registered under,
+/// while a single-marker message cannot satisfy another contract and stays unresolved as before.
 /// </summary>
 internal static class HandlerLookup
 {
@@ -34,18 +30,48 @@ internal static class HandlerLookup
     internal static bool IsAuthenticatedMemberOnly(IServiceProvider services, Type messageType, Type responseType) =>
         GateOf(services, messageType, responseType).AuthenticatedMember;
 
-    /// <summary>
-    /// The gate a (message, response) pair's handler declares, read by reflection once
-    /// per pair and cached (02.1.1 performance review: the attribute lookup allocated on
-    /// every request). Handler types are fixed by Mediator's generated registrations; a
-    /// pair whose handler did not resolve is not cached, so it is re-checked next time.
-    /// </summary>
+    /// <summary>Whether the handler authenticates a credential before a tenant membership exists.</summary>
     internal static bool IsCredentialAuthenticated(IServiceProvider services, Type messageType, Type responseType) =>
         GateOf(services, messageType, responseType).CredentialAuthenticated;
 
     internal static string? AuditActionOf(IServiceProvider services, Type messageType, Type responseType) =>
         GateOf(services, messageType, responseType).AuditAction;
 
+    /// <summary>
+    /// Whether the handler of the pair names one of the authorization gates
+    /// (<see cref="PermissionAttribute"/>, <see cref="AuthenticatedMemberAttribute"/>,
+    /// <see cref="CredentialAuthenticatedAttribute"/>). A pair with no handler names
+    /// none: there is nothing to check and nothing to deny.
+    /// </summary>
+    internal static bool CarriesAuthGate(IServiceProvider services, Type messageType, Type responseType)
+    {
+        var gate = GateOf(services, messageType, responseType);
+        return gate.Permission is not null || gate.AuthenticatedMember || gate.CredentialAuthenticated;
+    }
+
+    /// <summary>
+    /// Refuses a gated message whose response cannot carry a Result: the stages that
+    /// enforce the gate answer through that contract, so passing the message on would
+    /// run its handler unchecked. A message whose handler names no gate still passes
+    /// through, because no stage would have checked it either way.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The handler names a gate and the response is not a Result.</exception>
+    internal static void EnsureAuthGateHasResultContract(IServiceProvider services, Type messageType, Type responseType)
+    {
+        if (!CarriesAuthGate(services, messageType, responseType))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"{messageType} is answered by a handler that names an authorization gate but answers {responseType}: "
+            + "a gated pipeline handler must answer Result/Result<T> so the pipeline stages can refuse it");
+    }
+
+    /// <summary>
+    /// Caches reflected gates for resolved handlers to avoid per-request attribute allocations.
+    /// Unresolved pairs are re-checked because a later service provider may register the handler.
+    /// </summary>
     private static (string? Permission, bool AuthenticatedMember, string? AuditAction, bool CredentialAuthenticated) GateOf(
         IServiceProvider services,
         Type messageType,
@@ -83,7 +109,24 @@ internal static class HandlerLookup
             return null;
         }
 
-        var face = open.MakeGenericType(messageType, responseType);
+        return ResolveHandlerType(services, open, messageType, responseType)
+            ?? (open != typeof(IQueryHandler<,>) ? ResolveHandlerType(services, typeof(IQueryHandler<,>), messageType, responseType) : null)
+            ?? (open != typeof(ICommandHandler<,>) ? ResolveHandlerType(services, typeof(ICommandHandler<,>), messageType, responseType) : null)
+            ?? (open != typeof(IRequestHandler<,>) ? ResolveHandlerType(services, typeof(IRequestHandler<,>), messageType, responseType) : null);
+    }
+
+    private static Type? ResolveHandlerType(IServiceProvider services, Type open, Type messageType, Type responseType)
+    {
+        Type face;
+        try
+        {
+            face = open.MakeGenericType(messageType, responseType);
+        }
+        catch (ArgumentException)
+        {
+            // A handler contract is only a candidate when the message satisfies its generic constraints.
+            return null;
+        }
 
         return services.GetService(face)?.GetType();
     }

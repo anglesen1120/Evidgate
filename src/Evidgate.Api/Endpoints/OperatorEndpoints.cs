@@ -14,7 +14,7 @@ namespace Evidgate.Api.Endpoints;
 /// listing and replay live under <c>/internal/operator/*</c>, guarded by
 /// <see cref="IOperatorGate"/> and excluded from the served OpenAPI document
 /// (T16/CR-01-4) — the same posture <c>/internal/health/*</c> and
-/// <c>/internal/slice</c> already take. No <c>/v1</c> mount exists: operator
+/// <c>/internal/health</c> already take. No <c>/v1</c> mount exists: operator
 /// routes carry no tenant context, so the tenant pipeline never applies (§5's
 /// "routes are outside /v1").
 /// </summary>
