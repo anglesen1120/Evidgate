@@ -8,9 +8,19 @@ list (`contracts/rls-exceptions.txt`, the single source the boot self-check shar
   missing_unique_key    no `unique (org_id, id)` (TL T3: the composite-FK target)
   missing_rls           ENABLE or FORCE ROW LEVEL SECURITY is absent
   missing_policy        no policy using `evidgate.current_org_id()` (TL T2)
+  policy_no_role        a policy without a `TO <role>` clause (or `to public`): it filters
+                        every role that holds a privilege, `evidgate_operator` included
+  operator_select_no_policy   `evidgate_operator` holds SELECT and a policy admits it (no
+                              `TO` clause or `to public`), with no operator policy gating it
 
 Exception kinds relax this: `platform` and `catalogue` tables still need ENABLE + FORCE
 and a policy but have no `org_id` rule; `mechanism` tables are skipped entirely.
+
+`POLICY_TO_EXEMPT` excuses a `TO`-less policy only while the replayed effective policy for that
+table and name is a different, role-scoped statement.
+
+`0001` hands `evidgate_operator` SELECT on every `public` table, so the operator rule fires only
+where a policy admits it on a business table; a policy naming only `evidgate_app` matches nothing.
 
 Every `SECURITY DEFINER` function (TL T80) must:
 
@@ -29,6 +39,11 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+# The review-blocker gate already reads a policy's `TO` clause safely (quoted identifiers kept
+# whole, bodies blanked); the path insert covers the unittest entry, which loads this by path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from review_blockers.sql import policy_roles, policy_tokens  # noqa: E402
 
 # Definers whose audit trail is something other than a per-call audit row. Adding a name
 # here is a review decision, so each entry carries its reason. Keys are EXACT qualified
@@ -140,6 +155,18 @@ DEFINER_AUDIT_EXEMPT = {
 # Roles a definer function may be granted EXECUTE to.
 ALLOWED_GRANTEES = {"evidgate_app", "evidgate_worker_sched", "evidgate_operator"}
 
+# Tenant policies that shipped without a `TO` clause and were replaced later. The key is the
+# EXACT statement (file, policy, table) and it counts only while the replayed effective policy
+# for that table and name is a different, role-scoped statement: an unsuperseded one keeps failing.
+POLICY_TO_EXEMPT = {
+    (file, "tenant_isolation", table): "superseded by 0055_tenant_policy_roles.sql, which recreates the policy `to evidgate_app`"
+    for file, table in (
+        ("0053_security_security_event.sql", "public.security_event"),
+        ("0054_healing_llm_call.sql", "public.healing_llm_call"),
+        ("0054_healing_llm_call.sql", "public.healing_llm_budget"),
+    )
+}
+
 DEFERRAL = re.compile(r"--\s*lint:\s*audit-deferred\s+(\S+)\s+([^\n]+)")
 
 
@@ -224,12 +251,45 @@ def qualified(name: str) -> str:
 
 
 TABLE = re.compile(r"^create\s+(?:unlogged\s+|temp(?:orary)?\s+)?table\s+(?:if\s+not\s+exists\s+)?([\w.\"]+)\s*\((.*)\)\s*(?:partition\s+by.*)?$", re.I | re.S)
-POLICY = re.compile(r"^create\s+policy\s+\S+\s+on\s+([\w.\"]+)(.*)$", re.I | re.S)
+POLICY = re.compile(r"^create\s+policy\s+(\S+)\s+on\s+([\w.\"]+)(.*)$", re.I | re.S)
+DROP_POLICY = re.compile(r"^drop\s+policy\s+(?:if\s+exists\s+)?(\S+)\s+on\s+([\w.\"]+)$", re.I)
+GRANT = re.compile(r"^grant\s+(.+?)\s+on\s+(?:table\s+)?([\w.\"]+)\s+to\s+(.+)$", re.I | re.S)
+REVOKE = re.compile(r"^revoke\s+(?:grant\s+option\s+for\s+)?(.+?)\s+on\s+(?:table\s+)?([\w.\"]+)\s+from\s+(.+)$", re.I | re.S)
+DEFAULT_PRIVS = re.compile(
+    r"^alter\s+default\s+privileges(?:\s+for\s+role\s+(\S+))?(?:\s+in\s+schema\s+([\w\"]+))?\s+"
+    r"(grant|revoke)\s+(.+?)\s+on\s+(tables|sequences|functions)\s+(?:to|from)\s+(.+)$", re.I | re.S
+)
 ALTER_RLS = re.compile(
     r"^alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?([\w.\"]+)\s+(enable|disable|no\s+force|force)\s+row\s+level\s+security$", re.I
 )
 HELPER = re.compile(r"current_org_id\s*\(\s*\)", re.I)
 OPEN_USING = re.compile(r"using\s*\(\s*true\s*\)", re.I)
+GRANTEE_STOP = frozenset({"with", "cascade"})
+
+
+@dataclass(frozen=True)
+class Policy:
+    """One `create policy` statement and the roles its `TO` clause names."""
+
+    file: str
+    name: str
+    table: str
+    text: str
+    to_roles: tuple[str, ...]  # empty when the statement has no `TO` clause
+
+
+def grantees(clause: str) -> list[str]:
+    """The roles a `TO`/`FROM` clause names, cut at `with grant option` or `cascade`."""
+    roles: list[str] = []
+    for token in policy_tokens(clause):
+        if token.lower() in GRANTEE_STOP:
+            break
+        roles.append(token.lower())
+    return roles
+
+
+def grants_select(privileges: str) -> bool:
+    return bool(re.search(r"\b(select|all)\b", privileges, re.I))
 
 
 class Schema:
@@ -238,10 +298,13 @@ class Schema:
     def __init__(self) -> None:
         self.tables: dict[str, tuple[str, str]] = {}  # table -> (file, body)
         self.rls: dict[str, dict[str, bool]] = {}
-        self.policies: dict[str, list[tuple[str, str]]] = {}  # table -> [(file, text)]
+        self.policies: dict[tuple[str, str], Policy] = {}  # (table, name) -> effective policy
+        self.policy_statements: list[Policy] = []  # every create policy, in replay order
         self.unique_org_id: set[str] = set()
         self.functions: list[tuple[str, str, str, str]] = []  # file, name, header, body
-        self.grants: list[tuple[str, str]] = []  # file, statement
+        self.grants: list[tuple[str, str]] = []  # file, statement: grants only, for the definer lint
+        self.privileges: list[tuple[str, str]] = []  # file, statement: grants and revokes, in order
+        self.operator_select: set[str] = set()  # tables evidgate_operator ends up able to SELECT
 
 
 def collect(files: dict[str, str]) -> Schema:
@@ -263,7 +326,12 @@ def collect(files: dict[str, str]) -> Schema:
                 else:
                     state["force"] = False
             elif m := POLICY.match(stmt):
-                schema.policies.setdefault(qualified(m.group(1)), []).append((name, m.group(2)))
+                roles = tuple(role.lower() for role in policy_roles(stmt) or ())
+                policy = Policy(name, m.group(1).strip('"').lower(), qualified(m.group(2)), m.group(3), roles)
+                schema.policies[(policy.table, policy.name)] = policy
+                schema.policy_statements.append(policy)
+            elif m := DROP_POLICY.match(stmt):
+                schema.policies.pop((qualified(m.group(2)), m.group(1).strip('"').lower()), None)
             elif m := re.match(
                 r"^create\s+unique\s+index\s+(?:if\s+not\s+exists\s+)?\S+\s+on\s+([\w.\"]+)\s*\(\s*org_id\s*,\s*id\s*\)", stmt, re.I
             ):
@@ -274,9 +342,35 @@ def collect(files: dict[str, str]) -> Schema:
                 schema.unique_org_id.add(qualified(m.group(1)))
             elif m := re.match(r"^create\s+(?:or\s+replace\s+)?function\s+([\w.\"]+)\s*\(", stmt, re.I):
                 schema.functions.append((name, m.group(1).lower().strip('"'), stmt, body))
-            elif low.startswith(("grant ", "alter default privileges")):
-                schema.grants.append((name, stmt))
+            elif low.startswith(("grant ", "revoke ", "alter default privileges")):
+                schema.privileges.append((name, stmt))
+                if low.startswith(("grant ", "alter default privileges")):
+                    schema.grants.append((name, stmt))
+    schema.operator_select = operator_select_tables(schema)
     return schema
+
+
+def operator_select_tables(schema: Schema) -> set[str]:
+    """Tables where `evidgate_operator` ends up holding SELECT after the replay.
+
+    `0001`'s default privileges hand it SELECT on every `public` table the migration role
+    creates, so the baseline is yes, only an explicit table-level revoke removes it, and a
+    later grant wins again. Other `for role` defaults do not reach these tables.
+    """
+    defaults: dict[str, bool] = {}  # schema -> operator holds SELECT on new tables; explicit wins
+    explicit: dict[str, bool] = {}
+    for _, stmt in schema.privileges:
+        if m := DEFAULT_PRIVS.match(stmt):
+            role, schema_name, verb, privileges, kind, roles = m.groups()
+            if kind.lower() != "tables" or (role or "evidgate_owner").strip('"').lower() != "evidgate_owner":
+                continue
+            if "evidgate_operator" in grantees(roles) and grants_select(privileges):
+                defaults[(schema_name or "public").strip('"').lower()] = verb.lower() == "grant"
+        elif m := GRANT.match(stmt) or REVOKE.match(stmt):
+            privileges, table, roles = m.groups()
+            if "evidgate_operator" in grantees(roles) and grants_select(privileges):
+                explicit[qualified(table)] = stmt.lower().startswith("grant")
+    return {table for table in schema.tables if explicit.get(table, defaults.get(table.split(".", 1)[0], False))}
 
 
 def lint_tables(schema: Schema, exceptions: dict[str, str]) -> list[Finding]:
@@ -296,17 +390,43 @@ def lint_tables(schema: Schema, exceptions: dict[str, str]) -> list[Finding]:
         if not (state.get("enable") and state.get("force")):
             findings.append(Finding(name, table, "missing_rls", "ENABLE and FORCE ROW LEVEL SECURITY must both be in force after the last migration"))
 
-        policies = schema.policies.get(table, [])
-        if kind is None and not any(HELPER.search(text) for _, text in policies):
+        policies = [policy for (owner, _), policy in schema.policies.items() if owner == table]
+        if kind is None and not any(HELPER.search(policy.text) for policy in policies):
             findings.append(Finding(name, table, "missing_policy", "no policy over `evidgate.current_org_id()` (TL T2)"))
         if kind is not None and not policies:
             findings.append(Finding(name, table, "missing_policy", "an excepted table still needs at least one policy"))
-        for pfile, text in policies:
-            if kind is not None and re.match(r"\s*for\s+select\b", text, re.I):
+        for policy in policies:
+            if kind is not None and re.match(r"\s*for\s+select\b", policy.text, re.I):
                 continue  # a read-only platform/catalogue policy may be open (e.g. the permission catalogue)
-            owner_only = re.search(r"\bto\s+evidgate_owner\b", text, re.I) and not re.search(r"\bto\s+[^;]*\b(evidgate_app|public)\b", text, re.I)
-            if OPEN_USING.search(text) and not owner_only:
-                findings.append(Finding(pfile, table, "open_policy", "`using (true)` is allowed only `to evidgate_owner`"))
+            owner_only = re.search(r"\bto\s+evidgate_owner\b", policy.text, re.I) and not re.search(r"\bto\s+[^;]*\b(evidgate_app|public)\b", policy.text, re.I)
+            if OPEN_USING.search(policy.text) and not owner_only:
+                findings.append(Finding(policy.file, table, "open_policy", "`using (true)` is allowed only `to evidgate_owner`"))
+    return findings
+
+
+def lint_policies(schema: Schema, exceptions: dict[str, str]) -> list[Finding]:
+    """Every policy names its roles, unless a later migration replaced it; and no policy may
+    admit `evidgate_operator` to a table where it holds SELECT with no operator policy."""
+    findings: list[Finding] = []
+    for policy in schema.policy_statements:
+        if policy.to_roles and "public" not in policy.to_roles:
+            continue
+        effective = schema.policies.get((policy.table, policy.name))
+        superseded = effective is not None and effective is not policy and effective.to_roles and "public" not in effective.to_roles
+        if superseded and (policy.file, policy.name, policy.table) in POLICY_TO_EXEMPT:
+            continue
+        findings.append(Finding(policy.file, policy.table, "policy_no_role",
+            "name the roles a tenant policy applies to (`to evidgate_app`); without a clause it filters PUBLIC too, the operator included"))
+    for table in schema.tables:
+        policies = [policy for (owner, _), policy in schema.policies.items() if owner == table]
+        if table not in schema.operator_select or exceptions.get(table) is not None:
+            continue
+        if any("evidgate_operator" in policy.to_roles for policy in policies):
+            continue  # an operator policy is the gate: it decides which rows the operator reads
+        for policy in policies:
+            if not policy.to_roles or "public" in policy.to_roles:
+                findings.append(Finding(policy.file, table, "operator_select_no_policy",
+                    "evidgate_operator holds SELECT here and this policy admits it; scope the policy or revoke SELECT from evidgate_operator"))
     return findings
 
 
@@ -355,7 +475,8 @@ def lint(migrations: Path, exceptions_path: Path) -> list[Finding]:
     exceptions = load_exceptions(exceptions_path)
     raws = {f.name: f.read_text(encoding="utf-8") for f in sorted(migrations.glob("*.sql"))}
     schema = collect(raws)
-    return lint_tables(schema, exceptions) + lint_definers(schema, raws)
+    return (lint_tables(schema, exceptions) + lint_policies(schema, exceptions)
+            + lint_definers(schema, raws))
 
 
 def main(argv: list[str]) -> int:

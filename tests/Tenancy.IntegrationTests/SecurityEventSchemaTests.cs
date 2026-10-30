@@ -9,15 +9,15 @@ namespace Tenancy.IntegrationTests;
 /// 11.5.1-T5.1 SQL level: migration 0053's <c>security_event</c> as the database sees it — the contract shape
 /// of the table, the <c>(org_id, id)</c> composite key a later tenant FK targets, the two indexes the page reads
 /// are served by, the append-only grant of the application role, the <c>0004</c> version trigger, and the tenant
-/// boundary itself (ENABLE + FORCE row level security: the PUBLIC <c>tenant_isolation</c> policy plus the
-/// owner-only backfill policy, 00 §5.4.6 / DECISIONS F5).
+/// boundary itself (ENABLE + FORCE row level security: the evidgate_app-only <c>tenant_isolation</c> policy
+/// plus the owner-only backfill policy, 00 §5.4.6 / DECISIONS F5).
 /// </summary>
 /// <remarks>
 /// The closed <c>type</c> and <c>severity</c> vocabularies are deliberately NOT database constraints: a new type
 /// is a docs decision owned elsewhere (11.1.1-T4.1, V2's <c>injection_attempt</c>), so the table carries no
 /// CHECK and no enum — asserted here so a later "helpful" constraint fails this test instead of shipping. The
-/// tenant policy is declared without <c>TO</c>, so it applies to PUBLIC (<c>polroles = {0}</c>, which
-/// <see cref="PostgresTenancyFixture.PoliciesAsync"/> cannot name), hence the local projection below.
+/// tenant policy names <c>evidgate_app</c> alone: 0053 left the role clause out, which applied it to PUBLIC and
+/// so to the operator's SELECT grant, and 0055 re-declared it to close that path.
 /// </remarks>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
@@ -102,21 +102,20 @@ public sealed class SecurityEventSchemaTests
 
         var policies = await PolicyRowsAsync(database);
 
-        // Two policies, and nothing else: the PUBLIC tenant predicate plus the owner-only backfill policy that
+        // Two policies, and nothing else: the app-role tenant predicate plus the owner-only backfill policy that
         // FORCE makes necessary (0004/0005/0028/0046/0049/0052 precedent). The backfill policy names
-        // evidgate_owner only, so it must not widen what the app role can reach.
+        // evidgate_owner only, and the tenant policy names evidgate_app only, so neither reaches a third role.
         policies.ShouldBe(
             [
                 "security_event_owner_backfill:evidgate_owner:*:true:true",
-                "tenant_isolation:PUBLIC:*:(org_id = evidgate.current_org_id()):-",
+                "tenant_isolation:evidgate_app:*:(org_id = evidgate.current_org_id()):(org_id = evidgate.current_org_id())",
             ],
             Case.Sensitive,
             $"{Table} declares exactly the tenant policy and the owner backfill policy");
 
-        // The write half of the tenant policy: an ALL policy with no explicit WITH CHECK answers the USING
-        // expression for inserted rows, so the row records no separate check ('-') — the exact-list assertion
-        // above pins that. A later explicit WITH CHECK must be the same expression, or a tenant could write a
-        // row it can never read back.
+        // The write half of the tenant policy: 0055 writes the WITH CHECK expression out explicitly instead of
+        // letting it default to USING, and both spellings mean the same thing — a tenant may only write a row it
+        // can read back. A later edit that widens either clause fails here.
         var isolation = policies[1];
         var withCheck = isolation[(isolation.LastIndexOf(':') + 1)..];
         (withCheck is "-" or "(org_id = evidgate.current_org_id())")
@@ -272,7 +271,7 @@ public sealed class SecurityEventSchemaTests
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", Table, "truncate"))
             .ShouldBeFalse("0053 revokes TRUNCATE: a recorded event is append-only for the application role");
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_operator", Table, "select"))
-            .ShouldBeTrue("the operator keeps 0001's default select on the table");
+            .ShouldBeFalse("0055 revokes the operator's SELECT: the tenant policy names evidgate_app alone");
 
         var org = Guid.CreateVersion7();
 
