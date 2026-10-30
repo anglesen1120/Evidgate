@@ -107,8 +107,9 @@ DOCS_FULL_PATHS = frozenset({"docs/security/audit-and-deletion-rule.md"})
 # ADR pages are resolved by the licence and dependency scans, which read the
 # exception ids: they need the web toolchain, not the .NET SDK.
 DOCS_NO_DOTNET_PREFIXES = ("docs/adr/",)
-# Story files a .NET catalogue test enumerates: it reads every one, so a path the
-# change set removes from this tree can fail `test` (an edit cannot).
+# Story files a .NET catalogue test globs: it requires the stories a V1-pending
+# permission names, so a removal here can fail `test` only for those (an edit
+# cannot). Judging every removal from this tree `full` over-approximates safely.
 PLAN_STORY_PREFIX = "plans/features/"
 # Build inputs that change what a .NET stage compiles, wherever they sit. The
 # allow-lists above never contain one today; naming them keeps a future move
@@ -142,6 +143,9 @@ GATE_PATHS = frozenset(
         "scripts/tests/test_gate_scope.py",
         "scripts/tests/test_verify_scope.py",
         "scripts/build-images.sh",
+        "scripts/image-checks.sh",
+        "scripts/image-db-checks.sh",
+        "scripts/image-base-layers.py",
         "scripts/smoke-clean-build.sh",
         "scripts/tests/review_blockers_fixtures.py",
     }
@@ -234,7 +238,7 @@ def tier_of_path(path: str, *, untracked=(), deleted=()) -> tuple[str, str]:
     if path in DOCS_FULL_PATHS:
         return "full", "documentation a .NET test reads"
     if path.startswith(PLAN_STORY_PREFIX) and path in deleted:
-        return "full", "story file a .NET catalogue test requires"
+        return "full", "deleted story file a .NET catalogue test globs"
     if path.startswith(DOCS_NO_DOTNET_PREFIXES):
         return "no-dotnet", "ADR file the licence and dependency scans resolve"
     if is_doc(path):
@@ -374,8 +378,13 @@ def _evaluate(env) -> Scope:
     change = changed_paths(commits)
     judged = tuple(path for path in change.paths if not is_local_only(path, change.untracked))
     tier, reason = tier_of_paths(change.paths, untracked=change.untracked, deleted=change.deleted)
+    computed = tier
     tier, note = apply_request(tier, env.get("EVIDGATE_GATE_SCOPE"))
     notes = [note] if note else []
+    if note and tier != computed:
+        # The report is read as `<tier> (<reason>, …)`, so a reason for the tier
+        # the paths alone allowed would read as if the request had not moved it.
+        reason, notes = note, []
     if len(commits) > 1:
         notes.append(f"EVIDGATE_REVIEW_BASE was read against {gitio.short(commits[1])} as well")
     return Scope(

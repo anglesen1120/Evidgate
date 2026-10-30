@@ -386,7 +386,19 @@ class ChangeSet(RepoTest):
         self.change(("docs/a.md", "text\n"))
         scope = self.scope(EVIDGATE_GATE_SCOPE="full")
         self.assertEqual(scope.tier, "full")
-        self.assertTrue(any("widened" in note for note in scope.notes))
+        # The scope line prints this beside `full`: it must name the widening,
+        # not the tier the changed paths alone allowed.
+        self.assertIn("widened the docs tier", scope.reason)
+
+    def test_a_full_report_carries_what_the_scope_line_prints(self):
+        self.change(("src/Evidgate.Api/Program.cs", "// x\n"))
+        report = gate_scope.render(self.scope())
+        keys = [line.split(":", 1)[0] for line in report.splitlines()]
+        # A full tier runs every stage, so it has no `skipped:` line: the caller
+        # still has to be able to print `full (<reason>, N changed path(s), base)`.
+        self.assertEqual(keys, ["tier", "reason", "changed", "base", "stages"])
+        self.assertIn("tier: full", report)
+        self.assertIn("reason: src/Evidgate.Api/Program.cs", report)
 
     def test_the_lock_stage_file_is_a_gate_file(self):
         self.change(("scripts/locked-run.sh", "#!/usr/bin/env bash\n"))
@@ -407,6 +419,12 @@ class ReverseCoverage(unittest.TestCase):
     A test that opens `docs/…` or `fixtures/…` fails when that path changes, so
     the path cannot be prose-only: every such literal the repository's own C#
     sources name must classify `full`, or a new test reading one shrinks a lane.
+    The literal form only: a path a source assembles from segments with
+    `Path.Combine(root, "docs", …)` is invisible here, because no joined form is
+    rebuilt from one call (`CatalogueTests` builds `plans/features` that way, and
+    a removal under it is `full` on its own). A segmented path inside a tree that
+    is already `full` loses nothing; one inside an allow-listed tree is the gap
+    this test does not close.
     """
 
     TREES = ("src", "tests")
@@ -473,7 +491,7 @@ class CommandLine(RepoTest):
         self.assertIn("tier: docs", self.output)
         self.assertEqual(self.run_cli(EVIDGATE_GATE_SCOPE="full"), 0)
         self.assertIn("tier: full", self.output)
-        self.assertIn("note: EVIDGATE_GATE_SCOPE=full widened", self.output)
+        self.assertIn("reason: EVIDGATE_GATE_SCOPE=full widened the docs tier", self.output)
 
     def test_outside_a_work_tree_the_report_is_a_full_gate(self):
         # A caller in a directory that is not a work tree gets a red-by-default
