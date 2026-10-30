@@ -16,7 +16,9 @@ NODE_VERSION="26.10.0"
 WORKDIR="$(mktemp -d "$HOME/.evidgate-smoke.XXXXXX")"
 # The inner script lives OUTSIDE the copied tree: inside it would show up in
 # the container as an extra root file and trip check-layout.sh.
-INNER_SCRIPT="$(mktemp "$HOME/.evidgate-smoke-inner.XXXXXX.sh")"
+# The X run must end the name: BSD mktemp substitutes only a trailing run and
+# takes anything after it literally, so a suffix would give every run one path.
+INNER_SCRIPT="$(mktemp "$HOME/.evidgate-smoke-inner.XXXXXX")"
 trap 'rm -rf "$WORKDIR"; rm -f "$INNER_SCRIPT"' EXIT
 
 # Copy tracked + untracked-not-ignored files (a clean-clone equivalent for the
