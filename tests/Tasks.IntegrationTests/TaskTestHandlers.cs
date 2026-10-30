@@ -15,6 +15,9 @@ internal static class TaskHandlerTypes
     internal const string Recording = "test.record";
     internal const string Tenant = "test.tenant";
 
+    /// <summary>A handler that waits inside its run until its cancellation token fires.</summary>
+    internal const string Blocking = "test.blocking";
+
     /// <summary>A type no handler in this process claims (01.5.1 §11: it must stay queued).</summary>
     internal const string Unhandled = "test.unhandled";
 }
@@ -89,13 +92,124 @@ public sealed class RecordingTaskHandler : ITaskHandler<RecordingPayload>
     {
         if (_recorder.Delay > TimeSpan.Zero)
         {
-            await Task.Delay(_recorder.Delay, cancellationToken);
+            // Ignores the token on purpose: it models a handler that does not honour
+            // cancellation, so a batch can really outlive its lease.
+            await Task.Delay(_recorder.Delay, CancellationToken.None);
         }
 
         if (_recorder.Failure is not null)
         {
             throw _recorder.Failure;
         }
+    }
+}
+
+/// <summary>Payload of <see cref="BlockingTaskHandler"/>.</summary>
+public sealed record BlockingPayload(string Marker);
+
+/// <summary>
+/// What the lease and shutdown tests observe about <see cref="BlockingTaskHandler"/>:
+/// whether a run reached its wait, whether the consumer's token fired, and how many runs
+/// were ever in flight at once — a second consumer running the same row pushes that above
+/// one, which is the double execution those two paths must never cause.
+/// </summary>
+public sealed class BlockingTaskProbe
+{
+    private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _blocksRemaining = 1;
+    private int _running;
+    private int _maxRunning;
+    private int _runs;
+    private int _cancelledAtEntry;
+
+    /// <summary>Completes when a run has reached the wait, so a test never polls for it.</summary>
+    internal Task Entered => _entered.Task;
+
+    /// <summary>Completes when a run's token fired while it was waiting.</summary>
+    internal Task Cancelled => _cancelled.Task;
+
+    /// <summary>Total runs the handler saw.</summary>
+    internal int Runs => Volatile.Read(ref _runs);
+
+    /// <summary>Runs whose token had already fired when the handler was entered.</summary>
+    internal int CancelledAtEntry => Volatile.Read(ref _cancelledAtEntry);
+
+    /// <summary>Highest number of runs that were in flight at the same time.</summary>
+    internal int MaxRunning => Volatile.Read(ref _maxRunning);
+
+    /// <summary>
+    /// The first run waits until <paramref name="cancellationToken"/> fires; later runs
+    /// return at once, so a test can finish the reclaimed row without a second wait.
+    /// A run entered with a spent budget is counted, so a test can prove it really ran.
+    /// </summary>
+    internal async ValueTask RunAsync(CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            Interlocked.Increment(ref _cancelledAtEntry);
+        }
+
+        Interlocked.Increment(ref _runs);
+        TrackMaximum(Interlocked.Increment(ref _running));
+
+        try
+        {
+            if (Interlocked.Exchange(ref _blocksRemaining, 0) == 1)
+            {
+                _entered.TrySetResult();
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    _cancelled.TrySetResult();
+                    throw;
+                }
+            }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _running);
+        }
+    }
+
+    private void TrackMaximum(int running)
+    {
+        var observed = Volatile.Read(ref _maxRunning);
+        while (running > observed &&
+               Interlocked.CompareExchange(ref _maxRunning, running, observed) != observed)
+        {
+            observed = Volatile.Read(ref _maxRunning);
+        }
+    }
+}
+
+/// <summary>
+/// The handler the cancellation paths of the consumer need: one that is still inside its
+/// run when the lease budget or the host's stopping token fires, so both the retry and the
+/// release are observed instead of inferred from a fast handler.
+/// </summary>
+public sealed class BlockingTaskHandler : ITaskHandler<BlockingPayload>
+{
+    private readonly BlockingTaskProbe _probe;
+
+    public BlockingTaskHandler(BlockingTaskProbe probe) => _probe = probe;
+
+    /// <inheritdoc />
+    public string TaskType => TaskHandlerTypes.Blocking;
+
+    /// <inheritdoc />
+    public bool RequiresTenant => false;
+
+    /// <inheritdoc />
+    public ValueTask HandleAsync(BlockingPayload payload, ITenantScope? scope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        return _probe.RunAsync(cancellationToken);
     }
 }
 

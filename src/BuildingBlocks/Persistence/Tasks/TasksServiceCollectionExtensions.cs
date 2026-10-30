@@ -42,6 +42,12 @@ public static class TasksServiceCollectionExtensions
             .Validate(
                 options => options.Queues.All(queue => !string.IsNullOrWhiteSpace(queue.Name) && queue.Name.Length <= 64),
                 "every EVIDGATE__TASKS__QUEUES__*__NAME must be a non-empty queue name of at most 64 characters")
+            // ValidateDataAnnotations never looks inside a list, so the per-queue
+            // [Range] is dead here and a zero value stopped the Worker instead of the
+            // boot. The numbers repeat it because check-env-matrix.mjs reads them there.
+            .Validate(
+                options => options.Queues.All(queue => queue.Concurrency >= 1 && queue.Concurrency <= 64),
+                "EVIDGATE__TASKS__QUEUES__*__CONCURRENCY must be between 1 and 64")
             .Validate(
                 options => options.BackoffMaxSeconds >= options.BackoffBaseSeconds,
                 "EVIDGATE__TASKS__BACKOFFMAXSECONDS must be at least EVIDGATE__TASKS__BACKOFFBASESECONDS")
