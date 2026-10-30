@@ -64,12 +64,12 @@ public sealed class TaskLeaseCancellationTests
             services: collection => collection.AddSingleton(host.Probe));
 
         var running = host.Consumer.PollOnceAsync(Queue, Token);
-        await host.Probe.Entered.WaitAsync(TimeSpan.FromSeconds(30), Token);
+        await host.Probe.WaitEnteredAsync(TimeSpan.FromSeconds(30), Token);
 
         // Before the budget runs out the run is still inside the handler, so the
         // cancellation below is caused by the advance and not by a budget already spent.
         host.Probe.Runs.ShouldBe(1);
-        host.Probe.Cancelled.IsCompleted.ShouldBeFalse("the handler is still waiting");
+        host.Probe.HasCancelled.ShouldBeFalse("the handler is still waiting");
         running.IsCompleted.ShouldBeFalse("the pass is still running the handler");
 
         // The claim is `active` under a live lease, so a second consumer takes nothing:
@@ -85,7 +85,7 @@ public sealed class TaskLeaseCancellationTests
 
         clock.Advance(TimeSpan.FromSeconds(9.5));
 
-        await host.Probe.Cancelled.WaitAsync(TimeSpan.FromSeconds(30), Token);
+        await host.Probe.WaitCancelledAsync(TimeSpan.FromSeconds(30), Token);
 
         try
         {
@@ -104,7 +104,7 @@ public sealed class TaskLeaseCancellationTests
         }
 
         (await running.WaitAsync(TimeSpan.FromSeconds(30), Token)).ShouldBe(1);
-        host.Probe.Cancelled.IsCompleted.ShouldBeTrue("the handler's token fires at its budget");
+        host.Probe.HasCancelled.ShouldBeTrue("the handler's token fires at its budget");
 
         await AssertLeaseAttemptFailedAsync(owner);
 
