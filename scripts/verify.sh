@@ -12,13 +12,41 @@
 set -euo pipefail
 
 # BASH_SOURCE, not $0: the stage-selection tests source this file, and $0 there
-# is the test's own shell, not this script.
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# is the test's own shell, not this script. A piped run (`bash < scripts/verify.sh`)
+# has no source path at all — the caller's shell feeds the bytes — so the root is
+# the repository git names for the directory it was piped from, and the run guard
+# at the end of the file calls `main` for that case too.
+# Limitation: a piped run's text is never scanned for the disarmed-gate flag.
+# bash consumes the script from stdin before any check runs, so no file is left to
+# read. CI and every documented caller invoke the script by path, which is scanned.
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+else
+  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+
+# Both files are the gate: the stage table below and the guard/selection half in
+# verify-guards.sh (split out to keep this file under the 500-line limit). The
+# scans read both, and a piped run must start inside the repository, so neither
+# file may be missing before anything else is defined.
+if [[ ! -f "$ROOT/scripts/verify.sh" ]]; then
+  echo "verify: cannot find scripts/verify.sh under '$ROOT': a piped run must start" \
+    "inside the repository" >&2
+  exit 2
+fi
+if [[ ! -f "$ROOT/scripts/verify-guards.sh" ]]; then
+  echo "verify: cannot find scripts/verify-guards.sh next to scripts/verify.sh under" \
+    "'$ROOT'" >&2
+  exit 2
+fi
+# shellcheck source=scripts/verify-guards.sh
+. "$ROOT/scripts/verify-guards.sh"
 
 # Canonical stage order: the order every stage list is validated and reported in,
 # and the order a bare run follows within its tier. A bare run does not run every
-# stage — scripts/gate_scope.py picks the subset the change set can fail (see the
-# "path-scoped tiers" block below); `--stage` runs a subset in the order given.
+# stage — scripts/gate_scope.py picks the subset the change set can fail, and
+# verify-guards.sh consumes that report; `--stage` runs a subset in the order
+# given.
 ALL_STAGES=(
   restore
   build
@@ -58,6 +86,16 @@ ALL_STAGES=(
 
 stage() { echo "== $1"; }
 
+# The test assemblies that carry a trait-selected stage. A stage cannot filter
+# the whole solution: every assembly without the trait then runs zero tests, MTP
+# reports that as exit code 8 for a run that did execute the trait's tests, and
+# the only way to hide it is the flag `refuse_gate_flag` rejects.
+# The assemblies are named instead, and `run_trait_stage` (verify-guards.sh) fails
+# the stage when a `*.cs` file carrying the trait belongs to a project outside
+# them, so a moved or reformatted test cannot silently drop out of the stage.
+HOSTILE_ASSEMBLIES=(tests/Tenancy.IntegrationTests)
+FUZZ_ASSEMBLIES=(tests/Tenancy.IntegrationTests)
+
 usage() {
   cat <<'EOF'
 usage: scripts/verify.sh [--stage <name>]... | --list-stages
@@ -92,12 +130,30 @@ run_stage() {
   test)
     # EVIDGATE_VERIFY_SKIP_DOCKER=1 skips the Category=Docker integration tests
     # (Testcontainers). Only smoke-clean-build.sh sets it: its container has no
-    # Docker daemon, and mounting the host socket would hand it the host. Exit code
-    # 8 means an assembly holds only Docker tests, so none ran there.
+    # Docker daemon, and mounting the host socket would hand it the host. The
+    # skip path runs one assembly per call because an assembly whose whole suite
+    # is Docker tests legitimately runs none there, and MTP reports that for the
+    # assembly as exit code 8 — a solution-wide call would turn it into one
+    # failed run. Per assembly the code is legible: 8 is "this assembly had no
+    # test left", anything else is the assembly's own verdict, and a stage where
+    # no assembly ran a test at all still fails.
     if [[ "${EVIDGATE_VERIFY_SKIP_DOCKER:-}" == "1" ]]; then
       stage "dotnet test (unit + architecture; Docker integration tests skipped)"
-      dotnet test --no-build -c Release --solution Evidgate.slnx \
-        --filter-not-trait "Category=Docker" --ignore-exit-code 8
+      tests_ran=0
+      for test_project in tests/*/*.csproj; do
+        status=0
+        dotnet test --no-build -c Release --project "$test_project" \
+          --filter-not-trait "Category=Docker" || status=$?
+        case "$status" in
+        0) tests_ran=1 ;;
+        8) echo "   $test_project: no test runs with Docker skipped (the assembly needs a daemon)" ;;
+        *) exit "$status" ;;
+        esac
+      done
+      if [[ "$tests_ran" -eq 0 ]]; then
+        echo "verify: the Docker-skipped test stage ran no test in any assembly" >&2
+        exit 1
+      fi
     else
       stage "dotnet test (unit, architecture, Docker integration)"
       dotnet test --no-build -c Release --solution Evidgate.slnx
@@ -134,11 +190,10 @@ run_stage() {
     # 06.3.2-T1.2/T1.3 (AC2/AC3): the committed hostile-input corpus and its mutation smoke, run on the built
     # assembly and selected by [Trait("Category","Hostile")]. The corpus drives the parser profile in-process
     # (XML reports, archives) and the completion's media sniff/size cap with fakes, so the stage needs no Docker
-    # daemon and the assembly's Docker suites never start. `--ignore-exit-code 8` follows the `test` stage's skip
-    # path: every other assembly of the solution holds no Hostile test, which MTP reports as exit code 8.
+    # daemon and the assembly's Docker suites never start. Only the trait-bearing assemblies run (see
+    # `run_trait_stage`): a trait that selects nothing fails the stage instead of passing it.
     stage "dotnet test (hostile-input fixtures and mutation smoke)"
-    dotnet test --no-build -c Release --solution Evidgate.slnx \
-      --filter-trait "Category=Hostile" --ignore-exit-code 8
+    run_trait_stage Hostile "${HOSTILE_ASSEMBLIES[@]}"
     ;;
   fixtures-fuzz)
     # 06.3.2-T2.1 (AC4): the seeded-mutation fuzz harness (HostileFuzzTests, FuzzPromotionTests) over
@@ -149,15 +204,14 @@ run_stage() {
     # Category=Hostile only and never runs this harness. The seed is set HERE too: one per run, from the CI run id
     # (or the clock outside CI), so consecutive nights do not replay one PRNG stream; it is echoed below so a red
     # run can be replayed with EVIDGATE_FUZZ_SEED=<value>. Findings go under artifacts/fuzz-findings, which the
-    # nightly job uploads. `--ignore-exit-code 8` follows the `test` stage's skip path: every other assembly of the
-    # solution holds no Fuzz test, which MTP reports as exit code 8.
+    # nightly job uploads. Only the trait-bearing assemblies run (see `run_trait_stage`): a trait that selects
+    # nothing fails the stage instead of passing it.
     export EVIDGATE_FUZZ_BUDGET_SECONDS="${EVIDGATE_FUZZ_BUDGET_SECONDS:-600}"
     export EVIDGATE_FUZZ_FINDINGS_DIR="${EVIDGATE_FUZZ_FINDINGS_DIR:-$ROOT/artifacts/fuzz-findings}"
     export EVIDGATE_FUZZ_SEED="${EVIDGATE_FUZZ_SEED:-${GITHUB_RUN_ID:-$(date +%s)}}"
     stage "dotnet test (fuzz harness, ${EVIDGATE_FUZZ_BUDGET_SECONDS}s budget)"
     echo "   EVIDGATE_FUZZ_SEED=${EVIDGATE_FUZZ_SEED}"
-    dotnet test --no-build -c Release --solution Evidgate.slnx \
-      --filter-trait "Category=Fuzz" --ignore-exit-code 8
+    run_trait_stage Fuzz "${FUZZ_ASSEMBLIES[@]}"
     ;;
   tsc-build)
     # tsc -b of the root tsconfig.json references: packages/* AND apps/web — the
@@ -321,15 +375,23 @@ run_stage() {
   check-gate-scope)
     # The path-scoped tier classifier's fixtures (test_gate_scope.py): which
     # stage subset a change set needs, the allow-lists, the fail-closed paths and
-    # the mirror of ALL_STAGES; and the consumer's (test_verify_scope.py): only a
-    # docs/no-dotnet tier with a known, non-empty list may narrow a bare run.
+    # the mirror of ALL_STAGES; the reason and report lines it prints
+    # (test_gate_scope_reasons.py); the consumer's (test_verify_scope.py): only a
+    # docs/no-dotnet tier with a known, non-empty list may narrow a bare run, and
+    # the scope line a full tier prints; the gate's own refusals
+    # (test_verify_refusal.py): a script or its sourced guard helper that hands
+    # dotnet the ignore flag, and a trait stage whose assemblies do not cover the
+    # trait, both fail; and the clean-build smoke's temp path
+    # (test_smoke_mktemp.py).
     # Bytecode is off so the run leaves no .pyc in the tracked test tree; the
     # files are named rather than discovered, because `unittest` with nothing to
     # run prints "Ran 0 tests ... OK" and a rename would turn this stage green.
     stage "check-gate-scope"
     PYTHONPATH="${ROOT}/scripts:${ROOT}/scripts/tests${PYTHONPATH:+:${PYTHONPATH}}" \
       PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
-      scripts/tests/test_gate_scope.py scripts/tests/test_verify_scope.py
+      scripts/tests/test_gate_scope.py scripts/tests/test_gate_scope_reasons.py \
+      scripts/tests/test_verify_scope.py \
+      scripts/tests/test_verify_refusal.py scripts/tests/test_smoke_mktemp.py
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three
@@ -374,108 +436,18 @@ run_stage() {
   esac
 }
 
-# --- argument parsing ---------------------------------------------------------
-# Everything below is a function and the run is guarded at the end of the file,
-# so sourcing this script defines the selection without executing a stage.
+# --- run ---------------------------------------------------------------------
+# Argument parsing, the disarmed-gate refusal, the trait-stage runner and the
+# gate-scope report consumer live in scripts/verify-guards.sh (sourced above):
+# this file keeps the stage table they drive. The parsed report is state of the
+# run, so it is initialised here beside the loop that fills and reads it.
 selected=() scope_tier="" scope_reason="" scope_changed="" scope_base=""
 scope_stages="" scope_skipped="" scope_notes=()
-
-# `in_list <name> <names...>`: membership over an explicit list.
-in_list() {
-  local needle="$1" item
-  shift
-  for item in "$@"; do [[ "$item" == "$needle" ]] && return 0; done
-  return 1
-}
-
-fail_usage() {
-  echo "verify: $1" >&2
-  usage >&2
-  exit 2
-}
-
-parse_args() {
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-    --stage)
-      if [[ $# -lt 2 ]]; then fail_usage "--stage needs a stage name"; fi
-      # An explicit list is the caller's own verdict: every named stage runs,
-      # whatever the tier would have chosen; an unknown name is a caller typo.
-      if ! in_list "$2" "${ALL_STAGES[@]}"; then fail_usage "unknown stage '$2'"; fi
-      selected+=("$2")
-      shift 2
-      ;;
-    --list-stages) printf '%s\n' "${ALL_STAGES[@]}"; exit 0 ;;
-    -h | --help) usage; exit 0 ;;
-    *) fail_usage "unknown argument '$1'" ;;
-    esac
-  done
-}
-
-# --- path-scoped tiers --------------------------------------------------------
-# No --stage means "whatever this change set can fail": scripts/gate_scope.py is
-# the only decider (and where it is tested), this block just consumes its report.
-# A classifier that crashes, prints nothing or omits the tier is the full gate.
-#
-# The FIRST line for a key wins: a duplicate may repeat a fact, never replace it.
-read_scope() {
-  local line
-  while IFS= read -r line; do
-    case "$line" in
-    "tier: "*) if [[ -z "$scope_tier" ]]; then scope_tier="${line#tier: }"; fi ;;
-    "reason: "*) if [[ -z "$scope_reason" ]]; then scope_reason="${line#reason: }"; fi ;;
-    "changed: "*) if [[ -z "$scope_changed" ]]; then scope_changed="${line#changed: }"; fi ;;
-    "base: "*) if [[ -z "$scope_base" ]]; then scope_base="${line#base: }"; fi ;;
-    "stages: "*) if [[ -z "$scope_stages" ]]; then scope_stages="${line#stages: }"; fi ;;
-    "skipped: "*) if [[ -z "$scope_skipped" ]]; then scope_skipped="${line#skipped: }"; fi ;;
-    "note: "*) scope_notes+=("${line#note: }") ;;
-    esac
-  done <<<"$1"
-}
-
-# Turn the parsed report into the run list. Only a `docs` or `no-dotnet` tier
-# with a non-empty list of known stages may narrow a bare run; an unknown tier,
-# an empty or invented stage list, or a missing key is the full gate.
-plan_selection() {
-  local name narrowed="" candidates=()
-  case "$scope_tier" in
-  docs | no-dotnet) if [[ -n "$scope_stages" ]]; then narrowed=1; fi ;;
-  esac
-  if [[ -n "$narrowed" ]]; then
-    read -r -a candidates <<<"$scope_stages" || true
-    for name in ${candidates[@]+"${candidates[@]}"}; do
-      if ! in_list "$name" "${ALL_STAGES[@]}"; then narrowed=""; fi
-    done
-    if [[ "${#candidates[@]}" -eq 0 ]]; then narrowed=""; fi
-  fi
-  if [[ -n "$narrowed" ]]; then
-    selected=("${candidates[@]}")
-    echo "== gate scope: ${scope_tier} (${scope_reason}, ${scope_changed} changed path(s), base ${scope_base})"
-    if [[ -n "$scope_skipped" ]]; then echo "   skipped by scope: ${scope_skipped}"; fi
-    for note in ${scope_notes[@]+"${scope_notes[@]}"}; do echo "   note: ${note}"; done
-  else
-    scope_tier="full"
-    echo "== gate scope: no usable tier/stage list (full gate)"
-    selected=("${ALL_STAGES[@]}")
-  fi
-}
-
-# The success line is a claim about the whole gate, so it is made only when every
-# canonical stage is in the run list.
-report_result() {
-  local name
-  for name in "${ALL_STAGES[@]}"; do
-    if ! in_list "$name" ${selected[@]+"${selected[@]}"}; then
-      echo "== verify: selected stages passed: ${selected[*]}"
-      return 0
-    fi
-  done
-  echo "== verify: all stages passed"
-}
 
 main() {
   local name report
   cd "$ROOT"
+  refuse_gate_flag "$@"
   parse_args "$@"
   if [[ "${#selected[@]}" -eq 0 ]]; then
     report="$(PYTHONDONTWRITEBYTECODE=1 python3 scripts/gate_scope.py)" || report=""
@@ -490,7 +462,10 @@ main() {
   report_result
 }
 
-# Run only when executed: a sourced copy stops after defining the selection.
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+# Run only when executed: a sourced copy stops after defining the selection. A
+# piped run has no source path at all, so it is the other case that must run —
+# `bash < scripts/verify.sh` is how the gate is quoted into a shell, and running
+# nothing there would read as a pass.
+if [[ -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]}" == "$0" ]]; then
   main "$@"
 fi
