@@ -4,12 +4,15 @@
 # ci.yml stay current. Dependabot PRs run the same required checks as any PR —
 # a bump still needs its ADR-0002 row (check-adr-matrix.sh), licence-scan and
 # audit-deps pass (plans/01-foundation.md §5–§6, 01.7.1 §7).
+# target-branch: the default branch (main) is stale; work integrates on develop,
+# so every update PR must open against develop.
 version: 2
 updates:
   # NuGet — Central Package Management (Directory.Packages.props at repo root).
   - package-ecosystem: 'nuget'
     directories:
       - '/'
+    target-branch: 'develop'
     schedule:
       interval: 'weekly'
       day: 'monday'
@@ -33,6 +36,12 @@ updates:
       - '/'
       - '/apps/web'
       - '/packages/*'
+    target-branch: 'develop'
+    # TypeScript majors are locked by the Angular build peer range (DECISIONS §4).
+    ignore:
+      - dependency-name: 'typescript'
+        update-types:
+          - 'version-update:semver-major'
     schedule:
       interval: 'weekly'
       day: 'monday'
@@ -55,6 +64,7 @@ updates:
   - package-ecosystem: 'github-actions'
     directories:
       - '/'
+    target-branch: 'develop'
     schedule:
       interval: 'weekly'
       day: 'monday'
