@@ -11,6 +11,23 @@ check_rls = importlib.util.module_from_spec(SPEC)
 sys.modules["check_rls"] = check_rls
 SPEC.loader.exec_module(check_rls)
 
+# The policy-replay and operator-SELECT fixtures live in a second file (this one is near its
+# line budget). They are imported here because `verify.sh` runs this file by name, and unittest
+# collects the `TestCase` subclasses that are attributes of the module it was given.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_check_rls_policies import OperatorSelectReplay, PolicyStatementReplay  # noqa: E402,F401
+
+
+class ReplayFixturesLoaded(unittest.TestCase):
+    """`verify.sh` runs this file by name, so the second fixture file is reached only through the
+    import above; naming the classes here makes a dropped import fail the gate instead of
+    silently shrinking it."""
+
+    def test_the_policy_replay_fixtures_are_collected_with_this_file(self):
+        for fixture in (PolicyStatementReplay, OperatorSelectReplay):
+            with self.subTest(fixture=fixture.__name__):
+                self.assertTrue(issubclass(fixture, unittest.TestCase))
+
 GOOD_TABLE = """
 create table public.widget (
   id uuid not null,
@@ -36,9 +53,14 @@ grant execute on function evidgate_resolve.lookup(text) to evidgate_app;
 
 
 def run(sql: str, exceptions: str = "") -> list:
+    return run_files({"0001_x_y.sql": sql}, exceptions)
+
+
+def run_files(files: dict[str, str], exceptions: str = "") -> list:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        (root / "0001_x_y.sql").write_text(sql, encoding="utf-8")
+        for name, sql in files.items():
+            (root / name).write_text(sql, encoding="utf-8")
         (root / "ex.txt").write_text(exceptions, encoding="utf-8")
         return check_rls.lint(root, root / "ex.txt")
 
@@ -183,6 +205,30 @@ create or replace function {name}(p_key text) returns uuid
 $$;
 """
 
+DEFAULT_OPERATOR_SELECT = """
+alter default privileges for role evidgate_owner in schema public
+  grant select on tables to evidgate_operator;
+"""
+
+TO_LESS_EVENT = """
+create table public.security_event (
+  id uuid not null,
+  org_id uuid not null,
+  constraint security_event_pkey primary key (id),
+  constraint security_event_org_key unique (org_id, id)
+);
+alter table public.security_event enable row level security;
+alter table public.security_event force row level security;
+create policy tenant_isolation on public.security_event
+  using (org_id = evidgate.current_org_id());
+"""
+
+ROLE_SCOPED_EVENT = """
+drop policy if exists tenant_isolation on public.security_event;
+create policy tenant_isolation on public.security_event for all to evidgate_app
+  using (org_id = evidgate.current_org_id()) with check (org_id = evidgate.current_org_id());
+"""
+
 
 class AuditExemptions(unittest.TestCase):
     """F28/`0051`: the audit exemptions are exact, qualified and reasoned, and they do not blanket.
@@ -266,6 +312,90 @@ class AuditExemptions(unittest.TestCase):
             with self.subTest(name=name):
                 for phrase in stale:
                     self.assertNotIn(phrase, reason.lower(), f"{name} still claims the table is missing")
+
+
+class PolicyRoles(unittest.TestCase):
+    """A tenant policy names its roles, and an operator SELECT needs a policy that excludes it.
+
+    A policy without a `TO` clause applies to PUBLIC, so `evidgate_operator` — which `0001`'s
+    default privileges let SELECT every `public` table — is filtered by `org_id` instead of
+    being refused. `POLICY_TO_EXEMPT` excuses the three statements `0055` replaces, and only
+    while the replayed effective policy really is a different, role-scoped statement.
+    """
+
+    def test_policy_without_a_role_clause_is_refused(self):
+        self.assertEqual(rules(run(GOOD_TABLE.replace(" for all to evidgate_app", " for all"))), {"policy_no_role"})
+
+    def test_public_is_not_a_role(self):
+        self.assertEqual(rules(run(GOOD_TABLE.replace("to evidgate_app", "to public"))), {"policy_no_role"})
+
+    def test_a_superseded_exempt_policy_is_clean(self):
+        files = {"0053_security_security_event.sql": TO_LESS_EVENT, "0055_tenant_policy_roles.sql": ROLE_SCOPED_EVENT}
+        self.assertEqual(run_files(files), [])
+
+    def test_the_exemption_does_not_leak_to_another_file(self):
+        for name in ("0053_other_name.sql", "0054_healing_llm_call.sql"):
+            with self.subTest(file=name):
+                files = {name: TO_LESS_EVENT, "0055_tenant_policy_roles.sql": ROLE_SCOPED_EVENT}
+                self.assertEqual(rules(run_files(files)), {"policy_no_role"})
+
+    def test_an_exempt_policy_that_is_never_superseded_still_fails(self):
+        self.assertEqual(rules(run_files({"0053_security_security_event.sql": TO_LESS_EVENT})), {"policy_no_role"})
+
+    def test_a_replacement_that_keeps_the_policy_open_does_not_supersede(self):
+        for replacement in (" for all", " for all to public"):
+            with self.subTest(replacement=replacement):
+                files = {
+                    "0053_security_security_event.sql": TO_LESS_EVENT,
+                    "0055_tenant_policy_roles.sql": ROLE_SCOPED_EVENT.replace(" for all to evidgate_app", replacement),
+                }
+                self.assertEqual(rules(run_files(files)), {"policy_no_role"})
+
+    def test_every_policy_exemption_is_exact_and_reasoned(self):
+        for (name, policy, table), reason in check_rls.POLICY_TO_EXEMPT.items():
+            with self.subTest(policy=(name, policy, table)):
+                self.assertTrue(name.endswith(".sql"), "the key names the exact migration file")
+                self.assertEqual(policy, "tenant_isolation")
+                self.assertTrue(table.startswith("public."), "the table is schema-qualified")
+                self.assertIn("0055_tenant_policy_roles.sql", reason, "the reason names the migration that supersedes it")
+
+    def test_operator_select_on_a_policy_that_admits_it_is_refused(self):
+        for policy in (GOOD_TABLE.replace(" for all to evidgate_app", " for all"), GOOD_TABLE.replace("to evidgate_app", "to public")):
+            with self.subTest(policy=policy.splitlines()[-2]):
+                findings = run(DEFAULT_OPERATOR_SELECT + policy)
+                self.assertIn("operator_select_no_policy", rules(findings))
+                self.assertTrue(all(f.subject == "public.widget" for f in findings))
+
+    def test_operator_select_with_a_role_scoped_policy_is_clean(self):
+        # The operator keeps SELECT from the default privileges, but no policy matches its rows.
+        self.assertEqual(run(DEFAULT_OPERATOR_SELECT + GOOD_TABLE), [])
+
+    def test_an_explicit_grant_is_seen_without_default_privileges(self):
+        sql = GOOD_TABLE.replace("to evidgate_app", "") + "grant select on public.widget to evidgate_operator;"
+        self.assertIn("operator_select_no_policy", rules(run(sql)))
+
+    def test_a_revoke_clears_the_operator_grant(self):
+        sql = DEFAULT_OPERATOR_SELECT + GOOD_TABLE.replace("to evidgate_app", "") + "revoke all on public.widget from evidgate_operator;"
+        self.assertNotIn("operator_select_no_policy", rules(run(sql)))
+
+    def test_a_later_grant_wins_over_an_earlier_revoke(self):
+        sql = (GOOD_TABLE.replace("to evidgate_app", "")
+               + "revoke select on public.widget from evidgate_operator;"
+               + "grant select on public.widget to evidgate_operator;")
+        self.assertIn("operator_select_no_policy", rules(run(sql)))
+
+    def test_an_operator_policy_gates_the_operator(self):
+        sql = DEFAULT_OPERATOR_SELECT + GOOD_TABLE.replace("to evidgate_app", "to evidgate_operator")
+        self.assertEqual(run(sql), [])
+
+    def test_an_excepted_table_is_out_of_scope(self):
+        sql = DEFAULT_OPERATOR_SELECT + """
+        create table public.permission (id uuid not null, constraint permission_pkey primary key (id));
+        alter table public.permission enable row level security;
+        alter table public.permission force row level security;
+        create policy permission_app_read on public.permission for select to evidgate_app using (true);
+        """
+        self.assertEqual(run(sql, "public.permission catalogue\n"), [])
 
 
 class RealRepository(unittest.TestCase):

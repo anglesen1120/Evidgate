@@ -136,8 +136,11 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   `healing_llm_budget` (one counter row per project, day and period, whose unique key is the atomic
   consume target, with both caps deliberately outside the app role's grant and an owner/definer
   provisioning path owed to 08.5.1-T1.4/T1.7) — shape, grants and the deferred incident/candidate FKs
-  in its own notes below;
-  the next free number is `0055`; a gap means two branches invented the same sequence and neither history can be trusted.
+  in its own notes below; and `0055` is the tenant-policy role fix — `tenant_isolation` re-created
+  `TO evidgate_app` on `security_event` (`0053`) and on `healing_llm_call`/`healing_llm_budget` (`0054`),
+  whose policy was declared without a `TO` clause and therefore applied to PUBLIC, plus the
+  `evidgate_operator` `select` revoked on all three tables (notes at the end of this file);
+  the next free number is `0056`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -494,7 +497,9 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
   SQL, so an emitter that writes a payload is a defect its own review must catch (11.5.1 §8, S3).
 - RLS is the ordinary tenant shape: `ENABLE` + `FORCE ROW LEVEL SECURITY`. `tenant_isolation` is the
   tenant policy — `org_id = evidgate.current_org_id()` in `USING`, applied as `WITH CHECK` too, and with
-  no `TO` clause it applies to PUBLIC, so the app role reaches only its own scope. `security_event_owner_backfill`
+  no `TO` clause it applies to PUBLIC, so the app role reaches only its own scope. That PUBLIC scope is
+  closed by `0055`, which re-creates the policy `TO evidgate_app` (notes at the end of this file); the
+  predicate and the app role's behaviour are unchanged. `security_event_owner_backfill`
   is the house second policy (`FOR ALL TO evidgate_owner USING (true) WITH CHECK (true)`,
   `0004`/`0005`/`0028`/`0046`/`0049`/`0052` precedent): `FORCE` applies to the owner as well, so a
   migration or fixture write would otherwise be refused. It names `evidgate_owner` only and grants the
@@ -513,10 +518,12 @@ exists` and a catalog check around the FK add, so a re-run is a no-op; one
   privileges, so `evidgate_app` starts with full DML, and `0053` closes with
   `revoke update, delete, truncate on public.security_event from evidgate_app;`. `select` and `insert`
   remain — exactly what an emitter needs: the application role can record an event and read it back, but
-  cannot rewrite or remove one after the fact. `evidgate_operator` keeps `0001`'s default `select`. The
-  reason: a security record an ordinary tenant request could edit is not evidence, and no retention
-  sweep exists yet, so nothing legitimate updates or deletes a row today. (A future sweep, if any, is a
-  definer task of its own, like `0015`'s purge.)
+  cannot rewrite or remove one after the fact. The reason: a security record an ordinary tenant request
+  could edit is not evidence, and no retention sweep exists yet, so nothing legitimate updates or deletes
+  a row today. (A future sweep, if any, is a definer task of its own, like `0015`'s purge.)
+  `evidgate_operator` kept `0001`'s default `select` until `0055` revoked it: with the policy applying
+  to PUBLIC, that grant let an operator session set `evidgate.org_id` and read any tenant's events
+  (notes at the end of this file).
 - `updated_at` and `version` belong to the database: `security_event_set_updated_at_and_version` is the
   `0004` convention trigger (`BEFORE UPDATE … FOR EACH ROW`, `public.set_updated_at_and_version()`), so a
   privileged backfill stamps the time and increments `version`. No route writes them — the app role may
@@ -596,7 +603,9 @@ period_cap_tokens returning id`, whose zero-row result means no call is placed (
   `period_start` is a `date` because the boundary is a calendar day the caller resolves.
 - RLS is the ordinary tenant shape on both tables: `ENABLE` + `FORCE ROW LEVEL SECURITY`,
   `tenant_isolation` as `org_id = evidgate.current_org_id()` in USING and as WITH CHECK, declared
-  without `TO` so it applies to PUBLIC, plus the house `_owner_backfill` policy (`FOR ALL TO
+  without `TO` so it applies to PUBLIC — `0055` re-creates both policies `TO evidgate_app`, with the
+  same predicate and the same app-role result (notes at the end of this file) — plus the house
+  `_owner_backfill` policy (`FOR ALL TO
 evidgate_owner USING (true) WITH CHECK (true)`) that `FORCE` makes necessary for a migration or
   fixture write. Neither table is in `contracts/rls-exceptions.txt`: `org_id` is NOT NULL on both, so
   there is no NULL-org read row and the boot self-check sees a plain scoped tenant policy. There is
@@ -610,7 +619,8 @@ evidgate_owner USING (true) WITH CHECK (true)`) that `FORCE` makes necessary for
   of exactly the two columns the consume and reset statements move (`used_cost`, `used_tokens`) — two
   columns, not the four-plus-two an earlier revision of this note counted. The identity columns and
   the period stay unwritable, so a consume cannot re-target or backdate the row it matched, and
-  neither table has a DELETE. `evidgate_operator` keeps a read-only `select` (TL T76) and
+  neither table has a DELETE. `evidgate_operator` kept a read-only `select` (TL T76) until `0055`
+  revoked it — that grant under a PUBLIC policy could read any tenant's ledger and budget rows — and
   `evidgate_worker_sched` holds nothing — the gateway runs in a tenant context, never as a sweep.
 - THE CAP WRITER IS OWED, NOT GRANTED: `period_cap_cost`/`period_cap_tokens` are in neither the
   app-role INSERT nor its UPDATE grant, because a tenant transaction able to write either one could
@@ -647,3 +657,53 @@ Test migration directories live with their test project
 `migrations/` is the production history and must contain only real changes.
 `tests/Isolation.Tests` proves the tenancy contract by applying these files
 through the real runner against a throwaway PostgreSQL 18 container.
+
+## Notes on tenant policy roles (`0055`)
+
+- Why the file exists: `tenant_isolation` reached public.security_event (`0053`) and
+  public.healing_llm_call / public.healing_llm_budget (`0054`) without a `TO` clause, so PostgreSQL
+  applied it to PUBLIC — every role. `evidgate_operator` held `SELECT` on all three (from `0001`'s
+  default privileges and, for the two LLM tables, explicitly at the end of `0054`) and a role may
+  `set evidgate.org_id` itself, so an operator session could read any tenant's security events, call
+  ledger and budget counters. No application path read these tables as the operator — the tenant
+  routes and the recorder run as `evidgate_app` — so the grant bought no read path, only the exposure.
+- What changed: all three policies are dropped and re-created as `FOR ALL TO evidgate_app` with the
+  same predicate (`org_id = evidgate.current_org_id()` in `USING`, the same expression in
+  `WITH CHECK`; `0053` declared `USING` only, and a policy's `WITH CHECK` defaults to its `USING`, so
+  the app role's behaviour is identical), and `revoke all on public.<table> from evidgate_operator`
+  runs on each. The table-level revoke is the whole of it because no column-level grant to the
+  operator exists on those tables. The statements are `drop policy if exists` + `create policy` +
+  a repeatable `revoke`, and the file has no down migration. The policy keeps its `tenant_isolation`
+  name — the house policy naming rule's `<table>_app_tenant` is the template for a table this
+  repository creates from now on — because this file corrects the role clause of one existing policy,
+  and a rename would split that policy's history in two and break the lint's exact
+  `(file, policy, table)` exemption keys.
+- What did NOT change: `0053` and `0054` are applied files and stay byte-identical (the runner refuses
+  a checksum mismatch); their notes above are kept as the history of what those files did, with the
+  operator sentences marked as superseded here. `ENABLE`/`FORCE ROW LEVEL SECURITY`, the
+  `_owner_backfill` policies, the app-role grants, `contracts/rls-exceptions.txt` and `0001`'s role
+  definitions are untouched, and no privilege is granted by this file.
+- The default privileges still hand `SELECT` to `evidgate_operator` on every table `evidgate_owner`
+  creates in `public`; `0055` deliberately does not change them, because some tables are granted to
+  the operator on purpose — `schema_migration` (`0001`), and `0003`'s probe table carries an
+  `rls_probe_operator_read` policy — and a default-privilege change would silently rewrite that
+  decision for every future table instead of deciding it once per table. A new tenant table is safe
+  only when its own file names the app role in its policy and decides the operator's grant
+  explicitly — revoke it, or add a `TO evidgate_operator` read policy as `0003`'s
+  `rls_probe_operator_read` does. `scripts/check-rls.py` now enforces both halves: `policy_no_role`
+  rejects a `create policy` (or `alter policy`) whose roles are absent, `public`, or a session
+  pseudo-role such as `current_user`, and `operator_select_no_policy` rejects a business table whose
+  effective policy admits the operator (not role-scoped, or scoped to a role the operator is a member
+  of) while the operator still holds `SELECT` and no `TO evidgate_operator` policy exists. The only
+  exemptions are the three superseded `tenant_isolation` statements of `0053`/`0054` (exact
+  `(file, policy, table)` entries in `POLICY_TO_EXEMPT`), and an exemption is honoured only while the
+  replayed schema's effective policy for that table and name is a later definition that names
+  `evidgate_app` — which is exactly what `0055` supplies, so deleting its `create policy` statements
+  turns the exemptions back into findings.
+- Deployment: migrate before app, and the file takes an exclusive lock on three tables that live
+  traffic writes, so it sets `lock_timeout = '5s'`; that timeout bounds each lock wait, not the file
+  as a whole, and the runner applies the file in one transaction, so its three table locks are held
+  together until it commits — apply it while Healing traffic is idle. Exit 3 means "apply again
+  while the table is quiet", not a defect. Rollback restores nothing and needs to restore nothing:
+  re-granting `SELECT` to `evidgate_operator` without a `TO evidgate_operator` policy still reads
+  zero rows, and a file that re-created the policies without `TO` would fail the lint.
