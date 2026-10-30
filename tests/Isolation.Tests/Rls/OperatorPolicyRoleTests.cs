@@ -14,8 +14,9 @@ namespace Isolation.Tests;
 /// <para>
 /// The policy's own reach is asserted twice more: FORCE row level security still binds the owner, and every
 /// <c>tenant_isolation</c> policy of schema <c>public</c> lists exactly <c>evidgate_app</c>, so a later table
-/// that reintroduces the PUBLIC form fails here by name. Each fact migrates a fresh database
-/// (<see cref="PostgresIsolationFixture"/>), so a seed cannot leak into another fact.
+/// that reintroduces the PUBLIC form fails here by name. The five read-only facts share one migrated
+/// database, created on first use (<see cref="PostgresIsolationFixture"/>); the one fact that seeds rows
+/// migrates a database of its own, so a seed cannot leak into another fact.
 /// </para>
 /// </summary>
 [Collection(IsolationSuite.Name)]
@@ -36,13 +37,32 @@ public sealed class OperatorPolicyRoleTests
 
     private readonly PostgresIsolationFixture _fixture;
 
+    /// <summary>
+    /// The one migrated database the five read-only facts share: the three refusals and the two catalogue
+    /// sweeps only read the schema, so one database per fact would migrate the same head five times. Created
+    /// on first use and reused afterwards, since xUnit builds a new instance per fact. Nothing is dropped
+    /// here — the database belongs to <see cref="PostgresIsolationFixture"/>, which takes the whole container
+    /// with it, or drops the scratch databases a reused server holds when the assembly finishes.
+    /// </summary>
+    private static Task<string>? _readOnlyDatabase;
+
+    private static readonly object ReadOnlyDatabaseGate = new();
+
     public OperatorPolicyRoleTests(PostgresIsolationFixture fixture) => _fixture = fixture;
+
+    private Task<string> ReadOnlyDatabaseAsync()
+    {
+        lock (ReadOnlyDatabaseGate)
+        {
+            return _readOnlyDatabase ??= _fixture.CreateDatabaseAsync();
+        }
+    }
 
     /// <summary>Security events are tenant data: the operator's former default SELECT must answer 42501.</summary>
     [Fact]
     public async Task Operator_Select_SecurityEvent_Is_Denied()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await ReadOnlyDatabaseAsync();
         await AssertOperatorSelectDeniedAsync(database, "public.security_event");
     }
 
@@ -50,7 +70,7 @@ public sealed class OperatorPolicyRoleTests
     [Fact]
     public async Task Operator_Select_HealingLlmCall_Is_Denied()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await ReadOnlyDatabaseAsync();
         await AssertOperatorSelectDeniedAsync(database, "public.healing_llm_call");
     }
 
@@ -58,7 +78,7 @@ public sealed class OperatorPolicyRoleTests
     [Fact]
     public async Task Operator_Select_HealingLlmBudget_Is_Denied()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await ReadOnlyDatabaseAsync();
         await AssertOperatorSelectDeniedAsync(database, "public.healing_llm_budget");
     }
 
@@ -102,7 +122,7 @@ public sealed class OperatorPolicyRoleTests
     [Fact]
     public async Task Force_Rls_Stays_On_Target_Tables()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await ReadOnlyDatabaseAsync();
         var token = TestContext.Current.CancellationToken;
 
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
@@ -116,7 +136,7 @@ public sealed class OperatorPolicyRoleTests
                 $"{name}: the migrated schema must contain the table");
 
             var table = tables.Single(entry => string.Equals(entry.Name, name, StringComparison.Ordinal));
-            table.RowLevelSecurityEnabled.ShouldBeTrue($"{name}: row level security must stay ENABLED (DECISIONS F5)");
+            table.RowLevelSecurityEnabled.ShouldBeTrue($"{name}: row level security must stay ENABLED");
             table.RowLevelSecurityForced.ShouldBeTrue(
                 $"{name}: row level security must stay FORCED — the owner would otherwise bypass the tenant policy");
         }
@@ -130,7 +150,7 @@ public sealed class OperatorPolicyRoleTests
     [Fact]
     public async Task Tenant_Isolation_Policies_Apply_To_App_Role_Only()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await ReadOnlyDatabaseAsync();
         var token = TestContext.Current.CancellationToken;
 
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));

@@ -16,10 +16,11 @@
 -- writes fixtures and privileged backfills, and the owner policy is the reason FORCE does not lock
 -- it out.
 --
--- The policy keeps the name `tenant_isolation` rather than D4's `<table>_app_tenant`: this file
--- corrects the role clause of one existing policy, so the same name keeps the history readable as one
--- policy and keeps the lint's exact `(file, policy, table)` exemption keys pointing at it. A table
--- created from now on follows D4 and names its own policy.
+-- The policy keeps the name `tenant_isolation` rather than the house policy naming rule's
+-- `<table>_app_tenant`: this file corrects the role clause of one existing policy, so the same name
+-- keeps the history readable as one policy and keeps the lint's exact `(file, policy, table)`
+-- exemption keys pointing at it. A table created from now on follows the house policy naming rule
+-- and names its own policy.
 --
 -- ORDER: migrate before app. The old policy admitted `evidgate_app` through PUBLIC and the new one
 -- names it explicitly with the same predicate, so neither order refuses an application statement;
@@ -38,8 +39,8 @@
 -- scripts/check-rls.py (`policy_no_role`, `operator_select_no_policy`) refuses the next table that
 -- repeats either mistake.
 --
--- Forward-only, idempotent: `drop policy if exists` / `create policy` and a repeatable `revoke`, so a
--- re-run after a rollback replays cleanly.
+-- Forward-only: `drop policy if exists` + `create policy` and a repeatable `revoke` are the statements
+-- this file runs; they state the role clause and the operator grant, and there is no down migration.
 
 set local lock_timeout = '5s';
 

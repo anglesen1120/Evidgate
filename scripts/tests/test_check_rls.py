@@ -11,6 +11,23 @@ check_rls = importlib.util.module_from_spec(SPEC)
 sys.modules["check_rls"] = check_rls
 SPEC.loader.exec_module(check_rls)
 
+# The policy-replay and operator-SELECT fixtures live in a second file (this one is near its
+# line budget). They are imported here because `verify.sh` runs this file by name, and unittest
+# collects the `TestCase` subclasses that are attributes of the module it was given.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_check_rls_policies import OperatorSelectReplay, PolicyStatementReplay  # noqa: E402,F401
+
+
+class ReplayFixturesLoaded(unittest.TestCase):
+    """`verify.sh` runs this file by name, so the second fixture file is reached only through the
+    import above; naming the classes here makes a dropped import fail the gate instead of
+    silently shrinking it."""
+
+    def test_the_policy_replay_fixtures_are_collected_with_this_file(self):
+        for fixture in (PolicyStatementReplay, OperatorSelectReplay):
+            with self.subTest(fixture=fixture.__name__):
+                self.assertTrue(issubclass(fixture, unittest.TestCase))
+
 GOOD_TABLE = """
 create table public.widget (
   id uuid not null,

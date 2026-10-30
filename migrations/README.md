@@ -672,10 +672,12 @@ through the real runner against a throwaway PostgreSQL 18 container.
   `WITH CHECK`; `0053` declared `USING` only, and a policy's `WITH CHECK` defaults to its `USING`, so
   the app role's behaviour is identical), and `revoke all on public.<table> from evidgate_operator`
   runs on each. The table-level revoke is the whole of it because no column-level grant to the
-  operator exists on those tables. The policy keeps its `tenant_isolation` name — D4's
-  `<table>_app_tenant` is the template for a table this repository creates from now on — because this
-  file corrects the role clause of one existing policy, and a rename would split that policy's
-  history in two and break the lint's exact `(file, policy, table)` exemption keys.
+  operator exists on those tables. The statements are `drop policy if exists` + `create policy` +
+  a repeatable `revoke`, and the file has no down migration. The policy keeps its `tenant_isolation`
+  name — the house policy naming rule's `<table>_app_tenant` is the template for a table this
+  repository creates from now on — because this file corrects the role clause of one existing policy,
+  and a rename would split that policy's history in two and break the lint's exact
+  `(file, policy, table)` exemption keys.
 - What did NOT change: `0053` and `0054` are applied files and stay byte-identical (the runner refuses
   a checksum mismatch); their notes above are kept as the history of what those files did, with the
   operator sentences marked as superseded here. `ENABLE`/`FORCE ROW LEVEL SECURITY`, the
@@ -689,16 +691,19 @@ through the real runner against a throwaway PostgreSQL 18 container.
   only when its own file names the app role in its policy and decides the operator's grant
   explicitly — revoke it, or add a `TO evidgate_operator` read policy as `0003`'s
   `rls_probe_operator_read` does. `scripts/check-rls.py` now enforces both halves: `policy_no_role`
-  rejects a `create policy` without a `TO` clause, and `operator_select_no_policy` rejects a business
-  table whose effective policy admits the operator (no `TO` clause, or `TO public`) while the
-  operator still holds `SELECT` and no `TO evidgate_operator` policy exists. The only exemptions are
-  the three superseded `tenant_isolation` statements of `0053`/`0054` (exact
+  rejects a `create policy` (or `alter policy`) whose roles are absent, `public`, or a session
+  pseudo-role such as `current_user`, and `operator_select_no_policy` rejects a business table whose
+  effective policy admits the operator (not role-scoped, or scoped to a role the operator is a member
+  of) while the operator still holds `SELECT` and no `TO evidgate_operator` policy exists. The only
+  exemptions are the three superseded `tenant_isolation` statements of `0053`/`0054` (exact
   `(file, policy, table)` entries in `POLICY_TO_EXEMPT`), and an exemption is honoured only while the
-  replayed schema's effective policy for that table and name is a later, role-scoped definition —
-  which is exactly what `0055` supplies, so deleting its `create policy` statements turns the
-  exemptions back into findings.
+  replayed schema's effective policy for that table and name is a later definition that names
+  `evidgate_app` — which is exactly what `0055` supplies, so deleting its `create policy` statements
+  turns the exemptions back into findings.
 - Deployment: migrate before app, and the file takes an exclusive lock on three tables that live
-  traffic writes, so it sets `lock_timeout = '5s'`; exit 3 means "apply again while the table is
-  quiet", not a defect. Rollback restores nothing and needs to restore nothing: re-granting `SELECT`
-  to `evidgate_operator` without a `TO evidgate_operator` policy still reads zero rows, and a file
-  that re-created the policies without `TO` would fail the lint.
+  traffic writes, so it sets `lock_timeout = '5s'`; that timeout bounds each lock wait, not the file
+  as a whole, and the runner applies the file in one transaction, so its three table locks are held
+  together until it commits — apply it while Healing traffic is idle. Exit 3 means "apply again
+  while the table is quiet", not a defect. Rollback restores nothing and needs to restore nothing:
+  re-granting `SELECT` to `evidgate_operator` without a `TO evidgate_operator` policy still reads
+  zero rows, and a file that re-created the policies without `TO` would fail the lint.
