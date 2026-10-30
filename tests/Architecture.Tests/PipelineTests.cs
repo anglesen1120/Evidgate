@@ -8,7 +8,8 @@ namespace Architecture.Tests;
 /// Authorization lives in the Mediator pipeline, so every handler class must declare
 /// its permission via [Permission]; and a request handler must answer Result/Result&lt;T&gt;,
 /// because that contract is what makes the pipeline's tenant and authorization stages
-/// run for it.
+/// run for it. A handler whose message never enters the pipeline — a stream or a
+/// notification — may therefore carry no gate at all.
 /// </summary>
 public class PipelineTests
 {
@@ -129,6 +130,7 @@ public class PipelineTests
     /// The rule that keeps a gated handler from answering a bare DTO: the stage that
     /// enforces [Permission], [AuthenticatedMember] or [CredentialAuthenticated] can only
     /// refuse through a Result, and a handler with no gate is outside this rule's scope.
+    /// An inherited [Permission] counts, because that is the attribute the pipeline reads.
     /// </summary>
     [Fact]
     public void Every_Gated_Handler_Returns_A_Result()
@@ -138,11 +140,12 @@ public class PipelineTests
             typeof(Evidgate.Modules.Sample.Domain.HandlerReturningDto),
             typeof(Evidgate.Modules.Sample.Domain.HandlerWithAuthenticatedMemberReturningDto),
             typeof(Evidgate.Modules.Sample.Domain.HandlerWithCredentialReturningDto),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerInheritingPermissionReturningDto),
             typeof(Evidgate.Modules.Sample.Domain.HandlerWithoutGateReturningDto),
             typeof(Evidgate.Modules.Sample.Domain.HandlerReturningResult),
         ]);
 
-        violations.Count.ShouldBe(3);
+        violations.Count.ShouldBe(4);
         violations.ShouldContain(v =>
             v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerReturningDto)) && v.Contains("Result"));
         violations.ShouldContain(v =>
@@ -150,10 +153,49 @@ public class PipelineTests
         violations.ShouldContain(v =>
             v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithCredentialReturningDto)));
 
+        // The gate lives on the base class: a rule reading only the type's own attributes
+        // would let this DTO answer through unchecked.
+        violations.ShouldContain(v =>
+            v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerInheritingPermissionReturningDto)));
+
         // The ungated DTO handler is what the other rule reports; this one must not.
         violations.ShouldAllBe(v =>
             !v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithoutGateReturningDto)));
         violations.ShouldAllBe(v => !v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerReturningResult)));
+    }
+
+    /// <summary>
+    /// A gate on a stream or notification handler is unenforceable: those messages are
+    /// dispatched outside IPipelineBehavior, so the rule reports the type whatever it
+    /// answers, while the same handlers without a gate stay outside this rule.
+    /// </summary>
+    [Fact]
+    public void Every_Gated_Handler_That_Bypasses_The_Pipeline_Is_Reported()
+    {
+        var violations = PipelineHandlerRules.EveryGatedHandlerReturnsResult(
+        [
+            typeof(Evidgate.Modules.Sample.Domain.HandlerWithGateStreamingDto),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerWithGateOnNotification),
+            typeof(Evidgate.Modules.Sample.Domain.GatedStreamHandlerBase),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerStreamingDtoWithoutGate),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerOnNotificationWithoutGate),
+        ]);
+
+        violations.Count.ShouldBe(2);
+        violations.ShouldContain(v =>
+            v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithGateStreamingDto))
+                && v.Contains("IPipelineBehavior"));
+        violations.ShouldContain(v =>
+            v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithGateOnNotification))
+                && v.Contains("IPipelineBehavior"));
+
+        // An abstract base is never dispatched: the concrete subclass above is the row.
+        violations.ShouldAllBe(v =>
+            !v.Contains(nameof(Evidgate.Modules.Sample.Domain.GatedStreamHandlerBase)));
+        violations.ShouldAllBe(v =>
+            !v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerStreamingDtoWithoutGate)));
+        violations.ShouldAllBe(v =>
+            !v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerOnNotificationWithoutGate)));
     }
 
     [Fact]
@@ -166,6 +208,9 @@ public class PipelineTests
         handlers.Count.ShouldBeGreaterThan(10);
 
         PipelineHandlerRules.EveryPipelineHandlerReturnsResult(handlers).ShouldBeEmpty();
-        PipelineHandlerRules.EveryGatedHandlerReturnsResult(handlers).ShouldBeEmpty();
+
+        // The gated rule also refuses a gate on a stream or notification handler, which
+        // IsRequestHandler does not select, so the whole solution is passed to it.
+        PipelineHandlerRules.EveryGatedHandlerReturnsResult(types).ShouldBeEmpty();
     }
 }

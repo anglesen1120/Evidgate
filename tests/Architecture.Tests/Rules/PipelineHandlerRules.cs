@@ -10,9 +10,9 @@ namespace Architecture.Tests.Rules;
 /// graph. Every rule takes its types explicitly, so a test proves it on synthetic
 /// violations and then runs the same function over the real solution.
 /// <para>
-/// Mediator's own request-handler interfaces only: command, query, request and stream
-/// handlers. <c>INotificationHandler</c> is deliberately excluded — notifications are
-/// not request-scoped pipeline work, and integration events travel through the outbox.
+/// Notification handlers are not request-scoped pipeline work (integration events travel
+/// through the outbox), but they are still scanned for a gate: their messages never run
+/// through <c>IPipelineBehavior</c>, so a gate on one could never be enforced.
 /// </para>
 /// </summary>
 public static class PipelineHandlerRules
@@ -28,7 +28,16 @@ public static class PipelineHandlerRules
         "IStreamRequestHandler",
     };
 
-    /// <summary>True for a concrete class implementing one of Mediator's request-handler interfaces.</summary>
+    /// <summary>Mediator handler interfaces whose messages never traverse <c>IPipelineBehavior</c>.</summary>
+    public static readonly IReadOnlySet<string> PipelineBypassingInterfaceNames = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "IStreamCommandHandler",
+        "IStreamQueryHandler",
+        "IStreamRequestHandler",
+        "INotificationHandler",
+    };
+
+    /// <summary>True for a concrete class implementing one of Mediator's handler interfaces.</summary>
     public static bool IsRequestHandler(Type type) =>
         !type.IsAbstract
         && !type.IsInterface
@@ -64,12 +73,25 @@ public static class PipelineHandlerRules
         }
     }
 
-    /// <summary>True when the handler declares one of the three pipeline authorization gates.</summary>
+    /// <summary>True when the handler carries a gate, including an inherited permission.</summary>
     public static bool NamesAuthGate(Type type) =>
-        type.GetCustomAttributesData().Any(attribute =>
-            attribute.AttributeType.FullName == typeof(PermissionAttribute).FullName
-            || attribute.AttributeType.FullName == typeof(AuthenticatedMemberAttribute).FullName
+        type.GetCustomAttributes(typeof(PermissionAttribute), inherit: true).Length > 0
+        || type.GetCustomAttributesData().Any(attribute =>
+            attribute.AttributeType.FullName == typeof(AuthenticatedMemberAttribute).FullName
             || attribute.AttributeType.FullName == typeof(CredentialAuthenticatedAttribute).FullName);
+
+    /// <summary>
+    /// True when the handler's contract is dispatched outside <c>IPipelineBehavior</c>:
+    /// streams are consumed incrementally and notifications are published to every
+    /// handler, so neither traverses the request pipeline the stages live in. An abstract
+    /// base is never dispatched, so it is not reported here; its concrete subclasses are.
+    /// </summary>
+    public static bool BypassesRequestPipeline(Type type) =>
+        !type.IsAbstract
+        && !type.IsInterface
+        && type.GetInterfaces().Any(face =>
+            face.Namespace == "Mediator"
+            && PipelineBypassingInterfaceNames.Contains(face.Name.Split('`')[0]));
 
     /// <summary>
     /// Every request handler answers <c>Result</c>/<c>Result&lt;T&gt;</c>: the pipeline's
@@ -96,9 +118,10 @@ public static class PipelineHandlerRules
     }
 
     /// <summary>
-    /// Every handler that names an authorization gate answers <c>Result</c>/<c>Result&lt;T&gt;</c>.
-    /// A stage can only refuse through that contract, so a gated handler answering a
-    /// DTO would run unchecked; handlers with no gate are out of scope here.
+    /// Every gated handler must run through the request pipeline and answer
+    /// <c>Result</c>/<c>Result&lt;T&gt;</c>. Stream and notification handlers bypass that
+    /// pipeline entirely, so a gate on one is refused whatever its response type;
+    /// handlers with no gate are out of scope here.
     /// </summary>
     public static IReadOnlyList<string> EveryGatedHandlerReturnsResult(IEnumerable<Type> types)
     {
@@ -106,7 +129,20 @@ public static class PipelineHandlerRules
 
         foreach (var type in Ordered(types))
         {
-            if (!IsRequestHandler(type) || !NamesAuthGate(type))
+            if (!NamesAuthGate(type))
+            {
+                continue;
+            }
+
+            if (BypassesRequestPipeline(type))
+            {
+                // No stage would see the message, so the gate this handler names is never enforced.
+                violations.Add($"{type.FullName} names an authorization gate but its message never runs through " +
+                    "IPipelineBehavior: a stream or notification handler cannot enforce pipeline gates");
+                continue;
+            }
+
+            if (!IsRequestHandler(type))
             {
                 continue;
             }

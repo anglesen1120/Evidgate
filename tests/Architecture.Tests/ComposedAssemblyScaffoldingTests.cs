@@ -5,17 +5,19 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// The composition roots register no demo type. A scaffolding class that reaches
-/// <c>Evidgate.Api</c> or <c>Evidgate.Worker</c> ships in production, so it fails
-/// here rather than after a deploy; a deliberate case is a recorded exemption.
+/// No scaffolding-named type ships in a composed assembly. The check is on the type name:
+/// a class whose name starts with InMemory, Mock, Fake, Stub or Slice that is reachable from
+/// <c>Evidgate.Api</c> or <c>Evidgate.Worker</c> ships in production, so it fails here rather
+/// than after a deploy; a deliberate case is a recorded exemption. It is not a
+/// dependency-injection registration check: the type need not be registered with any container.
 /// </summary>
-public sealed class NoScaffoldingRegisteredTests
+public sealed class ComposedAssemblyScaffoldingTests
 {
     private static readonly string[] ForbiddenPrefixes = ["InMemory", "Mock", "Fake", "Stub", "Slice"];
 
     /// <summary>
-    /// Types composed on purpose, each with the decision that allows it. Every entry must
-    /// still exist, so a deletion cannot leave a stale permission behind.
+    /// Prefix-named types shipped on purpose, each with the decision that allows it. Every
+    /// entry must still exist, so a deletion cannot leave a stale permission behind.
     /// </summary>
     private static readonly Dictionary<string, string> Allowed = new(StringComparer.Ordinal)
     {
@@ -47,7 +49,7 @@ public sealed class NoScaffoldingRegisteredTests
     }
 
     [Fact]
-    public void No_Scaffolding_Type_Ships_From_A_Composed_Assembly()
+    public void No_InMemory_Mock_Fake_Stub_Or_Slice_Type_Ships_From_A_Composed_Assembly()
     {
         var composed = CompositionAssemblies();
         var types = SolutionLayout.EvidgateAssemblies()
@@ -63,7 +65,7 @@ public sealed class NoScaffoldingRegisteredTests
             .ToDictionary(type => type.FullName ?? type.Name, StringComparer.Ordinal);
 
         var offenders = scaffolding.Keys.Except(Allowed.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        offenders.ShouldBeEmpty("no InMemory*/Mock*/Fake*/Stub*/Slice* type may ship from a host assembly: " + string.Join(", ", offenders));
+        offenders.ShouldBeEmpty("no InMemory*/Mock*/Fake*/Stub*/Slice* type may ship from a composed assembly: " + string.Join(", ", offenders));
 
         // A recorded allowance for a type that no longer exists would silently excuse a future one.
         var stale = Allowed.Keys.Except(scaffolding.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();

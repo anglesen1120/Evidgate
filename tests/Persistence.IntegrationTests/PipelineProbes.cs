@@ -143,10 +143,8 @@ internal sealed class ProbeIdempotentCommandHandler(ITenantDb db, ITenantScopeAc
 }
 
 /// <summary>
-/// A bare DTO response and no permission attribute: the shape a DTO-answering
-/// message has, so a probe can show the pipeline refuses it rather than running it
-/// unguarded. Documented in <c>TenantTransactionBehaviour</c> and guarded by
-/// <c>Architecture.Tests</c>.
+/// An unattributed DTO response lets the probe show that a message without an authorization
+/// gate passes through the tenant stages rather than being refused for its response shape.
 /// </summary>
 internal sealed record ProbeDtoResult(Guid Id);
 
