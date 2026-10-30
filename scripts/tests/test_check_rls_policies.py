@@ -49,6 +49,20 @@ def tenant_policy(name: str, roles: str = "to evidgate_app") -> str:
     )
 
 
+OPERATOR_SELECT = """
+alter default privileges for role evidgate_owner in schema public
+  grant select on tables to evidgate_operator;
+"""
+
+
+def operator_read(name: str, predicate: str) -> str:
+    """A `TO evidgate_operator` read policy over `predicate`; whether it gates is the question."""
+    return (
+        f"create policy {name}_operator_read on public.{name} for select to evidgate_operator "
+        f"using ({predicate});"
+    )
+
+
 def run_files(files: dict[str, str], exceptions: str = "") -> list:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -259,11 +273,112 @@ class OperatorSelectReplay(unittest.TestCase):
                    + "grant select on public.widget to evidgate_app;")
         self.assertEqual(safe, [])
 
+    def test_an_operator_policy_naming_the_role_alone_does_not_gate(self):
+        """The role may `set evidgate.org_id` itself, so a policy that compares to that setting hands
+        it every tenant: naming `evidgate_operator` in the `TO` clause is not the gate."""
+        for predicate in (
+            "org_id = evidgate.current_org_id()",
+            "org_id = current_setting('evidgate.org_id')::uuid",
+            "org_id = current_setting('EVIDGATE.ORG_ID', true)::uuid",
+            "org_id = evidgate.current_project_id()",
+            "org_id = current_setting(setting_name)::uuid",
+        ):
+            with self.subTest(predicate=predicate):
+                sql = OPERATOR_SELECT + create_table("widget") + tenant_policy("widget") + operator_read("widget", predicate)
+                self.assertEqual(rules(run(sql)), {"operator_select_no_policy"})
+
+    def test_an_operator_policy_that_confines_the_tenant_gates_the_read(self):
+        for predicate in (
+            "org_id = '00000000-0000-0000-0000-000000000000'::uuid",
+            "org_id in (select g.org_id from public.support_grant g where g.revoked_at is null)",
+            "org_id = any (array['00000000-0000-0000-0000-000000000000'::uuid])",
+            "'00000000-0000-0000-0000-000000000000'::uuid = org_id::uuid",
+        ):
+            with self.subTest(predicate=predicate):
+                sql = OPERATOR_SELECT + create_table("widget") + tenant_policy("widget") + operator_read("widget", predicate)
+                self.assertEqual(run(sql), [], "a predicate the session cannot set and that compares the tenant confines the read")
+
+    def test_an_operator_policy_that_never_compares_the_tenant_gates_nothing(self):
+        """A predicate that matches every row of every tenant, or none, is not a tenancy gate: the
+        operator reads all rows without choosing anything."""
+        for predicate in (
+            "org_id is not null",
+            "id is not null",
+            "current_setting('role', true) = 'evidgate_auditor'",
+        ):
+            with self.subTest(predicate=predicate):
+                sql = OPERATOR_SELECT + create_table("widget") + tenant_policy("widget") + operator_read("widget", predicate)
+                self.assertEqual(rules(run(sql)), {"operator_select_no_policy"})
+
+    def test_an_operator_policy_without_a_using_clause_gates_nothing(self):
+        sql = OPERATOR_SELECT + create_table("widget") + tenant_policy("widget") + (
+            "create policy widget_operator_read on public.widget for select to evidgate_operator;")
+        self.assertEqual(rules(run(sql)), {"operator_select_no_policy"},
+                         "PostgreSQL applies `true` when a policy declares no USING")
+
+    def test_an_operator_policy_that_is_open_is_refused_twice(self):
+        sql = OPERATOR_SELECT + create_table("widget") + tenant_policy("widget") + operator_read("widget", "true")
+        self.assertEqual(rules(run(sql)), {"open_policy", "operator_select_no_policy"})
+
     def test_the_register_says_the_operator_rule_is_narrowed(self):
         text = " ".join((check_rls.__doc__ or "").split())
         self.assertIn("operator_select_no_policy", text)
         self.assertIn("Narrowed on purpose", text)
         self.assertIn("0055", text, "the docstring records that 0055 revokes the operator's SELECT anyway")
+
+
+def probed(file: str, policy: str, table: str) -> dict[str, str]:
+    """The exemption's exact statement, in the file and on the table the key names."""
+    name = table.split(".")[-1]
+    return {
+        file: (create_table(name) + tenant_policy(name)
+               + f"\ngrant select on {table} to evidgate_operator;\n"
+               + f"create policy {policy} on {table} for select to evidgate_operator "
+                 "using (org_id = evidgate.current_org_id());")
+    }
+
+
+class OperatorGateExemptions(unittest.TestCase):
+    """`OPERATOR_GATE_EXEMPT` accepts an operator predicate the text lint judges unsafe, keyed by the
+    exact effective policy: the accepted statement is all it covers, and the reason says why."""
+
+    def test_every_exemption_is_exact_reasoned_and_written_somewhere(self):
+        self.assertTrue(check_rls.OPERATOR_GATE_EXEMPT, "the canary predicate needs its documented exemption")
+        migrations = HERE.parent.parent / "migrations"
+        for (file, policy, table), reason in check_rls.OPERATOR_GATE_EXEMPT.items():
+            with self.subTest(policy=(file, policy, table)):
+                self.assertTrue((migrations / file).is_file(), "the key names a migration that exists")
+                self.assertTrue(policy and table.startswith("public."))
+                self.assertTrue(reason.strip(), "an exemption carries its reason")
+
+    def test_the_exempt_statement_is_clean_where_it_is_written(self):
+        for (file, policy, table), _ in check_rls.OPERATOR_GATE_EXEMPT.items():
+            with self.subTest(policy=(file, policy, table)):
+                self.assertEqual(run_files(probed(file, policy, table)), [])
+
+    def test_the_exemption_does_not_cover_the_same_policy_in_another_file(self):
+        for (file, policy, table), _ in check_rls.OPERATOR_GATE_EXEMPT.items():
+            with self.subTest(policy=(file, policy, table)):
+                self.assertEqual(rules(run_files(probed("0099_other_probe.sql", policy, table))),
+                                 {"operator_select_no_policy"})
+
+    def test_a_later_widening_of_the_exempt_policy_is_still_refused(self):
+        for (file, policy, table), _ in check_rls.OPERATOR_GATE_EXEMPT.items():
+            with self.subTest(policy=(file, policy, table)):
+                files = probed(file, policy, table)
+                files["0099_widen.sql"] = f"alter policy {policy} on {table} to public;"
+                self.assertEqual(rules(run_files(files)), {"policy_no_role"},
+                                 "the exemption covers the statement, not a later `TO` widening")
+                opened = probed(file, policy, table)
+                opened["0099_open.sql"] = f"alter policy {policy} on {table} using (true);"
+                self.assertIn("operator_select_no_policy", rules(run_files(opened)),
+                              "an open replacement is not exempt")
+
+    def test_an_operator_policy_the_lint_cannot_judge_still_needs_its_exemption(self):
+        sql = OPERATOR_SELECT + create_table("widget") + tenant_policy("widget") + operator_read(
+            "widget", "org_id = evidgate.current_org_id()")
+        self.assertEqual(rules(run(sql)), {"operator_select_no_policy"},
+                         "no exemption means no trust: the canary table is named, not the shape")
 
 
 if __name__ == "__main__":

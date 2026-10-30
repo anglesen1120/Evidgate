@@ -15,7 +15,16 @@ SPEC.loader.exec_module(check_rls)
 # line budget). They are imported here because `verify.sh` runs this file by name, and unittest
 # collects the `TestCase` subclasses that are attributes of the module it was given.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_check_rls_policies import OperatorSelectReplay, PolicyStatementReplay  # noqa: E402,F401
+from test_check_rls_embedded import (  # noqa: E402,F401
+    EmbeddedPolicyStatements,
+    EmbeddedReplayOrder,
+    UnreadableExecute,
+)
+from test_check_rls_policies import (  # noqa: E402,F401
+    OperatorGateExemptions,
+    OperatorSelectReplay,
+    PolicyStatementReplay,
+)
 
 
 class ReplayFixturesLoaded(unittest.TestCase):
@@ -24,7 +33,14 @@ class ReplayFixturesLoaded(unittest.TestCase):
     silently shrinking it."""
 
     def test_the_policy_replay_fixtures_are_collected_with_this_file(self):
-        for fixture in (PolicyStatementReplay, OperatorSelectReplay):
+        for fixture in (
+            PolicyStatementReplay,
+            OperatorSelectReplay,
+            OperatorGateExemptions,
+            EmbeddedPolicyStatements,
+            UnreadableExecute,
+            EmbeddedReplayOrder,
+        ):
             with self.subTest(fixture=fixture.__name__):
                 self.assertTrue(issubclass(fixture, unittest.TestCase))
 
@@ -384,8 +400,10 @@ class PolicyRoles(unittest.TestCase):
                + "grant select on public.widget to evidgate_operator;")
         self.assertIn("operator_select_no_policy", rules(run(sql)))
 
-    def test_an_operator_policy_gates_the_operator(self):
-        sql = DEFAULT_OPERATOR_SELECT + GOOD_TABLE.replace("to evidgate_app", "to evidgate_operator")
+    def test_an_operator_policy_that_confines_the_tenant_gates_the_operator(self):
+        sql = DEFAULT_OPERATOR_SELECT + GOOD_TABLE + (
+            "create policy widget_operator_read on public.widget for select to evidgate_operator "
+            "using (org_id = '00000000-0000-0000-0000-000000000000'::uuid);")
         self.assertEqual(run(sql), [])
 
     def test_an_excepted_table_is_out_of_scope(self):
