@@ -249,7 +249,9 @@ public sealed partial class TaskConsumer
 
         // The handler runs under a token that also fires when the lease is about to
         // run out, so it never works past the point another consumer may reclaim the row.
-        using var leaseExpiry = new CancellationTokenSource(_handlerWindow - _time.GetElapsedTime(claimStarted), _time);
+        // Clamped: time passes between the pre-check above and this line.
+        var remaining = _handlerWindow - _time.GetElapsedTime(claimStarted);
+        using var leaseExpiry = new CancellationTokenSource(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero, _time);
         Exception? failure = null;
 
         try
