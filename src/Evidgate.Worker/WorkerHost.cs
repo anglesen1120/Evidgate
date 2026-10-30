@@ -18,7 +18,6 @@ using Evidgate.Modules.Tenancy;
 using Evidgate.Modules.Usage;
 using Evidgate.Worker.Health;
 using Evidgate.Worker.Options;
-using Evidgate.Worker.Slice;
 using Evidgate.Worker.Tasks;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
@@ -103,7 +102,6 @@ public static class WorkerHost
         builder.Services.AddEvidgateTasks(builder.Configuration);
 
         builder.Services.AddHostedService<HealthProbeListener>();
-        builder.Services.AddHostedService<SliceRunConsumer>();
         builder.Services.AddHostedService<TaskQueueHostedService>();
         builder.Services.AddHostedService<TaskScheduleHostedService>();
         // 01.5.1-T3: the outbox dispatcher — same registration posture as the

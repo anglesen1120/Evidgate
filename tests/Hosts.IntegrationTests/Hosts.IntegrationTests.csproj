@@ -23,5 +23,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <!-- The anonymous JSON probe the transport suites (correlation, envelope, endpoint filters) POST to. -->
+    <Compile Include="..\Shared\TransportProbeStartupFilter.cs" Link="TransportProbeStartupFilter.cs" />
   </ItemGroup>
 </Project>

@@ -143,10 +143,10 @@ internal sealed class ProbeIdempotentCommandHandler(ITenantDb db, ITenantScopeAc
 }
 
 /// <summary>
-/// The skeleton slice's shape (01.1.2-T3): a bare DTO response and no permission
-/// attribute, deliberately outside the C2 tenant stages — the behaviour this pins
-/// is documented in <c>TenantTransactionBehaviour</c> and guarded by
-/// <c>Architecture.Tests</c>' pinned exemption.
+/// A bare DTO response and no permission attribute: the shape a DTO-answering
+/// message has, so a probe can show the pipeline refuses it rather than running it
+/// unguarded. Documented in <c>TenantTransactionBehaviour</c> and guarded by
+/// <c>Architecture.Tests</c>.
 /// </summary>
 internal sealed record ProbeDtoResult(Guid Id);
 

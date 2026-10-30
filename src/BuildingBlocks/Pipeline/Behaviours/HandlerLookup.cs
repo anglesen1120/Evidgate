@@ -46,6 +46,37 @@ internal static class HandlerLookup
     internal static string? AuditActionOf(IServiceProvider services, Type messageType, Type responseType) =>
         GateOf(services, messageType, responseType).AuditAction;
 
+    /// <summary>
+    /// Whether the handler of the pair names one of the authorization gates
+    /// (<see cref="PermissionAttribute"/>, <see cref="AuthenticatedMemberAttribute"/>,
+    /// <see cref="CredentialAuthenticatedAttribute"/>). A pair with no handler names
+    /// none: there is nothing to check and nothing to deny.
+    /// </summary>
+    internal static bool CarriesAuthGate(IServiceProvider services, Type messageType, Type responseType)
+    {
+        var gate = GateOf(services, messageType, responseType);
+        return gate.Permission is not null || gate.AuthenticatedMember || gate.CredentialAuthenticated;
+    }
+
+    /// <summary>
+    /// Refuses a gated message whose response cannot carry a Result: the stages that
+    /// enforce the gate answer through that contract, so passing the message on would
+    /// run its handler unchecked. A message whose handler names no gate still passes
+    /// through, because no stage would have checked it either way.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The handler names a gate and the response is not a Result.</exception>
+    internal static void EnsureAuthGateHasResultContract(IServiceProvider services, Type messageType, Type responseType)
+    {
+        if (!CarriesAuthGate(services, messageType, responseType))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"{messageType} is answered by a handler that names an authorization gate but answers {responseType}: "
+            + "a gated pipeline handler must answer Result/Result<T> so the pipeline stages can refuse it");
+    }
+
     private static (string? Permission, bool AuthenticatedMember, string? AuditAction, bool CredentialAuthenticated) GateOf(
         IServiceProvider services,
         Type messageType,

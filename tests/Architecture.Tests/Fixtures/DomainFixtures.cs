@@ -108,6 +108,47 @@ internal sealed class AuditedHandlerReturningResult : ICommandHandler<CommandRet
 }
 
 /// <summary>
+/// Seeded violation fixture for the gated-handler rule: [AuthenticatedMember] on a handler
+/// answering a bare DTO, so the stage enforcing the gate could not refuse it.
+/// </summary>
+[AuthenticatedMember]
+internal sealed class HandlerWithAuthenticatedMemberReturningDto
+    : ICommandHandler<CommandReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public ValueTask<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        CommandReturningDto command,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new Evidgate.Modules.Sample.Contracts.SampleDto());
+}
+
+/// <summary>
+/// Seeded violation fixture for the gated-handler rule: [CredentialAuthenticated] on a
+/// handler answering a bare DTO instead of the Result the pipeline can refuse.
+/// </summary>
+[CredentialAuthenticated]
+internal sealed class HandlerWithCredentialReturningDto
+    : ICommandHandler<CommandReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public ValueTask<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        CommandReturningDto command,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new Evidgate.Modules.Sample.Contracts.SampleDto());
+}
+
+/// <summary>
+/// Negative control for the gated-handler rule: the same bare DTO answer with no gate at
+/// all, which that rule must leave to the general handler-shape rule.
+/// </summary>
+internal sealed class HandlerWithoutGateReturningDto
+    : ICommandHandler<CommandReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public ValueTask<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        CommandReturningDto command,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new Evidgate.Modules.Sample.Contracts.SampleDto());
+}
+
+/// <summary>
 /// Seeded violation fixture (02.1.1): [AuthenticatedMember] on a handler that is not
 /// in the allowlist — the hole in 00 §5.7 S2 must stay closed by name.
 /// </summary>

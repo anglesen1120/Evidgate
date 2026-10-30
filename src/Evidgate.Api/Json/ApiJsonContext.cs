@@ -9,7 +9,5 @@ namespace Evidgate.Api.Json;
 /// envelope context is <c>Evidgate.BuildingBlocks.SharedKernel.Serialization.EvidgateJsonContext</c>.
 /// </summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
-[JsonSerializable(typeof(SliceRunRequest))]
-[JsonSerializable(typeof(SliceRunResponse))]
 [JsonSerializable(typeof(HealthReportDto))]
 public sealed partial class ApiJsonContext : JsonSerializerContext;

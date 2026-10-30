@@ -128,7 +128,7 @@ public static class CorrelationNames
     /// </summary>
     /// <remarks>
     /// A module tags the run with the run's <see cref="Guid"/> object rather than its text
-    /// (<c>CreateRun</c>, <c>PlanExecutions</c>), while the edge and the task carrier tag text. Reading
+    ///  (<c>FinalizeShard</c>, <c>GetCase</c>), while the edge and the task carrier tag text. Reading
     /// only <c>as string</c> would silently drop the module-tagged value and leave every child span of
     /// a run without its <c>run_id</c>.
     /// </remarks>

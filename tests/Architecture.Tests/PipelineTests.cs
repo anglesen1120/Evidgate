@@ -5,10 +5,10 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// 00 §5.7 S2 + C2: authorization lives in the Mediator pipeline, so every handler
-/// class must declare its permission via [Permission]; and 00 §5.5 C8: a request
-/// handler must answer Result/Result&lt;T&gt;, because that contract is what makes
-/// the pipeline's tenant stages run for it (the pinned skeleton slice excepted).
+/// Authorization lives in the Mediator pipeline, so every handler class must declare
+/// its permission via [Permission]; and a request handler must answer Result/Result&lt;T&gt;,
+/// because that contract is what makes the pipeline's tenant and authorization stages
+/// run for it.
 /// </summary>
 public class PipelineTests
 {
@@ -103,28 +103,9 @@ public class PipelineTests
     }
 
     /// <summary>
-    /// The sprint-1 skeleton slice (01.1.2-T3), the pinned exemption of the C8
-    /// contract rule: 01.1.2 §8 records that these routes carry no tenant scope and
-    /// no permission, so their DTO responses are outside the C2 tenant stages until
-    /// 04/05 replace them with Result-carrying commands. Pinned by full type name
-    /// because the handlers are internal to their module assemblies.
-    /// </summary>
-    private static readonly string[] SkeletonSliceHandlers =
-    [
-        "Evidgate.Modules.Ingestion.Application.Commands.IngestManifestHandler",
-        "Evidgate.Modules.Ingestion.Application.Commands.AcceptEventBatchHandler",
-        "Evidgate.Modules.Orchestrator.Application.Commands.CreateRunHandler",
-        "Evidgate.Modules.Orchestrator.Application.Commands.PlanExecutionsHandler",
-        "Evidgate.Modules.Orchestrator.Application.Queries.GetCompletenessHandler",
-        "Evidgate.Modules.Policy.Application.Queries.GetDecisionHandler",
-    ];
-
-    /// <summary>
-    /// AC4 / 00 §5.5 C8: the C2 tenant stages only run for Result-carrying
-    /// messages, so every other Mediator request handler is a violation — proven on
-    /// synthetic violations first (the rule must fire, including for a Unit
-    /// response), then over the real solution, where only the pinned skeleton slice
-    /// may answer a bare DTO.
+    /// The pipeline's tenant and authorization stages only run for Result-carrying
+    /// messages, so any other Mediator request handler is a violation — proven on
+    /// synthetic violations first (the rule must fire, including for a Unit response).
     /// </summary>
     [Fact]
     public void Every_Pipeline_Handler_Returns_A_Result()
@@ -136,11 +117,42 @@ public class PipelineTests
             typeof(Evidgate.Modules.Sample.Domain.HandlerReturningResult),
         };
 
-        var violations = ArchitectureRules.EveryPipelineHandlerReturnsResult(fixtures, []);
+        var violations = PipelineHandlerRules.EveryPipelineHandlerReturnsResult(fixtures);
 
         violations.Count.ShouldBe(2);
         violations.ShouldContain(v => v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerReturningDto)));
         violations.ShouldContain(v => v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerReturningUnit)));
+        violations.ShouldAllBe(v => !v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerReturningResult)));
+    }
+
+    /// <summary>
+    /// The rule that keeps a gated handler from answering a bare DTO: the stage that
+    /// enforces [Permission], [AuthenticatedMember] or [CredentialAuthenticated] can only
+    /// refuse through a Result, and a handler with no gate is outside this rule's scope.
+    /// </summary>
+    [Fact]
+    public void Every_Gated_Handler_Returns_A_Result()
+    {
+        var violations = PipelineHandlerRules.EveryGatedHandlerReturnsResult(
+        [
+            typeof(Evidgate.Modules.Sample.Domain.HandlerReturningDto),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerWithAuthenticatedMemberReturningDto),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerWithCredentialReturningDto),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerWithoutGateReturningDto),
+            typeof(Evidgate.Modules.Sample.Domain.HandlerReturningResult),
+        ]);
+
+        violations.Count.ShouldBe(3);
+        violations.ShouldContain(v =>
+            v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerReturningDto)) && v.Contains("Result"));
+        violations.ShouldContain(v =>
+            v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithAuthenticatedMemberReturningDto)));
+        violations.ShouldContain(v =>
+            v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithCredentialReturningDto)));
+
+        // The ungated DTO handler is what the other rule reports; this one must not.
+        violations.ShouldAllBe(v =>
+            !v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerWithoutGateReturningDto)));
         violations.ShouldAllBe(v => !v.Contains(nameof(Evidgate.Modules.Sample.Domain.HandlerReturningResult)));
     }
 
@@ -149,13 +161,11 @@ public class PipelineTests
     {
         var types = SolutionLayout.EvidgateTypes();
 
-        ArchitectureRules
-            .EveryPipelineHandlerReturnsResult(types, SkeletonSliceHandlers)
-            .ShouldBeEmpty();
+        // The scan must reach the solution's handlers: an empty run would pass vacuously.
+        var handlers = types.Where(PipelineHandlerRules.IsRequestHandler).ToList();
+        handlers.Count.ShouldBeGreaterThan(10);
 
-        // The exemption list must name real handlers of this solution: a renamed or
-        // deleted slice handler must fail here instead of silently widening the hole.
-        var declared = types.Select(t => t.FullName).ToHashSet(StringComparer.Ordinal);
-        SkeletonSliceHandlers.ShouldAllBe(name => declared.Contains(name));
+        PipelineHandlerRules.EveryPipelineHandlerReturnsResult(handlers).ShouldBeEmpty();
+        PipelineHandlerRules.EveryGatedHandlerReturnsResult(handlers).ShouldBeEmpty();
     }
 }

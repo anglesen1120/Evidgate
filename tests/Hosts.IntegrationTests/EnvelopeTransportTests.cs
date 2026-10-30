@@ -43,9 +43,11 @@ public sealed class EnvelopeTransportTests
             await socket.ConnectAsync(IPAddress.Loopback, port, TestContext.Current.CancellationToken);
             await using var stream = socket.GetStream();
 
+            // The path is arbitrary: the limit is enforced before routing, so the
+            // answer is the transport 413 whatever the route would have been.
             var head = string.Create(
                 System.Globalization.CultureInfo.InvariantCulture,
-                $"POST /v1/slice/run HTTP/1.1\r\nHost: probe\r\nContent-Type: application/json\r\nContent-Length: {OversizeLength}\r\nConnection: close\r\n\r\n");
+                $"POST /v1/runs HTTP/1.1\r\nHost: probe\r\nContent-Type: application/json\r\nContent-Length: {OversizeLength}\r\nConnection: close\r\n\r\n");
             await stream.WriteAsync(Encoding.ASCII.GetBytes(head), TestContext.Current.CancellationToken);
 
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
