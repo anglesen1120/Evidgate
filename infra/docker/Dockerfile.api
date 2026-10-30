@@ -100,15 +100,23 @@ RUN set -eux; \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra@sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd AS runtime
 
 # Non-root by construction (ruling T41, 00 §5.7 S3): the chiseled base already
-# runs as UID 1654 via APP_UID, and the two lines below keep that true even if
+# runs as UID 1654 via APP_UID, and USER $APP_UID below keeps that true even if
 # the base image is ever swapped for one that does not. No shell and no package
 # manager are installed, so nothing can be added at run time. The `-extra`
 # variant is still distroless chiseled — it adds ICU + tzdata (the globalization
 # libraries), not a shell or a package manager, and it does not set
 # DOTNET_SYSTEM_GLOBALIZATION_INVARIANT, which the plain `-chiseled` base does.
-USER $APP_UID
+#
+# /app is created as root and copied without --chown, so the tree stays root-owned and only world-readable: the
+# non-root runtime can read and start it but cannot unlink or replace an assembly. Both halves matter — a root-owned
+# file inside a directory the app uid owns is just as replaceable, and BuildKit creates a missing WORKDIR with the
+# ownership of whichever USER is active. Nothing in the Api writes under its base directory — the Data Protection
+# key ring goes to the default key directory (in-memory where none is writable), temp files go to /tmp, and Kestrel
+# serves HTTP on 8080 with no certificate file — so root ownership costs the runtime nothing.
+USER root
 WORKDIR /app
-COPY --from=build --chown=$APP_UID:$APP_UID /app ./
+COPY --from=build /app ./
+USER $APP_UID
 
 # The chiseled base sets ASPNETCORE_HTTP_PORTS=8080 (verified by
 # scripts/build-images.sh), which is why no ASPNETCORE_URLS is set here:

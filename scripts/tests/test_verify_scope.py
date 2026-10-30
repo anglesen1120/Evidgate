@@ -149,6 +149,41 @@ class Selection(unittest.TestCase):
         self.assertIn("skipped by scope: build", out)
         self.assertIn("note: untracked .omp ignored", out)
 
+    def test_a_full_tier_reports_why_it_is_full(self):
+        # A `full` verdict the classifier made is a verdict with a reason, not a
+        # missing stage list: the line names the change set the gate ran for.
+        _, stages, out = select(
+            "tier: full\nreason: outside the narrowed allow-lists\nchanged: 4\n"
+            "base: def456\nstages: build test\n"
+        )
+        self.assertEqual(stages, all_stages())
+        self.assertIn(
+            "== gate scope: full (outside the narrowed allow-lists, 4 changed path(s), base def456)",
+            out,
+        )
+        self.assertNotIn("no usable tier/stage list", out)
+
+    def test_a_report_without_facts_keeps_the_missing_list_line(self):
+        _, stages, out = select("tier: full\n")
+        self.assertEqual(stages, all_stages())
+        self.assertIn("no usable tier/stage list (full gate)", out)
+
+    def test_a_narrow_tier_without_a_usable_stage_list_keeps_the_missing_list_line(self):
+        # The rich line is a `full` verdict's, not a stand-in: a docs report whose
+        # stage list is empty or invented names no runnable list, so it falls back
+        # to the line that says so.
+        for report in (
+            "tier: docs\nreason: markdown only\nchanged: 1\nbase: abc\nstages: \n",
+            "tier: docs\nreason: markdown only\nchanged: 1\nbase: abc\nstages: nosuch\n",
+            "tier: quick\nreason: an unknown tier\nchanged: 1\nbase: abc\nstages: build\n",
+        ):
+            with self.subTest(report=report):
+                tier, stages, out = select(report)
+                self.assertEqual(tier, "full")
+                self.assertEqual(stages, all_stages())
+                self.assertIn("no usable tier/stage list (full gate)", out)
+                self.assertNotIn("== gate scope: full (", out)
+
 
 class BareRun(unittest.TestCase):
     """`main` end to end: the copied script, a stub classifier, stub stages."""
@@ -159,6 +194,9 @@ class BareRun(unittest.TestCase):
         (self.tree / "scripts").mkdir()
         self.script = self.tree / "scripts" / "verify.sh"
         shutil.copy(VERIFY, self.script)
+        # verify.sh sources its guard/selection half from the same tree and
+        # refuses to start without it, so a copied script needs both files.
+        shutil.copy(VERIFY.with_name("verify-guards.sh"), self.tree / "scripts")
         (self.tree / "scripts" / "gate_scope.py").write_text(STUB_CLASSIFIER)
         self.marker = self.tree / "classifier-ran"
 
@@ -199,8 +237,15 @@ class BareRun(unittest.TestCase):
         self.assertIn("no usable tier/stage list (full gate)", done.stdout)
 
     def test_a_full_tier_never_claims_a_narrowed_run(self):
-        done = self.run_main(report="tier: full\nstages: build\n")
+        done = self.run_main(
+            report="tier: full\nreason: outside the narrowed allow-lists\nchanged: 1\n"
+            "base: abc\nstages: build\n"
+        )
         self.assertEqual(self.ran(done), all_stages())
+        self.assertIn(
+            "== gate scope: full (outside the narrowed allow-lists, 1 changed path(s), base abc)",
+            done.stdout,
+        )
         self.assertIn("== verify: all stages passed", done.stdout)
 
     def test_all_stages_passed_is_a_coverage_claim_not_a_tier_claim(self):
@@ -232,10 +277,15 @@ class BareRun(unittest.TestCase):
 
 
 class StageWiring(unittest.TestCase):
-    def test_check_gate_scope_runs_both_scope_modules(self):
+    def test_check_gate_scope_runs_every_scope_module(self):
         text = VERIFY.read_text()
         body = text.split("  check-gate-scope)", 1)[1].split(";;", 1)[0]
-        for module in ("scripts/tests/test_gate_scope.py", "scripts/tests/test_verify_scope.py"):
+        for module in (
+            "scripts/tests/test_gate_scope.py",
+            "scripts/tests/test_verify_scope.py",
+            "scripts/tests/test_verify_refusal.py",
+            "scripts/tests/test_smoke_mktemp.py",
+        ):
             self.assertIn(module, body)
 
 

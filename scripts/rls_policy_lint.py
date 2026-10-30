@@ -20,9 +20,22 @@ statement wins:
     policy scoped to that role reach it) and `alter default privileges`, which reaches only the
     tables created after it.
 
-Out of scope, by decision: statements inside a `DO $$ … $$` body (its text is not replayed) and
-the quality of an operator policy's predicate — a policy that names `evidgate_operator` is
-trusted to be the gate.
+A statement does not have to be at the top level to run: `rls_embedded_sql` yields what a
+`do $body$ … $body$` block and an `execute '…'` string run, and the replay consumes those too, in
+execution order. Text whose SQL cannot be read from the file — an `execute` of a variable, an
+`execute format(…)` that builds DDL from its arguments — becomes an `embedded_dynamic` finding
+rather than silence.
+
+An operator policy gates the operator only when its predicate confines the tenant by something the
+session cannot choose (`rls_operator_gate`): naming `evidgate_operator` in the `TO` clause is not
+enough, because the role may `set evidgate.org_id` itself, and a predicate that never compares
+`org_id` (`using (org_id is not null)`, `using (current_setting('role') = 'x')`) separates no
+tenant. Predicates are read as text, so a predicate that compares `org_id` to a value, a subquery or
+a function call counts as a gate — the lint cannot tell whether that table is operator-writable or
+that function checks a scope, which is the conservative limit, and a reviewer who judges such a
+predicate safe names it in `OPERATOR_GATE_EXEMPT`. Column-level and `grant option for` revokes
+stay modelled as they were: a column-level revoke removes no table privilege, and a
+`revoke grant option for` removes no SELECT.
 """
 from __future__ import annotations
 
@@ -36,6 +49,9 @@ from pathlib import Path
 # module through the entry script.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from review_blockers.sql import ROLE_STOP, policy_tokens  # noqa: E402
+from rls_embedded_sql import execution_order  # noqa: E402
+from rls_names import NAME, TABLE_NAME, Finding, ident, qualified, split_dotted, strip_comments  # noqa: E402
+from rls_operator_gate import confines_tenant  # noqa: E402
 
 APP = "evidgate_app"
 OWNER = "evidgate_owner"  # the migration role: the owner of every table a migration creates
@@ -47,101 +63,6 @@ PSEUDO_ROLES = frozenset({"public", "current_user", "session_user", "current_rol
 SESSION_ROLES = frozenset({"current_user", "session_user", "current_role"})
 
 
-@dataclass(frozen=True)
-class Finding:
-    file: str
-    subject: str
-    rule: str
-    message: str
-
-    def __str__(self) -> str:
-        return f"{self.file}: {self.subject}: {self.rule}: {self.message}"
-
-
-def strip_comments(sql: str) -> str:
-    sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.S)
-    return re.sub(r"--[^\n]*", " ", sql)
-
-
-DOLLAR = re.compile(r"\$(\w*)\$")
-
-
-def statements(sql: str) -> list[tuple[str, str]]:
-    """Split comment-free SQL on `;` outside dollar-quoted bodies and single-quoted strings.
-
-    Returns (statement with each dollar body replaced by `$$`, concatenated bodies). Generic
-    dollar tags (`$fn$`, `$body$`) are honoured, so a function cannot hide behind its tag.
-    """
-    out: list[tuple[str, str]] = []
-    head: list[str] = []
-    bodies: list[str] = []
-    i, n = 0, len(sql)
-    while i < n:
-        ch = sql[i]
-        if ch == "'":
-            j = i + 1
-            while j < n:
-                if sql[j] == "'" and sql[j + 1 : j + 2] == "'":
-                    j += 2
-                elif sql[j] == "'":
-                    break
-                else:
-                    j += 1
-            head.append(sql[i : j + 1])
-            i = j + 1
-        elif ch == "$" and (m := DOLLAR.match(sql, i)):
-            end = sql.find(m.group(0), m.end())
-            if end < 0:
-                raise SystemExit(f"unterminated dollar quote {m.group(0)}")
-            bodies.append(sql[m.end() : end])
-            head.append("$$")
-            i = end + len(m.group(0))
-        elif ch == ";":
-            out.append((" ".join("".join(head).split()), "\n".join(bodies)))
-            head, bodies = [], []
-            i += 1
-        else:
-            head.append(ch)
-            i += 1
-    tail = " ".join("".join(head).split())
-    if tail:
-        out.append((tail, "\n".join(bodies)))
-    return out
-
-
-def ident(token: str) -> str:
-    """One (possibly quoted) identifier: quotes removed, doubled quotes undone, lowercased."""
-    token = token.strip()
-    if len(token) >= 2 and token[0] == '"' and token[-1] == '"':
-        return token[1:-1].replace('""', '"').lower()
-    return token.lower()
-
-
-def split_dotted(name: str) -> list[str]:
-    """Split `schema.table` on the dots outside quoted identifiers."""
-    parts: list[str] = []
-    buf: list[str] = []
-    quoted = False
-    for char in name.strip():
-        if char == '"':
-            quoted = not quoted
-            buf.append(char)
-        elif char == "." and not quoted:
-            parts.append("".join(buf))
-            buf = []
-        else:
-            buf.append(char)
-    parts.append("".join(buf))
-    return [part for part in parts if part]
-
-
-def qualified(name: str) -> str:
-    parts = [ident(part) for part in split_dotted(name)] or [""]
-    return ".".join(parts) if len(parts) > 1 else f"public.{parts[0]}"
-
-
-NAME = r'"(?:[^"]|"")*"|\S+'
-TABLE_NAME = r'[\w."]+'
 TABLE = re.compile(r"^create\s+(?:unlogged\s+|temp(?:orary)?\s+)?table\s+(?:if\s+not\s+exists\s+)?([\w.\"]+)\s*\((.*)\)\s*(?:partition\s+by.*)?$", re.I | re.S)
 POLICY = re.compile(rf"^create\s+policy\s+({NAME})\s+on\s+({TABLE_NAME})(.*)$", re.I | re.S)
 ALTER_POLICY = re.compile(rf"^alter\s+policy\s+({NAME})\s+on\s+({TABLE_NAME})(.*)$", re.I | re.S)
@@ -335,6 +256,7 @@ class Schema:
         self.grants: list[tuple[str, str]] = []  # file, statement: grants only, for the definer lint
         self.reach = Privileges()
         self.operator_select: set[str] = set()  # tables evidgate_operator ends up able to SELECT
+        self.unresolved: list[tuple[str, str]] = []  # file, SQL a `do` body or `execute` hides
 
 
 def apply_create(schema: Schema, file: str, name: str, table: str, tail: str) -> None:
@@ -374,7 +296,10 @@ def apply_alter(schema: Schema, file: str, name: str, table: str, tail: str) -> 
 def collect(files: dict[str, str]) -> Schema:
     schema = Schema()
     for name in sorted(files):
-        for stmt, body in statements(strip_comments(files[name])):
+        chunks, notes = execution_order(strip_comments(files[name]))
+        schema.unresolved.extend((name, note) for note in notes)
+        for chunk in chunks:
+            stmt, body = chunk.text, chunk.body
             low = stmt.lower()
             if m := TABLE.match(stmt):
                 table = qualified(m.group(1))
@@ -465,9 +390,30 @@ def lint_tables(schema: Schema, exceptions: dict[str, str]) -> list[Finding]:
     return findings
 
 
-def lint_policies(schema: Schema, exceptions: dict[str, str], exempt: dict[tuple[str, str, str], str]) -> list[Finding]:
+def lint_embedded(schema: Schema) -> list[Finding]:
+    """A `do` body or `execute` can run SQL the replay cannot read; report it rather than pass."""
+    return [
+        Finding(file, "execute", "embedded_dynamic", f"a statement the replay cannot read: {note}")
+        for file, note in schema.unresolved
+    ]
+
+
+def exempt_operator_statement(policy: Policy, exempt: dict[tuple[str, str, str], str]) -> bool:
+    """An accepted operator predicate is keyed by the exact statement it rewards.
+
+    The key is `(file, policy, table)` of the EFFECTIVE policy, so a later statement under the same
+    name is judged again, and an accepted statement widened to `using (true)` is not exempt."""
+    return (policy.file, policy.name, policy.table) in exempt and not policy.open_using
+
+
+def lint_policies(
+    schema: Schema,
+    exceptions: dict[str, str],
+    exempt: dict[tuple[str, str, str], str],
+    operator_exempt: dict[tuple[str, str, str], str],
+) -> list[Finding]:
     """Every policy names its roles, unless a later migration replaced it; and no policy may
-    admit `evidgate_operator` to a table where it holds SELECT with no operator policy."""
+    admit `evidgate_operator` to a table where it holds SELECT unless something confines it."""
     findings: list[Finding] = []
     for index, policy in enumerate(schema.policy_statements):
         if not policy.restates_roles or role_scoped(policy.to_roles):
@@ -484,11 +430,22 @@ def lint_policies(schema: Schema, exceptions: dict[str, str], exempt: dict[tuple
         if table not in schema.operator_select or exceptions.get(table) is not None:
             continue
         policies = effective_policies(schema, table)
-        if any(OPERATOR in policy.to_roles for policy in policies):
-            continue  # an operator policy is the gate: it decides which rows the operator reads
+        # Naming the operator does not gate it: an operator policy whose predicate reads the tenant
+        # from the session lets the role pick its rows, and one that never compares the tenant
+        # applies every row, so both are reported like an open policy.
+        if any(OPERATOR in policy.to_roles and confines_tenant(policy.text) for policy in policies):
+            continue
         for policy in policies:
-            if role_scoped(policy.to_roles) and not (set(policy.to_roles) & reach):
+            if OPERATOR in policy.to_roles:
+                message = ("a `to evidgate_operator` policy does not confine the operator: its predicate "
+                           "takes the tenant from the session, never compares it, or applies every row; "
+                           "confine it or revoke SELECT")
+            elif role_scoped(policy.to_roles) and not (set(policy.to_roles) & reach):
                 continue
-            findings.append(Finding(policy.file, table, "operator_select_no_policy",
-                "evidgate_operator holds SELECT here and this policy admits it; scope the policy or revoke SELECT from evidgate_operator"))
+            else:
+                message = ("evidgate_operator holds SELECT here and this policy admits it; "
+                           "scope the policy or revoke SELECT from evidgate_operator")
+            if exempt_operator_statement(policy, operator_exempt):
+                continue
+            findings.append(Finding(policy.file, table, "operator_select_no_policy", message))
     return findings

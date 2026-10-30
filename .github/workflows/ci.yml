@@ -117,7 +117,7 @@ jobs:
           --stage isolation
       - name: 'Upload the isolation JUnit report'
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: isolation-junit
           path: artifacts/test-results/isolation.junit.xml
@@ -175,7 +175,7 @@ jobs:
           --stage fixtures-fuzz
       - name: 'Upload the fuzz findings on failure'
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-findings
           path: artifacts/fuzz-findings
@@ -194,7 +194,7 @@ jobs:
           # base...HEAD and the U1 ratchet over the head tree. A shallow clone
           # has no base commit and no history, and the stage fails closed.
           fetch-depth: 0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # FR-01-2: the Node version (26) comes from .nvmrc, not a floating range.
           node-version-file: .nvmrc
@@ -337,7 +337,7 @@ jobs:
           # check-sources.sh calls `dotnet nuget list source`; no package work
           # happens here, so the NuGet cache stays off.
           global-json-file: global.json
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -390,7 +390,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -405,7 +405,7 @@ jobs:
         run: npm run e2e -w apps/web
       - name: 'Upload the Playwright report on failure'
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report
           path: apps/web/playwright-report
@@ -427,7 +427,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -442,7 +442,7 @@ jobs:
         run: npm run e2e:fixtures -w apps/web
       - name: 'Upload the Playwright report on failure'
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-fixtures
           path: apps/web/playwright-report-fixtures
@@ -465,7 +465,7 @@ jobs:
           global-json-file: global.json
           cache: true
           cache-dependency-path: '**/packages.lock.json'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -480,14 +480,14 @@ jobs:
           --stage audit-deps
           --stage sbom
       - name: 'Upload SBOMs'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom
           path: artifacts/sbom/
           # §8: 14 days for PR evidence, 90 for main (release evidence).
           retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 14 }}
       - name: 'Upload licence report'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: licence-report
           path: artifacts/licence-report.json

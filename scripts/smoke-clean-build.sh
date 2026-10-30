@@ -14,10 +14,16 @@ NODE_VERSION="26.10.0"
 # Stage under $HOME: container runtimes (colima/docker-desktop) mount $HOME into
 # the VM but not /var/folders, so an mktemp default would appear empty inside.
 WORKDIR="$(mktemp -d "$HOME/.evidgate-smoke.XXXXXX")"
+# The trap goes up as soon as the first temp path exists: a failing second mktemp
+# (or an interrupt before it) must not leave the copied tree behind. It reads
+# INNER_SCRIPT through an empty default because that file may never be created.
+INNER_SCRIPT=""
+trap 'rm -rf "$WORKDIR"; [[ -z "$INNER_SCRIPT" ]] || rm -f "$INNER_SCRIPT"' EXIT
 # The inner script lives OUTSIDE the copied tree: inside it would show up in
 # the container as an extra root file and trip check-layout.sh.
-INNER_SCRIPT="$(mktemp "$HOME/.evidgate-smoke-inner.XXXXXX.sh")"
-trap 'rm -rf "$WORKDIR"; rm -f "$INNER_SCRIPT"' EXIT
+# The X run must end the name: BSD mktemp substitutes only a trailing run and
+# takes anything after it literally, so a suffix would give every run one path.
+INNER_SCRIPT="$(mktemp "$HOME/.evidgate-smoke-inner.XXXXXX")"
 
 # Copy tracked + untracked-not-ignored files (a clean-clone equivalent for the
 # working tree: bin/, obj/, node_modules/, dist/, .env* are excluded by .gitignore).

@@ -14,18 +14,30 @@ list (`contracts/rls-exceptions.txt`, the single source the boot self-check shar
                         included. `alter policy` is replayed, so a later widening is reported
   operator_select_no_policy   `evidgate_operator` ends up holding SELECT (after the replay)
                               and a policy admits it (no `TO` clause, `to public`, a session
-                              pseudo-role, or a role the operator is a member of), with no
-                              operator policy gating it. Narrowed on purpose: a policy scoped
-                              to a role that cannot reach the operator leaves it zero rows
+                              pseudo-role, or a role the operator is a member of), with nothing
+                              gating it. A policy `to evidgate_operator` gates it only while its
+                              `USING` predicate compares `org_id` to something the session cannot
+                              choose: the role may `set evidgate.org_id` itself, so a
+                              `current_setting('evidgate.org_id')` comparison — or the
+                              `current_org_id()`/`current_project_id()` helper, which is that
+                              comparison — is a finding, not a gate, and a predicate that never
+                              compares `org_id` (`using (org_id is not null)`) separates no tenant.
+                              Narrowed on purpose: a policy
+                              scoped to a role that cannot reach the operator leaves it zero rows
                               through RLS, so that shape is not reported; `0055` revokes the
                               operator's SELECT on the three tables it repairs anyway
+  embedded_dynamic      a `do` body or an `execute` runs SQL the replay cannot read statically
+                        (an `execute` of a variable, an `execute format(…)` that builds DDL from
+                        its arguments): reported rather than trusted, so an unreadable statement
+                        cannot pass as clean
 
 Exception kinds relax this: `platform` and `catalogue` tables still need ENABLE + FORCE
 and a policy but have no `org_id` rule; `mechanism` tables are skipped entirely.
 
 `POLICY_TO_EXEMPT` excuses a `TO`-less policy only while a later statement re-creates that
 policy `to evidgate_app`; a replacement naming another role, PUBLIC or a pseudo-role does not
-count.
+count. `OPERATOR_GATE_EXEMPT` accepts an operator predicate the text lint cannot judge, keyed by
+the exact `(file, policy, table)` the replay leaves in place.
 
 `0001` hands `evidgate_operator` SELECT on every `public` table, so the operator rule fires only
 where a policy admits it on a business table; a policy naming only `evidgate_app` matches nothing.
@@ -51,7 +63,7 @@ from pathlib import Path
 # script is at the 500-line limit and the entry stays readable. The path insert covers the
 # unittest entry, which loads this file by path rather than as a package member.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from rls_policy_lint import Finding, collect, lint_policies, lint_tables  # noqa: E402
+from rls_policy_lint import Finding, collect, lint_embedded, lint_policies, lint_tables  # noqa: E402
 
 # Definers whose audit trail is something other than a per-call audit row. Adding a name
 # here is a review decision, so each entry carries its reason. Keys are EXACT qualified
@@ -175,6 +187,20 @@ POLICY_TO_EXEMPT = {
     )
 }
 
+# An operator policy whose predicate a reviewer accepted, where the text lint cannot judge it. The
+# key is the EXACT effective policy (file, policy, table), so a later statement under the same name
+# is judged again, and the accepted statement must not be an open `using (true)`.
+OPERATOR_GATE_EXEMPT = {
+    ("0003_foundation_rls_probe.sql", "rls_probe_operator_read", "public.rls_probe"): (
+        "0003:61-79, the foundation RLS canary: `rls_probe` is the probe table Isolation.Tests "
+        "asserts the policy contract on (a uuid org, id, label and timestamps — no tenant business "
+        "data), and its operator read is the deliberate audited read path the table exists to "
+        "demonstrate. The predicate is the tenant shape on purpose: it shows that RLS filters a "
+        "role that sets its own `evidgate.org_id`, which is the exposure 0055 removed from the "
+        "three business tables. The file is applied, so its text cannot change."
+    )
+}
+
 DEFERRAL = re.compile(r"--\s*lint:\s*audit-deferred\s+(\S+)\s+([^\n]+)")
 
 
@@ -236,7 +262,9 @@ def lint(migrations: Path, exceptions_path: Path) -> list[Finding]:
     exceptions = load_exceptions(exceptions_path)
     raws = {f.name: f.read_text(encoding="utf-8") for f in sorted(migrations.glob("*.sql"))}
     schema = collect(raws)
-    return (lint_tables(schema, exceptions) + lint_policies(schema, exceptions, POLICY_TO_EXEMPT)
+    return (lint_tables(schema, exceptions)
+            + lint_policies(schema, exceptions, POLICY_TO_EXEMPT, OPERATOR_GATE_EXEMPT)
+            + lint_embedded(schema)
             + lint_definers(schema, raws))
 
 

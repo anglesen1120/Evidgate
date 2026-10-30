@@ -51,10 +51,21 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf
 # Evidgate.slnx, which does not exist in an image, so the path is explicit here.
 ENV EVIDGATE_MIGRATOR__MIGRATIONSPATH=/app/migrations
 
-USER $APP_UID
+# /app is created as root and copied without --chown, so the tree stays root-owned and only world-readable: the
+# non-root job can read and run it but cannot unlink or replace an assembly or a script. Both halves matter — a
+# root-owned file inside a directory the app uid owns is just as replaceable, and BuildKit creates a missing WORKDIR
+# with the ownership of whichever USER is active. DbUp only reads the scripts (its journal is a database table) and
+# nothing else writes under the base directory, while a writable tree would let anything running in this job — which
+# holds the owner-role connection string — rewrite the migrations it is about to apply.
+# The chmod is explicit: this COPY reads the build context, i.e. a working
+# checkout, and BuildKit keeps the source modes — a clone made under umask 077
+# would ship 0600 scripts the non-root job cannot read. u=rwX,go=rX makes the
+# directories 0755 and the scripts 0644 whatever that umask; root ownership stays.
+USER root
 WORKDIR /app
-COPY --from=build --chown=$APP_UID:$APP_UID /app ./
-COPY --chown=$APP_UID:$APP_UID migrations/ /app/migrations/
+COPY --from=build /app ./
+COPY --chmod=u=rwX,go=rX migrations/ /app/migrations/
+USER $APP_UID
 
 # Args append to the entry point, so `docker run <image> --status` runs
 # `dotnet /app/Evidgate.Migrator.dll --status` (AC5, 10.2.1-T1.2), `--dry-run`
