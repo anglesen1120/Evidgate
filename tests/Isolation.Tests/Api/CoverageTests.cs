@@ -14,11 +14,7 @@ namespace Isolation.Tests.Api;
 public sealed class CoverageTests(ApiIsolationFixture fixture)
 {
     /// <summary>Served routes deliberately absent from the spec, each a recorded decision.</summary>
-    private static readonly Dictionary<ApiRoute, string> ServedNotInSpec = new()
-    {
-        [new ApiRoute("POST", "/v1/slice/run")] =
-            "01.1.2 run-only slice dev surface, recorded in tests/Contract.Tests/ServedDocumentTests.cs:59",
-    };
+    private static readonly Dictionary<ApiRoute, string> ServedNotInSpec = new();
 
     /// <summary>Spec ∩ served ⊆ covered, covered ⊆ served, served ⊆ spec ∪ allowlist.</summary>
     [Fact]

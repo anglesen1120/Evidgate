@@ -23,7 +23,7 @@ public sealed class OpenApiSurfaceTests
         using var metrics = await client.GetAsync("/metrics", TestContext.Current.CancellationToken);
         Assert.Equal(200, (int)metrics.StatusCode);
 
-        // The served OpenAPI document has the /v1 slice route but no /internal/* path.
+        // The served OpenAPI document has the documented /v1 routes but no /internal/* path.
         using var openApi = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
         Assert.Equal(200, (int)openApi.StatusCode);
         var body = await openApi.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -32,7 +32,8 @@ public sealed class OpenApiSurfaceTests
 
         using var document = JsonDocument.Parse(body);
         var paths = document.RootElement.GetProperty("paths").EnumerateObject().ToArray();
-        Assert.Contains(paths, path => path.Name == "/v1/slice/run");
+        Assert.Contains(paths, path => path.Name == "/v1/permissions");
         Assert.DoesNotContain(paths, path => path.Name.StartsWith("/internal/", StringComparison.Ordinal));
+        Assert.DoesNotContain(paths, path => path.Name.StartsWith("/v1/slice", StringComparison.Ordinal));
     }
 }

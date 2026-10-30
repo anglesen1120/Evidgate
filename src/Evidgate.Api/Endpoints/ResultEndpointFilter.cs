@@ -12,9 +12,8 @@ namespace Evidgate.Api.Endpoints;
 /// response. Mounted on a route with <c>AddEndpointFilter</c>, it turns a
 /// <see cref="Result{T}"/> success into the body's JSON with the result's own
 /// status, and a failure into the 00 §9.2 error envelope — never
-/// <c>ProblemDetails</c>. A route whose delegate returns anything else (the
-/// skeleton slice's DTOs) passes through untouched, so this filter is safe on a
-/// route that mixes the two.
+/// <c>ProblemDetails</c>. A route whose delegate returns anything else passes
+/// through untouched, so this filter is safe on a route that mixes the two.
 /// </summary>
 public sealed class ResultEndpointFilter : IEndpointFilter
 {

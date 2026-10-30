@@ -24,7 +24,10 @@ namespace Evidgate.BuildingBlocks.Pipeline.Behaviours;
 /// <typeparamref name="TMessage"/> shape — deterministic per command type.
 /// </para>
 /// </summary>
-public sealed class IdempotencyBehaviour<TMessage, TResponse>(IIdempotencyStore store, IAuditTrail audit)
+public sealed class IdempotencyBehaviour<TMessage, TResponse>(
+    IServiceProvider services,
+    IIdempotencyStore store,
+    IAuditTrail audit)
     : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
@@ -42,12 +45,14 @@ public sealed class IdempotencyBehaviour<TMessage, TResponse>(IIdempotencyStore 
             return await next(message, cancellationToken).ConfigureAwait(false);
         }
 
-        // Same contract guard the tenant/authorization stages carry: a DTO-answering
-        // command cannot express the 409/400 Result this behaviour produces, so it
-        // passes through rather than surfacing TenantScopeMissingException or an
-        // InvalidOperationException from ResultFactory (QA-P defect D2).
+        // The 409/400 answers this stage produces are Results, so a command whose
+        // response cannot carry one is refused rather than allowed to skip the key
+        // claim — unless its handler names no gate, in which case nothing here
+        // would have denied it anyway.
         if (!ResultFactory.IsResultContract(typeof(TResponse)))
         {
+            HandlerLookup.EnsureAuthGateHasResultContract(services, typeof(TMessage), typeof(TResponse));
+
             return await next(message, cancellationToken).ConfigureAwait(false);
         }
 

@@ -348,6 +348,7 @@ public sealed class TaskConsumerTests
             Substitute.For<Evidgate.BuildingBlocks.Persistence.Tenancy.ITenantScopeFactory>(),
             Substitute.For<ITaskAlertSink>(),
             Options.Create(new TasksOptions { VisibilityTimeoutSeconds = 1 }),
+            TimeProvider.System,
             NullLogger<TaskConsumer>.Instance);
 
         (await consumer.PollOnceAsync(Queue, Token)).ShouldBe(0, "a stale claim is not processed");

@@ -28,6 +28,9 @@ internal sealed class TasksTestHost : IAsyncDisposable
     /// <summary>What the suite's task handlers saw.</summary>
     internal TaskRunRecorder Recorder => _provider.GetRequiredService<TaskRunRecorder>();
 
+    /// <summary>What the blocking handlers saw; a second host shares it through <c>services</c>.</summary>
+    internal BlockingTaskProbe Probe => _provider.GetRequiredService<BlockingTaskProbe>();
+
     internal ITaskClaimer Claimer => _provider.GetRequiredService<ITaskClaimer>();
 
     internal ITaskQueueWriter Writer => _provider.GetRequiredService<ITaskQueueWriter>();
@@ -83,8 +86,10 @@ internal sealed class TasksTestHost : IAsyncDisposable
         collection.AddEvidgateTenancy();
         collection.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
         collection.AddSingleton<TaskRunRecorder>();
+        collection.AddSingleton<BlockingTaskProbe>();
         collection.AddTaskHandler<RecordingPayload, RecordingTaskHandler>();
         collection.AddTaskHandler<TenantPayload, TenantTaskHandler>();
+        collection.AddTaskHandler<BlockingPayload, BlockingTaskHandler>();
 
         services?.Invoke(collection);
 

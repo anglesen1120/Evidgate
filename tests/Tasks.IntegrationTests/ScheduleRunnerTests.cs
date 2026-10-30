@@ -164,7 +164,7 @@ public sealed class ScheduleRunnerTests
         // The registered schedules are exactly the types the worker has handlers for,
         // so a fire is always claimable by the worker that made it.
         host.Handlers.TaskTypes.ShouldBe(
-            [EvidgateSweeps.IdempotencyPurgeTaskType, EvidgateSweeps.TaskSweepTaskType, Evidgate.BuildingBlocks.Persistence.Audit.AuditSweeps.VerifyChainTaskType, TaskHandlerTypes.Recording, TaskHandlerTypes.Tenant],
+            [EvidgateSweeps.IdempotencyPurgeTaskType, EvidgateSweeps.TaskSweepTaskType, Evidgate.BuildingBlocks.Persistence.Audit.AuditSweeps.VerifyChainTaskType, TaskHandlerTypes.Recording, TaskHandlerTypes.Tenant, TaskHandlerTypes.Blocking],
             ignoreOrder: true);
     }
 

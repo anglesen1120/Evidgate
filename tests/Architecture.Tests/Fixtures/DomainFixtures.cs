@@ -108,6 +108,47 @@ internal sealed class AuditedHandlerReturningResult : ICommandHandler<CommandRet
 }
 
 /// <summary>
+/// Seeded violation fixture for the gated-handler rule: [AuthenticatedMember] on a handler
+/// answering a bare DTO, so the stage enforcing the gate could not refuse it.
+/// </summary>
+[AuthenticatedMember]
+internal sealed class HandlerWithAuthenticatedMemberReturningDto
+    : ICommandHandler<CommandReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public ValueTask<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        CommandReturningDto command,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new Evidgate.Modules.Sample.Contracts.SampleDto());
+}
+
+/// <summary>
+/// Seeded violation fixture for the gated-handler rule: [CredentialAuthenticated] on a
+/// handler answering a bare DTO instead of the Result the pipeline can refuse.
+/// </summary>
+[CredentialAuthenticated]
+internal sealed class HandlerWithCredentialReturningDto
+    : ICommandHandler<CommandReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public ValueTask<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        CommandReturningDto command,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new Evidgate.Modules.Sample.Contracts.SampleDto());
+}
+
+/// <summary>
+/// Negative control for the gated-handler rule: the same bare DTO answer with no gate at
+/// all, which that rule must leave to the general handler-shape rule.
+/// </summary>
+internal sealed class HandlerWithoutGateReturningDto
+    : ICommandHandler<CommandReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public ValueTask<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        CommandReturningDto command,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new Evidgate.Modules.Sample.Contracts.SampleDto());
+}
+
+/// <summary>
 /// Seeded violation fixture (02.1.1): [AuthenticatedMember] on a handler that is not
 /// in the allowlist — the hole in 00 §5.7 S2 must stay closed by name.
 /// </summary>
@@ -132,4 +173,89 @@ internal static class TenantPublishingFixture
 {
     internal static void Publish(Evidgate.BuildingBlocks.Pipeline.Tenancy.IRequestTenantContextSetter setter) =>
         setter.Publish(Guid.Empty, projectId: null).Dispose();
+}
+
+/// <summary>
+/// Base fixture for the inherited-gate case: [Permission] here is what the pipeline reads
+/// on the derived handler too, because the attribute is declared Inherited and the runtime
+/// lookup passes <c>inherit: true</c>.
+/// </summary>
+[Permission("run:create")]
+internal abstract class PermissionGatedHandlerBase
+    : ICommandHandler<CommandReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public ValueTask<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        CommandReturningDto command,
+        CancellationToken cancellationToken) =>
+        ValueTask.FromResult(new Evidgate.Modules.Sample.Contracts.SampleDto());
+}
+
+/// <summary>
+/// Seeded violation fixture for the gated-handler rule: it declares no attribute itself and
+/// inherits [Permission] from <see cref="PermissionGatedHandlerBase"/>, so a rule that only
+/// looked at the type's own attributes would let a gated DTO answer through.
+/// </summary>
+internal sealed class HandlerInheritingPermissionReturningDto : PermissionGatedHandlerBase;
+
+/// <summary>Seeded violation fixture: a stream message whose handler carries a gate.</summary>
+internal sealed record StreamQueryReturningDto : IStreamQuery<Evidgate.Modules.Sample.Contracts.SampleDto>;
+
+/// <summary>
+/// Base fixture for the bypass case: an abstract stream handler is never dispatched, so the
+/// rule must stay silent about it and report the concrete subclass that inherits its gate.
+/// </summary>
+[Permission("run:create")]
+internal abstract class GatedStreamHandlerBase
+    : IStreamQueryHandler<StreamQueryReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public abstract IAsyncEnumerable<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        StreamQueryReturningDto query,
+        CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Seeded violation fixture for the gated-handler rule: a gated stream handler. Its message is
+/// consumed through the stream handler interface, never through <c>IPipelineBehavior</c>, so no
+/// stage could enforce the permission it names.
+/// </summary>
+internal sealed class HandlerWithGateStreamingDto : GatedStreamHandlerBase
+{
+    public override IAsyncEnumerable<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        StreamQueryReturningDto query,
+        CancellationToken cancellationToken) =>
+        System.Linq.AsyncEnumerable.Empty<Evidgate.Modules.Sample.Contracts.SampleDto>();
+}
+
+/// <summary>Seeded violation fixture: a published notification whose handler carries a gate.</summary>
+internal sealed record SampleNotificationFixture : INotification;
+
+/// <summary>
+/// Seeded violation fixture for the gated-handler rule: notifications are published to every
+/// handler outside the request pipeline, so a gate declared here is never enforced.
+/// </summary>
+[Permission("run:create")]
+internal sealed class HandlerWithGateOnNotification : INotificationHandler<SampleNotificationFixture>
+{
+    public ValueTask Handle(SampleNotificationFixture notification, CancellationToken cancellationToken) =>
+        ValueTask.CompletedTask;
+}
+
+/// <summary>
+/// Clean fixture: the same stream handler with no gate at all. The gated-handler rule only
+/// covers types that name a gate, so this one must not be reported.
+/// </summary>
+internal sealed class HandlerStreamingDtoWithoutGate
+    : IStreamQueryHandler<StreamQueryReturningDto, Evidgate.Modules.Sample.Contracts.SampleDto>
+{
+    public IAsyncEnumerable<Evidgate.Modules.Sample.Contracts.SampleDto> Handle(
+        StreamQueryReturningDto query,
+        CancellationToken cancellationToken) =>
+        System.Linq.AsyncEnumerable.Empty<Evidgate.Modules.Sample.Contracts.SampleDto>();
+}
+
+/// <summary>Clean fixture: the same notification handler with no gate at all.</summary>
+internal sealed class HandlerOnNotificationWithoutGate : INotificationHandler<SampleNotificationFixture>
+{
+    public ValueTask Handle(SampleNotificationFixture notification, CancellationToken cancellationToken) =>
+        ValueTask.CompletedTask;
 }

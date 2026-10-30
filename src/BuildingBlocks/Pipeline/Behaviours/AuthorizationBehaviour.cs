@@ -42,6 +42,10 @@ public sealed class AuthorizationBehaviour<TMessage, TResponse>(
     {
         if (!ResultFactory.IsResultContract(typeof(TResponse)))
         {
+            // A gated handler that answers a DTO would run unchecked: only a message
+            // with nothing to authorize has nothing to deny.
+            HandlerLookup.EnsureAuthGateHasResultContract(services, typeof(TMessage), typeof(TResponse));
+
             return await next(message, cancellationToken).ConfigureAwait(false);
         }
 

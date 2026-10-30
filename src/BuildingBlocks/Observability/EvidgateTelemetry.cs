@@ -5,10 +5,8 @@ using Evidgate.BuildingBlocks.Observability.Correlation;
 namespace Evidgate.BuildingBlocks.Observability;
 
 /// <summary>
-/// One telemetry vocabulary for both entry points (01.1.2-T1.2): the
-/// <see cref="ActivitySource"/> and <see cref="Meter"/> the hosts subscribe to,
-/// and the <c>evidgate.module</c> tag every module-crossing span carries so a
-/// trace shows which modules the 00 §5.5 slice crossed.
+/// Hosts subscribe to this <see cref="ActivitySource"/> and <see cref="Meter"/> so both entry points
+/// use one telemetry vocabulary. The <c>evidgate.module</c> tag identifies the modules a trace crosses.
 /// </summary>
 public static class EvidgateTelemetry
 {
@@ -21,7 +19,7 @@ public static class EvidgateTelemetry
     /// <summary>Span/metric tag naming the module a unit of work belongs to (00 §5.1 names).</summary>
     public const string ModuleTag = "evidgate.module";
 
-    /// <summary>Span tag naming the module operation, e.g. <c>CreateRun</c>.</summary>
+    /// <summary>Span tag naming the module operation, e.g. <c>FinalizeShard</c>.</summary>
     public const string OperationTag = "evidgate.operation";
 
     /// <summary>Span tag carrying the 00 §9.1 request id.</summary>
@@ -84,7 +82,7 @@ public static class EvidgateTelemetry
     /// </summary>
     public const string SessionSlideMetricName = "evidgate_session_slide_total";
 
-    /// <summary>Span tag naming the message type a pipeline span ran (e.g. <c>CreateRun</c>).</summary>
+    /// <summary>Span tag naming the message type a pipeline span ran (e.g. <c>FinalizeShard</c>).</summary>
     public const string PipelineMessageTag = "evidgate.message";
 
     /// <summary>Span tag carrying the thrown exception's type on a failed pipeline run (OTel <c>error.type</c>).</summary>

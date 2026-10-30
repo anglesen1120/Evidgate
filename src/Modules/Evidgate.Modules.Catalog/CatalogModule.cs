@@ -4,7 +4,6 @@ using Evidgate.Modules.Catalog.Application;
 using Evidgate.Modules.Catalog.Application.Commands;
 using Evidgate.Modules.Catalog.Contracts;
 using Evidgate.Modules.Catalog.Domain;
-using Evidgate.Modules.Catalog.Infrastructure;
 using Evidgate.Modules.Catalog.Infrastructure.Persistence;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,9 +21,6 @@ internal static class CatalogModule
     public static IServiceCollection AddCatalogModule(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-
-        // The sprint-1 skeleton read of published suite revisions; 03.2.1 replaces it with the real catalog.
-        services.AddSingleton<ICatalog, InMemorySuiteCatalog>();
 
         // 03.1.1: the EF write model of the catalog (00 §5.5 C4).
         services.AddEvidgateDbContext<CatalogDbContext>(typeof(CatalogDbContext).Assembly);

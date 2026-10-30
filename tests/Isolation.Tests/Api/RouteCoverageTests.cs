@@ -18,7 +18,7 @@ public sealed class RouteCoverageTests
     private static readonly ApiRoute GetOrg = new("GET", "/v1/orgs/{o}");
     private static readonly ApiRoute GetCase = new("GET", "/v1/cases/{c}");
     private static readonly ApiRoute DeleteOrg = new("DELETE", "/v1/orgs/{o}");
-    private static readonly ApiRoute SliceRun = new("POST", "/v1/slice/run");
+    private static readonly ApiRoute LegacyRun = new("POST", "/v1/legacy/run");
 
     private static readonly IReadOnlyDictionary<ApiRoute, string> NoAllowlist = new Dictionary<ApiRoute, string>();
 
@@ -121,15 +121,15 @@ public sealed class RouteCoverageTests
     [Fact]
     public void Gate_Reports_A_Served_Route_Missing_From_The_Spec_Unless_Allowlisted()
     {
-        ApiRoute[] served = [GetOrg, SliceRun];
+        ApiRoute[] served = [GetOrg, LegacyRun];
 
         var red = RouteCoverage.Check([GetOrg], served, served, NoAllowlist);
 
         red.IsClean.ShouldBeFalse();
-        red.Unspecified.ShouldBe([SliceRun]);
-        red.Describe().ShouldContain("unspecified: POST /v1/slice/run");
+        red.Unspecified.ShouldBe([LegacyRun]);
+        red.Describe().ShouldContain("unspecified: POST /v1/legacy/run");
 
-        var allowlist = new Dictionary<ApiRoute, string> { [SliceRun] = "dev-only slice surface, not part of the V1 contract" };
+        var allowlist = new Dictionary<ApiRoute, string> { [LegacyRun] = "an operational surface outside the V1 contract" };
         var green = RouteCoverage.Check([GetOrg], served, served, allowlist);
 
         green.IsClean.ShouldBeTrue(green.Describe());
@@ -153,7 +153,7 @@ public sealed class RouteCoverageTests
         Endpoint[] endpoints =
         [
             Route("/v1/cases/{id:guid}", "GET", "PATCH"),
-            Route("/v1/slice/run"),
+            Route("/v1/legacy/run"),
             Route("/internal/health/live", "GET"),
             Route("/v10/other", "GET"),
         ];
@@ -167,7 +167,7 @@ public sealed class RouteCoverageTests
         [
             new ApiRoute("GET", "/v1/cases/{id}"),
             new ApiRoute("PATCH", "/v1/cases/{id}"),
-            new ApiRoute(ServedRouteInventory.AnyMethod, "/v1/slice/run"),
+            new ApiRoute(ServedRouteInventory.AnyMethod, "/v1/legacy/run"),
         ]);
     }
 
