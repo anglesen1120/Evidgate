@@ -15,7 +15,17 @@ SPEC.loader.exec_module(check_rls)
 # line budget). They are imported here because `verify.sh` runs this file by name, and unittest
 # collects the `TestCase` subclasses that are attributes of the module it was given.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_check_rls_policies import OperatorSelectReplay, PolicyStatementReplay  # noqa: E402,F401
+from test_check_rls_embedded import (  # noqa: E402,F401
+    EmbeddedPolicyStatements,
+    EmbeddedReplayOrder,
+    ExecuteConcatenation,
+    UnreadableExecute,
+)
+from test_check_rls_policies import (  # noqa: E402,F401
+    OperatorGateExemptions,
+    OperatorSelectReplay,
+    PolicyStatementReplay,
+)
 
 
 class ReplayFixturesLoaded(unittest.TestCase):
@@ -24,7 +34,15 @@ class ReplayFixturesLoaded(unittest.TestCase):
     silently shrinking it."""
 
     def test_the_policy_replay_fixtures_are_collected_with_this_file(self):
-        for fixture in (PolicyStatementReplay, OperatorSelectReplay):
+        for fixture in (
+            PolicyStatementReplay,
+            OperatorSelectReplay,
+            OperatorGateExemptions,
+            EmbeddedPolicyStatements,
+            UnreadableExecute,
+            EmbeddedReplayOrder,
+            ExecuteConcatenation,
+        ):
             with self.subTest(fixture=fixture.__name__):
                 self.assertTrue(issubclass(fixture, unittest.TestCase))
 
@@ -140,6 +158,42 @@ class TableRules(unittest.TestCase):
     def test_comments_do_not_satisfy_the_lint(self):
         sql = GOOD_TABLE.replace("alter table public.widget force row level security;", "-- alter table public.widget force row level security;")
         self.assertEqual(rules(run(sql)), {"missing_rls"})
+
+
+class CommentLexing(unittest.TestCase):
+    """Comment stripping reads SQL tokens: a `--` or `/*` inside a literal, a quoted identifier
+    or a dollar-quoted body is data, so it can neither hide nor invent a statement."""
+
+    def test_a_comment_marker_inside_a_literal_hides_no_later_ddl(self):
+        sql = GOOD_TABLE.replace(
+            "alter table public.widget force row level security;",
+            "select '--'; alter table public.widget disable row level security;",
+        )
+        self.assertEqual(rules(run(sql)), {"missing_rls"})
+
+    def test_literals_and_quoted_identifiers_survive_a_comment_sweep(self):
+        from rls_names import strip_comments
+
+        for kept in ("select '-- x';", 'select "--y";', "select '/* z */';", "select '\"/*';"):
+            with self.subTest(kept=kept):
+                self.assertEqual(strip_comments(kept), kept)
+
+    def test_a_dollar_body_keeps_its_statements_and_loses_only_its_own_comments(self):
+        from rls_names import strip_comments
+
+        swept = strip_comments(
+            "do $$ -- body note\ncreate policy p on public.t to evidgate_app using (true); $$;"
+        )
+        self.assertNotIn("body note", swept)
+        self.assertIn("create policy p on public.t", swept)
+        self.assertIn("$$", swept, "the tag stays so the body is still read as one statement")
+
+    def test_an_ordinary_or_nested_block_comment_is_removed(self):
+        from rls_names import strip_comments
+
+        self.assertNotIn("hidden", strip_comments("select 1; -- hidden\nselect 2;"))
+        self.assertNotIn("gone", strip_comments("select 1; /* gone /* nested */ also gone */ select 2;"))
+        self.assertIn("select 2", strip_comments("select 1; /* gone */ select 2;"))
 
 
 class DefinerRules(unittest.TestCase):
@@ -384,8 +438,10 @@ class PolicyRoles(unittest.TestCase):
                + "grant select on public.widget to evidgate_operator;")
         self.assertIn("operator_select_no_policy", rules(run(sql)))
 
-    def test_an_operator_policy_gates_the_operator(self):
-        sql = DEFAULT_OPERATOR_SELECT + GOOD_TABLE.replace("to evidgate_app", "to evidgate_operator")
+    def test_an_operator_policy_that_confines_the_tenant_gates_the_operator(self):
+        sql = DEFAULT_OPERATOR_SELECT + GOOD_TABLE + (
+            "create policy widget_operator_read on public.widget for select to evidgate_operator "
+            "using (org_id = '00000000-0000-0000-0000-000000000000'::uuid);")
         self.assertEqual(run(sql), [])
 
     def test_an_excepted_table_is_out_of_scope(self):

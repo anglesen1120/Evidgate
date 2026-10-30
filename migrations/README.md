@@ -689,17 +689,22 @@ through the real runner against a throwaway PostgreSQL 18 container.
   `rls_probe_operator_read` policy — and a default-privilege change would silently rewrite that
   decision for every future table instead of deciding it once per table. A new tenant table is safe
   only when its own file names the app role in its policy and decides the operator's grant
-  explicitly — revoke it, or add a `TO evidgate_operator` read policy as `0003`'s
-  `rls_probe_operator_read` does. `scripts/check-rls.py` now enforces both halves: `policy_no_role`
+  explicitly — revoke it, or add a `TO evidgate_operator` read policy whose predicate compares
+  `org_id` to something the session cannot set (`0003`'s `rls_probe_operator_read` reads the session
+  on purpose: the probe table exists to show that RLS filters a role that picks its own tenant).
+  `scripts/check-rls.py` now enforces both halves: `policy_no_role`
   rejects a `create policy` (or `alter policy`) whose roles are absent, `public`, or a session
   pseudo-role such as `current_user`, and `operator_select_no_policy` rejects a business table whose
   effective policy admits the operator (not role-scoped, or scoped to a role the operator is a member
-  of) while the operator still holds `SELECT` and no `TO evidgate_operator` policy exists. The only
+  of) while the operator still holds `SELECT` and no `TO evidgate_operator` policy confines it. The only
   exemptions are the three superseded `tenant_isolation` statements of `0053`/`0054` (exact
   `(file, policy, table)` entries in `POLICY_TO_EXEMPT`), and an exemption is honoured only while the
   replayed schema's effective policy for that table and name is a later definition that names
   `evidgate_app` — which is exactly what `0055` supplies, so deleting its `create policy` statements
-  turns the exemptions back into findings.
+  turns the exemptions back into findings. The second list, `OPERATOR_GATE_EXEMPT`, accepts one operator predicate the text lint cannot
+  judge — keyed by the exact `(file, policy, table)` the replay leaves in place, and only while
+  that statement is not an open `using (true)`: `0003`'s `rls_probe_operator_read`, for the
+  reason it carries.
 - Deployment: migrate before app, and the file takes an exclusive lock on three tables that live
   traffic writes, so it sets `lock_timeout = '5s'`; that timeout bounds each lock wait, not the file
   as a whole, and the runner applies the file in one transaction, so its three table locks are held
@@ -707,3 +712,17 @@ through the real runner against a throwaway PostgreSQL 18 container.
   while the table is quiet", not a defect. Rollback restores nothing and needs to restore nothing:
   re-granting `SELECT` to `evidgate_operator` without a `TO evidgate_operator` policy still reads
   zero rows, and a file that re-created the policies without `TO` would fail the lint.
+
+- How far `check-rls` reads a migration: a policy, grant, revoke or table statement written inside
+  `do $body$ … $body$` (any tag) or an `execute '…'` string runs at migration time, so the lint replays
+  it in execution order and reads an `execute` argument written as `'…'`, `E'…'` or `$tag$…$tag$`.
+  SQL it cannot read from the file is a finding, not a pass: `embedded_dynamic` reports an `execute`
+  of a variable and an `execute format(…)` whose template builds DDL, because the arguments could
+  change the table or the role.
+- Conservative by design, in both rules: a column-level `revoke` removes no table privilege and a
+  `revoke grant option for` removes no `SELECT`, so both leave the operator's table `SELECT` counted;
+  an operator policy's predicate is read as text, so a predicate that never compares `org_id`
+  (`org_id is not null`, a role check) is a finding, while one that compares it to a value, a
+  subquery or a function call counts as a gate (the lint cannot tell whether that table is
+  operator-writable or that function checks a scope); and a `do` body nested past three levels is
+  reported rather than recursed.
