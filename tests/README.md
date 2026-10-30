@@ -23,11 +23,12 @@ archive rows against one deliberately weakened `ZipArchiveOptions` cap to prove 
 
 Both classes need no container, but they are selected by their own trait rather than by `Category=Docker`:
 `[Trait("Category","Hostile")]`, which `scripts/verify.sh --stage fixtures-hostile` (and the `fixtures-hostile` CI
-job) selects with `dotnet test --filter-trait "Category=Hostile" --ignore-exit-code 8`. That way the corpus runs
-as its own gate on every PR while the assembly's Docker suites stay untouched, and
-`EVIDGATE_VERIFY_SKIP_DOCKER=1` still skips exactly the container-backed classes. `Category=Hostile` is a
-selection trait (the `test` stage's `--filter-not-trait "Category=Docker"` skip path ignores it); the Docker
-column above still uses `Category=Docker` alone.
+job) selects by running the trait-bearing assembly (`tests/Tenancy.IntegrationTests`) with
+`dotnet test --project … --filter-trait "Category=Hostile" --minimum-expected-tests 1`. That way the corpus runs
+as its own gate on every PR while the assembly's Docker suites stay untouched, and a trait that selects no test
+fails the stage instead of passing it. `EVIDGATE_VERIFY_SKIP_DOCKER=1` still skips exactly the container-backed
+classes. `Category=Hostile` is a selection trait (the `test` stage's `--filter-not-trait "Category=Docker"` skip
+path ignores it); the Docker column above still uses `Category=Docker` alone.
 
 ## Fuzz harness (06.3.2-T2)
 
@@ -38,7 +39,8 @@ the per-input limit, and the corpus test plus the mutation smoke already carry i
 deterministic PRNG (splitmix64, so a recorded seed replays a run exactly), and drives every mutated input through
 `IParsing.ParseXmlReport` and `IParsing.EnumerateArchive`. `HostileFuzzTests` and `FuzzPromotionTests` carry
 `[Trait("Category","Fuzz")]`, which `scripts/verify.sh --stage fixtures-fuzz` (and the nightly `fixtures-fuzz` CI
-job) selects with `dotnet test --filter-trait "Category=Fuzz" --ignore-exit-code 8`.
+job) selects by running the trait-bearing assembly with
+`dotnet test --project … --filter-trait "Category=Fuzz" --minimum-expected-tests 1`.
 
 **`[DECISION]`** 06.3.2-T2.1 ships the seeded mutation fuzzer instead of `SharpFuzz`: SharpFuzz is only
 coverage-guided together with the AFL/libFuzzer native tooling plus an IL-instrumented copy of the parser assembly
