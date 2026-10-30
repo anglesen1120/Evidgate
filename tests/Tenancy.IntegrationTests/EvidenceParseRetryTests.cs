@@ -127,14 +127,14 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
         // ---- attempt 1: the worker goes away while the child is still running --------------------
         using (var workerGone = new CancellationTokenSource())
         {
-            // The fake cancels the consumer's token from inside the run — the worker being killed mid-parse — so the
-            // attempt ends exactly where the lease would have ended it. The consumer records a cancelled handler as a
-            // failed attempt (state `retry` with backoff) instead of judging the artifact, which is what this asserts.
+            // The fake cancels the consumer's token from inside the run — the host stopping mid-parse. The consumer
+            // releases a cancelled handler (state `queued`, attempt given back) instead of judging the artifact,
+            // which is what this asserts.
             using var stop = workerGone;
             runner.CancelAfterStart = stop;
 
             (await consumer.PollOnceAsync(queue, stop.Token))
-                .ShouldBe(1, "the cancelled attempt was claimed and failed, not skipped");
+                .ShouldBe(1, "the cancelled attempt was claimed and released, not skipped");
         }
 
         // The fake's evidence, not an OS fact: the runner saw the cancellation and stopped; that the real child was
@@ -153,9 +153,9 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
 
         runner.Calls.ShouldBe(2);
 
-        // The queue's own record: two attempts, and the second one closed the row.
+        // The queue's own record: a host stop gives its attempt back, so the redelivered run is attempt one.
         (await _fixture.ScalarAsync<int>(database, $"select attempts from public.task where id = '{taskId:D}'"))
-            .ShouldBe(2, "the cancelled attempt was retried, not lost");
+            .ShouldBe(1, "the cancelled attempt was released, not lost and not charged");
         (await _fixture.ScalarAsync<string>(database, $"select state from public.task where id = '{taskId:D}'"))
             .ShouldBe("done", "the redelivered attempt finished the row");
 

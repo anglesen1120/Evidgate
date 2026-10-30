@@ -38,6 +38,8 @@
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Compliance.Redaction" Version="10.10.0" />
     <PackageVersion Include="Microsoft.Extensions.Telemetry" Version="10.10.0" />
+    <!-- Test-only fake clock: the consumer's lease budget must expire without waiting, and TimeProvider.CreateTimer is the only way to fire it on demand. -->
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.10.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
     <!-- 10.3.1-T1.1: outbound HttpClient spans + W3C traceparent on every outbound call. -->
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.19.0" />

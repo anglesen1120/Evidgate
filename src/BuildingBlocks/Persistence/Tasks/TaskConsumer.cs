@@ -42,6 +42,20 @@ public sealed partial class TaskConsumer
     /// </summary>
     private static readonly TimeSpan TransitionWriteBudget = TimeSpan.FromSeconds(2);
 
+    /// <summary>Upper bound of the safety margin between handler cancellation and lease end.</summary>
+    private static readonly TimeSpan LeaseMargin = TimeSpan.FromSeconds(5);
+
+    private readonly TimeProvider _time;
+
+    /// <summary>
+    /// How long after the claim a handler may still run: the lease less a margin for
+    /// the transition write and clock drift, so it is cancelled before another
+    /// consumer can reclaim the row. Measured on the monotonic clock from just
+    /// before the claim statement, which can only be earlier than the database's
+    /// stamp, so it never overshoots the real lease.
+    /// </summary>
+    private readonly TimeSpan _handlerWindow;
+
     /// <summary>Creates the consumer over the registered claim/lease/handler/scope services.</summary>
     public TaskConsumer(
         ITaskClaimer claimer,
@@ -50,6 +64,7 @@ public sealed partial class TaskConsumer
         ITenantScopeFactory scopes,
         ITaskAlertSink alerts,
         IOptions<TasksOptions> options,
+        TimeProvider timeProvider,
         ILogger<TaskConsumer> logger)
     {
         ArgumentNullException.ThrowIfNull(claimer);
@@ -68,6 +83,8 @@ public sealed partial class TaskConsumer
         _options = options.Value;
 
         _leaseLength = TimeSpan.FromSeconds(_options.VisibilityTimeoutSeconds);
+        _handlerWindow = _leaseLength - TimeSpan.FromTicks(Math.Min(LeaseMargin.Ticks, _leaseLength.Ticks / 10));
+        _time = timeProvider;
         _logger = logger;
     }
 
@@ -87,7 +104,7 @@ public sealed partial class TaskConsumer
         // comparing that deadline with this host's clock: a host whose clock is stepped
         // or skewed would either skip every fresh claim or miss a real expiry. A
         // monotonic reading from just before the claim is immune to both.
-        var claimStarted = Stopwatch.GetTimestamp();
+        var claimStarted = _time.GetTimestamp();
 
         var batch = await _claimer
             .ClaimAsync(queue, _handlers.TaskTypes, _options.BatchSize, cancellationToken)
@@ -98,16 +115,17 @@ public sealed partial class TaskConsumer
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                // Shutdown: stop starting new work. The rows that never started keep
-                // their lease instead of being failed, because a cancelled attempt
-                // would burn a retry and record an error that says nothing about the
-                // handler — their lease is what redelivers them (T1.2's "finish
-                // in-flight, stop claiming", §7's consumer contract).
+                // Shutdown: stop starting new work and give the unstarted claims back
+                // (attempt included) instead of leaving them `active` for a full lease,
+                // which would burn a retry per deploy. Bounded and not cancellable by
+                // the shutdown; whatever it cannot write, the lease redelivers.
                 LogShutdownBeforeStarting(claim.Id, batch.Count - processed);
+                using var budget = new CancellationTokenSource(TransitionWriteBudget);
+                await ReleaseAsync(batch, processed, budget.Token).ConfigureAwait(false);
                 break;
             }
 
-            if (Stopwatch.GetElapsedTime(claimStarted) >= _leaseLength)
+            if (_time.GetElapsedTime(claimStarted) >= _handlerWindow)
             {
                 // The lease of everything still waiting ran out (one claim statement
                 // stamps one deadline for the whole batch, so the first row past it means
@@ -125,34 +143,6 @@ public sealed partial class TaskConsumer
         }
 
         return processed;
-    }
-
-    /// <summary>Gives back the attempts of the claims of <paramref name="batch"/> that were never started.</summary>
-    private async Task ReleaseAsync(
-        IReadOnlyList<TaskClaim> batch,
-        int started,
-        CancellationToken cancellationToken)
-    {
-        var released = 0;
-
-        for (var index = started; index < batch.Count; index++)
-        {
-            try
-            {
-                if (await _leases.ReleaseAsync(batch[index], cancellationToken).ConfigureAwait(false))
-                {
-                    released++;
-                }
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                // The lease is the backstop: an unreleased row is reclaimed like any
-                // other expired lease, it just pays for one attempt it did not use.
-                LogReleaseFailed(batch[index].Id, exception);
-            }
-        }
-
-        LogReleased(batch.Count - started, released);
     }
 
     /// <summary>
@@ -243,7 +233,7 @@ public sealed partial class TaskConsumer
         // against this host's clock: a worker whose clock leads the database by
         // at least the visibility timeout would read every fresh claim as expired
         // and drain no queue (the deadline itself is `now() + timeout` on the DB).
-        if (Stopwatch.GetElapsedTime(claimStarted) >= _leaseLength)
+        if (_time.GetElapsedTime(claimStarted) >= _handlerWindow)
         {
             LogLeaseExpiredBeforeRun(claim.Id, claim.TaskType);
             return false;
@@ -257,6 +247,11 @@ public sealed partial class TaskConsumer
         using var activity = TaskCorrelation.StartTaskActivity(claim, carrier);
         using var logScope = TaskCorrelation.BeginTaskScope(_logger, claim, carrier);
 
+        // The handler runs under a token that also fires when the lease is about to
+        // run out, so it never works past the point another consumer may reclaim the row.
+        // Clamped: time passes between the pre-check above and this line.
+        var remaining = _handlerWindow - _time.GetElapsedTime(claimStarted);
+        using var leaseExpiry = new CancellationTokenSource(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero, _time);
         Exception? failure = null;
 
         try
@@ -279,27 +274,44 @@ public sealed partial class TaskConsumer
                 return true;
             }
 
+            using var handlerLink = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, leaseExpiry.Token);
+            var handlerToken = handlerLink.Token;
+
             if (claim.OrgId is { } orgId)
             {
                 await using var scope = await _scopes
-                    .BeginAsync(orgId, projectId: null, readOnlyTransaction: false, cancellationToken)
+                    .BeginAsync(orgId, projectId: null, readOnlyTransaction: false, handlerToken)
                     .ConfigureAwait(false);
 
-                await invoker.InvokeAsync(claim.Payload, scope, cancellationToken).ConfigureAwait(false);
+                await invoker.InvokeAsync(claim.Payload, scope, handlerToken).ConfigureAwait(false);
 
                 // The handler's work is durable before the mechanism says `done`.
-                await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
+                await scope.CommitAsync(handlerToken).ConfigureAwait(false);
             }
             else
             {
                 // A platform task: no tenant, so no scope — the mechanism's own
                 // sweeps run across orgs by design (01.5.1 §3).
-                await invoker.InvokeAsync(claim.Payload, null, cancellationToken).ConfigureAwait(false);
+                await invoker.InvokeAsync(claim.Payload, null, handlerToken).ConfigureAwait(false);
             }
         }
         catch (Exception exception)
         {
             failure = exception;
+        }
+
+        if (failure is not null && cancellationToken.IsCancellationRequested && !leaseExpiry.IsCancellationRequested)
+        {
+            // Whatever the cancellation surfaced as (a driver may wrap it), a failure
+            // raised while the host is stopping is the shutdown's, not the handler's.
+            activity?.SetTag("task.released", "shutdown");
+            await ReleaseOnShutdownAsync(claim).ConfigureAwait(false);
+            return true;
+        }
+
+        if (failure is OperationCanceledException && leaseExpiry.IsCancellationRequested)
+        {
+            failure = new TimeoutException("the handler was cancelled because it ran past its task lease");
         }
 
         if (failure is null)
@@ -472,76 +484,4 @@ public sealed partial class TaskConsumer
             LogTransitionFailed(claim.Id, transitionFailure);
         }
     }
-
-    [LoggerMessage(
-        EventId = 2300,
-        Level = LogLevel.Warning,
-        Message = "Claim pass failed for queue {Queue}; retrying after the poll interval")]
-    private partial void LogPollFailed(string queue, Exception exception);
-
-    [LoggerMessage(
-        EventId = 2312,
-        Level = LogLevel.Information,
-        Message = "Released {Released} of {Waiting} claim(s) whose lease expired while they waited in the batch; their attempts are given back")]
-    private partial void LogReleased(int waiting, int released);
-
-    [LoggerMessage(
-        EventId = 2313,
-        Level = LogLevel.Warning,
-        Message = "Task {TaskId} could not be released; the reclaim path will redeliver it after its lease")]
-    private partial void LogReleaseFailed(Guid taskId, Exception exception);
-
-    [LoggerMessage(
-        EventId = 2309,
-        Level = LogLevel.Information,
-        Message = "Shutdown: {Remaining} claimed task row(s) left for the next worker (first is {TaskId}); their leases redeliver them")]
-    private partial void LogShutdownBeforeStarting(Guid taskId, int remaining);
-
-    [LoggerMessage(
-        EventId = 2308,
-        Level = LogLevel.Warning,
-        Message = "Task {TaskId} ({TaskType}) skipped: its lease expired while it waited in the batch, so the claimer's reclaim path owns it now")]
-    private partial void LogLeaseExpiredBeforeRun(Guid taskId, string taskType);
-
-    [LoggerMessage(
-        EventId = 2301,
-        Level = LogLevel.Debug,
-        Message = "Claim pass still failing for queue {Queue}")]
-    private partial void LogPollFailedAgain(string queue, Exception exception);
-
-    [LoggerMessage(
-        EventId = 2302,
-        Level = LogLevel.Information,
-        Message = "Task {TaskId} ({TaskType}) done")]
-    private partial void LogDone(Guid taskId, string taskType);
-
-    [LoggerMessage(
-        EventId = 2303,
-        Level = LogLevel.Warning,
-        Message = "Task {TaskId} ({TaskType}) finished after its lease was lost; the newer attempt owns the row")]
-    private partial void LogLeaseLost(Guid taskId, string taskType);
-
-    [LoggerMessage(
-        EventId = 2304,
-        Level = LogLevel.Error,
-        Message = "Task {TaskId} ran but its completion could not be written; the lease will redeliver it")]
-    private partial void LogCompletionFailed(Guid taskId, Exception exception);
-
-    [LoggerMessage(
-        EventId = 2305,
-        Level = LogLevel.Warning,
-        Message = "Task {TaskId} ({TaskType}) attempt {Attempt} failed, retrying in {BackoffSeconds}s: {Error}")]
-    private partial void LogRetry(Guid taskId, string taskType, int attempt, double backoffSeconds, string error);
-
-    [LoggerMessage(
-        EventId = 2306,
-        Level = LogLevel.Error,
-        Message = "Task {TaskId} ({TaskType}) dead-lettered after {Attempts} attempts: {Error}")]
-    private partial void LogDeadLetter(Guid taskId, string taskType, int attempts, string error);
-
-    [LoggerMessage(
-        EventId = 2307,
-        Level = LogLevel.Error,
-        Message = "Task {TaskId}: the failure transition could not be written; the lease will redeliver it")]
-    private partial void LogTransitionFailed(Guid taskId, Exception exception);
 }
