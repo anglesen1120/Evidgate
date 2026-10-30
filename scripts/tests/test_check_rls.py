@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_check_rls_embedded import (  # noqa: E402,F401
     EmbeddedPolicyStatements,
     EmbeddedReplayOrder,
+    ExecuteConcatenation,
     UnreadableExecute,
 )
 from test_check_rls_policies import (  # noqa: E402,F401
@@ -40,6 +41,7 @@ class ReplayFixturesLoaded(unittest.TestCase):
             EmbeddedPolicyStatements,
             UnreadableExecute,
             EmbeddedReplayOrder,
+            ExecuteConcatenation,
         ):
             with self.subTest(fixture=fixture.__name__):
                 self.assertTrue(issubclass(fixture, unittest.TestCase))
