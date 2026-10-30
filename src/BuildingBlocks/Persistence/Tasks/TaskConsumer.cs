@@ -47,6 +47,15 @@ public sealed partial class TaskConsumer
 
     private readonly TimeProvider _time;
 
+    /// <summary>
+    /// How long after the claim a handler may still run: the lease less a margin for
+    /// the transition write and clock drift, so it is cancelled before another
+    /// consumer can reclaim the row. Measured on the monotonic clock from just
+    /// before the claim statement, which can only be earlier than the database's
+    /// stamp, so it never overshoots the real lease.
+    /// </summary>
+    private readonly TimeSpan _handlerWindow;
+
     /// <summary>Creates the consumer over the registered claim/lease/handler/scope services.</summary>
     public TaskConsumer(
         ITaskClaimer claimer,
@@ -74,6 +83,7 @@ public sealed partial class TaskConsumer
         _options = options.Value;
 
         _leaseLength = TimeSpan.FromSeconds(_options.VisibilityTimeoutSeconds);
+        _handlerWindow = _leaseLength - TimeSpan.FromTicks(Math.Min(LeaseMargin.Ticks, _leaseLength.Ticks / 10));
         _time = timeProvider;
         _logger = logger;
     }
@@ -105,16 +115,17 @@ public sealed partial class TaskConsumer
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                // Shutdown: stop starting new work. The rows that never started keep
-                // their lease instead of being failed, because a cancelled attempt
-                // would burn a retry and record an error that says nothing about the
-                // handler — their lease is what redelivers them (T1.2's "finish
-                // in-flight, stop claiming", §7's consumer contract).
+                // Shutdown: stop starting new work and give the unstarted claims back
+                // (attempt included) instead of leaving them `active` for a full lease,
+                // which would burn a retry per deploy. Bounded and not cancellable by
+                // the shutdown; whatever it cannot write, the lease redelivers.
                 LogShutdownBeforeStarting(claim.Id, batch.Count - processed);
+                using var budget = new CancellationTokenSource(TransitionWriteBudget);
+                await ReleaseAsync(batch, processed, budget.Token).ConfigureAwait(false);
                 break;
             }
 
-            if (_time.GetElapsedTime(claimStarted) >= _leaseLength)
+            if (_time.GetElapsedTime(claimStarted) >= _handlerWindow)
             {
                 // The lease of everything still waiting ran out (one claim statement
                 // stamps one deadline for the whole batch, so the first row past it means
@@ -132,34 +143,6 @@ public sealed partial class TaskConsumer
         }
 
         return processed;
-    }
-
-    /// <summary>Gives back the attempts of the claims of <paramref name="batch"/> that were never started.</summary>
-    private async Task ReleaseAsync(
-        IReadOnlyList<TaskClaim> batch,
-        int started,
-        CancellationToken cancellationToken)
-    {
-        var released = 0;
-
-        for (var index = started; index < batch.Count; index++)
-        {
-            try
-            {
-                if (await _leases.ReleaseAsync(batch[index], cancellationToken).ConfigureAwait(false))
-                {
-                    released++;
-                }
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                // The lease is the backstop: an unreleased row is reclaimed like any
-                // other expired lease, it just pays for one attempt it did not use.
-                LogReleaseFailed(batch[index].Id, exception);
-            }
-        }
-
-        LogReleased(batch.Count - started, released);
     }
 
     /// <summary>
@@ -250,7 +233,7 @@ public sealed partial class TaskConsumer
         // against this host's clock: a worker whose clock leads the database by
         // at least the visibility timeout would read every fresh claim as expired
         // and drain no queue (the deadline itself is `now() + timeout` on the DB).
-        if (_time.GetElapsedTime(claimStarted) >= _leaseLength)
+        if (_time.GetElapsedTime(claimStarted) >= _handlerWindow)
         {
             LogLeaseExpiredBeforeRun(claim.Id, claim.TaskType);
             return false;
@@ -266,7 +249,7 @@ public sealed partial class TaskConsumer
 
         // The handler runs under a token that also fires when the lease is about to
         // run out, so it never works past the point another consumer may reclaim the row.
-        using var leaseExpiry = new CancellationTokenSource(HandlerBudget(claim), _time);
+        using var leaseExpiry = new CancellationTokenSource(_handlerWindow - _time.GetElapsedTime(claimStarted), _time);
         Exception? failure = null;
 
         try
@@ -315,8 +298,10 @@ public sealed partial class TaskConsumer
             failure = exception;
         }
 
-        if (failure is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        if (failure is not null && cancellationToken.IsCancellationRequested && !leaseExpiry.IsCancellationRequested)
         {
+            // Whatever the cancellation surfaced as (a driver may wrap it), a failure
+            // raised while the host is stopping is the shutdown's, not the handler's.
             activity?.SetTag("task.released", "shutdown");
             await ReleaseOnShutdownAsync(claim).ConfigureAwait(false);
             return true;
@@ -496,46 +481,5 @@ public sealed partial class TaskConsumer
             // reclaims it.
             LogTransitionFailed(claim.Id, transitionFailure);
         }
-    }
-
-    /// <summary>
-    /// Host shutdown cancelled the handler: hand the row back (`queued`, the attempt
-    /// given back) instead of failing it, so a deploy neither burns a retry nor
-    /// dead-letters healthy work. Bounded and shutdown-independent like the other
-    /// transitions; if it cannot be written the lease redelivers the row.
-    /// </summary>
-    private async Task ReleaseOnShutdownAsync(TaskClaim claim)
-    {
-        using var budget = new CancellationTokenSource(TransitionWriteBudget);
-
-        try
-        {
-            if (await _leases.ReleaseAsync(claim, budget.Token).ConfigureAwait(false))
-            {
-                LogReleasedOnShutdown(claim.Id, claim.TaskType);
-            }
-            else
-            {
-                LogLeaseLost(claim.Id, claim.TaskType);
-            }
-        }
-        catch (Exception exception)
-        {
-            LogReleaseFailed(claim.Id, exception);
-        }
-    }
-
-    /// <summary>
-    /// How long a handler may run: until the database-stamped lease the claim
-    /// returned, less a margin for clock skew and for the transition write, so the
-    /// handler is cancelled before another consumer can reclaim the row.
-    /// </summary>
-    private TimeSpan HandlerBudget(TaskClaim claim)
-    {
-        var margin = TimeSpan.FromTicks(Math.Min(LeaseMargin.Ticks, _leaseLength.Ticks / 10));
-        var leaseEnd = new DateTimeOffset(DateTime.SpecifyKind(claim.LockedUntil, DateTimeKind.Utc));
-        var budget = leaseEnd - _time.GetUtcNow() - margin;
-
-        return budget > TimeSpan.Zero ? budget : TimeSpan.Zero;
     }
 }

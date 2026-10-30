@@ -18,6 +18,9 @@ internal static class TaskHandlerTypes
     /// <summary>A handler that waits inside its run until its cancellation token fires.</summary>
     internal const string Blocking = "test.blocking";
 
+    /// <summary>The same wait, but a cancelled run fails with a plain exception, as a driver-backed one can.</summary>
+    internal const string FaultingBlocking = "test.blocking-fault";
+
     /// <summary>A type no handler in this process claims (01.5.1 §11: it must stay queued).</summary>
     internal const string Unhandled = "test.unhandled";
 }
@@ -104,11 +107,11 @@ public sealed class RecordingTaskHandler : ITaskHandler<RecordingPayload>
     }
 }
 
-/// <summary>Payload of <see cref="BlockingTaskHandler"/>.</summary>
+/// <summary>Payload of the blocking test handlers.</summary>
 public sealed record BlockingPayload(string Marker);
 
 /// <summary>
-/// What the lease and shutdown tests observe about <see cref="BlockingTaskHandler"/>:
+/// What the lease and shutdown tests observe about the blocking test handlers:
 /// whether a run reached its wait, whether the consumer's token fired, and how many runs
 /// were ever in flight at once — a second consumer running the same row pushes that above
 /// one, which is the double execution those two paths must never cause.
@@ -117,6 +120,7 @@ public sealed class BlockingTaskProbe
 {
     private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource? _cancellationGate;
     private int _blocksRemaining = 1;
     private int _running;
     private int _maxRunning;
@@ -139,11 +143,35 @@ public sealed class BlockingTaskProbe
     internal int MaxRunning => Volatile.Read(ref _maxRunning);
 
     /// <summary>
+    /// Arms a gate the next cancelled run waits on after its token fired: the pass keeps
+    /// the row, so a test can read the database at the instant of the cancellation, before
+    /// any transition is written. The test completes the returned source.
+    /// </summary>
+    internal TaskCompletionSource ArmCancellationGate()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref _cancellationGate, gate);
+
+        return gate;
+    }
+
+    /// <summary>
     /// The first run waits until <paramref name="cancellationToken"/> fires; later runs
     /// return at once, so a test can finish the reclaimed row without a second wait.
     /// A run entered with a spent budget is counted, so a test can prove it really ran.
     /// </summary>
-    internal async ValueTask RunAsync(CancellationToken cancellationToken)
+    internal ValueTask RunAsync(CancellationToken cancellationToken) =>
+        RunCoreAsync(cancelledFailure: null, cancellationToken);
+
+    /// <summary>
+    /// The same wait, but a cancelled run fails with <paramref name="cancelledFailure"/>
+    /// instead of <see cref="OperationCanceledException"/>: handlers and drivers do not all
+    /// surface cancellation as that type, and the release must not depend on which one.
+    /// </summary>
+    internal ValueTask RunAsync(Func<Exception> cancelledFailure, CancellationToken cancellationToken) =>
+        RunCoreAsync(cancelledFailure, cancellationToken);
+
+    private async ValueTask RunCoreAsync(Func<Exception>? cancelledFailure, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested)
         {
@@ -166,6 +194,17 @@ public sealed class BlockingTaskProbe
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     _cancelled.TrySetResult();
+
+                    if (Volatile.Read(ref _cancellationGate) is { } gate)
+                    {
+                        await gate.Task.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None).ConfigureAwait(false);
+                    }
+
+                    if (cancelledFailure is not null)
+                    {
+                        throw cancelledFailure();
+                    }
+
                     throw;
                 }
             }
@@ -210,6 +249,35 @@ public sealed class BlockingTaskHandler : ITaskHandler<BlockingPayload>
         ArgumentNullException.ThrowIfNull(payload);
 
         return _probe.RunAsync(cancellationToken);
+    }
+}
+
+/// <summary>
+/// The same wait, but a cancelled run fails with a plain exception: a handler backed by a
+/// driver or a client library does not always surface cancellation as an
+/// <see cref="OperationCanceledException"/>, and the shutdown release must not depend on
+/// which exception type a cancelled run happens to raise.
+/// </summary>
+public sealed class FaultingBlockingTaskHandler : ITaskHandler<BlockingPayload>
+{
+    private readonly BlockingTaskProbe _probe;
+
+    public FaultingBlockingTaskHandler(BlockingTaskProbe probe) => _probe = probe;
+
+    /// <inheritdoc />
+    public string TaskType => TaskHandlerTypes.FaultingBlocking;
+
+    /// <inheritdoc />
+    public bool RequiresTenant => false;
+
+    /// <inheritdoc />
+    public ValueTask HandleAsync(BlockingPayload payload, ITenantScope? scope, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        return _probe.RunAsync(
+            () => new InvalidOperationException("the handler's work aborted when the host stopped"),
+            cancellationToken);
     }
 }
 

@@ -28,7 +28,7 @@ internal sealed class TasksTestHost : IAsyncDisposable
     /// <summary>What the suite's task handlers saw.</summary>
     internal TaskRunRecorder Recorder => _provider.GetRequiredService<TaskRunRecorder>();
 
-    /// <summary>What <see cref="BlockingTaskHandler"/> saw; a second host shares it through <c>services</c>.</summary>
+    /// <summary>What the blocking handlers saw; a second host shares it through <c>services</c>.</summary>
     internal BlockingTaskProbe Probe => _provider.GetRequiredService<BlockingTaskProbe>();
 
     internal ITaskClaimer Claimer => _provider.GetRequiredService<ITaskClaimer>();
