@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 /// the non-negative counts, the two call indexes and the budget's atomic-consume unique key (AC3);
 /// </description></item>
 /// <item><description>
-/// the tenant boundary: ENABLE + FORCE row level security on both tables, the PUBLIC
+/// the tenant boundary: ENABLE + FORCE row level security on both tables, the evidgate_app-only
 /// <c>tenant_isolation</c> policy plus the owner-only backfill policy, and a foreign org's call and
 /// budget rows invisible to (and unwritable by) another tenant;
 /// </description></item>
@@ -38,9 +38,10 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// <para>
 /// The retry/timeout/budget behaviour itself is 08.5.1-T1.3/T1.4's (the gateway records the attempt
-/// rows); what this file pins is the shape those rows must satisfy. Both tenant policies are declared
-/// without <c>TO</c>, so they apply to PUBLIC (<c>polroles = {0}</c>, which
-/// <see cref="PostgresTenancyFixture.PoliciesAsync"/> cannot name), hence the local projection below.
+/// rows); what this file pins is the shape those rows must satisfy. <c>0055</c> re-declares both tenant
+/// policies <c>to evidgate_app</c> and revokes the operator's SELECT: a <c>TO</c>-less policy applies to
+/// PUBLIC, which let <c>evidgate_operator</c>'s grant reach every tenant. The local projection below
+/// resolves the role list by name, so the expected row pins that clause too.
 /// </para>
 /// </summary>
 [Collection(TenancySuite.Name)]
@@ -369,13 +370,13 @@ public sealed class HealingLlmSchemaTests
             rls.Forced.ShouldBeTrue($"DECISIONS F5: FORCE is what makes the owner obey its own policies too");
         }
 
-        // Two policies each, and nothing else: the PUBLIC tenant predicate plus the owner-only backfill
+        // Two policies each, and nothing else: the app-role tenant predicate plus the owner-only backfill
         // policy FORCE makes necessary. Both tables are org-scoped (org_id NOT NULL), so neither appears in
         // contracts/rls-exceptions.txt.
         (await PolicyRowsAsync(database, CallTable)).ShouldBe(
             [
                 "healing_llm_call_owner_backfill:evidgate_owner:*:true:true",
-                "tenant_isolation:PUBLIC:*:(org_id = evidgate.current_org_id()):(org_id = evidgate.current_org_id())",
+                "tenant_isolation:evidgate_app:*:(org_id = evidgate.current_org_id()):(org_id = evidgate.current_org_id())",
             ],
             Case.Sensitive,
             $"{CallTable} declares exactly the tenant policy and the owner backfill policy");
@@ -383,7 +384,7 @@ public sealed class HealingLlmSchemaTests
         (await PolicyRowsAsync(database, BudgetTable)).ShouldBe(
             [
                 "healing_llm_budget_owner_backfill:evidgate_owner:*:true:true",
-                "tenant_isolation:PUBLIC:*:(org_id = evidgate.current_org_id()):(org_id = evidgate.current_org_id())",
+                "tenant_isolation:evidgate_app:*:(org_id = evidgate.current_org_id()):(org_id = evidgate.current_org_id())",
             ],
             Case.Sensitive,
             $"{BudgetTable} declares exactly the tenant policy and the owner backfill policy");
@@ -713,7 +714,7 @@ public sealed class HealingLlmSchemaTests
         (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", CallTable, "delete"))
             .ShouldBeFalse("0054 grants no DELETE: the ledger is append-only");
         (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_operator", CallTable, "select"))
-            .ShouldBeTrue("the operator keeps a read-only SELECT (TL T76)");
+            .ShouldBeFalse("0055 revokes the operator's SELECT: the tenant policy names evidgate_app and no read path uses the operator");
 
         foreach (var column in new[]
         {
