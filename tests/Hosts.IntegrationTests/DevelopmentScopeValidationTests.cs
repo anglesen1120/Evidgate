@@ -15,7 +15,7 @@ namespace Hosts.IntegrationTests;
 public sealed class DevelopmentScopeValidationTests
 {
     private const string UnreachableConnectionString =
-        "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
+        "Host=127.0.0.1;Port=1;Username=evidgate_app;Database=evidgate;Timeout=2";
 
     private static readonly ServiceProviderOptions Validating = new()
     {
