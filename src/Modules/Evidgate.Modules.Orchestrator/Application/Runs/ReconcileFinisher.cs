@@ -60,18 +60,20 @@ internal interface IReconcileFinisher
 /// <para>
 /// <b>Completeness</b> (00 §8.5, AC4): <c>complete</c> only when no reason was named, the run planned at least one shard
 /// and every planned shard closed. Missing evidence never reads as complete, and a run with zero planned shards is
-/// <c>incomplete</c> with no reason: nothing was proven, so nothing is claimed (fail closed).
+/// <c>incomplete</c> with no reason: nothing was proven, so nothing is claimed (fail closed). The comparison already
+/// names a planned execution that recorded no attempt, so a producer that finalized with a matching declared count can
+/// never complete a run whose plan says more cases ran than its attempts prove.
 /// </para>
 /// <para>
-/// <b>missing[]</b>: the event-evidence codes in the order the comparer produced them (producer id, then code
-/// ordinal), followed by the freeze's own reasons in the order <see cref="FreezeResult.Missing"/> gives them (orphans
-/// first, then unmet requirements — <c>artifact_missing</c> for either, or the requirement's own code), and finally one
-/// <c>artifact_missing</c> when the requirement set was unsatisfiable (the plan times the policy exceeded the freeze
-/// bound, <see cref="RequiredSet.Unsatisfiable"/>).
+/// <b>missing[]</b>: the comparison's codes in the order the comparer produced them (producer id, then code, then
+/// detail ordinal), followed by the freeze's own reasons in the order <see cref="FreezeResult.Missing"/> gives them
+/// (orphans first, then unmet requirements — <c>artifact_missing</c> for either, or the requirement's own code), and
+/// finally one <c>artifact_missing</c> when the requirement set was unsatisfiable (the plan times the policy exceeded the
+/// freeze bound, <see cref="RequiredSet.Unsatisfiable"/>).
 /// <b>Codes are de-duplicated, first occurrence kept</b> (PerfRev P3): the vocabulary is the closed 00 §8.5 list, so a
-/// hundred orphans or a requirement per execution all add up to the one code that says the same thing, while the
-/// revision's per-producer detail stays in the comparison the reconciler reports. The result is deterministic because
-/// both halves are.
+/// hundred orphans, an unmet requirement per execution or a planned execution per case all add up to the one code that
+/// says the same thing, while the revision's per-producer and per-execution detail stays in the comparison the reconciler
+/// reports. The result is deterministic because both halves are.
 /// </para>
 /// </summary>
 /// <param name="db">The Dapper path over the ambient scope; it demands an active scope before it touches the database.</param>

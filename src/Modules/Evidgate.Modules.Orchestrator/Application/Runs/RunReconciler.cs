@@ -5,12 +5,13 @@ using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 namespace Evidgate.Modules.Orchestrator.Application.Runs;
 
 /// <summary>
-/// The Dapper read behind <see cref="IRunReconciler"/> (05.3.2-T2.1/T2.2): three statements in a fixed order over the
+/// The Dapper read behind <see cref="IRunReconciler"/> (05.3.2-T2.1/T2.2): four statements in a fixed order over the
 /// ambient tenant scope, so it joins the caller's transaction and RLS scopes every row (00 §5.5 C3/C5), exactly like
 /// <see cref="RunEventScopeReader"/>. The run row is locked first and the state decides the outcome: a run that is not
 /// <c>collecting</c> is never compared, and nothing is read beyond its state (plan Notes, 05.3.2-T1 line 152: the
 /// finalize trigger is not evidence that the run is collectable). Read-only by construction — it never writes and never
-/// changes the run state; the only work after the lock is the slot list and the one grouped event aggregate.
+/// changes the run state; the only work after the lock is the slot list, the one grouped event aggregate and the
+/// coverage read of the plan's executions that recorded no attempt.
 /// <para>
 /// The lock statement also answers the run's collection deadline (<c>deadline_passed</c>, the database clock), which
 /// decides between <see cref="ReconcileDisposition.Pending"/> and <see cref="ReconcileDisposition.Compared"/> when the
@@ -52,6 +53,12 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             .QueryAsync<ObservedEventRow>(ReconcileSql.ObservedEvents, parameters, cancellationToken)
             .ConfigureAwait(false);
 
+        // Statement 4: the plan's executions with no recorded attempt. Read after the events under the same run lock, so
+        // the comparison and the coverage describe one instant of the run.
+        var uncovered = await db
+            .QueryAsync<UncoveredExecutionRow>(ReconcileSql.ListUncoveredExecutions, parameters, cancellationToken)
+            .ConfigureAwait(false);
+
         var planned = new PlannedShard[slots.Count];
         for (var index = 0; index < slots.Count; index++)
         {
@@ -80,7 +87,7 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 row.BlockedCount);
         }
 
-        var comparison = ReconcileComparer.Compare(planned, seen);
+        var comparison = ReconcileComparer.Compare(planned, seen, MapUncovered(uncovered));
 
         // An open shard before the collection deadline is not a verdict: the attempt waits (Pending) so the run stays
         // collecting until the last slot closes or the deadline forces the decision (COORDINATOR-DECISION S123, F1).
@@ -91,6 +98,22 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 ? ReconcileDisposition.Pending
                 : ReconcileDisposition.Compared,
             comparison);
+    }
+
+    /// <summary>
+    /// The planned executions the coverage statement answered, as the comparer's input. An empty answer means every
+    /// planned execution recorded an attempt — not that the read was skipped: the reconciler always passes what it read.
+    /// </summary>
+    /// <param name="rows">The uncovered rows, in the statement's order.</param>
+    private static PlannedExecution[] MapUncovered(IReadOnlyList<UncoveredExecutionRow> rows)
+    {
+        var executions = new PlannedExecution[rows.Count];
+        for (var index = 0; index < rows.Count; index++)
+        {
+            executions[index] = new PlannedExecution(rows[index].ExecutionKey, rows[index].ShardId);
+        }
+
+        return executions;
     }
 
     /// <summary>True when the comparison names an open planned shard (<c>missing_shard</c>).</summary>
@@ -159,5 +182,16 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         public long StaleCount { get; set; }
 
         public long BlockedCount { get; set; }
+    }
+
+    /// <summary>
+    /// One row as <see cref="ReconcileSql.ListUncoveredExecutions"/> returns it: a planned execution of the run with no
+    /// recorded attempt, and the shard whose producer id the reason carries.
+    /// </summary>
+    private sealed class UncoveredExecutionRow
+    {
+        public string ExecutionKey { get; set; } = string.Empty;
+
+        public string ShardId { get; set; } = string.Empty;
     }
 }

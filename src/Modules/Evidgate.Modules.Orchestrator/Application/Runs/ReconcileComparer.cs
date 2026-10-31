@@ -30,6 +30,12 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// exactly the plan's producers; the watermark is their stored-event total and no producer can be counted twice (a
 /// repeated producer row, impossible from the grouped read, is still ignored rather than merged).
 /// </para>
+/// <para>
+/// The events are not the whole of completeness: a planned execution that recorded no attempt is named once as
+/// <see cref="ReconcileMissingCodes.MissingResult"/>, because a producer that declares fewer events than the plan
+/// expected can agree with its own declaration while a planned case never ran. That reason is read from the plan rows
+/// and the recorded attempts alone — no event decides it — so it survives every matching count.
+/// </para>
 /// </remarks>
 internal static class ReconcileComparer
 {
@@ -37,17 +43,26 @@ internal static class ReconcileComparer
     internal const string DeclaredMissingDetail = "declared_missing";
 
     /// <summary>
-    /// Compares the planned shards against the observed events. Reasons are ordered by producer id (ordinal) and then by
-    /// code (ordinal): one closed shard reports <c>count_mismatch</c>, <c>setup_error</c>, <c>stale_epoch</c> and
-    /// <c>unknown_status</c> in that order, and an open shard reports only <c>missing_shard</c>.
+    /// Compares the planned shards against the observed events, and the run's plan against the attempts it recorded.
+    /// Reasons are ordered by producer id (ordinal), then code (ordinal), then detail (ordinal): one closed shard
+    /// reports <c>count_mismatch</c>, <c>setup_error</c>, <c>stale_epoch</c> and <c>unknown_status</c> in that order, an
+    /// open shard reports only <c>missing_shard</c>, and a planned execution with no attempt reports one
+    /// <c>missing_result</c> of its own.
     /// </summary>
     /// <param name="planned">The run's producer slots as the shard plan; one row per shard.</param>
     /// <param name="observed">The grouped aggregate rows, at most one per producer.</param>
+    /// <param name="uncovered">
+    /// The planned executions of the run that have no recorded attempt, each named once as
+    /// <see cref="ReconcileMissingCodes.MissingResult"/> however well the events agree: a plan row is the run's statement
+    /// that the case runs, so a case nobody attempted is missing evidence even when every producer declared the events
+    /// it did send. Null is the event comparison alone (the caller read no coverage), never "coverage is complete".
+    /// </param>
     /// <returns>The reasons, the planned/closed shard counts and the stored-event watermark.</returns>
-    /// <exception cref="ArgumentNullException">Either list is null.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="planned"/> or <paramref name="observed"/> is null.</exception>
     public static ReconcileComparison Compare(
         IReadOnlyList<PlannedShard> planned,
-        IReadOnlyList<ObservedShard> observed)
+        IReadOnlyList<ObservedShard> observed,
+        IReadOnlyList<PlannedExecution>? uncovered = null)
     {
         ArgumentNullException.ThrowIfNull(planned);
         ArgumentNullException.ThrowIfNull(observed);
@@ -137,14 +152,42 @@ internal static class ReconcileComparer
             }
         }
 
-        // The stated order, made explicit rather than implied by the loop: producer id (ordinal), then code (ordinal).
-        // Each code is added at most once per shard, so the ordering is total and stays stable for equal keys.
+        AddCoverageReasons(missing, uncovered);
+
+        // The stated order, made explicit rather than implied by the loop: producer id (ordinal), then code (ordinal),
+        // then the detail, which is what separates two planned executions of one shard. Each code is added at most once
+        // per shard, so the ordering is total and stays stable for equal keys.
         var ordered = missing
             .OrderBy(static reason => reason.ProducerId ?? string.Empty, StringComparer.Ordinal)
             .ThenBy(static reason => reason.Code, StringComparer.Ordinal)
+            .ThenBy(static reason => reason.Detail, StringComparer.Ordinal)
             .ToArray();
 
         return new ReconcileComparison(ordered, planned.Count, closedShards, eventWatermark);
+    }
+
+    /// <summary>
+    /// Names one <c>missing_result</c> per planned execution that recorded no attempt. The reason is independent of the
+    /// events: a producer can declare a smaller count and agree with it, so only the plan's own rows can say that a
+    /// planned case never reported a status. The detail carries the execution key — the plan row's identity, never a
+    /// payload — so the entries of one shard stay distinguishable.
+    /// </summary>
+    /// <param name="missing">The reasons collected so far.</param>
+    /// <param name="uncovered">The planned executions with no recorded attempt; null when the caller read no coverage.</param>
+    private static void AddCoverageReasons(List<ReconcileMissing> missing, IReadOnlyList<PlannedExecution>? uncovered)
+    {
+        if (uncovered is null)
+        {
+            return;
+        }
+
+        foreach (var execution in uncovered)
+        {
+            missing.Add(new ReconcileMissing(
+                ReconcileMissingCodes.MissingResult,
+                execution.ShardId,
+                $"execution_key={execution.ExecutionKey}"));
+        }
     }
 
     /// <summary>The observation of a producer that stored no event.</summary>

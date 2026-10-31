@@ -612,16 +612,17 @@ public sealed class ReconcileComparerUnitTests
     // ---- every code is a 0049 literal and means incomplete evidence ------------------------
 
     [Fact]
-    public void Every_Code_Is_A_0049_Literal_And_Makes_The_Evidence_Incomplete()
+    public void Every_Code_Is_A_Migration_Literal_And_Makes_The_Evidence_Incomplete()
     {
-        // The migration's closed list is the one authority for these strings: T2.4 persists the comparison into
+        // The migration's closed list is the one authority for these strings: the finisher persists the comparison into
         // evidence_revision, whose CHECK refuses a code outside it. Every literal this module names must be one of the
-        // migration's, verbatim; the comparer emits all of them except artifact_missing, which the freeze result of
-        // T2.4 contributes.
+        // migration's, verbatim; the comparer emits all of them except artifact_missing, which the freeze result
+        // contributes. The list is read from the latest file that defines the CHECK, because 0056 re-created it over the
+        // 0049 codes plus the plan-coverage code.
         var migrationCodes = MigrationMissingCodes();
         migrationCodes.ShouldBe(
-            ["missing_shard", "count_mismatch", "artifact_missing", "build_mismatch", "unknown_status", "setup_error", "stale_epoch"],
-            "the 0049 CHECK's closed code list");
+            ["missing_shard", "count_mismatch", "artifact_missing", "build_mismatch", "unknown_status", "setup_error", "stale_epoch", "missing_result"],
+            "the migration CHECK's closed code list");
 
         string[] codeLiterals =
         [
@@ -631,28 +632,30 @@ public sealed class ReconcileComparerUnitTests
             ReconcileMissingCodes.SetupError,
             ReconcileMissingCodes.StaleEpoch,
             ReconcileMissingCodes.ArtifactMissing,
+            ReconcileMissingCodes.MissingResult,
         ];
 
         codeLiterals.Where(code => !migrationCodes.Contains(code, StringComparer.Ordinal)).ShouldBeEmpty(
-            "every reconciler code must be a 0049 literal");
+            "every reconciler code must be a literal of the migration CHECK");
         codeLiterals.Order(StringComparer.Ordinal).ToArray().ShouldBe(
-            ["artifact_missing", "count_mismatch", "missing_shard", "setup_error", "stale_epoch", "unknown_status"],
+            ["artifact_missing", "count_mismatch", "missing_result", "missing_shard", "setup_error", "stale_epoch", "unknown_status"],
             "the codes the reconciler names");
 
         // Each code the comparer itself emits leaves Missing non-empty, so the reconciler can never report matching
-        // evidence (EventsMatch) while a shard is incomplete.
-        (string Code, PlannedShard[] Planned, ObservedShard[] Observed)[] cases =
+        // evidence (EventsMatch) while a shard or a planned execution is incomplete.
+        (string Code, PlannedShard[] Planned, ObservedShard[] Observed, PlannedExecution[] Uncovered)[] cases =
         [
-            (ReconcileMissingCodes.MissingShard, [Planned("producer-1", closed: false)], []),
-            (ReconcileMissingCodes.CountMismatch, [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)], [Observed("producer-1", upTo: 2, min: 1, max: 2)]),
-            (ReconcileMissingCodes.UnknownStatus, [Planned("producer-1")], [Observed("producer-1", unknown: 1)]),
-            (ReconcileMissingCodes.SetupError, [Planned("producer-1")], [Observed("producer-1", blocked: 1)]),
-            (ReconcileMissingCodes.StaleEpoch, [Planned("producer-1")], [Observed("producer-1", stale: 1)]),
+            (ReconcileMissingCodes.MissingShard, [Planned("producer-1", closed: false)], [], []),
+            (ReconcileMissingCodes.CountMismatch, [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)], [Observed("producer-1", upTo: 2, min: 1, max: 2)], []),
+            (ReconcileMissingCodes.UnknownStatus, [Planned("producer-1")], [Observed("producer-1", unknown: 1)], []),
+            (ReconcileMissingCodes.SetupError, [Planned("producer-1")], [Observed("producer-1", blocked: 1)], []),
+            (ReconcileMissingCodes.StaleEpoch, [Planned("producer-1")], [Observed("producer-1", stale: 1)], []),
+            (ReconcileMissingCodes.MissingResult, [Planned("producer-1")], [Observed("producer-1")], [new PlannedExecution(Key(9), "producer-1")]),
         ];
 
         foreach (var testCase in cases)
         {
-            var result = ReconcileComparer.Compare(testCase.Planned, testCase.Observed);
+            var result = ReconcileComparer.Compare(testCase.Planned, testCase.Observed, testCase.Uncovered);
 
             result.Missing.ShouldNotBeEmpty($"the {testCase.Code} case must report a reason");
             result.Missing.ShouldContain(
@@ -687,6 +690,85 @@ public sealed class ReconcileComparerUnitTests
             ]);
         result.ShardsPlanned.ShouldBe(3);
         result.ShardsClosed.ShouldBe(2);
+    }
+
+    // ---- plan coverage (a planned execution with no recorded attempt) --------------------
+
+    [Fact]
+    public void Uncovered_Execution_Is_MissingResult_For_Its_Shard_With_The_Execution_Key()
+    {
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1")],
+            [Observed("producer-1")],
+            [new PlannedExecution(Key(7), "producer-1")]);
+
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.MissingResult);
+        reason.ProducerId.ShouldBe("producer-1", "the reason names the shard whose plan row it is");
+        reason.Detail.ShouldBe($"execution_key={Key(7)}", "the plan row's identity, never a payload");
+        result.EventsMatch.ShouldBeFalse("counts that agree cannot prove a case that never attempted");
+        result.ShardsPlanned.ShouldBe(1);
+        result.ShardsClosed.ShouldBe(1);
+    }
+
+    [Fact]
+    public void Every_Uncovered_Execution_Gets_Its_Own_Entry_Even_When_Every_Count_Agrees()
+    {
+        // The producer declared one event and stored exactly that one: the event evidence is complete, and the plan
+        // still says two executions never reported. One entry per execution, in a stable order.
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1")],
+            [Observed("producer-1")],
+            [new PlannedExecution(Key(2), "producer-1"), new PlannedExecution(Key(1), "producer-1")]);
+
+        result.Missing.Select(reason => reason.Detail).ShouldBe(
+            [$"execution_key={Key(1)}", $"execution_key={Key(2)}"],
+            "one entry per execution, ordered by the detail");
+        result.Missing.ShouldAllBe(reason => reason.Code == ReconcileMissingCodes.MissingResult);
+        result.EventsMatch.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Covered_Plan_And_Matching_Events_Name_No_Reason()
+    {
+        var result = ReconcileComparer.Compare(
+            [Planned("producer-1")],
+            [Observed("producer-1")],
+            []);
+
+        result.Missing.ShouldBeEmpty("every planned execution reported an attempt");
+        result.EventsMatch.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Null_Coverage_Is_The_Event_Comparison_Alone_Not_A_Complete_Plan()
+    {
+        // The parameter is optional so the comparer can be used without the coverage read; null must read as "not read",
+        // never as "nothing missing", which is why it cannot turn an uncovered plan into matching evidence.
+        var result = ReconcileComparer.Compare([Planned("producer-1")], [Observed("producer-1")], uncovered: null);
+
+        result.Missing.ShouldBeEmpty();
+        result.EventsMatch.ShouldBeTrue("the caller asked for the event comparison only");
+    }
+
+    [Fact]
+    public void Coverage_Reasons_Join_The_Event_Reasons_In_Producer_Then_Code_Order()
+    {
+        var result = ReconcileComparer.Compare(
+            [
+                Planned("producer-1", shardIndex: 1, closed: false),
+                Planned("producer-2", shardIndex: 2),
+            ],
+            [Observed("producer-2")],
+            [new PlannedExecution(Key(4), "producer-2"), new PlannedExecution(Key(3), "producer-1")]);
+
+        result.Missing.Select(reason => $"{reason.ProducerId}|{reason.Code}").ShouldBe(
+            [
+                "producer-1|missing_result",
+                "producer-1|missing_shard",
+                "producer-2|missing_result",
+            ],
+            "the total order is producer id, then code, then detail");
     }
 
     // ---- the requirement set's bound (RequiredArtifactResolver.Compose) --------------------
@@ -783,21 +865,22 @@ public sealed class ReconcileComparerUnitTests
         new(producerId, upTo, beyond, min, max, unknown, unfinished, stale, blocked);
 
     /// <summary>
-    /// The closed code list of <c>migrations/0049_orchestration_evidence_revision.sql</c>, read from the
-    /// <c>missing &lt;@ array[...]</c> term of <c>evidence_revision_missing_check</c> — the pin that this comparer's
-    /// literals and the persisted CHECK cannot drift apart.
+    /// The closed code list of the CHECK as the latest migration leaves it —
+    /// <c>migrations/0056_reconcile_missing_result.sql</c>, which re-creates <c>evidence_revision_missing_check</c> over
+    /// 0049's list plus the plan-coverage code — read from the <c>missing &lt;@ array[...]</c> term. This is the pin that
+    /// this comparer's literals and the persisted CHECK cannot drift apart.
     /// </summary>
     private static string[] MigrationMissingCodes()
     {
-        var path = Path.Combine(RepositoryRoot(), "migrations", "0049_orchestration_evidence_revision.sql");
-        File.Exists(path).ShouldBeTrue($"the evidence_revision migration must be committed at {path}");
+        var path = Path.Combine(RepositoryRoot(), "migrations", "0056_reconcile_missing_result.sql");
+        File.Exists(path).ShouldBeTrue($"the evidence_revision CHECK migration must be committed at {path}");
 
         var sql = File.ReadAllText(path);
         var start = sql.IndexOf("missing <@ array[", StringComparison.Ordinal);
-        start.ShouldBeGreaterThan(-1, "0049 must list the codes with 'missing <@ array['");
+        start.ShouldBeGreaterThan(-1, "0056 must list the codes with 'missing <@ array['");
 
         var end = sql.IndexOf("]::text[]", start, StringComparison.Ordinal);
-        end.ShouldBeGreaterThan(start, "the 0049 code list must close with ']::text[]'");
+        end.ShouldBeGreaterThan(start, "the 0056 code list must close with ']::text[]'");
 
         return Regex.Matches(sql[start..end], "'([a-z_]+)'")
             .Select(match => match.Groups[1].Value)

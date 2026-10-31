@@ -139,8 +139,12 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   in its own notes below; and `0055` is the tenant-policy role fix — `tenant_isolation` re-created
   `TO evidgate_app` on `security_event` (`0053`) and on `healing_llm_call`/`healing_llm_budget` (`0054`),
   whose policy was declared without a `TO` clause and therefore applied to PUBLIC, plus the
-  `evidgate_operator` `select` revoked on all three tables (notes at the end of this file);
-  the next free number is `0056`; a gap means two branches invented the same sequence and neither history can be trusted.
+  `evidgate_operator` `select` revoked on all three tables (notes at the end of this file); and
+  `0056` is the reconciler's plan-coverage reason — `evidence_revision_missing_check` re-created over
+  the `0049` list with `missing_result` appended (added `not valid`, then validated), so a planned
+  execution that never produced an attempt can be recorded instead of the revision insert being refused
+  (notes at the end of this file);
+  the next free number is `0057`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -726,3 +730,37 @@ through the real runner against a throwaway PostgreSQL 18 container.
   subquery or a function call counts as a gate (the lint cannot tell whether that table is
   operator-writable or that function checks a scope); and a `do` body nested past three levels is
   reported rather than recursed.
+
+## Notes on the plan-coverage reason (`0056`)
+
+- Why the file exists: `0049` closed the `missing[]` vocabulary at the seven codes the event
+  comparison and the artifact freeze can name. The reconciler also decides completeness from the
+  run's plan — a `planned_execution` with no recorded `case_attempt` never reported a status — and
+  the code for it, `missing_result`, had to enter the CHECK or the revision insert would fail 23514
+  and the attempt would be retried until the queue dead-lettered it.
+- What changed: `evidence_revision_missing_check` is dropped and re-created with the same predicate
+  and the same `CASE`/`array_position` shape, over an array literal with `missing_result` appended.
+  The dimension guard and the null-element guard are copied verbatim: a CHECK's term order is not
+  guaranteed, and `array_position` raises `0A000` on a multi-dimensional array, so the dimension test
+  must run and short-circuit first.
+- Why `not valid` + `validate`: the row scan becomes its own statement, so a failure names the phase
+  that failed, and the shape matches the three-step form `0031` used for its deferred foreign keys.
+  It buys **no** lock relief here: the migrator applies one transaction per script
+  (`WithTransactionPerScript`, `Src/Evidgate.Migrator/MigratorRunner.cs`), so the ACCESS EXCLUSIVE the
+  `drop`/`add constraint` takes is held until the file commits and the `validate constraint` scan runs
+  under it — readers of `evidence_revision` wait for the scan, and `lock_timeout = '5s'` bounds only
+  the wait to acquire, never the hold. Both phases sit inside that one transaction, so no reader ever
+  sees an unvalidated constraint. Every row of the old list is a member of the new one, so the
+  validation cannot fail on existing history.
+- What did NOT change: `0049` stays byte-identical (the runner refuses a checksum mismatch) and its
+  table, trigger, pointer FK, grants and index are untouched — this file only replaces one CHECK.
+  Its notes above keep describing `0049`; the code list they quote is superseded here.
+- Deployment: migrate before app. The literal is additive in both directions — an old application
+  never writes `missing_result` and the widened CHECK accepts every code it does write — so the only
+  order that fails is an application writing the new code before this file has run. The file holds an
+  exclusive lock on one live table from its first `alter table` to its commit — acquisition is bounded
+  by `lock_timeout = '5s'` (exit 3 means "apply again while the table is quiet", not a defect), the
+  hold is not, so apply it in a quiet window rather than relying on the timeout to shorten it. Rollback needs to restore nothing, but a code rollback after rows
+  name `missing_result` would refuse those rows under a narrower CHECK, which is why there is no down
+  migration.
+
