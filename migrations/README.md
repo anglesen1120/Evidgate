@@ -769,7 +769,6 @@ through the real runner against a throwaway PostgreSQL 18 container.
   name `missing_result` would refuse those rows under a narrower CHECK, which is why there is no down
   migration.
 
-
 ## Notes on the collection-deadline scan (`0056`)
 
 - Why the function exists: a reconcile is enqueued only by the finalize that closes a producer slot,
