@@ -1,20 +1,20 @@
-import { Component, computed, input, provideZonelessChangeDetection, signal } from '@angular/core';
+import { Component, input, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, type ParamMap } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
 import type { ProjectDto } from '@evidgate/sdk';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 import { SessionStore } from '../../../core/session/session.store';
 import {
   OnboardingProgressService,
   type OnboardingProgress,
 } from '../data/onboarding-progress.service';
-import type { StepNumber } from '../data/step-derivation';
 import { OnboardingStore } from '../onboarding.store';
 import { CreateProjectPage } from '../steps/create-project.page';
 import { ConnectCiPage } from '../steps/connect-ci.page';
 import { EnableCollectionPage } from '../steps/enable-collection.page';
 import { OnboardingShellComponent } from './onboarding-shell.component';
+import { shellStore, type ShellStore, type StubScope } from './onboarding-shell.spec-support';
 
 @Component({ selector: 'app-onboarding-create-project', template: '' })
 class CreateProjectStub {
@@ -39,66 +39,18 @@ class EnableCollectionStub {
   readonly projectId = input.required<string>();
 }
 
-/** The scope a stub store reports as the one-shot create marker (S71 F1/N1). */
-interface StubScope {
-  orgId: string;
-  projectId: string | null;
-}
-
-function shellStore(createdScope: () => StubScope | null = () => null) {
-  const viewStep = signal<StepNumber>(1);
-  const currentStep = signal<StepNumber | 'enabled'>(2);
-  const focusToken = signal(0);
-  const done = signal<Readonly<Record<StepNumber, boolean>>>({
-    1: false,
-    2: false,
-    3: false,
-    4: false,
-    5: false,
-  });
-  /** The real store bumps the token only when a user move actually changes the step. */
-  const showStep = (step: StepNumber): void => {
-    if (viewStep() === step) return;
-    viewStep.set(step);
-    focusToken.update((token) => token + 1);
-  };
-  return {
-    status: signal<'loading' | 'ready' | 'error'>('ready'),
-    failure: signal<'forbidden' | 'not-found' | 'unavailable' | null>(null),
-    viewStep,
-    currentStep,
-    done,
-    project: signal<{ id: string; name: string } | null>({
-      id: 'project-1',
-      name: 'Storefront web',
-    }),
-    focusToken,
-    canGoNext: computed(() => done()[viewStep()] && viewStep() < 5),
-    canGoBack: computed(() => viewStep() > 1),
-    load: vi.fn<(orgId: string, projectId: string | null) => Promise<void>>(() =>
-      Promise.resolve(),
-    ),
-    consumeCreated: vi.fn((orgId: string, projectId: string | null) => {
-      const created = createdScope();
-      return created !== null && created.orgId === orgId && created.projectId === projectId;
-    }),
-    selectStep: vi.fn((step: StepNumber) => {
-      const current = currentStep();
-      if (current === 'enabled' || step <= current) showStep(step);
-    }),
-    next: vi.fn(() => {
-      if (done()[viewStep()] && viewStep() < 5) showStep((viewStep() + 1) as StepNumber);
-    }),
-    back: vi.fn(() => {
-      if (viewStep() > 1) showStep((viewStep() - 1) as StepNumber);
-    }),
-  };
+/**
+ * The router the shell reads for its navigation handoff. These cases arrive with the navigation
+ * already finished, so no event is in flight and none waits for the created step's handoff.
+ */
+function finishedRouter(): { events: Subject<unknown>; currentNavigation: () => unknown } {
+  return { events: new Subject<unknown>(), currentNavigation: () => null };
 }
 
 describe('OnboardingShellComponent', () => {
   let fixture: ComponentFixture<OnboardingShellComponent>;
   let root: HTMLElement;
-  let store = shellStore();
+  let store: ShellStore = shellStore();
   let orgParams: BehaviorSubject<ParamMap>;
   let childParams: BehaviorSubject<ParamMap>;
 
@@ -121,8 +73,10 @@ describe('OnboardingShellComponent', () => {
    */
   async function setup(options: SetupOptions = {}): Promise<void> {
     TestBed.resetTestingModule();
-    store = shellStore(options.created);
-    store.focusToken.set(options.focusToken ?? 0);
+    store = shellStore({
+      createdScope: options.created ?? (() => null),
+      focusToken: options.focusToken ?? 0,
+    });
     orgParams = new BehaviorSubject(convertToParamMap({ orgId: 'org-1' }));
     childParams = new BehaviorSubject(
       convertToParamMap(options.projectId === undefined ? {} : { projectId: options.projectId }),
@@ -132,6 +86,7 @@ describe('OnboardingShellComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: OnboardingStore, useValue: store },
+        { provide: Router, useValue: finishedRouter() },
         {
           provide: ActivatedRoute,
           useValue: { pathFromRoot: [{ paramMap: orgParams }, { paramMap: childParams }] },
@@ -179,7 +134,7 @@ describe('OnboardingShellComponent', () => {
     expect(document.activeElement?.id).not.toBe('onboarding-title');
   });
 
-  it('returns focus to the stable page heading after every failed reload (AC-F63-b)', async () => {
+  it('returns focus to the stable page heading after every failed reload', async () => {
     // A page whose own read already failed: this is the error branch the retry button lives in.
     store.status.set('loading');
     await fixture.whenStable();
@@ -286,7 +241,7 @@ describe('OnboardingShellComponent', () => {
     ['not-found', 'app-not-found-pattern'],
     ['unavailable', 'app-error-pattern'],
   ] as const)(
-    'renders the T8 %s replacement without stale completion flags',
+    'renders the %s replacement without stale completion flags',
     async (failure, selector) => {
       store.done.update((done) => ({ ...done, 1: true, 2: true }));
       store.failure.set(failure);
@@ -299,7 +254,7 @@ describe('OnboardingShellComponent', () => {
     },
   );
 
-  it('renders the T8 loading skeleton without a stale stepper', async () => {
+  it('renders the loading skeleton without a stale stepper', async () => {
     store.status.set('loading');
     await fixture.whenStable();
     expect(root.querySelector('app-loading-pattern [aria-busy="true"]')).not.toBeNull();
@@ -340,7 +295,7 @@ describe('OnboardingShellComponent', () => {
     expect(root.querySelector('[data-testid="connect-ci-page"]')).toBeNull();
   });
 
-  it('renders the enable step at step 5 with the wizard scope (09.2.1-T5)', async () => {
+  it('renders the enable step at step 5 with the wizard scope', async () => {
     store.done.set({ 1: true, 2: true, 3: true, 4: true, 5: false });
     store.viewStep.set(5);
     await fixture.whenStable();
@@ -349,12 +304,12 @@ describe('OnboardingShellComponent', () => {
     expect(root.querySelector('[data-testid="enable-collection-page"]')?.textContent).toContain(
       'org-1 project-1',
     );
-    // Next stays disabled on this open step: `done[5]` comes from the project's activation read
-    // (09.2.1-T5.2), and this stub state reports no activation.
+    // Next stays disabled on this open step: `done[5]` comes from the project's activation read,
+    // and this stub state reports no activation.
     expect(button('next').disabled).toBe(true);
   });
 
-  it('renders the scope a create just published, and reads any other (S71 F1)', async () => {
+  it('renders the scope a create just published, and reads any other', async () => {
     await setup({
       created: () => ({ orgId: 'org-1', projectId: 'project-1' }),
       projectId: 'project-1',
@@ -375,7 +330,7 @@ describe('OnboardingShellComponent', () => {
     expect(store.load).toHaveBeenCalledTimes(1);
   });
 
-  it('reads again on a revisit that inherits a used focus token, and moves no focus (S71 N1)', async () => {
+  it('reads again on a revisit that inherits a used focus token, and moves no focus', async () => {
     // A store left ready by an earlier activation carries the token of a step moved back then.
     await setup({ focusToken: 2 });
 
@@ -396,7 +351,7 @@ describe('OnboardingShellComponent', () => {
   });
 });
 
-describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
+describe('OnboardingShellComponent over the real store', () => {
   const PROJECT: ProjectDto = {
     id: 'project-1',
     org_id: 'org-1',
@@ -444,6 +399,7 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
         OnboardingStore,
         { provide: OnboardingProgressService, useValue: { load: progressLoad } },
         { provide: SessionStore, useValue: { adoptCreatedProject: vi.fn() } },
+        { provide: Router, useValue: finishedRouter() },
         {
           provide: ActivatedRoute,
           useValue: { pathFromRoot: [{ paramMap: orgParams }, { paramMap: childParams }] },
@@ -463,7 +419,7 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
     return { progressLoad, childParams, activate, store: TestBed.inject(OnboardingStore) };
   }
 
-  it('reads once for the page and once for the create, and reads again on the next visit (S71 F1/N1)', async () => {
+  it('reads once for the page and once for the create, and reads again on the next visit', async () => {
     const { progressLoad, childParams, activate, store } = await setupRealShell();
     const fixture = await activate();
     expect(progressLoad).toHaveBeenCalledTimes(1);
@@ -480,7 +436,7 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
     expect(progressLoad).toHaveBeenCalledTimes(2);
     const rendered = fixture.nativeElement as HTMLElement;
     expect(rendered.querySelector('[data-testid="onboarding-step-2"]')).not.toBeNull();
-    // The create's step change still moves focus on the activation it caused (S71 F2).
+    // The create's step change still moves focus on the activation it caused.
     expect(document.activeElement?.id).toBe('onboarding-step-title');
 
     // The marker was consumed by that activation, so a later visit to the same URL re-derives.
@@ -489,7 +445,7 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
     expect(progressLoad).toHaveBeenCalledTimes(3);
   });
 
-  it('reads again when the shell is re-created over a ready scope with no create in between (S71 N1)', async () => {
+  it('reads again when the shell is re-created over a ready scope with no create in between', async () => {
     const { progressLoad, activate } = await setupRealShell();
     const first = await activate();
     expect(progressLoad).toHaveBeenCalledTimes(1);

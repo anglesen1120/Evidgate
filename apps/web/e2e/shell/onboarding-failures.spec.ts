@@ -1,18 +1,18 @@
-// 09.2.1-T1 (plan 09.2.1 §2 AC1, §6 "a reload resumes at the derived step", §8 failure path): a
-// progress read the server refuses must render the shell's T8 pattern, never a step.
+// A progress read the server refuses must render the shell's refusal pattern, never a step.
 //
 // Two layers answer a refusal here, and both are asserted because a wizard that swallowed either one
 // would claim a step nobody earned:
 //
 //   1. the wizard's own read, at a project address — `getProject` answers 403/404 and the shell
-//      renders the forbidden / not-found pattern inside `onboarding-shell` (steps 3–4 are still the
-//      placeholders T3/T4 own, and step 2 only renders for a project the wizard could read, so a
+//      renders the forbidden / not-found pattern inside `onboarding-shell` (the later steps are
+//      still placeholders, and step 2 only renders for a project the wizard could read, so a
 //      "step 2" here would be a fabrication);
 //   2. the org's scope read, at the onboarding root — a 403 or 404 on `listProjects` is answered by
-//      the shell's scope guard as the same not-found page (00 §9.2 never distinguishes "you may
-//      not" from "it is not there"), so the wizard does not render at all.
+//      the shell's scope guard as the same not-found page (a refusal and an absence are one answer
+//      on purpose), so the wizard does not render at all.
 import { expect, test, type Page } from '@playwright/test';
 
+import { danglingDescriptions } from './dangling-descriptions';
 import {
   activationReadToggle,
   CREATED_PROJECT,
@@ -28,7 +28,7 @@ import {
 } from './onboarding-support';
 import { withVariant } from './support';
 
-test.describe('a refused progress read renders the T8 pattern (AC1)', () => {
+test.describe('a refused progress read renders the refusal pattern', () => {
   test('a 403 on the wizard project read renders the forbidden pattern', async ({ page }) => {
     await page.goto(refusalUrl('en', 'onboarding-forbidden', CREATED_PROJECT));
 
@@ -52,7 +52,7 @@ test.describe('a refused progress read renders the T8 pattern (AC1)', () => {
     for (const failure of ['onboarding-forbidden', 'onboarding-project-not-found'] as const) {
       await page.goto(orgRefusalUrl('en', failure));
 
-      // 00 §9.2: a 403 and a 404 on the scope read are one answer on purpose.
+      // A 403 and a 404 on the scope read are one answer on purpose.
       await expect(page.locator('app-not-found-pattern').first()).toBeVisible();
       await expect(
         page.locator('[data-testid="onboarding-shell"] [data-testid="onboarding-stepper"]'),
@@ -64,7 +64,7 @@ test.describe('a refused progress read renders the T8 pattern (AC1)', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// F63: step 5's own read failures (AC-F63-b/c), one layer below the wizard refusals above.
+// Step 5's own read failures, one layer below the wizard refusals above.
 //
 // The fixtures backend answers a fixed document per (operation, variant), in process
 // (`provideFixtureBackend()` replaces `HttpBackend`), so these cases prove only what the browser can
@@ -84,7 +84,7 @@ test.describe('a refused progress read renders the T8 pattern (AC1)', () => {
 const ENABLE_ROOT = '[data-testid="enable-collection"]';
 /** The page's typed error panel, which a `403` read is *not* (it is a page state, not a load error). */
 const ENABLE_ERROR = '[data-testid="enable-collection-error"]';
-/** AC-F63-c: the one recovery a refused (403) read offers. */
+/** The one recovery a refused (403) read offers. */
 const READ_AGAIN = '[data-testid="enable-collection-read-again"]';
 /** The refused-read copy. */
 const UNREADABLE = '[data-testid="enable-collection-unreadable"]';
@@ -113,8 +113,8 @@ async function openStepFiveWithRefusedRead(page: Page): Promise<void> {
   await expect(page.locator(ENABLE_ROOT)).toBeVisible();
 }
 
-test.describe("step 5's refused activation read (F63)", () => {
-  test('a twice-refused read keeps focus on its own control and never reaches a command (AC-F63-b, AC-F63-c)', async ({
+test.describe("step 5's refused activation read", () => {
+  test('a twice-refused read keeps focus on its own control and never reaches a command', async ({
     page,
   }) => {
     await openStepFiveWithRefusedRead(page);
@@ -135,7 +135,7 @@ test.describe("step 5's refused activation read (F63)", () => {
     await page.keyboard.press('Enter');
 
     // The answer replaced the control that was pressed, so focus sits on the named target of that
-    // answer (AC-F63-b) — never on <body> — and the same refusal is rendered again.
+    // answer — never on <body> — and the same refusal is rendered again.
     await expect(readAgain).toBeFocused();
     await expect(page.locator(UNREADABLE)).toBeVisible();
     await expect(page.locator(CONFIRM)).toBeDisabled();
@@ -149,24 +149,12 @@ test.describe("step 5's refused activation read (F63)", () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// 09.8.1-T1.4: the three form refusals, in the browser. Each step answers a 422 envelope whose
-// `details` names a control (00 §9.2), so each is asserted the way a screen-reader user meets it:
-// one labelled alert carries the rows, the refused control is marked invalid and described by that
-// text, every description id resolves, and focus sits on the page's own heading — outside the
-// alerts — rather than on `<body>` where the disabled press left it.
+// The three form refusals, in the browser. Each step answers a 422 envelope whose `details` names a
+// control, so each is asserted the way a screen-reader user meets it: one labelled alert carries the
+// rows, the refused control is marked invalid and described by that text, every description id
+// resolves, and focus sits on the page's own heading — outside the alerts — rather than on `<body>`
+// where the disabled press left it.
 // ---------------------------------------------------------------------------------------------
-
-/** One rendered element per `aria-describedby` token, so a dangling id fails the assertion. */
-async function danglingDescriptions(page: Page): Promise<readonly string[]> {
-  return page.evaluate(() =>
-    Array.from(document.querySelectorAll('[aria-describedby]')).flatMap((element) =>
-      (element.getAttribute('aria-describedby') ?? '')
-        .split(/\s+/)
-        .filter(Boolean)
-        .filter((id) => document.getElementById(id) === null),
-    ),
-  );
-}
 
 test.describe('form refusals announce once and keep the visitor’s place', () => {
   test('create project: the name refusal is one labelled alert and focus is on its heading', async ({

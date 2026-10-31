@@ -92,6 +92,7 @@
       <p>{{ workflowHint }}</p>
       <form (ngSubmit)="createBinding()">
         <div class="field">
+          @let repoIdShown = (oidcSubmitted() && repoIdInvalid()) || serverRepoIdError() !== null;
           <label for="connect-oidc-repo-id">{{ repoIdLabel }}</label>
           <input
             id="connect-oidc-repo-id"
@@ -101,11 +102,10 @@
             [attr.inputmode]="'numeric'"
             autocomplete="off"
             [(ngModel)]="repositoryId"
+            (input)="dismissServerReason('repository_id')"
             [disabled]="busy() || !bindingPermitted()"
-            [attr.aria-invalid]="
-              (oidcSubmitted() && repoIdInvalid()) || serverRepoIdError() !== null ? 'true' : null
-            "
-            [attr.aria-describedby]="'connect-repo-id-error'"
+            [attr.aria-invalid]="repoIdShown ? 'true' : null"
+            [attr.aria-describedby]="describedBy(repoIdShown ? 'connect-repo-id-error' : null)"
           />
           <p
             id="connect-repo-id-error"
@@ -120,6 +120,8 @@
           </p>
         </div>
         <div class="field">
+          @let repoNameShown =
+            (oidcSubmitted() && repoNameInvalid()) || serverRepoNameError() !== null;
           <label for="connect-oidc-repo-name">{{ repoNameLabel }}</label>
           <input
             id="connect-oidc-repo-name"
@@ -130,13 +132,10 @@
             [attr.autocapitalize]="'none'"
             spellcheck="false"
             [(ngModel)]="repositoryName"
+            (input)="dismissServerReason('repository_full_name')"
             [disabled]="busy() || !bindingPermitted()"
-            [attr.aria-invalid]="
-              (oidcSubmitted() && repoNameInvalid()) || serverRepoNameError() !== null
-                ? 'true'
-                : null
-            "
-            [attr.aria-describedby]="'connect-repo-name-error'"
+            [attr.aria-invalid]="repoNameShown ? 'true' : null"
+            [attr.aria-describedby]="describedBy(repoNameShown ? 'connect-repo-name-error' : null)"
           />
           <p
             id="connect-repo-name-error"
@@ -151,6 +150,7 @@
           </p>
         </div>
         <div class="field">
+          @let refsShown = (oidcSubmitted() && refsInvalid()) || serverRefsError() !== null;
           <label for="connect-oidc-refs">{{ refsLabel }}</label>
           <textarea
             id="connect-oidc-refs"
@@ -160,11 +160,12 @@
             [attr.autocapitalize]="'none'"
             spellcheck="false"
             [(ngModel)]="refs"
+            (input)="dismissServerReason('allowed_ref_patterns')"
             [disabled]="busy() || !bindingPermitted()"
-            [attr.aria-invalid]="
-              (oidcSubmitted() && refsInvalid()) || serverRefsError() !== null ? 'true' : null
+            [attr.aria-invalid]="refsShown ? 'true' : null"
+            [attr.aria-describedby]="
+              describedBy('connect-refs-hint', refsShown ? 'connect-refs-error' : null)
             "
-            [attr.aria-describedby]="'connect-refs-hint connect-refs-error'"
           ></textarea>
           <p id="connect-refs-hint">{{ refsHint }}</p>
           <p
@@ -180,6 +181,8 @@
           </p>
         </div>
         <div class="field">
+          @let workflowsShown =
+            (oidcSubmitted() && workflowsInvalid()) || serverWorkflowsError() !== null;
           <label for="connect-oidc-workflows">{{ workflowsLabel }}</label>
           <textarea
             id="connect-oidc-workflows"
@@ -189,13 +192,15 @@
             [attr.autocapitalize]="'none'"
             spellcheck="false"
             [(ngModel)]="workflows"
+            (input)="dismissServerReason('allowed_workflow_refs')"
             [disabled]="busy() || !bindingPermitted()"
-            [attr.aria-invalid]="
-              (oidcSubmitted() && workflowsInvalid()) || serverWorkflowsError() !== null
-                ? 'true'
-                : null
+            [attr.aria-invalid]="workflowsShown ? 'true' : null"
+            [attr.aria-describedby]="
+              describedBy(
+                'connect-workflows-hint',
+                workflowsShown ? 'connect-workflows-error' : null
+              )
             "
-            [attr.aria-describedby]="'connect-workflows-hint connect-workflows-error'"
           ></textarea>
           <p id="connect-workflows-hint">{{ workflowsHint }}</p>
           <p
@@ -261,6 +266,8 @@
       <p>{{ tokenHint }}</p>
       <form (ngSubmit)="createToken()">
         <div class="field">
+          @let tokenNameShown =
+            (tokenSubmitted() && tokenNameInvalid()) || serverTokenNameError() !== null;
           <label for="connect-token-name">{{ tokenNameLabel }}</label>
           <input
             id="connect-token-name"
@@ -269,13 +276,12 @@
             type="text"
             autocomplete="off"
             [(ngModel)]="tokenName"
+            (input)="dismissServerReason('name')"
             [disabled]="busy() || !tokenPermitted()"
-            [attr.aria-invalid]="
-              (tokenSubmitted() && tokenNameInvalid()) || serverTokenNameError() !== null
-                ? 'true'
-                : null
+            [attr.aria-invalid]="tokenNameShown ? 'true' : null"
+            [attr.aria-describedby]="
+              describedBy(tokenNameShown ? 'connect-token-name-error' : null)
             "
-            [attr.aria-describedby]="'connect-token-name-error'"
           />
           <p
             id="connect-token-name-error"
