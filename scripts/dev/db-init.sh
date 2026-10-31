@@ -14,7 +14,15 @@
 # in `ps` output (00 §5.7 S3). The template printed at the end carries
 # placeholders, never the values.
 #
-# usage: scripts/dev/db-init.sh [--help]
+# usage: scripts/dev/db-init.sh [--with-token] [--help]
+#
+#   --with-token  after the role grants, run `Evidgate.Migrator seed-dev
+#                 --with-token`: the dev tenant plus one dev ingest token and one
+#                 sample policy revision, minted through the real commands on the
+#                 app role. A minted secret reaches this script's stdout only,
+#                 once: never captured, tee'd, exported or logged, and a rerun
+#                 that finds a live token prints no secret. Requires
+#                 EVIDGATE__CI__PEPPER in the environment.
 #
 # required environment:
 #   EVIDGATE_OWNER_PASSWORD       password for the migration role
@@ -27,6 +35,8 @@
 #   EVIDGATE_DB_SUPERUSER_PASSWORD [postgres]
 #   EVIDGATE_DB_CONTAINER                  run psql through `docker exec -i <name>`
 #                                          instead of a host psql (this host has none)
+#   EVIDGATE_DB_INIT_SEED [1]              0 skips the dev seed (plain or --with-token)
+#   EVIDGATE__CI__PEPPER                   base64 CI pepper; required with --with-token
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -52,12 +62,18 @@ usage() {
   cat <<'USAGE'
 Evidgate local database bootstrap (01.4.1-T2.3).
 
-usage: scripts/dev/db-init.sh [--help]
+usage: scripts/dev/db-init.sh [--with-token] [--help]
 
 Creates the database and its owner credential as superuser, applies the
 migrations as evidgate_owner (migration 0001 creates evidgate_app,
-evidgate_operator and evidgate_worker_sched), then grants those roles LOGIN +
+evidgate_operator and evidgate_worker_sched), grants those roles LOGIN +
 a password as superuser and prints the EVIDGATE_* environment template.
+
+  --with-token  after the grants, also run `seed-dev --with-token`: the dev
+                tenant, one project-bound dev ingest token (artifact:write,
+                event:write, run:create) and one sample policy revision. A minted
+                token is printed here once, never to a log or a file; a rerun
+                that finds a live token prints no secret.
 
 required environment:
   EVIDGATE_OWNER_PASSWORD        password for the migration role
@@ -71,6 +87,8 @@ optional environment (defaults in brackets):
   EVIDGATE_DB_SUPERUSER_PASSWORD [postgres]
   EVIDGATE_DB_CONTAINER                  run psql through `docker exec -i <name>`
                                          instead of a host psql (this host has none)
+  EVIDGATE_DB_INIT_SEED [1]              0 skips the dev seed
+  EVIDGATE__CI__PEPPER                   required with --with-token (base64)
 
 Passwords never appear on a command line: they are exported to the psql children
 and read there with \getenv.
@@ -89,14 +107,17 @@ dsn_quote() {
   printf '"%s"' "${value//\"/\"\"}"
 }
 
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  usage
-  exit 0
-fi
-
-if [[ $# -gt 0 ]]; then
-  die "unexpected argument '$1' (try --help)"
-fi
+with_token=false
+for arg in "$@"; do
+  case "$arg" in
+    --with-token) with_token=true ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *) die "unexpected argument '$arg' (try --help)" ;;
+  esac
+done
 
 missing=""
 for name in "${PASSWORD_VARS[@]}"; do
@@ -175,8 +196,10 @@ EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
 
 # 2b. The synthetic dev tenant (01.8.1-T3.1): org, project, dev user with its roles and a
 #     CI binding. Idempotent; the command itself refuses anything but a local Development
-#     database, and `--no-seed` skips it.
-if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ]; then
+#     database, and `--no-seed` skips it. Under --with-token it runs in step 3b instead,
+#     because that invocation also mints through the app role, which needs the LOGIN
+#     granted in step 3.
+if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ] && [ "$with_token" = false ]; then
   printf 'db-init: seeding the dev tenant (seed-dev)\n'
   DOTNET_ENVIRONMENT=Development EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
     dotnet run --project "$ROOT/src/Evidgate.Migrator" -- seed-dev
@@ -194,6 +217,23 @@ alter role evidgate_app login password :'app_password';
 alter role evidgate_operator login password :'operator_password';
 alter role evidgate_worker_sched login password :'worker_sched_password';
 SQL
+
+# 3b. The token seed: the tenant, one ingest token and one sample revision, minted
+#     through the real commands on the app role so it follows the grants above.
+#     A minted secret reaches this script's stdout once and nowhere else.
+if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ] && [ "$with_token" = true ]; then
+  printf 'db-init: seeding the dev tenant and the dev ingest token (seed-dev --with-token)\n'
+  app_connection_string="Host=$DB_HOST;Port=$DB_PORT;Database=$DB_NAME;Username=evidgate_app;Password=$(dsn_quote "$EVIDGATE_APP_PASSWORD")"
+  DOTNET_ENVIRONMENT=Development \
+    EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
+    EVIDGATE__DATABASE__CONNECTIONSTRING="$app_connection_string" \
+    EVIDGATE__CI__PEPPER="${EVIDGATE__CI__PEPPER:-}" \
+    dotnet run --project "$ROOT/src/Evidgate.Migrator" -- seed-dev --with-token
+  # The note must hold on a rerun too, and it cannot tell which case happened
+  # without capturing the seed's stdout, the one thing this path must not do.
+  printf 'db-init: if a line EVIDGATE_DEV_TOKEN=... was printed above, its secret is shown once and stored nowhere: export it in your shell (docs/dev-setup.md).\n'
+  printf "db-init: if none was printed, a live 'dev-seed' ingest token already exists; its secret was shown once and cannot be shown again. To get a new one run: scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token\n"
+fi
 
 cat <<EOF
 db-init: done — $DB_NAME is at head with evidgate_owner, evidgate_app, evidgate_operator, evidgate_worker_sched.

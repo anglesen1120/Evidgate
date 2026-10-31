@@ -18,7 +18,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
-    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+    <!-- Aliased: the Migrator carries its own generated mediator, which would collide with this project's. -->
+    <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" Aliases="migrator" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />

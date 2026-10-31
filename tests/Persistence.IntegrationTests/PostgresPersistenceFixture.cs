@@ -1,5 +1,7 @@
+extern alias migrator;
+
 using System.Globalization;
-using Evidgate.Migrator;
+using migrator::Evidgate.Migrator;
 using Evidgate.Testing;
 using Npgsql;
 using Testcontainers.PostgreSql;

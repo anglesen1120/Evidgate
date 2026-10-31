@@ -1,15 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- The contract schema set code-generates and Roslyn-compiles its validators at runtime (Corvus
+         Json.Validator); the compile assets only reach deps.json with this property, exactly as
+         tests/Contract.Tests.csproj documents for its own host. -->
+    <PreserveCompilationContext>true</PreserveCompilationContext>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="dbup-postgresql" />
     <PackageReference Include="Npgsql" />
   </ItemGroup>
+  <!-- seed-dev with the token switch drives the modules' own commands through Mediator, so the
+       generator runs here (as in both entry points) and the container below is built
+       from the same shared extensions (DevSeedServices). -->
+  <ItemGroup>
+    <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="Mediator.SourceGenerator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
   <ItemGroup>
     <!-- 10.1.1-T2: the connection string resolves through ISecretProvider, which
          lives in SharedKernel (dependency-free, so no package graph is added). -->
     <ProjectReference Include="..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+    <!-- seed-dev with the token switch: the tenant's ingest token and sample policy are minted by the
+         real commands, never by a second copy of the credential or policy logic. -->
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Policy\Evidgate.Modules.Policy.csproj" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <!-- The redactor and the options' ToString are internal by design (00 §5.7 S3);

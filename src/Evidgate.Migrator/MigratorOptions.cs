@@ -174,7 +174,8 @@ public sealed class MigratorOptions
     private static string? Read(IReadOnlyDictionary<string, string?> values, string key) =>
         values.TryGetValue(key, out var value) ? value : null;
 
-    private static Dictionary<string, string?> ProcessEnvironment()
+    /// <summary>The process environment as a snapshot, the same shape the tests pass in.</summary>
+    internal static Dictionary<string, string?> ProcessEnvironment()
     {
         var values = new Dictionary<string, string?>(StringComparer.Ordinal);
         foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())

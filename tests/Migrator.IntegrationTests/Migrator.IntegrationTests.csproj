@@ -3,6 +3,10 @@
        Not named Evidgate.* so the Architecture.Tests reflection scan never picks it up. -->
   <PropertyGroup>
     <RootNamespace>Migrator.IntegrationTests</RootNamespace>
+    <!-- The token switch of seed-dev loads the Corvus schema set in this host, and that set compiles its
+         validators with Roslyn at runtime: the reference assemblies are only in deps.json with this
+         property (the same reason tests/Contract.Tests.csproj sets it). -->
+    <PreserveCompilationContext>true</PreserveCompilationContext>
   </PropertyGroup>
   <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, xunit.runner.visualstudio, Shouldly
        and NSubstitute come from tests/Directory.Build.props (01.6.1-T1.1). -->
@@ -12,6 +16,10 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
+    <!-- The Migrator keeps its module references private (they would leak internal handlers into every test
+         project that references it); the token seed runs them in this host, so they are referenced here. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Policy\Evidgate.Modules.Policy.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />

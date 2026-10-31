@@ -25,6 +25,9 @@ COPY Directory.Build.props Directory.Packages.props global.json nuget.config ./
 # build would apply the analyzers' default severities instead.
 COPY .editorconfig ./
 COPY src/ ./src/
+# The Migrator now builds the Persistence and module projects (the dev token seed
+# reuses their handlers); Persistence embeds contracts/rls-exceptions.txt.
+COPY contracts/ ./contracts/
 RUN dotnet restore --locked-mode src/Evidgate.Migrator/Evidgate.Migrator.csproj
 
 # No PublishReadyToRun: 00 §5.7 P7 names the long-lived Api/Worker processes,

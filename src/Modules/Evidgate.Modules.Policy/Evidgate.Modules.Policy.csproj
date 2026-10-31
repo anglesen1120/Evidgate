@@ -25,6 +25,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Evidgate.Api" />
     <InternalsVisibleTo Include="Evidgate.Worker" />
+    <InternalsVisibleTo Include="Evidgate.Migrator" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
     <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
   </ItemGroup>

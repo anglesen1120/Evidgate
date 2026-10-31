@@ -39,20 +39,24 @@ evg_load_env() {
 }
 
 # Exported names whose value is a credential. A new secret is covered by this
-# pattern instead of an edit at every call site.
-EVG_SECRET_ENV_PATTERN='PASSWORD|SECRET|CONNECTIONSTRING|ACCESSKEY|S3_CONFIG'
+# pattern instead of an edit at every call site. ACCESS_?KEY covers both spellings
+# a local identity uses (EVIDGATE_S3_ACCESS_KEY, EVIDGATE__OBJECT__ACCESSKEY);
+# PEPPER and DEV_TOKEN cover the two credentials the token seed relies on, so a
+# shell that exported them does not hand them to npm, ng serve or dotnet build.
+EVG_SECRET_ENV_PATTERN='PASSWORD|SECRET|CONNECTIONSTRING|ACCESS_?KEY|S3_CONFIG|PEPPER|DEV_TOKEN'
 
 # Fills EVG_SCRUB_ARGS with one `-u NAME` pair per exported variable matching
-# the pattern above, read from the live environment.
+# the pattern above, read from the live environment. Process substitution, not a
+# command substitution inside a here-document: this has to expand identically on
+# macOS /bin/bash 3.2, and the loop then runs in this shell rather than a
+# subshell, so EVG_SCRUB_ARGS survives it.
 evg_scrub_env_args() {
   local name
   EVG_SCRUB_ARGS=()
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     EVG_SCRUB_ARGS+=(-u "$name")
-  done <<EOF
-$(env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -Ei "$EVG_SECRET_ENV_PATTERN" || true)
-EOF
+  done < <(env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -Ei "$EVG_SECRET_ENV_PATTERN" || true)
 }
 
 # Runs a third-party command (npm, npx tsc, ng serve, dotnet build) with every
