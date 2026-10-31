@@ -6,6 +6,7 @@
 // is compiled first so the test is independent of a prior build.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -133,7 +134,19 @@ describe('reporter e2e (real playwright test CLI)', () => {
     const capability = envelopes[0]?.ext.capability as
       { engine?: { version?: string } } | undefined;
     expect(validateCapability(capability)).toBe(true);
-    expect(capability?.engine?.version ?? '').toMatch(/^1\.63\./);
+    // Read the installed engine's own package.json, independent of the reporter's reader,
+    // so the check follows the pinned devDependency instead of a hard-coded minor.
+    const installedManifest: unknown = createRequire(import.meta.url)(
+      '@playwright/test/package.json',
+    );
+    const installed =
+      installedManifest !== null &&
+      typeof installedManifest === 'object' &&
+      'version' in installedManifest
+        ? installedManifest.version
+        : undefined;
+    expect(installed).toMatch(/^1\.\d+\.\d+$/);
+    expect(capability?.engine?.version).toBe(installed);
 
     // The fixture's user `test.step` must arrive as a real step envelope with an integer
     // duration (the schema requires duration_ms >= 0).
