@@ -267,7 +267,7 @@ public sealed partial class SeedDevCatalogTests
             database,
             pepper: string.Empty,
             environment: "Development",
-            appConnectionString: "Host=db.internal.example.com;Port=5432;Database=evidgate;Username=evidgate_app;Password=x",
+            appConnectionString: "Host=db.internal.example.com;Port=5432;Database=evidgate;Username=evidgate_app",
             omitPepper: true);
 
         var refused = SeedDevTokenHarness.Run(["seed-dev"], variables);

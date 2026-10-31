@@ -101,7 +101,7 @@ public sealed class SeedDevTests
     public void SeedDev_Usage_Mentions_TheCommand() => MigratorHost.Usage.ShouldContain("seed-dev");
 
     private static string SharedHost(string role) =>
-        $"Host=db.prod.example.com;Port=5432;Database=evidgate;Username={role};Password=x";
+        $"Host=db.prod.example.com;Port=5432;Database=evidgate;Username={role}";
 
     private SeedDevTokenHarness.RunResult RunSeed(string database, string? environment) =>
         SeedDevTokenHarness.Run(
