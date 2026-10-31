@@ -1060,6 +1060,8 @@
         "type": "Project",
         "dependencies": {
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )",
+          "Microsoft.Extensions.Hosting": "[10.0.14, )",
           "Npgsql": "[10.0.3, )",
           "dbup-postgresql": "[7.0.1, )"
         }

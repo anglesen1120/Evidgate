@@ -98,8 +98,8 @@ public sealed class MigratorTests
         using var migrations = TempMigrations.Create()
             .Add("0001_probe_first.sql", "create table if not exists public.drift_probe_first (id int primary key);");
 
-        MigratorHarness.Run(migrations.Path, _fixture.OwnerConnectionString(database))
-            .ExitCode.ShouldBe(MigratorExitCodes.Success);
+        var first = MigratorHarness.Run(migrations.Path, _fixture.OwnerConnectionString(database));
+        first.ExitCode.ShouldBe(MigratorExitCodes.Success, string.Join(" | ", first.Messages));
 
         // Edit the applied file and add a pending one: the pending file must NOT be applied.
         migrations
@@ -219,7 +219,7 @@ public sealed class MigratorTests
             migrations.Path,
             _fixture.OwnerConnectionString(database),
             MigrationCommand.Status);
-        pristineStatus.ExitCode.ShouldBe(MigratorExitCodes.Success);
+        pristineStatus.ExitCode.ShouldBe(MigratorExitCodes.Success, string.Join(" | ", pristineStatus.Messages));
         pristineStatus.Messages.ShouldContain("summary: 0 applied, 2 pending, 0 drifted");
 
         var outcome = MigratorHarness.Run(

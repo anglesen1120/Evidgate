@@ -12,8 +12,9 @@ namespace Evidgate.Migrator;
 /// <remarks>
 /// Refuses, writing nothing, unless <c>DOTNET_ENVIRONMENT</c> is <c>Development</c> and the database host is the local
 /// machine or a bare compose service name (no dots): a seed pointed at a shared database is the mistake this guard
-/// exists for. The data is fully synthetic (00 §11). The dev ingest token and the sample policy are seed part 2
-/// (01.8.1-T4), which needs 02.4.2 and 07.1.1.
+/// exists for. The data is fully synthetic (00 §11). <c>seed-dev --with-token</c> is seed part 2: after this tenant is
+/// written, one dev ingest token and one sample policy revision are minted through the modules' own commands on the
+/// app role (<see cref="DevSeedToken"/>), so no credential or policy row is ever composed by hand.
 /// </remarks>
 public static class DevSeed
 {
@@ -40,6 +41,12 @@ public static class DevSeed
 
     /// <summary>The synthetic repository id of the dev binding.</summary>
     public const long DevRepositoryId = 9_000_000_000_001;
+
+    /// <summary>The name of the seeded ingest token; the rerun check looks for a live token under exactly this name.</summary>
+    public const string TokenName = "dev-seed";
+
+    /// <summary>The dev user's email, as the tenant seed writes it and the seed's principal carries it.</summary>
+    public const string UserEmail = "dev@evidgate.local";
 
     private const string Sql =
         """
@@ -77,7 +84,7 @@ public static class DevSeed
         on conflict (id) do nothing;
         """;
 
-    /// <summary>Applies the seed; returns the process exit code.</summary>
+    /// <summary>Applies seed part 1; returns the process exit code.</summary>
     /// <param name="options">Owner-role connection and paths.</param>
     /// <param name="environment">Environment overrides (tests); null reads the process environment.</param>
     /// <param name="output">Where progress goes.</param>
@@ -86,12 +93,44 @@ public static class DevSeed
         MigratorOptions options,
         IReadOnlyDictionary<string, string?>? environment,
         TextWriter output,
-        TextWriter error)
+        TextWriter error) =>
+        Run(options, environment, output, error, withToken: false);
+
+    /// <summary>Applies seed part 1 and, with <paramref name="withToken"/>, also part 2 (the ingest token and the sample policy).</summary>
+    /// <param name="options">Owner-role connection and paths.</param>
+    /// <param name="environment">Environment overrides (tests); null reads the process environment.</param>
+    /// <param name="output">Where progress goes; the one-time token secret goes here and nowhere else.</param>
+    /// <param name="error">Where a refusal or failure goes.</param>
+    /// <param name="withToken">Also mint the dev ingest token and the sample policy revision, on the app role.</param>
+    public static int Run(
+        MigratorOptions options,
+        IReadOnlyDictionary<string, string?>? environment,
+        TextWriter output,
+        TextWriter error,
+        bool withToken)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(error);
 
+        // Both parts are behind the one refusal guard, and it runs before anything else, so a seed
+        // pointed at a shared database or a production environment writes nothing at all.
+        if (Refusal(options, environment, error) is { } refusal)
+        {
+            return refusal;
+        }
+
+        return withToken
+            ? DevSeedToken.Run(options, environment, output, error)
+            : WriteTenant(options, output, error);
+    }
+
+    /// <summary>Null when the seed may run; else the exit code, after the refusal is written and nothing else was done.</summary>
+    private static int? Refusal(
+        MigratorOptions options,
+        IReadOnlyDictionary<string, string?>? environment,
+        TextWriter error)
+    {
         var current = environment is not null
             ? (environment.TryGetValue(EnvironmentVariable, out var value) ? value : null)
             : Environment.GetEnvironmentVariable(EnvironmentVariable);
@@ -111,6 +150,15 @@ public static class DevSeed
             return MigratorExitCodes.InvalidInvocation;
         }
 
+        return null;
+    }
+
+    /// <summary>Writes the synthetic tenant as the owner role, in one transaction; returns the process exit code.</summary>
+    /// <param name="options">Owner-role connection.</param>
+    /// <param name="output">Where progress goes.</param>
+    /// <param name="error">Where a failure goes.</param>
+    internal static int WriteTenant(MigratorOptions options, TextWriter output, TextWriter error)
+    {
         try
         {
             using var connection = new NpgsqlConnection(options.ConnectionString);

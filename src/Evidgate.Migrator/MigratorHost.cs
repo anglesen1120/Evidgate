@@ -1,3 +1,6 @@
+using Evidgate.BuildingBlocks.SharedKernel.Secrets;
+using Evidgate.Modules.Identity.Ci;
+
 namespace Evidgate.Migrator;
 
 /// <summary>
@@ -10,6 +13,7 @@ public static class MigratorHost
     private const string StatusArgument = "--status";
     private const string DryRunArgument = "--dry-run";
     private const string SeedDevArgument = "seed-dev";
+    private const string WithTokenArgument = "--with-token";
     private const string HelpArgument = "--help";
     private const string HelpShortArgument = "-h";
 
@@ -18,16 +22,24 @@ public static class MigratorHost
         $"""
         evidgate-migrator — applies plain-SQL migrations as the owner role, journalled in {MigratorOptions.JournalTableName} (00 §5.2, ADR-0003).
 
-        usage: Evidgate.Migrator [--status | --dry-run | seed-dev | --help]
+        usage: Evidgate.Migrator [--status | --dry-run | seed-dev [--with-token] | --help]
 
           (no arguments)  apply every pending migration, one transaction per file
           --status        print applied, pending and drifted files; exit {MigratorExitCodes.ChecksumMismatch} on drift, applies nothing
           --dry-run       print the pending files without applying anything
           seed-dev        write the synthetic dev tenant (org, project, dev user + roles, CI binding); idempotent;
                           refuses unless DOTNET_ENVIRONMENT=Development and the database host is local (01.8.1-T3)
+          seed-dev --with-token
+                          also mint ONE dev ingest token (name dev-seed, no expiry) and ONE sample policy revision for the
+                          dev project, through the real Identity/Policy commands on the app-role connection; the token
+                          is printed once on stdout as EVIDGATE_DEV_TOKEN=…, and a rerun prints how to recover instead;
+                          refuses unless Development, every database host is local, {SecretNames.CiPepper} is configured
+                          and {SecretNames.DatabaseConnectionString} carries the app role
 
         environment:
           {MigratorOptions.ConnectionStringVariable}   (required) owner-role connection string
+          {SecretNames.DatabaseConnectionString}   (required by --with-token) app-role (evidgate_app) connection string
+          {SecretNames.CiPepper}   (required by --with-token) base64 pepper, at least {CiSecrets.MinKeyBytes} bytes
           {MigratorOptions.MigrationsPathVariable}     (optional) defaults to <repo>/migrations
           {MigratorOptions.CommandTimeoutVariable} (optional) seconds per statement, default {MigratorOptions.DefaultCommandTimeoutSeconds} = no timeout
 
@@ -51,7 +63,7 @@ public static class MigratorHost
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(error);
 
-        if (!TryParse(args, out var command, out var usageError))
+        if (!TryParse(args, out var command, out var withToken, out var usageError))
         {
             error.WriteLine($"E {usageError}");
             error.WriteLine(Usage);
@@ -82,15 +94,16 @@ public static class MigratorHost
 
         if (command == MigrationCommand.SeedDev)
         {
-            return DevSeed.Run(options, environment, output, error);
+            return DevSeed.Run(options, environment, output, error, withToken);
         }
 
         return MigratorRunner.Run(options, command.Value, output).ExitCode;
     }
 
-    private static bool TryParse(string[] args, out MigrationCommand? command, out string? error)
+    private static bool TryParse(string[] args, out MigrationCommand? command, out bool withToken, out string? error)
     {
         error = null;
+        withToken = false;
 
         if (args.Length == 0)
         {
@@ -98,10 +111,31 @@ public static class MigratorHost
             return true;
         }
 
-        if (args.Length > 1)
+        if (args.Length > 2)
         {
             command = null;
             error = $"expected at most one argument, got {args.Length}";
+            return false;
+        }
+
+        if (args.Length == 2)
+        {
+            // The only two-argument form is the seed plus its one switch. Every other pair keeps the wording a
+            // one-argument command line has always answered, so callers that match on it are unaffected.
+            var seed = args[0] == SeedDevArgument || args[1] == SeedDevArgument;
+            var token = args[0] == WithTokenArgument || args[1] == WithTokenArgument;
+
+            if (seed && token)
+            {
+                command = MigrationCommand.SeedDev;
+                withToken = true;
+                return true;
+            }
+
+            command = null;
+            error = token
+                ? $"'{WithTokenArgument}' is only valid with {SeedDevArgument}"
+                : "expected at most one argument, got 2";
             return false;
         }
 
@@ -116,6 +150,10 @@ public static class MigratorHost
             case SeedDevArgument:
                 command = MigrationCommand.SeedDev;
                 return true;
+            case WithTokenArgument:
+                command = null;
+                error = $"'{WithTokenArgument}' is only valid with {SeedDevArgument}";
+                return false;
             case HelpArgument:
             case HelpShortArgument:
                 command = null;
