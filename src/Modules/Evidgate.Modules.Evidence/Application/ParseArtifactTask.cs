@@ -11,17 +11,17 @@ using Microsoft.Extensions.Logging;
 namespace Evidgate.Modules.Evidence.Application;
 
 /// <summary>
-/// Payload of the <c>artifact_parse</c> task (06.3.6 §5, T1.4), as the completion's outbox row writes it: one
-/// artifact id. The tenant comes from the task row (<c>task.org_id</c>), never from the payload, so a payload cannot
-/// name another tenant's artifact (00 §5.4.1, T3).
+/// Payload of the <c>artifact_parse</c> task, as the completion's outbox row writes it: one artifact id. The tenant
+/// comes from the task row (<c>task.org_id</c>), never from the payload, so a payload cannot name another tenant's
+/// artifact.
 /// </summary>
 /// <param name="ArtifactId">The artifact whose stored report is parsed.</param>
 internal sealed record ParseArtifactPayload(Guid ArtifactId);
 
 /// <summary>
-/// Runs the 06.3.1 profile over one artifact's bytes in the resource-limited child (06.3.6 §5/§7, T1.4): the task
-/// handler that closes AC3 — a crash, OOM kill or timeout becomes a <c>rejected</c> artifact with the stable reason
-/// <see cref="ParseRunRejection"/> maps it to, and never takes the Worker down.
+/// Runs the parsing profile over one artifact's bytes in the resource-limited child: a crash, OOM kill or timeout
+/// becomes a <c>rejected</c> artifact with the stable reason <see cref="ParseRunRejection"/> maps it to, and never takes
+/// the Worker down.
 /// <para>
 /// <b>Nothing is written before the child finishes.</b> The handler reads the row, opens the object read with the
 /// kind policy's cap, hands the stream to <see cref="IParseRunner"/> and only then decides. A successful run persists
@@ -30,17 +30,18 @@ internal sealed record ParseArtifactPayload(Guid ArtifactId);
 /// </para>
 /// <para>
 /// <b>The absence of a verdict is the freeze's own signal.</b> Evidence counts a report only when its
-/// <c>artifact_parse</c> row is <c>done</c>, and the consumer writes <c>done</c> only after this handler's
-/// transaction committed, so a rejection can never be read as frozen evidence; a parse that never finishes (a
-/// dead-lettered row) keeps the report out of every revision for as long as the task sweep retains that row, and an
-/// operator replay after it is gone is what puts the report back in front of a freeze.
+/// <c>artifact_parse</c> row is <c>done</c> and the completion's parse outbox row has been dispatched, and the
+/// consumer writes <c>done</c> only after this handler's transaction committed, so a rejection can never be read as
+/// frozen evidence; a parse that never finishes (a dead-lettered row) keeps the report out of every revision for as
+/// long as the task sweep retains that row, and an operator replay after it is gone is what puts the report back in
+/// front of a freeze.
 /// </para>
 /// <para>
 /// <b>The child's own rejection is still a verdict.</b> A run that ends 0 with its marker may hold a <c>rejected</c>
 /// record — the child's decision on content it refuses (a DTD, an unsafe archive entry, an input over the cap) — and
 /// that record is the verdict: the artifact is rejected with the record's <c>reason</c> when that value is shaped like
 /// a code word (<c>^[a-z0-9_]{1,64}$</c>) and with <see cref="ArtifactFailureCode.ParseCrashed"/> otherwise, so no text
-/// the untrusted document influenced can reach a tenant-visible column (D-S125-Q4, 00 §5.7 S3).
+/// the untrusted document influenced can reach a tenant-visible column.
 /// </para>
 /// <para>
 /// <b>An object the cap no longer admits is a verdict too.</b> <see cref="IObjectStorage.GetAsync"/> refuses to
@@ -52,7 +53,7 @@ internal sealed record ParseArtifactPayload(Guid ArtifactId);
 /// <b>One guarded write per artifact.</b> A verdict is a single <c>UPDATE</c> whose predicate is the row's version
 /// token (the entity's concurrency mapping), issued only after this attempt read the row in a parseable state — so a
 /// replay after the rejection, or a concurrent attempt that already wrote, matches no row and the artifact is decided
-/// once (06.3.6 AC8). An artifact that is already <c>rejected</c>, or not <c>ready</c>/<c>uploaded</c> any more, is not
+/// once. An artifact that is already <c>rejected</c>, or not <c>ready</c>/<c>uploaded</c> any more, is not
 /// parsed again at all.
 /// </para>
 /// <para>
@@ -66,26 +67,26 @@ internal sealed record ParseArtifactPayload(Guid ArtifactId);
 /// <para>
 /// <b>What is not a verdict.</b> A cancellation (lease loss, shutdown) rethrows: the runner has already tree-killed
 /// its child, and the queue's redelivery is the retry. A <see cref="ParseRunFailureKind.SpawnFailed"/> run throws
-/// too, because no child existed to judge the artifact — the row stays as it was and the queue retries with backoff
-/// (06.3.6 §6). Neither path writes a state.
+/// too, because no child existed to judge the artifact — the row stays as it was and the queue retries with
+/// backoff. Neither path writes a state.
 /// </para>
 /// <para>
 /// <b>Nothing secret, nothing tenant-visible beyond the code.</b> The reason is the only value a tenant sees; the
 /// child's stderr may appear in one operator log line (already bounded and redacted by the runner) and never in the
-/// failure code, the artifact row or a thrown exception's message (00 §5.7 S3, 06.3.6 §8).
+/// failure code, the artifact row or a thrown exception's message.
 /// </para>
 /// <para>
-/// <b>P5 exception, recorded (06.3.6-T2).</b> The object read and the child run happen inside the tenant
+/// <b>Transaction exception, recorded.</b> The object read and the child run happen inside the tenant
 /// transaction the consumer opened around this attempt, because a task handler receives that transaction and cannot
 /// release it — the same posture <see cref="ArtifactStagingDeleteTaskHandler"/> takes for its delete. This is a
-/// deliberate exception to the 00 §5.7 P5 rule that storage calls run outside a database transaction, and it is
+/// deliberate exception to the rule that storage calls run outside a database transaction, and it is
 /// temporary: <see cref="IObjectStorage.GetAsync"/>'s own remarks name it as the one recorded exception and forbid a
 /// new caller from copying it.
 /// <list type="bullet">
-/// <item><b>Receiver:</b> 06.3.6-T2 (its own parse queue and concurrency), which schedules the parse outside the
+/// <item><b>Receiver:</b> the parse queue's own concurrency work, which schedules the parse outside the
 /// consumer's transaction or runs it on a scope opened after the read.</item>
 /// <item><b>Exposure now:</b> one idle-in-transaction connection for the length of one parse and one object read,
-/// bounded by the wall clock the runner enforces (06.3.6 §7) and by the queue's own per-queue concurrency
+/// bounded by the wall clock the runner enforces and by the queue's own per-queue concurrency
 /// (originally one, this queue's default).</item>
 /// <item><b>Why it is not exploitable:</b> the read takes no row lock, so it blocks no writer; the transaction
 /// commits only the guarded verdict <c>UPDATE</c> at the end.</item>
@@ -94,7 +95,7 @@ internal sealed record ParseArtifactPayload(Guid ArtifactId);
 /// </summary>
 /// <param name="contexts">The tenant write model the artifact and its kind policy are read through.</param>
 /// <param name="storage">The object store the artifact's bytes are read from, capped by the kind policy.</param>
-/// <param name="runner">The out-of-process runner; the only way this module reaches a parser (06.3.6 AC1).</param>
+/// <param name="runner">The out-of-process runner; the only way this module reaches a parser.</param>
 /// <param name="logger">The one structured line a rejection or an invisible artifact writes.</param>
 internal sealed partial class ParseArtifactTaskHandler(
     ITenantDbContextFactory<EvidenceDbContext> contexts,
@@ -128,7 +129,7 @@ internal sealed partial class ParseArtifactTaskHandler(
 
     /// <summary>
     /// The fixed first line of the exception a row raises whose stored <c>object_key</c> is not the key its own
-    /// coordinates mint. It names no key and no coordinate (00 §5.7 S3).
+    /// coordinates mint. It names no key and no coordinate.
     /// </summary>
     private const string ObjectKeyMismatchMessage =
         "the artifact's stored object key is not the key its row mints, so the report was not read; an operator must look at this artifact";
@@ -172,7 +173,7 @@ internal sealed partial class ParseArtifactTaskHandler(
         if (!IsParseable(artifact.State))
         {
             // Already rejected (parsed and decided once), or not yet ready: nothing to do, and the runner is never
-            // started, so a replay after the rejection costs no child process (06.3.6 AC8).
+            // started, so a replay after the rejection costs no child process.
             LogAlreadyDecided(logger, artifact.Id, artifact.State);
             return;
         }
@@ -187,7 +188,7 @@ internal sealed partial class ParseArtifactTaskHandler(
 
         if (ParseRunnerProfileFor(artifact.MediaType) is not { } profile)
         {
-            // A report media type with no arm (text/html above all: the server never parses HTML, 06.3.1 §10 T1.2).
+            // A report media type with no arm (text/html above all: the server never parses HTML).
             // The in-process path has no parse for these bytes either, so a completion is the whole work.
             LogNothingToParse(logger, artifact.Id, artifact.Kind, artifact.MediaType);
             return;
@@ -224,7 +225,7 @@ internal sealed partial class ParseArtifactTaskHandler(
         {
             // The final object of a ready artifact is retained; an absent one is an infrastructure fault (or a store
             // that has not made the promotion visible yet), never a verdict: retry instead of rejecting evidence
-            // nobody judged. The message names no key (00 §5.7 S3).
+            // nobody judged. The message names no key.
             throw new InvalidOperationException(
                 "the artifact's stored object is not readable, so the report was not parsed; the task is retried");
         }
@@ -239,7 +240,7 @@ internal sealed partial class ParseArtifactTaskHandler(
         {
             // Success: the record stream belongs to the caller that asked for a parse, and no such caller persists it
             // yet (see the type remarks). Nothing is written, which is exactly what the in-process path does — unless
-            // the stream carries the child's own rejection record, which is this run's verdict (D-S125-Q4).
+            // the stream carries the child's own rejection record, which is this run's verdict.
             if (result is ParseRunSucceeded succeeded && ChildRejectionRecord.ReasonIn(succeeded) is { } reported)
             {
                 LogChildRejected(logger, artifact.Id, reported, succeeded.ChildExitCode);
@@ -317,7 +318,7 @@ internal sealed partial class ParseArtifactTaskHandler(
             }
 
             // Still parseable, so no verdict is stored: the attempt lost a race to another write and must not drop the
-            // parse. The message carries neither stderr nor a key (00 §5.7 S3).
+            // parse. The message carries neither stderr nor a key.
             throw new InvalidOperationException(
                 "the parse verdict could not be written because the artifact changed while it was parsed, so the task is retried");
         }
@@ -354,7 +355,7 @@ internal sealed partial class ParseArtifactTaskHandler(
         return string.Equals(artifact.ObjectKey, minted, StringComparison.Ordinal);
     }
 
-    /// <summary>True when the artifact may still be parsed: <c>uploaded</c> or <c>ready</c> (00 §8.4, 06.3.6 §6).</summary>
+    /// <summary>True when the artifact may still be parsed: <c>uploaded</c> or <c>ready</c>.</summary>
     /// <param name="state">The row's <c>artifact.state</c>.</param>
     /// <returns><see langword="true"/> for a state the parse may still decide.</returns>
     private static bool IsParseable(string? state) =>
@@ -363,7 +364,7 @@ internal sealed partial class ParseArtifactTaskHandler(
 
     /// <summary>
     /// The effective byte cap the run is bounded by: the project's kind-policy row resolved against the static
-    /// defaults by the same rule the mint and the completion used (06.1.2-T3.1), so the parse can never read more
+    /// defaults by the same rule the mint and the completion used, so the parse can never read more
     /// than the cap the artifact was admitted under (D-A9).
     /// </summary>
     /// <param name="context">This attempt's write model.</param>
@@ -399,8 +400,8 @@ internal sealed partial class ParseArtifactTaskHandler(
     }
 
     /// <summary>
-    /// The profile arm a declared media type selects (06.3.6 §5), or <see langword="null"/> for a type the profile has
-    /// no arm for — <c>text/html</c> above all, which the server never parses (06.3.1 §10 T1.2).
+    /// The profile arm a declared media type selects, or <see langword="null"/> for a type the profile has no arm
+    /// for — <c>text/html</c> above all, which the server never parses.
     /// <para>
     /// The families are the ones <see cref="MediaSniffer"/> verifies, and this only chooses the arm: the artifact
     /// reached <c>ready</c> through that sniffer, so the bytes already agree with the declared type. Keep the two
@@ -439,8 +440,7 @@ internal sealed partial class ParseArtifactTaskHandler(
 
     /// <summary>
     /// The one line a rejection writes: the artifact and the reason it is now carrying, the child's exit code, and the
-    /// runner's bounded, redacted stderr excerpt for the operator. Never a stored value and never a tenant-visible one
-    /// (00 §5.7 S3, 06.3.6 §8).
+    /// runner's bounded, redacted stderr excerpt for the operator. Never a stored value and never a tenant-visible one.
     /// </summary>
     /// <param name="logger">The handler's logger.</param>
     /// <param name="artifactId">The artifact that was rejected.</param>
@@ -499,7 +499,7 @@ internal sealed partial class ParseArtifactTaskHandler(
     /// <summary>
     /// The verdict the child reported itself, on a run that exited 0: an operator wants to know that the rejected
     /// document was content, not a crash, so this line names the reason and the exit code and never a record's other
-    /// text (00 §5.7 S3).
+    /// text.
     /// </summary>
     /// <param name="logger">The handler's logger.</param>
     /// <param name="artifactId">The artifact whose stream held the rejection.</param>

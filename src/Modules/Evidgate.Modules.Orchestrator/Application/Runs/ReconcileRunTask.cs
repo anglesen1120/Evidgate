@@ -50,7 +50,9 @@ internal sealed partial class ReconcileRunTaskHandler(
         await using var attemptScope = scopeFactory.CreateAsyncScope();
 
         var reconciler = attemptScope.ServiceProvider.GetRequiredService<IRunReconciler>();
-        var outcome = await reconciler.ReconcileAsync(payload.RunId, cancellationToken).ConfigureAwait(false);
+        var outcome = await reconciler
+            .ReconcileAsync(payload.RunId, payload.LateEvidence, cancellationToken)
+            .ConfigureAwait(false);
 
         // The four values are taken first so the log call's arguments stay locals (CA1873: no work behind a disabled
         // log level). They are numbers and one interned token; the payload is never among them.

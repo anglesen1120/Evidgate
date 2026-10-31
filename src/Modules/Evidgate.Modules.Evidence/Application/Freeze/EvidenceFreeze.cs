@@ -10,17 +10,16 @@ using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 namespace Evidgate.Modules.Evidence.Application.Freeze;
 
 /// <summary>
-/// <see cref="IEvidenceFreeze"/> over the caller's tenant transaction (06.5.1-T1, T2, FR-06-1, FR-06-14, rulings T3 and
-/// T17). It never opens a connection or a transaction, never commits and never rolls back: the read, the conditional
-/// resolution and the canonical hash all run on the ambient scope, so the caller's rollback also undoes the
-/// <c>attempt_id</c> resolution (AC6, 00 §5.5 C3), and it makes no network call (00 §5.7 P5).
+/// <see cref="IEvidenceFreeze"/> over the caller's tenant transaction. It never opens a connection or a transaction,
+/// never commits and never rolls back: the read, the conditional resolution and the canonical hash all run on the
+/// ambient scope, so the caller's rollback also undoes the <c>attempt_id</c> resolution, and no network call is made.
 /// <para>
 /// One read statement answers every <c>ready</c> artifact of the run whose parse has decided, with the attempt its
 /// <c>(execution_key, attempt_no)</c> resolves to; a report still awaiting its parse verdict is left out, so the caller
 /// reports it as a missing requirement instead of freezing evidence a later rejection would contradict. The requirement
 /// comparison, the orphan classification and the hash are decided entirely in memory over that result, and at most one
 /// <c>UPDATE</c> persists the pairs that resolved for the first time — two statements whatever the number of artifacts
-/// or requirements (AC6, 00 §5.7 P2/P3).
+/// or requirements.
 /// </para>
 /// <para>
 /// Both bounds fail closed instead of handing back a result the stored rows disagree with: a run above
@@ -33,7 +32,7 @@ namespace Evidgate.Modules.Evidence.Application.Freeze;
 /// <param name="scopes">The tenant-scope accessor; <c>Require()</c> is the guard that throws before any statement.</param>
 internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor scopes) : IEvidenceFreeze
 {
-    /// <summary>The 00 §8.5 <c>missing[]</c> code shape: a lower_snake code of 1..64 characters.</summary>
+    /// <summary>The <c>missing[]</c> code shape: a lower_snake code of 1..64 characters.</summary>
     [GeneratedRegex("\\A[a-z][a-z0-9_]{0,63}\\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex ReasonCodeShape();
 
@@ -42,15 +41,15 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
     {
         Validate(request);
 
-        // The tenant-scope guard runs before any statement (00 §5.5 C3): with no open scope this throws and nothing
-        // is sent. The read and the write both name the scope's org and project explicitly, never a caller value.
+        // The tenant-scope guard runs before any statement: with no open scope this throws and nothing is sent. The
+        // read and the write both name the scope's org and project explicitly, never a caller value.
         var scope = scopes.Require();
 
         // Statement 1: every ready artifact of the run with its resolved case_attempt, one statement however many
         // artifacts and requirements the call carries. A raw report whose parse has not decided is not one of them:
-        // the artifact_parse task row is the verdict's signal (FreezeSql.SelectReadyArtifacts). An unknown or foreign
+        // an unfinished artifact_parse task row or an undispatched parse outbox row keeps it out. An unknown or foreign
         // run simply answers no row. The limit is one past the cap, so the row that proves the run is too large is
-        // still read (F4, D-S57-Q10).
+        // still read.
         var rows = await db.QueryAsync<ReadyArtifactRow>(
             FreezeSql.SelectReadyArtifacts,
             new
@@ -78,7 +77,7 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         {
             if (row.ResolvedAttemptId is null)
             {
-                // Ruling T17: no case_attempt for the pair. The row stays unresolved — a stored attempt_id would be a
+                // No case_attempt for the pair. The row stays unresolved — a stored attempt_id would be a
                 // link to some other attempt, which nothing may silently reinterpret as this one.
                 if (row.CurrentAttemptId is not null)
                 {
@@ -93,7 +92,7 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
             if (row.CurrentAttemptId is { } stored && stored != row.ResolvedAttemptId)
             {
                 // An already-resolved artifact may only ever name the attempt its pair resolves to; anything else is an
-                // integrity violation and nothing is rewritten (06.5.1 §6, AC4).
+                // integrity violation and nothing is rewritten.
                 throw new InvalidOperationException(
                     $"artifact {row.ArtifactId} of run {request.RunId} holds attempt_id {stored}, but its execution "
                     + $"{row.ExecutionKey} attempt {row.AttemptNo} resolves to case_attempt {row.ResolvedAttemptId}.");
@@ -116,7 +115,7 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         if (pending.Count > 0)
         {
             // Statement 2: one bounded UPDATE for the whole batch, idempotent by its `attempt_id is null` guard, so a
-            // second call over the same state issues no statement at all (AC4). The statement locks and writes the
+            // second call over the same state issues no statement at all. The statement locks and writes the
             // batch in `a.id` order itself (FreezeSql.ResolveAttemptIds), so no in-memory ordering is needed here.
             var resolved = await db.ExecuteAsync(
                 FreezeSql.ResolveAttemptIds,
@@ -129,10 +128,10 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
                 },
                 cancellationToken).ConfigureAwait(false);
 
-            // Every row the read sent must still match the guard at write time (F3, D-S57-Q11): a shorter count means
-            // an artifact left `ready`, or a concurrent freeze resolved the same pair, between the read and the
-            // UPDATE. Reporting the row as resolved would contradict what is stored, so the call fails closed and the
-            // caller's rollback undoes its partial write (05.3.2-T2 retries the reconcile on this).
+            // Every row the read sent must still match the guard at write time: a shorter count means an artifact left
+            // `ready`, or a concurrent freeze resolved the same pair, between the read and the UPDATE. Reporting the
+            // row as resolved would contradict what is stored, so the call fails closed and the caller's rollback
+            // undoes its partial write.
             if (resolved != pending.Count)
             {
                 throw new InvalidOperationException(
@@ -142,7 +141,7 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
             }
         }
 
-        // AC1/AC2 ordering (06.5.1 §5): (execution_key, attempt_no, kind, artifact id), ordinal, decided here so the
+        // Result order: (execution_key, attempt_no, kind, artifact id), ordinal, decided here so the
         // result never depends on DB collation or physical row order — the artifacts of one attempt are adjacent.
         var ordered = rows
             .OrderBy(row => row.ExecutionKey, StringComparer.Ordinal)
@@ -154,7 +153,7 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         var ready = new List<FrozenArtifact>(ordered.Count);
         var orphans = new List<OrphanArtifact>();
         // Gaps are the exception, not the shape of a call: a complete freeze reports none, so this list starts empty
-        // instead of reserving one slot per ready artifact plus one per requirement (F8).
+        // instead of reserving one slot per ready artifact plus one per requirement.
         var missing = new List<MissingReason>();
 
         foreach (var row in ordered)
@@ -173,8 +172,8 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
                 continue;
             }
 
-            // AC2: never dropped and never resolved to a wrong attempt — the orphan is reported with its own
-            // artifact_missing entry, distinct from any unmet requirement (AC3).
+            // Never dropped and never resolved to a wrong attempt — the orphan is reported with its own
+            // artifact_missing entry, distinct from any unmet requirement.
             orphans.Add(new OrphanArtifact(
                 row.ArtifactId,
                 row.ExecutionKey,
@@ -194,9 +193,9 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
 
         missing.AddRange(RequirementGaps(request.Required, resolvedAttempts));
 
-        // 06.5.1 §5/D5: the canonical hash of the whole ready set (resolved and orphaned together), in the same
-        // order, over (artifact_id, object_key, checksum) only — the resolved attempt is metadata about the artifact,
-        // not part of what makes it, so resolving an orphan later never changes this digest.
+        // The canonical hash of the whole ready set (resolved and orphaned together), in the same order, over
+        // (artifact_id, object_key, checksum) only — the resolved attempt is metadata about the artifact, not part of
+        // what makes it, so resolving an orphan later never changes this digest.
         var hashRows = new HashRow[ordered.Count];
         for (var index = 0; index < ordered.Count; index++)
         {
@@ -205,8 +204,8 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         }
 
         // Serialized straight to UTF-8 and canonicalized from those bytes, so the digest costs no UTF-16 string and no
-        // copy (F8). JsonSerializerOptions.Default is the configuration the previous Serialize(string) call used, so
-        // the digest of a given ready set is byte-identical to before (the tests recompute it independently).
+        // copy. JsonSerializerOptions.Default is the configuration the previous Serialize(string) call used, so the
+        // digest of a given ready set is byte-identical to before (the tests recompute it independently).
         return new FreezeResult(
             ready,
             orphans,
@@ -215,11 +214,11 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
     }
 
     /// <summary>
-    /// The unsatisfied requirements (AC3): one <see cref="MissingSource.Requirement"/> gap per distinct requirement,
+    /// The unsatisfied requirements: one <see cref="MissingSource.Requirement"/> gap per distinct requirement,
     /// carrying the caller's own <see cref="RequiredArtifactSpec.ReasonCode"/>, so it never reads as the orphan's
     /// <see cref="FreezeCodes.ArtifactMissing"/>. A requirement is met only by a <b>resolved</b> <c>ready</c> artifact of
-    /// the same execution and kind (and the same attempt when the spec names one), never by an orphan (ruling T17). An
-    /// exact duplicate spec collapses to one gap; two specs that differ only in their reason code stay two gaps.
+    /// the same execution and kind (and the same attempt when the spec names one), never by an orphan. An exact
+    /// duplicate spec collapses to one gap; two specs that differ only in their reason code stay two gaps.
     /// </summary>
     /// <param name="required">The caller's requirement set, already validated.</param>
     /// <param name="resolvedAttempts">The attempt numbers of the resolved ready artifacts, per (execution key, kind).</param>
@@ -255,7 +254,7 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         }
 
         // An attempt number starts at 1, so `?? 0` places an any-attempt gap before the per-attempt gaps of the same
-        // requirement, exactly as the contract's §5 order reads.
+        // requirement, exactly as the documented gap order reads.
         gaps.Sort(static (left, right) =>
         {
             var order = string.CompareOrdinal(left.ExecutionKey, right.ExecutionKey);
@@ -278,9 +277,9 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
     }
 
     /// <summary>
-    /// The request-shape rules of 06.5.1-T1 (D2). A malformed request is a caller bug, never a data condition, so it
-    /// is reported before the tenant-scope guard and before any statement: a request of the wrong shape must never
-    /// depend on whether a scope happens to be open.
+    /// The request-shape rules. A malformed request is a caller bug, never a data condition, so it is reported before
+    /// the tenant-scope guard and before any statement: a request of the wrong shape must never depend on whether a
+    /// scope happens to be open.
     /// </summary>
     /// <param name="request">The request to check.</param>
     /// <exception cref="ArgumentNullException">The request, its requirement list or an element is null.</exception>
@@ -321,7 +320,7 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
             if (!ArtifactShape.IsExecutionKey(spec.ExecutionKey))
             {
                 throw new ArgumentException(
-                    $"request.Required[{index}].ExecutionKey is not the 00 §7 sha256 hex shape (^[0-9a-f]{{64}}$), "
+                    $"request.Required[{index}].ExecutionKey is not the sha256 hex shape (^[0-9a-f]{{64}}$), "
                     + "so no artifact row could ever carry it.",
                     nameof(request));
             }
@@ -329,21 +328,21 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
             if (!ArtifactKind.IsKnown(spec.Kind))
             {
                 throw new ArgumentException(
-                    $"request.Required[{index}].Kind is outside the 00 §7 closed artifact-kind list.",
+                    $"request.Required[{index}].Kind is outside the closed artifact-kind list.",
                     nameof(request));
             }
 
             if (spec.ReasonCode is null || !ReasonCodeShape().IsMatch(spec.ReasonCode))
             {
                 throw new ArgumentException(
-                    $"request.Required[{index}].ReasonCode is not the 00 §8.5 lower_snake shape (^[a-z][a-z0-9_]{{0,63}}$).",
+                    $"request.Required[{index}].ReasonCode is not the lower_snake shape (^[a-z][a-z0-9_]{{0,63}}$).",
                     nameof(request));
             }
 
             if (spec.AttemptNo is < 1)
             {
                 throw new ArgumentException(
-                    $"request.Required[{index}].AttemptNo is {spec.AttemptNo}; attempt numbers start at 1 (00 §7).",
+                    $"request.Required[{index}].AttemptNo is {spec.AttemptNo}; attempt numbers start at 1.",
                     nameof(request));
             }
         }
@@ -369,8 +368,8 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
     }
 
     /// <summary>
-    /// The artifact id as the lowercase <c>"D"</c> form the ordinal ordering compares (D4). Lowercase hex is the same
-    /// text <c>Guid.ToString("D")</c> always produces, independent of culture.
+    /// The artifact id as the lowercase <c>"D"</c> form the ordinal ordering compares. Lowercase hex is the same text
+    /// <c>Guid.ToString("D")</c> always produces, independent of culture.
     /// </summary>
     /// <param name="artifactId">The artifact id.</param>
     /// <returns>The id in <c>"D"</c> form.</returns>
@@ -415,8 +414,8 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         [property: JsonPropertyName("resolved_attempt_id")] Guid ResolvedAttemptId);
 
     /// <summary>
-    /// One element of the canonical hash input (06.5.1 §5/D5): the artifact's identity and content address, never its
-    /// resolved attempt, so the digest of a set of artifacts does not depend on when their pairs resolved.
+    /// One element of the canonical hash input: the artifact's identity and content address, never its resolved
+    /// attempt, so the digest of a set of artifacts does not depend on when their pairs resolved.
     /// </summary>
     /// <param name="ArtifactId">The artifact id.</param>
     /// <param name="ObjectKey">The final object key.</param>

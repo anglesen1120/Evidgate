@@ -208,23 +208,16 @@ internal sealed class ReconcileFinisher(
 
         // (c) A late append is idempotent against its own evidence. The consumer commits this transaction and only then
         // completes the task row, so a crash in between re-claims the same attempt; appending a second, identical
-        // revision would break "one late batch, one revision". Both halves of the evidence must match: the watermark
-        // counts the run's stored events, and the frozen set catches a re-freeze that resolved an artifact with no event
-        // moving. Equal evidence answers with the revision already recorded instead of a copy of it.
+        // revision would break "one late batch, one revision". Equal evidence answers with the revision already recorded
+        // instead of a copy of it.
         if (settlement == ReconcileSettlement.AppendLateEvidence)
         {
-            var latest = await db
-                .QuerySingleOrDefaultAsync<LatestRevision>(
-                    EvidenceRevisionSql.SelectLatestRevision,
-                    parameters,
-                    cancellationToken)
+            var recorded = await LatestRevisionCoversAsync(orgId, runId, comparison, frozen, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (latest is not null
-                && latest.EventWatermark == comparison.EventWatermark
-                && string.Equals(latest.ArtifactSetHash, frozen.ArtifactSetHash, StringComparison.Ordinal))
+            if (recorded is not null)
             {
-                return new ReconcileFinalization(latest.Completeness, latest.Id, latest.RevisionNo);
+                return recorded;
             }
         }
 
@@ -283,8 +276,8 @@ internal sealed class ReconcileFinisher(
                 $"run {runId:D} did not accept the evidence pointer in this tenant ({moved} row(s) updated)");
         }
 
-        // (f) The state edge, last and only for a collecting run: collecting -> complete|incomplete through 05.3.1's
-        // guarded transition (it re-takes the run row this transaction already holds FOR NO KEY UPDATE, which is a no-op
+        // (f) The state edge, last and only for a collecting run: collecting -> complete|incomplete through the guarded
+        // run-state transition (it re-takes the run row this transaction already holds FOR NO KEY UPDATE, which is a no-op
         // for the holder). A system edge is credited to the system actor, which is what a task consumer is; the outbox
         // row and the audit row join this unit of work. Late evidence appends a revision and never moves the state: the
         // run already finished as incomplete, and both terminal states are the run's last word, so the revision — not
@@ -312,6 +305,40 @@ internal sealed class ReconcileFinisher(
         await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
 
         return new ReconcileFinalization(completeness, revisionId, revisionNo);
+    }
+
+    /// <summary>
+    /// The latest revision of the run when it already counts exactly this evidence, or null when the attempt must append.
+    /// Both halves must match: the watermark counts the run's stored events, and the artifact-set hash catches a
+    /// re-freeze that resolved an artifact with no event moving — accepting either one alone would drop real evidence.
+    /// </summary>
+    /// <param name="orgId">The tenant of this attempt, from the scope it runs in.</param>
+    /// <param name="runId">The run whose latest revision is read.</param>
+    /// <param name="comparison">The comparison this attempt would persist.</param>
+    /// <param name="frozen">The freeze result this attempt would persist.</param>
+    /// <param name="cancellationToken">Cancelled on shutdown or lease loss.</param>
+    private async ValueTask<ReconcileFinalization?> LatestRevisionCoversAsync(
+        Guid orgId,
+        Guid runId,
+        ReconcileComparison comparison,
+        FreezeResult frozen,
+        CancellationToken cancellationToken)
+    {
+        var latest = await db
+            .QuerySingleOrDefaultAsync<LatestRevision>(
+                EvidenceRevisionSql.SelectLatestRevision,
+                new { org_id = orgId, run_id = runId },
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (latest is null
+            || latest.EventWatermark != comparison.EventWatermark
+            || !string.Equals(latest.ArtifactSetHash, frozen.ArtifactSetHash, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return new ReconcileFinalization(latest.Completeness, latest.Id, latest.RevisionNo);
     }
 
     /// <summary>

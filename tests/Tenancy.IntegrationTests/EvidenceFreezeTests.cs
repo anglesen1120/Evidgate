@@ -1,9 +1,8 @@
-// 06.5.1-T1/T2: IEvidenceFreeze through a real PostgreSQL and the real host — the one cross-module
-// call 05's reconciler (05.3.2-T2) makes to freeze a run's evidence. Every test opens the caller's
-// tenant transaction itself (FreezeScope) and owns the commit boundary, so "runs inside the caller's
-// transaction, never opens or commits one" is what the read-back assertions pin. Expectations come
-// from the plan (06.5.1 §2 AC1-AC4/AC6, §4 T1/T2 statements, §5 result shapes, §8 failure path,
-// §9 test names) and rulings T3/T17, not from the current behaviour.
+// IEvidenceFreeze through a real PostgreSQL and the real host — the one cross-module call 05's
+// reconciler makes to freeze a run's evidence. Every test opens the caller's tenant transaction itself
+// (FreezeScope) and owns the commit boundary, so "runs inside the caller's transaction, never opens or
+// commits one" is what the read-back assertions pin. Expectations come from the feature plan's result
+// shapes, failure path and test names, not from the current behaviour.
 #pragma warning disable CA1861
 using System.Globalization;
 using Evidgate.BuildingBlocks.Canonicalization;
@@ -20,13 +19,12 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// 06.5.1-T1/T2 through a real PostgreSQL and the real host: <see cref="IEvidenceFreeze"/> inside the
+/// The freeze through a real PostgreSQL and the real host: <see cref="IEvidenceFreeze"/> inside the
 /// caller's tenant transaction. The artifacts of a run are left-joined to <c>case_attempt</c> by
 /// <c>(execution_key, attempt_no)</c>, the pairs that resolve are persisted with one idempotent
 /// <c>UPDATE … WHERE attempt_id IS NULL</c>, the caller's requirement set is reported as
-/// <see cref="MissingSource.Requirement"/> gaps distinct from ruling T17's orphans, and the
-/// <see cref="FreezeResult.ArtifactSetHash"/> is the canonical digest of the ready set (00 §5.5
-/// C3/C7, §5.7 P2/P3, §7, §8.4/§8.5).
+/// <see cref="MissingSource.Requirement"/> gaps distinct from the unresolved-pair orphans, and the
+/// <see cref="FreezeResult.ArtifactSetHash"/> is the canonical digest of the ready set.
 /// </summary>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
@@ -152,7 +150,7 @@ public sealed class EvidenceFreezeTests
         + $"'{FinalKey(org, project, runId, seed.ExecutionKey, seed.AttemptNo, seed.Id)}', 'application/zip', "
         + $"'{seed.Checksum ?? ChecksumOf(seed.Id)}', '{seed.Sensitivity}', 'clean', '{seed.State}')";
 
-    /// <summary>The 06.1.1 §1/AC2 final object key of one row's own identity (the 0028 shape CHECK).</summary>
+    /// <summary>The final object key of one row's own identity (the artifact shape CHECK).</summary>
     private static string FinalKey(Guid org, Guid project, Guid runId, string executionKey, int attemptNo, Guid id) =>
         $"org/{org}/project/{project}/run/{runId}/attempt/{executionKey}/{attemptNo}/{id}";
 
@@ -260,11 +258,11 @@ public sealed class EvidenceFreezeTests
     /// <summary>Every command one freeze issued (the host's app-role data source is logged by <see cref="TenancyApiFactory.Statements"/>).</summary>
     private static IReadOnlyList<string> Statements(World world) => world.Api.Statements.Snapshot();
 
-    /// <summary>The commands that write (00 §5.7 P2's "no per-artifact write"): a plain <c>update</c> or a CTE one.</summary>
+    /// <summary>The commands that write (the no-per-artifact-write rule): a plain <c>update</c> or a CTE one.</summary>
     private static IEnumerable<string> UpdateStatements(IEnumerable<string> statements) =>
         statements.Where(statement => statement.Contains("update ", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>The D4 order: <c>(execution_key, attempt_no, kind, id)</c>, ordinal, id as lower-case "D".</summary>
+    /// <summary>The documented order: <c>(execution_key, attempt_no, kind, id)</c>, ordinal, id as lower-case "D".</summary>
     private static List<(string ExecutionKey, int AttemptNo, string Kind, Guid Id)> FreezeOrder(
         IEnumerable<(string ExecutionKey, int AttemptNo, string Kind, Guid Id)> tuples) =>
         tuples
@@ -274,7 +272,7 @@ public sealed class EvidenceFreezeTests
             .ThenBy(tuple => tuple.Id.ToString("D"), StringComparer.Ordinal)
             .ToList();
 
-    /// <summary>The 06.5.1 §5 digest computed independently of the service, over the documented tuple array.</summary>
+    /// <summary>The digest computed independently of the service, over the documented tuple array.</summary>
     private static string ExpectedHash(IEnumerable<(Guid Id, string ObjectKey, string Checksum)> rows) =>
         CanonicalHash.Compute(
             "["
@@ -294,7 +292,7 @@ public sealed class EvidenceFreezeTests
     private Task<string> XminAsync(World world, Guid artifactId) =>
         _fixture.ScalarAsync<string>(world.Database, $"select xmin::text from public.artifact where id = '{artifactId}'");
 
-    // ------------------------------------------------------------------ AC1 / AC4: resolve + persist
+    // ------------------------------------------------------------------ resolve + persist
 
     [Fact]
     public async Task Freeze_ResolvesReadyArtifacts_ToAttempts_AndPersists()
@@ -334,7 +332,7 @@ public sealed class EvidenceFreezeTests
         var orphanVideoSeed = new ArtifactSeed(orphanVideo, second.ExecutionKey, 2, ArtifactKind.Video);
         ArtifactSeed[] ready = [traceSeed, screenshotSeed, retriedTraceSeed, reportSeed];
 
-        // Ready rows of the other five states of the 00 §8.4 machine: never part of a freeze (00 §8.4).
+        // Ready rows of the other five states of the artifact machine: never part of a freeze.
         ArtifactSeed[] notReady =
         [
             new(pending, first.ExecutionKey, 1, ArtifactKind.Trace, ArtifactState.PendingUpload),
@@ -417,7 +415,7 @@ public sealed class EvidenceFreezeTests
             .ShouldBe(firstAttempt2.ToString());
     }
 
-    // ------------------------------------------------------------------ AC2 / T17: the orphan
+    // ------------------------------------------------------------------ the orphan
 
     [Fact]
     public async Task Freeze_UnresolvedPair_IsOrphan_ArtifactMissing()
@@ -473,7 +471,7 @@ public sealed class EvidenceFreezeTests
             .ShouldBe(1);
     }
 
-    // ------------------------------------------------------------------ AC3: requirement gaps vs orphans
+    // ------------------------------------------------------------------ requirement gaps vs orphans
 
     [Fact]
     public async Task Freeze_MissingRequiredArtifact_DistinctFromOrphan()
@@ -506,7 +504,7 @@ public sealed class EvidenceFreezeTests
             // Not met at all, declared twice: duplicate specs collapse to one gap.
             duplicate,
             duplicate,
-            // The only attempt-2 artifact is an orphan: it never satisfies a requirement (D3), and the
+            // The only attempt-2 artifact is an orphan: it never satisfies a requirement, and the
             // caller-declared artifact_missing stays distinguishable from the orphan's by Source and ArtifactId.
             new RequiredArtifactSpec(key, ArtifactKind.Screenshot, FreezeCodes.ArtifactMissing, 2));
 
@@ -523,7 +521,7 @@ public sealed class EvidenceFreezeTests
         });
     }
 
-    // ------------------------------------------------------------------ AC4: idempotent, no rewrite
+    // ------------------------------------------------------------------ idempotent, no rewrite
 
     [Fact]
     public async Task Freeze_AttemptIdResolution_IsIdempotent_NoRewrite()
@@ -608,7 +606,7 @@ public sealed class EvidenceFreezeTests
             .ShouldBe(attempt1.ToString());
     }
 
-    // ------------------------------------------------------------------ §5: the canonical hash
+    // ------------------------------------------------------------------ the canonical hash
 
     [Fact]
     public async Task Freeze_HashIsCanonical_OrderIndependent()
@@ -666,7 +664,7 @@ public sealed class EvidenceFreezeTests
         resolved.ArtifactSetHash.ShouldBe(withOrphan.ArtifactSetHash);
     }
 
-    // ------------------------------------------------------------------ §8 P3: bounded statements
+    // ------------------------------------------------------------------ bounded statements
 
     [Fact]
     public async Task Freeze_BoundedQueries_NoNPlus1()
@@ -808,7 +806,7 @@ public sealed class EvidenceFreezeTests
             $"select count(*) from public.artifact where org_id = '{otherOrg}'"))
             .ShouldBe(2);
 
-        // No ambient tenant scope: refused before any statement (00 §5.5 C3).
+        // No ambient tenant scope: refused before any statement.
         await using var services = world.Api.Services.CreateAsyncScope();
         var unscoped = services.ServiceProvider.GetRequiredService<IEvidenceFreeze>();
         world.Api.Statements.Clear();
@@ -926,7 +924,8 @@ public sealed class EvidenceFreezeTests
     [InlineData("queued")]
     [InlineData("active")]
     [InlineData("retry")]
-    public async Task Freeze_ReportStillParsing_IsArtifactMissing(string parseState)
+    [InlineData("dead_letter")]
+    public async Task Freeze_UnfinishedParseTask_IsArtifactMissing(string parseState)
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world);
@@ -1012,13 +1011,83 @@ public sealed class EvidenceFreezeTests
         second.Ready.ShouldNotContain(artifact => artifact.ArtifactId == stillParsing);
     }
 
+    [Fact]
+    public async Task Freeze_UndispatchedParseOutbox_IsArtifactMissing()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world);
+        var key = plan.Executions[0].ExecutionKey;
+
+        await SeedAttemptsAsync(world, plan.RunId, new CaseAttemptInput(key, 1, "passed"));
+
+        var report = Guid.CreateVersion7();
+        await InsertArtifactAsync(world, plan.RunId, new ArtifactSeed(report, key, 1, ArtifactKind.RawReport));
+
+        // The completion committed `ready` and its parse request; the dispatcher has not turned that outbox row
+        // into a task row yet, so the task anti-join alone reads nothing and would admit an unparsed report.
+        await InsertParseOutboxAsync(world, report);
+
+        var spec = new RequiredArtifactSpec(key, ArtifactKind.RawReport, FreezeCodes.ArtifactMissing, 1);
+        var expectedGap = new MissingReason(
+            FreezeCodes.ArtifactMissing,
+            MissingSource.Requirement,
+            key,
+            ArtifactKind.RawReport,
+            1,
+            null);
+
+        var pending = await FreezeAsync(world, plan.RunId, spec);
+        pending.Ready.ShouldBeEmpty();
+        pending.Orphans.ShouldBeEmpty();
+        pending.Missing.ShouldHaveSingleItem().ShouldBe(expectedGap);
+
+        // The dispatcher's own hand-over: the task row exists and the outbox row is stamped. Still no verdict.
+        await InsertParseTaskAsync(world, report, "queued");
+        await DispatchParseOutboxAsync(world, report);
+
+        var dispatched = await FreezeAsync(world, plan.RunId, spec);
+        dispatched.Ready.ShouldBeEmpty();
+        dispatched.Missing.ShouldHaveSingleItem().ShouldBe(expectedGap);
+
+        // Only the parse's own verdict admits the report, so neither half of the gate over-blocks.
+        await SetParseTaskStateAsync(world, report, "done");
+
+        var parsed = await FreezeAsync(world, plan.RunId, spec);
+        parsed.Ready.Select(artifact => artifact.ArtifactId).ShouldBe(new[] { report });
+        parsed.Missing.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Freeze_ForeignOrgParseRows_DoNotBlock()
+    {
+        await using var world = await StartAsync();
+        var plan = await SeedPlanAsync(world);
+        var key = plan.Executions[0].ExecutionKey;
+
+        await SeedAttemptsAsync(world, plan.RunId, new CaseAttemptInput(key, 1, "passed"));
+
+        var report = Guid.CreateVersion7();
+        await InsertArtifactAsync(world, plan.RunId, new ArtifactSeed(report, key, 1, ArtifactKind.RawReport));
+
+        // `public.task` and `public.outbox` carry no row-level security, so only the explicit `org_id` predicate
+        // keeps another tenant's row naming this artifact id out of this tenant's decision.
+        var (otherOrg, _) = await CreateOtherTenantAsync(world, "other");
+        await InsertParseTaskAsync(world, report, "active", otherOrg);
+        await InsertParseOutboxAsync(world, report, otherOrg);
+
+        var result = await FreezeAsync(world, plan.RunId);
+
+        result.Ready.Select(artifact => artifact.ArtifactId).ShouldBe(new[] { report });
+        result.Missing.ShouldBeEmpty();
+    }
+
     /// <summary>
     /// One <c>artifact_parse</c> row for <paramref name="artifactId"/>, in the task state under test: the
     /// dispatcher's row shape (<c>payload.artifact_id</c>), so the freeze sees exactly what production writes.
     /// </summary>
-    private async Task InsertParseTaskAsync(World world, Guid artifactId, string state)
+    private async Task InsertParseTaskAsync(World world, Guid artifactId, string state, Guid? org = null)
     {
-        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), org ?? world.Org);
         var taskId = Guid.CreateVersion7();
 
         (await scope.ExecuteAsync(
@@ -1026,7 +1095,7 @@ public sealed class EvidenceFreezeTests
             + "values (@id, @org_id, 'default', 'artifact_parse', "
             + "jsonb_build_object('artifact_id', @artifact_id::text), @idempotency_key, @state)",
             ("id", taskId),
-            ("org_id", world.Org),
+            ("org_id", org ?? world.Org),
             ("artifact_id", artifactId.ToString("D", CultureInfo.InvariantCulture)),
             ("idempotency_key", "outbox:" + taskId.ToString("D", CultureInfo.InvariantCulture)),
             ("state", state)))
@@ -1034,6 +1103,41 @@ public sealed class EvidenceFreezeTests
 
         await scope.CommitAsync();
     }
+
+    /// <summary>
+    /// The completion's parse request before the dispatcher runs: one undispatched <c>outbox</c> row, no task row,
+    /// with the key and payload shape <c>CompleteArtifactUpload</c> writes.
+    /// </summary>
+    private async Task InsertParseOutboxAsync(World world, Guid artifactId, Guid? org = null)
+    {
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), org ?? world.Org);
+        var outboxId = Guid.CreateVersion7();
+        var artifactText = artifactId.ToString("D", CultureInfo.InvariantCulture);
+
+        (await scope.ExecuteAsync(
+            "insert into public.outbox (id, org_id, aggregate_type, aggregate_id, task_type, payload, idempotency_key) "
+            + "values (@id, @org_id, 'artifact', @aggregate_id, 'artifact_parse', "
+            + "jsonb_build_object('artifact_id', @artifact_id::text), @idempotency_key)",
+            ("id", outboxId),
+            ("org_id", org ?? world.Org),
+            ("aggregate_id", artifactId),
+            ("artifact_id", artifactText),
+            ("idempotency_key", "evidence:artifact:" + artifactText + ":parse")))
+            .ShouldBe(1);
+
+        await scope.CommitAsync();
+    }
+
+    /// <summary>
+    /// The dispatcher's stamp on the parse outbox row. The app role may only insert outbox rows, so the stamp runs as
+    /// the owner, exactly the role the dispatcher holds.
+    /// </summary>
+    private Task DispatchParseOutboxAsync(World world, Guid artifactId) =>
+        _fixture.ExecuteAsync(
+            world.Database,
+            "update public.outbox set dispatched_at = now() "
+            + $"where org_id = '{world.Org}' and task_type = 'artifact_parse' "
+            + $"and payload ->> 'artifact_id' = '{artifactId.ToString("D", CultureInfo.InvariantCulture)}'");
 
     /// <summary>
     /// The consumer's own transition of <paramref name="artifactId"/>'s parse row, keyed the way the dispatcher writes
@@ -1083,14 +1187,14 @@ public sealed class EvidenceFreezeTests
         await scope.CommitAsync();
     }
 
-    // ------------------------------------------------------------------ §8 Authz: no HTTP surface
+    // ------------------------------------------------------------------ authz: no HTTP surface
 
     [Fact]
     public async Task Freeze_AddsNoHttpRoute()
     {
         await using var world = await StartAsync();
 
-        // 06.5.1 §8 (Authz row) and 00 §5.5 C7: the freeze is an internal cross-module service call that 05's
+        // The freeze is an internal cross-module service call that 05's
         // reconcile handler makes inside its own tenant transaction — it exposes no /v1 route, so no permission
         // gates it and no caller can freeze evidence over HTTP.
         var routes = world.Api.Services.GetServices<EndpointDataSource>()
@@ -1102,10 +1206,10 @@ public sealed class EvidenceFreezeTests
         routes.ShouldNotBeEmpty();
         routes.ShouldNotContain(
             route => route.Contains("freeze", StringComparison.OrdinalIgnoreCase),
-            "IEvidenceFreeze is a service call, never a route (06.5.1 §8 Authz row)");
+            "IEvidenceFreeze is a service call, never a route");
     }
 
-    // ------------------------------------------------------------------ §8 failure path: request shape
+    // ------------------------------------------------------------------ failure path: request shape
 
     [Theory]
     [InlineData("request_null")]
@@ -1132,7 +1236,7 @@ public sealed class EvidenceFreezeTests
         world.Api.Statements.Clear();
 
         // No tenant scope is open on purpose: validation runs before the scope guard and before any statement,
-        // so a malformed request from a caller bug never reaches the guard (06.5.1 §8 Failure path).
+        // so a malformed request from a caller bug never reaches the guard.
         FreezeRequest? request = caseName switch
         {
             "request_null" => null,
@@ -1151,7 +1255,7 @@ public sealed class EvidenceFreezeTests
         Statements(world).ShouldBeEmpty();
     }
 
-    /// <summary>One malformed request of the D2 list; a requirement set is otherwise well formed.</summary>
+    /// <summary>One malformed request of the shape list; a requirement set is otherwise well formed.</summary>
     private static FreezeRequest InvalidRequest(string caseName, Guid runId, string key) => caseName switch
     {
         "run_id_empty" => new FreezeRequest(Guid.Empty, []),
@@ -1182,7 +1286,7 @@ public sealed class EvidenceFreezeTests
         int? attemptNo = null) =>
         new(runId, [new RequiredArtifactSpec(key, kind, reasonCode, attemptNo)]);
 
-    // ------------------------------------------------------------------ §8 integrity: a disagreeing attempt_id
+    // ------------------------------------------------------------------ integrity: a disagreeing attempt_id
 
     [Fact]
     public async Task Freeze_StoredAttemptIdDisagreeing_ThrowsAndRewritesNothing()

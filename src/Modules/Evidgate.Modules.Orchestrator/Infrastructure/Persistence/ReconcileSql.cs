@@ -35,10 +35,18 @@ internal static class ReconcileSql
     /// attempt waits for every planned shard instead of forcing a decision on an unset deadline (fail open on waiting,
     /// never on completeness). A passed deadline is what 05.3.2-T3.1 needs to force the verdict.
     /// </para>
+    /// <para>
+    /// <c>late_window_open</c> is the same window the ingest route admits late evidence through
+    /// (<see cref="RunEventScopeReader"/>, <c>now() &lt;= collection_deadline_at + late_window_minutes</c>), evaluated by
+    /// the same clock under the same lock: a compare of a finished run copies that decision instead of making a second
+    /// one, so evidence accepted at the edge of the window stays reconcilable and nothing accepted after it is.
+    /// </para>
     /// </summary>
     internal const string LockRun = """
         select r.state as state,
-               coalesce(r.collection_deadline_at <= now(), false) as deadline_passed
+               coalesce(r.collection_deadline_at <= now(), false) as deadline_passed,
+               coalesce(now() <= r.collection_deadline_at + make_interval(mins => r.late_window_minutes), false)
+                   as late_window_open
           from public.run r
          where r.org_id = @org_id and r.id = @run_id
            for no key update of r
@@ -88,7 +96,7 @@ internal static class ReconcileSql
     /// A flag count rides along in the same pass and does not narrow the acknowledged total above: <c>blocked_count</c>
     /// counts the <c>test.finished</c> events whose normalized status is <c>blocked</c> — a failed setup, which marks its
     /// dependants blocked (00 §8.3). The comparer turns a non-zero count on a closed shard into <c>setup_error</c>, so a
-    /// blocked event can never leave the evidence looking complete (D-S119-Q2 risk, 05.3.2-T2.3). <c>event.stale</c> is
+    /// blocked event can never leave the evidence looking complete. <c>event.stale</c> is
     /// not counted: nothing writes it, because no producer's current epoch is stored anywhere to compare against, and a
     /// count that can only ever be zero would claim a check this module does not make.
     /// </para>

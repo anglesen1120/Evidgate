@@ -1,21 +1,20 @@
 namespace Evidgate.Modules.Evidence.Contracts;
 
 /// <summary>
-/// The one call 05's reconciler (05.3.2-T2) makes into Evidence to freeze a run's evidence (06.5.1, FR-06-1, FR-06-14,
-/// rulings T3 and T17). It is a cross-module service call, <b>not</b> a Mediator query or command: it runs
-/// <b>inside the caller's ambient tenant transaction</b> and never opens, commits or rolls back a transaction, so the
-/// caller's rollback undoes the <c>attempt_id</c> resolution it performed (00 §5.5 C3). It makes no network call (P5) and
-/// writes no outbox row.
+/// The one call 05's reconciler makes into Evidence to freeze a run's evidence. It is a cross-module service call,
+/// <b>not</b> a Mediator query or command: it runs <b>inside the caller's ambient tenant transaction</b> and never opens,
+/// commits or rolls back a transaction, so the caller's rollback undoes the <c>attempt_id</c> resolution it performed.
+/// It makes no network call and writes no outbox row.
 /// <para>
-/// Reading is one statement and writing is at most one statement, whatever the number of artifacts or requirements
-/// (00 §5.7 P2/P3): the <c>ready</c> artifacts of the run are left-joined to <c>case_attempt</c> by
-/// <c>(execution_key, attempt_no)</c>, and the pairs that resolved for the first time are persisted by one idempotent
-/// <c>UPDATE … WHERE attempt_id IS NULL</c>. Only <c>ready</c> artifacts count (00 §8.4), and a raw report only once its
-/// <c>artifact_parse</c> task finished: a revision is immutable, so a report the parser may still refuse stays out, and is
-/// reported as the missing requirement instead, until its parse task row is <c>done</c> or no longer retained.
+/// Reading is one statement and writing is at most one statement, whatever the number of artifacts or requirements: the
+/// <c>ready</c> artifacts of the run are left-joined to <c>case_attempt</c> by <c>(execution_key, attempt_no)</c>, and the
+/// pairs that resolved for the first time are persisted by one idempotent <c>UPDATE … WHERE attempt_id IS NULL</c>. A raw
+/// report counts only once its parse verdict exists: an unfinished <c>artifact_parse</c> task row or an undispatched
+/// parse outbox row keeps it out, reported as the missing requirement instead, because a revision is immutable and the
+/// parser may still refuse the bytes.
 /// </para>
 /// <para>
-/// <b>No-mutation contract (06.5.1 §6).</b> A <c>ready</c> artifact's <c>object_key</c> and <c>checksum</c> never change, and its
+/// <b>No-mutation contract.</b> A <c>ready</c> artifact's <c>object_key</c> and <c>checksum</c> never change, and its
 /// <c>attempt_id</c> is only ever filled from <c>NULL</c>: a second call over the same state returns an equal
 /// <see cref="FreezeResult"/> and issues no <c>UPDATE</c>, and a call made after a late artifact turned <c>ready</c> resolves
 /// only that artifact's row. 05 alone persists the <c>evidence_revision</c>; nothing here writes it, and a frozen revision is
@@ -27,7 +26,7 @@ public interface IEvidenceFreeze
     /// <summary>
     /// Freezes the evidence of <see cref="FreezeRequest.RunId"/>: lists its <c>ready</c> artifacts whose parse has decided with
     /// <c>(execution_key, attempt_no)</c> resolved to <c>case_attempt</c>, reports the pairs that do not resolve as
-    /// <see cref="FreezeResult.Orphans"/> (ruling T17: never dropped, never resolved to a wrong attempt, <c>attempt_id</c> stays
+    /// <see cref="FreezeResult.Orphans"/> (never dropped, never resolved to a wrong attempt, <c>attempt_id</c> stays
     /// null), compares the caller's <see cref="FreezeRequest.Required"/> set with what is <c>ready</c> and returns the gaps in
     /// <see cref="FreezeResult.Missing"/>, plus the deterministic <see cref="FreezeResult.ArtifactSetHash"/>.
     /// <para>
@@ -40,7 +39,7 @@ public interface IEvidenceFreeze
     /// resolution <c>UPDATE</c> must touch every row the read sent it: when an artifact left <c>ready</c>, or another freeze
     /// resolved the same pair, between the read and the <c>UPDATE</c>, the call throws instead of returning a result that
     /// disagrees with the rows stored. That write is part of the caller's transaction, so the caller's rollback undoes it;
-    /// 05.3.2-T2 retries the reconcile on the exception and SHOULD serialise freezes of one run (the run row is the natural
+    /// the reconcile retries on the exception and SHOULD serialise freezes of one run (the run row is the natural
     /// lock), so the race stays rare rather than being a policy.
     /// </para>
     /// </summary>
@@ -65,7 +64,7 @@ public interface IEvidenceFreeze
 /// <param name="RunId">The run whose evidence is frozen; it must be visible to the caller's tenant scope.</param>
 /// <param name="Required">
 /// The artifacts the caller requires, resolved by 05/03 from the manifest and policy: 06 compares against this set and never
-/// decides which artifacts a case needs (06.5.1 §1 non-goals). Empty means nothing is required.
+/// decides which artifacts a case needs. Empty means nothing is required.
 /// </param>
 public sealed record FreezeRequest(Guid RunId, IReadOnlyList<RequiredArtifactSpec> Required)
 {
@@ -81,11 +80,11 @@ public sealed record FreezeRequest(Guid RunId, IReadOnlyList<RequiredArtifactSpe
 }
 
 /// <summary>One required artifact: a <c>ready</c> artifact of <see cref="Kind"/> must exist for the execution.</summary>
-/// <param name="ExecutionKey">The planned execution's key, sha256 hex (00 §7): <c>^[0-9a-f]{64}$</c>.</param>
-/// <param name="Kind">The artifact kind (00 §7); one of the closed list the <c>artifact</c> table accepts.</param>
+/// <param name="ExecutionKey">The planned execution's key, sha256 hex: <c>^[0-9a-f]{64}$</c>.</param>
+/// <param name="Kind">The artifact kind; one of the closed list the <c>artifact</c> table accepts.</param>
 /// <param name="ReasonCode">
-/// The 00 §8.5 <c>missing[]</c> code the caller wants reported when the requirement is not met; forwarded verbatim in
-/// <see cref="MissingReason.Code"/>. Shape <c>^[a-z][a-z0-9_]{0,63}$</c>; the vocabulary itself is 00 §8.5's, 06 does not invent codes.
+/// The <c>missing[]</c> code the caller wants reported when the requirement is not met; forwarded verbatim in
+/// <see cref="MissingReason.Code"/>. Shape <c>^[a-z][a-z0-9_]{0,63}$</c>; 06 does not invent codes.
 /// </param>
 /// <param name="AttemptNo">
 /// The attempt the artifact must belong to, or null when an artifact of any recorded attempt of the execution satisfies the
@@ -93,14 +92,14 @@ public sealed record FreezeRequest(Guid RunId, IReadOnlyList<RequiredArtifactSpe
 /// </param>
 public sealed record RequiredArtifactSpec(string ExecutionKey, string Kind, string ReasonCode, int? AttemptNo = null);
 
-/// <summary>The frozen evidence of one run (06.5.1 §3).</summary>
+/// <summary>The frozen evidence of one run.</summary>
 /// <param name="Ready">
 /// The <c>ready</c> artifacts whose <c>(execution_key, attempt_no)</c> resolved to a <c>case_attempt</c>, ordered by
-/// <c>(execution_key, attempt_no, kind, artifact id)</c> so the artifacts of one attempt are adjacent (the grouping 06.5.1 AC1 names).
+/// <c>(execution_key, attempt_no, kind, artifact id)</c> so the artifacts of one attempt are adjacent.
 /// <c>execution_key</c>, <c>kind</c> and the lower-case <c>D</c> text of the id compare ordinally, <c>attempt_no</c> numerically.
 /// </param>
 /// <param name="Orphans">
-/// The <c>ready</c> artifacts whose pair has no <c>case_attempt</c> (ruling T17), same order. Each contributes one
+/// The <c>ready</c> artifacts whose pair has no <c>case_attempt</c>, same order. Each contributes one
 /// <see cref="MissingReason"/> with code <see cref="FreezeCodes.ArtifactMissing"/> to <see cref="Missing"/>.
 /// </param>
 /// <param name="Missing">
@@ -108,7 +107,7 @@ public sealed record RequiredArtifactSpec(string ExecutionKey, string Kind, stri
 /// unmet requirement. Deterministically ordered; empty means the evidence is complete as far as 06 can tell.
 /// </param>
 /// <param name="ArtifactSetHash">
-/// <c>sha256:&lt;hex&gt;</c> (00 §7) of the RFC 8785 canonical JSON of the ready set — resolved and orphaned artifacts together — as an
+/// <c>sha256:&lt;hex&gt;</c> of the RFC 8785 canonical JSON of the ready set — resolved and orphaned artifacts together — as an
 /// array of <c>{artifact_id, object_key, checksum}</c> ordered by <c>(execution_key, attempt_no, kind, id)</c>. It is independent of
 /// database row order and excludes <c>attempt_id</c>, so resolving an orphan later does not change it.
 /// </param>
@@ -154,10 +153,10 @@ public sealed record OrphanArtifact(
     string Checksum,
     string Sensitivity);
 
-/// <summary>Why a <see cref="MissingReason"/> exists: the two gap classes 06.5.1 AC2 and AC3 keep distinct.</summary>
+/// <summary>Why a <see cref="MissingReason"/> exists: the two gap classes the contract keeps distinct.</summary>
 public enum MissingSource
 {
-    /// <summary>A <c>ready</c> artifact with no <c>case_attempt</c> for its pair (ruling T17); code <see cref="FreezeCodes.ArtifactMissing"/>.</summary>
+    /// <summary>A <c>ready</c> artifact with no <c>case_attempt</c> for its pair; code <see cref="FreezeCodes.ArtifactMissing"/>.</summary>
     Orphan = 0,
 
     /// <summary>A caller-required artifact with no <c>ready</c> artifact bound to a recorded attempt; code is the requirement's own.</summary>
@@ -165,7 +164,7 @@ public enum MissingSource
 }
 
 /// <summary>One entry of <see cref="FreezeResult.Missing"/>, 05 maps <see cref="Code"/> straight into <c>evidence_revision.missing[]</c>.</summary>
-/// <param name="Code">The 00 §8.5 code: <see cref="FreezeCodes.ArtifactMissing"/> for an orphan, the requirement's <see cref="RequiredArtifactSpec.ReasonCode"/> otherwise.</param>
+/// <param name="Code">The code: <see cref="FreezeCodes.ArtifactMissing"/> for an orphan, the requirement's <see cref="RequiredArtifactSpec.ReasonCode"/> otherwise.</param>
 /// <param name="Source">Whether an orphan or an unmet requirement produced the entry.</param>
 /// <param name="ExecutionKey">The execution the gap belongs to.</param>
 /// <param name="Kind">The artifact kind concerned.</param>
@@ -180,13 +179,13 @@ public sealed record MissingReason(
     Guid? ArtifactId);
 
 /// <summary>
-/// The only <c>missing[]</c> code 06 originates (ruling T17); every other code is forwarded from the caller's requirement.
+/// The only <c>missing[]</c> code 06 originates; every other code is forwarded from the caller's requirement.
 /// The vocabulary itself is the reconciler's closed list (the <c>evidence_revision_missing_check</c> CHECK), and its
 /// plan-coverage member <c>missing_result</c> is one 06 can never produce: a planned execution with no status is the
 /// reconciler's observation, not an artifact gap, so no constant here names it.
 /// </summary>
 public static class FreezeCodes
 {
-    /// <summary>00 §8.5 <c>artifact_missing</c>.</summary>
+    /// <summary>The <c>artifact_missing</c> code.</summary>
     public const string ArtifactMissing = "artifact_missing";
 }

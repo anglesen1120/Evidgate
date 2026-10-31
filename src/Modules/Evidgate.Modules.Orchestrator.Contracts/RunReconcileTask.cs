@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Evidgate.Modules.Orchestrator.Contracts;
 
@@ -91,13 +92,16 @@ public static class RunReconcileContract
 
     /// <summary>
     /// The payload of the late-evidence trigger: the run and the delivering shard, with the two declaration fields a
-    /// payload of this type always carries, at zero. The reconciler re-reads the slot's stored declaration under its own
-    /// lock, so a declaration copied here could only drift from it (the deadline trigger takes the same shape).
+    /// payload of this type always carries, at zero, and <see cref="RunReconcilePayload.LateEvidence"/> set. The reconciler
+    /// re-reads the slot's stored declaration under its own lock, so a declaration copied here could only drift from it
+    /// (the deadline trigger takes the same shape).
     /// </summary>
     /// <param name="runId">The run the late evidence belongs to.</param>
     /// <param name="producerId">The shard that delivered it late.</param>
     public static string LatePayloadJson(Guid runId, string producerId) =>
-        PayloadJson(runId, producerId, declaredLastSequence: 0, declaredCount: 0);
+        JsonSerializer.Serialize(
+            new RunReconcilePayload(runId, producerId, 0, 0) { LateEvidence = true },
+            PayloadOptions);
 
     /// <summary>
     /// The task type (and schedule name) of the collection deadline sweep: a platform task that scans
@@ -130,4 +134,14 @@ public sealed record RunReconcilePayload(
     Guid RunId,
     string ProducerId,
     long DeclaredLastSequence,
-    int DeclaredCount);
+    int DeclaredCount)
+{
+    /// <summary>
+    /// <c>late_evidence</c>: set only by the trigger the ingest handler enqueues for a late batch it accepted. A finalize
+    /// close and a deadline sweep leave it absent, so the reconciler can tell "late evidence arrived" from "an ordinary
+    /// trigger was redelivered or replayed" — only the former may compare a run that already finished, and only while its
+    /// late window is open.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool LateEvidence { get; init; }
+}
