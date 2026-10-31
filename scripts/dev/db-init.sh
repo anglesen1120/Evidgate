@@ -19,9 +19,10 @@
 #   --with-token  after the role grants, run `Evidgate.Migrator seed-dev
 #                 --with-token`: the dev tenant plus one dev ingest token and one
 #                 sample policy revision, minted through the real commands on the
-#                 app role. The token secret is written to this script's stdout
-#                 only, once: it is never captured, tee'd, exported or logged.
-#                 Requires EVIDGATE__CI__PEPPER in the environment.
+#                 app role. A minted secret reaches this script's stdout only,
+#                 once: never captured, tee'd, exported or logged, and a rerun
+#                 that finds a live token prints no secret. Requires
+#                 EVIDGATE__CI__PEPPER in the environment.
 #
 # required environment:
 #   EVIDGATE_OWNER_PASSWORD       password for the migration role
@@ -70,8 +71,9 @@ a password as superuser and prints the EVIDGATE_* environment template.
 
   --with-token  after the grants, also run `seed-dev --with-token`: the dev
                 tenant, one project-bound dev ingest token (artifact:write,
-                event:write, run:create) and one sample policy revision. The token
-                is printed here ONCE; it is never written to a log or a file.
+                event:write, run:create) and one sample policy revision. A minted
+                token is printed here once, never to a log or a file; a rerun
+                that finds a live token prints no secret.
 
 required environment:
   EVIDGATE_OWNER_PASSWORD        password for the migration role
@@ -216,12 +218,9 @@ alter role evidgate_operator login password :'operator_password';
 alter role evidgate_worker_sched login password :'worker_sched_password';
 SQL
 
-# 3b. The token seed (01.8.1-T4.1): the tenant above plus one ingest token and one
-#     sample policy revision, minted through the real commands on the app role, so it
-#     follows the grants above (that role needs LOGIN) and both credentials travel as
-#     environment variables, never as arguments. The token secret reaches this script's
-#     stdout only: it is not captured in a variable, tee'd, or written to a log, because
-#     any copy would outlive the run in a file the developer did not mean to create.
+# 3b. The token seed: the tenant, one ingest token and one sample revision, minted
+#     through the real commands on the app role so it follows the grants above.
+#     A minted secret reaches this script's stdout once and nowhere else.
 if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ] && [ "$with_token" = true ]; then
   printf 'db-init: seeding the dev tenant and the dev ingest token (seed-dev --with-token)\n'
   app_connection_string="Host=$DB_HOST;Port=$DB_PORT;Database=$DB_NAME;Username=evidgate_app;Password=$(dsn_quote "$EVIDGATE_APP_PASSWORD")"
@@ -230,7 +229,10 @@ if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ] && [ "$with_token" = true ]; then
     EVIDGATE__DATABASE__CONNECTIONSTRING="$app_connection_string" \
     EVIDGATE__CI__PEPPER="${EVIDGATE__CI__PEPPER:-}" \
     dotnet run --project "$ROOT/src/Evidgate.Migrator" -- seed-dev --with-token
-  printf 'db-init: the token above is shown once and is not stored anywhere; export it in your shell as EVIDGATE_DEV_TOKEN (docs/dev-setup.md)\n'
+  # The note must hold on a rerun too, and it cannot tell which case happened
+  # without capturing the seed's stdout, the one thing this path must not do.
+  printf 'db-init: if a line EVIDGATE_DEV_TOKEN=... was printed above, its secret is shown once and stored nowhere: export it in your shell (docs/dev-setup.md).\n'
+  printf "db-init: if none was printed, a live 'dev-seed' ingest token already exists; its secret was shown once and cannot be shown again. To get a new one run: scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token\n"
 fi
 
 cat <<EOF

@@ -195,14 +195,15 @@ export EVIDGATE_PROJECT=dev-project
 export EVIDGATE_DEV_TOKEN='egt_...'   # the line the seed printed
 ```
 
-**Rerunning with a live token** exits 0, mints nothing and prints no secret:
+**Rerunning with a live token** exits 0, mints nothing and prints no secret; the
+scripts say so and name the one recovery:
 
 ```text
-seed-dev: a live token named dev-seed already exists for this project and its secret cannot be shown again; to mint a new one, reset the dev database: scripts/dev/up.sh --reset
+a live 'dev-seed' ingest token already exists; its secret was shown once and cannot be shown again. To get a new one run: scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token
 ```
 
-Today that recovery really is a reset, because revoking needs a session
-(`DELETE /v1/ingest-tokens/{t}`) and the dev user has no login yet:
+That reset is the only recovery in dev: the dev user has no login, so there is no
+session to revoke a token with, and a stored secret cannot be shown a second time.
 
 ```sh
 scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token

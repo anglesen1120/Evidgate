@@ -18,9 +18,10 @@
 #   --with-token  also run `Evidgate.Migrator seed-dev --with-token`: one dev
 #                 ingest token (project-bound, scopes artifact:write, event:write,
 #                 run:create) and one sample policy revision, minted through the
-#                 real commands on the app role. The token secret goes to this
+#                 real commands on the app role. A minted secret goes to this
 #                 terminal only, once: never to a log file, `.env.dev` or a
-#                 subprocess environment. Needs EVIDGATE__CI__PEPPER in .env.dev.
+#                 subprocess environment; a rerun that finds a live token prints
+#                 no secret. Needs EVIDGATE__CI__PEPPER in .env.dev.
 #
 # Secrets: the first run copies .env.dev.template to .env.dev, fills every __...__
 # placeholder with a fresh random value and chmods it 600. No password is ever
@@ -57,9 +58,10 @@ one of the three is not digits only; see docs/dev-setup.md, Troubleshooting.
 
   --reset       stop the host processes and delete the pg-data/s3-data volumes first
   --with-token  also mint the dev ingest token and the sample policy revision
-                (seed-dev --with-token). The token is printed here once; it is
-                never written to a log or .env.dev. Needs EVIDGATE__CI__PEPPER
-                in .env.dev (base64, >= 32 bytes; docs/dev-setup.md).
+                (seed-dev --with-token). A minted token is printed here once and
+                never to a log or .env.dev, and a rerun that finds a live token
+                prints no secret. Needs EVIDGATE__CI__PEPPER in .env.dev (base64,
+                >= 32 bytes; docs/dev-setup.md).
   -h, --help    this text
 
 Environment read from .env.dev (created from .env.dev.template on first run):
@@ -357,10 +359,9 @@ done
 ensure_env_file
 evg_load_env || die "$EVG_ENV_FILE is missing"
 
-# The token seed resolves the CI pepper through ISecretProvider, like the Api and
-# the Worker, and refuses before writing anything when it is absent. Checking here
-# keeps a missing pepper from bringing the whole compose stack up first (unless the
-# seed is disabled altogether); the seed still owns the validation of the value.
+# The seed resolves the CI pepper through ISecretProvider like the Api and refuses
+# before writing anything when it is absent; checking first keeps a missing pepper
+# from bringing the whole compose stack up. The seed still validates the value.
 if [ "$with_token" = true ] && [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ] \
   && [ -z "${EVIDGATE__CI__PEPPER:-}" ]; then
   die "EVIDGATE__CI__PEPPER is not set — add it to .env.dev first (base64, >= 32 bytes:
@@ -450,9 +451,21 @@ cat <<EOF
 EOF
 
 if [ "$with_token" = true ]; then
-  cat <<'EOF'
+  if [ "${EVIDGATE_DB_INIT_SEED:-1}" = "0" ]; then
+    cat <<'EOF'
 
-  dev ingest token    printed once above as EVIDGATE_DEV_TOKEN=... — it is not
-                      stored anywhere; export it in your shell (docs/dev-setup.md)
+  dev ingest token    not minted: EVIDGATE_DB_INIT_SEED=0 skipped the seed and the
+                      existing-token check. Set it to 1 in the environment or in
+                      .env.dev (that file wins over the shell) and re-run with
+                      --with-token to seed; a live token is then reported, not
+                      re-shown.
 EOF
+  else
+    cat <<'EOF'
+
+  dev ingest token    if a line EVIDGATE_DEV_TOKEN=... was printed above, it is
+                      shown once and stored nowhere: export it in your shell.
+                      If none was printed, a live 'dev-seed' ingest token already exists; its secret was shown once and cannot be shown again. To get a new one run: scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token
+EOF
+  fi
 fi
