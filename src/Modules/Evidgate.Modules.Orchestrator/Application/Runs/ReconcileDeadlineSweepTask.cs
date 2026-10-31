@@ -29,8 +29,9 @@ internal sealed record ReconcileDeadlineSweepPayload(int Limit);
 /// never the sweep's.
 /// </para>
 /// <para>
-/// A trigger whose task dead-letters would leave the run stuck exactly the same way, so the sweep also re-arms
-/// it: the next attempt is queued once the previous one gave up, up to
+/// An attempt that ends without a verdict leaves the run stuck exactly the same way — its task dead-letters, it
+/// finishes <c>done</c> while the run is still overdue, or its task row is purged after dispatch — so the sweep
+/// also re-arms it: the next attempt is queued once the previous one is spent, up to
 /// <see cref="RunReconcileContract.DeadlineMaxAttempts"/> attempts. Past the bound the run is left alone and
 /// the fire warns once — a permanent failure stops on its own instead of queueing for ever.
 /// </para>
@@ -107,6 +108,9 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
     /// <summary>The queue's giving-up state: the one state that says an attempt will never run again.</summary>
     private const string DeadLettered = "dead_letter";
 
+    /// <summary>The queue's finished state: the attempt ran, and whatever it wrote is all this run will get from it.</summary>
+    private const string Done = "done";
+
     /// <inheritdoc />
     public string TaskType => ReconcileDeadlineSweeps.ScheduleName;
 
@@ -161,8 +165,8 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
             LogPageBoundReached(ReconcileDeadlineSweeps.MaxPagesPerFire, limit);
         }
 
-        // Once per fire, never once per run: a run past its attempt bound is a permanent failure the sweep must
-        // keep naming for an operator, without turning every tick into a page of identical warnings.
+        // Once per fire, never once per run: a run past its attempt bound has no verdict the sweep can reach, and an
+        // operator has to see it — without turning every tick into a page of identical warnings.
         if (exhausted > 0)
         {
             LogAttemptsExhausted(exhausted, RunReconcileContract.DeadlineMaxAttempts);
@@ -251,7 +255,7 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
             .ConfigureAwait(false);
         var states = attempts.ToDictionary(
             row => row.IdempotencyKey,
-            row => row.TaskState,
+            row => row,
             StringComparer.Ordinal);
 
         var enqueued = 0;
@@ -294,26 +298,32 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
     /// <summary>
     /// Which attempt of one overdue run the sweep may queue now, and whether the run has spent its bound.
     /// <para>
-    /// The chain advances only through a dead letter: the first attempt is queued while it has no outbox row, and
-    /// a later one only once the attempt before it reached <c>dead_letter</c>. A row that is still undispatched
-    /// (no task yet), pending, in flight or done is not a failure, so the sweep leaves it alone — queueing again
-    /// would spend a second attempt on work the first one is still doing, and a done attempt that left the run
-    /// open is answered by the deadline itself, not by a loop.
+    /// An attempt is spent once nothing will come of it: its task dead-lettered, or it finished <c>done</c> while
+    /// the run is still overdue (an app that answered "nothing to decide" for this run, or lost the race to a
+    /// no-op), or its task row is gone after being dispatched — retention purges finished tasks, the outbox row
+    /// stays, and the trigger still spent a slot. A spent attempt is never retried: the chain moves to the next
+    /// key instead.
+    /// </para>
+    /// <para>
+    /// An attempt that is not spent is not a failure either: an outbox row not yet dispatched, or a task still
+    /// <c>queued</c>, <c>active</c> or waiting a retry, is work in progress, so the sweep queues nothing and waits.
+    /// The chain is bounded by <see cref="RunReconcileContract.DeadlineMaxAttempts"/>: once every attempt is spent
+    /// the run is left alone and counted for the fire's warning, so a poison run stops on its own.
     /// </para>
     /// </summary>
-    /// <returns>The attempt to queue (0 for none) and whether every attempt dead-lettered.</returns>
+    /// <returns>The attempt to queue (0 for none) and whether every attempt is spent.</returns>
     private static (int Attempt, bool Exhausted) PlanAttempt(
         Guid runId,
-        Dictionary<string, string?> taskStates)
+        Dictionary<string, DeadlineAttemptRow> attempts)
     {
         for (var attempt = 1; attempt <= RunReconcileContract.DeadlineMaxAttempts; attempt++)
         {
-            if (!taskStates.TryGetValue(RunReconcileContract.DeadlineIdempotencyKey(runId, attempt), out var state))
+            if (!attempts.TryGetValue(RunReconcileContract.DeadlineIdempotencyKey(runId, attempt), out var row))
             {
                 return (attempt, false);
             }
 
-            if (!string.Equals(state, DeadLettered, StringComparison.Ordinal))
+            if (!IsSpent(row))
             {
                 return (0, false);
             }
@@ -321,6 +331,16 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
 
         return (0, true);
     }
+
+    /// <summary>
+    /// Whether an attempt can no longer produce a verdict: a dead letter, a completion that left the run open, or a
+    /// dispatched row whose task retention already deleted. A row still waiting to be dispatched is not spent — its
+    /// task has simply not been inserted yet.
+    /// </summary>
+    private static bool IsSpent(DeadlineAttemptRow row) =>
+        string.Equals(row.TaskState, DeadLettered, StringComparison.Ordinal)
+        || string.Equals(row.TaskState, Done, StringComparison.Ordinal)
+        || (row.TaskState is null && row.Dispatched);
 
     [LoggerMessage(
         EventId = 2425,
@@ -337,7 +357,7 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
     [LoggerMessage(
         EventId = 2427,
         Level = LogLevel.Warning,
-        Message = "Deadline sweep left {Runs} overdue run(s) alone this fire: each spent all {Attempts} collection-deadline attempt(s) and the last one dead-lettered")]
+        Message = "Deadline sweep left {Runs} overdue run(s) alone this fire: each spent all {Attempts} collection-deadline attempt(s) without a verdict")]
     private partial void LogAttemptsExhausted(int runs, int attempts);
 
     /// <summary>One overdue run as the scan projects it: the tenant, the run, and the deadline that passed.</summary>

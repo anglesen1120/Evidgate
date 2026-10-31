@@ -49,13 +49,14 @@ public static class RunReconcileContract
     public const string DeadlineProducerId = "deadline";
 
     /// <summary>
-    /// How many collection-deadline attempts one run may spend: the first, plus two re-arms after a dead letter.
+    /// How many collection-deadline attempts one run may spend: the first, plus two re-arms after a spent attempt.
     /// <para>
-    /// A deadline reconcile that dead-letters leaves the run <c>collecting</c> past its deadline, so without a
-    /// re-arm the run would never reach a verdict. The bound is what stops a poison run — one whose attempt
-    /// always fails — from queueing a trigger on every fire for ever: three attempts ride out a transient
-    /// failure (a restart, a lock timeout) and a permanent one stops on its own, named by the sweep's warning,
-    /// for an operator to pick up.
+    /// A deadline reconcile that ends without a verdict — dead-lettered, finished while the run is still overdue,
+    /// or purged after dispatch — leaves the run open past its deadline, so without a re-arm the run would never
+    /// reach a verdict. The bound is what stops a poison run — one whose attempt always fails the same way — from
+    /// queueing a trigger on every fire for ever: three attempts ride out a transient failure (a restart, a lock
+    /// timeout, an app that could not decide yet) and a permanent one stops on its own, named by the sweep's
+    /// warning, for an operator to pick up.
     /// </para>
     /// </summary>
     public const int DeadlineMaxAttempts = 3;
@@ -67,8 +68,8 @@ public static class RunReconcileContract
     /// <para>
     /// One key per attempt, not per fire: every sweep that finds the same run overdue writes the same key for
     /// the same attempt, so <c>outbox_org_idem_uq</c> keeps two sweeps from queueing two attempts. The first
-    /// attempt keeps the key rows already carry, and a later attempt exists only after the one before it
-    /// dead-lettered (<see cref="DeadlineMaxAttempts"/>).
+    /// attempt keeps the key rows already carry, and a later attempt exists only after the one before it was spent
+    /// (<see cref="DeadlineMaxAttempts"/>).
     /// </para>
     /// </summary>
     /// <param name="runId">The run the sweep found past its collection deadline.</param>

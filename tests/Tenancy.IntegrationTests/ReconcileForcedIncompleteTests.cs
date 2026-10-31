@@ -1,11 +1,8 @@
 // The forced-incomplete closure of an overdue run: a run whose producers never started (`queued`) or never finalized
 // (`running`) gets no reconcile from any finalize, so the collection deadline is the only thing that can decide it.
 // These cases drive the whole platform path — the schedule runner, the sweep handler, the outbox dispatcher and the
-// task consumer — so what they prove is the platform behaviour, not a handler body called by hand.
-//
-// The clock split is the same as the collecting-deadline cases: the scan and the reconcile attempt both compare
-// `collection_deadline_at` with the database's `now()`, so a case writes the past into the column and the fake clock
-// only moves the schedule's ticks.
+// task consumer. The scan and the attempt compare `collection_deadline_at` with the database's `now()`, so a case
+// writes the past into the column and the fake clock only moves the schedule's ticks.
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Orchestrator.Contracts;
@@ -46,8 +43,7 @@ public sealed class ReconcileForcedIncompleteTests
         await using var world = await StartAsync(clock);
         var runId = world.RunId;
 
-        // No finalize will ever arrive for this run: its producer slot stays open and nothing else enqueues an attempt,
-        // which is exactly the stall the deadline exists for.
+        // No finalize will ever arrive for this run: its slot stays open, which is the stall the deadline exists for.
         await SetRunStateAsync(world, runId, state);
         await PassCollectionDeadlineAsync(world, runId);
 
@@ -125,11 +121,7 @@ public sealed class ReconcileForcedIncompleteTests
         (await RevisionCountAsync(world, runId)).ShouldBe(0, "no attempt, no revision");
     }
 
-    /// <summary>
-    /// The scan itself, one overdue run per state of the machine: only <c>queued</c>, <c>running</c> and
-    /// <c>collecting</c> come back, whatever their tenant — the sweep is the only caller and it must see exactly the
-    /// runs a reconcile attempt can decide.
-    /// </summary>
+    /// <summary>The scan names only <c>queued</c>, <c>running</c> and <c>collecting</c> — the runs an attempt can decide.</summary>
     [Fact]
     public async Task DeadlineScan_OverdueRuns_NamesQueuedRunningAndCollectingOnly()
     {
@@ -196,6 +188,126 @@ public sealed class ReconcileForcedIncompleteTests
         (await RevisionCountAsync(world, runId)).ShouldBe(1);
     }
 
+    // ------------------------------------------------------------------ the fallback and the scan/claim window
+
+    /// <summary>
+    /// A comparison that names nothing — slot closed with a matching declaration, nothing left to report — still closes
+    /// <c>incomplete</c> with a reason from the closed list, because a run outside collecting cannot prove a pass.
+    /// Without the fallback the revision would be <c>incomplete</c> with an empty <c>missing[]</c>, which this rejects.
+    /// </summary>
+    [Fact]
+    public async Task Sweep_ComparisonNamesNothing_StillClosesWithAReason()
+    {
+        var clock = AlignedClock();
+        await using var world = await StartAsync(clock, planned: 0, slots: 1);
+        var runId = world.RunId;
+
+        (await CloseSlotAsync(world, runId)).ShouldBe(1, "the run's one slot is closed: the comparison then names nothing");
+        await SetRunStateAsync(world, runId, "running");
+        await PassCollectionDeadlineAsync(world, runId);
+
+        await SweepAsync(world, clock);
+        (await DeadlineRowsAsync(world, runId)).ShouldBe(1);
+        await DispatchAndReconcileAsync(world, expectedReconciles: 1);
+
+        (await StateAsync(world, runId)).ShouldBe("incomplete", "a run outside collecting never reads complete");
+        (await CompletenessAsync(world, runId)).ShouldBe("incomplete");
+        (await MissingAsync(world, runId)).ShouldBe(
+            "missing_shard",
+            "nothing was missing and the plan still holds a slot: the fallback names the shard never collected");
+    }
+
+    /// <summary>
+    /// A cancel landing between the scan and the claim survives: the attempt finds a terminal run, closes nothing and
+    /// appends no revision, so a forced verdict can never overwrite a caller's decision.
+    /// </summary>
+    [Fact]
+    public async Task PostScanCancel_LeavesTheRunCanceledWithNoRevision()
+    {
+        var clock = AlignedClock();
+        await using var world = await StartAsync(clock);
+        var runId = world.RunId;
+
+        await SetRunStateAsync(world, runId, "running");
+        await PassCollectionDeadlineAsync(world, runId);
+        await SweepAsync(world, clock);
+        await DispatchAsync(world, expectedReconciles: 1);
+
+        await SetRunStateAsync(world, runId, "canceled");
+
+        await ReconcileAsync(world, expectedReconciles: 1);
+
+        (await StateAsync(world, runId)).ShouldBe("canceled", "the attempt never re-decides a run that left early");
+        (await RevisionCountAsync(world, runId)).ShouldBe(0, "nothing was compared, so nothing was frozen");
+        (await TaskStateAsync(world, RunReconcileContract.OutboxTaskType)).ShouldBe(
+            "done",
+            "the attempt is a normal completion: the run it named is terminal");
+    }
+
+    /// <summary>
+    /// The claim finds <c>collecting</c> and decides as collecting: a satisfied plan reads <c>complete</c>, a settlement a
+    /// forced close could never produce.
+    /// </summary>
+    [Fact]
+    public async Task PostScanCollecting_AttemptTakesTheCollectingPath()
+    {
+        var clock = AlignedClock();
+        await using var world = await StartAsync(clock, planned: 0, slots: 1);
+        var runId = world.RunId;
+
+        (await CloseSlotAsync(world, runId)).ShouldBe(1, "a closed, matching slot is what makes the plan satisfied");
+        await SetRunStateAsync(world, runId, "running");
+        await PassCollectionDeadlineAsync(world, runId);
+        await SweepAsync(world, clock);
+        await DispatchAsync(world, expectedReconciles: 1);
+
+        await SetRunStateAsync(world, runId, "collecting");
+
+        await ReconcileAsync(world, expectedReconciles: 1);
+
+        (await MissingAsync(world, runId)).ShouldBe(
+            string.Empty,
+            "the collecting comparison named nothing, so the reason list is empty — a forced close always names one");
+        (await StateAsync(world, runId)).ShouldBe("complete", "the claim decided as collecting, not as forced");
+        (await CompletenessAsync(world, runId)).ShouldBe("complete");
+    }
+
+    /// <summary>
+    /// The scan compares with <c>&lt;=</c> on the database clock: a deadline equal to the transaction's <c>now()</c> is
+    /// already overdue — asserted inside that one transaction.
+    /// </summary>
+    [Fact]
+    public async Task DeadlineScan_DeadlineEqualToNow_IsOverdue()
+    {
+        await using var world = await StartAsync(AlignedClock(), planned: 0, slots: 1);
+        var runId = world.RunId;
+
+        await using var connection = await _fixture.OpenSuperuserAsync(world.Database);
+        await using var transaction = await connection.BeginTransactionAsync(Token);
+
+        await using (var set = connection.CreateCommand())
+        {
+            set.Transaction = transaction;
+            set.CommandText =
+                $"update public.run set state = 'queued', collection_deadline_at = now() where id = '{runId:D}'";
+            (await set.ExecuteNonQueryAsync(Token)).ShouldBe(1);
+        }
+
+        long named;
+        await using (var scan = connection.CreateCommand())
+        {
+            scan.Transaction = transaction;
+            scan.CommandText =
+                "select count(*) from evidgate.reconcile_overdue_runs(null, null, 100) "
+                + $"where run_id = '{runId:D}'";
+            named = (long)(await scan.ExecuteScalarAsync(Token))!;
+        }
+
+        named.ShouldBe(1, "the comparison is <=, so a deadline equal to the database's now() is already overdue");
+
+        await transaction.RollbackAsync(Token);
+    }
+
     // ------------------------------------------------------------------ world and driving
 
     /// <summary>
@@ -259,10 +371,7 @@ public sealed class ReconcileForcedIncompleteTests
         }
     }
 
-    /// <summary>
-    /// A fixed, cron-aligned instant: the runner composes the occurrences due in its lookback window from the schedule's
-    /// cron, so a boundary-aligned start puts every fire on an exact ten-minute mark.
-    /// </summary>
+    /// <summary>A cron-aligned instant, so every fire lands on an exact ten-minute mark.</summary>
     private static FakeTimeProvider AlignedClock() =>
         new(new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero));
 
@@ -288,12 +397,16 @@ public sealed class ReconcileForcedIncompleteTests
             "the maintenance consumer runs the sweep task to done");
     }
 
-    /// <summary>Dispatches, then claims on the reconcile queue until the expected attempts ran and completed.</summary>
-    private static async Task DispatchAndReconcileAsync(IngestTestWorld world, int expectedReconciles)
+    /// <summary>Dispatches once and checks the sweep's triggers reached the queue.</summary>
+    private static async Task DispatchAsync(IngestTestWorld world, int expectedReconciles)
     {
         (await world.Host.Services.GetRequiredService<OutboxDispatcher>().DispatchBatchAsync(Token)).Enqueued
             .ShouldBeGreaterThanOrEqualTo(expectedReconciles, "the sweep's triggers reach the queue");
+    }
 
+    /// <summary>Claims on the reconcile queue until the expected attempts ran and completed.</summary>
+    private static async Task ReconcileAsync(IngestTestWorld world, int expectedReconciles)
+    {
         var consumer = world.Host.Services.GetRequiredService<TaskConsumer>();
         for (var attempt = 0; attempt < 3 * expectedReconciles + 3; attempt++)
         {
@@ -308,6 +421,13 @@ public sealed class ReconcileForcedIncompleteTests
         (await CountDoneReconcilesAsync(world)).ShouldBeGreaterThanOrEqualTo(
             expectedReconciles,
             "every queued reconcile is claimed and completed by the consumer");
+    }
+
+    /// <summary>Dispatches, then claims on the reconcile queue until the expected attempts ran and completed.</summary>
+    private static async Task DispatchAndReconcileAsync(IngestTestWorld world, int expectedReconciles)
+    {
+        await DispatchAsync(world, expectedReconciles);
+        await ReconcileAsync(world, expectedReconciles);
     }
 
     private static Task<long> CountDoneReconcilesAsync(IngestTestWorld world) =>
@@ -352,6 +472,19 @@ public sealed class ReconcileForcedIncompleteTests
 
     private Task SetRunStateAsync(IngestTestWorld world, Guid runId, string state) =>
         _fixture.ExecuteAsync(world.Database, $"update public.run set state = '{state}' where id = '{runId:D}'");
+
+    /// <summary>
+    /// Closes every slot of the run with a matching zero declaration, so the comparison names nothing. The update
+    /// answers the rows it touched: a miss (the fixture names its slots from 1, not 0) would leave the slot open and
+    /// make the open-shard reason masquerade as this case's subject.
+    /// </summary>
+    private Task<long> CloseSlotAsync(IngestTestWorld world, Guid runId) =>
+        _fixture.ScalarAsync<long>(
+            world.Database,
+            "with closed as (update public.producer_slot "
+            + "set closed_at = now(), declared_last_sequence = 0, declared_count = 0 "
+            + $"where org_id = '{world.Org}' and run_id = '{runId:D}' returning 1) "
+            + "select count(*) from closed");
 
     /// <summary>Moves the deadline into the database's past, the only clock the scan and the attempt compare against.</summary>
     private Task PassCollectionDeadlineAsync(IngestTestWorld world, Guid runId) =>

@@ -577,7 +577,6 @@ public sealed partial class ReconcileRunTests
             + $"and action = '{RunStateTransitionContract.AuditAction}' and object_type = 'run' "
             + $"and object_id = '{runId:D}' and actor_type = 'system'");
 
-    /// <summary>The reasons of one outcome as <c>code:producer:detail</c>, for a readable failure message.</summary>
     /// <summary>
     /// The settlement the consumer derives from an outcome: only a late comparison appends a revision to a run that
     /// already finished, and an overdue comparison is a forced close, so neither leaves the decision to the collecting
@@ -590,6 +589,7 @@ public sealed partial class ReconcileRunTests
         _ => ReconcileSettlement.DecideCollection,
     };
 
+    /// <summary>The reasons of one outcome as <c>code:producer:detail</c>, for a readable failure message.</summary>
     private static string Describe(ReconcileOutcome outcome) =>
         outcome.Comparison is null
             ? $"disposition={outcome.Disposition}, no comparison"

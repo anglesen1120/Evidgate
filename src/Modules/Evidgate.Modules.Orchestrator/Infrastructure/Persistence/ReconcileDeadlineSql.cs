@@ -35,14 +35,21 @@ internal static class ReconcileDeadlineSql
         """;
 
     /// <summary>
-    /// The deadline attempts of one org already written to its outbox, among the keys a page carries, with the
-    /// state of the task each one became (null while the row is still undispatched): one statement for the whole
-    /// page, so the probe costs one round trip instead of one per run.
+    /// The deadline attempts of one org already written to its outbox, among the keys a page carries, with what
+    /// became of each: whether it was handed to the queue, and the state of the task it became (null when the row
+    /// is still undispatched — or when its task is gone): one statement for the whole page, so the probe costs one
+    /// round trip instead of one per run.
     /// <para>
     /// The join is the only link from a trigger to the work it produced: a task row carries no outbox id, it
     /// carries <c>'outbox:' || outbox.id</c> as its own idempotency key, so that expression — not a column — is
     /// what pairs the two. <c>org_id</c> is named on both sides: neither table has a tenant policy, so the
     /// predicates are the whole boundary, and a task row of another tenant can never answer for this one.
+    /// </para>
+    /// <para>
+    /// Dispatch inserts the tasks and stamps <c>dispatched_at</c> in one transaction, so a stamped row with no task
+    /// row lost its task to retention, never to a half-finished dispatch. The flag is projected as a boolean because
+    /// the decision only ever asks whether the row reached the queue, and that answer cannot be confused with the
+    /// null state of a row that has not.
     /// </para>
     /// <para>
     /// The keys travel as JSON text and are unpacked in SQL. A <c>string[]</c> parameter cannot be bound here:
@@ -53,6 +60,7 @@ internal static class ReconcileDeadlineSql
     /// </summary>
     internal const string AttemptStates = """
         select o.idempotency_key as "IdempotencyKey",
+               (o.dispatched_at is not null) as "Dispatched",
                t.state as "TaskState"
           from public.outbox o
           left join public.task t
@@ -63,7 +71,8 @@ internal static class ReconcileDeadlineSql
         """;
 }
 
-/// <summary>One deadline attempt as the probe projects it: the outbox key and the state of the task it became.</summary>
+/// <summary>One deadline attempt as the probe projects it: its outbox key, whether it reached the queue, and its task.</summary>
 /// <param name="IdempotencyKey">The outbox idempotency key of the attempt.</param>
-/// <param name="TaskState">The task's state, or null while the outbox row is still undispatched.</param>
-internal sealed record DeadlineAttemptRow(string IdempotencyKey, string? TaskState);
+/// <param name="Dispatched">Whether the dispatcher stamped the row, i.e. its task was inserted.</param>
+/// <param name="TaskState">The task's state, or null while the row is undispatched or once its task is purged.</param>
+internal sealed record DeadlineAttemptRow(string IdempotencyKey, bool Dispatched, string? TaskState);

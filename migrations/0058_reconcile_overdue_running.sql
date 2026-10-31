@@ -33,21 +33,21 @@
 --
 -- ORDER: migrate before app, in the same deploy. The widened scan is what lets the sweep queue a `queued` or
 -- `running` run at all, and only the reconciler shipped with this file can decide one: an application built
--- before it answers `NotCollectable` for such an attempt and completes it without a verdict. The re-arm path
--- advances only through a dead letter (`RunReconcileContract.DeadlineMaxAttempts`, three attempts), so a
--- completed attempt is never re-armed and that run stays open for good — the exact stall this file removes.
--- Applying the file while only old Workers run is therefore a window in which a newly queued attempt can be
--- spent; deploy the app immediately after the migration (the old application keeps working otherwise: it
--- never sees the rows the scan returns today).
+-- before it answers `NotCollectable` for such an attempt and completes it without a verdict. That costs one
+-- attempt, not the run: the sweep re-arms a spent attempt — done, dead-lettered, or its task purged — up to
+-- `RunReconcileContract.DeadlineMaxAttempts` (three), so the run is attempted again after the deployment, and
+-- only an exhausted bound leaves it open for an operator to see. Deploy the app immediately after the
+-- migration; the old application otherwise keeps working, because it never sees the rows the scan returns
+-- today, and every attempt it wastes is retried.
 --
 -- LOCKS: `create index` (not `concurrently`, which cannot run inside the migrator's per-script transaction)
--- takes a SHARE lock on `public.run`: readers continue while it builds, inserts and updates wait behind it,
--- and the `lock_timeout` below bounds the wait to acquire it. The new index is created BEFORE the old one is
--- dropped, so no statement runs without a usable partial index. `drop index` takes an ACCESS EXCLUSIVE lock on
--- `public.run` for the catalog change alone — no table rewrite, and no reader sees a partially dropped index —
--- but it does queue behind in-flight work, so it runs under the same `lock_timeout`: exit 3 means "apply again
--- while the table is quiet", not a defect. `create or replace function` plus the two privilege statements are
--- catalog writes on a function the sweep calls every ten minutes; the same bound covers them.
+-- takes a SHARE lock on `public.run`: readers continue while it builds, inserts and updates wait behind it. The
+-- same transaction then runs `drop index`, which needs ACCESS EXCLUSIVE and queues NEW readers behind it for as
+-- long as it waits — and because the whole script is one transaction, a `lock_timeout` on that drop rolls back
+-- the completed index build. Apply this file in a quiet window; exit 3 means "apply again while the table is
+-- quiet", not a defect. The new index is created BEFORE the old one is dropped, so no statement runs without a
+-- usable partial index; `create or replace function` plus the two privilege statements are catalog writes on a
+-- function the sweep calls every ten minutes, and the same bound covers them.
 --
 -- Forward-only: `create index if not exists`, `drop index if exists`, `create or replace` and repeatable
 -- `revoke`/`grant`, so a re-run is a no-op in substance, and there is no down migration. Dropping the wider

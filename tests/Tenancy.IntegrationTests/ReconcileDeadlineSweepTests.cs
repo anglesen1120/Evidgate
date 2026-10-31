@@ -105,8 +105,9 @@ public sealed class ReconcileDeadlineSweepTests
         // only what the second sweep adds, not a row the first attempt left behind.
         await DispatchAsync(world);
 
-        // The next fire finds the same run (it is still past its deadline), and the key keeps it from queueing a second
-        // attempt: a completed attempt is never re-armed, so one run is one deadline attempt while nothing fails.
+        // The next fire does not even see this run any more: the attempt decided it, so the scan no longer names it.
+        // A done attempt is spent, and a spent attempt is only re-armed while its run is still overdue — nothing
+        // re-arms a run that already has a verdict.
         clock.Advance(TimeSpan.FromMinutes(10));
         await SweepAsync(world, clock);
         (await DispatchAsync(world)).Enqueued.ShouldBe(
