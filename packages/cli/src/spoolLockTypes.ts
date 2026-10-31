@@ -1,13 +1,18 @@
-// The shapes and the on-disk constants of the two producer-directory locks: the CLI's own
-// `spool.lock` and the reporter's `writer.lock`. They live together so the file names, the
-// mode and the size bound cannot drift between the writer that creates a lock and the
-// reader that has to trust it.
+// The shapes and the on-disk constants of the producer-directory locks: the CLI's own
+// `spool.lock`, the takeover mutex that serialises breaking a stale one, and the reporter's
+// `writer.lock`. They live together so the file names, the mode and the size bound cannot
+// drift between the writer that creates a lock and the reader that has to trust it.
 import { CliError } from './errors.js';
 
 /** The lock file name inside a producer directory. */
 export const spoolLockFileName = 'spool.lock';
 /** `spool.lock` is created 0600 like every other spool file. */
 export const spoolLockFileMode = 0o600;
+/**
+ * The takeover mutex beside `spool.lock`: only its holder may inspect and break a stale
+ * lock, so the read-then-rename cannot interleave with a second contender.
+ */
+export const takeoverLockFileName = `${spoolLockFileName}.takeover`;
 
 /**
  * A lock file written by an older writer (or by anything else) may still be empty for a
@@ -26,6 +31,24 @@ export interface SpoolLockFile {
   readonly startedAt: string;
 }
 
+/**
+ * Seams that park a contender inside the stale-lock takeover or its release so a spec can
+ * interleave a competitor deterministically. They are never set in production and change
+ * no outcome on their own; each one runs exactly where its name says.
+ */
+export interface SpoolLockHooks {
+  /** After a stale lock was observed and before the takeover mutex is taken. */
+  readonly beforeTakeover?: () => Promise<void>;
+  /** While the observed stale lock is quarantined and the takeover mutex is still held. */
+  readonly afterQuarantine?: () => Promise<void>;
+  /** After the lock at the path was read and before its inode is confirmed again. */
+  readonly afterEntryRead?: () => Promise<void>;
+  /** After a dead mutex was re-checked and immediately before its reclaim rename. */
+  readonly beforeDeadMutexReclaim?: () => Promise<void>;
+  /** After the holder unlinks its matched record, before quarantine scavenging. */
+  readonly afterReleaseUnlink?: () => Promise<void>;
+}
+
 export interface SpoolLockOptions {
   /** Pid recorded in the lock. Defaults to `process.pid`; injected by tests. */
   readonly pid?: number;
@@ -35,6 +58,20 @@ export interface SpoolLockOptions {
   readonly isProcessAlive?: (pid: number) => boolean;
   /** Attempts allowed while breaking a stale lock. Defaults to 3. */
   readonly maxTakeoverAttempts?: number;
+  /** Takeover seams for the race specs; absent in production. */
+  readonly hooks?: SpoolLockHooks;
+}
+
+/**
+ * A lock this process holds: where it is, what it records, and which inode carries it, so
+ * release can still find the record after a takeover renamed it aside.
+ */
+export interface HeldSpoolLock {
+  readonly path: string;
+  readonly pid: number;
+  readonly startedAt: string;
+  readonly dev: number;
+  readonly ino: number;
 }
 
 /** `spool_locked`: a live process holds this producer directory (exit 3, contracts/cli.md). */
