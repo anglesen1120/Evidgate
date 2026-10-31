@@ -61,9 +61,12 @@ can never change the exit code. `CommandDefinition.run` and `main` return
 
 `gate` exits 2 only for `INCONCLUSIVE` or a run still `pending`: at the
 deadline, or when the deadline itself cut the final request off before it
-answered. A final poll the server answers `5xx`/`429` past the bounded retries,
-or whose decision body breaks or is aborted after its headers, is exit 3 even
-when an earlier poll answered `pending`; no such path may exit 0.
+answered. The timer that ended the request decides that cut, not a clock
+reading: it stays exit 2 when an earlier attempt in the same poll was retried
+after a `5xx`/`429`, while a `401` refresh that outlives the wait exits 3
+`request_failed`. A final poll the server answers `5xx`/`429` past the
+bounded retries, or whose decision body breaks or is aborted after its headers,
+is exit 3 even when an earlier poll answered `pending`; no such path may exit 0.
 
 The replay range is reserved, not defined: 04.9.1-T4 assigns one code each to a
 refused grant, an engine-pin mismatch, a timeout and a partial upload, and

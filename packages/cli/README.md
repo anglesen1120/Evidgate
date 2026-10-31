@@ -148,6 +148,9 @@ refresh cannot buy the replay a fresh window. The last poll is the exception: it
 starts on the deadline with the 1 ms minimum budget, so a decision that is already
 waiting there still counts. When that last request is instead cut off before it
 answers, the abort is not a verdict and a run that answered pending earlier exits 2.
+Which timer ended the request decides that, not a clock reading: it stays
+exit 2 when an earlier attempt in the same poll was retried after a `5xx`/`429`,
+while a `401` refresh that outlives the wait is exit 3 `request_failed`.
 Every other way a wait can end after a pending answer exits 3, never 2: a final
 poll the server answers `5xx`/`429` past the bounded retries, a decision body that
 breaks or is aborted after its headers, and a token refresh that outlives the wait.

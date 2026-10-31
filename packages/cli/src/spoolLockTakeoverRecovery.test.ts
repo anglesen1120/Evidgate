@@ -165,6 +165,40 @@ describe('withSpoolLock — post-rename takeover', () => {
     expect(await readdir(directory)).toEqual([spoolLockFileName]);
   });
 
+  it('reports a live holder when the retained quarantine stopped matching', async () => {
+    await writeFile(lockPath, lockText(deadPid), { mode: spoolLockFileMode });
+    const successor = lockText(7777);
+    let entered = false;
+    const failure = failureOf(
+      withSpoolLock(
+        directory,
+        () => {
+          entered = true;
+          return Promise.resolve('ran');
+        },
+        {
+          pid: 5555,
+          now: () => fixedNow,
+          // Only the planted record is dead; the quarantine's new holder stays alive.
+          isProcessAlive: (pid) => pid !== deadPid,
+          hooks: {
+            afterQuarantine: async () => {
+              // The rename survives, but the quarantined inode now carries a live holder.
+              await writeFile(await quarantineName(), successor, { mode: spoolLockFileMode });
+            },
+          },
+        },
+      ),
+    );
+    const locked = expectError(await failure, SpoolLockedError);
+    expect(locked.code).toBe('spool_locked');
+    expect(locked.holderPid).toBe(7777);
+    expect(entered).toBe(false);
+    // The live record is back at the original path and no quarantine name survives.
+    expect(await readFile(lockPath, 'utf8')).toBe(successor);
+    expect(await readdir(directory)).toEqual([spoolLockFileName]);
+  });
+
   it('retries the link when the quarantine vanished and nothing replaced it', async () => {
     await writeFile(lockPath, lockText(deadPid), { mode: spoolLockFileMode });
     const result = await withSpoolLock(directory, () => Promise.resolve('ran'), {

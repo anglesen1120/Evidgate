@@ -1,6 +1,6 @@
-// The flag shapes and validators of `events send`. Both ids become spool path segments
-// verbatim, so the wire shape is checked here and the spool-id rules on top of it — before
-// `getToken()`, so a bad flag makes no request and no token exchange at all.
+// The flag shapes and validators the producer commands share (`events send`, `runs create`,
+// `runs finalize`, `artifacts upload`) plus `gate`: ids become spool and wire segments
+// verbatim, so they are checked here before `getToken()` — no request, no token exchange.
 import { usageError } from './eventsSendErrors.js';
 
 import type { ParsedValues } from './index.js';

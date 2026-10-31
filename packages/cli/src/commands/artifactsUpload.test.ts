@@ -313,9 +313,9 @@ describe('artifacts upload', () => {
     expect(stderr.join('')).toContain("run 'evidgate --help' for usage");
   });
 
-  // The producer commands share one flag parser, and it refuses an empty value; the upload's
-  // own copy passed `''` through, so `--file ''` reached the path guard and `--run ''` the
-  // UUID check instead of failing as a usage error before any request.
+  // The shared flag helper refuses an empty required value, so `--file ''` fails as a usage
+  // error before any request rather than reaching the path guard (or `--run ''` the UUID
+  // check), which are the wrong errors for a flag that is present but empty.
   it('refuses_an_empty_required_value_before_any_request', async () => {
     const store = stubFetch(happyStore());
     const { io, stdout, stderr } = capture();

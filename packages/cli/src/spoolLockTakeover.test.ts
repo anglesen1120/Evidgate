@@ -148,8 +148,7 @@ describe('withSpoolLock — stale takeover', () => {
       expect(cPhase).toBe('refused');
       expect(aPhase).toBe('refused');
       const locked = expectError(await a.failure, SpoolLockedError);
-      expect(locked.code).toBe('spool_locked');
-      expect(locked.holderPid).toBe(2222);
+      expect(locked).toMatchObject({ code: 'spool_locked', holderPid: 2222 });
       // B's lock was never moved: the path still names B and nothing is quarantined.
       expect(await readFile(lockPath, 'utf8')).toBe(lockText(2222));
       expect(await readdir(directory)).toEqual([spoolLockFileName]);

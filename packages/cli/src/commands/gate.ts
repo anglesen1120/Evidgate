@@ -12,6 +12,7 @@ import type { ResolvedConfig } from '../config.js';
 import { parseDuration } from '../duration.js';
 import { CliError, prefixStderrLines } from '../errors.js';
 import { isRetryable, retryAfter } from '../sender.js';
+import { perRequestTimeoutMs } from '../senderLimits.js';
 import { serverErrorFromResponse, transportError } from '../serverError.js';
 
 import { flagValue, requiredFlag, uuidPattern } from './eventsSendArgs.js';
@@ -252,8 +253,11 @@ async function attemptDecision(
   // Never past the deadline, and never below the 1 ms the last poll needs for its answer.
   const budget = deadlineAt === undefined ? undefined : Math.max(deadlineAt - now(), 1);
   let attempt: AbortSignal | undefined;
+  // The wait bounds this attempt when what is left of it is no more than one request gets.
+  let waitBounded = false;
   const operation = (signal: AbortSignal): Promise<DecisionResult> => {
     attempt = signal;
+    waitBounded = deadlineAt !== undefined && deadlineAt - now() <= perRequestTimeoutMs;
     return getRunDecision({
       client: session.client,
       path: { r: request.runId },
@@ -274,8 +278,8 @@ async function attemptDecision(
     return {
       kind: 'transient',
       error: transportError(result.error),
-      // Only the wait's own timer, and only once it has fired, ends a request unanswered.
-      endedByDeadline: deadlineAt !== undefined && attempt?.aborted === true && now() >= deadlineAt,
+      // The abort's provenance, not a clock reading: only a wait-bounded attempt is the cut.
+      endedByDeadline: waitBounded && attempt?.aborted === true,
     };
   }
   if (!response.ok) {
