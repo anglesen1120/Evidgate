@@ -1,10 +1,10 @@
-// 04.2.1-T1.2: the per-CI-job `ci_producer` token cache (04.2.1 §5
-// `auth/token-cache.ts`, AC3). One file per (api_url, project) under `cacheDir`, mode
-// `0600` in a `0700` directory owned by the current user, written atomically (temp file
-// + rename). A file that is not a regular file, is group/world-readable, is owned by
-// another user, or does not parse is treated as absent — never trusted, never thrown on
-// (04.2.1 §8 T5). The file is opened `O_NOFOLLOW` so a symlink is never followed (S4),
-// and a cache directory that is a symlink or is owned by another user is refused (D1).
+// The per-CI-job `ci_producer` token cache: one file per (api_url, project) under `cacheDir`,
+// mode `0600` in a `0700` directory owned by the current user, written atomically (temp file
+// + rename, which replaces a planted symlink instead of following it). The read path distrusts
+// an untrusted file — a foreign owner, a group/world-readable mode, a non-regular file or
+// unparseable content reads as absent, never as an error — and opens it `O_NOFOLLOW`; the write
+// path refuses a symlinked or foreign-owned cache directory. Those owner, mode and `O_NOFOLLOW`
+// guards are POSIX only; on win32 only a regular-file check applies.
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { chmod, lstat, mkdir, open, rename, rm, unlink, type FileHandle } from 'node:fs/promises';
@@ -14,7 +14,8 @@ import type { ResolvedConfig } from '../config.js';
 import { CliError } from '../errors.js';
 import { registerSecret } from '../redact.js';
 
-/** Refresh the token when it expires within this margin (04.2.1 §5, AC3). */
+/** Refresh the token when it expires within this margin, so a request that starts now does
+ * not begin already expired. */
 export const refreshMarginMs = 60_000;
 
 /** The longest a server token can live (60 min) plus 5 min of clock skew (S3). */
@@ -33,7 +34,7 @@ export interface CachedToken {
 /** The fields that key the cache file; `ResolvedConfig` satisfies it structurally. */
 export type TokenCacheConfig = Pick<ResolvedConfig, 'apiUrl' | 'project' | 'cacheDir'>;
 
-/** `ci-token.<sha256 hex of apiUrl + "\n" + project>.json` in `cacheDir` (04.2.1 §5). */
+/** `ci-token.<sha256 hex of apiUrl + "\n" + project>.json` in `cacheDir`, one per project. */
 export function tokenCachePath(config: TokenCacheConfig): string {
   const key = createHash('sha256').update(`${config.apiUrl}\n${config.project}`).digest('hex');
   return join(config.cacheDir, `ci-token.${key}.json`);
@@ -41,10 +42,10 @@ export function tokenCachePath(config: TokenCacheConfig): string {
 
 /**
  * Reads the cached token, or `undefined` when there is none or it cannot be trusted.
- * Never throws: a missing file, a non-regular file, a symlink, a group/world-readable
- * or foreign-owned file (POSIX), a cache directory owned by another user (D1) and
- * unparseable content all read as absent. The file is opened `O_NOFOLLOW` and inspected
- * through the one handle (S4). A trusted token is registered for redaction (T78).
+ * Never throws: a missing file, a non-regular file, a symlink, a group/world-readable or
+ * foreign-owned file, a cache directory owned by another user and unparseable content all
+ * read as absent. The file is inspected through the one handle it is opened with, and a
+ * trusted token is registered for redaction.
  */
 export async function readCachedToken(config: TokenCacheConfig): Promise<CachedToken | undefined> {
   const path = tokenCachePath(config);
@@ -135,7 +136,7 @@ export async function writeCachedToken(
   }
 }
 
-/** Deletes the cache file; an absent file is not an error (04.2.1 §8 retention). */
+/** Deletes the cache file; an absent file is not an error, so a purge is always safe. */
 export async function deleteCachedToken(config: TokenCacheConfig): Promise<void> {
   try {
     await rm(tokenCachePath(config), { force: true });
@@ -146,8 +147,8 @@ export async function deleteCachedToken(config: TokenCacheConfig): Promise<void>
 
 /**
  * True while the token is more than `refreshMarginMs` from expiry and no further than
- * `maxTokenLifetimeMs` away (04.2.1 §5, AC3). A far-future `expires_at` is untrusted:
- * the server never issues a token that outlives `maxTokenLifetimeMs` (S3).
+ * `maxTokenLifetimeMs` away. A far-future `expires_at` is untrusted: the server never issues
+ * a token that outlives `maxTokenLifetimeMs`.
  */
 export function isFresh(value: CachedToken, nowMs: number): boolean {
   const remainingMs = Date.parse(value.expiresAt) - nowMs;

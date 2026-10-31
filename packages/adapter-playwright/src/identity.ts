@@ -1,11 +1,9 @@
-// 04.3.2-T1.2/T1.4: case/variant identity mapping. The server owns `execution_key`
-// (00 §7); the reporter resolves the case identity (the `evidgate.id` annotation first,
-// else the sidecar manifest of the test file's own directory or an ancestor directory up
-// to the suite's common ancestor), the variant hash (the server
-// `VariantNormalizer` semantics over the project's declared params) and the target env,
-// and emits them as `ext.case_id`, `ext.variant_hash` and `ext.target_env`.
-// `execution_key` stays the schema-valid placeholder behind the injectable resolver seam
-// (coordinator decision 4): the reporter never hashes it.
+// Case/variant identity mapping. The server owns `execution_key`; the reporter resolves the case
+// identity (the `evidgate.id` annotation first, else the sidecar manifest of the test file's own
+// directory or an ancestor directory up to the suite's common ancestor), the variant hash (the
+// server `VariantNormalizer` semantics over the project's declared params) and the target env,
+// and emits them as `ext.case_id`, `ext.variant_hash` and `ext.target_env`. `execution_key` stays
+// the schema-valid placeholder behind the injectable resolver seam: the reporter never hashes it.
 import type { TestCase } from '@playwright/test/reporter';
 
 import { brief, isCanonicalCaseId, type SidecarIndex } from './sidecar.js';
@@ -17,7 +15,7 @@ export const PLACEHOLDER_EXECUTION_KEY = '0'.repeat(64);
 /** The manifest `targetEnv` shape (contracts/manifest/manifest.v1.json `$defs.targetEnv`). */
 export const TARGET_ENV_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
-/** The annotation type that carries a catalog case id (00 §7, 03.1.1). */
+/** The annotation type that carries a catalog case id. */
 export const EVIDGATE_ID_ANNOTATION = 'evidgate.id';
 
 /** The shared empty parameter set: every project without declared params hashes once. */
@@ -44,7 +42,7 @@ export interface Identity {
  */
 export type IdentityResolver = (test: TestCase) => Identity;
 
-/** The `ext.warn` codes this adapter emits (04.3.2 §5 "Warning channel"). */
+/** The `ext.warn` codes this adapter emits. */
 export type WarningCode =
   | 'duplicate_case_id'
   | 'identity_conflict'
@@ -55,7 +53,6 @@ export type WarningCode =
   | 'invalid_sidecar_entry'
   | 'sidecar_conflict'
   | 'unmapped'
-  // 04.3.2-T2.2: a raw Playwright status the status table does not know.
   | 'unknown_status'
   | 'warnings_truncated';
 
@@ -83,7 +80,7 @@ export interface IdentityResolverDeps {
   warn?: ((warning: WarningPayload) => void) | undefined;
   /** Per-project variant memo; created when absent. */
   variantCache?: WeakMap<object, VariantOutcome> | undefined;
-  /** Projects already warned about an invalid target env (S3); created when absent. */
+  /** Projects already warned about an invalid target env; created when absent. */
   targetEnvWarned?: WeakSet<object> | undefined;
 }
 
@@ -126,10 +123,9 @@ export function validTargetEnv(value: unknown): string | undefined {
 }
 
 /**
- * Resolves one test's identity (04.3.2 §5): the `evidgate.id` annotation first, the
- * sidecar second, both present and different → conflict (never a silent pick). Pure
- * except for the warning sink and the optional variant memo; the stateful wrapper is
- * {@link createIdentityResolver}.
+ * Resolves one test's identity: the `evidgate.id` annotation first, the sidecar second, both
+ * present and different → conflict (never a silent pick). Pure except for the warning sink and
+ * the optional variant memo; the stateful wrapper is {@link createIdentityResolver}.
  */
 export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Identity {
   const location = locationOf(test);
@@ -183,7 +179,7 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
   if (targetEnv !== undefined) {
     identity.target_env = targetEnv;
   } else if (deps.targetEnv === undefined && project !== undefined) {
-    // S3: both EVIDGATE_TARGET_ENV and the project name are invalid, so no target_env is
+    // Both EVIDGATE_TARGET_ENV and the project name are invalid, so no target_env is
     // emitted. Warn once per project (the project object is the memo key) and never echo
     // the rejected name.
     const warned = deps.targetEnvWarned;
@@ -203,10 +199,9 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
 }
 
 /**
- * The stateful resolver the reporter uses: memoises each test's identity by
- * {@link testKey} (so a conflicted test is never re-mapped within the run, §6) and
- * reports a `duplicate_case_id` warning the first time a case id is seen on a second
- * identity (see {@link identityKey}).
+ * The stateful resolver the reporter uses: memoises each test's identity by {@link testKey} (so a
+ * conflicted test is never re-mapped within the run) and reports a `duplicate_case_id` warning the
+ * first time a case id is seen on a second identity (see {@link identityKey}).
  */
 export function createIdentityResolver(deps: IdentityResolverDeps): IdentityResolver {
   const variantCache = deps.variantCache ?? new WeakMap<object, VariantOutcome>();
@@ -249,9 +244,8 @@ export function createIdentityResolver(deps: IdentityResolverDeps): IdentityReso
         const sameSidecarFile =
           first.source === 'sidecar' && identity.source === 'sidecar' && first.file === file;
         if (!sameSidecarFile) {
-          // AC1: name both locations. Two tests that share one source location are told
-          // apart by their (sanitised) titles so the message stays useful without echoing
-          // raw text.
+          // Name both locations. Two tests that share one source location are told apart by
+          // their (sanitised) titles so the message stays useful without echoing raw text.
           const sameLocation = first.location === location;
           const firstLabel = sameLocation
             ? `${first.location} (${brief(first.title)})`
@@ -270,7 +264,7 @@ export function createIdentityResolver(deps: IdentityResolverDeps): IdentityReso
   };
 }
 
-/** The first test seen for a case id, for the AC1 duplicate warning. */
+/** The first test seen for a case id, for the duplicate warning. */
 interface FirstUse {
   /** {@link identityKey} of the first test: stable across projects and `repeatEach`. */
   key: string;

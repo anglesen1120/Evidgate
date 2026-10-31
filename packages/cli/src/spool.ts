@@ -1,35 +1,6 @@
-// 04.2.3-T1.1: the CLI's read/append side of the on-disk spool.
-//
-// Layout (D1 of the 04.2.3 contract; it adopts the merged reporter's writer so a run
-// spooled by `@evidgate/playwright-reporter` is readable here):
-//
-//   <spool_dir>/<run_id>/<producer_id>/NNNNNN.jsonl   6-digit chunks, one envelope per line
-//   <spool_dir>/<run_id>/<producer_id>/shards.json      writer-owned (never written here):
-//                                                      shard identity + sequence_next floor;
-//                                                      legacy checkpoint.json read as fallback
-//   <spool_dir>/<run_id>/<producer_id>/writer.lock      reporter-held writer lock (D-S56-Q8)
-//   <spool_dir>/<run_id>/<producer_id>/uploads/         CLI-owned upload journal (04.2.4)
-//   <spool_dir>/<run_id>/<producer_id>/cursor.json      CLI-owned ack cursor (0600)
-//   <spool_dir>/<run_id>/<producer_id>/spool.lock       CLI single-writer lock (spoolLock.ts)
-//
-// Durability: appended lines are written, fsynced and the directory fsynced before this
-// module reports success; `ack` makes every chunk it has not already made durable (plus
-// the highest chunk, the only one a writer may still be appending to) and the directory
-// durable BEFORE advancing the cursor, which is itself written tmp + fsync + rename +
-// directory fsync, so a crash can only ever repeat an ack, never lose one.
-//
-// Reads are streaming (bounded blocks, one line at a time): a chunk is never loaded whole
-// and neither is a run. One line is bounded by {@link maxSpoolLineBytes}; a longer line is
-// `spool_corrupt`, never an unbounded buffer. A final line without `\n` is a torn write
-// from a crashed writer and is ignored by the reader (D3); any other unparseable line, a
-// non-contiguous sequence, or a torn line in a non-final chunk is `spool_corrupt` naming
-// chunk + line (never skipped). The appender repairs a torn tail it finds in the highest
-// chunk before its first write, so appending can never concatenate JSON onto a fragment.
-//
-// Cap (D4): `EVIDGATE_SPOOL_MAX_BYTES` bounds the sum of the run directory's file sizes.
-// The check runs BEFORE a single byte is written, so `SpoolCapExceededError` always means
-// "nothing was appended" and names the run, the producer, the cap, the used bytes and the
-// unsent sequence range.
+// The CLI's read/append side of the on-disk spool. Appends and acks are fsynced before
+// success is reported, so a crash can repeat an ack but never lose one; reads stream
+// bounded lines, and the byte cap is checked before anything is written.
 import { closeSync, constants as fsConstants, fsyncSync, openSync } from 'node:fs';
 import { chmod, lstat, mkdir, open, readdir, rename, rm, unlink } from 'node:fs/promises';
 import { basename, join, resolve, sep } from 'node:path';
@@ -140,8 +111,8 @@ export interface OpenProducerSpoolOptions {
 }
 
 /**
- * `spool_cap_exceeded` (AC3, exit 3): the run's spool cannot take another byte without
- * crossing `EVIDGATE_SPOOL_MAX_BYTES`. Nothing was written by the call that throws it.
+ * `spool_cap_exceeded`: the run's spool cannot take another byte without crossing
+ * `EVIDGATE_SPOOL_MAX_BYTES`. Nothing was written by the call that throws it.
  */
 export class SpoolCapExceededError extends CliError {
   readonly runId: string;
@@ -463,7 +434,7 @@ export class ProducerSpool {
     );
     if (usedBytes + requiredBytes > this.maxBytes) {
       // Checks only so far: no chunk was repaired, created or written, so the spool is
-      // byte-identical when this throws (AC3 "nothing written").
+      // byte-identical when this throws ("nothing written").
       throw new SpoolCapExceededError({
         runId: this.runId,
         producerId: this.producerId,

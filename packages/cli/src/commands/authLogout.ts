@@ -1,5 +1,7 @@
-// 04.2.1-T1.1: `evidgate auth logout` — deletes the cached `ci_producer` token so the
-// next run re-authenticates (04.2.1 §8 retention). It needs no token source itself.
+// `evidgate auth logout` — deletes the cached `ci_producer` token so the next run
+// re-authenticates. It needs no token source itself, so it still works once the exchange
+// credential is gone; the server-side token is not revoked here and stays valid until it
+// expires.
 import { deleteCachedToken } from '../auth/tokenCache.js';
 import { ExitCode } from '../exitCodes.js';
 

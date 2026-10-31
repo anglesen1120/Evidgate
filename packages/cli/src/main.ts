@@ -1,8 +1,8 @@
-// 04.2.1-T2.1 / 04.2.1-T1.1: the pure entry point. `main` takes argv, the environment,
-// the two output writers and the optional exchange seams, returns the exit code and
-// never calls `process.exit` (that is `bin.ts`). Every write goes through a redacting
-// writer, so a secret can never reach stdout/stderr (T78); the one exception is the
-// `::add-mask::` line, which a command writes through `maskSecret` to the RAW stdout.
+// The pure entry point. `main` takes argv, the environment, the two output writers and
+// the optional exchange seams, and returns the exit code; the shim `bin.ts` owns the
+// process-level `process.exitCode` write. Every write goes through a redacting writer so a
+// secret cannot reach stdout/stderr; the one exception is the `::add-mask::` line, written
+// to the raw stdout.
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
 
 import type { ExchangeDeps } from './auth/exchange.js';
@@ -59,7 +59,7 @@ export async function main(
   const output = createRedactingIo(io);
   // The mask line must reach the runner verbatim, so it is written to the RAW stdout.
   // `redact(value) !== value` is true only for a registered secret, and the CR/LF guard
-  // keeps a value from forging a second workflow command (04.2.1-T1.1, T78).
+  // keeps a value from forging a second workflow command.
   const maskSecret = (value: string): void => {
     if (value.length > 0 && !/[\r\n]/.test(value) && redact(value) !== value) {
       io.stdout(`::add-mask::${value}\n`);
@@ -102,7 +102,7 @@ export async function main(
       requireToken: resolved.command.requireToken,
     });
     // A command's own pre-flight check runs before the `--verbose` dump, so a refused
-    // configuration is never echoed by that dump (04.2.4-T2 `quickstart`).
+    // configuration is never echoed by that dump.
     resolved.command.validateConfig?.(config);
     if (config.verbose) {
       output.stderr(prefixStderrLines(`${formatConfigForVerbose(config)}\n`));

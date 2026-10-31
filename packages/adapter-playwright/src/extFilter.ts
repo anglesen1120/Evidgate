@@ -1,33 +1,10 @@
-// 04.3.1-T1.2: the 04 §6 `ext` allow-list. Only keys this reporter declares reach `ext`;
-// everything else is dropped, and a key whose name looks like a credential is dropped
-// and counted separately so a leak attempt is observable rather than silent.
+// The `ext` allow-list. Only keys this reporter declares reach `ext`; everything else is
+// dropped, and a key whose name looks like a credential is dropped and counted separately, so
+// a leak attempt is observable rather than silent.
 //
-// The declared set (04 §6 names the test-derived subset — test.title, test.file,
-// test.location, project name, engine version):
-//   schema     — required by contracts/schemas/event-envelope.v1.json on every `ext`
-//   title      — test.title / step.title
-//   file       — test.location.file
-//   location   — test.location / step.location as {file, line, column}
-//   project    — the Playwright project name (test.parent.project()?.name)
-//   engine     — the @playwright/test version carried in the capability document
-//   marker     — run.log marker: run_begin | run_end
-//   capability — the capability document carrier on the first run.log envelope (AC3)
-//   category   — step.category (test.step vs pw:api vs expect …)
-//   case_id    — the resolved catalog case id (04.3.2-T1.2)
-//   variant_hash — sha256 over the canonical normalised params (04.3.2-T1.3)
-//   target_env — EVIDGATE_TARGET_ENV, else the Playwright project name (04.3.2-T1.4)
-//   identity_conflict — true when annotation and sidecar disagree (04.3.2 AC2)
-//   warn       — a warning payload on a run.log envelope (04.3.2 §5)
-//   normalized — the 00 §8.3 normalised status of a test.finished (04.3.2-T2.1, AC6)
-//   skip_reason — "fixme" for a skipped test whose annotations include fixme (AC6)
-//   xfail      — true when expectedStatus is "failed" and the attempt passed or failed (AC6)
-//   error_summary — first line of the first error message, ANSI-stripped, ≤ 256 chars;
-//              never a stack line (04.3.2-T2.1)
-//   attachments — the attempt's attachment records (base name, kind, sensitive, outcome,
-//              code, artifact id) on a test.finished that carried attachments (04.3.3-T2.2).
-//              Set ONLY by the reporter's `testExt` from our own `AttachmentRecord` rows, and
-//              never from a Playwright member: `stepExt` deletes a raw `TestStep.attachments`
-//              (its `{path, body}` would put an absolute path and the bytes into the spool).
+// `attachments` is set ONLY from our own `AttachmentRecord` rows, never from a Playwright
+// member: `stepExt` deletes a raw `TestStep.attachments`, whose `{path, body}` would put an
+// absolute path and the file bytes straight into the spool.
 export const EXT_ALLOWED_KEYS = [
   'schema',
   'title',
@@ -52,7 +29,7 @@ export const EXT_ALLOWED_KEYS = [
 
 export type ExtAllowedKey = (typeof EXT_ALLOWED_KEYS)[number];
 
-/** A key name that looks like a credential is dropped and counted (04 §6, S3). */
+/** A key name that looks like a credential, so it is dropped and counted separately. */
 export const SECRET_KEY_PATTERN = /token|secret|password/i;
 
 export interface ExtFilterResult {

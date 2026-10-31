@@ -1,10 +1,10 @@
-// 04.2.1-T1.1: the OIDC/ingest-token exchange at `POST /v1/ci/token` (04.2.1 §5
-// `auth/refresh.ts`, AC1/AC2/AC4/AC7). It resolves the token source, obtains the
-// credential (the env OIDC JWT, a GitHub Actions ID token, or the ingest token), calls
-// the SDK operation with the redirect-refusing client, and maps every failure to a
-// `CliError` whose `code` echoes the server's `error.code` verbatim (contracts/cli.md
-// §5). The exchanged token is registered with the redactor before it is validated or
-// returned, so it can never reach a writer (T78).
+// The OIDC/ingest-token exchange at `POST /v1/ci/token`: resolves the token source, obtains
+// the credential (env OIDC JWT, GitHub Actions ID token, or ingest token), calls the SDK
+// operation through the redirect-refusing client, and maps a server refusal to a `CliError`
+// carrying the server's `error.code` when it is a safe identifier (else `exchange_failed`);
+// client-side failures carry the CLI's own codes (contracts/cli.md §5). The exchanged token is
+// registered with the redactor before it is validated or returned, so it can never reach a
+// writer.
 import { exchangeCiToken, type CiTokenRequest } from '@evidgate/sdk';
 
 import { callApi } from '../callApi.js';
@@ -20,7 +20,7 @@ import { deleteCachedToken } from './tokenCache.js';
 export type ExchangeSource = 'oidc' | 'actions-id-token' | 'ingest';
 
 export interface ExchangedToken {
-  /** Registered with the redactor before any validation or return (T78). */
+  /** Registered with the redactor before any validation or return, so no message can leak it. */
   readonly token: string;
   /** ISO-8601 expiry from the server. */
   readonly expiresAt: string;
@@ -65,7 +65,7 @@ const exchangeSourceNames =
   `${envNames.actionsIdTokenRequestUrl} + ${envNames.actionsIdTokenRequestToken} or ` +
   `${envNames.ingestToken}`;
 
-/** Remediation lines for the two binding states (04.2.1 §8 T70). */
+/** Remediation lines for the two binding states; the server's message alone is not actionable. */
 const bindingHints: Readonly<Record<string, string>> = {
   binding_pending:
     'the repository has not presented the binding challenge yet — set the repository ' +
@@ -131,9 +131,9 @@ export async function exchangeToken(
 }
 
 /**
- * Exchanges the credential and, when the server answers 401/403, purges the cached
- * entry first so the next run re-authenticates cleanly (04.2.1 §6). A purge failure is
- * swallowed: the server's error is the one that must surface (C2).
+ * Exchanges the credential and, when the server answers 401/403, purges the cached entry
+ * first so the next run re-authenticates cleanly. A purge failure is swallowed: the server's
+ * error is the one that must surface.
  */
 export async function exchangeAndPurge(
   config: ResolvedConfig,
@@ -198,10 +198,9 @@ function buildBody(
 }
 
 /**
- * Fetches a GitHub Actions ID token from `ACTIONS_ID_TOKEN_REQUEST_URL` with the
- * `evidgate` audience. The URL must be `https:` (or `http:` on a loopback host); a
- * non-2xx reply or a body without a `value` is `oidc_request_failed`, a transport
- * failure is `transport` (04.2.1 §5).
+ * Fetches a GitHub Actions ID token from `ACTIONS_ID_TOKEN_REQUEST_URL` with the `evidgate`
+ * audience. The URL must be `https:` (or `http:` on a loopback host); a non-2xx reply or a
+ * body without a `value` is `oidc_request_failed`, a transport failure is `transport`.
  */
 async function fetchActionsIdToken(
   config: ResolvedConfig,
@@ -283,7 +282,7 @@ function parseActionsIdTokenUrl(raw: string): URL {
   return url;
 }
 
-/** Validates the 200 body; the token is registered before validation (T78). */
+/** Validates the 200 body; the token is registered for redaction before validation. */
 function readSuccess(data: unknown, source: ExchangeSource): ExchangedToken {
   const body: Record<string, unknown> =
     typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};

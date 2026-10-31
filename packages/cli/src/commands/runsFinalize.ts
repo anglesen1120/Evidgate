@@ -1,36 +1,8 @@
-// 04.2.3-T2.1: `evidgate runs finalize` — declares one producer slot done at
-// `POST /v1/runs/{r}/finalize` (openapi `finalizeRun`, 00 §9.3, 05.3.2-T1) and prints the
-// 202 reconcile-accepted state (04.2.3 §2 AC6, §5, §8; contracts/cli.md §11).
-//
-// The two values the server arbitrates are read from the CLI's own ack cursor, never from
-// flags (D7, 2026-10-23): `last_sequence` is `cursor.json`'s `last_acked_sequence` and
-// `count` its `acked_count`. A spool that still holds unacked events is refused with
-// `unsent_events` (exit 3) naming the run and the unsent range, so a finalize can never
-// declare a sequence the server has not acknowledged. A cursor whose `acked_count`
-// exceeds `last_acked_sequence` is `spool_corrupt` (exit 3) rather than a declaration
-// nobody could have produced (S54 SC9). A missing producer directory is `spool_missing`
-// (exit 3) — finalize never creates a spool.
-//
-// Every flag is validated BEFORE `getToken()`, so a bad flag makes no request at all and
-// not even the token exchange (the `runs create` rule, 04.2.2 §8/§9). Each option is
-// single-use: every option is `multiple: true`, so a repetition is refused as `usage`
-// instead of silently taking the last value.
-//
-// The slot is read and the spool purged under the producer's exclusive `spool.lock`
-// (D2/`spoolLock.ts`), the same lock `events send` holds, so two CLI processes can never
-// interleave an ack, a finalize or a purge. A reporter that still holds `writer.lock` makes
-// the command refuse with `spool_locked` (exit 3) before the cursor is read — finalize is
-// the destructive one — and the same guard is re-checked immediately before the recursive
-// purge, so a test run that is still writing never loses its spool (D-S56-Q8). The purge
-// runs only after a 202: a failed finalize keeps every byte, and a failed purge after a 202
-// is a stderr warning, not an error — the run IS finalized at that point.
-//
-// A 403 `producer_slot_taken`, a 422 `unknown_producer`, a 422 `manifest_invalid` or a 409
-// is never retried: it exits 3 with the server's `error.code` and `request_id` verbatim
-// (T9). A transport failure, a 429 or a 5xx is retried a bounded number of times under the
-// SAME derived key and body, so a replay cannot declare a second slot. The hint says the
-// command is idempotent, so re-running it after fixing the cause is safe. A 401 purges the
-// cached CI token (04.2.1-T1 hand-over, contracts/cli.md §7); a 403 or 422 keeps it.
+// `evidgate runs finalize` declares one producer slot done and prints the 202
+// reconcile-accepted state. The arbitrated values come from the CLI's own ack cursor, never
+// from flags, so a finalize can never declare a sequence the server has not acknowledged.
+// It runs under the same producer lock as `events send`, refuses a live writer before the
+// cursor is read, and purges only after a 202.
 import { createHash } from 'node:crypto';
 
 import { finalizeRun } from '@evidgate/sdk';
@@ -242,7 +214,7 @@ export const runsFinalizeCommand: CommandDefinition = {
         }
         if (!response.ok) {
           if (response.status === 401) {
-            // Best-effort: the server's error is the one that must surface (04.2.1 §6).
+            // Best-effort: the server's error is the one that must surface.
             await deleteCachedToken(config).catch(() => undefined);
           }
           // A 403 `producer_slot_taken`, a 422 `unknown_producer`/`manifest_invalid` and a
@@ -312,10 +284,10 @@ function usageError(message: string): CliError {
 }
 
 /**
- * Maps a non-2xx finalize reply through §5 and adds the one hint the command owns: the
- * server's slot close makes a repeat a no-op 202, so re-running after fixing the cause is
- * safe. The server code, `request_id` and `detail:` lines are carried over untouched
- * (T9) — this only re-wraps so the hint is not lost (`ServerErrorFallback` has no hint).
+ * Maps a non-2xx finalize reply and adds the one hint the command owns: the server's slot
+ * close makes a repeat a no-op 202, so re-running after fixing the cause is safe. The server
+ * code, `request_id` and `detail:` lines are carried over untouched; this only re-wraps so
+ * the hint is not lost (`ServerErrorFallback` has no hint).
  */
 function finalizeError(error: unknown, response: Response): CliError {
   const mapped = serverErrorFromResponse(error, response, {

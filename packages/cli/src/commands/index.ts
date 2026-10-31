@@ -1,5 +1,5 @@
-// 04.2.1-T2.1: the command registry (04.2.1 §5). 04.2.2/04.2.3 add a command by
-// appending one entry here; the dispatcher in `main.ts` never changes
+// The command registry. A new command is added by appending one entry here; the dispatcher in
+// `main.ts` never changes, so commands cannot drift in how they are parsed or dispatched
 // (contracts/cli.md §1).
 import type { ParseArgsOptionsConfig } from 'node:util';
 
@@ -30,9 +30,9 @@ export interface CommandContext {
   /** Transport/back-off seams `main` forwards from its own `deps` argument. */
   readonly deps: ExchangeDeps;
   /**
-   * Writes a GitHub `::add-mask::<value>` line to the RAW stdout, bypassing the
-   * redacting writer (which would otherwise turn the mask into `[REDACTED]`). A no-op
-   * unless `value` is a registered secret without a line break (04.2.1-T1.1, T78).
+   * Writes a GitHub `::add-mask::<value>` line to the RAW stdout, bypassing the redacting
+   * writer (which would otherwise turn the mask into `[REDACTED]`). A no-op unless `value` is
+   * a registered secret without a line break, because the runner parses that line by line.
    */
   readonly maskSecret: (value: string) => void;
 }
@@ -49,9 +49,9 @@ export interface CommandDefinition {
   /** Usage placeholder for the command's positional arguments, e.g. `<file>`. */
   readonly positionals?: string;
   /**
-   * Optional pre-flight check `main` runs after `resolveConfig` and BEFORE the
-   * `--verbose` config dump, so a command can refuse an unusable configuration without
-   * that dump echoing the offending value (04.2.4-T2 `quickstart` project guard).
+   * Optional pre-flight check `main` runs after `resolveConfig` and BEFORE the `--verbose`
+   * config dump, so a command can refuse an unusable configuration without that dump echoing
+   * the offending value.
    */
   readonly validateConfig?: (config: ResolvedConfig) => void;
   readonly run: (context: CommandContext) => Promise<ExitCode>;
@@ -65,11 +65,11 @@ export const commandRegistry: Readonly<Record<string, CommandDefinition>> = {
   [manifestsUploadCommand.name]: manifestsUploadCommand,
   [quickstartCommand.name]: quickstartCommand,
   [runsCreateCommand.name]: runsCreateCommand,
-  // 04.2.3: the two spool commands (`events send`, `runs finalize`). Appended here, so
-  // the dispatcher in `main.ts` never changes (contracts/cli.md §1).
+  // The two spool commands (`events send`, `runs finalize`), appended last so the dispatcher
+  // in `main.ts` never changes (contracts/cli.md §1).
   [eventsSendCommand.name]: eventsSendCommand,
   [runsFinalizeCommand.name]: runsFinalizeCommand,
-  // 04.2.4-T1: `artifacts upload` (`upload-url` -> presigned PUT -> `complete`).
+  // `artifacts upload` (`upload-url` -> presigned PUT -> `complete`).
   [artifactsUploadCommand.name]: artifactsUploadCommand,
 };
 

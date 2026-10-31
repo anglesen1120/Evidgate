@@ -1,8 +1,6 @@
-// 04.2.1-T2.2: the M1 dev-token path (04.2.1 §5 `auth/dev-token.ts`, AC8). It returns
-// `EVIDGATE_DEV_TOKEN` as the bearer with no exchange, no cache and no file write, and
-// is refused unless `EVIDGATE_ENV` is exactly `dev` AND the API URL is loopback — a
-// fail-closed decision stricter than AC8's minimum (04.2.1-T2 contract §Token sources).
-// 04.2.1-T1 replaces the caller's branch with the real exchange.
+// The dev-token path: returns `EVIDGATE_DEV_TOKEN` as the bearer with no exchange, no cache
+// and no file write, and refuses unless `EVIDGATE_ENV` is exactly `dev` AND the API URL is
+// loopback — fail-closed, because a dev token sent anywhere else is a leaked credential.
 import { isLoopbackApiUrl, type ResolvedConfig } from '../config.js';
 import { CliError } from '../errors.js';
 

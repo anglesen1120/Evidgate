@@ -1,18 +1,7 @@
-// 01.3.2-T2.2: the CLI half of the dual-runtime validators (00 §5.5 edge,
-// DECISIONS §4.2/§4.3). Ajv 8 against the 2020-12 meta-schema + ajv-formats
-// asserts `format`, matching Corvus.Json.Validator's `alwaysAssertFormat` on the
-// server. The module loads every `contracts/schemas/*.json`, `contracts/adapter/**/*.json`
-// (including `adapter/operations/`) and `contracts/manifest/*.json` document once,
-// keyed by file name without extension, and `validate` maps engine output to the
-// 00 §9.2 `details[]` rows (`index`, `path`, `reason`) — the same mapping
-// `Evidgate.BuildingBlocks.Contracts.Validation` produces, exercised against the
-// `fixtures/contracts/` parity corpus by both suites (AC3, T42). A document may
-// reference a sibling by its canonical URI (`urn:evidgate:contract:<key>`) — the
-// registry is the loaded set only, never the file system or the network.
-//
-// The core (`contractValidator`/`ContractSchemaSet`) is schema-text in, errors
-// out, so a web or SDK consumer can reuse it with schemas fetched out-of-band;
-// only `loadContractSchemas` touches the file system.
+// The CLI half of the dual-runtime validators: Ajv 8 against the 2020-12 meta-schema with
+// `format` asserted, matching Corvus.Json.Validator's `alwaysAssertFormat` on the server,
+// and mapping engine output to the same `details[]` rows the server emits so both suites
+// agree on the parity corpus. The registry is the loaded set only, never the file system.
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 

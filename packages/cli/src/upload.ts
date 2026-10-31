@@ -1,39 +1,8 @@
-// 04.2.4-T1.1/T1.2: `uploadFile()` — one artifact end to end: `POST /v1/artifacts/
-// upload-url` → signed presigned PUT → `POST /v1/artifacts/{a}/complete` (04.2.4 §2
-// AC1–AC4, §5, §6, §8; openapi `createArtifactUploadUrl` / `completeArtifact`).
-//
-// Reading discipline (04.2.4 §8 "single streaming pass / no double read of multi-GB
-// traces"): the signed checksum header must exist BEFORE the PUT, and the only way to know
-// it is to read the file. So the file is read TWICE with O(1) memory each time — pass 1
-// hashes it in bounded chunks, pass 2 streams it as the PUT body while hashing again — and
-// the second pass is verified against the first: if the bytes changed between the passes
-// (any size change or any digest change) the request is aborted before `complete` and the
-// upload fails `upload_checksum_mismatch`. No pass ever holds the file, or a window of it
-// larger than one chunk, in memory. The plan's "one pass" means "no whole-file buffering,
-// no temp copy", which is exactly what this does; `upload.test.ts` asserts the bound.
-//
-// Idempotency (T85/T92, 04.2.4 AC1/AC3):
-// - the `upload-url` `Idempotency-Key` is the AC1 formula — sha256 over the length-prefixed
-//   UTF-8 fields `run_id, producer_id, execution_key, attempt_no, kind, file_sha256` — so a
-//   retried request for the same artifact replays the stored response and never mints a
-//   second row. A renewal mint (the presigned URL expired before any byte was accepted)
-//   appends the mint number as a seventh length-prefixed field, so it is still deterministic
-//   across restarts but can never replay the dead row's stored response;
-// - `complete` carries its own deterministic key (artifact id + digest + size), so a
-//   resumed `complete` after a crash is the same request, not a second outcome.
-//
-// Retry/expiry (04.2.4 §5, §8): only 408/429/5xx/transport are retried (delegated to
-// `uploadRetry.ts`, which reuses `sender.ts`'s backoff/`Retry-After`/timeout). A PUT refused
-// with 403/404/410 means the presigned URL is dead (T18: 24 h `pending/`, ≤ 15 min URL): the
-// CLI re-requests `upload-url` as a fresh mint and retries the PUT against the new row,
-// bounded by the wall clock and a small mint cap. Deterministic 4xx are never retried and
-// surface verbatim.
-//
-// Secret hygiene (S3, 04 §6): the presigned URL is a bearer credential. It is never
-// printed, never written to the journal, never put in an error message, and the PUT is
-// made with the operator's bare `fetch` — NOT through the API client — so the API bearer
-// is never sent to the object store. Only the server's `error.code`, `request_id` and the
-// HTTP status are echoed.
+// One artifact end to end: `upload-url` → presigned PUT → `complete`. The file is read
+// twice with O(1) memory so the checksum exists before the PUT and a changed file aborts.
+// Deterministic keys make a retry replay rather than mint a second row, and the presigned
+// URL — a bearer credential — never reaches stdout/stderr, the journal, an error or the
+// API client.
 import { createHash, type Hash } from 'node:crypto';
 import { Readable } from 'node:stream';
 
@@ -151,7 +120,7 @@ export interface UploadOutcome {
   readonly state: 'ready';
   /** The bytes the server reports (equal to the local size). */
   readonly bytes: number;
-  /** `pending` right after `complete`; the secret scan is asynchronous (T19). */
+  /** `pending` right after `complete`; the secret scan is asynchronous. */
   readonly scanState: string | null;
   /** The artifact row's mint (`0` for the first `upload-url`). */
   readonly mintNo: number;
@@ -171,7 +140,7 @@ export class UploadFailedError extends CliError {
   }
 }
 
-/** Inputs of the AC1 `upload-url` key: exactly the values the request body is built from. */
+/** Inputs of the `upload-url` key: exactly the values the request body is built from. */
 export interface UploadUrlKeyInput {
   readonly runId: string;
   readonly producerId: string;
@@ -180,20 +149,14 @@ export interface UploadUrlKeyInput {
   readonly kind: ArtifactKind;
   /** `sha256:<64 hex>` — the local digest, not the base64 form the header uses. */
   readonly fileSha256: string;
-  /** The mint number: `0` is the AC1 key, `n` a deterministic renewal (see the module doc). */
+  /** The mint number: `0` is the first key, `n` a deterministic renewal (see the module doc). */
   readonly mintNo: number;
 }
 
 /**
- * The `upload-url` `Idempotency-Key` (04.2.4 AC1, T85/T92).
- *
- * The pre-image is a length-prefixed concatenation — `` <utf8 bytes>:<value> `` per field —
- * not a bare `‖`, because a bare concatenation is ambiguous (`ab|c` and `a|bc` hash the
- * same). Field order is fixed, `attempt_no` is its decimal spelling, and `kind`/`file_sha256`
- * are canonical already. `mint_no` is appended only when it is not `0`, so the first key is
- * exactly `sha256(run_id ‖ producer_id ‖ execution_key ‖ attempt_no ‖ kind ‖ file_sha256)`
- * and every renewal is a different, equally deterministic key. 64 hex characters, well
- * inside the route's 128-character cap, and identical across process restarts.
+ * The `upload-url` `Idempotency-Key`. The pre-image is length-prefixed per field, not a
+ * bare concatenation, because `ab|c` and `a|bc` would otherwise hash the same; `mint_no` is
+ * appended only for a renewal, so the first key is exactly the six-field digest.
  */
 export function deriveUploadUrlIdempotencyKey(input: UploadUrlKeyInput): string {
   const fields = [
@@ -220,10 +183,10 @@ export interface CompleteKeyInput {
 }
 
 /**
- * The `complete` `Idempotency-Key` (T92): the lowercase hex SHA-256 of the UTF-8 JSON array
+ * The `complete` `Idempotency-Key`: the lowercase hex SHA-256 of the UTF-8 JSON array
  * `['evidgate.artifact-complete-key.v1', artifact_id, file_sha256, size]`. A JSON array is
- * unambiguous and versioned like `deriveFinalizeIdempotencyKey`, so a resumed `complete`
- * is the same request while a different artifact never reuses the key.
+ * unambiguous and versioned, so a resumed `complete` is the same request while a different
+ * artifact never reuses the key.
  */
 export function deriveCompleteIdempotencyKey(input: CompleteKeyInput): string {
   return createHash('sha256')
@@ -312,7 +275,7 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
       };
     }
     if (resumable.put_done) {
-      // The bytes are already in the store: a restart calls ONLY `complete` (AC3, §6).
+      // The bytes are already in the store: a restart calls ONLY `complete`.
       artifactId = resumable.artifact_id;
     } else {
       // Re-request with the same key: the stored response replays the same artifact row.
@@ -355,7 +318,7 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
     });
   }
 
-  // AC3: a `ready` artifact is the stored object, so the server must report exactly the
+  // A `ready` artifact is the stored object, so the server must report exactly the
   // bytes that were signed. A missing count is not `0` and is not the local size: it is a
   // response that cannot prove the artifact exists (openapi `CompleteResponse.bytes` is
   // nullable, so `null` is a shape-valid answer with no evidence behind it).
@@ -396,14 +359,11 @@ export async function uploadFile(request: UploadRequest): Promise<UploadOutcome>
 }
 
 /**
- * A journal write that must never turn a finished transfer into a failure (04.2.4 §12.5):
- * once the bytes are in the store, a busy producer lock only costs the next run one repeat
- * of the interrupted step (`put_done` lost: the same bytes are PUT again, or a fresh mint
- * when the presigned URL has expired; `complete_done` lost: the idempotent `complete` is
- * called again). The wait itself is capped at `maxWaitMs` — `events send` may hold the lock
- * for minutes, and spending the rest of the upload deadline on it would make `complete` end
- * in `deadline_exceeded` for a transfer that already succeeded. Any other journal failure (a
- * corrupt or unsafe record) still surfaces: it means the resume state cannot be trusted.
+ * A journal write that must never turn a finished transfer into a failure: once the bytes
+ * are in the store, a busy producer lock only costs one repeat of the interrupted step, and
+ * the wait is capped so a long-held lock cannot push `complete` into `deadline_exceeded`.
+ * Any other journal failure (a corrupt or unsafe record) still surfaces: it means the resume
+ * state cannot be trusted.
  */
 async function updateJournalBestEffort(
   journal: UploadJournal,
@@ -532,8 +492,8 @@ async function requestUploadUrl(
 }
 
 /**
- * The PUT, retried only for 429/408/5xx/transport. A 403/404/410 is the expired-URL signal
- * (T18): it is never retried against the same signature, `mintAndPut` re-mints instead.
+ * The PUT, retried only for 429/408/5xx/transport. A 403/404/410 is the expired-URL signal:
+ * it is never retried against the same signature, `mintAndPut` re-mints instead.
  *
  * The attempt's `signal` from `retryAttempts` is deliberately NOT used: it carries the 30 s
  * per-request timeout of the two JSON calls, and a multi-GB trace legitimately takes longer
@@ -821,9 +781,9 @@ class UploadStalledError extends Error {
 /**
  * The PUT body: streams the file in bounded chunks while hashing, and refuses to finish if
  * the bytes are not exactly the declared size and digest — which aborts the request, so a
- * half-sent object is never completed (the `pending/` object expires by lifecycle, T18).
- * It reads the guarded descriptor `putOnce` re-opened (never a path), so a swapped file can
- * not be sent, and it reports every chunk to the idle timer.
+ * half-sent object is never completed. It reads the guarded descriptor `putOnce` re-opened
+ * (never a path), so a swapped file cannot be sent, and reports every chunk to the idle
+ * timer.
  *
  * `done` always settles, whoever ends the request first: the generator itself, the store
  * (an early 2xx — see {@link abandon}), or `putOnce`'s refusal path ({@link abort}).
@@ -1146,7 +1106,7 @@ const headerValuePattern = /[^\t\u0020-\u007e\u0080-\u00ff]/;
  * Exactly the signed headers, validated against the local file: `Content-Length` must be the
  * declared size and the `x-amz-checksum-sha256` header must equal the base64 of the digest.
  * A response that signs neither is refused — the checksum exists to make the PUT
- * self-verifying (T18), and sending an unsigned length would defeat that.
+ * self-verifying, and sending an unsigned length would defeat that.
  */
 function signedHeaders(
   headers: Readonly<Record<string, string>>,

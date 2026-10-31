@@ -1,17 +1,11 @@
-// 04.3.2-T1.3: `variant_hash` — the reporter's port of the server's catalog normaliser and
-// digest. The server is the source of truth:
-//   src/Modules/Evidgate.Modules.Catalog/Domain/VariantNormalizer.cs (Normalize/Scalar/StringValue)
-//   src/Modules/Evidgate.Modules.Catalog/Domain/TextRules.cs (IsClean)
-//   src/BuildingBlocks/SharedKernel/Security/SecretShape.cs (KeyLooksSecret/ValueLooksSecret/Entropy)
-//   src/BuildingBlocks/Canonicalization/CanonicalHash.cs + JsonCanonicalizer.cs (RFC 8785 digest)
-//
-// The reporter keeps no runtime import of @evidgate/cli here (the packages/adapter-playwright/src/uuidv7.ts
-// precedent): 04.3.3-T2 puts the package's one runtime load of the CLI in a single lazy
-// `import()` in `attach.ts`, and the dependency stays one-way — packages/cli never imports this
-// adapter. So the pinned `canonicalize` 5.1.0 package is used directly — exactly the library
-// packages/cli/src/canonical.ts wraps — and the `sha256:<lowercase hex>` wrapper is taken over its
-// output. `fixtures/variant-hash/vectors.json` is the shared corpus the .NET suite
-// (tests/Tenancy.IntegrationTests/VariantGoldenVectorTests.cs) asserts with the same expectations.
+// `variant_hash` — the reporter's port of the server's catalog normaliser and digest, which
+// stays the source of truth (src/Modules/Evidgate.Modules.Catalog/Domain/VariantNormalizer.cs,
+// TextRules.cs, SharedKernel/Security/SecretShape.cs, Canonicalization/CanonicalHash.cs). It
+// keeps no runtime import of @evidgate/cli: the package's one runtime load of the CLI is the
+// lazy `import()` in `attach.ts` and the dependency is one-way, so the pinned `canonicalize`
+// package is used directly — the same library packages/cli/src/canonical.ts wraps — with the
+// `sha256:<lowercase hex>` wrapper over its output. fixtures/variant-hash/vectors.json is the
+// corpus this package and the .NET variant suite both assert, so the port cannot drift unseen.
 //
 // The normalisation rules and the digest are ported exactly. Two things cannot be, because the
 // reporter is handed a JavaScript value where the server reads the author's JSON text:

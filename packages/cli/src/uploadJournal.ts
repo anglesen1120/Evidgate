@@ -1,23 +1,7 @@
-// 04.2.4-T1.3: the crash-safe upload journal (04.2.4 §4/§6, contracts/cli.md §12).
-//
-// Layout (one level below the producer directory the 04.2.3 spool already uses, so a
-// finalize purge that removes the producer directory removes the journal too):
-//
-//   <spool_dir>/<run_id>/<producer_id>/uploads/<identity>-<artifact_id>.json
-//
-// `<identity>` is the first 16 hex of the upload identity digest (see
-// {@link uploadIdentityDigest}). The identity is every value the `upload-url` request is
-// built from — `kind`, `execution_key`, `attempt_no`, `media_type`, `file_sha256`, `size`
-// — so the same bytes under a different execution, kind or attempt are a DIFFERENT upload:
-// they neither resume nor reuse the other row's mint. Keying the file name by that digest
-// also means a lookup reads the directory once and parses only its own candidates, instead
-// of parsing every record twice per upload.
-//
-// Content is the identity plus `{ artifact_id, put_done, complete_done, mint_no }`, where
-// `mint_no` is the 0-based upload-url mint this row belongs to (see `upload.ts` and
-// contracts/cli.md §12 for why an expired presigned URL needs a new mint). The record never
-// carries the presigned URL, a token or any header value: those are bearer credentials
-// (04 §6/S3) and a journal survives on disk after the process dies.
+// The crash-safe upload journal, one record per upload under the producer directory so a
+// finalize purge removes it too. The name digests every `upload-url` value, so a different
+// execution, kind or attempt cannot resume another row's mint. A record never carries the
+// presigned URL or a token: both are bearer credentials and the file outlives the process.
 //
 // Every write is tmp + fsync + rename + directory fsync under the producer's exclusive
 // `spool.lock` (`spoolLock.ts`), the same lock `events send` and `runs finalize` take, so
@@ -56,7 +40,7 @@ import { artifactKinds, type ArtifactKind } from './uploadPaths.js';
 
 import type { FileHandle } from 'node:fs/promises';
 
-/** The journal directory inside a producer directory (04.2.4 §4). */
+/** The journal directory inside a producer directory. */
 export const uploadsDirectoryName = 'uploads';
 
 /**
@@ -364,8 +348,8 @@ function sameIdentity(entry: UploadIdentity, identity: UploadIdentity): boolean 
 
 /**
  * The identity digest: the length-prefixed UTF-8 concatenation of a version tag and every
- * identity field, in a fixed order, hashed with SHA-256. Length prefixes keep the encoding
- * unambiguous (`ab|c` and `a|bc` must not collide), exactly like the AC1 `upload-url` key.
+ * identity field, fixed order, hashed with SHA-256. Length prefixes keep the encoding
+ * unambiguous (`ab|c` and `a|bc` must not collide), like the `upload-url` key.
  * 64 lowercase hex; the first 16 are the record's name prefix.
  */
 export function uploadIdentityDigest(identity: UploadIdentity): string {

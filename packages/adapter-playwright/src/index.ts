@@ -1,7 +1,7 @@
-// 04.3.1-T1.1: package entry. Playwright loads a reporter module and uses its default
-// export as the reporter class (node_modules/playwright/lib/runner/index.js
-// requireOrImportDefaultFunction), so `EvidgateReporter` is the default export here.
-// The named exports are the pieces the package's own tests and 04.3.2/04.3.3 extend.
+// Package entry. Playwright loads a reporter module and uses its default export as the
+// reporter class (node_modules/playwright/lib/runner/index.js requireOrImportDefaultFunction),
+// so `EvidgateReporter` is the default. The named exports are what the package's own tests and
+// the pipeline stages above import directly.
 export {
   EvidgateReporter,
   MAX_WARNING_ENVELOPES,

@@ -1,13 +1,8 @@
-// 04.2.2-T1.1: the 00 §9.2 error envelope → `CliError` mapping shared by the
-// project-scoped commands (contracts/cli.md §5). `auth/exchange.ts` uses it for the
-// token exchange and `manifests upload` for the manifest upload, so the two cannot
-// drift into two spellings of one rule: the server's `error.code` is echoed only when
-// it is a safe identifier, every server-supplied text field (message, request_id and
-// each detail path/reason) is redacted, capped at 200 code points and control-char
-// escaped, `request_id` falls back to the `X-Request-Id` header, and `error.details[]`
-// becomes one `detail:` line each.
-// A transport failure is reported with a fixed message, so the cause — which may embed
-// a URL or a credential — is never echoed.
+// Maps the server's error envelope to `CliError` so the exchange and manifest-upload paths
+// cannot drift into two spellings of one rule (contracts/cli.md §5): `error.code` is echoed
+// only when it is a safe identifier, and every server-supplied text field is redacted,
+// capped and control-char escaped. A transport failure keeps a fixed message, so a URL or
+// credential it might embed is never echoed.
 import { isErrorEnvelope, type ErrorEnvelope } from '@evidgate/sdk';
 
 import { CliError, escapeControlCharacters } from './errors.js';

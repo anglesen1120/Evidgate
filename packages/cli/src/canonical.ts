@@ -1,7 +1,7 @@
-// 01.3.2-T4.2: the CLI/web half of 00 §7 canonical hashing. `canonicalize` 5.1.0
-// is the pinned RFC 8785 (JCS) implementation (DECISIONS §4.2) and Node's crypto
-// gives the sha256:<hex> wrapper; the digests must match the server-side
-// Evidgate.BuildingBlocks.Canonicalization byte for byte (AC5).
+// The CLI/web half of canonical hashing. `canonicalize` is the pinned RFC 8785 (JCS)
+// implementation and Node's crypto gives the `sha256:<hex>` wrapper; the digests must match
+// the server-side Evidgate.BuildingBlocks.Canonicalization byte for byte, or the same document
+// hashes differently on the two sides of the wire.
 import { createHash } from 'node:crypto';
 
 import canonicalize from 'canonicalize';
@@ -61,19 +61,18 @@ export function canonicalHashOfCanonical(canonicalJson: string): string {
 }
 
 /**
- * Self-consistency guard (01.3.2-T4 QA DEF-1): a canonical text is a fixed point of
- * `JSON.parse` + `canonicalize`, so re-parsing it and canonicalizing it again must
- * reproduce it byte for byte. Node 26.10.0 does not always hold up its side: in a
- * long-running process, `JSON.parse` can mis-decode a member name written with an
- * escape (`"\r"` came back as a lone backslash) — the first parse of a text differs from
- * later ones for a small fraction of documents, so `canonicalize(JSON.parse(text))` can
- * depend on process history and produce a digest the server never computes for the same
- * document. That is a V8/Node defect, not fixable here; this guard turns the silent wrong
- * digest into a thrown error instead.
+ * Self-consistency guard: a canonical text is a fixed point of `JSON.parse` + `canonicalize`,
+ * so re-parsing it and canonicalizing it again must reproduce it byte for byte. Node does not
+ * always hold up its side: in a long-running process, `JSON.parse` can mis-decode a member
+ * name written with an escape (`"\r"` came back as a lone backslash) — the first parse of a
+ * text differs from later ones for a small fraction of documents, so
+ * `canonicalize(JSON.parse(text))` can depend on process history and produce a digest the
+ * server never computes for the same document. That is a V8/Node defect, not fixable here;
+ * this guard turns the silent wrong digest into a thrown error instead.
  *
- * It detects the divergence, not its cause: the check compares two parses made in the
- * same process, so it catches the case where the re-parse of the canonical text
- * disagrees with the value that produced it.
+ * It detects the divergence, not its cause: the check compares two parses made in the same
+ * process, so it catches the case where the re-parse of the canonical text disagrees with the
+ * value that produced it.
  *
  * @throws {Error} when the canonical text does not survive the round trip.
  */

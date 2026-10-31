@@ -1,24 +1,22 @@
-// 04.3.3-T2.1: the allow-listed directory guard every attachment path passes before an
-// upload (AC6; plan §8 "04 §5 traversal row" → `paths.test.ts`).
+// The allow-listed directory guard every attachment path passes before an upload.
 //
 // Why this exists: an attachment path arrives from the test process, and a trace or a
-// screenshot can carry personal data (DECISIONS §7). The rule is deny-by-default and the same
-// one `packages/cli/src/uploadPaths.ts` applies to `--file`: the file's REAL path must sit
-// under one of the roots — the Playwright output directories plus `test-results` plus any
-// explicitly allowed directory — with `realpath` taken on both sides, so a symlink planted
-// inside a root can never be used to reach a file outside it, and `..` traversal is resolved
-// away before the comparison. The two guards must agree on the edge cases, so the containment
-// test is the CLI's: `..foo` is a legal child name, only the exact `..` segment and `..`
-// followed by a separator leave the root.
+// screenshot can carry personal data. The rule is deny-by-default and the same one
+// `packages/cli/src/uploadPaths.ts` applies to `--file`: the file's REAL path must sit under one
+// of the roots — the Playwright output directories plus `test-results` plus any explicitly
+// allowed directory — with `realpath` taken on both sides, so a symlink planted inside a root
+// can never reach a file outside it, and `..` traversal is resolved away before the comparison.
+// The two guards must agree on the edge cases, so the containment test is the CLI's: `..foo` is
+// a legal child name, only the exact `..` segment and `..` followed by a separator leave the root.
 //
 // This module never reads a byte and never opens the file: it resolves, checks the type and
-// reports the size, and the upload streams from the same real path (04.2.4-T1). A path that
-// does not exist yet is `attachment_unreadable`; a directory, FIFO, device or a symlink that
-// appeared after the resolution is refused, because a FIFO would park the reporter
-// indefinitely and a device is never an attachment.
+// reports the size, and the upload streams from the same real path. A path that does not exist
+// yet is `attachment_unreadable`; a directory, FIFO, device or a symlink that appeared after the
+// resolution is refused, because a FIFO would park the reporter indefinitely and a device is
+// never an attachment.
 //
-// Messages are filtered reasons plus the file's BASE name — never the full path, never the
-// root list, never an errno message (which on some systems echoes the path).
+// Messages are filtered reasons plus the file's BASE name — never the full path, never the root
+// list, never an errno message (which on some systems echoes the path).
 import { type Stats } from 'node:fs';
 import { lstat, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -126,7 +124,7 @@ export function createPathGuard(options: PathGuardOptions): PathGuard {
       // `lstat`, not `stat`: `realpath` has resolved every component, so the only symlink a
       // `lstat` can still see is one created in between — and that is exactly the one that must
       // be refused rather than followed (the `sidecar.ts` precedent; the upload re-checks the
-      // descriptor it actually opened, 04.2.4-T1).
+      // descriptor it actually opened).
       let stats: Stats;
       try {
         stats = await lstat(realPath);
@@ -142,7 +140,7 @@ export function createPathGuard(options: PathGuardOptions): PathGuard {
 }
 
 /**
- * The roots an attachment may come from (AC6): every Playwright `outputDir`, the default
+ * The roots an attachment may come from: every Playwright `outputDir`, the default
  * `<rootDir>/test-results`, and every explicitly allowed directory. Each entry is resolved
  * against `rootDir` — Playwright resolves config paths against it, and the reporter's own
  * `dirs` option is documented the same way — absolute entries are kept as they are, and the
@@ -166,7 +164,7 @@ export function defaultAttachmentRoots(input: {
   return roots;
 }
 
-/** A refusal before the file is read: the path itself is not allowed (AC6). */
+/** A refusal before the file is read: the path itself is not allowed. */
 function refused(name: string, reason: string): PathVerdict {
   return { ok: false, code: 'attachment_path_refused', message: `attachment '${name}': ${reason}` };
 }

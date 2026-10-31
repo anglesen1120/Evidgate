@@ -1,6 +1,6 @@
-// 04.2.1-T2.1: `evidgate config check` — resolves the configuration and the token
-// source so AC5/AC8 are exercisable on the built binary. It never prints a token (T78);
-// `--json` emits `{ok, api_url, project, token_source}` only.
+// `evidgate config check` — resolves the configuration and the token source so a CI job can
+// prove its wiring before it sends anything. It never prints a token, only
+// `{ok, api_url, project, token_source}`, because that output lands in build logs.
 import { getToken } from '../auth/getToken.js';
 import { ExitCode } from '../exitCodes.js';
 
