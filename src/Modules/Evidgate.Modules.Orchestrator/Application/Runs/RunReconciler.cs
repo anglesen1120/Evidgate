@@ -5,12 +5,12 @@ using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 namespace Evidgate.Modules.Orchestrator.Application.Runs;
 
 /// <summary>
-/// The Dapper read behind <see cref="IRunReconciler"/> (05.3.2-T2.1/T2.2): three statements in a fixed order over the
-/// ambient tenant scope, so it joins the caller's transaction and RLS scopes every row (00 §5.5 C3/C5), exactly like
-/// <see cref="RunEventScopeReader"/>. The run row is locked first and the state decides the outcome: a run that is not
-/// <c>collecting</c> is never compared, and nothing is read beyond its state (plan Notes, 05.3.2-T1 line 152: the
-/// finalize trigger is not evidence that the run is collectable). Read-only by construction — it never writes and never
-/// changes the run state; the only work after the lock is the slot list and the one grouped event aggregate.
+/// The Dapper read behind <see cref="IRunReconciler"/>: statements in a fixed order over the ambient tenant scope, so it
+/// joins the caller's transaction and RLS scopes every row, exactly like <see cref="RunEventScopeReader"/>. The run row
+/// is locked first and the state decides the outcome: a run that is not <c>collecting</c> is never compared, and nothing
+/// is read beyond its state, because an enqueued finalize trigger is not evidence that the run is collectable. Read-only
+/// by construction — it never writes and never changes the run state; the work after the lock is the slot list, the one
+/// grouped event aggregate and, for the attempt that decides, the bounded read of the plan's uncovered executions.
 /// <para>
 /// The lock statement also answers the run's collection deadline (<c>deadline_passed</c>, the database clock), which
 /// decides between <see cref="ReconcileDisposition.Pending"/> and <see cref="ReconcileDisposition.Compared"/> when the
@@ -48,10 +48,6 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             .QueryAsync<PlannedSlotRow>(ReconcileSql.ListSlots, parameters, cancellationToken)
             .ConfigureAwait(false);
 
-        var observed = await db
-            .QueryAsync<ObservedEventRow>(ReconcileSql.ObservedEvents, parameters, cancellationToken)
-            .ConfigureAwait(false);
-
         var planned = new PlannedShard[slots.Count];
         for (var index = 0; index < slots.Count; index++)
         {
@@ -63,6 +59,10 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 slot.DeclaredLastSequence,
                 slot.DeclaredCount);
         }
+
+        var observed = await db
+            .QueryAsync<ObservedEventRow>(ReconcileSql.ObservedEvents, parameters, cancellationToken)
+            .ConfigureAwait(false);
 
         var seen = new ObservedShard[observed.Count];
         for (var index = 0; index < observed.Count; index++)
@@ -80,27 +80,57 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 row.BlockedCount);
         }
 
-        var comparison = ReconcileComparer.Compare(planned, seen);
-
         // An open shard before the collection deadline is not a verdict: the attempt waits (Pending) so the run stays
         // collecting until the last slot closes or the deadline forces the decision (COORDINATOR-DECISION S123, F1).
         // The open-shard decision reads the slot list taken AFTER the run-row lock, so two final finalizes serialise on
         // that lock and decide exactly once. `deadline_passed` comes from the lock statement, evaluated by the database.
+        // A waiting attempt returns here, before the coverage read: it decides nothing, and coverage cannot turn a wait
+        // into a verdict, so the bounded read of the plan is spent only on the attempt that compares for real.
+        if (HasOpenShard(planned) && !locked.DeadlinePassed)
+        {
+            return new ReconcileOutcome(
+                ReconcileDisposition.Pending,
+                ReconcileComparer.CompareEvents(planned, seen));
+        }
+
+        var coverage = await db
+            .QueryAsync<UncoveredExecutionRow>(ReconcileSql.ListUncoveredExecutions, parameters, cancellationToken)
+            .ConfigureAwait(false);
+
         return new ReconcileOutcome(
-            HasOpenShard(comparison) && !locked.DeadlinePassed
-                ? ReconcileDisposition.Pending
-                : ReconcileDisposition.Compared,
-            comparison);
+            ReconcileDisposition.Compared,
+            ReconcileComparer.Compare(planned, seen, MapCoverage(coverage)));
     }
 
-    /// <summary>True when the comparison names an open planned shard (<c>missing_shard</c>).</summary>
-    /// <param name="comparison">The comparison of this attempt.</param>
-    private static bool HasOpenShard(ReconcileComparison comparison)
+    /// <summary>
+    /// The bounded coverage read as the comparer's input. No row is the statement that every planned execution recorded
+    /// an attempt; the total comes from the statement's own window count, so a read cut short by its cap still carries
+    /// the true gap.
+    /// </summary>
+    /// <param name="rows">The uncovered rows, at most <see cref="ReconcileSql.UncoveredExecutionLimit"/> of them.</param>
+    private static ExecutionCoverage MapCoverage(IReadOnlyList<UncoveredExecutionRow> rows)
     {
-        for (var index = 0; index < comparison.Missing.Count; index++)
+        if (rows.Count == 0)
         {
-            var code = comparison.Missing[index].Code;
-            if (string.Equals(code, ReconcileMissingCodes.MissingShard, StringComparison.Ordinal))
+            return ExecutionCoverage.Complete;
+        }
+
+        var executions = new PlannedExecution[rows.Count];
+        for (var index = 0; index < rows.Count; index++)
+        {
+            executions[index] = new PlannedExecution(rows[index].ExecutionKey, rows[index].ShardId);
+        }
+
+        return new ExecutionCoverage(executions, rows[0].UncoveredTotal);
+    }
+
+    /// <summary>True when the shard plan still holds a slot that never closed.</summary>
+    /// <param name="planned">The run's producer slots as the shard plan, one row per shard.</param>
+    private static bool HasOpenShard(PlannedShard[] planned)
+    {
+        for (var index = 0; index < planned.Length; index++)
+        {
+            if (!planned[index].Closed)
             {
                 return true;
             }
@@ -159,5 +189,18 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         public long StaleCount { get; set; }
 
         public long BlockedCount { get; set; }
+    }
+
+    /// <summary>
+    /// One row as <see cref="ReconcileSql.ListUncoveredExecutions"/> returns it: a planned execution of the run with no
+    /// recorded attempt, the shard whose producer id the reason carries, and the statement's total for the whole run.
+    /// </summary>
+    private sealed class UncoveredExecutionRow
+    {
+        public string ExecutionKey { get; set; } = string.Empty;
+
+        public string ShardId { get; set; } = string.Empty;
+
+        public long UncoveredTotal { get; set; }
     }
 }

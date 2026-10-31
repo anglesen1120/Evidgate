@@ -39,7 +39,11 @@ public sealed class EvidenceRevisionSchemaTests
     /// <summary>The migration under test, re-run by the idempotency case.</summary>
     private const string MigrationFile = "0049_orchestration_evidence_revision.sql";
 
-    /// <summary>00 §8.5 reason codes: the closed list the migration's CHECK carries (T14 adds <c>setup_error</c>).</summary>
+    /// <summary>
+    /// 00 §8.5 reason codes: the closed list the migration's CHECK carries (T14 adds <c>setup_error</c>, and
+    /// <c>0056_reconcile_missing_result.sql</c> re-creates the CHECK over the same codes plus the plan-coverage
+    /// <c>missing_result</c>).
+    /// </summary>
     private static readonly string[] MissingCodes =
     [
         "missing_shard",
@@ -49,6 +53,7 @@ public sealed class EvidenceRevisionSchemaTests
         "unknown_status",
         "setup_error",
         "stale_epoch",
+        "missing_result",
     ];
 
     /// <summary>A well-formed manifest hash: the 00 §7 RFC 8785 content address.</summary>

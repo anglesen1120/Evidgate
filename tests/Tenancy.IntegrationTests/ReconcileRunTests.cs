@@ -73,9 +73,26 @@ public sealed class ReconcileRunTests
     /// One migrated database with an org, its project, a run and <paramref name="slots"/> producer slots.
     /// <paramref name="services"/> is the composition hook a case uses to replace one registered service (the freeze
     /// failure path); null leaves the production registrations alone.
+    /// <para>
+    /// Unless <paramref name="attempts"/> is false, every planned execution of the seeded run records one terminal
+    /// attempt (the migration role: <c>case_attempt</c> is FORCE RLS), so a case decides completeness from the evidence it
+    /// arranges and not from the plan alone: the reconciler names a planned execution with no recorded attempt as
+    /// <c>missing_result</c>, so a world whose plan answered nothing would add that reason to every case here.
+    /// </para>
     /// </summary>
-    private Task<IngestTestWorld> StartAsync(int slots = 1, Action<IServiceCollection>? services = null) =>
-        IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), slots: slots, services: services);
+    private async Task<IngestTestWorld> StartAsync(
+        int slots = 1,
+        Action<IServiceCollection>? services = null,
+        bool attempts = true)
+    {
+        var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), slots: slots, services: services);
+        if (attempts)
+        {
+            await RecordPlanAttemptsAsync(world);
+        }
+
+        return world;
+    }
 
     /// <summary>
     /// The consumer tests need the host to carry the queue mechanism too: the production
@@ -84,8 +101,9 @@ public sealed class ReconcileRunTests
     /// wrapped in <see cref="CountingRunReconciler"/> so a case can prove the handler body ran, not only that the task
     /// row ended <c>done</c>.
     /// </summary>
-    private Task<IngestTestWorld> StartWithQueueAsync() =>
-        IngestTestWorld.StartAsync(
+    private async Task<IngestTestWorld> StartWithQueueAsync()
+    {
+        var world = await IngestTestWorld.StartAsync(
             _fixture,
             IngestTestWorld.Writer(),
             services: services =>
@@ -99,6 +117,38 @@ public sealed class ReconcileRunTests
                         provider.GetRequiredService<ITenantScopeAccessor>()),
                     provider.GetRequiredService<ReconcileCallCounter>()));
             });
+        await RecordPlanAttemptsAsync(world);
+
+        return world;
+    }
+
+    /// <summary>
+    /// Records one terminal attempt per planned execution of the seeded run, through the real writer (so the schema owns
+    /// the row shape and resolves each case): the plan row of a case that reported a status, which is what the
+    /// reconciler's coverage read looks for.
+    /// </summary>
+    /// <param name="world">The world whose plan is answered.</param>
+    /// <param name="skip">How many trailing planned executions stay unattempted; zero answers the whole plan.</param>
+    private static async Task RecordPlanAttemptsAsync(IngestTestWorld world, int skip = 0)
+    {
+        var executions = world.Plan.Executions;
+        skip.ShouldBeLessThanOrEqualTo(executions.Count, "the plan must keep at least one answered execution");
+        if (executions.Count == skip)
+        {
+            return;
+        }
+
+        await using var attempts = await AttemptScope.BeginAsync(world.Api, world.Org);
+        var inputs = executions
+            .Take(executions.Count - skip)
+            .Select(execution => new CaseAttemptInput(execution.ExecutionKey, 1, "passed"))
+            .ToArray();
+
+        var outcomes = await attempts.WriteAsync(world.RunId, inputs);
+        outcomes.Count.ShouldBe(inputs.Length);
+        outcomes.ShouldAllBe(outcome => outcome.Status == CaseAttemptWriteStatus.Accepted);
+        await attempts.CommitAsync();
+    }
 
     /// <summary>Counts how often a reconcile attempt really ran inside the host: the claim case's witness.</summary>
     private sealed class ReconcileCallCounter
@@ -684,9 +734,12 @@ public sealed class ReconcileRunTests
     [InlineData(ReconcileMissingCodes.SetupError, "blocked_finish")]
     [InlineData(ReconcileMissingCodes.StaleEpoch, "stale_event")]
     [InlineData(ReconcileMissingCodes.ArtifactMissing, "orphan_artifact")]
+    [InlineData(ReconcileMissingCodes.MissingResult, "uncovered_execution")]
     public async Task Reconcile_EachMissingReason_IncompleteWithCode(string code, string scenario)
     {
-        await using var world = await StartAsync();
+        // The coverage scenario is the one shape the plan rows themselves decide, so its world records no attempt up
+        // front; every other shape keeps the whole plan answered and adds one event-evidence or freeze reason.
+        await using var world = await StartAsync(attempts: scenario != "uncovered_execution");
         var runId = world.RunId;
         await SetRunStateAsync(world, runId, "collecting");
         await ArrangeEventEvidenceAsync(world, runId, scenario);
@@ -1004,7 +1057,8 @@ public sealed class ReconcileRunTests
                 break;
 
             // The events match, but a planned execution has a ready artifact whose (execution_key, attempt_no) has no
-            // case_attempt: 06.5.1 reports the orphan (ruling T17), so the evidence is artifact_missing.
+            // case_attempt: 06.5.1 reports the orphan (ruling T17), so the evidence is artifact_missing. The pair is
+            // attempt 2 because attempt 1 is the terminal attempt the world records for this execution.
             case "orphan_artifact":
                 await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
                 await StoreEventsAsync(
@@ -1016,8 +1070,24 @@ public sealed class ReconcileRunTests
                     world,
                     runId,
                     world.Plan.Executions[0].ExecutionKey,
-                    attemptNo: 1,
+                    attemptNo: 2,
                     kind: "trace");
+                break;
+
+            // Every producer closed with matching events, and one planned execution recorded no attempt at all: the plan
+            // says a case never reported, which no event and no count can show (missing_result, plan coverage).
+            case "uncovered_execution":
+                await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 1, declaredCount: 1);
+                await StoreEventsAsync(
+                    world,
+                    runId,
+                    new StoredEvent(
+                        Producer,
+                        1,
+                        "test.finished",
+                        "passed",
+                        ExecutionKey: world.Plan.Executions[0].ExecutionKey));
+                await RecordPlanAttemptsAsync(world, skip: 1);
                 break;
 
             // Both events stored, one of them a test.finished whose normalized_status is null.
@@ -1253,6 +1323,32 @@ public sealed class ReconcileRunTests
             .ShouldBeFalse("T2.2 persists nothing (T2.4 owns the row)");
     }
 
+    /// <summary>
+    /// A waiting attempt stops before the coverage read: the plan's uncovered executions cannot turn a wait into a
+    /// verdict, so the bounded read under the run lock is spent only on the attempt that compares for real.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_OpenShardBeforeDeadline_SkipsTheCoverageRead()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+
+        world.Api.Statements.Clear();
+        var outcome = await ReconcileAsync(world, runId);
+
+        var statements = world.Api.Statements.Snapshot();
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Pending, Describe(outcome));
+        outcome.Comparison.ShouldNotBeNull("a pending attempt still reports the evidence it compared");
+        // The log proves capture is on before the negative check means anything: a snapshot that logged nothing would
+        // satisfy "no planned_execution statement" without the attempt ever running.
+        statements.ShouldContain(
+            statement => statement.Contains("public.producer_slot", StringComparison.Ordinal),
+            "the waiting attempt still reads the slots it decided on");
+        statements.Any(statement => statement.Contains("public.planned_execution", StringComparison.Ordinal))
+            .ShouldBeFalse(string.Join(Environment.NewLine, statements));
+    }
+
     // ------------------------------------------------------------------ T2.1: the trigger is claimed exactly once
 
     /// <summary>The queue the outbox dispatcher routes an unconfigured task type to (01.5.1 §11).</summary>
@@ -1480,7 +1576,7 @@ public sealed class ReconcileRunTests
             runId,
             new StoredEvent(Producer, 1, "test.finished", "passed", Stale: true),
             new StoredEvent(Producer, 2, "test.finished", "passed"));
-        await SeedReadyArtifactAsync(world, runId, world.Plan.Executions[0].ExecutionKey, attemptNo: 1, kind: "trace");
+        await SeedReadyArtifactAsync(world, runId, world.Plan.Executions[0].ExecutionKey, attemptNo: 2, kind: "trace");
 
         var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
 
@@ -2018,7 +2114,9 @@ public sealed class ReconcileRunTests
     public async Task Reconcile_PolicyRequiredKindReady_WritesCompleteRevision()
     {
         var counter = new FreezeCallCounter();
-        await using var world = await StartAsync(services: services => CountFreezeCalls(services, counter));
+        // attempts: false - this case seeds the plan's attempts itself (the freeze resolves each requirement through a
+        // case_attempt), so a second write of the same pair would come back a duplicate, not the acceptance it asserts.
+        await using var world = await StartAsync(attempts: false, services: services => CountFreezeCalls(services, counter));
         var runId = world.RunId;
         var executions = world.Plan.Executions;
         executions.ShouldNotBeEmpty("the positive requirement case must exercise a non-empty plan");

@@ -87,7 +87,7 @@ public sealed class ResolverTests : HarnessTest
 
     /// <summary>
     /// The <c>SECURITY DEFINER</c> functions outside <c>evidgate_resolve</c>: the owner-side definers of
-    /// <c>evidgate</c> — the TL T80 sweeps and the platform-scope writers — which return a count, a set of
+    /// <c>evidgate</c> — the platform sweeps and the platform-scope writers — which return a count, a set of
     /// ids or one stored row rather than the tenant tuple. Every definer in any non-system schema that is
     /// not in <c>evidgate_resolve</c> must be named here or the suite fails by name, so a new definer
     /// cannot be added without being classified. The value is the migration that creates it.
@@ -101,6 +101,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:177",
         ["evidgate.session_cleanup"] = "0048_identity_session_routes.sql:479",
         ["evidgate.healing_switch_set_system"] = "0052_healing_switch.sql:211",
+        ["evidgate.reconcile_overdue_runs"] = "0056_reconcile_missing_result.sql:132",
     };
 
     /// <summary>

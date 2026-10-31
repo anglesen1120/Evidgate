@@ -74,6 +74,13 @@ internal static class OrchestratorModule
         // registers it (01.5.1 §11), so this line is what makes the rows finalize already queued claimable.
         services.AddTaskHandler<RunReconcilePayload, ReconcileRunTaskHandler>();
 
+        // The collection-deadline sweep, and the schedule that fires it: a run is otherwise reconciled only by the
+        // finalize that closed its last producer slot, so a run whose last shard never closes would never be
+        // attempted at all. The handler only enqueues the trigger above; registering it in both hosts is what makes
+        // the type claimable, and the schedule definition is what a deployed Worker's schedule runner fires.
+        services.AddTaskHandler<ReconcileDeadlineSweepPayload, ReconcileDeadlineSweepTaskHandler>();
+        services.AddTaskSchedule(ReconcileDeadlineSweeps.Sweep);
+
         return services;
     }
 }
