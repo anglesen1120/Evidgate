@@ -7,7 +7,6 @@
 // those members are never touched: `/projects/p-1/runs/r-1` and `/projects/p-2/runs/r-2`
 // report the same template, which is what makes the span attribute a metric dimension rather
 // than a customer identifier.
-import type { ActivatedRouteSnapshot } from '@angular/router';
 
 /**
  * Reported instead of a template when no route matched: no snapshot of the chain carries a
@@ -16,16 +15,26 @@ import type { ActivatedRouteSnapshot } from '@angular/router';
 export const UNKNOWN_ROUTE = '/unknown';
 
 /**
+ * The members `routeTemplate` walks: the matched config, and the next node of the chain. Narrow on
+ * purpose, so a caller that has no router state yet (or a spec handing over a synthetic tree) needs
+ * no `ActivatedRouteSnapshot`; an `ActivatedRouteSnapshot` is assignable to it.
+ */
+export interface RouteTreeNode {
+  readonly routeConfig: { readonly path?: string } | null;
+  readonly firstChild: RouteTreeNode | null;
+}
+
+/**
  * The matched route template of the router's root snapshot, segments joined with `/`: a chain
  * that matched only empty paths is `/`, a wildcard match is `/**`, and a componentless parent
  * contributes only the paths it actually has. Angular's own root snapshot never has a
  * `routeConfig` (it is the router state's root, not a configured route), so the walk starts there
  * and only the descendants decide whether anything matched.
  */
-export function routeTemplate(root: ActivatedRouteSnapshot): string {
+export function routeTemplate(root: RouteTreeNode): string {
   const segments: string[] = [];
   let matched = false;
-  for (let node: ActivatedRouteSnapshot | null = root; node !== null; node = node.firstChild) {
+  for (let node: RouteTreeNode | null = root; node !== null; node = node.firstChild) {
     if (!node.routeConfig) {
       continue;
     }
