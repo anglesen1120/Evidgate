@@ -2,8 +2,10 @@
   <p>{{ intro }}</p>
 
   <!-- QA-01: the busy line is a live region by `role="status"` alone; a second `aria-live` on the
-       same node is redundant (and the terminal panel below relies on `role="status"` too). -->
-  <p class="busy-status" role="status">
+       same node is redundant (and the terminal panel below relies on `role="status"` too).
+       `tabindex="-1"` makes it the place the confirm hands focus to: the press disables the very
+       control it was made with, and this node stays mounted until the answer arrives. -->
+  <p class="busy-status" role="status" tabindex="-1" #busyStatus>
     @if (busy()) {
       {{ confirmingLabel }}
     } @else if (reading()) {
@@ -194,7 +196,7 @@
     <section
       class="read-failure"
       data-testid="enable-collection-error"
-      [attr.aria-labelledby]="readFailure() !== null ? 'enable-read-failed-heading' : null"
+      [attr.aria-labelledby]="failureHeadingId()"
     >
       @if (readFailure() !== null) {
         <!-- AC-F63-b: the named target a failed re-read returns focus to. `tabindex="-1"` keeps it
@@ -207,6 +209,17 @@
           #readFailureHeading
         >
           {{ readFailedHeading }}
+        </h3>
+      } @else {
+        <!-- The same contract for a refused confirm: the press disabled the confirm, so this
+             heading — outside every alert — is where the visitor's place goes. -->
+        <h3
+          class="read-failure__heading"
+          id="enable-confirm-failed-heading"
+          tabindex="-1"
+          #confirmFailureHeading
+        >
+          {{ confirmFailedHeading }}
         </h3>
       }
       <app-error-pattern
@@ -238,10 +251,22 @@
           {{ uncertainLabel }}
         </p>
       }
-      @for (detail of error.details; track $index) {
+      @if (details().length > 0) {
         <!-- R3: the shared error pattern renders `message`/`code` itself; these rows are the page's
-             own, so the page sanitises them before they reach the DOM. -->
-        <p class="validation">{{ clean(detail.path) }} {{ clean(detail.reason) }}</p>
+             own, so the page sanitises them before they reach the DOM. One labelled alert carries
+             them: a `path`-level reason is otherwise silent for a screen-reader user. -->
+        <div
+          role="alert"
+          data-testid="enable-collection-details"
+          aria-labelledby="enable-details-label"
+        >
+          <p id="enable-details-label" class="validation">{{ detailsLabel }}</p>
+          <ul class="validation">
+            @for (detail of details(); track $index) {
+              <li>{{ clean(detail.path) }} {{ clean(detail.reason) }}</li>
+            }
+          </ul>
+        </div>
       }
     </section>
   }

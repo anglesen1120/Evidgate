@@ -147,3 +147,116 @@ test.describe("step 5's refused activation read (F63)", () => {
     await expect(page.locator(ENABLED)).toHaveCount(0);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// 09.8.1-T1.4: the three form refusals, in the browser. Each step answers a 422 envelope whose
+// `details` names a control (00 §9.2), so each is asserted the way a screen-reader user meets it:
+// one labelled alert carries the rows, the refused control is marked invalid and described by that
+// text, every description id resolves, and focus sits on the page's own heading — outside the
+// alerts — rather than on `<body>` where the disabled press left it.
+// ---------------------------------------------------------------------------------------------
+
+/** One rendered element per `aria-describedby` token, so a dangling id fails the assertion. */
+async function danglingDescriptions(page: Page): Promise<readonly string[]> {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('[aria-describedby]')).flatMap((element) =>
+      (element.getAttribute('aria-describedby') ?? '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .filter((id) => document.getElementById(id) === null),
+    ),
+  );
+}
+
+test.describe('form refusals announce once and keep the visitor’s place', () => {
+  test('create project: the name refusal is one labelled alert and focus is on its heading', async ({
+    page,
+  }) => {
+    await page.goto(
+      withVariant(
+        onboardingPath('en'),
+        seedQueryWith('onboarding-empty', ['fixture.variant.createProject=name-taken']),
+      ),
+    );
+    await expect(shell(page)).toBeVisible();
+    await expectCurrentStep(page, 1);
+    await page.locator('#onboarding-project-name').fill('Storefront web');
+    await page.locator('#onboarding-project-slug').fill('storefront-web');
+    await page.locator('[data-testid="onboarding-project-submit"]').press('Enter');
+
+    await expect(page.locator('#onboarding-project-failure-heading')).toBeFocused();
+    const details = page.getByTestId('onboarding-project-details');
+    await expect(details).toHaveAttribute('role', 'alert');
+    await expect(details).toHaveAccessibleName(/the server refused these values/i);
+    await expect(details).toContainText('a project with this name already exists');
+    // One alert for the rows; the field's own node stays silent so the sentence is not repeated.
+    await expect(page.getByRole('alert').filter({ hasText: 'already exists' })).toHaveCount(1);
+    await expect(page.locator('#onboarding-project-name-error')).not.toHaveAttribute(
+      'aria-live',
+      /.*/,
+    );
+    await expect(page.locator('#onboarding-project-name')).toHaveAttribute('aria-invalid', 'true');
+    expect(await danglingDescriptions(page)).toEqual([]);
+  });
+
+  test('connect CI: the repository refusal is one labelled alert and focus is on its heading', async ({
+    page,
+  }) => {
+    await page.goto(
+      withVariant(
+        onboardingPath('en'),
+        seedQueryWith('onboarding-project', ['fixture.variant.createCiBinding=validation']),
+      ),
+    );
+    await expect(shell(page)).toBeVisible();
+    await expectCurrentStep(page, 2);
+    await page.locator('#connect-oidc-repo-id').fill('5012345');
+    await page.locator('#connect-oidc-repo-name').fill('acme/storefront-web');
+    await page.locator('#connect-oidc-refs').fill('refs/heads/main');
+    await page
+      .locator('#connect-oidc-workflows')
+      .fill('acme/storefront-web/.github/workflows/evidgate.yml@refs/heads/main');
+    await page.locator('[data-testid="connect-oidc-submit"]').press('Enter');
+
+    await expect(page.locator('#connect-failure-heading')).toBeFocused();
+    const details = page.getByTestId('connect-ci-details');
+    await expect(details).toHaveAttribute('role', 'alert');
+    await expect(details).toHaveAccessibleName(/the server refused these values/i);
+    await expect(details).toContainText('the GitHub App cannot read this repository');
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'cannot read this repository' }),
+    ).toHaveCount(1);
+    await expect(page.locator('#connect-oidc-repo-name')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('#connect-repo-name-error')).not.toHaveAttribute('aria-live', /.*/);
+    expect(await danglingDescriptions(page)).toEqual([]);
+  });
+
+  test('enable collection: the refused confirm names its section and takes focus alone', async ({
+    page,
+  }) => {
+    await page.goto(
+      withVariant(
+        onboardingPath('en'),
+        seedQueryWith('onboarding-evidence', [
+          ENABLE_GRANTS_TOGGLE,
+          'fixture.variant.createPolicyRevision=unknown-field',
+        ]),
+      ),
+    );
+    await expect(shell(page)).toBeVisible();
+    await expectCurrentStep(page, 5);
+    await page.locator('[data-testid="enable-collection-confirm"]').press('Enter');
+
+    await expect(page.locator('#enable-confirm-failed-heading')).toBeFocused();
+    await expect(page.locator(ENABLE_ERROR)).toHaveAccessibleName(
+      /collection could not be enabled/i,
+    );
+    const details = page.getByTestId('enable-collection-details');
+    await expect(details).toHaveAttribute('role', 'alert');
+    await expect(details).toHaveAccessibleName(/the server refused these values/i);
+    await expect(details).toContainText('/flaky_budget_max');
+    // The failed command never claims the terminal panel.
+    await expect(page.locator(ENABLED)).toHaveCount(0);
+    expect(await danglingDescriptions(page)).toEqual([]);
+  });
+});

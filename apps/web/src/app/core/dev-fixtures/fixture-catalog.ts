@@ -19,6 +19,7 @@
 
 import ciBindingCreate from '../../../../../../fixtures/web-api/ci-binding-create/input.json';
 import ciBindingCreateConflict from '../../../../../../fixtures/web-api/ci-binding-create-conflict/input.json';
+import ciBindingCreateValidation from '../../../../../../fixtures/web-api/ci-binding-create-validation/input.json';
 import auditList from '../../../../../../fixtures/web-api/audit-list/input.json';
 import auditListEmpty from '../../../../../../fixtures/web-api/audit-list-empty/input.json';
 import auditListSupport from '../../../../../../fixtures/web-api/audit-list-support/input.json';
@@ -32,6 +33,7 @@ import ciBindingsListSettingsForbidden from '../../../../../../fixtures/web-api/
 import ciBindingsListSettingsPage1 from '../../../../../../fixtures/web-api/ci-bindings-list-settings-page-1/input.json';
 import ciBindingsListSettingsPage2 from '../../../../../../fixtures/web-api/ci-bindings-list-settings-page-2/input.json';
 import ingestTokenCreate from '../../../../../../fixtures/web-api/ingest-token-create/input.json';
+import ingestTokenCreateNameInvalid from '../../../../../../fixtures/web-api/ingest-token-create-name-invalid/input.json';
 import ingestTokenRotate from '../../../../../../fixtures/web-api/ingest-token-rotate/input.json';
 import ingestTokenRotateConflict from '../../../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
 import ingestTokenRotateRateLimited from '../../../../../../fixtures/web-api/ingest-token-rotate-rate-limited/input.json';
@@ -101,6 +103,7 @@ import policyRevisionsList from '../../../../../../fixtures/web-api/policy-revis
 import policyRevisionsListAfterPublish from '../../../../../../fixtures/web-api/policy-revisions-list-after-publish/input.json';
 import policyRevisionsListConflictHead from '../../../../../../fixtures/web-api/policy-revisions-list-conflict-head/input.json';
 import projectCreate from '../../../../../../fixtures/web-api/project-create/input.json';
+import projectCreateNameTaken from '../../../../../../fixtures/web-api/project-create-name-taken/input.json';
 import projectDetail from '../../../../../../fixtures/web-api/project-detail/input.json';
 import projectDetailOnboardingConnected from '../../../../../../fixtures/web-api/project-detail-onboarding-connected/input.json';
 import projectDetailOnboardingEmpty from '../../../../../../fixtures/web-api/project-detail-onboarding-empty/input.json';
@@ -615,6 +618,7 @@ export interface FixtureCatalogRow {
 export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'ci-binding-create', document: ciBindingCreate },
   { name: 'ci-binding-create-conflict', document: ciBindingCreateConflict },
+  { name: 'ci-binding-create-validation', document: ciBindingCreateValidation },
   { name: 'audit-list', document: auditList },
   { name: 'audit-list-empty', document: auditListEmpty },
   { name: 'audit-list-support', document: auditListSupport },
@@ -632,6 +636,7 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
     cursor: '08df2cdfd69f6800-018f0000-0000-7000-8000-000000000063',
   },
   { name: 'ingest-token-create', document: ingestTokenCreate },
+  { name: 'ingest-token-create-name-invalid', document: ingestTokenCreateNameInvalid },
   { name: 'ingest-token-rotate', document: ingestTokenRotate },
   { name: 'ingest-token-rotate-conflict', document: ingestTokenRotateConflict },
   { name: 'ingest-token-rotate-rate-limited', document: ingestTokenRotateRateLimited },
@@ -746,6 +751,7 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
     document: policyRevisionsListConflictHead,
   },
   { name: 'project-create', document: projectCreate },
+  { name: 'project-create-name-taken', document: projectCreateNameTaken },
   { name: 'project-detail', document: projectDetail },
   { name: 'project-detail-onboarding-connected', document: projectDetailOnboardingConnected },
   { name: 'project-detail-onboarding-empty', document: projectDetailOnboardingEmpty },
