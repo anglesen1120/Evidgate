@@ -144,6 +144,12 @@ import runsList from '../../../../../../fixtures/web-api/runs-list/input.json';
 import runsListOnboardingConnected from '../../../../../../fixtures/web-api/runs-list-onboarding-connected/input.json';
 import runsListOnboardingProject from '../../../../../../fixtures/web-api/runs-list-onboarding-project/input.json';
 import runsListOnboardingRun from '../../../../../../fixtures/web-api/runs-list-onboarding-run/input.json';
+import suiteRevision from '../../../../../../fixtures/web-api/suite-revision/input.json';
+import suiteRevisionEmpty from '../../../../../../fixtures/web-api/suite-revision-empty/input.json';
+import suiteRevisionForbidden from '../../../../../../fixtures/web-api/suite-revision-forbidden/input.json';
+import suiteRevisionNotFound from '../../../../../../fixtures/web-api/suite-revision-not-found/input.json';
+import suiteRevisionPublished from '../../../../../../fixtures/web-api/suite-revision-published/input.json';
+import suiteRevisionUnavailable from '../../../../../../fixtures/web-api/suite-revision-unavailable/input.json';
 
 /**
  * One fixture document, exactly as `fixtures/web-api/<name>/input.json` stores it.
@@ -614,6 +620,14 @@ export interface FixtureCatalogRow {
  * reaches in the fixtures build (the progress read rejects the whole load for any refusal other
  * than `403`, so step 5 does not mount under it).
  * Its `X-Request-Id` (`…a10e`) is distinct again, and the body names the same id.
+ *
+ * The six `suite-revision*` rows answer the pinned revision read (`getSuiteRevision`,
+ * `GET /v1/suite-revisions/{r}`) the composition screen mounts: `ok` is a draft whose shard
+ * strategy is `count`, `published` is the immutable revision (status and the read-only notice come
+ * from the body, not from a client guess), `empty` is a revision with no member, `revision-not-found`
+ * and `revision-forbidden` are the two refusals the screen renders as its own states, and
+ * `revision-unavailable` is the `503` with a `Retry-After`. Every 2xx document carries the wire
+ * members and none of them a warnings member, because the read has none to send.
  */
 export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'ci-binding-create', document: ciBindingCreate },
@@ -806,6 +820,12 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'runs-list-onboarding-connected', document: runsListOnboardingConnected },
   { name: 'runs-list-onboarding-project', document: runsListOnboardingProject },
   { name: 'runs-list-onboarding-run', document: runsListOnboardingRun },
+  { name: 'suite-revision', document: suiteRevision },
+  { name: 'suite-revision-empty', document: suiteRevisionEmpty },
+  { name: 'suite-revision-forbidden', document: suiteRevisionForbidden },
+  { name: 'suite-revision-not-found', document: suiteRevisionNotFound },
+  { name: 'suite-revision-published', document: suiteRevisionPublished },
+  { name: 'suite-revision-unavailable', document: suiteRevisionUnavailable },
 ];
 
 /** One catalog entry: the corpus directory name, the document it holds and the cursor it answers. */

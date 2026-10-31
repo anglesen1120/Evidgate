@@ -100,6 +100,7 @@ const MARKERS = [
   'dev/settings-policy',
   'dev/run-list',
   'dev/run-detail',
+  'dev/suite-composition',
 ];
 
 /**
