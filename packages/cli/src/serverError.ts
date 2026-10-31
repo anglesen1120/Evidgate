@@ -27,7 +27,7 @@ const maxDetailFieldLength = 200;
  * straddling the cut can never leave a clear-text prefix; the cap counts code points, so
  * a surrogate pair is never split; escaping runs last, so a `\uXXXX` escape is never cut.
  */
-function sanitizeServerText(raw: string, max: number): string {
+export function sanitizeServerText(raw: string, max: number): string {
   const capped = Array.from(redact(raw)).slice(0, max).join('');
   return escapeControlCharacters(capped);
 }
