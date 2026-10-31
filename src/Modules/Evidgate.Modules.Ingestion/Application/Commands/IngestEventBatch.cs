@@ -545,14 +545,16 @@ internal sealed class IngestEventBatchHandler(
         // accepted events count, and a batch that accepted nothing (every event a duplicate of an earlier
         // batch) writes no slot row at all: the update would be a no-op that still bumps
         // producer_slot.version through the shared trigger (P2).
-        if (accepted > 0)
-        {
-            var slotMaxima = toInsert
+        var slotMaxima = accepted > 0
+            ? toInsert
                 .Where(e => insertedIds.Contains(e.EventId))
                 .GroupBy(e => e.ProducerId, StringComparer.Ordinal)
                 .Select(group => new SlotMax(group.Key, group.Max(e => e.Sequence)))
-                .ToList();
+                .ToList()
+            : [];
 
+        if (slotMaxima.Count > 0)
+        {
             await db.ExecuteAsync(
                 UpdateSlotSql,
                 new
@@ -562,6 +564,24 @@ internal sealed class IngestEventBatchHandler(
                     slots = JsonSerializer.Serialize(slotMaxima),
                 },
                 cancellationToken).ConfigureAwait(false);
+        }
+
+        // (h2) Late evidence needs a reader: the run already finished as incomplete, so no finalize will close another
+        // slot and nothing else would compare these rows into a revision. One trigger per shard, through the outbox in
+        // this transaction, so the row and the evidence commit or roll back together. Only accepted rows enqueue, so a
+        // resend of evidence already stored (accepted = 0) can never append a second revision.
+        if (late)
+        {
+            foreach (var slot in slotMaxima)
+            {
+                await outbox.EnqueueAsync(
+                    RunReconcileContract.OutboxTaskType,
+                    RunReconcileContract.LatePayloadJson(command.RunId, slot.producer_id),
+                    RunReconcileContract.AggregateType,
+                    command.RunId,
+                    RunReconcileContract.LateIdempotencyKey(command.RunId, slot.producer_id, slot.max_sequence),
+                    cancellationToken).ConfigureAwait(false);
+            }
         }
 
         // (i) The batch's own audit row (C5).

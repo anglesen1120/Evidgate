@@ -418,7 +418,7 @@ public sealed class ReconcileExecutionCoverageTests
         if (outcome.Disposition == ReconcileDisposition.Compared && outcome.Comparison is { } comparison)
         {
             finalization = await services.ServiceProvider.GetRequiredService<IReconcileFinisher>()
-                .FinishAsync(runId, comparison, Token);
+                .FinishAsync(runId, comparison, ReconcileSettlement.DecideCollection, Token);
         }
 
         await scope.CommitAsync();

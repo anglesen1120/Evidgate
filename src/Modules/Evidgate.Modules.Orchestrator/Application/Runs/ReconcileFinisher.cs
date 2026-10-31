@@ -17,6 +17,17 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 internal sealed record ReconcileFinalization(string Completeness, Guid RevisionId, int RevisionNo);
 
 /// <summary>
+/// The run's newest <c>evidence_revision</c> as the late-append guard reads it: enough to answer for an attempt whose
+/// evidence the recorded revision already counts, so a redelivered attempt appends nothing.
+/// </summary>
+internal sealed record LatestRevision(
+    Guid Id,
+    int RevisionNo,
+    string Completeness,
+    long EventWatermark,
+    string? ArtifactSetHash);
+
+/// <summary>
 /// The second half of one reconcile attempt (05.3.2-T2.3/T2.4): after <see cref="IRunReconciler"/> has locked the run
 /// <c>FOR NO KEY UPDATE</c> and compared the evidence, the finisher freezes the artifact set, appends ONE
 /// <c>evidence_revision</c> row, moves the run's pointer to it and moves <c>collecting → complete|incomplete</c> through
@@ -25,8 +36,8 @@ internal sealed record ReconcileFinalization(string Completeness, Guid RevisionI
 /// <para>
 /// It never opens, commits or rolls back a transaction (00 §5.5 C3): the caller's rollback undoes the revision, the
 /// pointer move and the state change together, so a failed attempt leaves no half-written revision and a retry starts
-/// from <c>collecting</c> again. A run that is no longer <c>collecting</c> never reaches this type — the reconciler
-/// answered <c>NotCollectable</c> and the handler does nothing — so one run appends at most one revision per attempt and
+/// from the state it began in. Two settlements reach this type: the collection decision of a <c>collecting</c> run and
+/// the late revision of one already <c>incomplete</c>. Either way one run appends at most one revision per attempt and
 /// never rewrites one (00 §8.5 C6/AC9).
 /// </para>
 /// </summary>
@@ -36,7 +47,11 @@ internal interface IReconcileFinisher
     /// Freezes the evidence of <paramref name="runId"/> and persists the revision of the comparison.
     /// </summary>
     /// <param name="runId">The run the reconciler just compared; its row is already locked by this transaction.</param>
-    /// <param name="comparison">The event-evidence result of the attempt (never null; only a <c>Compared</c> outcome has one).</param>
+    /// <param name="comparison">The event-evidence result of the attempt (never null; only a compared outcome has one).</param>
+    /// <param name="settlement">
+    /// Which settled run the comparison belongs to: <see cref="ReconcileSettlement.DecideCollection"/> moves the run
+    /// state, <see cref="ReconcileSettlement.AppendLateEvidence"/> leaves it alone.
+    /// </param>
     /// <param name="cancellationToken">Cancelled on shutdown or lease loss.</param>
     /// <returns>The persisted completeness and revision.</returns>
     /// <exception cref="InvalidOperationException">
@@ -51,12 +66,29 @@ internal interface IReconcileFinisher
     ValueTask<ReconcileFinalization> FinishAsync(
         Guid runId,
         ReconcileComparison comparison,
+        ReconcileSettlement settlement,
         CancellationToken cancellationToken);
+}
+
+/// <summary>What one finished attempt settles over the run's evidence.</summary>
+internal enum ReconcileSettlement
+{
+    /// <summary>
+    /// The run is <c>collecting</c>: this revision decides it, so the attempt moves the run to
+    /// <c>complete</c> or <c>incomplete</c> after the pointer move.
+    /// </summary>
+    DecideCollection,
+
+    /// <summary>
+    /// The run already finished as <c>incomplete</c> and late evidence arrived: this revision records it, and the run
+    /// state stays where it is — a finished run has no forward edge, so the revision alone carries the new completeness.
+    /// </summary>
+    AppendLateEvidence,
 }
 
 /// <summary>
 /// The Dapper implementation of <see cref="IReconcileFinisher"/>: resolve, freeze, compute, insert, move the pointer,
-/// transition — in that order.
+/// and — for a collecting run — transition, in that order.
 /// <para>
 /// <b>Completeness</b> (00 §8.5, AC4): <c>complete</c> only when no reason was named, the run planned at least one shard
 /// and every planned shard closed. Missing evidence never reads as complete, and a run with zero planned shards is
@@ -107,6 +139,7 @@ internal sealed class ReconcileFinisher(
     public async ValueTask<ReconcileFinalization> FinishAsync(
         Guid runId,
         ReconcileComparison comparison,
+        ReconcileSettlement settlement,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(comparison);
@@ -173,6 +206,28 @@ internal sealed class ReconcileFinisher(
 
         var parameters = new { org_id = orgId, run_id = runId };
 
+        // (c) A late append is idempotent against its own evidence. The consumer commits this transaction and only then
+        // completes the task row, so a crash in between re-claims the same attempt; appending a second, identical
+        // revision would break "one late batch, one revision". Both halves of the evidence must match: the watermark
+        // counts the run's stored events, and the frozen set catches a re-freeze that resolved an artifact with no event
+        // moving. Equal evidence answers with the revision already recorded instead of a copy of it.
+        if (settlement == ReconcileSettlement.AppendLateEvidence)
+        {
+            var latest = await db
+                .QuerySingleOrDefaultAsync<LatestRevision>(
+                    EvidenceRevisionSql.SelectLatestRevision,
+                    parameters,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (latest is not null
+                && latest.EventWatermark == comparison.EventWatermark
+                && string.Equals(latest.ArtifactSetHash, frozen.ArtifactSetHash, StringComparison.Ordinal))
+            {
+                return new ReconcileFinalization(latest.Completeness, latest.Id, latest.RevisionNo);
+            }
+        }
+
         // (d) The manifest hash the revision records, read tenant-first from the run's own manifest row.
         var manifestHash = await db
             .QuerySingleOrDefaultAsync<string>(
@@ -228,25 +283,32 @@ internal sealed class ReconcileFinisher(
                 $"run {runId:D} did not accept the evidence pointer in this tenant ({moved} row(s) updated)");
         }
 
-        // (f) The state edge, last: collecting -> complete|incomplete through 05.3.1's guarded transition (it re-takes the
-        // run row this transaction already holds FOR NO KEY UPDATE, which is a no-op for the holder). A system edge is
-        // credited to the system actor, which is what a task consumer is; the outbox row and the audit row join this unit
-        // of work.
-        var transition = await runStates
-            .TransitionAsync(
-                new TransitionRunStateCommand(runId, isComplete ? RunStates.Complete : RunStates.Incomplete),
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        if (!transition.IsSuccess)
+        // (f) The state edge, last and only for a collecting run: collecting -> complete|incomplete through 05.3.1's
+        // guarded transition (it re-takes the run row this transaction already holds FOR NO KEY UPDATE, which is a no-op
+        // for the holder). A system edge is credited to the system actor, which is what a task consumer is; the outbox
+        // row and the audit row join this unit of work. Late evidence appends a revision and never moves the state: the
+        // run already finished as incomplete, and both terminal states are the run's last word, so the revision — not
+        // the state — is what a later reader follows. `incomplete -> complete` is not an edge the machine allows
+        // (collecting writes both verdicts), and inventing one would let new evidence rewrite a finished verdict.
+        if (settlement == ReconcileSettlement.DecideCollection)
         {
-            throw new InvalidOperationException(
-                $"run {runId:D} did not move to {(isComplete ? RunStates.Complete : RunStates.Incomplete)}: "
-                + $"{transition.Error!.Code} {transition.Error.Message}");
+            var transition = await runStates
+                .TransitionAsync(
+                    new TransitionRunStateCommand(runId, isComplete ? RunStates.Complete : RunStates.Incomplete),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!transition.IsSuccess)
+            {
+                throw new InvalidOperationException(
+                    $"run {runId:D} did not move to {(isComplete ? RunStates.Complete : RunStates.Incomplete)}: "
+                    + $"{transition.Error!.Code} {transition.Error.Message}");
+            }
         }
 
         // The audit row of that edge joins the same transaction: the consumer's commit makes the revision, the pointer and
-        // the audit entry durable together, and a failed attempt rolls all three back.
+        // the audit entry durable together, and a failed attempt rolls all three back. A late attempt describes no edge,
+        // so its unit flushes nothing.
         await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
 
         return new ReconcileFinalization(completeness, revisionId, revisionNo);

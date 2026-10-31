@@ -5,9 +5,15 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// <c>evidence_revision_missing_check</c> CHECK — <c>0049</c> declared it over seven codes and <c>0056</c> re-created it
 /// with <c>missing_result</c> appended — and every constant here is one of its literals, verbatim: the codes of the
 /// event-evidence comparison (<c>missing_shard</c>, <c>count_mismatch</c>, <c>unknown_status</c>), of the event-derived
-/// readiness checks (<c>setup_error</c>, <c>stale_epoch</c>), of the plan's execution coverage
+/// readiness check (<c>setup_error</c>), of the plan's execution coverage
 /// (<see cref="MissingResult"/>) and <c>artifact_missing</c>, which the freeze result contributes. None of them is ever
 /// renamed.
+/// <para>
+/// <c>stale_epoch</c> stays in the CHECK but has no constant here: no writer sets <c>event.stale</c> — nothing stores a
+/// producer's current epoch to compare against (no job or job-lease table, and no epoch column on the slot) — so the
+/// reason could never fire and a code that cannot be produced is not a decision this module makes. The flag and the
+/// reason return together with lease epochs, when an authoritative current epoch exists to compare at insert time.
+/// </para>
 /// </summary>
 internal static class ReconcileMissingCodes
 {
@@ -36,12 +42,6 @@ internal static class ReconcileMissingCodes
     /// the run cannot be complete (00 §8.3; 05.3.2-T2.3, T14).
     /// </summary>
     public const string SetupError = "setup_error";
-
-    /// <summary>
-    /// In a closed shard: at least one stored event arrived with <c>stale = true</c> (its epoch is older than the
-    /// run's current one), so the evidence cannot be trusted as complete even when the counts agree (05.3.2-T2.3).
-    /// </summary>
-    public const string StaleEpoch = "stale_epoch";
 
     /// <summary>
     /// A planned execution of the run with no recorded <c>case_attempt</c>: no status was ever reported for it, so the
@@ -91,7 +91,7 @@ internal sealed record ExecutionCoverage(IReadOnlyList<PlannedExecution> Uncover
 /// <summary>
 /// What the acknowledged <c>event</c> rows of one producer say, computed in one grouped statement (no per-event
 /// round trip). Every stored event counts as acknowledged, whatever its <c>late</c>/<c>after_cancel</c>/<c>stale</c>
-/// flag, and the flagged ones are counted beside that total so a stale or blocked event is reported instead of hidden.
+/// flag, and a blocked finish is counted beside that total so it is reported instead of hidden.
 /// </summary>
 /// <param name="ProducerId">The producer id.</param>
 /// <param name="CountUpToDeclared">Events with <c>sequence &lt;= declared_last_sequence</c> (0 for an open shard).</param>
@@ -107,11 +107,6 @@ internal sealed record ExecutionCoverage(IReadOnlyList<PlannedExecution> Uncover
 /// </param>
 /// <param name="UnknownStatusCount"><c>test.finished</c> events with a null <c>normalized_status</c>.</param>
 /// <param name="UnfinishedStartedCount">Distinct <c>(execution_key, attempt_no)</c> of the producer that have a <c>test.started</c> event and no <c>test.finished</c> event from any producer of the run: a status that was never reported (COORDINATOR-DECISION S119, case b of <c>unknown_status</c>).</param>
-/// <param name="StaleCount">
-/// Stored events with <c>stale = true</c>. They still count as acknowledged (a producer declares the total it sent),
-/// so a stale event can fill a sequence slot and the count bounds can agree; this counter keeps that visible and a
-/// closed shard reports <see cref="ReconcileMissingCodes.StaleEpoch"/> (COORDINATOR-DECISION S119, Q2 risk closed).
-/// </param>
 /// <param name="BlockedCount">
 /// <c>test.finished</c> events whose normalized status is <c>blocked</c>: a failed setup marks its dependants blocked
 /// (00 §8.3), so a closed shard reports <see cref="ReconcileMissingCodes.SetupError"/>.
@@ -124,7 +119,6 @@ internal sealed record ObservedShard(
     long? MaxSequence,
     long UnknownStatusCount,
     long UnfinishedStartedCount,
-    long StaleCount,
     long BlockedCount);
 
 /// <summary>One reason the evidence is incomplete.</summary>
@@ -193,17 +187,25 @@ internal enum ReconcileDisposition
     /// </summary>
     Pending,
 
-    /// <summary>The comparison ran; <see cref="ReconcileOutcome.Comparison"/> holds the result.</summary>
+    /// <summary>The comparison ran on a <c>collecting</c> run; <see cref="ReconcileOutcome.Comparison"/> holds the result.</summary>
     Compared,
+
+    /// <summary>
+    /// The comparison ran on a run that already finished as <c>incomplete</c>: late evidence arrived inside its window,
+    /// so the attempt appends revision N+1 and moves the run's pointer to it, and the run state does not move. A
+    /// finished run has no forward edge left, and a revision, not a state, is what carries the new completeness.
+    /// </summary>
+    ComparedLate,
 }
 
 /// <summary>The result of one reconcile attempt; the run state is never changed by T2.1/T2.2.</summary>
 /// <param name="Disposition">What happened.</param>
 /// <param name="Comparison">
-/// Set when <paramref name="Disposition"/> is <see cref="ReconcileDisposition.Compared"/> — and also for
-/// <see cref="ReconcileDisposition.Pending"/>, whose comparison is the event evidence alone (its counts are the attempt's
-/// log line): a waiting attempt reads no plan coverage, because coverage cannot turn a wait into a verdict. A pending
-/// attempt finishes nothing: only <c>Compared</c> reaches the finisher.
+/// Set when <paramref name="Disposition"/> is <see cref="ReconcileDisposition.Compared"/> or
+/// <see cref="ReconcileDisposition.ComparedLate"/> — and also for <see cref="ReconcileDisposition.Pending"/>, whose
+/// comparison is the event evidence alone (its counts are the attempt's log line): a waiting attempt reads no plan
+/// coverage, because coverage cannot turn a wait into a verdict. A pending attempt finishes nothing: only the two
+/// compared dispositions reach the finisher.
 /// </param>
 internal sealed record ReconcileOutcome(ReconcileDisposition Disposition, ReconcileComparison? Comparison);
 
@@ -213,10 +215,13 @@ internal interface IRunReconciler
     /// <summary>
     /// Locks the run row <c>FOR NO KEY UPDATE</c>, lists the planned shards, reads the observed events per producer in
     /// one statement and compares; an attempt that decides reads the plan's executions with no recorded attempt in one
-    /// more statement first. Deterministic for the same rows and the same clock reading: the comparison depends on the
-    /// rows alone, and the disposition additionally on the deadline the lock statement evaluated, so the same rows answer
-    /// <see cref="ReconcileDisposition.Pending"/> before <c>collection_deadline_at</c> and
-    /// <see cref="ReconcileDisposition.Compared"/> after it. The caller decides nothing on <c>Pending</c>.
+    /// more statement first. A run that finished as <c>incomplete</c> is compared too — late evidence is only counted
+    /// through a revision — and answers <see cref="ReconcileDisposition.ComparedLate"/>, which never waits: its verdict
+    /// is written and no finalize can close a shard any more. Deterministic for the same rows and the same clock
+    /// reading: the comparison depends on the rows alone, and the disposition additionally on the deadline the lock
+    /// statement evaluated, so the same rows answer <see cref="ReconcileDisposition.Pending"/> before
+    /// <c>collection_deadline_at</c> and <see cref="ReconcileDisposition.Compared"/> after it. The caller decides nothing
+    /// on <c>Pending</c>.
     /// </summary>
     /// <param name="runId">The run to reconcile.</param>
     /// <param name="cancellationToken">Cancelled on shutdown or lease loss.</param>

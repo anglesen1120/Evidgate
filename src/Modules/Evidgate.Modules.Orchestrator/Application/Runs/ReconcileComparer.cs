@@ -18,10 +18,9 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// three events ending at 3 is a hole — so an equal count with a hole is still a disagreement. Storage order, late
 /// arrivals and a hole below the lowest stored sequence (an unwritten prefix) change nothing.
 /// <para>
-/// Every stored event counts as acknowledged whatever its <c>stale</c> flag, so a stale event can fill a sequence slot
-/// and leave the count bounds agreeing; the stale count keeps that from looking complete — a closed shard holding any
-/// stale event names <see cref="ReconcileMissingCodes.StaleEpoch"/>, and a closed shard holding a
-/// <c>blocked</c> <c>test.finished</c> names <see cref="ReconcileMissingCodes.SetupError"/>.
+/// Every stored event counts as acknowledged, so a <c>blocked</c> <c>test.finished</c> — a failed setup (00 §8.3) — is
+/// counted beside that total and a closed shard holding one names <see cref="ReconcileMissingCodes.SetupError"/> instead
+/// of looking complete.
 /// </para>
 /// <para>
 /// A shard whose slot never closed is reported once as <see cref="ReconcileMissingCodes.MissingShard"/> and neither its
@@ -45,9 +44,8 @@ internal static class ReconcileComparer
     /// <summary>
     /// Compares the planned shards against the observed events, and the run's plan against the attempts it recorded.
     /// Reasons are ordered by producer id (ordinal), then code (ordinal), then detail (ordinal): one closed shard
-    /// reports <c>count_mismatch</c>, <c>setup_error</c>, <c>stale_epoch</c> and <c>unknown_status</c> in that order, an
-    /// open shard reports only <c>missing_shard</c>, and a planned execution with no attempt reports one
-    /// <c>missing_result</c> of its own.
+    /// reports <c>count_mismatch</c>, <c>setup_error</c> and <c>unknown_status</c> in that order, an open shard reports
+    /// only <c>missing_shard</c>, and a planned execution with no attempt reports one <c>missing_result</c> of its own.
     /// </summary>
     /// <param name="planned">The run's producer slots as the shard plan; one row per shard.</param>
     /// <param name="observed">The grouped aggregate rows, at most one per producer.</param>
@@ -157,24 +155,14 @@ internal static class ReconcileComparer
                     countDetail));
             }
 
-            // A blocked finish is a failed setup (00 §8.3), and a stale event is an older epoch: neither depends on the
-            // declaration, so both are named for a shard that already reported declared_missing as well.
+            // A blocked finish is a failed setup (00 §8.3): it does not depend on the declaration, so the reason is
+            // named for a shard that already reported declared_missing as well.
             if (seen.BlockedCount > 0)
             {
                 missing.Add(new ReconcileMissing(
                     ReconcileMissingCodes.SetupError,
                     shard.ProducerId,
                     string.Create(CultureInfo.InvariantCulture, $"blocked={seen.BlockedCount}")));
-            }
-
-            if (seen.StaleCount > 0)
-            {
-                // A stale event still filled its sequence slot above, so the counts can agree while the evidence is not
-                // trustworthy: this reason is what keeps the shard from looking complete (D-S119-Q2 risk).
-                missing.Add(new ReconcileMissing(
-                    ReconcileMissingCodes.StaleEpoch,
-                    shard.ProducerId,
-                    string.Create(CultureInfo.InvariantCulture, $"stale={seen.StaleCount}")));
             }
 
             // A null normalized_status and a started attempt with no finish do not depend on the declaration, so this
@@ -250,7 +238,6 @@ internal static class ReconcileComparer
             MaxSequence: null,
             UnknownStatusCount: 0,
             UnfinishedStartedCount: 0,
-            StaleCount: 0,
             BlockedCount: 0);
 
     /// <summary>

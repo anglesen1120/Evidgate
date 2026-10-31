@@ -12,9 +12,11 @@
 // coordinator's S119 contract update (a test.started attempt with no test.finished, from any producer of the run, is
 // unknown_status).
 using System.Globalization;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Application.Freeze;
@@ -101,7 +103,7 @@ public sealed class ReconcileRunTests
     /// wrapped in <see cref="CountingRunReconciler"/> so a case can prove the handler body ran, not only that the task
     /// row ended <c>done</c>.
     /// </summary>
-    private async Task<IngestTestWorld> StartWithQueueAsync()
+    private async Task<IngestTestWorld> StartWithQueueAsync(int attemptsSkip = 0)
     {
         var world = await IngestTestWorld.StartAsync(
             _fixture,
@@ -117,7 +119,7 @@ public sealed class ReconcileRunTests
                         provider.GetRequiredService<ITenantScopeAccessor>()),
                     provider.GetRequiredService<ReconcileCallCounter>()));
             });
-        await RecordPlanAttemptsAsync(world);
+        await RecordPlanAttemptsAsync(world, attemptsSkip);
 
         return world;
     }
@@ -322,10 +324,11 @@ public sealed class ReconcileRunTests
             .BeginAsync(world.Org, null, false, Token);
         var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>().ReconcileAsync(runId, Token);
         ReconcileFinalization? finalization = null;
-        if (outcome.Disposition == ReconcileDisposition.Compared && outcome.Comparison is { } comparison)
+        if (outcome.Disposition is ReconcileDisposition.Compared or ReconcileDisposition.ComparedLate
+            && outcome.Comparison is { } comparison)
         {
             finalization = await services.ServiceProvider.GetRequiredService<IReconcileFinisher>()
-                .FinishAsync(runId, comparison, Token);
+                .FinishAsync(runId, comparison, Settlement(outcome), Token);
         }
 
         await scope.CommitAsync();
@@ -346,10 +349,11 @@ public sealed class ReconcileRunTests
             .BeginAsync(world.Org, null, false, Token);
         var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>().ReconcileAsync(runId, Token);
         ReconcileFinalization? finalization = null;
-        if (outcome.Disposition == ReconcileDisposition.Compared && outcome.Comparison is { } comparison)
+        if (outcome.Disposition is ReconcileDisposition.Compared or ReconcileDisposition.ComparedLate
+            && outcome.Comparison is { } comparison)
         {
             finalization = await services.ServiceProvider.GetRequiredService<IReconcileFinisher>()
-                .FinishAsync(runId, comparison, Token);
+                .FinishAsync(runId, comparison, Settlement(outcome), Token);
         }
 
         return (outcome, finalization);
@@ -557,6 +561,15 @@ public sealed class ReconcileRunTests
             + $"and object_id = '{runId:D}' and actor_type = 'system'");
 
     /// <summary>The reasons of one outcome as <c>code:producer:detail</c>, for a readable failure message.</summary>
+    /// <summary>
+    /// The settlement the consumer derives from an outcome: only a late comparison appends a revision to a run that
+    /// already finished, so only it must leave the run state alone.
+    /// </summary>
+    private static ReconcileSettlement Settlement(ReconcileOutcome outcome) =>
+        outcome.Disposition == ReconcileDisposition.ComparedLate
+            ? ReconcileSettlement.AppendLateEvidence
+            : ReconcileSettlement.DecideCollection;
+
     private static string Describe(ReconcileOutcome outcome) =>
         outcome.Comparison is null
             ? $"disposition={outcome.Disposition}, no comparison"
@@ -672,13 +685,14 @@ public sealed class ReconcileRunTests
     }
 
     /// <summary>
-    /// An in-range event the owner's seed flagged <c>stale = true</c> is still an acknowledged event: every stored event
-    /// counts toward the shard's declaration, so the shard's counts agree and no <c>count_mismatch</c> is named. What the
-    /// flag means as evidence is <c>stale_epoch</c> (00 §8.5, 05.3.2-T2.3): a closed shard holding a stale event is
-    /// incomplete with exactly that reason, and this half (T2.2) still writes nothing.
+    /// An in-range event carrying <c>stale = true</c> is an acknowledged event like any other, and it names no reason:
+    /// nothing in the product writes that flag — no producer's current epoch is stored anywhere to compare an event's
+    /// epoch against — so a reason built on it could only ever fire for a row an operator backfilled by hand, and the
+    /// comparison would then claim a check it does not make. The flag stays in the row and in the 00 §8.5 code list; the
+    /// reason returns with lease epochs, together with the writer that sets it.
     /// </summary>
     [Fact]
-    public async Task Reconcile_StaleEvent_CountsAgreeAndReportsStaleEpoch()
+    public async Task Reconcile_StaleFlag_NamesNoReasonAndLeavesTheShardDecidedByItsCounts()
     {
         await using var world = await StartAsync();
         var runId = world.RunId;
@@ -688,14 +702,13 @@ public sealed class ReconcileRunTests
             world,
             runId,
             new StoredEvent(Producer, 1, "test.finished", "passed", Stale: true),
-            new StoredEvent(Producer, 2, "test.finished", "failed"));
+            new StoredEvent(Producer, 2, "test.finished", "passed"));
 
         var outcome = await ReconcileAsync(world, runId);
 
         var comparison = outcome.Comparison.ShouldNotBeNull();
-        comparison.Missing.Select(reason => reason.Code)
-            .ShouldBe([ReconcileMissingCodes.StaleEpoch], $"{Describe(outcome)}: the count itself still agrees");
-        comparison.EventsMatch.ShouldBeFalse();
+        comparison.Missing.ShouldBeEmpty($"{Describe(outcome)}: the flag names nothing, the counts agree");
+        comparison.EventsMatch.ShouldBeTrue();
         (await StateAsync(world, runId)).ShouldBe("collecting", "T2.2 reports, T2.4 persists");
         (await RevisionCountAsync(world)).ShouldBe(0);
     }
@@ -710,9 +723,9 @@ public sealed class ReconcileRunTests
     /// ending at 3, stored 0, 1, 2), a hole with the declared last sequence stored (declared five, stored 0, 1, 2, 3, 5),
     /// a gap the declared count also misses, and storage out of sequence order (the aggregate is order-insensitive, so only
     /// the bounds it carries decide); a closed shard with a status the producer never normalized (<c>unknown_status</c>); a
-    /// closed shard whose <c>test.finished</c> says the setup was <c>blocked</c> (<c>setup_error</c>, 00 §8.3); a closed
-    /// shard holding an in-range event flagged stale (<c>stale_epoch</c>); and an execution with a <c>ready</c> artifact but
-    /// no <c>case_attempt</c> for its pair, which 06.5.1 reports as an orphan (<c>artifact_missing</c>, ruling T17).
+    /// closed shard whose <c>test.finished</c> says the setup was <c>blocked</c> (<c>setup_error</c>, 00 §8.3); and an
+    /// execution with a <c>ready</c> artifact but no <c>case_attempt</c> for its pair, which 06.5.1 reports as an orphan
+    /// (<c>artifact_missing</c>, ruling T17).
     /// <para>
     /// Every case runs the consumer's whole attempt — reconcile, then the finisher's freeze, revision insert, pointer move
     /// and transition, committed — so each asserts the acceptance shape: one revision, <c>revision_no</c> 1, completeness
@@ -732,7 +745,6 @@ public sealed class ReconcileRunTests
     [InlineData(ReconcileMissingCodes.CountMismatch, "out_of_order")]
     [InlineData(ReconcileMissingCodes.UnknownStatus, "null_status")]
     [InlineData(ReconcileMissingCodes.SetupError, "blocked_finish")]
-    [InlineData(ReconcileMissingCodes.StaleEpoch, "stale_event")]
     [InlineData(ReconcileMissingCodes.ArtifactMissing, "orphan_artifact")]
     [InlineData(ReconcileMissingCodes.MissingResult, "uncovered_execution")]
     public async Task Reconcile_EachMissingReason_IncompleteWithCode(string code, string scenario)
@@ -1045,17 +1057,6 @@ public sealed class ReconcileRunTests
                     new StoredEvent(Producer, 2, "test.finished", "passed"));
                 break;
 
-            // A closed shard whose counts agree but which holds an in-range event the owner's seed flagged stale: the
-            // evidence straddles an epoch change, so it is stale_epoch, never a count disagreement.
-            case "stale_event":
-                await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
-                await StoreEventsAsync(
-                    world,
-                    runId,
-                    new StoredEvent(Producer, 1, "test.finished", "passed", Stale: true),
-                    new StoredEvent(Producer, 2, "test.finished", "passed"));
-                break;
-
             // The events match, but a planned execution has a ready artifact whose (execution_key, attempt_no) has no
             // case_attempt: 06.5.1 reports the orphan (ruling T17), so the evidence is artifact_missing. The pair is
             // attempt 2 because attempt 1 is the terminal attempt the world records for this execution.
@@ -1105,15 +1106,16 @@ public sealed class ReconcileRunTests
     // ------------------------------------------------------------------ T2.1: only a collecting run is compared
 
     /// <summary>
-    /// The trigger is not evidence that the run is collectable (05.3.2 §7): a run in any other state —
-    /// <c>complete</c>, <c>incomplete</c>, <c>canceled</c> or still <c>running</c> — answers <c>NotCollectable</c>,
-    /// compares nothing, writes no revision and leaves the state alone. The zero <c>evidence_revision</c> row is the
-    /// half a retrying consumer would otherwise duplicate.
+    /// The trigger is not evidence that the run is collectable (05.3.2 §7): a run that cannot take evidence —
+    /// <c>complete</c>, <c>canceled</c> or still <c>running</c> — answers <c>NotCollectable</c>, compares nothing,
+    /// writes no revision and leaves the state alone. The zero <c>evidence_revision</c> row is the half a retrying
+    /// consumer would otherwise duplicate. <c>incomplete</c> is deliberately absent: a finished incomplete run still
+    /// takes evidence inside its late window, so its trigger compares and answers <c>ComparedLate</c>
+    /// (<see cref="Reconcile_IncompleteRun_ComparesLate"/>), not <c>NotCollectable</c>.
     /// </summary>
     /// <param name="state">The run state the reconcile trigger arrives too late for.</param>
     [Theory]
     [InlineData("complete")]
-    [InlineData("incomplete")]
     [InlineData("canceled")]
     [InlineData("running")]
     public async Task Reconcile_NonCollectable_NotCompared(string state)
@@ -1132,6 +1134,33 @@ public sealed class ReconcileRunTests
         (await StateAsync(world, runId)).ShouldBe(state);
         (await VersionAsync(world, runId)).ShouldBe(version);
         (await RevisionCountAsync(world)).ShouldBe(0);
+    }
+
+    // ------------------------------------------------------------------ T2.1: an incomplete run compares late (CR-08)
+
+    /// <summary>
+    /// A run that finished <c>incomplete</c> still takes evidence inside its late window, and that evidence only counts
+    /// through a revision of its own: the late trigger asks for exactly this comparison. So the state that used to be
+    /// <c>NotCollectable</c> now compares — <c>ComparedLate</c> — and the consumer settles it as an append, never as a
+    /// second collection decision. The reconciler half still writes nothing: no revision, no state move, no version bump.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_IncompleteRun_ComparesLate()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "incomplete");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 1, declaredCount: 1);
+        await StoreEventsAsync(world, runId, new StoredEvent(Producer, 1, "test.finished", "passed"));
+        var version = await VersionAsync(world, runId);
+
+        var outcome = await ReconcileAsync(world, runId);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.ComparedLate, Describe(outcome));
+        outcome.Comparison.ShouldNotBeNull("a finished run compares the evidence its late window took");
+        (await StateAsync(world, runId)).ShouldBe("incomplete", "the reconciler half never decides the run again");
+        (await VersionAsync(world, runId)).ShouldBe(version);
+        (await RevisionCountAsync(world)).ShouldBe(0, "persisting the late revision is the finisher's half");
     }
 
     // ------------------------------------------------------------------ T2.1: the tenant boundary
@@ -1561,8 +1590,9 @@ public sealed class ReconcileRunTests
 
     /// <summary>
     /// The <c>missing[]</c> order is stable and two-part: the comparison's codes first (producer id, then code ordinal) and
-    /// the freeze's own reasons after them, in the order <see cref="FreezeResult.Missing"/> gives. One stale event names
-    /// <c>stale_epoch</c> and one orphan artifact names <c>artifact_missing</c>; the stored array is exactly that order.
+    /// the freeze's own reasons after them, in the order <see cref="FreezeResult.Missing"/> gives. One normalized-status
+    /// hole names <c>unknown_status</c> and one orphan artifact names <c>artifact_missing</c>; the stored array is exactly
+    /// that order.
     /// </summary>
     [Fact]
     public async Task Reconcile_MissingCodes_ComparisonThenFreeze()
@@ -1574,8 +1604,8 @@ public sealed class ReconcileRunTests
         await StoreEventsAsync(
             world,
             runId,
-            new StoredEvent(Producer, 1, "test.finished", "passed", Stale: true),
-            new StoredEvent(Producer, 2, "test.finished", "passed"));
+            new StoredEvent(Producer, 1, "test.step", null),
+            new StoredEvent(Producer, 2, "test.finished", null));
         await SeedReadyArtifactAsync(world, runId, world.Plan.Executions[0].ExecutionKey, attemptNo: 2, kind: "trace");
 
         var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
@@ -1585,7 +1615,7 @@ public sealed class ReconcileRunTests
 
         var revision = await RevisionSummaryAsync(world, runId);
         revision.Missing.ShouldBe(
-            [ReconcileMissingCodes.StaleEpoch, ReconcileMissingCodes.ArtifactMissing],
+            [ReconcileMissingCodes.UnknownStatus, ReconcileMissingCodes.ArtifactMissing],
             Describe(outcome));
     }
 
@@ -2163,5 +2193,341 @@ public sealed class ReconcileRunTests
         (await StateAsync(world, runId)).ShouldBe("complete");
         (await PointerAsync(world, runId)).ShouldBe(revision.Id);
         (await RevisionCountAsync(world)).ShouldBe(1);
+    }
+
+    // ------------------------------------------------------------------ late evidence (05.3.2-T2.5)
+
+    /// <summary>The queue an outbox row lands on when the dispatcher has no route for its type.</summary>
+    private const string DefaultQueue = "default";
+
+    /// <summary>
+    /// Opens the run's late window. The window ends at <c>collection_deadline_at + late_window_minutes</c> (the ingest
+    /// route's own SQL, both columns of the locked run row), so a deadline five minutes back with a five-minute window
+    /// puts the end one minute ahead of the database clock: inside the window, as a producer's late evidence arrives.
+    /// </summary>
+    private Task OpenLateWindowAsync(IngestTestWorld world, Guid runId) =>
+        _fixture.ExecuteAsync(
+            world.Database,
+            "update public.run set late_window_minutes = 5, collection_deadline_at = now() - interval '4 minutes' "
+            + $"where id = '{runId:D}'");
+
+    /// <summary>
+    /// Closes the run's late window: the same columns, one minute past the end (<c>collection_deadline_at =
+    /// now() - 5 minutes - 1 second</c>), which is the state a run is in when its window is spent.
+    /// </summary>
+    private Task CloseLateWindowAsync(IngestTestWorld world, Guid runId) =>
+        _fixture.ExecuteAsync(
+            world.Database,
+            "update public.run set late_window_minutes = 5, collection_deadline_at = "
+            + $"now() - interval '5 minutes' - interval '1 second' where id = '{runId:D}'");
+
+    /// <summary>
+    /// The reconcile triggers the ingest path enqueued for one run's late evidence: the key shape is the contract's,
+    /// so a count here is exactly the number of attempts a late batch asked for.
+    /// </summary>
+    private static Task<long> LateTriggerRowsAsync(IngestTestWorld world, Guid runId) =>
+        world.CountAsync(
+            "outbox",
+            where: $"task_type = '{RunReconcileContract.OutboxTaskType}' "
+            + $"and idempotency_key like 'orchestrator:run:{runId:D}:reconcile:late:%'");
+
+    /// <summary>
+    /// One <c>evidence_revision</c> row of the run as a delimited scalar — id, number, completeness, codes, watermark,
+    /// manifest hash, artifact-set hash and <c>created_at</c> — so an "untouched" assertion compares every column a
+    /// rewrite would move rather than the two the summary reads.
+    /// </summary>
+    private static Task<string> RevisionRowAsync(IngestTestWorld world, Guid runId, int revisionNo) =>
+        world.ScalarAsync<string>(
+            "select er.id::text || '|' || er.revision_no::text || '|' || er.completeness || '|' || "
+            + "array_to_string(er.missing, ',') || '|' || er.event_watermark::text || '|' || er.manifest_hash || '|' || "
+            + "coalesce(er.artifact_set_hash, '') || '|' || er.created_at::text "
+            + $"from public.evidence_revision er where er.org_id = '{world.Org}' and er.run_id = '{runId:D}' "
+            + $"and er.revision_no = {revisionNo}");
+
+    /// <summary>One lower-case boolean column of one stored event, read by its producer sequence.</summary>
+    private static Task<bool> EventFlagAsync(IngestTestWorld world, long sequence, string column) =>
+        world.ScalarAsync<bool>($"select {column} from public.event where sequence = {sequence}");
+
+    /// <summary>Moves the committed outbox rows into the queue, then claims them until the expected attempts ran.</summary>
+    /// <param name="world">The world whose host carries the queue.</param>
+    /// <param name="expectedReconciles">How many reconcile rows must reach <c>done</c>.</param>
+    private static async Task DispatchAndReconcileAsync(IngestTestWorld world, int expectedReconciles)
+    {
+        var dispatched = await world.Host.Services.GetRequiredService<OutboxDispatcher>().DispatchBatchAsync(Token);
+        dispatched.Enqueued.ShouldBeGreaterThanOrEqualTo(
+            expectedReconciles,
+            customMessage: "the trigger the ingest path wrote reaches the queue");
+
+        var consumer = world.Host.Services.GetRequiredService<TaskConsumer>();
+        for (var attempt = 0; attempt < 3 * expectedReconciles + 3; attempt++)
+        {
+            if (await DoneReconcilesAsync(world) >= expectedReconciles)
+            {
+                return;
+            }
+
+            await consumer.PollOnceAsync(DefaultQueue, Token);
+        }
+
+        (await DoneReconcilesAsync(world)).ShouldBeGreaterThanOrEqualTo(
+            expectedReconciles,
+            customMessage: "every queued reconcile is claimed and completed by the consumer");
+    }
+
+    /// <summary>How many reconcile task rows ever reached <c>done</c>.</summary>
+    private static Task<long> DoneReconcilesAsync(IngestTestWorld world) =>
+        world.CountAsync(
+            "task",
+            where: $"task_type = '{RunReconcileContract.OutboxTaskType}' and state = 'done'");
+
+    /// <summary>
+    /// A run that finished as <c>incomplete</c> with one planned execution unanswered and one declared event missing:
+    /// the shard declares two events, stores the first, and the plan's second execution records no attempt. The first
+    /// revision then names <c>count_mismatch</c> and <c>missing_result</c>, and the evidence that closes both — the
+    /// second event and its attempt — is what arrives late.
+    /// </summary>
+    /// <param name="world">The queued world, whose plan keeps one execution unattempted.</param>
+    private async Task<(Guid RunId, string RevisionOne)> StartIncompleteRunAsync(IngestTestWorld world)
+    {
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.step", null, ExecutionKey: world.Plan.Executions[0].ExecutionKey));
+
+        var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Incomplete, Describe(outcome));
+        (await StateAsync(world, runId)).ShouldBe("incomplete");
+
+        return (runId, await RevisionRowAsync(world, runId, 1));
+    }
+
+    [Fact]
+    public async Task Late_Evidence_On_Incomplete_Run_Appends_Revision_Two_And_Leaves_Revision_One_Untouched()
+    {
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+
+        var (runId, revisionOne) = await StartIncompleteRunAsync(world);
+        await OpenLateWindowAsync(world, runId);
+
+        // The evidence the first revision missed: the declared second event, whose finished status also records the
+        // attempt of the planned execution the plan still had unanswered.
+        var late = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            runId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(
+                Guid.CreateVersion7(),
+                world.Plan.Executions[^1].ExecutionKey,
+                sequence: 2)));
+
+        late.Status.ShouldBe(HttpStatusCode.OK, late.ErrorMessage);
+        late.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
+        (await EventFlagAsync(world, 2, "late")).ShouldBeTrue("the run finished, so its evidence is late");
+        (await LateTriggerRowsAsync(world, runId)).ShouldBe(
+            1,
+            "one accepted late batch enqueues one reconcile, in the same transaction as the evidence");
+
+        await DispatchAndReconcileAsync(world, expectedReconciles: 1);
+
+        var latest = await RevisionSummaryAsync(world, runId);
+        latest.RevisionNo.ShouldBe(2, "late evidence is counted through a revision of its own");
+        latest.Completeness.ShouldBe(
+            ReconcileFinisher.Complete,
+            "the late event closed the count and the plan's last execution now has an attempt");
+        latest.Missing.ShouldBeEmpty();
+        (await RevisionRowAsync(world, runId, 1)).ShouldBe(
+            revisionOne,
+            "the earlier revision is immutable: the late attempt appends, it never rewrites");
+        (await RevisionCountAsync(world)).ShouldBe(2);
+        (await StateAsync(world, runId)).ShouldBe(
+            "incomplete",
+            "a finished run has no forward edge; the new revision carries the new completeness");
+        (await PointerAsync(world, runId)).ShouldBe(latest.Id, "the pointer follows the newest revision");
+    }
+
+    [Fact]
+    public async Task Late_Evidence_Resent_Appends_Exactly_One_Revision()
+    {
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+
+        var (runId, _) = await StartIncompleteRunAsync(world);
+        await OpenLateWindowAsync(world, runId);
+
+        var body = IngestQaRequests.Batch(IngestQaRequests.Event(
+            Guid.CreateVersion7(),
+            world.Plan.Executions[^1].ExecutionKey,
+            sequence: 2));
+
+        var first = await IngestQaRequests.PostEventsAsync(world.Client, runId, body);
+        first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
+        first.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
+
+        // The same evidence again: the event id is already stored, so this batch accepts nothing and asks for nothing.
+        var resend = await IngestQaRequests.PostEventsAsync(world.Client, runId, body);
+        resend.Status.ShouldBe(HttpStatusCode.OK, resend.ErrorMessage);
+        resend.Body.GetProperty("accepted").GetInt32().ShouldBe(0);
+        resend.Body.GetProperty("duplicates").GetInt32().ShouldBe(1);
+        (await LateTriggerRowsAsync(world, runId)).ShouldBe(1, "a resend stores no row, so it enqueues no trigger");
+
+        await DispatchAndReconcileAsync(world, expectedReconciles: 1);
+
+        (await RevisionCountAsync(world)).ShouldBe(2, "one late batch appends one revision, whatever it is resent as");
+        (await RevisionSummaryAsync(world, runId)).RevisionNo.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Redelivered_Late_Reconcile_Appends_No_Second_Revision()
+    {
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+
+        var (runId, _) = await StartIncompleteRunAsync(world);
+        await OpenLateWindowAsync(world, runId);
+
+        var late = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            runId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(
+                Guid.CreateVersion7(),
+                world.Plan.Executions[^1].ExecutionKey,
+                sequence: 2)));
+        late.Status.ShouldBe(HttpStatusCode.OK, late.ErrorMessage);
+
+        await DispatchAndReconcileAsync(world, expectedReconciles: 1);
+        (await RevisionCountAsync(world)).ShouldBe(2);
+
+        // Redelivery: the consumer commits the attempt's transaction and only then stamps the row done, so a crash in
+        // between re-claims the same trigger. The evidence has not moved since - the newest revision already counts this
+        // watermark - so the second attempt answers with that revision instead of appending a copy of it.
+        var (again, second) = await ReconcileAndFinishOnHostAsync(world, runId);
+
+        again.Disposition.ShouldBe(ReconcileDisposition.ComparedLate, Describe(again));
+        second.ShouldNotBeNull().RevisionNo.ShouldBe(2, "the guard answers with the revision the evidence already has");
+        (await RevisionCountAsync(world)).ShouldBe(
+            2,
+            "one late batch appends one revision, however often its attempt is redelivered");
+        (await StateAsync(world, runId)).ShouldBe("incomplete", "neither attempt settled the run");
+    }
+
+    [Fact]
+    public async Task Late_Evidence_On_Complete_Run_Is_Refused_And_Appends_No_Revision()
+    {
+        await using var world = await StartWithQueueAsync();
+
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 1, declaredCount: 1);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.step", null, ExecutionKey: world.Plan.Executions[0].ExecutionKey));
+
+        var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Complete, Describe(outcome));
+        (await StateAsync(world, runId)).ShouldBe("complete");
+
+        // A complete run is closed whatever its window says: the batch is refused before any row is written.
+        await OpenLateWindowAsync(world, runId);
+        var refused = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            runId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(
+                Guid.CreateVersion7(),
+                world.Plan.Executions[1].ExecutionKey,
+                sequence: 2)));
+
+        refused.Status.ShouldBe(HttpStatusCode.Conflict, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("run_closed");
+        (await LateTriggerRowsAsync(world, runId)).ShouldBe(0, "nothing was accepted, so no trigger was written");
+        (await world.CountAsync("event")).ShouldBe(1);
+
+        // And a trigger that named a complete run anyway decides nothing: only a late window reopens the comparison.
+        var attempt = await ReconcileAsync(world, runId);
+        attempt.Disposition.ShouldBe(
+            ReconcileDisposition.NotCollectable,
+            "completeness is decided once; a later trigger cannot append over it");
+        (await RevisionCountAsync(world)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Late_Evidence_Outside_The_Window_Is_Refused_And_Enqueues_No_Trigger()
+    {
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+
+        var (runId, _) = await StartIncompleteRunAsync(world);
+        await CloseLateWindowAsync(world, runId);
+
+        var refused = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            runId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(
+                Guid.CreateVersion7(),
+                world.Plan.Executions[^1].ExecutionKey,
+                sequence: 2)));
+
+        refused.Status.ShouldBe(HttpStatusCode.Conflict, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("run_closed");
+        (await LateTriggerRowsAsync(world, runId)).ShouldBe(0);
+        (await RevisionCountAsync(world)).ShouldBe(1, "a refused batch writes no evidence to reconcile");
+    }
+
+    // ------------------------------------------------------------------ the epoch flag (CR-09)
+
+    /// <summary>
+    /// An event's declared <c>epoch</c> is stored verbatim and marks nothing stale, because nothing can compare it: no
+    /// job or job-lease table exists, and neither the run nor the producer slot stores a current epoch, so
+    /// <c>event.stale</c> has no writer and the comparison names no epoch reason. This pins the state the removal left
+    /// behind — the flag and the 00 §8.5 code stay in the schema, the reason returns with lease epochs — so an
+    /// accidental half-restore (a writer without a source, or a reason without a writer) fails here.
+    /// </summary>
+    [Fact]
+    public async Task Older_Declared_Epoch_Is_Stored_Verbatim_And_Marks_Nothing_Stale()
+    {
+        await using var world = await StartWithQueueAsync();
+
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+
+        // Two events of the same producer, the second declaring a lower epoch: the shape a superseded lease would send.
+        var first = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            runId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(
+                Guid.CreateVersion7(),
+                IngestQaRequests.KeyOf(world, 0),
+                sequence: 1,
+                type: "test.step",
+                status: null,
+                epoch: 3L)));
+        first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
+
+        var second = await IngestQaRequests.PostEventsAsync(
+            world.Client,
+            runId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(
+                Guid.CreateVersion7(),
+                IngestQaRequests.KeyOf(world, 1),
+                sequence: 2,
+                type: "test.step",
+                status: null,
+                epoch: 2L)));
+        second.Status.ShouldBe(HttpStatusCode.OK, second.ErrorMessage);
+
+        (await world.ScalarAsync<long>("select epoch from public.event where sequence = 1")).ShouldBe(3);
+        (await world.ScalarAsync<long>("select epoch from public.event where sequence = 2")).ShouldBe(2);
+        (await EventFlagAsync(world, 1, "stale")).ShouldBeFalse();
+        (await EventFlagAsync(world, 2, "stale")).ShouldBeFalse("no epoch source exists to call it superseded");
+
+        // The comparison names no epoch reason either: the shard's counts decide it, and nothing else.
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
+        var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Complete, Describe(outcome));
+        (await RevisionSummaryAsync(world, runId)).Missing.ShouldBeEmpty(
+            "stale_epoch has no producer: the flag's only writer would be a current epoch nothing stores");
     }
 }

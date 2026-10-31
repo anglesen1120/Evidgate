@@ -38,8 +38,14 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             return new ReconcileOutcome(ReconcileDisposition.RunNotFound, Comparison: null);
         }
 
+        // A run that finished as incomplete still takes evidence inside its late window, and that evidence only counts
+        // once a revision of its own says so: the late trigger asks for exactly this comparison. Every other state —
+        // complete, canceled, or a run still collecting — reaches statement 2 for its own reason below, and a late batch
+        // for a complete run is refused upstream, so completeness stays decided once (fail closed).
+        var late = string.Equals(locked.State, RunStates.Incomplete, StringComparison.Ordinal);
+
         // Statement 2 never runs for a run outside its collection state: nothing to compare, nothing to change.
-        if (!string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
+        if (!late && !string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
         {
             return new ReconcileOutcome(ReconcileDisposition.NotCollectable, Comparison: null);
         }
@@ -76,7 +82,6 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 row.MaxSequence,
                 row.UnknownStatusCount,
                 row.UnfinishedStartedCount,
-                row.StaleCount,
                 row.BlockedCount);
         }
 
@@ -86,7 +91,9 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         // that lock and decide exactly once. `deadline_passed` comes from the lock statement, evaluated by the database.
         // A waiting attempt returns here, before the coverage read: it decides nothing, and coverage cannot turn a wait
         // into a verdict, so the bounded read of the plan is spent only on the attempt that compares for real.
-        if (HasOpenShard(planned) && !locked.DeadlinePassed)
+        // A finished run never waits: its verdict is already written, its open shard would never close now that no
+        // finalize is accepted, and waiting would leave the late evidence unread for good.
+        if (!late && HasOpenShard(planned) && !locked.DeadlinePassed)
         {
             return new ReconcileOutcome(
                 ReconcileDisposition.Pending,
@@ -98,7 +105,7 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             .ConfigureAwait(false);
 
         return new ReconcileOutcome(
-            ReconcileDisposition.Compared,
+            late ? ReconcileDisposition.ComparedLate : ReconcileDisposition.Compared,
             ReconcileComparer.Compare(planned, seen, MapCoverage(coverage)));
     }
 
@@ -185,8 +192,6 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         public long UnknownStatusCount { get; set; }
 
         public long UnfinishedStartedCount { get; set; }
-
-        public long StaleCount { get; set; }
 
         public long BlockedCount { get; set; }
     }
