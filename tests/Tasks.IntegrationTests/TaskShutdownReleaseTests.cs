@@ -43,7 +43,7 @@ public sealed class TaskShutdownReleaseTests
 
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(Token);
         var running = host.Consumer.PollOnceAsync(Queue, stopping.Token);
-        await host.Probe.Entered.WaitAsync(TimeSpan.FromSeconds(30), Token);
+        await host.Probe.WaitEnteredAsync(TimeSpan.FromSeconds(30), Token);
 
         (await AttemptsAsync(owner))
             .ShouldBe(1, "the claim counted the attempt that is now in flight");
@@ -53,7 +53,7 @@ public sealed class TaskShutdownReleaseTests
         (await running.WaitAsync(TimeSpan.FromSeconds(30), Token))
             .ShouldBe(1, "the released row is this pass's work, not a skipped claim");
 
-        host.Probe.Cancelled.IsCompleted.ShouldBeTrue("the handler's token fires on shutdown");
+        host.Probe.HasCancelled.ShouldBeTrue("the handler's token fires on shutdown");
         (await StateAsync(owner))
             .ShouldBe("queued", "a shutdown hands the row back instead of failing it");
         (await AttemptsAsync(owner)).ShouldBe(0, "the released attempt is given back");
@@ -109,7 +109,7 @@ public sealed class TaskShutdownReleaseTests
 
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(Token);
         var running = host.Consumer.PollOnceAsync(Queue, stopping.Token);
-        await host.Probe.Entered.WaitAsync(TimeSpan.FromSeconds(30), Token);
+        await host.Probe.WaitEnteredAsync(TimeSpan.FromSeconds(30), Token);
 
         await stopping.CancelAsync();
 
@@ -160,12 +160,12 @@ public sealed class TaskShutdownReleaseTests
 
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(Token);
         var running = host.Consumer.PollOnceAsync(Queue, stopping.Token);
-        await host.Probe.Entered.WaitAsync(TimeSpan.FromSeconds(30), Token);
+        await host.Probe.WaitEnteredAsync(TimeSpan.FromSeconds(30), Token);
 
         await stopping.CancelAsync();
 
         (await running.WaitAsync(TimeSpan.FromSeconds(30), Token)).ShouldBe(1);
-        host.Probe.Cancelled.IsCompleted.ShouldBeTrue("the handler's token fires on shutdown");
+        host.Probe.HasCancelled.ShouldBeTrue("the handler's token fires on shutdown");
 
         (await StateAsync(owner)).ShouldBe("queued", "the row is handed back, not failed");
         (await AttemptsAsync(owner)).ShouldBe(0, "the released attempt is given back");
@@ -195,12 +195,12 @@ public sealed class TaskShutdownReleaseTests
 
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(Token);
         var running = host.Consumer.PollOnceAsync(Queue, stopping.Token);
-        await host.Probe.Entered.WaitAsync(TimeSpan.FromSeconds(30), Token);
+        await host.Probe.WaitEnteredAsync(TimeSpan.FromSeconds(30), Token);
 
         await stopping.CancelAsync();
 
         (await running.WaitAsync(TimeSpan.FromSeconds(30), Token)).ShouldBe(1);
-        host.Probe.Cancelled.IsCompleted.ShouldBeTrue("the handler ran inside the row's scope until shutdown");
+        host.Probe.HasCancelled.ShouldBeTrue("the handler ran inside the row's scope until shutdown");
 
         (await StateAsync(owner)).ShouldBe("queued", "a tenant row is handed back like a platform one");
         (await AttemptsAsync(owner)).ShouldBe(0, "the released attempt is given back");
