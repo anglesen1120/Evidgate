@@ -313,7 +313,7 @@ describe('gate --wait', () => {
     expect(out.stderr.join('')).toBe(`evidgate: gate: run ${runId} is still pending after 1s\n`);
   });
 
-  it('reports pending when the final poll is aborted while its body is read', async () => {
+  it('aborted body after pending', async () => {
     const env = await devEnv(dirs);
     let requests = 0;
     // The first poll answers pending; the poll at the deadline sends its headers and then
@@ -335,12 +335,36 @@ describe('gate --wait', () => {
 
     const { code } = await invoke(gateArgv(['--run', runId, '--wait', '1s']), env, out, fetchImpl);
 
-    // The pending answer an earlier poll gave is where the wait ended: an abort is not an
-    // answer the run gave, so a body lost to it may not turn a pending run into a failure.
-    expect(code).toBe(2);
+    // The server began an answer the wait never finished reading, so the run's state is
+    // unknown rather than pending: the command reports the failed read and never exits 0.
+    expect(code).toBe(3);
     expect(requests).toBe(2);
     expect(out.stdout.join('')).toBe('');
-    expect(out.stderr.join('')).toBe(`evidgate: gate: run ${runId} is still pending after 1s\n`);
+    expect(out.stderr.join('')).toContain(
+      'error request_failed: the run decision body could not be read',
+    );
+  });
+
+  it('final poll 5xx after pending', async () => {
+    const env = await devEnv(dirs);
+    // The run answers pending once; every later poll is answered by a real 5xx.
+    const stub = stubFetch((_request, index) =>
+      index === 0 ? decided({ decision: null }) : refusal(503, 'internal', { retryable: true }),
+    );
+    const out = capture();
+
+    const { code } = await invoke(
+      gateArgv(['--run', runId, '--wait', '1s']),
+      env,
+      out,
+      stub.fetchImpl,
+    );
+
+    // The server's last word is an infrastructure failure, so it is the state the wait
+    // ended in; the earlier pending answer may not turn it into exit 2 or into a pass.
+    expect(code).toBe(3);
+    expect(out.stdout.join('')).toBe('');
+    expect(out.stderr.join('')).toContain('error internal');
   });
 
   it('does not let a hanging refresh overshoot the wait deadline', async () => {

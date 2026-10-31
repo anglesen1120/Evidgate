@@ -51,13 +51,19 @@ change the exit code; they appear only as the stderr `error.code` (§5).
 can never change the exit code. `CommandDefinition.run` and `main` return
 `Promise<ExitCode>`, so a command cannot return an unregistered code.
 
-| Code  | Name           | Meaning                                                       |
-| ----- | -------------- | ------------------------------------------------------------- |
-| 0     | `Ok`           | success; `gate` PASS                                          |
-| 1     | `Fail`         | `gate` FAIL (07.6.1)                                          |
-| 2     | `Inconclusive` | `gate` INCONCLUSIVE (07.6.1)                                  |
-| 3     | `Error`        | tool, usage, configuration, transport or auth error           |
-| 10–19 | reserved       | replay (04.9.1-T4), `[OPEN]` — not emitted by any command yet |
+| Code  | Name           | Meaning                                                             |
+| ----- | -------------- | ------------------------------------------------------------------- |
+| 0     | `Ok`           | success; `gate` PASS                                                |
+| 1     | `Fail`         | `gate` FAIL (07.6.1)                                                |
+| 2     | `Inconclusive` | `gate` INCONCLUSIVE, or still `pending` when `--wait` ends (07.6.1) |
+| 3     | `Error`        | tool, usage, configuration, transport or auth error                 |
+| 10–19 | reserved       | replay (04.9.1-T4), `[OPEN]` — not emitted by any command yet       |
+
+`gate` exits 2 only for `INCONCLUSIVE` or a run still `pending`: at the
+deadline, or when the deadline itself cut the final request off before it
+answered. A final poll the server answers `5xx`/`429` past the bounded retries,
+or whose decision body breaks or is aborted after its headers, is exit 3 even
+when an earlier poll answered `pending`; no such path may exit 0.
 
 The replay range is reserved, not defined: 04.9.1-T4 assigns one code each to a
 refused grant, an engine-pin mismatch, a timeout and a partial upload, and
@@ -264,7 +270,7 @@ position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 | `spool_cap_exceeded`       | 3    | the run directory would cross `EVIDGATE_SPOOL_MAX_BYTES`; nothing was written; names the run and the unsent range                                                                                                                                                                       |
 | `spool_corrupt`            | 3    | a spool line or `cursor.json` that is neither a torn tail nor valid (an `acked_count` above `last_acked_sequence` included), or a line longer than the 32 MiB per-line guard; the message names the chunk and line                                                                      |
 | `spool_missing`            | 3    | no spool exists for that run and producer (never written, or purged)                                                                                                                                                                                                                    |
-| `spool_locked`             | 3    | a live process holds `spool.lock`, or a live reporter holds `writer.lock` (§11.2, D-S56-Q8), for that producer directory; the message names its pid                                                                                                                                     |
+| `spool_locked`             | 3    | a live process holds `spool.lock`, a live taker holds the `spool.lock.takeover` mutex while breaking a stale lock, or a live reporter holds `writer.lock` (§11.2, D-S56-Q8), for that producer directory; the message names its pid                                                     |
 | `spool_unsafe_path`        | 3    | a spool path is not a real, owned object — a symlink, another user's directory, or a non-file where a file belongs — or the lock could not be created (the filesystem cannot hard-link) or inspected (an I/O errno); hint: an owned, symlink-free spool on a filesystem with hard links |
 | `invalid_ack`              | 3    | a cursor advance that is not a contiguous prefix already durable in the spool (internal guard)                                                                                                                                                                                          |
 | `unsent_events`            | 3    | `runs finalize` refused: the spool still holds unacked events; the message names the run and the unsent range                                                                                                                                                                           |
@@ -746,8 +752,18 @@ $EVIDGATE_SPOOL_DIR/<run_id>/<producer_id>/
                     #   present while a reporter writes
   cursor.json       # CLI-owned ack cursor (fields below)
   spool.lock        # exclusive CLI lock, present only while a command holds it
+  spool.lock.takeover # transient CLI takeover mutex ({ pid, started_at }), present
+                    #   while one process breaks a stale spool.lock; a crashed
+                    #   taker's mutex stays until another takeover reclaims it
   uploads/          # 0700: one `<identity>-<artifact_id>.json` upload journal per artifact (§12)
 ```
+
+A takeover also renames the lock it breaks, and the dead mutex of a taker that
+crashed, to unique `.stale` quarantine names
+(`spool.lock.<pid>.<uuid>.stale`, `takeover.<uuid>.stale`) for a few syscalls,
+so such a name may briefly appear in a producer directory: the takeover removes
+it, and a holder's release deletes any `spool.lock.*.stale` name that still
+carries its own lock inode (§11.2).
 
 - `<run_id>` and `<producer_id>` are single path segments (§5
   `invalid_spool_id`): `[A-Za-z0-9._-]`, not `.`/`..`, at most 128 characters,
@@ -813,10 +829,33 @@ hard-linked into place, the spool directory must live on a filesystem that
 supports hard links; where it does not (`EPERM`, `ENOTSUP`, `EOPNOTSUPP`, `EXDEV`
 or `ENOSYS`), the lock is refused with exit 3 `spool_unsafe_path` and an actionable
 hint instead of proceeding unlocked. A second
-CLI process gets exit 3 `spool_locked` naming the live pid. A lock whose pid is
-dead on this host is taken over only after a content re-read confirms the moved
-file is still the same lock, so a takeover can never discard or duplicate a live
-successor's lock. Only "there is nothing to read" (`ENOENT`, `ELOOP`, `ENXIO`) or a
+CLI process gets exit 3 `spool_locked` naming the live pid.
+
+A stale lock — one whose pid is dead on this host, or an entry that cannot be a
+lock — is taken over only while holding `<producer_dir>/spool.lock.takeover`, a
+transient mutex with the same `0600` hard-linked `{ pid, started_at }` record.
+The contender links the mutex first; when a live taker already holds it, the
+second contender exits 3 `spool_locked` naming that taker's pid instead of
+queueing, because a takeover lasts a few syscalls. Under the mutex it re-reads
+`spool.lock`. A live record there — a successor that linked its own lock
+meanwhile — stays at the path and is exit 3 `spool_locked` naming it; any other
+record it did not observe, or none at all, makes the acquisition link
+`spool.lock` again. Only the stale record it observed — dead or unreadable — is
+renamed to a unique `spool.lock.<pid>.<uuid>.stale` quarantine, and what was
+actually moved is read back: the observed stale record is deleted, while any
+other record is put back at the path with a `link` that fails when a newer lock
+already owns it, and the quarantine name is removed either way. The mutex is
+released only while it still carries the contender's own inode; the dead mutex
+of a taker that died is reclaimed by renaming it to a unique
+`takeover.<uuid>.stale` quarantine, verifying the moved record is that dead one,
+and deleting it — or putting it back when it is not. A takeover that did not win
+the lock links `spool.lock` again, up to 3 attempts in total. Deleting a lock
+therefore requires the moved file to be verified as the stale record the taker
+observed, and reclaiming a dead mutex requires the same check; the window both
+paths leave open is the one the code names — a crashed taker, two simultaneous
+reclaimers, a third publisher, and a contender linking into another reclaim's
+restore gap — which the post-rename verification narrows but does not close.
+Only "there is nothing to read" (`ENOENT`, `ELOOP`, `ENXIO`) or a
 file that cannot be a lock — non-regular, over 1 KiB, or unparseable — counts as a
 dead holder, after one re-read following a short pause; the file is opened
 `O_NOFOLLOW|O_NONBLOCK`, so a planted symlink, FIFO or device is neither followed

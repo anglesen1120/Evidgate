@@ -146,7 +146,7 @@ async function requestDecision(
   deadlineAt: number | undefined,
 ): Promise<PollStep> {
   const now = request.deps.now ?? Date.now;
-  const first = await attemptDecision(session, request, budgetMs(deadlineAt, now()));
+  const first = await attemptDecision(session, request, deadlineAt);
   if (first.kind !== 'unauthorized') {
     return first;
   }
@@ -188,7 +188,7 @@ async function requestDecision(
     // deadline instead of the 401 that the refresh had already answered.
     throw refreshOutlivedWait();
   }
-  const second = await attemptDecision(session, request, budgetMs(deadlineAt, refreshedAt));
+  const second = await attemptDecision(session, request, deadlineAt);
   if (second.kind === 'unauthorized') {
     throw second.error;
   }
@@ -239,14 +239,6 @@ function refreshOutlivedWait(): CliError {
 }
 
 /**
- * The retries one poll may spend: never past the absolute deadline, and never below the 1 ms
- * minimum the last poll needs. Without `--wait` the call keeps its own default budget.
- */
-function budgetMs(deadlineAt: number | undefined, now: number): number | undefined {
-  return deadlineAt === undefined ? undefined : Math.max(deadlineAt - now, 1);
-}
-
-/**
  * One request, classified for the poll loop. A body that breaks after its headers is a
  * transport failure, so a poll may retry it; a body the CLI cannot size or parse is thrown
  * instead, because a malformed answer is a contract violation, not a slow server.
@@ -254,10 +246,15 @@ function budgetMs(deadlineAt: number | undefined, now: number): number | undefin
 async function attemptDecision(
   session: Session,
   request: DecisionRequest,
-  budgetMs: number | undefined,
+  deadlineAt: number | undefined,
 ): Promise<DecisionAttempt> {
-  const operation = (signal: AbortSignal): Promise<DecisionResult> =>
-    getRunDecision({
+  const now = request.deps.now ?? Date.now;
+  // Never past the deadline, and never below the 1 ms the last poll needs for its answer.
+  const budget = deadlineAt === undefined ? undefined : Math.max(deadlineAt - now(), 1);
+  let attempt: AbortSignal | undefined;
+  const operation = (signal: AbortSignal): Promise<DecisionResult> => {
+    attempt = signal;
+    return getRunDecision({
       client: session.client,
       path: { r: request.runId },
       // The body is read below, not by the generated client, so an oversized body and a
@@ -265,55 +262,68 @@ async function attemptDecision(
       parseAs: 'stream',
       signal,
     });
+  };
   const result = await callApi(operation, {
     // A GET has no side effect, so a transport failure, a 429 and a 5xx may be replayed.
     policy: 'replay-safe',
     deps: request.deps,
-    ...(budgetMs === undefined ? {} : { budgetMs }),
+    ...(budget === undefined ? {} : { budgetMs: budget }),
   });
   const response = result.response;
   if (response === undefined) {
-    return { kind: 'transient', error: transportError(result.error) };
+    return {
+      kind: 'transient',
+      error: transportError(result.error),
+      // Only the wait's own timer, and only once it has fired, ends a request unanswered.
+      endedByDeadline: deadlineAt !== undefined && attempt?.aborted === true && now() >= deadlineAt,
+    };
   }
+  if (!response.ok) {
+    return failedDecision(response, result.error, now);
+  }
+  try {
+    return { kind: 'body', outcome: parseDecisionText(await readDecisionText(response)) };
+  } catch (error) {
+    // A stream that broke is retryable while the wait lasts; once the wait ends on it the
+    // answer is unreadable, so it is an infrastructure failure and never a pending answer.
+    if (error instanceof DecisionBodyStreamError) {
+      return { kind: 'transient', error };
+    }
+    throw error;
+  }
+}
+
+/**
+ * One non-2xx answer: a refused redirect and a permanent 4xx are fatal, a 401 may be
+ * refreshed once, and only the answers `callApi` itself calls transient may be polled again.
+ */
+function failedDecision(response: Response, sdkError: unknown, now: () => number): DecisionAttempt {
   if (response.status === refusedRedirectStatus) {
     throw new CliError('the decision request was answered with a redirect, which is refused', {
       code: 'request_failed',
     });
   }
   const error = (): CliError =>
-    serverErrorFromResponse(result.error, response, {
+    serverErrorFromResponse(sdkError, response, {
       code: 'request_failed',
       message: `the run decision request failed (HTTP ${response.status})`,
     });
   if (response.status === 401) {
     return { kind: 'unauthorized', error: error() };
   }
-  if (!response.ok) {
-    // Only the answers `callApi` itself calls transient may be polled again; a permanent
-    // 4xx (403, 404, 422) fails the build at once, and so does a 5xx the envelope marks
-    // `retryable: false`.
-    const transient =
-      (response.status === 429 || (response.status >= 500 && response.status <= 599)) &&
-      isRetryable(response.status, result.error);
-    if (!transient) {
-      throw error();
-    }
-    const failure = error();
-    const named = retryAfter(response, (request.deps.now ?? Date.now)(), { strict: true });
-    return named === undefined
-      ? { kind: 'transient', error: failure }
-      : { kind: 'transient', error: failure, retryAfterMs: named };
+  const transient =
+    (response.status === 429 || (response.status >= 500 && response.status <= 599)) &&
+    isRetryable(response.status, sdkError);
+  if (!transient) {
+    throw error();
   }
-  try {
-    return { kind: 'body', outcome: parseDecisionText(await readDecisionText(response)) };
-  } catch (error) {
-    // A stream that broke is retryable, so a wait that ends on one still reports the pending
-    // answer an earlier poll gave; an oversized or unparseable answer stays fatal.
-    if (error instanceof DecisionBodyStreamError) {
-      return { kind: 'transient', error };
-    }
-    throw error;
-  }
+  const failure = error();
+  const named = retryAfter(response, now(), { strict: true });
+  // The server answered, so this is not the deadline cutting a request off: a wait that
+  // ends on it must report the failure even after an earlier pending answer.
+  return named === undefined
+    ? { kind: 'transient', error: failure }
+    : { kind: 'transient', error: failure, retryAfterMs: named };
 }
 
 /**

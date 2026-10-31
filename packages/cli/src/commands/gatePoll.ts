@@ -20,7 +20,17 @@ const pollCapMs = 10_000;
  */
 export type PollStep =
   | { readonly kind: 'body'; readonly outcome: GateOutcome }
-  | { readonly kind: 'transient'; readonly error: CliError; readonly retryAfterMs?: number };
+  | {
+      readonly kind: 'transient';
+      readonly error: CliError;
+      readonly retryAfterMs?: number;
+      /**
+       * The wait's own deadline ended this attempt before the run answered it. Only such a
+       * cut may leave an earlier pending answer standing; any other final failure is the
+       * infrastructure error the wait ended on.
+       */
+      readonly endedByDeadline?: boolean;
+    };
 
 /** The seams a spec injects so polling needs no real time: no clock, no sleep, no jitter. */
 export interface PollDeps {
@@ -44,9 +54,9 @@ export interface PollOptions {
 /**
  * Polls until a body carries a decision, the wait is spent, or the last answer was transient.
  * A spent wait on a pending body returns that body (exit code 2). A spent wait on a transient
- * failure throws it (exit code 3) — unless an earlier poll already reported the run pending,
- * in which case that pending answer is the state the wait ended in: the last request is cut
- * off by the deadline's own 1 ms budget, and an abort is not an answer the run gave.
+ * failure throws it (exit code 3), even when an earlier poll reported the run pending — that
+ * pending answer only stands when the deadline itself cut the last request off before it
+ * answered, because then the run gave no later state to report.
  */
 export async function pollDecision(options: PollOptions): Promise<GateOutcome> {
   const now = options.deps.now ?? Date.now;
@@ -84,7 +94,7 @@ export async function pollDecision(options: PollOptions): Promise<GateOutcome> {
     }
   }
   if (step.kind === 'transient') {
-    if (lastPending !== undefined) {
+    if (lastPending !== undefined && step.endedByDeadline === true) {
       return lastPending;
     }
     throw step.error;
