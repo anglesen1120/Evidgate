@@ -1,9 +1,9 @@
-// 04.2.1-T2.1 / 04.2.1-T1.1: the one SDK client every command uses (04.2.1 §8 SSRF
-// hygiene). The base URL is the validated `EVIDGATE_API_URL` plus the `/v1` version
-// prefix, the bearer is the token from `getToken()` — omitted for the ingest exchange,
-// which carries the credential in the body instead — and `redirect: 'error'` stops the
-// generated client from following a redirect to a host the operator never configured.
-// `fetchImpl` is an injected seam so a spec can stub transport without a network call.
+// The one SDK client every command uses. The base URL is the validated `EVIDGATE_API_URL`
+// plus the `/v1` version prefix, the bearer is the token from `getToken()` — omitted for the
+// ingest exchange, which carries the credential in the body instead — and `redirect: 'error'`
+// stops the generated client from following a redirect to a host the operator never
+// configured. `fetchImpl` is an injected seam so a spec can stub transport without a network
+// call.
 import { createClient, type Client } from '@evidgate/sdk';
 
 import type { ResolvedConfig } from './config.js';
@@ -33,9 +33,9 @@ export function createApiClient(
     baseUrl: `${config.apiUrl}${API_VERSION_PREFIX}`,
     headers,
     redirect: 'error',
-    // The generated client spreads per-call options after the config, so a later
-    // command could re-enable redirects. Rebuild the Request with `redirect: 'error'`
-    // on every call, whatever the caller passed (SEC7).
+    // The generated client spreads per-call options after the config, so a caller could
+    // re-enable redirects. Rebuild the Request with `redirect: 'error'` on every call,
+    // whatever the caller passed, so no request can follow a redirect.
     fetch: (input, init) => fetchImpl(new Request(input, { ...init, redirect: 'error' })),
   });
 }

@@ -1,24 +1,7 @@
-// 09.1.1-T12.1: the OpenAPI half of the response contract the web fixture
-// backend (09.1.1-T12) serves and its contract check asserts. Given the one
-// parsed `contracts/openapi.yaml` document it answers two questions: which
-// method + path template an operationId names, and whether a response body is
-// what the document declares for (operationId, status). The engine is the
-// shared `createContractAjv()` instance (2020-12 + ajv-formats, `strict: false`,
-// never a second configuration) and the rows are the shared
-// `ContractValidationError` mapping, so a body accepted here is a body the
-// contract validator accepts.
-//
-// OpenAPI 3.1 schema objects ARE JSON Schema 2020-12 documents, so nothing is
-// translated — only local references are re-addressed: every member of
-// `components.schemas` is registered in ONE Ajv document
-// (`urn:evidgate:openapi:components`) under `$defs`, and every
-// `#/components/schemas/<name>` reference is rewritten to
-// `urn:evidgate:openapi:components#/$defs/<name>`. Ajv then resolves nested and
-// cyclic component references from that registry alone. Response objects that
-// are themselves `$ref: '#/components/responses/<name>'` are followed inside
-// the same document before their content schema is read. A reference this
-// document cannot resolve (an external `./schemas/*.json` file, for example)
-// is reported as a row, never thrown.
+// The OpenAPI half of the response contract: resolve an operationId to its method + path,
+// and validate a response body against the already parsed `contracts/openapi.yaml`. It
+// reuses the shared contract Ajv instance and error mapping, so acceptance matches the
+// contract validator, and an unresolvable `$ref` becomes a row instead of a throw.
 import type { Ajv2020, ValidateFunction } from 'ajv/dist/2020.js';
 
 import { collectValidationErrors, createContractAjv } from './validate.js';

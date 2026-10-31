@@ -1,11 +1,9 @@
-// 04.3.1-T1.3: the engine version guard (AC5, 04 §8 risk row). The reporter refuses to
-// run against a @playwright/test outside `^1.63` so a changed reporter API can never be
-// silently mis-mapped. The check is hand-written (no semver dependency is allowed) and
-// the version source is injectable for tests.
+// The reporter refuses to run against a @playwright/test outside `^1.63`: a changed reporter
+// API would otherwise mis-map silently. Hand-written because no semver dependency is allowed,
+// and the version source is injectable for tests.
 //
-// Prerelease handling: `^1.63` means `>=1.63.0 <2.0.0` and, as in npm's semver, a
-// prerelease does not satisfy it (`1.63.0-beta.1` is rejected) — the pinned release is
-// the only tested engine.
+// Prerelease handling: as in npm's semver a prerelease does not satisfy `^1.63`, because only
+// the pinned release is the tested engine.
 import { createRequire } from 'node:module';
 
 export const SUPPORTED_ENGINE_RANGE = '^1.63';
@@ -67,9 +65,9 @@ export function assertSupportedEngine(version: string): void {
 }
 
 /**
- * Reads the installed `@playwright/test` version from its package.json (D8: the engine
- * version is detected at runtime and travels in the capability document; the package
- * pins no engine of its own beyond the guard).
+ * Reads the installed `@playwright/test` version from its package.json. It is detected at
+ * runtime and travels in the capability document, so the package pins no engine of its own
+ * beyond the guard.
  */
 export function readInstalledPlaywrightVersion(): string {
   const require = createRequire(import.meta.url);

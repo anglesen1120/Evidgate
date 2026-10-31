@@ -1,28 +1,6 @@
-// 04.2.4-T1.3: the allowed-directory guard every `artifacts upload` file passes before a
-// single byte is sent (04.2.4 §8 "allowed directories / DECISIONS §7", area plan 04 §6).
-//
-// Why this exists: an artifact can carry personal data (DECISIONS §7), and a mistyped
-// `--file` is the cheapest way to ship a home directory or a credential file to evidence
-// storage. The rule is therefore deny-by-default: the file's REAL path must sit under one
-// of the configured roots — the test output directories `./test-results` and
-// `./playwright-report` of the current working directory, plus every `--dir` root the
-// operator adds. Realpath is taken on both sides, so a symlink planted inside a root can
-// never be used to reach a file outside it (the nominal path is not trusted, only the
-// resolved one), and `..` traversal is resolved away before the comparison.
-//
-// TOCTOU: the allow-list check resolves a path; the bytes come from a descriptor. The file
-// is opened with `O_NOFOLLOW|O_NONBLOCK` on the resolved path and the opened descriptor is
-// `fstat`ed, then its `dev`/`ino` are compared with `lstat` of the resolved path. A path
-// swapped between the check and the open (or a final component swapped for a symlink) is
-// refused rather than followed, and a FIFO/device/directory can never park the CLI or be
-// read as a file.
-//
-// The kind table mirrors the server's closed list (openapi `createArtifactUploadUrl.kind`,
-// T20) and the static per-kind caps of `contracts/evidence/artifact-kind-defaults.v1.json`
-// (06.1.2-T3). A kind with no static default has no client-side cap: the project's policy
-// row decides, so an over-cap file there is the server's 413 `payload_too_large`, surfaced
-// verbatim. The client-side refusal exists to fail before the token exchange, not to
-// replace the server's authority.
+// The deny-by-default allow-list every `artifacts upload` file passes before a byte is
+// sent: an artifact can carry personal data, so the real path must sit under a configured
+// root, and the opened descriptor is `fstat`ed to close the check/open race.
 import { constants as fsConstants, type Stats } from 'node:fs';
 import { lstat, open, realpath, type FileHandle } from 'node:fs/promises';
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -30,7 +8,7 @@ import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { CliError } from './errors.js';
 import { O_NOFOLLOW, O_NONBLOCK } from './spool.js';
 
-/** The artifact kinds the server accepts (openapi `createArtifactUploadUrl` enum, T20). */
+/** The artifact kinds the server accepts (openapi `createArtifactUploadUrl` enum). */
 export const artifactKinds = [
   'trace',
   'video',
@@ -45,9 +23,8 @@ export const artifactKinds = [
 export type ArtifactKind = (typeof artifactKinds)[number];
 
 /**
- * The static per-kind byte cap when the project has no policy row
- * (`artifact-kind-defaults.v1.json`, 06.1.2-T3). `undefined` means "the project's row is
- * the only cap", so the CLI cannot refuse locally.
+ * The static per-kind byte cap when the project has no policy row. `undefined` means the
+ * project's row is the only cap, so the CLI cannot refuse locally.
  */
 export const artifactKindMaxBytes: Readonly<Record<ArtifactKind, number | undefined>> = {
   trace: 104_857_600,
@@ -62,8 +39,8 @@ export const artifactKindMaxBytes: Readonly<Record<ArtifactKind, number | undefi
 
 /**
  * The roots an upload may read from when no `--dir` is given: the two directories a
- * Playwright/pytest run writes by default, relative to the process's working directory
- * (04.2.4 §8). `--dir` roots are added to these, never replace them.
+ * Playwright/pytest run writes by default, relative to the working directory. `--dir` roots
+ * are added to these, never replace them.
  */
 export const defaultUploadRoots: readonly string[] = ['test-results', 'playwright-report'];
 
@@ -119,7 +96,7 @@ const kindExtensions: Readonly<Record<string, readonly string[]>> = {
   raw_report: ['.xml', '.json', '.html', '.htm', '.zip'],
 };
 
-/** A file name is echoed on stdout, so match the control/format refusal of `config.ts`. */
+/** A file name is echoed on stdout, so match the control/format refusal of `configResolve.ts`. */
 const forbiddenInFileName = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 /**
@@ -146,8 +123,9 @@ export function pathRefused(message: string, hint?: string): CliError {
 }
 
 /**
- * `O_NOFOLLOW|O_NONBLOCK` plus the regular-file/owner checks: a symlink, a FIFO, a device
- * or a directory is refused with `upload_path_refused` instead of being read.
+ * Opens the resolved path `O_NOFOLLOW|O_NONBLOCK`: a symlink is refused with `ELOOP` instead
+ * of being followed, and a planted FIFO, device or directory cannot block the open and is
+ * then refused by the regular-file check.
  */
 export async function openUploadFile(input: OpenUploadFileInput): Promise<UploadFile> {
   if (input.file.length === 0) {
@@ -246,6 +224,9 @@ export async function openUploadFile(input: OpenUploadFileInput): Promise<Upload
     if (stats.size === 0) {
       throw pathRefused(`--file ${displayPath(path, input.cwd)} is empty`);
     }
+    // Refused here, before the token exchange, so an over-cap file costs no request. Only the
+    // kind's static default is known locally (`undefined` = the project row decides), so this
+    // mirrors the server's cap and never replaces it.
     const cap = artifactKindMaxBytes[input.kind];
     if (cap !== undefined && stats.size > cap) {
       throw new CliError(
