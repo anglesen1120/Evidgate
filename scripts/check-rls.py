@@ -81,7 +81,7 @@ DEFINER_AUDIT_EXEMPT = {
     "evidgate.expire_pending_invites": "T80 sweep: bounded expiry of past-due pending invites, observed via the task row",
     "evidgate.audit_org_ids": "T80 sweep: lists org ids for the chain-verification task, which records its own findings",
     "evidgate.reconcile_overdue_runs": (
-        "created 0056_reconcile_missing_result.sql:107 (uuid, uuid, integer): read-only T80 sweep scan — the "
+        "created 0056_reconcile_missing_result.sql:132 (uuid, uuid, integer): read-only sweep scan — the "
         "collection-deadline sweep reads which runs are overdue and writes nothing here, and the attempt it "
         "queues is the observable outcome (the run's state, its evidence_revision row, the task row); a per-call "
         "audit row written by a read-only projection would be a write amplification on every ten-minute fire"

@@ -143,7 +143,8 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   and `0056` is the reconciler's plan-coverage reason — `evidence_revision_missing_check` re-created over
   the `0049` list with `missing_result` appended (added `not valid`, then validated), so a planned
   execution that never produced an attempt can be recorded instead of the revision insert being refused —
-  plus the collection-deadline scan `evidgate.reconcile_overdue_runs`, a read-only `security definer`
+  plus the partial index `run_collecting_idx` on `public.run (org_id, id)` `where state = 'collecting'`
+  and the collection-deadline scan `evidgate.reconcile_overdue_runs`, a read-only `security definer`
   projection of `(org_id, run_id, collection_deadline_at)` for the overdue and still-collectable runs of
   every tenant, which `evidgate_worker_sched` alone may execute: `public.run` stays ungranted to the sweep
   role, so a platform sweep can name the runs to reconcile without reading a tenant's row
@@ -794,6 +795,12 @@ through the real runner against a throwaway PostgreSQL 18 container.
   commits meanwhile; the row limit is clamped inside the body (`1..1000`, default `100`), so a caller
   cannot ask for the whole table; and the body is `stable`, one snapshot per call. `set search_path = ''`
   and a schema-qualified relation keep the definer body immune to a caller's `search_path`.
+- The index: `run_collecting_idx` on `public.run (org_id, id)` `where state = 'collecting'`. The scan seeks
+  and orders on exactly that pair inside one state, while the table keeps every finished run forever, so a
+  partial index keeps the seek proportional to the runs a sweep can name instead of the run history. It is
+  reached through the definer function alone, so it needs no grant; `create index` runs inside the migrator's
+  per-script transaction, which is why it is not `concurrently` — the SHARE lock it takes lets readers
+  continue and queues inserts and updates behind it, under the file's `lock_timeout`.
 - Grants: `security definer` on `evidgate_owner` (the posture of every sweep helper — the owner is the
   only role with a policy-free view, and `scripts/check-rls.py` audits the body), `public` revoked,
   `EXECUTE` granted to `evidgate_worker_sched` alone. `evidgate_app` and `evidgate_operator` cannot call

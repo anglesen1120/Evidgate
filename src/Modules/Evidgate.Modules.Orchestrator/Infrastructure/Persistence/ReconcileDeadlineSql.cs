@@ -40,8 +40,8 @@ internal static class ReconcileDeadlineSql
     /// the whole page, so the probe costs one round trip instead of one per run.
     /// <para>
     /// The keys travel as JSON text and are unpacked in SQL. A <c>string[]</c> parameter cannot be bound here:
-    /// the tenant Dapper path registers a read-only <c>string[]</c> type handler (M1W3-02 — writes are EF
-    /// Core's), so <c>Dapper</c> refuses to write an array, and a module cannot bind the shared
+    /// the tenant Dapper path registers a read-only <c>string[]</c> type handler (writes are EF Core's), so
+    /// <c>Dapper</c> refuses to write an array, and a module cannot bind the shared
     /// <c>TextArrayParameter</c>, which is internal to its own assembly.
     /// </para>
     /// </summary>

@@ -46,9 +46,9 @@ internal static class ReconcileDeadlineSweeps
     public const int BatchSize = 100;
 
     /// <summary>
-    /// Pages one fire may drain. A fire that reaches this bound leaves the rest to the next one — the cursor
-    /// restarts at the beginning, and the pages it already visited are deduplicated by their keys, so stopping
-    /// early loses no work and repeats none.
+    /// Pages one fire may drain. A fire that reaches this bound leaves the rest to the next one: the cursor
+    /// restarts at the beginning and the keys already queued are skipped, so no run is queued twice — but a run
+    /// past the bound waits a whole tick, and the handler warns when the bound cut a full page short.
     /// </summary>
     public const int MaxPagesPerFire = 10;
 
@@ -105,6 +105,7 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
 
         var limit = Math.Clamp(payload.Limit, 1, ReconcileDeadlineSweeps.BatchSize);
         var enqueued = 0;
+        var drained = false;
 
         Guid? afterOrg = null;
         Guid? afterRun = null;
@@ -114,6 +115,7 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
             var candidates = await ReadPageAsync(afterOrg, afterRun, limit, cancellationToken).ConfigureAwait(false);
             if (candidates.Count == 0)
             {
+                drained = true;
                 break;
             }
 
@@ -126,8 +128,16 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
             // it, so the next page would come back empty.
             if (candidates.Count < limit)
             {
+                drained = true;
                 break;
             }
+        }
+
+        // A full last page at the bound means the scan has no evidence the backlog ended: whatever is left stays
+        // overdue and waits for the next fire, so the cut is logged rather than passed off as a finished sweep.
+        if (!drained)
+        {
+            LogPageBoundReached(ReconcileDeadlineSweeps.MaxPagesPerFire, limit);
         }
 
         LogSwept(enqueued, limit);
@@ -227,6 +237,12 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
         Level = LogLevel.Information,
         Message = "Deadline sweep queued {Enqueued} reconcile(s) in pages of at most {Limit} run(s)")]
     private partial void LogSwept(int enqueued, int limit);
+
+    [LoggerMessage(
+        EventId = 2426,
+        Level = LogLevel.Warning,
+        Message = "Deadline sweep stopped at its {Pages}-page bound of {Limit} run(s) per page with a full page: any overdue run past it waits for the next fire")]
+    private partial void LogPageBoundReached(int pages, int limit);
 
     /// <summary>One overdue run as the scan projects it: the tenant, the run, and the deadline that passed.</summary>
     private sealed record OverdueRun(Guid OrgId, Guid RunId, DateTimeOffset CollectionDeadlineAt);

@@ -1323,6 +1323,32 @@ public sealed class ReconcileRunTests
             .ShouldBeFalse("T2.2 persists nothing (T2.4 owns the row)");
     }
 
+    /// <summary>
+    /// A waiting attempt stops before the coverage read: the plan's uncovered executions cannot turn a wait into a
+    /// verdict, so the bounded read under the run lock is spent only on the attempt that compares for real.
+    /// </summary>
+    [Fact]
+    public async Task Reconcile_OpenShardBeforeDeadline_SkipsTheCoverageRead()
+    {
+        await using var world = await StartAsync();
+        var runId = world.RunId;
+        await SetRunStateAsync(world, runId, "collecting");
+
+        world.Api.Statements.Clear();
+        var outcome = await ReconcileAsync(world, runId);
+
+        var statements = world.Api.Statements.Snapshot();
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Pending, Describe(outcome));
+        outcome.Comparison.ShouldNotBeNull("a pending attempt still reports the evidence it compared");
+        // The log proves capture is on before the negative check means anything: a snapshot that logged nothing would
+        // satisfy "no planned_execution statement" without the attempt ever running.
+        statements.ShouldContain(
+            statement => statement.Contains("public.producer_slot", StringComparison.Ordinal),
+            "the waiting attempt still reads the slots it decided on");
+        statements.Any(statement => statement.Contains("public.planned_execution", StringComparison.Ordinal))
+            .ShouldBeFalse(string.Join(Environment.NewLine, statements));
+    }
+
     // ------------------------------------------------------------------ T2.1: the trigger is claimed exactly once
 
     /// <summary>The queue the outbox dispatcher routes an unconfigured task type to (01.5.1 §11).</summary>

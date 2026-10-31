@@ -46,7 +46,7 @@ internal static class ReconcileMissingCodes
     /// <summary>
     /// A planned execution of the run with no recorded <c>case_attempt</c>: no status was ever reported for it, so the
     /// run is incomplete however the producers' declarations agree. One entry per execution, keyed by its
-    /// <c>execution_key</c>.
+    /// <c>execution_key</c>, plus one counted entry when the bounded coverage read returned only part of the plan.
     /// </summary>
     public const string MissingResult = "missing_result";
 }
@@ -74,6 +74,19 @@ internal sealed record PlannedShard(
 /// on, so the reason it produces is attributed to the shard that should have reported it.
 /// </param>
 internal sealed record PlannedExecution(string ExecutionKey, string ShardId);
+
+/// <summary>
+/// The plan's executions that recorded no attempt, as one bounded read answers them. A run can plan tens of thousands of
+/// executions, so the read stops at a cap and every row carries the true total; the comparer names the rows it read and
+/// one counted reason for the rest, so the gap is never understated and the work stays bounded.
+/// </summary>
+/// <param name="Uncovered">The uncovered executions the read answered, never more than the read's cap.</param>
+/// <param name="Total">How many planned executions of the run recorded no attempt, however many rows were read.</param>
+internal sealed record ExecutionCoverage(IReadOnlyList<PlannedExecution> Uncovered, long Total)
+{
+    /// <summary>A plan every execution of which recorded an attempt.</summary>
+    public static ExecutionCoverage Complete { get; } = new([], 0);
+}
 
 /// <summary>
 /// What the acknowledged <c>event</c> rows of one producer say, computed in one grouped statement (no per-event
@@ -188,8 +201,9 @@ internal enum ReconcileDisposition
 /// <param name="Disposition">What happened.</param>
 /// <param name="Comparison">
 /// Set when <paramref name="Disposition"/> is <see cref="ReconcileDisposition.Compared"/> — and also for
-/// <see cref="ReconcileDisposition.Pending"/>, whose comparison is the evidence a finished attempt would have decided on
-/// (its counts are the attempt's log line). A pending attempt finishes nothing: only <c>Compared</c> reaches the finisher.
+/// <see cref="ReconcileDisposition.Pending"/>, whose comparison is the event evidence alone (its counts are the attempt's
+/// log line): a waiting attempt reads no plan coverage, because coverage cannot turn a wait into a verdict. A pending
+/// attempt finishes nothing: only <c>Compared</c> reaches the finisher.
 /// </param>
 internal sealed record ReconcileOutcome(ReconcileDisposition Disposition, ReconcileComparison? Comparison);
 
@@ -198,9 +212,9 @@ internal interface IRunReconciler
 {
     /// <summary>
     /// Locks the run row <c>FOR NO KEY UPDATE</c>, lists the planned shards, reads the observed events per producer in
-    /// one statement, reads the plan's executions with no recorded attempt in one more and compares. Deterministic for
-    /// the same rows and the same clock reading: the comparison depends on the rows alone, and the disposition
-    /// additionally on the deadline the lock statement evaluated, so the same rows answer
+    /// one statement and compares; an attempt that decides reads the plan's executions with no recorded attempt in one
+    /// more statement first. Deterministic for the same rows and the same clock reading: the comparison depends on the
+    /// rows alone, and the disposition additionally on the deadline the lock statement evaluated, so the same rows answer
     /// <see cref="ReconcileDisposition.Pending"/> before <c>collection_deadline_at</c> and
     /// <see cref="ReconcileDisposition.Compared"/> after it. The caller decides nothing on <c>Pending</c>.
     /// </summary>

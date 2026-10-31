@@ -200,6 +200,123 @@ public sealed class ReconcileDeadlineSweepTests
     }
 
     [Fact]
+    public async Task Sweep_SmallPageAcrossTwoTenants_QueuesEveryRunExactlyOnce()
+    {
+        var clock = AlignedClock();
+        await using var world = await StartAsync(clock);
+        var (otherOrg, _) = await world.CreateOtherOrgAsync("sweep-paging-b");
+
+        // Five overdue runs split 3/2 with a page of two puts a page boundary INSIDE a tenant: the page that
+        // straddles carries the last run of the first org and the first run of the second, so the handler opens two
+        // tenant scopes for one page and must still queue neither run twice.
+        var firstOrg = world.Org.CompareTo(otherOrg) < 0 ? world.Org : otherOrg;
+        var lastOrg = firstOrg == world.Org ? otherOrg : world.Org;
+
+        var firstRuns = new List<Guid>();
+        var lastRuns = new List<Guid>();
+        (firstOrg == world.Org ? firstRuns : lastRuns).Add(world.RunId);
+
+        while (firstRuns.Count < 3 || lastRuns.Count < 2)
+        {
+            var org = firstRuns.Count < 3 ? firstOrg : lastOrg;
+            (org == firstOrg ? firstRuns : lastRuns).Add((await world.SeedOtherRunAsync(org)).RunId);
+        }
+
+        var overdue = firstRuns.Concat(lastRuns).ToList();
+        foreach (var runId in overdue)
+        {
+            await MarkOverdueAsync(world, runId);
+        }
+
+        await SweepOnceAsync(world, clock, pageLimit: 2);
+
+        foreach (var runId in overdue)
+        {
+            (await DeadlineRowsAsync(world, runId)).ShouldBe(
+                1,
+                customMessage: $"run {runId:D} is queued once, whether it sat whole in a page or on a boundary");
+        }
+
+        (await OutboxOrgAsync(world, firstRuns[0])).ShouldBe(
+            firstOrg,
+            customMessage: "each row lands in the tenant of its own run");
+        (await OutboxOrgAsync(world, lastRuns[0])).ShouldBe(
+            lastOrg,
+            customMessage: "the page that straddles writes into both tenants");
+
+        await DispatchAndReconcileAsync(world, expectedReconciles: overdue.Count);
+
+        (await RevisionCountAsync(world)).ShouldBe(
+            overdue.Count,
+            customMessage: "one attempt per queued run, so a page boundary neither skipped nor repeated an attempt");
+    }
+
+    [Fact]
+    public async Task Sweep_TwiceBeforeDispatch_LeavesOneOutboxRow_AndOneRevisionAfterIt()
+    {
+        var clock = AlignedClock();
+        await using var world = await StartAsync(clock);
+        var runId = world.RunId;
+
+        await SetRunStateAsync(world, runId, "collecting");
+        await PassCollectionDeadlineAsync(world, runId);
+
+        // The repeat case above dispatches between the fires, so the second sweep measures the queue's key. Here
+        // nothing dispatches: the second handler's probe finds the first fire's row still pending in the outbox,
+        // which is the branch that keeps two fires of the same key from writing two triggers.
+        await SweepOnceAsync(world, clock);
+        clock.Advance(TimeSpan.FromMinutes(10));
+        await SweepOnceAsync(world, clock);
+
+        (await CountDoneAsync(world, RunReconcileContract.DeadlineSweepTaskType)).ShouldBe(
+            2,
+            customMessage: "both fires ran their handler to done, so the second one really reached the probe");
+        (await DeadlineRowsAsync(world, runId)).ShouldBe(
+            1,
+            customMessage: "the still-pending key keeps the second fire from writing a second trigger");
+        (await CountQueueRowsAsync(world)).ShouldBe(0, customMessage: "nothing dispatched yet, so no task row exists");
+
+        await DispatchAndReconcileAsync(world, expectedReconciles: 1);
+
+        (await RevisionCountAsync(world)).ShouldBe(1, customMessage: "one trigger, one attempt, one revision");
+        (await CountQueueRowsAsync(world)).ShouldBe(1, customMessage: "the pending trigger produced one task row");
+    }
+
+    [Fact]
+    public async Task Sweep_PageBoundCutAFullLastPage_AndTheNextFireQueuesTheRemainder()
+    {
+        var clock = AlignedClock();
+        await using var world = await StartAsync(clock);
+
+        // Eleven overdue runs at one row per page is one more than the ten-page bound, so the fire's last page is
+        // still full and it cannot tell the backlog ended. The run past the bound must reach the next fire, never be
+        // dropped: the bound delays a run, it never loses one.
+        var runs = new List<Guid> { world.RunId };
+        while (runs.Count < 11)
+        {
+            runs.Add((await world.SeedOtherRunAsync(world.Org)).RunId);
+        }
+
+        foreach (var runId in runs)
+        {
+            await MarkOverdueAsync(world, runId);
+        }
+
+        await SweepOnceAsync(world, clock, pageLimit: 1);
+
+        (await QueuedRunCountAsync(world)).ShouldBe(
+            10,
+            customMessage: "one fire drains at most its bound of ten pages, each a run here, so one of the eleven waits");
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        await SweepOnceAsync(world, clock);
+
+        (await QueuedRunCountAsync(world)).ShouldBe(
+            11,
+            customMessage: "the next fire queues the run the bound cut off, and re-probes the ten it already queued");
+    }
+
+    [Fact]
     public async Task DeadlineScan_IsExecutableByTheSweepRoleAlone()
     {
         await using var world = await StartAsync(AlignedClock());
@@ -357,6 +474,50 @@ public sealed class ReconcileDeadlineSweepTests
     private static Task<OutboxDispatchResult> DispatchAsync(IngestTestWorld world) =>
         world.Host.Services.GetRequiredService<OutboxDispatcher>().DispatchBatchAsync(Token);
 
+    /// <summary>
+    /// One schedule fire and its handler, observed by the count of completed sweep rows: a case that fires twice must
+    /// prove the second handler ran, which a "the newest row is done" read cannot — the first fire's row already is.
+    /// <paramref name="pageLimit"/> narrows the queued fire's payload, the operator-replayable field a paging case
+    /// needs, before the consumer claims it.
+    /// </summary>
+    private async Task SweepOnceAsync(IngestTestWorld world, FakeTimeProvider clock, int? pageLimit = null)
+    {
+        var completed = await CountDoneAsync(world, RunReconcileContract.DeadlineSweepTaskType);
+
+        (await FireAsync(world, clock)).ShouldBeGreaterThan(
+            0,
+            customMessage: "the schedule pass fires the registered sweeps");
+
+        if (pageLimit is { } limit)
+        {
+            await _fixture.ExecuteAsync(
+                world.Database,
+                $"update public.task set payload = '{{\"limit\":{limit}}}'::jsonb "
+                + $"where task_type = '{RunReconcileContract.DeadlineSweepTaskType}' and state <> 'done'");
+
+            (await world.ScalarAsync<int>(
+                "select (payload ->> 'limit')::int from public.task "
+                + $"where task_type = '{RunReconcileContract.DeadlineSweepTaskType}' and state <> 'done' "
+                + "order by created_at desc limit 1"))
+                .ShouldBe(limit, customMessage: "the queued fire carries the narrowed page size");
+        }
+
+        var consumer = world.Host.Services.GetRequiredService<TaskConsumer>();
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            if (await CountDoneAsync(world, RunReconcileContract.DeadlineSweepTaskType) > completed)
+            {
+                return;
+            }
+
+            await consumer.PollOnceAsync(MaintenanceQueue, Token);
+        }
+
+        (await CountDoneAsync(world, RunReconcileContract.DeadlineSweepTaskType)).ShouldBeGreaterThan(
+            completed,
+            customMessage: "the maintenance consumer runs this fire's sweep task to done");
+    }
+
     /// <summary>Dispatches, then claims on the reconcile queue until the expected tasks ran and completed.</summary>
     private static async Task DispatchAndReconcileAsync(IngestTestWorld world, int expectedReconciles)
     {
@@ -401,6 +562,10 @@ public sealed class ReconcileDeadlineSweepTests
             "select count(*) from public.outbox where idempotency_key = "
             + $"'{RunReconcileContract.DeadlineIdempotencyKey(runId)}'");
 
+    /// <summary>How many runs carry a collection-deadline trigger in the outbox, whatever their tenant.</summary>
+    private static Task<long> QueuedRunCountAsync(IngestTestWorld world) =>
+        world.CountAsync("outbox", where: "idempotency_key like 'orchestrator:run:%:reconcile:deadline'");
+
     private static Task<Guid?> OutboxOrgAsync(IngestTestWorld world, Guid runId) =>
         world.ScalarAsync<Guid?>(
             "select org_id from public.outbox where idempotency_key = "
@@ -431,6 +596,13 @@ public sealed class ReconcileDeadlineSweepTests
         _fixture.ExecuteAsync(
             world.Database,
             $"update public.run set collection_deadline_at = now() - interval '1 second' where id = '{runId:D}'");
+
+    /// <summary>Puts one run in the state the scan names — collectable and past its deadline — in one statement.</summary>
+    private Task MarkOverdueAsync(IngestTestWorld world, Guid runId) =>
+        _fixture.ExecuteAsync(
+            world.Database,
+            "update public.run set state = 'collecting', collection_deadline_at = now() - interval '1 minute' "
+            + $"where id = '{runId:D}'");
 
     /// <summary>Moves the deadline a day ahead, for the case that must stay before it.</summary>
     private Task FutureDeadlineAsync(IngestTestWorld world, Guid runId) =>

@@ -1,12 +1,13 @@
 -- 0056_reconcile_missing_result.sql
 --
 -- The file has two parts, both on the reconcile outcome. Part 1 (below, through the constraint
--- validation) widens the `missing[]` vocabulary with `missing_result`. Part 2 (at the end) adds
--- `evidgate.reconcile_overdue_runs`, the read-only projection the collection-deadline sweep scans with:
--- the verdict of part 1 is what a run past its deadline is decided with, and part 2 is what makes an
--- attempt happen for a run whose shard never finalizes. Each part carries its own WHY/WHAT/GRANTS block.
+-- validation) widens the `missing[]` vocabulary with `missing_result`. Part 2 (at the end) adds the
+-- partial index the overdue scan seeks through and `evidgate.reconcile_overdue_runs`, the read-only
+-- projection the collection-deadline sweep scans with: the verdict of part 1 is what a run past its
+-- deadline is decided with, and part 2 is what makes an attempt happen for a run whose shard never
+-- finalizes. Each part carries its own WHY/WHAT/GRANTS block.
 --
--- WHY: `evidence_revision.missing[]` carries the 00 §8.5 reason codes of an incomplete revision, and
+-- WHY: `evidence_revision.missing[]` carries the reason codes of an incomplete revision, and
 -- 0049's CHECK pinned that vocabulary to the seven codes the event comparison and the artifact freeze
 -- can name. The reconciler now also decides completeness from the run's PLAN: a planned execution with
 -- no recorded `case_attempt` never produced a status, so the run is incomplete whatever the producers
@@ -65,6 +66,25 @@ alter table public.evidence_revision
     end) not valid;
 
 alter table public.evidence_revision validate constraint evidence_revision_missing_check;
+
+-- ---------------------------------------------------------------------------------------------------
+-- The scan's index on `public.run`.
+-- ---------------------------------------------------------------------------------------------------
+-- WHY: the scan seeks and orders on `(org_id, id)` inside one state, and `public.run` keeps every finished
+-- run forever. A partial index over the collecting rows alone keeps that seek proportional to the runs a
+-- sweep can actually name — one entry per in-flight run, none for history.
+--
+-- LOCKS: `create index` (not `concurrently`, which cannot run inside the migrator's per-script transaction)
+-- takes a SHARE lock on `public.run`: readers continue while it builds, inserts and updates of the table wait
+-- behind it, and `lock_timeout` above bounds the wait to acquire the lock. `if not exists` makes a re-run a
+-- no-op, index and all.
+--
+-- GRANTS: none. The sweep role reaches this index only through the definer function below, and holds no
+-- privilege on the table itself.
+
+create index if not exists run_collecting_idx
+  on public.run (org_id, id)
+  where state = 'collecting';
 
 -- ---------------------------------------------------------------------------------------------------
 -- The collection-deadline scan (`evidgate.reconcile_overdue_runs`).

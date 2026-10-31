@@ -1,4 +1,4 @@
-// Plan coverage of one reconcile attempt against a real PostgreSQL (05.3.2-T2, 00 §8.5): the comparison is not only the
+// Plan coverage of one reconcile attempt against a real PostgreSQL: the comparison is not only the
 // declared-versus-observed event evidence, because a producer can declare fewer events than the plan expected and agree
 // with itself while a planned case never ran. The coverage read answers that half from the plan rows and the recorded
 // attempts alone: a planned_execution whose execution_key has no case_attempt is named once as missing_result, so the run
@@ -16,6 +16,7 @@ using System.Globalization;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -26,7 +27,7 @@ namespace Tenancy.IntegrationTests;
 [Trait("Category", "Docker")]
 public sealed class ReconcileExecutionCoverageTests
 {
-    /// <summary>The producer id of the one seeded producer slot (05.2.1 registers <c>shard-N</c> per manifest shard).</summary>
+    /// <summary>The producer id of the one seeded producer slot, which the run registers as <c>shard-N</c> per shard.</summary>
     private const string Producer = IngestTestWorld.ProducerId;
 
     /// <summary>How many planned executions these cases seed: three, so "some ran" and "all ran" differ by one.</summary>
@@ -167,7 +168,7 @@ public sealed class ReconcileExecutionCoverageTests
     [Fact]
     public async Task Reconcile_BlockedAttemptWithoutTimestamps_IsPresent()
     {
-        // A blocked case (a failed setup, 00 §8.3) reports a status and never runs, so its row carries no started_at and
+        // A blocked case (a failed setup) reports a status and never runs, so its row carries no started_at and
         // no finished_at. The coverage predicate reads row existence only, so the execution counts as present and the
         // run can complete on the two cases that did run.
         await using var world = await StartAsync();
@@ -196,7 +197,7 @@ public sealed class ReconcileExecutionCoverageTests
     public async Task Reconcile_EveryUncoveredExecution_NamedOnceInComparison()
     {
         // Two executions never recorded an attempt: the comparison names each of them (so the operator learns which
-        // cases are missing), while the revision stores the closed vocabulary code once (PerfRev P3).
+        // cases are missing), while the revision stores the closed vocabulary code once.
         await using var world = await StartAsync();
         var runId = world.RunId;
         var executions = world.Plan.Executions;
@@ -212,6 +213,45 @@ public sealed class ReconcileExecutionCoverageTests
             [$"execution_key={executions[1].ExecutionKey}", $"execution_key={executions[2].ExecutionKey}"],
             Describe(outcome));
         comparison.Missing.ShouldAllBe(reason => reason.Code == ReconcileMissingCodes.MissingResult);
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Incomplete);
+        (await RevisionAsync(world, runId)).Missing.ShouldBe([ReconcileMissingCodes.MissingResult]);
+    }
+
+    [Fact]
+    public async Task Reconcile_MoreUncoveredExecutionsThanTheReadCap_ReportsTheTrueTotal()
+    {
+        // One planned execution more than the coverage read returns: the comparison names the lowest execution keys the
+        // read selected and one counted entry for the rest, so the gap is never understated, the attempt never builds one
+        // object per execution of a huge plan, and two attempts over the same rows select the same subset.
+        var cap = ReconcileSql.UncoveredExecutionLimit;
+        await using var world = await StartAsync(planned: cap + 1);
+        var runId = world.RunId;
+        await SetRunStateAsync(world);
+        await CloseSlotAsync(world, runId, declaredLastSequence: 0, declaredCount: 0);
+
+        var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
+
+        var comparison = outcome.Comparison.ShouldNotBeNull(Describe(outcome));
+        comparison.Missing.Count.ShouldBe(cap + 1, Describe(outcome));
+        comparison.Missing.ShouldAllBe(reason => reason.Code == ReconcileMissingCodes.MissingResult);
+        comparison.Missing.Count(reason => reason.ProducerId is not null).ShouldBe(cap);
+        comparison.Missing
+            .Where(reason => reason.ProducerId is not null)
+            .Select(reason => reason.Detail)
+            .Order(StringComparer.Ordinal)
+            .ToArray()
+            .ShouldBe(
+                [.. world.Plan.Executions
+                    .Select(execution => $"execution_key={execution.ExecutionKey}")
+                    .Order(StringComparer.Ordinal)
+                    .Take(cap)],
+                "the read returns the lowest execution keys, so its subset cannot move between attempts");
+
+        var counted = comparison.Missing.Single(reason => reason.ProducerId is null);
+        counted.Detail.ShouldBe(
+            string.Create(CultureInfo.InvariantCulture, $"uncovered_total={cap + 1};listed={cap}"),
+            "the true total of the plan's uncovered executions, not what the read returned");
+
         finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Incomplete);
         (await RevisionAsync(world, runId)).Missing.ShouldBe([ReconcileMissingCodes.MissingResult]);
     }
@@ -232,13 +272,14 @@ public sealed class ReconcileExecutionCoverageTests
         int AttemptNo = 1);
 
     /// <summary>
-    /// One migrated database with a run of three planned executions and the one producer slot these cases finalize. No
-    /// attempt is recorded up front: each case seeds exactly the attempts its scenario is about.
+    /// One migrated database with a run of <paramref name="planned"/> planned executions and the one producer slot these
+    /// cases finalize. No attempt is recorded up front: each case seeds exactly the attempts its scenario is about.
     /// </summary>
-    private Task<IngestTestWorld> StartAsync() =>
-        IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: Planned, slots: 1);
+    /// <param name="planned">How many executions the run plans.</param>
+    private Task<IngestTestWorld> StartAsync(int planned = Planned) =>
+        IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: planned, slots: 1);
 
-    /// <summary>The run has to be <c>collecting</c> for the reconciler to compare it at all (05.3.2-T2.1).</summary>
+    /// <summary>The run has to be <c>collecting</c> for the reconciler to compare it at all.</summary>
     /// <param name="world">The world whose run moves.</param>
     private static Task SetRunStateAsync(IngestTestWorld world) => world.SetRunStateAsync("collecting");
 
@@ -299,7 +340,7 @@ public sealed class ReconcileExecutionCoverageTests
     }
 
     /// <summary>
-    /// One <c>blocked</c> attempt in the shape only the server produces (05.3.3-T2's <c>IBlockedAttemptResolver</c>): a
+    /// One <c>blocked</c> attempt in the shape only the server produces (the blocked-attempt resolver): a
     /// failed setup stopped the case before it ran, so the row carries neither <c>started_at</c> nor <c>finished_at</c>,
     /// and the writer never receives this status from a producer (its raw vocabulary has no <c>blocked</c>).
     /// </summary>
@@ -326,7 +367,7 @@ public sealed class ReconcileExecutionCoverageTests
     }
 
     /// <summary>
-    /// Closes the seeded slot the way 04.1.2-T5 writes it: <c>closed_at</c> plus the two declared values in one statement
+    /// Closes the seeded slot the way a finalize writes it: <c>closed_at</c> plus the two declared values in one statement
     /// (0035's all-or-nothing check), so the reconciler sees a first-close declaration.
     /// </summary>
     /// <param name="world">The world whose slot is closed.</param>
@@ -360,7 +401,7 @@ public sealed class ReconcileExecutionCoverageTests
     // ------------------------------------------------------------------ the consumer's whole attempt, and its reads
 
     /// <summary>
-    /// One full attempt the way the consumer runs it (05.3.2-T2.3/T2.4): reconcile, then — only for a compared attempt —
+    /// One full attempt the way the consumer runs it: reconcile, then — only for a compared attempt —
     /// freeze and persist the revision, all in ONE ambient tenant transaction, committed when both return.
     /// </summary>
     /// <param name="world">The world the attempt runs against.</param>
@@ -386,8 +427,8 @@ public sealed class ReconcileExecutionCoverageTests
     }
 
     /// <summary>The persisted completeness and missing codes of a run's latest revision.</summary>
-    /// <param name="Completeness">The 00 §8.5 completeness.</param>
-    /// <param name="Missing">The 00 §8.5 codes in stored order.</param>
+    /// <param name="Completeness">The stored completeness.</param>
+    /// <param name="Missing">The stored missing codes in order.</param>
     private sealed record RevisionSummary(string Completeness, IReadOnlyList<string> Missing);
 
     /// <summary>Reads the latest revision of one run as one delimited scalar (the suite's read style).</summary>

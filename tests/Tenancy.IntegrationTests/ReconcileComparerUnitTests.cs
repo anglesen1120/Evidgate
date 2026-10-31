@@ -23,7 +23,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Every_Shard_Matching_Has_No_Missing()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [
                 Planned("producer-1", shardIndex: 1),
                 Planned("producer-2", shardIndex: 2, declaredLastSequence: 3, declaredCount: 4),
@@ -42,7 +42,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Empty_Plan_Has_No_Missing()
     {
-        var result = ReconcileComparer.Compare([], [Observed("producer-1")]);
+        var result = ReconcileComparer.CompareEvents([], [Observed("producer-1")]);
 
         result.Missing.ShouldBeEmpty();
         result.EventsMatch.ShouldBeTrue();
@@ -53,7 +53,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void A_Closed_Shard_With_No_Stored_Event_And_A_Zero_Declaration_Matches()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 0, declaredCount: 0)],
             []);
 
@@ -66,7 +66,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // A declaration of zero events matches only when nothing at all was stored, so one stored event — even the
         // shard's own sequence 0 — is a disagreement.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 0, declaredCount: 0)],
             [Observed("producer-1", upTo: 1, min: 0, max: 0)]);
 
@@ -80,7 +80,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Open_Shard_Is_One_MissingShard_And_Its_Events_Are_Not_Compared()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", shardIndex: 2, closed: false, declaredLastSequence: null, declaredCount: null)],
             [Observed("producer-1", upTo: 5, beyond: 5, unknown: 3, unfinished: 2)]);
 
@@ -96,7 +96,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Open_Shard_Without_Observed_Events_Is_Still_A_MissingShard()
     {
-        var result = ReconcileComparer.Compare([Planned("producer-1", shardIndex: 7, closed: false)], []);
+        var result = ReconcileComparer.CompareEvents([Planned("producer-1", shardIndex: 7, closed: false)], []);
 
         var reason = result.Missing.ShouldHaveSingleItem();
         reason.Code.ShouldBe(ReconcileMissingCodes.MissingShard);
@@ -110,7 +110,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // Two contiguous events (1, 2) end exactly on the declared high-water mark: the range is clean, only the count
         // is one short of the declared three.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
             [Observed("producer-1", upTo: 2, min: 1, max: 2)]);
 
@@ -125,7 +125,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // Sequences 3, 4 and 5 are contiguous and end on the declared high-water mark 5, while only 2 events were
         // declared: the declaration undercounts its own clean range.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 5, declaredCount: 2)],
             [Observed("producer-1", upTo: 3, min: 3, max: 5)]);
 
@@ -137,7 +137,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Events_Beyond_The_Declared_Last_Sequence_Are_CountMismatch()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
             [Observed("producer-1", upTo: 3, beyond: 1, max: 3)]);
 
@@ -149,7 +149,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void A_Closed_Shard_With_No_Stored_Event_And_A_NonZero_Declaration_Is_CountMismatch()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 1, declaredCount: 2)],
             []);
 
@@ -165,7 +165,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // Declared three events ending at sequence 3, stored 0, 1 and 2: the count agrees and the range still has a
         // hole where 3 should be — the case a count-only comparison could not see.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 3, declaredCount: 3)],
             [Observed("producer-1", upTo: 3, min: 0, max: 2)]);
 
@@ -180,7 +180,7 @@ public sealed class ReconcileComparerUnitTests
     public void A_Sequence_Gap_Below_The_Declared_Last_Is_CountMismatch()
     {
         // Declared five events ending at 5, stored 0, 1, 2, 3 and 5: the count and the end agree, but 4 was never stored.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 5, declaredCount: 5)],
             [Observed("producer-1", upTo: 5, min: 0, max: 5)]);
 
@@ -195,7 +195,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // Declared two events ending at long.MaxValue, stored 0 and long.MaxValue: not contiguous, and a `last - min + 1`
         // would wrap to long.MinValue and skip the hole check.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: long.MaxValue, declaredCount: 2)],
             [Observed("producer-1", upTo: 2, min: 0, max: long.MaxValue)]);
 
@@ -206,7 +206,7 @@ public sealed class ReconcileComparerUnitTests
     public void A_Zero_Based_Contiguous_Shard_Matches()
     {
         // The envelope allows sequence >= 0, so a shard that starts at 0 is contiguous when its count is the declared one.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
             [Observed("producer-1", upTo: 3, min: 0, max: 2)]);
 
@@ -217,7 +217,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void A_One_Based_Contiguous_Shard_Matches()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 5, declaredCount: 5)],
             [Observed("producer-1", upTo: 5, min: 1, max: 5)]);
 
@@ -230,7 +230,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // The producer simply started at 3: a hole below the lowest stored sequence is not detectable from these columns
         // and is never reported (ordering.md §3).
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 5, declaredCount: 3)],
             [Observed("producer-1", upTo: 3, min: 3, max: 5)]);
 
@@ -243,7 +243,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // Every stored event is past the declared high-water mark, so the range [min stored, declared last] is empty: the
         // count bound and the end bound name the disagreement, and the contiguity bound adds nothing.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 1)],
             [Observed("producer-1", upTo: 0, beyond: 1, min: 5, max: 5)]);
 
@@ -255,7 +255,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void A_Closed_Shard_With_A_Null_Declared_Count_Fails_Closed()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 0, declaredCount: null)],
             [Observed("producer-1", unknown: 2)]);
 
@@ -277,7 +277,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void A_Closed_Shard_With_A_Null_Declared_Last_Sequence_Fails_Closed()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: null, declaredCount: 0)],
             []);
 
@@ -291,7 +291,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Unknown_Status_With_Matching_Counts_Is_UnknownStatus()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 1, declaredCount: 2)],
             [Observed("producer-1", upTo: 2, unknown: 1, max: 1)]);
 
@@ -304,7 +304,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void A_Started_Attempt_Without_A_Finish_Is_UnknownStatus()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 0, declaredCount: 1)],
             [Observed("producer-1", unfinished: 1)]);
 
@@ -316,7 +316,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Null_Status_And_Unfinished_Attempts_Are_Counted_Together()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
             [Observed("producer-1", upTo: 3, unknown: 2, unfinished: 3, max: 2)]);
 
@@ -332,7 +332,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // The stale event still fills its sequence slot, so the declared count and the stored range agree: only the flag
         // shows the epoch is older than the run's, and counting it as acknowledged must not hide that.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 1, declaredCount: 2)],
             [Observed("producer-1", upTo: 2, max: 1, stale: 1)]);
 
@@ -348,7 +348,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // A blocked finish is a failed setup (00 §8.3): the shard's own counts can still agree and the evidence is not
         // complete.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
             [Observed("producer-1", upTo: 3, max: 2, blocked: 2)]);
 
@@ -363,7 +363,7 @@ public sealed class ReconcileComparerUnitTests
     public void An_Open_Shard_Is_Not_Compared_For_Stale_Or_Blocked_Events()
     {
         // The open shard is reported once and its events stay unexamined, so the flag counts add no second reason.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", shardIndex: 4, closed: false)],
             [Observed("producer-1", upTo: 3, beyond: 3, stale: 2, blocked: 1)]);
 
@@ -377,7 +377,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // One closed shard can break every bound at once: each reason is its own entry, and the count mismatch keeps its
         // own detail instead of being folded into the flags.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
             [Observed("producer-1", upTo: 2, max: 1, stale: 1, blocked: 1, unknown: 1)]);
 
@@ -397,7 +397,7 @@ public sealed class ReconcileComparerUnitTests
     public void A_Closed_Shard_Without_Stale_Or_Blocked_Events_Names_Neither_Reason()
     {
         // The flags are the only source of these two reasons: zero counts add nothing to an otherwise matching shard.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 1, declaredCount: 2)],
             [Observed("producer-1", upTo: 2, max: 1)]);
 
@@ -410,7 +410,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void A_Shard_Reports_CountMismatch_Before_UnknownStatus()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
             [Observed("producer-1", upTo: 2, unknown: 2, unfinished: 1, max: 1)]);
 
@@ -437,7 +437,7 @@ public sealed class ReconcileComparerUnitTests
             Observed("A", upTo: 4, beyond: 4),
         };
 
-        var result = ReconcileComparer.Compare(planned, observed);
+        var result = ReconcileComparer.CompareEvents(planned, observed);
 
         // Ordinal: "A" (0x41) sorts before "a2" (0x61), which sorts before "b"; a culture-aware order would differ.
         result.Missing.Select(missing => $"{missing.ProducerId}|{missing.Code}").ShouldBe(
@@ -453,7 +453,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Flag_Reasons_Are_Ordered_By_Producer_Then_Code()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [
                 Planned("b", shardIndex: 2, declaredLastSequence: 0, declaredCount: 1),
                 Planned("A", shardIndex: 1, declaredLastSequence: 0, declaredCount: 1),
@@ -487,8 +487,8 @@ public sealed class ReconcileComparerUnitTests
             Observed("a"),
         };
 
-        var forward = ReconcileComparer.Compare(planned, observed);
-        var reversed = ReconcileComparer.Compare([.. planned.Reverse()], [.. observed.Reverse()]);
+        var forward = ReconcileComparer.CompareEvents(planned, observed);
+        var reversed = ReconcileComparer.CompareEvents([.. planned.Reverse()], [.. observed.Reverse()]);
 
         reversed.Missing.ShouldBe(forward.Missing);
         reversed.Missing.Count.ShouldBe(3);
@@ -506,8 +506,8 @@ public sealed class ReconcileComparerUnitTests
         };
         var observed = new[] { Observed("producer-1", unknown: 1) };
 
-        var first = ReconcileComparer.Compare(planned, observed);
-        var second = ReconcileComparer.Compare(planned, observed);
+        var first = ReconcileComparer.CompareEvents(planned, observed);
+        var second = ReconcileComparer.CompareEvents(planned, observed);
 
         second.Missing.ShouldBe(first.Missing);
         second.Missing.Select(missing => missing.Detail).ShouldBe(first.Missing.Select(missing => missing.Detail));
@@ -521,7 +521,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Observed_Rows_Outside_The_Plan_Are_Ignored()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1")],
             [
                 Observed("producer-1"),
@@ -537,7 +537,7 @@ public sealed class ReconcileComparerUnitTests
     public void Event_Watermark_Sums_Every_Observed_Row()
     {
         // Both branches of the aggregate are counted: the events up to each declared high-water mark here.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [
                 Planned("producer-1", shardIndex: 1, declaredLastSequence: 3, declaredCount: 4),
                 Planned("producer-2", shardIndex: 2, declaredLastSequence: 0, declaredCount: 1),
@@ -557,7 +557,7 @@ public sealed class ReconcileComparerUnitTests
         // The watermark is the stored event total, not the compared total: events past a declaration and events of a
         // producer outside the plan are stored events too, so both are summed while neither adds a reason for the
         // unplanned producer.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 0, declaredCount: 1)],
             [
                 Observed("producer-1", upTo: 1, beyond: 2, min: 0, max: 2),
@@ -573,7 +573,7 @@ public sealed class ReconcileComparerUnitTests
     {
         // The grouped statement answers at most one row per producer, so a repeat is unreachable from the database; the
         // function ignores a repeat the same way it does for the reasons, so those events are never added twice.
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1")],
             [Observed("producer-1"), Observed("producer-1", upTo: 2, beyond: 1)]);
 
@@ -584,7 +584,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Event_Watermark_Of_A_Run_Without_Events_Is_Zero()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [Planned("producer-1", declaredLastSequence: 0, declaredCount: 0)],
             []);
 
@@ -595,7 +595,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Shards_Planned_And_Closed_Are_Counted()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [
                 Planned("producer-1", shardIndex: 1),
                 Planned("producer-2", shardIndex: 2, closed: false),
@@ -643,19 +643,19 @@ public sealed class ReconcileComparerUnitTests
 
         // Each code the comparer itself emits leaves Missing non-empty, so the reconciler can never report matching
         // evidence (EventsMatch) while a shard or a planned execution is incomplete.
-        (string Code, PlannedShard[] Planned, ObservedShard[] Observed, PlannedExecution[] Uncovered)[] cases =
+        (string Code, PlannedShard[] Planned, ObservedShard[] Observed, ExecutionCoverage Coverage)[] cases =
         [
-            (ReconcileMissingCodes.MissingShard, [Planned("producer-1", closed: false)], [], []),
-            (ReconcileMissingCodes.CountMismatch, [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)], [Observed("producer-1", upTo: 2, min: 1, max: 2)], []),
-            (ReconcileMissingCodes.UnknownStatus, [Planned("producer-1")], [Observed("producer-1", unknown: 1)], []),
-            (ReconcileMissingCodes.SetupError, [Planned("producer-1")], [Observed("producer-1", blocked: 1)], []),
-            (ReconcileMissingCodes.StaleEpoch, [Planned("producer-1")], [Observed("producer-1", stale: 1)], []),
-            (ReconcileMissingCodes.MissingResult, [Planned("producer-1")], [Observed("producer-1")], [new PlannedExecution(Key(9), "producer-1")]),
+            (ReconcileMissingCodes.MissingShard, [Planned("producer-1", closed: false)], [], ExecutionCoverage.Complete),
+            (ReconcileMissingCodes.CountMismatch, [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)], [Observed("producer-1", upTo: 2, min: 1, max: 2)], ExecutionCoverage.Complete),
+            (ReconcileMissingCodes.UnknownStatus, [Planned("producer-1")], [Observed("producer-1", unknown: 1)], ExecutionCoverage.Complete),
+            (ReconcileMissingCodes.SetupError, [Planned("producer-1")], [Observed("producer-1", blocked: 1)], ExecutionCoverage.Complete),
+            (ReconcileMissingCodes.StaleEpoch, [Planned("producer-1")], [Observed("producer-1", stale: 1)], ExecutionCoverage.Complete),
+            (ReconcileMissingCodes.MissingResult, [Planned("producer-1")], [Observed("producer-1")], new ExecutionCoverage([new PlannedExecution(Key(9), "producer-1")], 1)),
         ];
 
         foreach (var testCase in cases)
         {
-            var result = ReconcileComparer.Compare(testCase.Planned, testCase.Observed, testCase.Uncovered);
+            var result = ReconcileComparer.Compare(testCase.Planned, testCase.Observed, testCase.Coverage);
 
             result.Missing.ShouldNotBeEmpty($"the {testCase.Code} case must report a reason");
             result.Missing.ShouldContain(
@@ -671,7 +671,7 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Multiple_Reasons_Across_Shards_Are_All_Reported()
     {
-        var result = ReconcileComparer.Compare(
+        var result = ReconcileComparer.CompareEvents(
             [
                 Planned("producer-1", shardIndex: 1, closed: false),
                 Planned("producer-2", shardIndex: 2, declaredLastSequence: 2, declaredCount: 3),
@@ -690,85 +690,6 @@ public sealed class ReconcileComparerUnitTests
             ]);
         result.ShardsPlanned.ShouldBe(3);
         result.ShardsClosed.ShouldBe(2);
-    }
-
-    // ---- plan coverage (a planned execution with no recorded attempt) --------------------
-
-    [Fact]
-    public void Uncovered_Execution_Is_MissingResult_For_Its_Shard_With_The_Execution_Key()
-    {
-        var result = ReconcileComparer.Compare(
-            [Planned("producer-1")],
-            [Observed("producer-1")],
-            [new PlannedExecution(Key(7), "producer-1")]);
-
-        var reason = result.Missing.ShouldHaveSingleItem();
-        reason.Code.ShouldBe(ReconcileMissingCodes.MissingResult);
-        reason.ProducerId.ShouldBe("producer-1", "the reason names the shard whose plan row it is");
-        reason.Detail.ShouldBe($"execution_key={Key(7)}", "the plan row's identity, never a payload");
-        result.EventsMatch.ShouldBeFalse("counts that agree cannot prove a case that never attempted");
-        result.ShardsPlanned.ShouldBe(1);
-        result.ShardsClosed.ShouldBe(1);
-    }
-
-    [Fact]
-    public void Every_Uncovered_Execution_Gets_Its_Own_Entry_Even_When_Every_Count_Agrees()
-    {
-        // The producer declared one event and stored exactly that one: the event evidence is complete, and the plan
-        // still says two executions never reported. One entry per execution, in a stable order.
-        var result = ReconcileComparer.Compare(
-            [Planned("producer-1")],
-            [Observed("producer-1")],
-            [new PlannedExecution(Key(2), "producer-1"), new PlannedExecution(Key(1), "producer-1")]);
-
-        result.Missing.Select(reason => reason.Detail).ShouldBe(
-            [$"execution_key={Key(1)}", $"execution_key={Key(2)}"],
-            "one entry per execution, ordered by the detail");
-        result.Missing.ShouldAllBe(reason => reason.Code == ReconcileMissingCodes.MissingResult);
-        result.EventsMatch.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void Covered_Plan_And_Matching_Events_Name_No_Reason()
-    {
-        var result = ReconcileComparer.Compare(
-            [Planned("producer-1")],
-            [Observed("producer-1")],
-            []);
-
-        result.Missing.ShouldBeEmpty("every planned execution reported an attempt");
-        result.EventsMatch.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void Null_Coverage_Is_The_Event_Comparison_Alone_Not_A_Complete_Plan()
-    {
-        // The parameter is optional so the comparer can be used without the coverage read; null must read as "not read",
-        // never as "nothing missing", which is why it cannot turn an uncovered plan into matching evidence.
-        var result = ReconcileComparer.Compare([Planned("producer-1")], [Observed("producer-1")], uncovered: null);
-
-        result.Missing.ShouldBeEmpty();
-        result.EventsMatch.ShouldBeTrue("the caller asked for the event comparison only");
-    }
-
-    [Fact]
-    public void Coverage_Reasons_Join_The_Event_Reasons_In_Producer_Then_Code_Order()
-    {
-        var result = ReconcileComparer.Compare(
-            [
-                Planned("producer-1", shardIndex: 1, closed: false),
-                Planned("producer-2", shardIndex: 2),
-            ],
-            [Observed("producer-2")],
-            [new PlannedExecution(Key(4), "producer-2"), new PlannedExecution(Key(3), "producer-1")]);
-
-        result.Missing.Select(reason => $"{reason.ProducerId}|{reason.Code}").ShouldBe(
-            [
-                "producer-1|missing_result",
-                "producer-1|missing_shard",
-                "producer-2|missing_result",
-            ],
-            "the total order is producer id, then code, then detail");
     }
 
     // ---- the requirement set's bound (RequiredArtifactResolver.Compose) --------------------
@@ -838,8 +759,11 @@ public sealed class ReconcileComparerUnitTests
     [Fact]
     public void Compare_Rejects_Null_Lists()
     {
-        Should.Throw<ArgumentNullException>(() => ReconcileComparer.Compare(null!, []));
-        Should.Throw<ArgumentNullException>(() => ReconcileComparer.Compare([], null!));
+        Should.Throw<ArgumentNullException>(() => ReconcileComparer.CompareEvents(null!, []));
+        Should.Throw<ArgumentNullException>(() => ReconcileComparer.CompareEvents([], null!));
+        Should.Throw<ArgumentNullException>(() => ReconcileComparer.Compare(null!, [], ExecutionCoverage.Complete));
+        Should.Throw<ArgumentNullException>(() => ReconcileComparer.Compare([], null!, ExecutionCoverage.Complete));
+        Should.Throw<ArgumentNullException>(() => ReconcileComparer.Compare([], [], null!));
     }
 
     // ---- builders ------------------------------------------------------------------------

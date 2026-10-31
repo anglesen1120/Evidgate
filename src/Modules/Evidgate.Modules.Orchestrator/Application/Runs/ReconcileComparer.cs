@@ -51,18 +51,56 @@ internal static class ReconcileComparer
     /// </summary>
     /// <param name="planned">The run's producer slots as the shard plan; one row per shard.</param>
     /// <param name="observed">The grouped aggregate rows, at most one per producer.</param>
-    /// <param name="uncovered">
-    /// The planned executions of the run that have no recorded attempt, each named once as
-    /// <see cref="ReconcileMissingCodes.MissingResult"/> however well the events agree: a plan row is the run's statement
-    /// that the case runs, so a case nobody attempted is missing evidence even when every producer declared the events
-    /// it did send. Null is the event comparison alone (the caller read no coverage), never "coverage is complete".
+    /// <param name="coverage">
+    /// The planned executions that recorded no attempt, as the bounded coverage read answered them. It is required
+    /// because a comparison without it silently reports matching evidence for a plan nobody ran: an empty list is the
+    /// statement that every planned execution reported, never a read that was skipped.
     /// </param>
     /// <returns>The reasons, the planned/closed shard counts and the stored-event watermark.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="planned"/> or <paramref name="observed"/> is null.</exception>
+    /// <exception cref="ArgumentNullException">An argument is null.</exception>
     public static ReconcileComparison Compare(
         IReadOnlyList<PlannedShard> planned,
         IReadOnlyList<ObservedShard> observed,
-        IReadOnlyList<PlannedExecution>? uncovered = null)
+        ExecutionCoverage coverage)
+    {
+        ArgumentNullException.ThrowIfNull(coverage);
+
+        var missing = ShardReasons(planned, observed, out var closedShards, out var eventWatermark);
+        AddCoverageReasons(missing, coverage);
+
+        return new ReconcileComparison(Order(missing), planned.Count, closedShards, eventWatermark);
+    }
+
+    /// <summary>
+    /// The event half of the comparison alone: the planned shards against the observed events, with no plan coverage.
+    /// A waiting attempt reports it as its log line, because it decides nothing and does not read the coverage.
+    /// </summary>
+    /// <param name="planned">The run's producer slots as the shard plan; one row per shard.</param>
+    /// <param name="observed">The grouped aggregate rows, at most one per producer.</param>
+    /// <returns>The reasons, the planned/closed shard counts and the stored-event watermark.</returns>
+    /// <exception cref="ArgumentNullException">Either list is null.</exception>
+    public static ReconcileComparison CompareEvents(
+        IReadOnlyList<PlannedShard> planned,
+        IReadOnlyList<ObservedShard> observed)
+    {
+        var missing = ShardReasons(planned, observed, out var closedShards, out var eventWatermark);
+
+        return new ReconcileComparison(Order(missing), planned.Count, closedShards, eventWatermark);
+    }
+
+    /// <summary>
+    /// The declared-versus-observed and readiness reasons of the event evidence, in the order the shards are visited;
+    /// <see cref="Order"/> puts them in their stated order once every reason is in.
+    /// </summary>
+    /// <param name="planned">The run's producer slots as the shard plan; one row per shard.</param>
+    /// <param name="observed">The grouped aggregate rows, at most one per producer.</param>
+    /// <param name="closedShards">How many planned shards finalized.</param>
+    /// <param name="eventWatermark">The stored-event total of the observed rows read.</param>
+    private static List<ReconcileMissing> ShardReasons(
+        IReadOnlyList<PlannedShard> planned,
+        IReadOnlyList<ObservedShard> observed,
+        out int closedShards,
+        out long eventWatermark)
     {
         ArgumentNullException.ThrowIfNull(planned);
         ArgumentNullException.ThrowIfNull(observed);
@@ -72,17 +110,17 @@ internal static class ReconcileComparer
         // than merged, so the result stays a pure function of the input sequence. Events are immutable, so the stored
         // total only grows and is a watermark T2.4 can persist as it stands, summed over the rows the comparison read.
         var observations = new Dictionary<string, ObservedShard>(observed.Count, StringComparer.Ordinal);
-        long eventWatermark = 0;
+        long stored = 0;
         foreach (var row in observed)
         {
             if (observations.TryAdd(row.ProducerId, row))
             {
-                eventWatermark += row.CountUpToDeclared + row.CountBeyondDeclared;
+                stored += row.CountUpToDeclared + row.CountBeyondDeclared;
             }
         }
 
         var missing = new List<ReconcileMissing>();
-        var closedShards = 0;
+        var closed = 0;
 
         foreach (var shard in planned.OrderBy(static slot => slot.ProducerId, StringComparer.Ordinal))
         {
@@ -96,7 +134,7 @@ internal static class ReconcileComparer
                 continue;
             }
 
-            closedShards++;
+            closed++;
 
             // An absent row means the producer stored no event: zero acknowledged events, no status evidence.
             var seen = observations.TryGetValue(shard.ProducerId, out var row) ? row : NoObservation(shard.ProducerId);
@@ -152,41 +190,52 @@ internal static class ReconcileComparer
             }
         }
 
-        AddCoverageReasons(missing, uncovered);
+        closedShards = closed;
+        eventWatermark = stored;
 
-        // The stated order, made explicit rather than implied by the loop: producer id (ordinal), then code (ordinal),
-        // then the detail, which is what separates two planned executions of one shard. Each code is added at most once
-        // per shard, so the ordering is total and stays stable for equal keys.
-        var ordered = missing
+        return missing;
+    }
+
+    /// <summary>
+    /// The stated order, made explicit rather than implied by the loop that adds the reasons: producer id (ordinal), then
+    /// code (ordinal), then the detail, which is what separates two planned executions of one shard. Each shard code is
+    /// added at most once per shard, so the ordering is total and stays stable for equal keys.
+    /// </summary>
+    /// <param name="missing">Every reason the comparison named.</param>
+    private static ReconcileMissing[] Order(List<ReconcileMissing> missing) =>
+        missing
             .OrderBy(static reason => reason.ProducerId ?? string.Empty, StringComparer.Ordinal)
             .ThenBy(static reason => reason.Code, StringComparer.Ordinal)
             .ThenBy(static reason => reason.Detail, StringComparer.Ordinal)
             .ToArray();
 
-        return new ReconcileComparison(ordered, planned.Count, closedShards, eventWatermark);
-    }
-
     /// <summary>
-    /// Names one <c>missing_result</c> per planned execution that recorded no attempt. The reason is independent of the
-    /// events: a producer can declare a smaller count and agree with it, so only the plan's own rows can say that a
-    /// planned case never reported a status. The detail carries the execution key — the plan row's identity, never a
-    /// payload — so the entries of one shard stay distinguishable.
+    /// Names the plan's executions that recorded no attempt: one <c>missing_result</c> per row, and when the bounded read
+    /// stopped at its cap, one more reason carrying the true total. The reason is independent of the events — a producer
+    /// can declare a smaller count and agree with it — so only the plan's own rows can say that a planned case never
+    /// reported a status, and the count keeps a huge plan from hiding behind the cap. The detail carries the execution key,
+    /// the plan row's identity and never a payload, so the entries of one shard stay distinguishable.
     /// </summary>
     /// <param name="missing">The reasons collected so far.</param>
-    /// <param name="uncovered">The planned executions with no recorded attempt; null when the caller read no coverage.</param>
-    private static void AddCoverageReasons(List<ReconcileMissing> missing, IReadOnlyList<PlannedExecution>? uncovered)
+    /// <param name="coverage">The uncovered executions read and the true total.</param>
+    private static void AddCoverageReasons(List<ReconcileMissing> missing, ExecutionCoverage coverage)
     {
-        if (uncovered is null)
-        {
-            return;
-        }
-
-        foreach (var execution in uncovered)
+        foreach (var execution in coverage.Uncovered)
         {
             missing.Add(new ReconcileMissing(
                 ReconcileMissingCodes.MissingResult,
                 execution.ShardId,
                 $"execution_key={execution.ExecutionKey}"));
+        }
+
+        if (coverage.Total > coverage.Uncovered.Count)
+        {
+            missing.Add(new ReconcileMissing(
+                ReconcileMissingCodes.MissingResult,
+                ProducerId: null,
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"uncovered_total={coverage.Total};listed={coverage.Uncovered.Count}")));
         }
     }
 
