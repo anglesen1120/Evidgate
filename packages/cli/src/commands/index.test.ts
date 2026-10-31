@@ -132,6 +132,32 @@ describe('command registry', () => {
     expect(usageText).toContain('runs finalize');
   });
 
+  // `gate` takes a single-word name and the two value options the ticket contract names; the
+  // help line must also say that the extra `--json` members are fields pending contract.
+  it('resolves gate with its single-use options and lists it in the help text', () => {
+    expect(resolveCommand(['gate'])).toMatchObject({
+      command: commandRegistry['gate'],
+      words: 1,
+      rest: [],
+    });
+    expect(resolveCommand(['gate', 'extra'])).toMatchObject({
+      command: commandRegistry['gate'],
+      words: 1,
+      rest: ['extra'],
+    });
+    expect(commandRegistry['gate']?.requireToken).toBe(true);
+    expect(commandRegistry['gate']?.options?.['run']).toEqual({
+      type: 'string',
+      multiple: true,
+    });
+    expect(commandRegistry['gate']?.options?.['wait']).toEqual({
+      type: 'string',
+      multiple: true,
+    });
+    expect(usageText).toMatch(/\n {2}gate {2,}read a run decision/);
+    expect(usageText).toContain('fields pending contract');
+  });
+
   // CR8 (S54): the spool surface is lazy, so only the two spool commands force it in their
   // `validateConfig` pre-flight. A malformed `EVIDGATE_SPOOL_MAX_BYTES` is therefore their
   // `invalid_config` — and never a `runs create` / `auth login` failure.

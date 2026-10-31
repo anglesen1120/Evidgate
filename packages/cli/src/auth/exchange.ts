@@ -12,6 +12,7 @@ import { createApiClient } from '../client.js';
 import { envNames, isLoopbackApiUrl, resolveTokenSource, type ResolvedConfig } from '../config.js';
 import { CliError, type CliErrorOptions } from '../errors.js';
 import { registerSecret } from '../redact.js';
+import { attemptSignal } from '../sender.js';
 import { serverErrorFromResponse, transportError } from '../serverError.js';
 
 import { deleteCachedToken } from './tokenCache.js';
@@ -36,6 +37,11 @@ export interface ExchangeDeps {
   readonly random?: () => number;
   /** Clock in milliseconds; it drives the retry budget and an HTTP-date `Retry-After`. */
   readonly now?: () => number;
+  /**
+   * Absolute instant, on the `now` scale, that the exchange may not pass. Absent leaves it the
+   * exchange's own budget; a caller polling to a `--wait` deadline lowers it to what is left.
+   */
+  readonly deadlineAt?: number;
 }
 
 /** Thrown for HTTP 401/403 from `/v1/ci/token`; the caller purges the cache entry. */
@@ -49,7 +55,8 @@ export class ExchangeAuthError extends CliError {
   }
 }
 
-const requestTimeoutMs = 30_000;
+/** The exchange's own budget: two request timeouts plus the 60 s `Retry-After` cap. */
+const exchangeBudget = 120_000;
 /** The wait contracts/cli.md §5 documents when a 429 names no usable `Retry-After`. */
 const defaultRetryAfterMs = 1_000;
 /** The audience the server's `CiAuthOptions.GithubOidcAudience` expects. */
@@ -96,8 +103,9 @@ export async function exchangeToken(
   if (source === undefined || source === 'dev') {
     throw new CliError(`missing configuration: ${exchangeSourceNames}`, { code: 'missing_config' });
   }
+  assertDeadlineLeft(deps);
   const fetchImpl = deps.fetch ?? fetch;
-  const credential = await resolveCredential(config, source, fetchImpl);
+  const credential = await resolveCredential(config, source, fetchImpl, deps);
   const client = createApiClient(config, credential.bearer, fetchImpl);
   const body = buildBody(config, source, credential);
 
@@ -105,10 +113,11 @@ export async function exchangeToken(
     // One retry, the pre-tenant exchange's own budget: a credential is single-use, so a
     // second replay buys nothing, and contracts/cli.md §5 documents the 1 s floor for a
     // 429 that names no usable `Retry-After`. The budget holds two request timeouts plus
-    // the 60 s `Retry-After` cap, so a documented wait never blocks the single retry.
+    // the 60 s `Retry-After` cap, so a documented wait never blocks the single retry, and a
+    // caller's deadline lowers it so the exchange cannot outlive the wait that asked for it.
     policy: 'pre-processing',
     maxAttempts: 2,
-    budgetMs: 120_000,
+    budgetMs: exchangeBudgetMsFor(deps),
     fallbackRetryAfterMs: defaultRetryAfterMs,
     deps,
   });
@@ -128,6 +137,32 @@ export async function exchangeToken(
     });
   }
   throw new CliError(envelope.message, envelope.options);
+}
+
+/**
+ * The exchange budget, lowered to what a caller's deadline leaves. `callApi` applies its own
+ * 1 ms floor, so a caller that checks first still gets one request whose abort ends it.
+ */
+function exchangeBudgetMsFor(deps: ExchangeDeps): number {
+  if (deps.deadlineAt === undefined) {
+    return exchangeBudget;
+  }
+  const now = deps.now === undefined ? Date.now() : deps.now();
+  return Math.min(exchangeBudget, deps.deadlineAt - now);
+}
+
+/**
+ * Refuses to open a request for a deadline that has already passed. `attemptSignal` falls back
+ * to the plain per-request timeout once nothing is left, so a request started here could keep a
+ * socket open for 30 s after the caller has already decided its exit code.
+ */
+function assertDeadlineLeft(deps: ExchangeDeps): void {
+  const now = deps.now === undefined ? Date.now() : deps.now();
+  if (deps.deadlineAt !== undefined && deps.deadlineAt - now <= 0) {
+    throw new CliError('the token exchange was not started: its deadline had already passed', {
+      code: 'request_failed',
+    });
+  }
 }
 
 /**
@@ -159,6 +194,7 @@ async function resolveCredential(
   config: ResolvedConfig,
   source: ExchangeSource,
   fetchImpl: typeof fetch,
+  deps: ExchangeDeps,
 ): Promise<Credential> {
   if (source === 'ingest') {
     const ingestToken = config.ingestToken;
@@ -178,7 +214,7 @@ async function resolveCredential(
     }
     return { bearer: jwt, ingestToken: undefined };
   }
-  return { bearer: await fetchActionsIdToken(config, fetchImpl), ingestToken: undefined };
+  return { bearer: await fetchActionsIdToken(config, fetchImpl, deps), ingestToken: undefined };
 }
 
 /** `{ binding_challenge }` only when configured; the ingest body also carries the token. */
@@ -205,6 +241,7 @@ function buildBody(
 async function fetchActionsIdToken(
   config: ResolvedConfig,
   fetchImpl: typeof fetch,
+  deps: ExchangeDeps,
 ): Promise<string> {
   const requestUrl = config.actionsIdTokenRequestUrl;
   const requestToken = config.actionsIdTokenRequestToken;
@@ -217,13 +254,16 @@ async function fetchActionsIdToken(
   }
   const url = parseActionsIdTokenUrl(requestUrl);
   url.searchParams.set('audience', githubOidcAudience);
+  const now = deps.now === undefined ? Date.now() : deps.now();
 
   let response: Response;
   try {
     response = await fetchImpl(url, {
       headers: { Authorization: `bearer ${requestToken}` },
       redirect: 'error',
-      signal: AbortSignal.timeout(requestTimeoutMs),
+      // `attemptSignal` adds the caller's deadline when it has one (an infinite instant leaves
+      // the 30 s per-request timeout alone), so a `--wait` refresh cannot outlive the wait.
+      signal: attemptSignal(deps.deadlineAt ?? Number.POSITIVE_INFINITY, now),
     });
   } catch (error) {
     throw transportError(error);

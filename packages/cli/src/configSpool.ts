@@ -3,6 +3,7 @@
 // can only break the commands that use the spool, and the value is never echoed in an error.
 import { resolve } from 'node:path';
 
+import { parseDuration } from './duration.js';
 import { defaultSpoolMaxBytes } from './spool.js';
 import { envNames, invalidConfig, trimmedEnv } from './configEnv.js';
 import { CliError } from './errors.js';
@@ -28,14 +29,8 @@ export const defaultSendDeadlineMs = 1_800_000;
 /** `EVIDGATE_SEND_DEADLINE` ceiling: 24 hours. */
 export const maxSendDeadlineMs = 86_400_000;
 
-/** A bare decimal integer, used for the byte count and for bare deadline seconds. */
+/** A bare decimal integer, used for the byte count. */
 const decimalPattern = /^[0-9]{1,20}$/;
-
-/**
- * `EVIDGATE_SEND_DEADLINE`: a bare integer (seconds) or `<n>s`, `<n>m`, `<n>h`. The
- * amount is bounded to 9 digits so `amount x 3 600 000` can never leave the safe range.
- */
-const deadlinePattern = /^([0-9]{1,9})([smh]?)$/;
 
 /**
  * The spool surface `events send` and `runs finalize` need, resolved in the order root,
@@ -126,22 +121,16 @@ export function resolveSendDeadlineMs(env: Readonly<Record<string, string | unde
   if (value === undefined) {
     return defaultSendDeadlineMs;
   }
-  const match = deadlinePattern.exec(value);
-  if (match === null) {
-    throw invalidConfig(
-      envNames.sendDeadline,
-      'must be an integer number of seconds, or <n>s, <n>m or <n>h',
-    );
+  const parsed = parseDuration(value, maxSendDeadlineMs);
+  if (parsed.ok) {
+    return parsed.milliseconds;
   }
-  const amount = Number(match[1]);
-  const unit = match[2] ?? 's';
-  const factor = unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : 1_000;
-  const milliseconds = amount * factor;
-  if (!Number.isSafeInteger(milliseconds) || milliseconds <= 0) {
-    throw invalidConfig(envNames.sendDeadline, 'must be greater than zero');
-  }
-  if (milliseconds > maxSendDeadlineMs) {
-    throw invalidConfig(envNames.sendDeadline, 'must be at most 24h');
-  }
-  return milliseconds;
+  throw invalidConfig(
+    envNames.sendDeadline,
+    parsed.reason === 'grammar'
+      ? 'must be an integer number of seconds, or <n>s, <n>m or <n>h'
+      : parsed.reason === 'not_positive'
+        ? 'must be greater than zero'
+        : 'must be at most 24h',
+  );
 }
