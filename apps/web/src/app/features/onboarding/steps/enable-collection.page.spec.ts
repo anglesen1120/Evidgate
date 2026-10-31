@@ -521,6 +521,44 @@ describe('EnableCollectionPage', () => {
     expect(retryButton(root)?.disabled).toBe(true);
   });
 
+  it('drops a confirm refusal whose panel a failed read took, so the read’s recovery moves no focus', async () => {
+    // The page's own gates cannot produce this state (a press needs the read to have answered, and a
+    // scope change aborts the intent before a read can fail), so the read state is written directly:
+    // the request must not survive the panel it was queued for.
+    let refuseActivation!: (reason: ApiRequestError) => void;
+    const confirmation = new Promise<PolicyActivationDto>((_, reject) => {
+      refuseActivation = reject;
+    });
+    activatePolicy.mockImplementationOnce(() => confirmation);
+    activatePolicy.mockRejectedValue(failure('validation', 422));
+    submit(root);
+    await settle();
+    expect(confirmButton(root)!.disabled).toBe(true);
+
+    // The read fails while the chain still runs, so its panel replaces the refusal's.
+    const readError = failure('unavailable', 503).error;
+    fixture.componentInstance['activationRead'].set({ kind: 'error', error: readError });
+    await settle();
+    refuseActivation(failure('validation', 422));
+    await settle();
+    expect(root.querySelector('#enable-confirm-failed-heading')).toBeNull();
+    expect(root.querySelector('#enable-read-failed-heading')).not.toBeNull();
+
+    // The read recovers through its own Retry: the refusal's heading returns, and nothing moves.
+    retryButton(root)!.click();
+    await settle();
+    const heading = root.querySelector<HTMLElement>('#enable-confirm-failed-heading');
+    expect(heading).not.toBeNull();
+    expect(document.activeElement, 'a refused confirm took focus off its own reply').not.toBe(
+      heading,
+    );
+
+    // The positive control: a refusal the page still shows takes that heading.
+    submit(root);
+    await settle();
+    expect(document.activeElement).toBe(root.querySelector('#enable-confirm-failed-heading'));
+  });
+
   it('moves focus to the terminal heading when the confirm goes away (QA-01)', async () => {
     submit(root);
     await settle();

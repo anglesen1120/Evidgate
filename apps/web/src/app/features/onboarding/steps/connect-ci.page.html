@@ -32,14 +32,14 @@
         class="connect__failure-heading"
         id="connect-failure-heading"
         tabindex="-1"
-        #failureHeading
+        #failureHeadingEl
       >
         {{ failureHeading }}
       </h3>
       <app-error-pattern [error]="error" [headingLevel]="4" />
       @if (details().length > 0) {
-        <!-- The envelope's field rows (00 §9.2) as the second, labelled alert: without it a
-             `path`-level reason is never spoken, only printed. -->
+        <!-- The envelope's field rows as the second, labelled alert: without it a `path`-level
+             reason is never spoken, only printed. -->
         <div role="alert" data-testid="connect-ci-details" aria-labelledby="connect-details-label">
           <p id="connect-details-label" class="validation">{{ detailsLabel }}</p>
           <ul class="validation">

@@ -19,6 +19,7 @@ import { createIntentRunner } from '../../../core/http/retry';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states';
 import { OnboardingStore } from '../onboarding.store';
+import { sanitizeLabel } from './default-policy';
 import { describedBy, fieldDetails, reasonFor } from './field-details';
 
 @Component({
@@ -146,12 +147,12 @@ import { describedBy, fieldDetails, reasonFor } from './field-details';
           "
         />
         <p id="onboarding-project-name-help">{{ nameHint }}</p>
-        <!-- A field the server refused is announced once, by the details alert below; its own
-             live region would say the same sentence a second time. -->
+        <!-- A refused field is spoken once, by the details alert; its own live region would repeat
+             the same sentence. When no alert renders (forbidden, not_found), the field keeps it. -->
         <p
           id="onboarding-project-name-error"
           class="validation"
-          [attr.aria-live]="serverNameError() === null ? 'polite' : null"
+          [attr.aria-live]="serverNameError() !== null && showsEnvelopeDetails() ? null : 'polite'"
         >
           @if (nameError !== null) {
             {{ nameError }}
@@ -187,7 +188,7 @@ import { describedBy, fieldDetails, reasonFor } from './field-details';
         <p
           id="onboarding-project-slug-error"
           class="validation"
-          [attr.aria-live]="serverSlugError() === null ? 'polite' : null"
+          [attr.aria-live]="serverSlugError() !== null && showsEnvelopeDetails() ? null : 'polite'"
         >
           @if (slugError !== null) {
             {{ slugError }}
@@ -225,7 +226,7 @@ import { describedBy, fieldDetails, reasonFor } from './field-details';
             class="failure__heading"
             id="onboarding-project-failure-heading"
             tabindex="-1"
-            #failureHeading
+            #failureHeadingEl
           >
             {{ failureHeading }}
           </h3>
@@ -287,7 +288,7 @@ export class CreateProjectPage {
   /**
    * True when the draft no longer carries the body the current intent was submitted with, and
    * true before the first submit. Every field of `CreateProjectRequest` must be compared here: a
-   * field this misses would reuse the previous key for a different payload (S71 QA-F1).
+   * field this misses would reuse the previous key for a different payload.
    */
   protected readonly draftChanged = computed(() => {
     const submitted = this.submittedBody();
@@ -307,22 +308,31 @@ export class CreateProjectPage {
         !this.draftChanged()),
   );
 
-  /** The envelope's field rows (00 §9.2), so a refusal points at the control it names. */
-  protected readonly details = computed(() => fieldDetails(this.creation.error()?.details ?? []));
+  /** The envelope's field rows, so a refusal points at the control it names. */
+  protected readonly details = computed(() =>
+    // Sanitised before the field is read, so an invisible character cannot stop a row from
+    // matching its control. The values are still rendered by interpolation only.
+    fieldDetails(
+      (this.creation.error()?.details ?? []).map((detail) =>
+        detail.path === undefined
+          ? { ...detail, reason: sanitizeLabel(detail.reason) }
+          : { ...detail, path: sanitizeLabel(detail.path), reason: sanitizeLabel(detail.reason) },
+      ),
+    ),
+  );
   protected readonly serverNameError = computed(() => reasonFor(this.details(), 'name'));
   protected readonly serverSlugError = computed(() => reasonFor(this.details(), 'slug'));
-  /** The refusal states that carry their own envelope rows; the T8 patterns own the other two. */
+  /** Refusals that print their own envelope rows; the other kinds render a pattern without one. */
   protected readonly showsEnvelopeDetails = computed(() => {
     const failure = this.creation.error();
     return failure !== null && failure.kind !== 'forbidden' && failure.kind !== 'not_found';
   });
   protected readonly describedBy = describedBy;
   private readonly busyStatus = viewChild<ElementRef<HTMLElement>>('busyStatus');
-  private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeading');
+  private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeadingEl');
   /**
-   * Set when this page's own submit or retry failed. The render pass focuses the refusal heading
-   * once it exists — the pressed submit is disabled and then replaced, so without this move the
-   * visitor's place is `<body>` while the alert speaks.
+   * Set when this page's own submit or retry failed: the render pass then focuses the refusal
+   * heading, because the pressed submit is disabled and replaced, leaving the visitor nowhere.
    */
   private readonly announceFailure = signal(false);
 
@@ -343,11 +353,16 @@ export class CreateProjectPage {
 
   constructor() {
     this.destroyRef.onDestroy(() => this.creation.reset());
-    // The refusal heading is the page's own focus target: it is outside every alert, so moving
-    // there neither repeats the announcement nor leaves the visitor on `<body>`. Reading the ref
-    // keeps it tracked, so the pass that renders the refusal re-runs this with an element.
+    // The refusal heading is the page's own focus target: outside every alert, so moving there
+    // repeats nothing. The kind is decided before the ref is read, because an effect can run
+    // before this component's DOM update and the ref may still be the heading being removed.
     effect(() => {
+      const failure = this.creation.error();
       if (!this.announceFailure()) return;
+      if (failure === null || !this.showsEnvelopeDetails()) {
+        this.announceFailure.set(false);
+        return;
+      }
       const heading = this.failureHeadingRef()?.nativeElement;
       if (heading === undefined) return;
       this.announceFailure.set(false);
@@ -361,8 +376,7 @@ export class CreateProjectPage {
     const body: CreateProjectRequest = { name: this.name().trim(), slug: this.slug().trim() };
     // An unchanged body keeps the intent and its key: after an ambiguous network failure the
     // resource may already exist, and a fresh key would let the server create it twice. Only a
-    // corrected payload abandons the key (S71 QA-F1), which is why the decision lives here and
-    // not in a per-keystroke handler.
+    // corrected payload abandons the key, which is why the decision lives here.
     if (this.draftChanged()) {
       this.creation.reset();
     }
@@ -406,8 +420,8 @@ export class CreateProjectPage {
     //
     // The marker `projectCreated` armed is only good for the activation this URL change causes.
     // When no such activation is coming — the user already left, the router declined, or the
-    // navigation rejected — it must not be left behind for a later visit (N2/F10), which would
-    // render a derivation nobody read for it.
+    // navigation rejected — it must not be left behind for a later visit, which would render a
+    // derivation nobody read for it.
     const activated =
       this.router.url === originUrl && (await this.navigateToProject(orgId, project.id));
     if (!activated) {

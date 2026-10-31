@@ -184,7 +184,10 @@ export class EnableCollectionPage {
    * of a different read.
    */
   private refocusGeneration: number | null = null;
-  /** Set when this page's own confirm or retry was refused; the render pass takes it and clears it. */
+  /**
+   * Set when this page's own confirm or retry was refused. The render pass spends it on the
+   * refusal's heading, or drops it when no heading can render.
+   */
   private readonly announceConfirmFailure = signal(false);
   private readonly readFailureHeadingRef = viewChild<ElementRef<HTMLElement>>('readFailureHeading');
   private readonly confirmFailureHeadingRef =
@@ -341,10 +344,23 @@ export class EnableCollectionPage {
   protected readonly unavailableLabel = $localize`:@@onboarding.enable.unavailable:Unavailable`;
 
   constructor() {
-    // A scope change abandons the intent and the appended revision: the next confirm belongs to a
-    // different project, so its key must not be the old one. `reset()` also invalidates a running
-    // attempt (its settlement then writes nothing), which is the guard a data-service call cannot
-    // provide on its own.
+    this.abandonOnScopeChange();
+    this.focusEnabledHeading();
+    this.focusReadAnswer();
+    this.focusConfirmFailure();
+    this.destroyRef.onDestroy(() => {
+      this.readGeneration++;
+      this.clearReadWait();
+      this.activation.reset();
+    });
+  }
+
+  /**
+   * A scope change abandons the intent and its cached revision: the next confirm belongs to another
+   * project. `reset()` also stops the running attempt from writing anything when it settles, which
+   * the data service cannot do for the page.
+   */
+  private abandonOnScopeChange(): void {
     effect(() => {
       this.orgId();
       this.projectId();
@@ -353,21 +369,28 @@ export class EnableCollectionPage {
       this.activation.reset();
       void this.readActivation();
     });
-    // QA-01: the confirm disappears on success, so the focus it carried would be dropped. The
-    // terminal heading is the announcement target (`tabindex="-1"`, `role="status"` on the panel):
-    // focus moves there once the panel exists. Reading the ref inside this effect keeps it tracked,
-    // so the pass that mounts the panel re-runs it with a resolved element.
+  }
+
+  /**
+   * The confirm vanishes on success, so the focus it carried would be dropped; the terminal panel's
+   * heading is the announcement target. Reading the ref inside the effect keeps it tracked, so the
+   * pass that mounts the panel re-runs it with a resolved element.
+   */
+  private focusEnabledHeading(): void {
     effect(() => {
       if (this.enabled() === null) {
         return;
       }
       this.enabledHeadingRef()?.nativeElement.focus();
     });
-    // AC-F63-b: a re-read the user asked for replaces the control it was pressed from, so the answer
-    // hands focus to a named target — the read failure's own heading, or the 403 recovery control.
-    // Only a read this page's own re-read started arrives here: the first read, a scope change and
-    // the shell's reload leave focus where the shell put it. Reading the refs keeps them tracked, so
-    // the pass that mounts the target re-runs this with a resolved element.
+  }
+
+  /**
+   * A re-read the user pressed replaces the control it was pressed from, so its answer hands focus
+   * to a named target. Only the read this page's own press started qualifies; reading the refs keeps
+   * the pass that mounts the target tracked.
+   */
+  private focusReadAnswer(): void {
     effect(() => {
       const read = this.activationRead();
       // Only the read this page's own press started may move focus, and only while it is still the
@@ -385,20 +408,26 @@ export class EnableCollectionPage {
       this.refocusGeneration = null;
       target.nativeElement.focus();
     });
-    // The confirm disables itself while the chain runs, so the press cannot keep focus. The busy
-    // line takes the place first (`confirm`), and a refusal then hands it to the page-owned heading
-    // — never to the alert, whose body a focus move would read a second time.
+  }
+
+  /**
+   * The press disabled the confirm, so a refusal hands the place to the page's own heading — never
+   * to the alert, whose body a focus move would read a second time. A request whose failure has
+   * been cleared, or whose panel a failed read now owns, is dropped rather than spent later.
+   */
+  private focusConfirmFailure(): void {
     effect(() => {
       if (!this.announceConfirmFailure()) return;
+      // The heading renders only for a refusal this page still shows; anything else strands the
+      // request, and a stranded one would move focus on a render nobody pressed for.
+      if (this.failure() === null || this.readFailure() !== null) {
+        this.announceConfirmFailure.set(false);
+        return;
+      }
       const heading = this.confirmFailureHeadingRef()?.nativeElement;
       if (heading === undefined) return;
       this.announceConfirmFailure.set(false);
       heading.focus();
-    });
-    this.destroyRef.onDestroy(() => {
-      this.readGeneration++;
-      this.clearReadWait();
-      this.activation.reset();
     });
   }
 

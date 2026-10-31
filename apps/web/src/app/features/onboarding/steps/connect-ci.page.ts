@@ -1,10 +1,11 @@
-// 09.2.1-T2 (AC2/AC7, §8): server-derived connection metadata and component-scoped,
-// one-time reveal. Secret-bearing commands never create an Idempotency intent or auto-retry.
+// Server-derived connection metadata and a component-scoped, one-time reveal: secret-bearing
+// commands never create an Idempotency intent and never auto-retry.
 import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  afterRenderEffect,
   computed,
   effect,
   inject,
@@ -28,6 +29,7 @@ import { CliQuickstartComponent } from '../health/cli-quickstart.component';
 import { ConnectionHealthComponent } from '../health/connection-health.component';
 import { deriveConnectionHealth, type ConnectionHealth } from '../health/connection-health';
 import { OnboardingStore } from '../onboarding.store';
+import { sanitizeLabel } from './default-policy';
 import { fieldDetails, reasonFor } from './field-details';
 
 /**
@@ -72,7 +74,7 @@ export class ConnectCiPage {
   private healthBoundaryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly bindingHeading = viewChild<ElementRef<HTMLHeadingElement>>('bindingHeading');
   private readonly tokenHeading = viewChild<ElementRef<HTMLHeadingElement>>('tokenHeading');
-  private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeading');
+  private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeadingEl');
   private readonly busyStatusRef = viewChild<ElementRef<HTMLElement>>('busyStatus');
   /**
    * Set when a press of this page's own command was refused. The render pass moves focus to the
@@ -117,8 +119,16 @@ export class ConnectCiPage {
     const length = [...this.tokenName().trim()].length;
     return length < 1 || length > MAX_TOKEN_NAME_LENGTH;
   });
-  /** The envelope's field rows (00 §9.2) of the refusal on screen, and the reason per control. */
-  protected readonly details = computed(() => fieldDetails(this.failure()?.details ?? []));
+  /** The refusal's field rows, and the reason per control, both as server text made display-safe. */
+  protected readonly details = computed(() => {
+    // Sanitised before the field lookup, so a control character cannot hide the field it names.
+    const rows = (this.failure()?.details ?? []).map((detail) =>
+      detail.path === undefined
+        ? { ...detail, reason: sanitizeLabel(detail.reason) }
+        : { ...detail, path: sanitizeLabel(detail.path), reason: sanitizeLabel(detail.reason) },
+    );
+    return fieldDetails(rows);
+  });
   protected readonly serverRepoIdError = computed(() => reasonFor(this.details(), 'repository_id'));
   protected readonly serverRepoNameError = computed(() =>
     reasonFor(this.details(), 'repository_full_name'),
@@ -242,19 +252,20 @@ export class ConnectCiPage {
       this.scheduleHealthBoundary(this.store.tokens());
       onCleanup(() => this.clearHealthBoundaryTimer());
     });
-    // 09.1.1-T5.2: the health boundary timer is session-scoped work. Signing out (or a session that
-    // expires) must stop it, even when this step's signals do not change again — the page can stay
-    // mounted under a router outlet while the session ends, and a timer that fires afterwards would
-    // repaint a credential panel for a session that no longer exists.
+    // The health boundary timer is session-scoped work: signing out must stop it, even when this
+    // step's signals do not change again — the page can stay mounted under a router outlet while
+    // the session ends, and a timer that fires afterwards would repaint a credential panel for a
+    // session that no longer exists.
     const endOfSession = this.session.onSessionEnd(() => this.clearHealthBoundaryTimer());
     // The refusal heading is the page's own focus target: outside both alerts, so the move neither
-    // repeats an announcement nor leaves the visitor on `<body>` after a disabled press.
-    effect(() => {
-      if (!this.announceFailure()) return;
-      const heading = this.failureHeadingRef()?.nativeElement;
-      if (heading === undefined) return;
-      this.announceFailure.set(false);
-      heading.focus();
+    // repeats an announcement nor leaves the visitor on `<body>` after a disabled press. The cue is
+    // consumed after render, so a refusal whose heading never renders cannot leave it armed.
+    afterRenderEffect({
+      write: () => {
+        if (!this.announceFailure()) return;
+        this.announceFailure.set(false);
+        this.failureHeadingRef()?.nativeElement.focus();
+      },
     });
     this.destroyRef.onDestroy(() => {
       this.clearHealthBoundaryTimer();

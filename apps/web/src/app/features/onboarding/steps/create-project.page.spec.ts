@@ -246,6 +246,84 @@ describe('CreateProjectPage', () => {
     }
   });
 
+  it('removes the invisible characters an envelope row carries before rendering it', async () => {
+    createProject.mockRejectedValueOnce(
+      failure({
+        kind: 'validation',
+        status: 422,
+        details: [
+          { path: '/name\u202E', reason: 'A\u0007 project with this name already exists.' },
+          { path: '/slug', reason: 'Taken.\u202C' },
+        ],
+      }),
+    );
+    await fill();
+    await submit();
+    await settle();
+    const rendered =
+      root.querySelector('[data-testid="onboarding-project-details"]')?.textContent ?? '';
+    expect(rendered).toContain('A project with this name already exists.');
+    expect(rendered).toContain('Taken.');
+    expect(rendered).not.toMatch(/[\p{Cc}\p{Cf}]/u);
+    // The path was cleaned before the field was read, so the row still reaches its control.
+    const nameError = root.querySelector('#onboarding-project-name-error')!;
+    expect(nameError.textContent).toContain('A project with this name already exists.');
+    expect(nameError.hasAttribute('aria-live')).toBe(false);
+  });
+
+  it.each([
+    ['forbidden', 403],
+    ['not_found', 404],
+  ] as const)(
+    'keeps the field live region when the %s refusal renders no details alert',
+    async (kind, status) => {
+      createProject.mockRejectedValueOnce(
+        failure({
+          kind,
+          status,
+          retryable: false,
+          details: [{ path: 'name', reason: 'No project by that name.' }],
+        }),
+      );
+      await fill();
+      await submit();
+      await settle();
+      expect(root.querySelector('[data-testid="onboarding-project-details"]')).toBeNull();
+      expect(root.querySelector('#onboarding-project-failure-heading')).toBeNull();
+      const error = root.querySelector('#onboarding-project-name-error')!;
+      expect(error.textContent).toContain('No project by that name.');
+      expect(error.getAttribute('aria-live')).toBe('polite');
+      // No heading renders, so the waiting line keeps the place and nothing queues a focus move.
+      const busy = root.querySelector('[data-testid="onboarding-project-busy"]');
+      expect(document.activeElement).toBe(busy);
+      await settle();
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(busy);
+    },
+  );
+
+  it('does not hand focus to the heading a hidden-kind refusal removes', async () => {
+    createProject.mockRejectedValueOnce(
+      failure({
+        kind: 'validation',
+        status: 422,
+        details: [{ path: 'slug', reason: 'This slug is taken.' }],
+      }),
+    );
+    await fill();
+    await submit();
+    await settle();
+    expect(document.activeElement).toBe(root.querySelector('#onboarding-project-failure-heading'));
+    // The next refusal renders no heading, so the one already in the DOM is on its way out.
+    createProject.mockRejectedValueOnce(failure({ kind: 'forbidden', status: 403 }));
+    await submit();
+    await settle();
+    expect(root.querySelector('#onboarding-project-failure-heading')).toBeNull();
+    expect(document.activeElement).toBe(
+      root.querySelector('[data-testid="onboarding-project-busy"]'),
+    );
+  });
+
   it('holds focus on the waiting line while the request runs, then on the refusal heading', async () => {
     let rejectPending: (error: unknown) => void = () => undefined;
     const pending = new Promise<ProjectDto>((_resolve, reject) => {
@@ -266,7 +344,10 @@ describe('CreateProjectPage', () => {
     );
     await settle();
     await fixture.whenStable();
-    expect(document.activeElement).toBe(root.querySelector('#onboarding-project-failure-heading'));
+    const heading = root.querySelector('#onboarding-project-failure-heading')!;
+    expect(document.activeElement).toBe(heading);
+    // The template ref must not shadow the label: the heading shows its text, not an element.
+    expect(heading.textContent?.trim()).toBe('The project could not be created');
   });
 
   it('retains visible disabled mutation controls when permission is missing', async () => {

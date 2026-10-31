@@ -1,4 +1,4 @@
-// 09.2.1-T2: both server-confirmed paths, refusal/boundaries, and reveal lifetime.
+// Both server-confirmed paths, refusal/boundaries, and reveal lifetime.
 import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type {
@@ -129,8 +129,8 @@ describe('ConnectCiPage', () => {
           provide: SessionStore,
           useValue: {
             has: () => permitted(),
-            // 09.1.1-T5.2: the page registers its health timer with the session boundary, so a fake
-            // store without the registration seam would throw in the constructor.
+            // The page registers its health timer with the session boundary, so a fake store
+            // without the registration seam would throw in the constructor.
             onSessionEnd: () => () => undefined,
           },
         },
@@ -283,6 +283,79 @@ describe('ConnectCiPage', () => {
     expect(document.activeElement).toBe(root.querySelector('#connect-failure-heading'));
   });
 
+  it('strips control and format characters from server paths and reasons before display', async () => {
+    createIngestToken.mockRejectedValueOnce(
+      failure('validation', 422, {
+        details: [
+          {
+            path: '/name\u0007\u202e',
+            reason: 'Name \u0000must\u200f not embed\u2028 separators.',
+          },
+        ],
+      }),
+    );
+    await fill({ 'connect-token-name': 'Build upload' });
+    await submit('token');
+    const details = root.querySelector('[data-testid="connect-ci-details"]')!;
+    expect(details.textContent).toContain('/name');
+    expect(details.textContent).toContain('Name must not embed separators.');
+    // The row still names its field, so the reason also appears beside that control.
+    expect(root.querySelector('#connect-token-name-error')?.textContent).toContain(
+      'Name must not embed separators.',
+    );
+    expect(root.querySelector('#connect-token-name')?.getAttribute('aria-invalid')).toBe('true');
+    expect(root.textContent).not.toMatch(/[\u0000\u0007\u200f\u202e\u2028\u2029]/);
+  });
+
+  it('leaves no refusal cue behind once the refusal that armed it clears', async () => {
+    createIngestToken.mockRejectedValueOnce(failure('validation', 422));
+    await fill({ 'connect-token-name': 'Build upload' });
+    await submit('token');
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(root.querySelector('#connect-failure-heading'));
+    // Starting the next command clears the refusal, and with it the heading the cue pointed at.
+    await submit('token');
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    await fixture.whenStable();
+    expect(root.querySelector('#connect-failure-heading')).toBeNull();
+    const revealValue = root.querySelector('[data-testid="reveal-value"]');
+    expect(document.activeElement).toBe(
+      root.querySelector(`#${revealValue?.getAttribute('aria-labelledby')}`),
+    );
+  });
+
+  it('consumes a refusal cue whose heading never renders', async () => {
+    refresh.mockImplementationOnce(() => {
+      // The reconcile answers under a different scope, so the refusal never reaches the screen.
+      fixture.componentRef.setInput('projectId', 'project-2');
+      return Promise.resolve();
+    });
+    createIngestToken.mockRejectedValueOnce(failure('timeout', 0));
+    await fill({ 'connect-token-name': 'Build upload' });
+    await submit('token');
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    await fixture.whenStable();
+    expect(root.querySelector('[data-testid="connect-ci-error"]')).toBeNull();
+    // Nothing was rendered to move to: the visitor stays on the waiting line the press left.
+    expect(document.activeElement).toBe(root.querySelector('[data-testid="connect-ci-busy"]'));
+    // The spent cue cannot fire on a later render; the next refusal arms and moves focus once.
+    createIngestToken.mockRejectedValueOnce(failure('validation', 422));
+    await fill({ 'connect-token-name': 'Build upload' });
+    await submit('token');
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(root.querySelector('#connect-failure-heading'));
+  });
+
   it('returns focus to the first panel heading when a re-read removes the retry notice', async () => {
     refreshFailure.set('unavailable');
     await fixture.whenStable();
@@ -411,6 +484,8 @@ describe('ConnectCiPage', () => {
       // title one level below that, outside every alert so it can take focus.
       const pageHeading = error?.querySelector('h3.connect__failure-heading');
       expect(pageHeading).not.toBeNull();
+      // The heading renders the class field's copy, never the template ref it is bound to.
+      expect(pageHeading?.textContent?.trim()).toBe('The connection was not saved');
       expect(pageHeading?.closest('[role="alert"]')).toBeNull();
       expect(error?.querySelector('h4.state-panel__title')).not.toBeNull();
       expect(error?.querySelector('h2')).toBeNull();
@@ -905,7 +980,7 @@ describe('ConnectCiPage', () => {
     await fixture.whenStable();
     const health = root.querySelector('[data-testid="connection-health"]');
     expect(health?.getAttribute('data-health-state')).toBe('unhealthy');
-    // Presence still completes step 2 (plan §6): the health panel reports, it does not gate.
+    // Presence still completes step 2: the health panel reports, it does not gate.
     expect(canGoNext()).toBe(true);
     expect(root.querySelector('[data-testid="connect-token-row"]')).not.toBeNull();
     expect(root.querySelector('[data-testid="connect-token-rotate"]')).toBeNull();
