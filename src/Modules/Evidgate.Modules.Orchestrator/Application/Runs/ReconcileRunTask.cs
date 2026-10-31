@@ -11,7 +11,7 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// enqueues when it newly closes a producer slot (<see cref="RunReconcileContract"/>). Tenant-bound, so the consumer
 /// opens the row's tenant transaction around it and commits it only when the attempt returns. The handler resolves and
 /// decides nothing itself: it hands the run id to <see cref="IRunReconciler"/> and, for a compared attempt, that attempt's
-/// comparison to <see cref="IReconcileFinisher"/>, which is why a run that is gone, not <c>collecting</c>, or still
+/// comparison to <see cref="IReconcileFinisher"/>, which is why a run that is gone, not collectable, or still
 /// <c>pending</c> (a planned shard is open and the collection deadline has not passed) is a normal completion — the task
 /// row is the record of what ran, and nothing changed.
 /// <para>
@@ -76,18 +76,25 @@ internal sealed partial class ReconcileRunTaskHandler(
         // T2.3/T2.4: a compared attempt is finished in the SAME ambient tenant transaction (the reconciler has already
         // locked the run FOR NO KEY UPDATE and its comparison is this attempt's own read). RunNotFound, NotCollectable
         // and Pending reach no finisher at all — nothing to freeze, nothing to append, nothing to transition: a pending
-        // attempt waits for the open shard or for the collection deadline, so the run stays collecting. A late attempt
-        // (the run already finished as incomplete and new evidence arrived) appends a revision and settles no state.
+        // attempt waits for the open shard or for the collection deadline, so the run stays collecting. An overdue
+        // attempt (queued or running past its deadline) is settled as a forced close, and a late attempt (the run
+        // already finished as incomplete and new evidence arrived) appends a revision and settles no state.
         // An exception here is not caught: it must abort the attempt so the consumer rolls the transaction back and
         // retries it.
-        if (comparison is null || outcome.Disposition is not (ReconcileDisposition.Compared or ReconcileDisposition.ComparedLate))
+        if (comparison is null
+            || outcome.Disposition is not (ReconcileDisposition.Compared
+                or ReconcileDisposition.ComparedLate
+                or ReconcileDisposition.ComparedOverdue))
         {
             return;
         }
 
-        var settlement = outcome.Disposition == ReconcileDisposition.ComparedLate
-            ? ReconcileSettlement.AppendLateEvidence
-            : ReconcileSettlement.DecideCollection;
+        var settlement = outcome.Disposition switch
+        {
+            ReconcileDisposition.ComparedLate => ReconcileSettlement.AppendLateEvidence,
+            ReconcileDisposition.ComparedOverdue => ReconcileSettlement.CloseOverdue,
+            _ => ReconcileSettlement.DecideCollection,
+        };
 
         var finisher = attemptScope.ServiceProvider.GetRequiredService<IReconcileFinisher>();
         var finalization = await finisher
@@ -109,6 +116,7 @@ internal sealed partial class ReconcileRunTaskHandler(
         ReconcileDisposition.Pending => "pending",
         ReconcileDisposition.Compared => "compared",
         ReconcileDisposition.ComparedLate => "compared_late",
+        ReconcileDisposition.ComparedOverdue => "compared_overdue",
         _ => "unknown",
     };
 

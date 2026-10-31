@@ -152,8 +152,12 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   `public.task` and `outbox_parse_artifact_idx` on `public.outbox`, each `(org_id, (payload ->>
 'artifact_id'))` and partial on the rows the freeze's "is this artifact's parse verdict still owed"
   anti-joins ask about, so neither lookup is a scan of a mechanism table once per ready artifact
-  (notes at the end of this file);
-  the next free number is `0058`; a gap means two branches invented the same sequence and neither history can be trusted.
+  (notes at the end of this file); and `0058` is the overdue-run half of the same sweep — `evidgate.reconcile_overdue_runs`
+  re-created to name `queued` and `running` runs past `collection_deadline_at` beside `collecting` (same signature,
+  definer posture and keyset cursor), with the partial index `run_overdue_idx` over those three states replacing
+  `run_collecting_idx`, which it subsumes, so a run whose producers never started or never finalized is finally decided
+  `incomplete` instead of staying open forever (notes at the end of this file);
+  the next free number is `0059`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -856,3 +860,42 @@ through the real runner against a throwaway PostgreSQL 18 container.
   gains an entry.
 - No down migration: dropping the index would not roll back behaviour, it would silently return the
   freeze to a sequential scan of the queue.
+
+## Notes on the overdue `queued`/`running` runs (`0058`)
+
+- Why the predicate widens: `0056`'s scan named `collecting` runs only, on the reasoning that the reconcile it
+  queues refused every other state, so an attempt on one would only spend the run's single deadline key. The
+  stall that leaves is the state before collecting: a reconcile is enqueued only by the finalize that closes a
+  producer slot, so a run whose producers never started (`queued`) or died before their first finalize
+  (`running`) is never named by anything and stays open past `collection_deadline_at` forever. The deadline is
+  the run's promise, so past it the run is closed from the evidence that arrived — never as a pass, because
+  missing evidence never reads as one.
+- What it exposes: the same `(org_id, run_id, collection_deadline_at)` projection with the same signature,
+  return shape, `security definer` posture, `search_path = ''`, database-clock comparison, keyset cursor on
+  `(org_id, id)` and clamped limit (`1..1000`, default `100`) as `0056`; the predicate becomes
+  `state in ('queued', 'running', 'collecting')`. Those three are exactly the states the run machine declares
+  an edge to `incomplete` from. `created` stays out: no shard plan is committed for it and
+  `created -> incomplete` is not a declared edge, so a deadline verdict there would invent a transition; the
+  terminal states have no outgoing edge, so their verdict stands and the scan never names them.
+- The index: `run_overdue_idx` on `public.run (org_id, id)` with the scan's own predicate. `run_collecting_idx`
+  (`0056`) is dropped in the same file because the wider predicate covers it — a statement written as
+  `state = 'collecting'` implies the partial predicate, so the planner reads the new index — and keeping both
+  would write a second entry per collecting run on every insert and state update, for no reader. The new
+  index is created before the old one is dropped, so no statement runs without a usable one.
+- Grants: unchanged, and repeated in the file so it is self-contained — `security definer` on
+  `evidgate_owner`, `public` revoked, `EXECUTE` for `evidgate_worker_sched` alone.
+- How `check-rls` reads it: `DEFINER_AUDIT_EXEMPT` carries the new create-site cite
+  (`0058_reconcile_overdue_running.sql:65`) and `tests/Isolation.Tests/Rls/ResolverTests.cs` pins the same
+  decision in its owner-definer allow-list, so a moved or deleted definition turns one of the two into a
+  finding instead of a silent pass.
+- Deployment: migrate before app, in the same deploy. The widened scan is what lets the sweep queue a
+  `queued` or `running` run at all, and only the reconciler shipped with this file decides one; an older
+  application answers `NotCollectable` for such an attempt and spends that run's deadline key, which would
+  leave the run open exactly as before. The rest is additive for an older application: it never sees a row
+  the old scan did not also return.
+- Locks: `create index` takes a SHARE lock on `public.run` (readers continue, writes queue) and `drop index`
+  an ACCESS EXCLUSIVE lock for the catalog change alone — no rewrite — both under the file's
+  `set local lock_timeout = '5s'`; a busy table fails the migration for a retry instead of stalling run
+  writes. `create or replace` and the repeatable `revoke`/`grant` are catalog writes on the function.
+- No down migration: restoring the collecting-only predicate would not roll back a behaviour, it would
+  return the platform to a run past its deadline that nothing ever decides.

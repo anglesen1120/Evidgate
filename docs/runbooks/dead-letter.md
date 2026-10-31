@@ -151,7 +151,7 @@ Columns at `migrations/0008_platform_task_queue.sql:103-111` (`state`, `attempts
 3. **Expired lease / consumer died.** `last_error` begins with `lease expired:` — that exact text is written by the claimer's reclaim (`src/BuildingBlocks/Persistence/Tasks/TaskQueueSql.cs:69`) and event `2350` names the batch (`TaskClaimer.cs:287-291`). Action: replay; a crashing handler on a large payload may repeat, so check the same `task_type` for other lease-expiry dead letters before replaying.
 4. **Poison payload.** The same row dead-letters again within one attempt, or every row of one `task_type`/`aggregate_id` fails with a parse or validation error. Action: do not replay a third time; escalate as a producer bug with the `idempotency_key` and the run/aggregate id from Q3.
 5. **Handler bug (systemic).** Q2 shows one `task_type` with meaningful depth across several orgs and no dependency outage. Action: escalate to the owning module; replay only after the fix is deployed, and expect the queue to drain itself on the next claim cycle.
-6. **Tenant-scoped run path.** A dead letter whose `aggregate_type` is `run` (Q3) and whose run is `collecting` past `collection_deadline_at` — this is §7.1's known gap; follow §7.1 rather than the generic replay.
+6. **Tenant-scoped run path.** A dead letter whose `aggregate_type` is `run` (Q3) and whose run is `queued`, `running` or `collecting` past `collection_deadline_at` — the deadline trigger's case — gets a bounded re-arm from the sweep (three attempts at most, §7.1), so follow §7.1 rather than the generic replay.
 
 If none match, keep the row: it is the evidence. Classification is recorded in the handover note with the numbers only.
 
@@ -186,7 +186,7 @@ There is **no `replayed` state**: `Replayed` is the *outcome* enum of the servic
 ### 5.3 Idempotency of the replay, and of the handler
 
 - The **replay** is idempotent by the state guard: a second POST finds a non-`dead_letter` row and answers 409 instead of re-queueing (`ReplayDeadLetterTask.cs:40-45` and `:90-102`; `OperatorEndpoints.cs:26-27`). No `Idempotency-Key` and no `ETag` (same cite).
-- The **handler** is at-least-once and must be idempotent on the work's natural key, which is the producer's `task.idempotency_key` (`ITaskHandler.cs:30-35`); the queue itself dedupes inserts by `task_idem_uq` (`migrations/0008_platform_task_queue.sql:34-38`; `:131`). For a run reconcile this is explicit: the finisher appends at most one evidence revision per attempt and never rewrites one, and a run that left `collecting` never reaches it (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileFinisher.cs:19-31`; the no-op branch is `src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs:74-82`).
+- The **handler** is at-least-once and must be idempotent on the work's natural key, which is the producer's `task.idempotency_key` (`ITaskHandler.cs:30-35`); the queue itself dedupes inserts by `task_idem_uq` (`migrations/0008_platform_task_queue.sql:34-38`; `:131`). For a run reconcile this is explicit: the finisher appends at most one evidence revision per attempt and never rewrites one (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileFinisher.cs:231-244` for the equal-evidence guard, `migrations/0049_orchestration_evidence_revision.sql:162-165` for the append-only revoke), and a terminal run, or one the reconciler answers `NotCollectable` for, never reaches it (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs:78-87`).
 
 ### 5.4 Audit
 
@@ -205,7 +205,7 @@ The two operator task routes call the queue services directly; **no audit row is
 After the replay, confirm from the row — read with **Q5** by the id you saved, since Q1 no longer lists the row once it leaves `dead_letter` — and, for run-scoped work, from the run:
 
 - the task row's `state` is `done` (state vocabulary `migrations/0008_platform_task_queue.sql:113`) or `queued`/`active` with `attempts` below `max_attempts`; `updated_at` and `version` should have moved past the values the row had in `dead_letter` (`:110-111`).
-- for a run-scoped task, Q4 shows the run out of `collecting` (`migrations/0031_orchestration_run.sql:118-119`).
+- for a run-scoped task, Q4 shows the run out of `queued`/`running`/`collecting` (`migrations/0031_orchestration_run.sql:118-119`).
 
 Escalate (hand off with ids, counts, timestamps) when any of these holds:
 
@@ -214,40 +214,40 @@ Escalate (hand off with ids, counts, timestamps) when any of these holds:
 - the row is a `missing_tenant` platform row for tenant-bound work;
 - the dead-lettered row is older than ~25 days: retention deletes terminal rows after 30 (`src/BuildingBlocks/Persistence/Tasks/EvidgateSweeps.cs:84-96`; the delete is `src/BuildingBlocks/Persistence/Tasks/SweepTaskHandlers.cs:114-124`), and a replayed row must be replayed *before* the sweep removes it;
 - the route answers 401/403 (§5.1) and the work is tenant-visible — escalate to the platform owner, never bypass;
-- for a run-scoped task, the run is still `collecting` after the replay (§7.1).
+- for a run-scoped task, the run is still `queued`, `running` or `collecting` after the replay, or the sweep has spent its last deadline attempt on it (§7.1).
 
 ## 7. Known gaps
 
-### 7.1 Carried gap: the collection-deadline outbox key is not re-armed after a dead letter (S152, CR-10)
+### 7.1 The collection-deadline trigger: a bounded re-arm after a dead letter (S165, closes the S152 carried row)
 
-Carried row, verbatim from [`../status-carried.md:420`](../status-carried.md): *"The deadline reconcile is enqueued once per run with outbox key `orchestrator:run:{run}:reconcile:deadline`, and the sweep's probe skips a run whose key exists in any state. If that task dead-letters, the run stays `collecting` and is never re-queued. Fix: re-arm on dead-letter (attempt-suffixed key or a bounded attempt counter) with a test that forces the dead-letter"* (receiver: next reconcile/outbox task).
+The S152 carried row ([`../status-carried.md:420`](../status-carried.md)) is closed by `migrations/0058_reconcile_overdue_running.sql` and the sweep's attempt chain. The deadline trigger has one outbox key per attempt — `orchestrator:run:{run}:reconcile:deadline` for the first, `…:reconcile:deadline:{attempt}` for a re-arm (`src/Modules/Evidgate.Modules.Orchestrator.Contracts/RunReconcileTask.cs:77-83`) — and the sweep queues the next attempt only once the previous one is **spent**, up to `DeadlineMaxAttempts = 3` (`RunReconcileTask.cs:62`). An attempt is spent when nothing will come of it: its task row **dead-lettered**, it finished **`done`** while the run was still overdue (the attempt decided "nothing to decide" for this run, or lost the race to a no-op), or its task row was **purged by retention after dispatch** — the outbox row stays and the trigger still spent a slot (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileDeadlineSweepTask.cs:335-343`). A spent attempt is never retried; the chain moves to the next key.
 
-How it strands a run, in code:
+What the sweep decides per overdue run (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileDeadlineSweepTask.cs:315-333`), reading each attempt key's dispatch flag and task state through one probe for the whole page (`src/Modules/Evidgate.Modules.Orchestrator/Infrastructure/Persistence/ReconcileDeadlineSql.cs:61-71`):
 
-| Link | Evidence |
+| What the probe shows for one run | Sweep action |
 | --- | --- |
-| One deadline key per run, by design (the dedupe is the point) | `src/Modules/Evidgate.Modules.Orchestrator.Contracts/RunReconcileTask.cs:50-62` |
-| The sweep's probe reads **any** outbox row with that key — no `dispatched_at` filter, so a dispatched or long-since-dead row still counts as "already queued" | `src/Modules/Evidgate.Modules.Orchestrator/Infrastructure/Persistence/ReconcileDeadlineSql.cs:48-53`; called at `src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileDeadlineSweepTask.cs:197-216` |
-| Outbox rows are never deleted — no application role holds `delete` (only the table owner `evidgate_owner`, not an on-call credential) — so the key is permanent | `migrations/0006_platform_outbox.sql:98-99`; `migrations/0009_platform_outbox_dispatch.sql:28-31` |
-| The sweep only ever sees `state = 'collecting'` runs past the database clock | `migrations/0056_reconcile_missing_result.sql:132-150` (`:144-145`) |
-| A reconcile attempt does nothing when the run is not `collecting` | `ReconcileRunTask.cs:74-82` |
-| Nothing else moves a `collecting` run: the only edge out is the finisher's guarded transition | `ReconcileFinisher.cs:19-31`; `migrations/0031_orchestration_run.sql:118-119` |
+| no outbox row for attempt 1 | queues attempt 1 |
+| attempts `1..n-1` each spent (dead letter, `done`, or purged after dispatch), no row for attempt `n` | queues attempt `n` |
+| a row that is not spent: undispatched, or its task `queued`, `active` or waiting a retry | queues nothing — that attempt is work in progress, the sweep waits |
+| all three attempts spent | queues nothing; one warning event `2427` per fire carries the count (`ReconcileDeadlineSweepTask.cs:357-361`) |
 
-So: deadline task dead-letters → key persists in `outbox` → every later sweep fire treats the run as already queued → the run stays `collecting` past its deadline forever, and no alert is tied to that condition yet (the last row of §2's table).
+So a dead letter no longer strands the run: the next fire re-arms it, twice at most. "The key exists" stopped meaning "the attempt happened", because the probe reads the dispatch flag and the task state instead of the key's presence; outbox rows themselves are still never deleted (no application role holds `delete`, `migrations/0006_platform_outbox.sql:98-99`, `migrations/0009_platform_outbox_dispatch.sql:28-31`). A task row is purged by retention after 30 days (`src/BuildingBlocks/Persistence/Tasks/EvidgateSweeps.cs:84-96`); being dispatched with no task row left is read as spent, so the purge advances the chain instead of ending it.
+
+The operator is involved only after the third attempt: event `2427` names how many runs spent all three this fire, each of them stays overdue with no further row ever queued, and the third attempt's dead letter is the row to inspect (§5 replay, or escalate in step 5).
 
 **What the operator does today:**
 
-1. Find the deadline outbox row for the run (§3.2 Q4 gives `org_id` and the run id; then):
+1. Find the deadline outbox rows for the run — one per attempt (§3.2 Q4 gives `org_id` and the run id; then):
 
    ```sql
    -- role: evidgate_app, in the read-only session of §3.1 (set session characteristics as transaction read only)
-   select o.id, o.created_at, o.dispatched_at
+   select o.id, o.idempotency_key, o.created_at, o.dispatched_at
      from public.outbox o
     where o.org_id = '<org uuid>'
-      and o.idempotency_key = 'orchestrator:run:' || '<run uuid>' || ':reconcile:deadline';
+      and o.idempotency_key like 'orchestrator:run:' || '<run uuid>' || ':reconcile:deadline%';
    ```
 
-   (`outbox_idempotency_key_length_check` bounds the key at 256, `migrations/0006_platform_outbox.sql:80` for the column and `:89` for the check; the key format is `RunReconcileTask.cs:61-62`.)
+   (`outbox_idempotency_key_length_check` bounds the key at 256, `migrations/0006_platform_outbox.sql:80` for the column and `:89` for the check; the key format is `RunReconcileTask.cs:77-83` and the attempt bound `:61` — at most three keys, the last being `…:reconcile:deadline:3`.)
 2. Find the task row the dispatcher derived from it (`'outbox:' || o.id`, `migrations/0008_platform_task_queue.sql:34-38`) and confirm it is the dead letter:
 
    ```sql
@@ -257,19 +257,19 @@ So: deadline task dead-letters → key persists in `outbox` → every later swee
     where t.idempotency_key = 'outbox:' || '<outbox id>';
    ```
 
-3. Replay that task id through §5 (§5.1's ⚠️ applies: 401 until 02.x). The replay re-runs the same reconcile attempt, which settles the run through the finisher because the run is still `collecting` (`ReconcileRunTask.cs:74-82`).
+3. Replay that task id through §5 (§5.1's ⚠️ applies: 401 until 02.x). The replay re-runs that reconcile attempt: with the run still past `collection_deadline_at` in `queued` or `running` (or `collecting`), the attempt decides it and the run reaches its verdict in the finisher (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs:76-97`). Replaying the third attempt does not buy a fourth: the sweep stops at `DeadlineMaxAttempts = 3` (`RunReconcileTask.cs:62`), so a run still overdue after it needs step 5.
 4. Verify. Re-run Q4 in the tenant scope, and re-run the sweep's own predicate to see whether the run is still overdue:
 
    ```sql
    -- role: evidgate_app, inside the tenant-scope transaction of §3.1
-   select r.org_id, r.id, r.collection_deadline_at
+   select r.org_id, r.id, r.state, r.collection_deadline_at
      from public.run r
-    where r.state = 'collecting'
+    where r.state in ('queued', 'running', 'collecting')
       and r.collection_deadline_at <= now();
    ```
 
-   This is `evidgate.reconcile_overdue_runs`' predicate with its cursor dropped (`migrations/0056_reconcile_missing_result.sql:142-149`); the function itself is executable only by `evidgate_worker_sched` (`:152-154`), so an operator reproduces the predicate rather than calling it.
-5. If the run is still `collecting` after the replay: **escalate**. The sweep will not re-arm it (the table above), the key is permanent, and the fix is code (receiver: the next reconcile/outbox task). Do not hand-insert a second outbox row: it is an unaudited write that bypasses the outbox writer, and it is not a reliable fix — an attempt for a run that has already left `collecting` is answered `NotCollectable` and reaches no finisher, so nothing transitions the run (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs:74-82`, disposition set at `RunReconciler.cs:41-45`), and `outbox_org_idem_uq` (`migrations/0006_platform_outbox.sql:94`) rejects the same key. Escalate with the run id, the outbox id, the task id and the timestamps.
+   This is `evidgate.reconcile_overdue_runs`' predicate with its cursor dropped (`migrations/0058_reconcile_overdue_running.sql:77-78`); the function itself is executable only by `evidgate_worker_sched` (`:85-87`), so an operator reproduces the predicate rather than calling it.
+5. If the run is still overdue after the replay, or after the third attempt: **escalate**. The sweep stops at its attempt bound and says so with warning event `2427` (counts only, once per fire), so nothing further is queued for that run and the fix is an operator action, not another row. Do not hand-insert a second outbox row: it is an unaudited write that bypasses the outbox writer, `outbox_org_idem_uq` (`migrations/0006_platform_outbox.sql:94`) rejects a key that already exists, and an attempt for a run the reconciler answers `NotCollectable` for reaches no finisher (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs:78-87`, disposition set at `RunReconciler.cs:69-72`). Escalate with the run id, the outbox ids and their attempt suffixes, the task ids and the timestamps.
 
 ### 7.2 Other gaps this runbook states plainly
 
@@ -341,6 +341,6 @@ Each SQL identifier this runbook uses, and where the schema defines it.
 | `evidgate.current_org_id()` reading `current_setting('evidgate.org_id', true)` | function | `migrations/0002_foundation_evidgate_schema.sql:30-33` |
 | `evidgate.org_id` (the GUC §3.1 writes with `select set_config(…, true)`, kept transaction-local) | session setting | `migrations/0002_foundation_evidgate_schema.sql:30-33` |
 | `grant execute on function evidgate.current_org_id() to evidgate_app, evidgate_operator` | grant | `migrations/0002_foundation_evidgate_schema.sql:44` |
-| `run_collecting_idx` | partial index | `migrations/0056_reconcile_missing_result.sql:85-87` |
-| `evidgate.reconcile_overdue_runs` (signature `uuid, uuid, integer`; selects `state = 'collecting'` past the DB clock) | function | `migrations/0056_reconcile_missing_result.sql:132-150` |
-| `evidgate_worker_sched` is the only role with EXECUTE on `evidgate.reconcile_overdue_runs` | grant | `migrations/0056_reconcile_missing_result.sql:152-154` |
+| `run_overdue_idx` (`where state in ('queued', 'running', 'collecting')`, replaced `run_collecting_idx`) | partial index | `migrations/0058_reconcile_overdue_running.sql:59-61`, drop at `:63` |
+| `evidgate.reconcile_overdue_runs` (signature `uuid, uuid, integer`; selects `state in ('queued', 'running', 'collecting')` past the DB clock) | function | `migrations/0058_reconcile_overdue_running.sql:65-83` (`create or replace` at `:65`) |
+| `evidgate_worker_sched` is the only role with EXECUTE on `evidgate.reconcile_overdue_runs` | grant | `migrations/0058_reconcile_overdue_running.sql:85-87` |

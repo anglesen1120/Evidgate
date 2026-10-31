@@ -17,14 +17,30 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 internal sealed record ReconcileDeadlineSweepPayload(int Limit);
 
 /// <summary>
-/// Names of the collection-deadline sweep: the only trigger a run gets when its last shard never finalizes.
+/// Names of the collection-deadline sweep: the only trigger a run gets when nothing else closes it.
 /// <para>
 /// A reconcile is otherwise enqueued in the transaction that closes a producer slot, and the attempt decides
-/// the run's outcome against the collection deadline on the database clock. A run whose shard never closes
-/// therefore never gets an attempt, and stays <c>collecting</c> forever with no row in the outbox, so nothing
-/// in the platform retries it. This sweep is that missing retry: it finds the runs that are past their
-/// deadline and still collectable, and queues one reconcile for each — the same task type, the same handler,
-/// no new reconciliation logic.
+/// the run's outcome against the collection deadline on the database clock. A run whose shard never closes —
+/// or that never leaves <c>queued</c>/<c>running</c> because its producers never finalize — therefore never
+/// gets an attempt, and stays open for ever with no row in the outbox, so nothing in the platform retries it.
+/// This sweep is that missing retry: it finds the runs past their deadline that are still decidable
+/// (<c>queued</c>, <c>running</c> or <c>collecting</c>), and queues one reconcile for each — the same task
+/// type, the same handler, no new reconciliation logic. Which of them can be decided is the attempt's call,
+/// never the sweep's.
+/// </para>
+/// <para>
+/// An attempt that ends without a verdict leaves the run stuck exactly the same way — its task dead-letters, it
+/// finishes <c>done</c> while the run is still overdue, or its task row is purged after dispatch — so the sweep
+/// also re-arms it: the next attempt is queued once the previous one is spent, up to
+/// <see cref="RunReconcileContract.DeadlineMaxAttempts"/> attempts. Past the bound the run is left alone and
+/// the fire warns once — a permanent failure stops on its own instead of queueing for ever.
+/// </para>
+/// <para>
+/// Known limit, and the reason the warning matters: a run past the bound stays overdue, so the scan still names
+/// it and it keeps its slot in every later fire, while a fire reads at most
+/// <see cref="BatchSize"/> x <see cref="MaxPagesPerFire"/> rows from the lowest keys and persists no cursor.
+/// More than one budget of such runs at low keys therefore puts the rest of the backlog past a fire's reach —
+/// the warning is what makes that visible, and paging past it needs a cursor the schema does not have yet.
 /// </para>
 /// </summary>
 internal static class ReconcileDeadlineSweeps
@@ -62,9 +78,9 @@ internal static class ReconcileDeadlineSweeps
 }
 
 /// <summary>
-/// Platform task: reads every tenant's overdue runs through the sweep role's definer function, then queues one
-/// reconcile per run inside that run's own tenant scope, and only there — the outbox row takes its tenant from
-/// the scope, never from the scan.
+/// Platform task: reads every tenant's overdue runs through the sweep role's definer function, then queues the
+/// attempt each run may still spend inside that run's own tenant scope, and only there — the outbox row takes its
+/// tenant from the scope, never from the scan.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -72,8 +88,8 @@ internal static class ReconcileDeadlineSweeps
 /// of them. Tenant scoping happens per run instead (<see cref="ITenantScopeFactory.BeginAsync"/>, one scope per
 /// page of one org), so the only write of this handler — the outbox insert — runs under that run's tenant,
 /// exactly like a finalize's trigger: <see cref="IOutboxWriter"/> takes <c>org_id</c> from the ambient scope and
-/// never from a caller argument. The outbox is a mechanism table with no tenant policy by design (0006), so that
-/// write path, and the probe's explicit <c>org_id</c> filter, are what hold the boundary.
+/// never from a caller argument. The outbox and the task queue are mechanism tables with no tenant policy by
+/// design (0006), so that write path, and the probe's explicit <c>org_id</c> filter, are what hold the boundary.
 /// </para>
 /// <para>
 /// Overdue is decided by the database (<c>collection_deadline_at &lt;= now()</c> inside the function), not by
@@ -89,6 +105,12 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
     IOutboxWriter outbox,
     ILogger<ReconcileDeadlineSweepTaskHandler> logger) : ITaskHandler<ReconcileDeadlineSweepPayload>
 {
+    /// <summary>The queue's giving-up state: the one state that says an attempt will never run again.</summary>
+    private const string DeadLettered = "dead_letter";
+
+    /// <summary>The queue's finished state: the attempt ran, and whatever it wrote is all this run will get from it.</summary>
+    private const string Done = "done";
+
     /// <inheritdoc />
     public string TaskType => ReconcileDeadlineSweeps.ScheduleName;
 
@@ -105,6 +127,7 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
 
         var limit = Math.Clamp(payload.Limit, 1, ReconcileDeadlineSweeps.BatchSize);
         var enqueued = 0;
+        var exhausted = 0;
         var drained = false;
 
         Guid? afterOrg = null;
@@ -119,7 +142,9 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
                 break;
             }
 
-            enqueued += await EnqueueAsync(candidates, cancellationToken).ConfigureAwait(false);
+            var outcome = await EnqueueAsync(candidates, cancellationToken).ConfigureAwait(false);
+            enqueued += outcome.Enqueued;
+            exhausted += outcome.Exhausted;
 
             afterOrg = candidates[^1].OrgId;
             afterRun = candidates[^1].RunId;
@@ -138,6 +163,13 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
         if (!drained)
         {
             LogPageBoundReached(ReconcileDeadlineSweeps.MaxPagesPerFire, limit);
+        }
+
+        // Once per fire, never once per run: a run past its attempt bound has no verdict the sweep can reach, and an
+        // operator has to see it — without turning every tick into a page of identical warnings.
+        if (exhausted > 0)
+        {
+            LogAttemptsExhausted(exhausted, RunReconcileContract.DeadlineMaxAttempts);
         }
 
         LogSwept(enqueued, limit);
@@ -170,14 +202,16 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
     }
 
     /// <summary>
-    /// Queues one reconcile per candidate, one tenant scope per org of the page: the keys of that org are
-    /// read in a single statement, so a run an earlier fire already queued (or a run a previous page of this
-    /// same fire queued) is not queued twice — and the outbox's own unique index stays the enforcement, this
-    /// probe only saves the write.
+    /// Queues the attempt each candidate may still spend, one tenant scope per org of the page: a run an earlier
+    /// fire queued (or a previous page of this same fire queued) is not queued twice — and the outbox's own
+    /// unique index stays the enforcement, the probe only saves the write.
     /// </summary>
-    private async Task<int> EnqueueAsync(List<OverdueRun> candidates, CancellationToken cancellationToken)
+    private async Task<DeadlineEnqueueOutcome> EnqueueAsync(
+        List<OverdueRun> candidates,
+        CancellationToken cancellationToken)
     {
         var enqueued = 0;
+        var exhausted = 0;
         var index = 0;
 
         while (index < candidates.Count)
@@ -190,47 +224,123 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
                 index++;
             }
 
-            await using var orgScope = await scopes
-                .BeginAsync(orgId, projectId: null, readOnlyTransaction: false, cancellationToken)
-                .ConfigureAwait(false);
-
-            var keys = page
-                .Select(row => RunReconcileContract.DeadlineIdempotencyKey(row.RunId))
-                .ToArray();
-            var present = await db
-                .QueryAsync<string>(
-                    ReconcileDeadlineSql.ExistingKeys,
-                    // A list cannot travel as an array parameter on the tenant Dapper path (see ExistingKeys), so
-                    // it is sent as one JSON document and unpacked by the statement.
-                    new { org_id = orgId, keys = JsonSerializer.Serialize(keys) },
-                    cancellationToken)
-                .ConfigureAwait(false);
-            var queued = new HashSet<string>(present, StringComparer.Ordinal);
-
-            foreach (var row in page)
-            {
-                var key = RunReconcileContract.DeadlineIdempotencyKey(row.RunId);
-                if (!queued.Add(key))
-                {
-                    continue;
-                }
-
-                await outbox.EnqueueAsync(
-                        RunReconcileContract.OutboxTaskType,
-                        RunReconcileContract.DeadlinePayloadJson(row.RunId),
-                        RunReconcileContract.AggregateType,
-                        row.RunId,
-                        key,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-                enqueued++;
-            }
-
-            await orgScope.CommitAsync(cancellationToken).ConfigureAwait(false);
+            var outcome = await EnqueuePageAsync(orgId, page, cancellationToken).ConfigureAwait(false);
+            enqueued += outcome.Enqueued;
+            exhausted += outcome.Exhausted;
         }
 
-        return enqueued;
+        return new DeadlineEnqueueOutcome(enqueued, exhausted);
     }
+
+    /// <summary>Queues one org's share of a page inside that org's own scope, in one probe round trip.</summary>
+    private async Task<DeadlineEnqueueOutcome> EnqueuePageAsync(
+        Guid orgId,
+        List<OverdueRun> page,
+        CancellationToken cancellationToken)
+    {
+        await using var orgScope = await scopes
+            .BeginAsync(orgId, projectId: null, readOnlyTransaction: false, cancellationToken)
+            .ConfigureAwait(false);
+
+        // Every attempt of every run on the page in one key set: the probe answers with the ones that exist and
+        // what became of them, which is all a decision needs.
+        var keys = page.SelectMany(row => AttemptKeys(row.RunId)).ToArray();
+        var attempts = await db
+            .QueryAsync<DeadlineAttemptRow>(
+                ReconcileDeadlineSql.AttemptStates,
+                // A list cannot travel as an array parameter on the tenant Dapper path (see AttemptStates), so it
+                // is sent as one JSON document and unpacked by the statement.
+                new { org_id = orgId, keys = JsonSerializer.Serialize(keys) },
+                cancellationToken)
+            .ConfigureAwait(false);
+        var states = attempts.ToDictionary(
+            row => row.IdempotencyKey,
+            row => row,
+            StringComparer.Ordinal);
+
+        var enqueued = 0;
+        var exhausted = 0;
+        foreach (var row in page)
+        {
+            var (attempt, spent) = PlanAttempt(row.RunId, states);
+            if (spent)
+            {
+                exhausted++;
+                continue;
+            }
+
+            if (attempt == 0)
+            {
+                continue;
+            }
+
+            await outbox.EnqueueAsync(
+                    RunReconcileContract.OutboxTaskType,
+                    RunReconcileContract.DeadlinePayloadJson(row.RunId),
+                    RunReconcileContract.AggregateType,
+                    row.RunId,
+                    RunReconcileContract.DeadlineIdempotencyKey(row.RunId, attempt),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            enqueued++;
+        }
+
+        await orgScope.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return new DeadlineEnqueueOutcome(enqueued, exhausted);
+    }
+
+    /// <summary>The keys of every attempt a run may spend, in attempt order.</summary>
+    private static IEnumerable<string> AttemptKeys(Guid runId) =>
+        Enumerable
+            .Range(1, RunReconcileContract.DeadlineMaxAttempts)
+            .Select(attempt => RunReconcileContract.DeadlineIdempotencyKey(runId, attempt));
+
+    /// <summary>
+    /// Which attempt of one overdue run the sweep may queue now, and whether the run has spent its bound.
+    /// <para>
+    /// An attempt is spent once nothing will come of it: its task dead-lettered, or it finished <c>done</c> while
+    /// the run is still overdue (an app that answered "nothing to decide" for this run, or lost the race to a
+    /// no-op), or its task row is gone after being dispatched — retention purges finished tasks, the outbox row
+    /// stays, and the trigger still spent a slot. A spent attempt is never retried: the chain moves to the next
+    /// key instead.
+    /// </para>
+    /// <para>
+    /// An attempt that is not spent is not a failure either: an outbox row not yet dispatched, or a task still
+    /// <c>queued</c>, <c>active</c> or waiting a retry, is work in progress, so the sweep queues nothing and waits.
+    /// The chain is bounded by <see cref="RunReconcileContract.DeadlineMaxAttempts"/>: once every attempt is spent
+    /// the run is left alone and counted for the fire's warning, so a poison run stops on its own.
+    /// </para>
+    /// </summary>
+    /// <returns>The attempt to queue (0 for none) and whether every attempt is spent.</returns>
+    private static (int Attempt, bool Exhausted) PlanAttempt(
+        Guid runId,
+        Dictionary<string, DeadlineAttemptRow> attempts)
+    {
+        for (var attempt = 1; attempt <= RunReconcileContract.DeadlineMaxAttempts; attempt++)
+        {
+            if (!attempts.TryGetValue(RunReconcileContract.DeadlineIdempotencyKey(runId, attempt), out var row))
+            {
+                return (attempt, false);
+            }
+
+            if (!IsSpent(row))
+            {
+                return (0, false);
+            }
+        }
+
+        return (0, true);
+    }
+
+    /// <summary>
+    /// Whether an attempt can no longer produce a verdict: a dead letter, a completion that left the run open, or a
+    /// dispatched row whose task retention already deleted. A row still waiting to be dispatched is not spent — its
+    /// task has simply not been inserted yet.
+    /// </summary>
+    private static bool IsSpent(DeadlineAttemptRow row) =>
+        string.Equals(row.TaskState, DeadLettered, StringComparison.Ordinal)
+        || string.Equals(row.TaskState, Done, StringComparison.Ordinal)
+        || (row.TaskState is null && row.Dispatched);
 
     [LoggerMessage(
         EventId = 2425,
@@ -244,6 +354,15 @@ internal sealed partial class ReconcileDeadlineSweepTaskHandler(
         Message = "Deadline sweep stopped at its {Pages}-page bound of {Limit} run(s) per page with a full page: any overdue run past it waits for the next fire")]
     private partial void LogPageBoundReached(int pages, int limit);
 
+    [LoggerMessage(
+        EventId = 2427,
+        Level = LogLevel.Warning,
+        Message = "Deadline sweep left {Runs} overdue run(s) alone this fire: each spent all {Attempts} collection-deadline attempt(s) without a verdict")]
+    private partial void LogAttemptsExhausted(int runs, int attempts);
+
     /// <summary>One overdue run as the scan projects it: the tenant, the run, and the deadline that passed.</summary>
     private sealed record OverdueRun(Guid OrgId, Guid RunId, DateTimeOffset CollectionDeadlineAt);
+
+    /// <summary>What one page of the sweep wrote, and how many of its runs had spent their attempts.</summary>
+    private readonly record struct DeadlineEnqueueOutcome(int Enqueued, int Exhausted);
 }

@@ -7,8 +7,9 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// <summary>
 /// The Dapper read behind <see cref="IRunReconciler"/>: statements in a fixed order over the ambient tenant scope, so it
 /// joins the caller's transaction and RLS scopes every row, exactly like <see cref="RunEventScopeReader"/>. The run row
-/// is locked first and the state decides the outcome: only a <c>collecting</c> run — or a finished <c>incomplete</c> one
-/// this attempt carries late evidence for — is compared, and nothing is read beyond its state,
+/// is locked first and the state decides the outcome: only a <c>collecting</c> run — a <c>queued</c> or <c>running</c> one
+/// past its collection deadline, or a finished <c>incomplete</c> one this attempt carries late evidence for — is compared,
+/// and nothing is read beyond its state,
 /// because an enqueued finalize trigger is not evidence that the run is collectable. Read-only by construction — it never
 /// writes and never changes the run state; the work after the lock is the slot list, the one grouped event aggregate and,
 /// for the attempt that decides, the bounded read of the plan's uncovered executions.
@@ -16,7 +17,10 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// The lock statement also answers the run's collection deadline (<c>deadline_passed</c>) on the database clock: it
 /// decides between <see cref="ReconcileDisposition.Pending"/> and <see cref="ReconcileDisposition.Compared"/> when the
 /// plan still holds an open shard (before the deadline the attempt waits, past it the open shard is
-/// <c>missing_shard</c> and the attempt finishes). The late window is not read here: whether late evidence was
+/// <c>missing_shard</c> and the attempt finishes). It is also what lets a <c>queued</c> or <c>running</c> run be decided
+/// at all: before its deadline such a run is <see cref="ReconcileDisposition.NotCollectable"/>, past it the attempt
+/// compares and the finisher closes the run <c>incomplete</c>
+/// (<see cref="ReconcileDisposition.ComparedOverdue"/>). The late window is not read here: whether late evidence was
 /// accepted is the ingest route's decision, taken once under its own lock when it admitted the batch, so a trigger
 /// carrying that decision stays reconcilable however long the queue took to reach it.
 /// </para>
@@ -53,8 +57,16 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         var late = lateTrigger
             && string.Equals(locked.State, RunStates.Incomplete, StringComparison.Ordinal);
 
-        // Statement 2 never runs for a run outside its collection state: nothing to compare, nothing to change.
-        if (!late && !string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
+        // A queued or running run past its collection deadline is decided too: no finalize will enqueue the attempt
+        // that could close it, and the deadline is the run's promise to the caller. Before it the run stays
+        // NotCollectable — it is not collecting, so there is nothing to wait for.
+        var overdue = !late
+            && locked.DeadlinePassed
+            && (string.Equals(locked.State, RunStates.Queued, StringComparison.Ordinal)
+                || string.Equals(locked.State, RunStates.Running, StringComparison.Ordinal));
+
+        // Statement 2 never runs for a run outside its collection states: nothing to compare, nothing to change.
+        if (!late && !overdue && !string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
         {
             return new ReconcileOutcome(ReconcileDisposition.NotCollectable, Comparison: null);
         }
@@ -113,8 +125,14 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             .QueryAsync<UncoveredExecutionRow>(ReconcileSql.ListUncoveredExecutions, parameters, cancellationToken)
             .ConfigureAwait(false);
 
+        var disposition = late
+            ? ReconcileDisposition.ComparedLate
+            : overdue
+                ? ReconcileDisposition.ComparedOverdue
+                : ReconcileDisposition.Compared;
+
         return new ReconcileOutcome(
-            late ? ReconcileDisposition.ComparedLate : ReconcileDisposition.Compared,
+            disposition,
             ReconcileComparer.Compare(planned, seen, MapCoverage(coverage)));
     }
 
