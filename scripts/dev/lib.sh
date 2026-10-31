@@ -38,6 +38,35 @@ evg_load_env() {
   return 0
 }
 
+# Exported names whose value is a credential. A new secret is covered by this
+# pattern instead of an edit at every call site.
+EVG_SECRET_ENV_PATTERN='PASSWORD|SECRET|CONNECTIONSTRING|ACCESSKEY|S3_CONFIG'
+
+# Fills EVG_SCRUB_ARGS with one `-u NAME` pair per exported variable matching
+# the pattern above, read from the live environment.
+evg_scrub_env_args() {
+  local name
+  EVG_SCRUB_ARGS=()
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    EVG_SCRUB_ARGS+=(-u "$name")
+  done <<EOF
+$(env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -Ei "$EVG_SECRET_ENV_PATTERN" || true)
+EOF
+}
+
+# Runs a third-party command (npm, npx tsc, ng serve, dotnet build) with every
+# credential removed from its environment: it runs external code, and only the
+# Api and the Worker need the dev secrets. Args: CMD [ARG...].
+evg_run_scrubbed() {
+  evg_scrub_env_args
+  if [ "${#EVG_SCRUB_ARGS[@]}" -gt 0 ]; then
+    env "${EVG_SCRUB_ARGS[@]}" "$@"
+  else
+    env "$@"
+  fi
+}
+
 evg_compose() { docker compose -f "$EVG_COMPOSE_FILE" "$@"; }
 
 # True when up.sh started the host and it is still alive.
@@ -45,6 +74,14 @@ evg_host_is_running() {
   local pid
   pid="$(cat "$EVG_PID_DIR/$1.pid" 2>/dev/null || true)"
   [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+# Ports reach compose interpolation and `ng serve` as strings, so a value with a
+# letter becomes a bad publish spec or silently publishes nothing. Args: NAME VALUE.
+evg_require_port() {
+  case "$2" in
+    '' | *[!0-9]*) evg_die "$1 must be a number of digits only (got '$2') — check .env.dev" ;;
+  esac
 }
 
 # Terminates one process and its descendants, deepest first: `dotnet watch`
@@ -67,15 +104,11 @@ evg_process_tree() {
   printf '%s\n' "$pid"
 }
 
-# Stops a host process started by up.sh. `dotnet watch` itself never exits on
-# SIGTERM — it logs "Waiting for a file to change" and stays — so the wait is for
-# the app it owns (the deepest descendant), which is allowed its graceful
-# shutdown budget of up to 10 s (Evidgate.Api/Worker ShutdownTimeout); the
-# watchers are then reaped with SIGKILL when still present. `npm run start` (the
-# web host) forwards the signal to `ng serve`, so the same wait applies to it.
-# Safe when nothing runs.
+# Stops a host process started by up.sh. The tree is snapshotted before SIGTERM,
+# so the final SIGKILL reaches every pid seen then; the wait is for the deepest
+# descendant (the app), because `dotnet watch` ignores SIGTERM. Safe when idle.
 evg_stop_host() {
-  local name="$1" pid_file pid app_pid deadline
+  local name="$1" pid_file pid app_pid deadline tree pid_to_kill
   pid_file="$EVG_PID_DIR/$name.pid"
   [ -f "$pid_file" ] || return 0
   pid="$(cat "$pid_file" 2>/dev/null || true)"
@@ -84,7 +117,8 @@ evg_stop_host() {
   kill -0 "$pid" 2>/dev/null || return 0
 
   evg_info "stopping $name (pid $pid)"
-  app_pid="$(evg_process_tree "$pid" | head -n 1)"
+  tree="$(evg_process_tree "$pid")"
+  app_pid="$(printf '%s\n' "$tree" | head -n 1)"
   evg_kill_tree "$pid" TERM
 
   # A watcher shim (or a watch that has not started its app yet) is not an app:
@@ -101,7 +135,16 @@ evg_stop_host() {
     evg_warn "$name did not stop within 15 s — sending SIGKILL"
   fi
 
-  evg_kill_tree "$pid" KILL
+  # The snapshot, not a fresh tree walk: a child that left the tree is exactly
+  # the process SIGKILL must still reach.
+  while IFS= read -r pid_to_kill; do
+    [ -n "$pid_to_kill" ] || continue
+    if kill -0 "$pid_to_kill" 2>/dev/null; then
+      kill -s KILL "$pid_to_kill" 2>/dev/null || true
+    fi
+  done <<EOF
+$tree
+EOF
 }
 
 evg_stop_hosts() {

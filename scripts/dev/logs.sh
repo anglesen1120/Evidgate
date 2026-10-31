@@ -76,6 +76,12 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# `wait -n` ends the script as soon as one side stops; without it a dead
-# follower would leave the terminal hanging on the other.
-wait -n "$compose_pid" "$tail_pid" || true
+# Ends the script as soon as one side stops; without that a dead follower would
+# leave the terminal hanging on the other. `wait -n` needs bash 4.3 and macOS
+# ships 3.2 (where it prints nothing and follows nothing), so poll kill -0.
+while :; do
+  for follower in "$compose_pid" "$tail_pid"; do
+    kill -0 "$follower" 2>/dev/null || exit 0
+  done
+  sleep 1 || true
+done

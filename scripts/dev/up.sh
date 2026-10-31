@@ -22,7 +22,8 @@
 #
 # web: `ng serve` runs as the host process `web` (own pid/log like api/worker). It
 # needs the npm workspaces installed and packages/sdk built, because the app
-# imports the SDK from its git-ignored dist/; this script does both when missing.
+# imports the SDK from its git-ignored dist/; this script keeps both current
+# (npm ci when the install is stale, `tsc -b` incremental on every run).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -44,8 +45,8 @@ the Worker with `dotnet watch` and the Angular app with `ng serve` on the host,
 and waits for both .NET readiness endpoints and the dev server.
 
 It refuses before compose starts when another process already holds one of the
-published ports (EVIDGATE_DB_PORT, EVIDGATE_S3_PORT) or EVIDGATE_WEB_PORT; see
-docs/dev-setup.md, Troubleshooting.
+published ports (EVIDGATE_DB_PORT, EVIDGATE_S3_PORT) or EVIDGATE_WEB_PORT, and when
+one of the three is not digits only; see docs/dev-setup.md, Troubleshooting.
 
   --reset   stop the host processes and delete the pg-data/s3-data volumes first
   -h, --help  this text
@@ -188,18 +189,19 @@ port_is_open() {
   return 1
 }
 
-# True when another process already holds 127.0.0.1:$2 and the service of this
-# stack that should own it ($1, `-` for a host process) is not the one running
-# there. A compose publish onto a taken port silently does not apply, and db-init
-# then talks to that other server — a Homebrew postgresql@17 on 5432 answers
-# "role evidgate_owner does not exist". A re-run of up.sh must pass, hence the
-# service check.
+# True when another process holds 127.0.0.1:$2 and the service that should own it
+# ($1, `-` for a host process) has no container: a publish onto a taken port
+# silently does not apply and db-init would then talk to that other server.
 port_conflict() {
-  local service="$1" port="$2" running=""
+  local service="$1" port="$2" container=""
   if [ "$service" != "-" ]; then
-    running="$(evg_compose ps --status running -q "$service" 2>/dev/null || true)"
+    container="$(evg_compose ps -a -q "$service" 2>/dev/null || true)"
   fi
-  if [ -n "$running" ]; then
+  if [ -n "$container" ]; then
+    if [ -z "$(evg_compose ps --status running -q "$service" 2>/dev/null || true)" ] \
+      && port_is_open "$port"; then
+      evg_warn "port $port is held while the '$service' container exists but is not running (down or unhealthy) — if another process owns the port, compose reports it"
+    fi
     return 1
   fi
   port_is_open "$port"
@@ -217,8 +219,9 @@ preflight_ports() {
   fi
   if port_conflict seaweedfs "$EVIDGATE_S3_PORT"; then
     die "port $EVIDGATE_S3_PORT on 127.0.0.1 is already in use, so SeaweedFS cannot be
-     published there. Set EVIDGATE_S3_PORT and EVIDGATE_S3_ENDPOINT in .env.dev, or
-     stop the process holding the port (docs/dev-setup.md, Troubleshooting)."
+     published there. Set EVIDGATE_S3_PORT, EVIDGATE_S3_ENDPOINT and
+     EVIDGATE__OBJECT__ENDPOINT in .env.dev, or stop the process holding the port
+     (docs/dev-setup.md, Troubleshooting)."
   fi
   if ! evg_host_is_running web && port_conflict - "$EVIDGATE_WEB_PORT"; then
     die "port $EVIDGATE_WEB_PORT on 127.0.0.1 is already in use, so ng serve cannot bind
@@ -227,49 +230,48 @@ preflight_ports() {
   fi
 }
 
-# The role passwords up.sh exported from .env.dev. The web toolchain needs none of
-# them: `npm ci` runs lifecycle scripts and `ng serve` is a third-party build, so
-# neither gets the dev credentials in its environment.
-WEB_ENV_SCRUB=(
-  -u EVIDGATE_DB_SUPERUSER_PASSWORD -u EVIDGATE_OWNER_PASSWORD
-  -u EVIDGATE_APP_PASSWORD -u EVIDGATE_OPERATOR_PASSWORD
-  -u EVIDGATE_WORKER_SCHED_PASSWORD
-)
-
 # Api and Worker share project references; two `dotnet watch` processes that both
 # restore on a cold checkout race on the shared obj/*.nuget.g.targets files
 # ("already exists"). Building each once, in sequence, makes the two restores no-ops.
+# The build is third-party tooling that runs no dev code, so it gets no credential
+# (evg_run_scrubbed); the two `dotnet watch` hosts that follow keep the full
+# environment because they need the connection strings.
 build_hosts() {
   local project
   for project in Evidgate.Api Evidgate.Worker; do
     info "building $project"
-    dotnet build "$EVG_ROOT/src/$project" --nologo -v q \
+    evg_run_scrubbed dotnet build "$EVG_ROOT/src/$project" --nologo -v q \
       || die "dotnet build of $project failed — run: dotnet build src/$project"
   done
 }
 
 # apps/web imports @evidgate/sdk, whose main/types point into packages/sdk/dist —
-# git-ignored, so absent on a clean checkout. The reference build that the gate
-# runs first (scripts/verify.sh tsc-build runs `tsc -b`) is therefore a
-# prerequisite of `ng serve`; npm ci is needed once per checkout for the same reason.
+# git-ignored, so absent on a clean checkout. npm ci is needed when the install is
+# absent or older than package-lock.json; `tsc -b` is incremental, so running it
+# every time is what rebuilds a stale dist/. Both are third-party tooling and run
+# without the dev credentials.
 ensure_web_prerequisites() {
   command -v node >/dev/null 2>&1 || die "node is required for ng serve (Node 26, docs/dev-setup.md)"
   command -v npm >/dev/null 2>&1 || die "npm is required for ng serve (Node 26, docs/dev-setup.md)"
-  if [ ! -d "$EVG_ROOT/node_modules" ]; then
+  local modules="$EVG_ROOT/node_modules" install_marker="$EVG_ROOT/node_modules/.package-lock.json"
+  if [ ! -d "$modules" ] || [ ! -f "$install_marker" ] \
+    || [ "$EVG_ROOT/package-lock.json" -nt "$install_marker" ]; then
     info "installing the npm workspaces (npm ci)"
-    ( cd "$EVG_ROOT" && env "${WEB_ENV_SCRUB[@]}" npm ci --silent ) \
+    ( cd "$EVG_ROOT" && evg_run_scrubbed npm ci --no-progress --loglevel=error ) \
       || die "npm ci failed — fix what it printed and re-run"
   fi
-  if [ ! -f "$EVG_ROOT/packages/sdk/dist/src/index.d.ts" ]; then
-    info "building packages/sdk (the web app imports it from dist/)"
-    ( cd "$EVG_ROOT" && env "${WEB_ENV_SCRUB[@]}" npx tsc -b packages/sdk ) \
-      || die "building packages/sdk failed"
-  fi
+  info "building packages/sdk (tsc -b, the web app imports it from dist/)"
+  ( cd "$EVG_ROOT" && evg_run_scrubbed npx tsc -b packages/sdk ) \
+    || die "building packages/sdk failed — run: npx tsc -b packages/sdk"
 }
 
 start_host() {
-  local name="$1"
+  local name="$1" scrub=false
   shift
+  if [ "${1:-}" = "--scrub" ]; then
+    scrub=true
+    shift
+  fi
   local pid_file="$EVG_PID_DIR/$name.pid" log_file="$EVG_LOG_DIR/$name.log" pid
 
   if evg_host_is_running "$name"; then
@@ -281,7 +283,18 @@ start_host() {
   printf '\n===== %s: started %s =====\n' "$name" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$log_file"
   (
     cd "$EVG_ROOT"
-    nohup "$@" >>"$log_file" 2>&1 &
+    # --scrub drops every credential-shaped variable; the .NET hosts keep the
+    # full environment because they need the connection strings.
+    if [ "$scrub" = true ]; then
+      evg_scrub_env_args
+    else
+      EVG_SCRUB_ARGS=()
+    fi
+    if [ "${#EVG_SCRUB_ARGS[@]}" -gt 0 ]; then
+      nohup env "${EVG_SCRUB_ARGS[@]}" "$@" >>"$log_file" 2>&1 &
+    else
+      nohup "$@" >>"$log_file" 2>&1 &
+    fi
     echo $! >"$pid_file"
   )
   pid="$(cat "$pid_file")"
@@ -335,6 +348,9 @@ export_s3_config_for_compose
 : "${EVIDGATE_DB_PORT:=5432}"
 : "${EVIDGATE_S3_PORT:=8333}"
 : "${EVIDGATE_WEB_PORT:=4200}"
+evg_require_port EVIDGATE_DB_PORT "$EVIDGATE_DB_PORT"
+evg_require_port EVIDGATE_S3_PORT "$EVIDGATE_S3_PORT"
+evg_require_port EVIDGATE_WEB_PORT "$EVIDGATE_WEB_PORT"
 : "${ASPNETCORE_URLS:=http://127.0.0.1:8080}"
 : "${EVIDGATE__WORKER__HEALTHPORT:=8081}"
 : "${EVIDGATE__WORKER__HEALTHADDRESS:=127.0.0.1}"
@@ -373,7 +389,8 @@ start_host api dotnet watch --project "$EVG_ROOT/src/Evidgate.Api" --non-interac
 start_host worker dotnet watch --project "$EVG_ROOT/src/Evidgate.Worker" --non-interactive run
 # CI=1 and NG_CLI_ANALYTICS=false keep `ng serve` non-interactive: a first run
 # would otherwise ask about usage-data sharing and wait for an answer under nohup.
-start_host web env "${WEB_ENV_SCRUB[@]}" CI=1 NG_CLI_ANALYTICS=false \
+# --scrub starts it without any exported credential (it is third-party tooling).
+start_host web --scrub env CI=1 NG_CLI_ANALYTICS=false \
   npm run start -w apps/web -- --host 127.0.0.1 --port "$EVIDGATE_WEB_PORT"
 
 wait_for_ready api "${ASPNETCORE_URLS}/internal/health/ready"
