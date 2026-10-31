@@ -2,6 +2,7 @@
 // the sender's backoff and timeout, deterministic 4xx is returned verbatim, and the whole
 // upload is bounded by one deadline. An expired presigned URL is not retried here but
 // re-minted by `upload.ts`, because a signature that expired can never succeed again.
+import { parseDuration } from './duration.js';
 import { CliError } from './errors.js';
 import { attemptSignal, backoffDelay } from './sender.js';
 
@@ -47,9 +48,6 @@ export interface RetryOptions {
   readonly describe: (error: unknown) => string;
 }
 
-/** The bare-integer-seconds or `<n>s` / `<n>m` / `<n>h` grammar of contracts/cli.md §3. */
-const deadlinePattern = /^([0-9]+)([smh]?)$/;
-
 /**
  * `EVIDGATE_UPLOAD_DEADLINE`: one deadline for a whole artifact upload. Same grammar and
  * bounds as `EVIDGATE_SEND_DEADLINE`: a bare integer is seconds, an `s`/`m`/`h`
@@ -63,21 +61,11 @@ export function resolveUploadDeadlineMs(env: Readonly<Record<string, string | un
   if (raw === undefined || raw === '') {
     return defaultUploadDeadlineMs;
   }
-  const match = deadlinePattern.exec(raw);
-  if (match === null) {
-    throw invalidDeadline(name);
+  const parsed = parseDuration(raw, maxUploadDeadlineMs);
+  if (parsed.ok) {
+    return parsed.milliseconds;
   }
-  const amount = Number(match[1]);
-  const scale = match[2] === 'h' ? 3_600_000 : match[2] === 'm' ? 60_000 : 1_000;
-  const milliseconds = amount * scale;
-  if (
-    !Number.isSafeInteger(milliseconds) ||
-    milliseconds <= 0 ||
-    milliseconds > maxUploadDeadlineMs
-  ) {
-    throw invalidDeadline(name);
-  }
-  return milliseconds;
+  throw invalidDeadline(name);
 }
 
 function invalidDeadline(name: string): CliError {

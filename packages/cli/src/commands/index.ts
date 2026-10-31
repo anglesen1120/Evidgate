@@ -13,6 +13,7 @@ import { authLoginCommand } from './authLogin.js';
 import { authLogoutCommand } from './authLogout.js';
 import { configCheckCommand } from './configCheck.js';
 import { eventsSendCommand } from './eventsSend.js';
+import { gateCommand } from './gate.js';
 import { manifestsUploadCommand } from './manifestsUpload.js';
 import { quickstartCommand } from './quickstart.js';
 import { runsCreateCommand } from './runsCreate.js';
@@ -71,6 +72,8 @@ export const commandRegistry: Readonly<Record<string, CommandDefinition>> = {
   [runsFinalizeCommand.name]: runsFinalizeCommand,
   // `artifacts upload` (`upload-url` -> presigned PUT -> `complete`).
   [artifactsUploadCommand.name]: artifactsUploadCommand,
+  // `gate` reads one run's decision and maps it to the exit code.
+  [gateCommand.name]: gateCommand,
 };
 
 export interface ResolvedCommand {

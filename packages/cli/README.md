@@ -103,3 +103,60 @@ run id as step outputs and passes them through step env; the generic one capture
 the `--json` output in shell variables. `artifacts upload` sends one file per
 invocation from `test-results/` or `playwright-report/` (or a `--dir` root) and
 verifies the size and checksum the server reports at `complete`.
+
+## Gate
+
+`evidgate gate` reads one run's decision and turns it into the exit code a CI step
+branches on:
+
+```sh
+evidgate gate --run <run_id>                 # one request
+evidgate gate --run <run_id> --wait 5m       # poll until the run decides
+evidgate gate --run <run_id> --json          # one JSON object line on stdout
+```
+
+Only a literal `PASS` exits 0:
+
+- `PASS` → 0;
+- `FAIL` → 1;
+- `INCONCLUSIVE` → 2;
+- `decision: null` (still pending) → 2, both without `--wait` and when the wait
+  runs out.
+
+Everything else exits 3 with `evidgate: error <code>`: a transport failure, a
+`401`, `403` or `404`, a `5xx`/`429` that still fails after the bounded retries, a
+body that is not JSON, a body that is not an object, a body without a `decision`
+member, and any `decision` value outside the four above (`"pass"`, `""`, a
+number).
+
+`--wait` takes the same grammar as `EVIDGATE_SEND_DEADLINE`: bare seconds or an
+`s`/`m`/`h` suffix, greater than zero and at most 24 hours; anything else exits 3
+before any request. It polls with an exponential backoff and full jitter (1 s
+floor, 10 s cap) and honours `Retry-After` on `429`/`503` up to the same 60 s
+ceiling the rest of the client uses, so a server-named wait can be longer than
+the backoff cap. Neither ever sleeps past the deadline. Without `--wait` the
+command sends exactly one request.
+
+Human mode prints `gate: <DECISION> (run <run_id>)` and one `  - <reason>` line per
+reason; a pending or timed-out run explains itself on stderr. Server text is
+redacted, control characters are escaped, each reason line is capped at 200
+characters, and at most 50 reasons are printed (the rest collapse into one
+`… (k more)` line), so one response cannot flood a CI log. `--json` prints
+exactly one object line on stdout, with these keys in this order:
+
+```json
+{
+  "decision": "PASS",
+  "completeness": null,
+  "evaluation_id": null,
+  "mode": null,
+  "url": null
+}
+```
+
+`completeness`, `evaluation_id`, `mode` and `url` are **fields pending contract**:
+`contracts/openapi.yaml` declares only `decision`, `evaluation_revision` and
+`reasons` today, so each of the four is printed when the response carries it as a
+string and is `null` otherwise. Nothing is derived from the API URL and no value is
+guessed. `decision` is `null` on a pending timeout. The run id must be a UUID; any
+other value exits 3 before a token exchange.
