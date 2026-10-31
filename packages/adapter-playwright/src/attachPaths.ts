@@ -123,7 +123,7 @@ export function createPathGuard(options: PathGuardOptions): PathGuard {
       }
       // `lstat`, not `stat`: `realpath` has resolved every component, so the only symlink a
       // `lstat` can still see is one created in between — and that is exactly the one that must
-      // be refused rather than followed (the `sidecar.ts` precedent; the upload re-checks the
+      // be refused rather than followed (the `sidecarRead.ts` precedent; the upload re-checks the
       // descriptor it actually opened).
       let stats: Stats;
       try {
