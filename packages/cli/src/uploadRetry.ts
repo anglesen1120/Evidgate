@@ -1,6 +1,7 @@
 // One retry policy for all three upload calls: 408/429/5xx and transport failures share
 // the sender's backoff and timeout, deterministic 4xx is returned verbatim, and the whole
-// upload is bounded by one deadline so an expired presigned URL is re-minted, not retried.
+// upload is bounded by one deadline. An expired presigned URL is not retried here but
+// re-minted by `upload.ts`, because a signature that expired can never succeed again.
 import { CliError } from './errors.js';
 import { attemptSignal, backoffDelay } from './sender.js';
 
@@ -51,7 +52,7 @@ const deadlinePattern = /^([0-9]+)([smh]?)$/;
 
 /**
  * `EVIDGATE_UPLOAD_DEADLINE`: one deadline for a whole artifact upload. Same grammar and
- * bounds as `EVIDGATE_SEND_DEADLINE` (§3): a bare integer is seconds, an `s`/`m`/`h`
+ * bounds as `EVIDGATE_SEND_DEADLINE`: a bare integer is seconds, an `s`/`m`/`h`
  * suffix scales it, default 1800000 ms, ceiling 86400000 ms. Zero, a fraction, a unit
  * suffix this grammar does not know and a longer value are `invalid_config` naming the
  * variable; the raw value is never echoed (it could forge a log line).

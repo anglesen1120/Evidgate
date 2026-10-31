@@ -18,7 +18,7 @@ import { registerSecret } from '../redact.js';
  * not begin already expired. */
 export const refreshMarginMs = 60_000;
 
-/** The longest a server token can live (60 min) plus 5 min of clock skew (S3). */
+/** The longest a server token can live (60 min) plus 5 min of clock skew. */
 export const maxTokenLifetimeMs = 65 * 60_000;
 
 // `O_NOFOLLOW` is POSIX-only; win32 falls back to the `lstat` check in `readCachedToken`.
@@ -51,14 +51,14 @@ export async function readCachedToken(config: TokenCacheConfig): Promise<CachedT
   const path = tokenCachePath(config);
   let handle: FileHandle | undefined;
   try {
-    // D1: a cache directory owned by another user is not trusted.
+    // A cache directory owned by another user is not trusted.
     if (process.platform !== 'win32' && typeof process.getuid === 'function') {
       const dirStats = await lstat(config.cacheDir);
       if (dirStats.uid !== process.getuid()) {
         return undefined;
       }
     }
-    // S4: win32 has no `O_NOFOLLOW`, so reject a symlink with `lstat` before opening.
+    // win32 has no `O_NOFOLLOW`, so reject a symlink with `lstat` before opening.
     if (process.platform === 'win32') {
       const stats = await lstat(path);
       if (!stats.isFile()) {
@@ -98,7 +98,7 @@ export async function readCachedToken(config: TokenCacheConfig): Promise<CachedT
  * `wx`, then `chmod`ed so the umask cannot widen it) is renamed over the target, which
  * replaces a symlink rather than following it. The directory must be a real directory
  * owned by the current user; a symlink or foreign-owned directory is refused and a
- * loose mode is tightened to `0700` (D1). Any failure is `token_cache_error` and the
+ * loose mode is tightened to `0700`. Any failure is `token_cache_error` and the
  * temp file is removed best-effort; the message never carries a token value.
  */
 export async function writeCachedToken(
@@ -109,7 +109,7 @@ export async function writeCachedToken(
   const temp = join(config.cacheDir, `.ci-token.${randomUUID()}.tmp`);
   try {
     await mkdir(config.cacheDir, { recursive: true, mode: 0o700 });
-    // D1: refuse a symlinked or foreign-owned directory, and tighten a loose mode.
+    // Refuse a symlinked or foreign-owned directory, and tighten a loose mode.
     if (process.platform !== 'win32') {
       const dirStats = await lstat(config.cacheDir);
       if (

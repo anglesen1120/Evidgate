@@ -34,7 +34,7 @@ const defaultTakeoverAttempts = 3;
 /** No lock record is longer than a few dozen bytes; anything larger is not a lock. */
 const maxLockFileBytes = 1024;
 
-/** The lock file's whole content (task file §4 / D2). Nothing else is ever written. */
+/** The lock file's whole content: no token, no argv, nothing a support bundle could leak. */
 export interface SpoolLockFile {
   readonly pid: number;
   readonly startedAt: string;
@@ -480,7 +480,7 @@ async function readSpoolLockPath(path: string): Promise<SpoolLockFile | null> {
 }
 
 /**
- * The reporter's own lock (D-S56-Q8, `@evidgate/playwright-reporter` `writerLock.ts`):
+ * The reporter's own lock (`@evidgate/playwright-reporter` `writerLock.ts`):
  * `<producer_dir>/writer.lock`, mode 0600, whole content `{ pid, started_at }`, held for
  * the life of a writer. It is never the CLI's: only {@link assertNoLiveWriter} reads it.
  */
@@ -495,7 +495,7 @@ export interface WriterLockCheckOptions {
 }
 
 /**
- * `spool_locked` (D-S56-Q8, exit 3): the reporter is writing this producer right now, so
+ * `spool_locked` (exit 3): the reporter is writing this producer right now, so
  * nothing may read, ack, finalize or purge its chunk stream. The message names the pid.
  */
 export class WriterLockedError extends CliError {
@@ -531,7 +531,7 @@ export function readWriterLock(directory: string): Promise<SpoolLockFile | null>
 }
 
 /**
- * Refuses when the reporter holds a *live* `writer.lock` (D-S56-Q8). Called under the
+ * Refuses when the reporter holds a *live* `writer.lock`. Called under the
  * CLI's own `spool.lock`, so a second CLI can never be inside the same producer directory.
  *
  * - live pid -> `WriterLockedError` (`spool_locked`, exit 3), naming the pid. Nothing is
@@ -565,6 +565,6 @@ export async function assertNoLiveWriter(
  * by a live reporter, only the chunk readers/purgers are.
  */
 export interface ProducerLockOptions extends WriterLockCheckOptions {
-  /** Refuse with `spool_locked` while the reporter holds `writer.lock` (D-S56-Q8). */
+  /** Refuse with `spool_locked` while the reporter holds `writer.lock`. */
   readonly requireNoLiveWriter?: boolean;
 }

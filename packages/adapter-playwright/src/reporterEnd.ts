@@ -46,7 +46,11 @@ export class RunEndSequence {
     }
     const gateTripped = this.deps.identity.gateTripped;
     if (gateTripped) this.writeIdentityGateLine();
-    const failure = this.deps.bufferedFailure() ?? this.closeWriter(writer);
+    // Close unconditionally: the close is what flushes the queued `run_end` and releases the
+    // producer's lock, so a failure buffered earlier must not skip it. The buffered failure
+    // still wins for the report, being the original cause.
+    const closeError = this.closeWriter(writer);
+    const failure = this.deps.bufferedFailure() ?? closeError;
     if (failure !== null) this.reportBufferedFailure(failure);
     if (result.status === 'passed' && (gateTripped || failure !== null)) {
       return { status: 'failed' };

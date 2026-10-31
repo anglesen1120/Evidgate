@@ -123,8 +123,9 @@ export function pathRefused(message: string, hint?: string): CliError {
 }
 
 /**
- * `O_NOFOLLOW|O_NONBLOCK` plus the regular-file/owner checks: a symlink, a FIFO, a device
- * or a directory is refused with `upload_path_refused` instead of being read.
+ * Opens the resolved path `O_NOFOLLOW|O_NONBLOCK`: a symlink is refused with `ELOOP` instead
+ * of being followed, and a planted FIFO, device or directory cannot block the open and is
+ * then refused by the regular-file check.
  */
 export async function openUploadFile(input: OpenUploadFileInput): Promise<UploadFile> {
   if (input.file.length === 0) {
@@ -223,6 +224,9 @@ export async function openUploadFile(input: OpenUploadFileInput): Promise<Upload
     if (stats.size === 0) {
       throw pathRefused(`--file ${displayPath(path, input.cwd)} is empty`);
     }
+    // Refused here, before the token exchange, so an over-cap file costs no request. Only the
+    // kind's static default is known locally (`undefined` = the project row decides), so this
+    // mirrors the server's cap and never replaces it.
     const cap = artifactKindMaxBytes[input.kind];
     if (cap !== undefined && stats.size > cap) {
       throw new CliError(

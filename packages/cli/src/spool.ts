@@ -12,19 +12,19 @@ import type { ProducerLockOptions } from './spoolLock.js';
 import type { Dirent } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 
-/** `EVIDGATE_SPOOL_MAX_BYTES` default: 256 MiB per run directory (D4). */
+/** `EVIDGATE_SPOOL_MAX_BYTES` default: 256 MiB per run directory. */
 export const defaultSpoolMaxBytes = 268_435_456;
 /** Spool directories are created 0700. */
 export const spoolDirMode = 0o700;
-/** Every spool file this module writes is 0600 (task file §8). */
+/** Every spool file this module writes is 0600. */
 export const spoolFileMode = 0o600;
-/** A chunk rotates at 1 MiB (the merged writer's limit, D1). */
+/** A chunk rotates at 1 MiB (the merged writer's limit). */
 export const spoolChunkMaxBytes = 1_048_576;
-/** A chunk rotates at 1000 lines (the merged writer's limit, D1). */
+/** A chunk rotates at 1000 lines (the merged writer's limit). */
 export const spoolChunkMaxLines = 1000;
 /** Chunk names are zero-padded to six digits: `000001.jsonl`. */
 export const spoolChunkDigits = 6;
-/** The CLI-owned ack cursor (D1). */
+/** The CLI-owned ack cursor. */
 export const spoolCursorFileName = 'cursor.json';
 /** A leftover tmp from a crash between write and rename. */
 export const spoolCursorTmpFileName = 'cursor.json.tmp';
@@ -87,7 +87,7 @@ export interface SpoolEvent {
   readonly lineNumber: number;
 }
 
-/** The CLI-owned ack cursor (D1). `next_unacked_sequence === last_acked_sequence + 1`. */
+/** The CLI-owned ack cursor. `next_unacked_sequence === last_acked_sequence + 1`. */
 export interface SpoolCursor {
   readonly producerId: string;
   readonly nextUnackedSequence: number;
@@ -152,7 +152,7 @@ export class SpoolCapExceededError extends CliError {
   }
 }
 
-/** `spool_corrupt` (D3, exit 3): a spool line that is neither a torn tail nor valid. */
+/** `spool_corrupt` (exit 3): a spool line that is neither a torn tail nor valid. */
 export class SpoolCorruptError extends CliError {
   /** The chunk file name, e.g. `000002.jsonl`. */
   readonly chunk: string;
@@ -170,7 +170,7 @@ export class SpoolCorruptError extends CliError {
   }
 }
 
-/** `spool_missing` (D7, exit 3): there is no spool for this run/producer. */
+/** `spool_missing` (exit 3): there is no spool for this run/producer. */
 export class SpoolMissingError extends CliError {
   readonly runId: string;
   readonly producerId: string;
@@ -212,7 +212,7 @@ export class InvalidSpoolIdError extends CliError {
   }
 }
 
-/** Validates a spool path segment (writer parity, S3 analogue). */
+/** Validates a spool path segment (the reporter's writer applies the same rule). */
 export function assertValidSpoolId(field: 'run_id' | 'producer_id', value: string): void {
   if (typeof value !== 'string' || value.length === 0) {
     throw new InvalidSpoolIdError(field, String(value), 'must not be empty');
@@ -247,7 +247,7 @@ function unsafePath(message: string): CliError {
 }
 
 /**
- * Defence in depth for S3: even after id validation, the resolved directory must stay
+ * Defence in depth: even after id validation, the resolved directory must stay
  * inside the resolved spool root.
  */
 function assertWithinSpoolDir(
@@ -285,7 +285,7 @@ export async function listProducers(spoolDir: string, runId: string): Promise<st
   return producers.sort(compareStrings);
 }
 
-/** Total bytes of every regular file under `<spool_dir>/<run_id>` (the D4 cap base). */
+/** Total bytes of every regular file under `<spool_dir>/<run_id>` (the cap base). */
 export function runDirBytes(spoolDir: string, runId: string): Promise<number> {
   assertValidSpoolId('run_id', runId);
   const runDirectory = join(spoolDir, runId);
@@ -358,7 +358,7 @@ export class ProducerSpool {
       await hardenDirectory(this.directory);
       return;
     }
-    // A missing run or producer directory is `spool_missing` (D7), never a raw errno.
+    // A missing run or producer directory is `spool_missing`, never a raw errno.
     await this.hardenExisting(this.runDirectory);
     await this.hardenExisting(this.directory);
   }
@@ -381,7 +381,7 @@ export class ProducerSpool {
   /**
    * Runs `fn` holding the exclusive producer lock; a live holder is `spool_locked`.
    *
-   * `options.requireNoLiveWriter` adds the D-S56-Q8 guard: the reporter's `writer.lock` is
+   * `options.requireNoLiveWriter` adds the live-writer guard: the reporter's `writer.lock` is
    * inspected after `spool.lock` is taken, and a live reporter refuses the command with
    * `spool_locked` (exit 3) before `fn` runs. Only the chunk readers/purgers (events send,
    * runs finalize) pass it; the upload journal keeps the plain lock, so a running test can
@@ -511,7 +511,7 @@ export class ProducerSpool {
 
   /**
    * Streams the events from `cursor.nextUnackedSequence` onward, in sequence order. A
-   * final line without `\n` is a torn write and is skipped (D3); every other bad line, a
+   * final line without `\n` is a torn write and is skipped; every other bad line, a
    * gap and a regression are `SpoolCorruptError` naming chunk + line.
    */
   async *readUnacked(): AsyncGenerator<SpoolEvent> {
@@ -736,7 +736,7 @@ export class ProducerSpool {
    * The chunk the next line goes into: the highest existing chunk (after repairing a torn
    * tail it may end with), or `000001.jsonl` when the producer has none yet. A consumed
    * chunk is never reused: rotation always moves to `highest + 1`, never to the lowest ack
-   * boundary (D2).
+   * boundary.
    */
   private async chunkState(): Promise<{ index: number; bytes: number; lines: number }> {
     if (
@@ -781,7 +781,7 @@ export class ProducerSpool {
 
   /**
    * The highest sequence durable on disk (0 when the producer has no valid line yet).
-   * Read fresh on every call: D2 lets the reporter keep appending without the lock, so a
+   * Read fresh on every call: the reporter keeps appending without the lock, so a
    * cached high-water mark would make `ack` reject events that are already on disk.
    */
   private async lastOnDiskSequence(): Promise<number> {
@@ -809,18 +809,18 @@ export class ProducerSpool {
    * the cursor may advance.
    *
    * Cost is O(1) syscalls per call, not O(chunks): the writer only ever appends to the
-   * highest chunk (rotation always moves to `highest + 1`, D2), so every lower chunk is
+   * highest chunk (rotation always moves to `highest + 1`), so every lower chunk is
    * immutable and was already fsynced — by `append` when this process rotated it, or by
    * this method once, after which its name is remembered in {@link syncedChunks}. Only the
-   * highest chunk can have grown since the last ack (a writer appending without the lock,
-   * D2), so it is synced on every call. That keeps a send at O(chunks) syncs in total
+   * highest chunk can have grown since the last ack (a writer appending without the lock),
+   * so it is synced on every call. That keeps a send at O(chunks) syncs in total
    * instead of the O(batches × chunks) the previous every-chunk sweep cost.
    *
    * Restart safety rests on absence, never on presence: {@link syncedChunks} is empty in a
    * fresh process and a name enters it only after this process opened and fsynced that
    * chunk, so "not in the set" always means "not yet made durable by this process" and the
    * first ack of a new process syncs every chunk on disk. Nothing here assumes a chunk was
-   * durable because `append` wrote it: the reporter appends without the CLI lock (D2), so
+   * durable because `append` wrote it: the reporter appends without the CLI lock, so
    * a chunk below the highest is trusted only after this process synced it itself.
    */
   private async fsyncChunks(): Promise<void> {
@@ -841,7 +841,7 @@ export class ProducerSpool {
     fsyncDirectorySync(this.directory);
   }
 
-  /** Atomic cursor replace: tmp (0600) + fsync + rename + directory fsync (D1). */
+  /** Atomic cursor replace: tmp (0600) + fsync + rename + directory fsync. */
   private async writeCursor(cursor: SpoolCursor): Promise<void> {
     const state = {
       producer_id: cursor.producerId,
@@ -1279,7 +1279,7 @@ function tryParseLine(text: string): ParsedSpoolLine | null {
   return { sequence, eventId };
 }
 
-/** Parses a line the reader must trust, or throws `spool_corrupt` (D3). */
+/** Parses a line the reader must trust, or throws `spool_corrupt`. */
 function parseSpoolLine(text: string, chunk: string, lineNumber: number): ParsedSpoolLine {
   const parsed = tryParseLine(text);
   if (parsed === null) {

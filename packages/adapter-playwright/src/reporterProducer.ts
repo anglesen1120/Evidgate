@@ -29,7 +29,7 @@ export function resolveProducerIdentity(
       `@evidgate/playwright-reporter: the producer_id option ` +
         `${JSON.stringify(explicitProducerId)} conflicts with the shard Playwright ` +
         `selected (${String(config.shard.current)}/${String(config.shard.total)}): this ` +
-        `shard's manifest slot is ${JSON.stringify(derived.producer_id)} (T54). Drop the ` +
+        `shard's manifest slot is ${JSON.stringify(derived.producer_id)}. Drop the ` +
         'option to derive it, or pass that id; another id would be rejected by the server ' +
         '(422 unknown_producer).',
     );

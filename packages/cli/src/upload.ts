@@ -416,7 +416,7 @@ async function mintAndPut(
       if (!(error instanceof PresignExpiredError)) {
         throw error;
       }
-      // T18: a presigned URL cannot be re-signed for an existing row, so the dead row is
+      // A presigned URL cannot be re-signed for an existing row, so the dead row is
       // abandoned (it expires under `pending/`) and a fresh mint is requested. The journal
       // row keeps its mint_no, so `nextMintNo` can never reuse that key.
       lastExpiry = error.cliError;
@@ -589,7 +589,7 @@ async function completeWithRetry(
           code: 'request_failed',
           message: `the artifact complete failed (HTTP ${response.status})`,
         });
-        // §5: 401 needs the auth hint; 409/404/422 are deterministic and never retried.
+        // 401 needs the auth hint; 409/404/422 are deterministic and never retried.
         return {
           ok: false,
           error: withAuthHint(withStatus(mapped, response.status), response.status),
@@ -605,7 +605,7 @@ async function completeWithRetry(
 
 const authHint = 'run `evidgate auth login` to refresh the cached CI token';
 
-/** 401 means the cached token is dead: surface the server code with the refresh hint (§5). */
+/** 401 means the cached token is dead: surface the server code with the refresh hint. */
 function withAuthHint(error: UploadFailedError, status: number): UploadFailedError {
   if (status !== 401) {
     return error;
@@ -613,7 +613,12 @@ function withAuthHint(error: UploadFailedError, status: number): UploadFailedErr
   return new UploadFailedError(error.message, { ...errorOptions(error), hint: authHint }, status);
 }
 
-/** The presigned PUT itself: exactly the signed headers, the file streamed from disk. */
+/**
+ * The presigned PUT itself: exactly the signed headers, the file streamed from disk.
+ * `o.fetch` is the bare fetch, not the API client: the client carries the CI bearer, and
+ * that token must never reach the object store — a signed `authorization` is refused besides,
+ * so a signing response cannot force it out.
+ */
 async function putOnce(o: {
   readonly presigned: UploadUrlResponse;
   readonly file: UploadFile;
@@ -642,12 +647,12 @@ async function putOnce(o: {
   let stallTimer: unknown;
   let deadlineTimer: unknown;
   // The idle timer only guards the SENDING of the body. Two things stop it for good: the
-  // generator finishing (`settleTimers` via `onFinish`, N4 — the wait for the response is
+  // generator finishing (`settleTimers` via `onFinish` — the wait for the response is
   // then bounded by the upload deadline alone, so a store that takes longer than the idle
   // budget to verify a large checksum is not aborted and re-PUT from byte 0), and this
   // function's `finally`. The flag is what makes the stop final: a read that resumes after
   // the handle was closed could otherwise call `onProgress` and arm a fresh timer that
-  // nothing would ever clear (N3).
+  // nothing would ever clear.
   let timersSettled = false;
   const clearStall = (): void => {
     if (stallTimer !== undefined) {
@@ -673,7 +678,7 @@ async function putOnce(o: {
     // A transport that drops the request (an early 2xx from a proxy, an abort) destroys this
     // stream without ever resuming the generator — and a generator that never started runs
     // no `finally`. `close` is therefore what settles `done`; without it `await body.done`
-    // would wait forever (N3).
+    // would wait forever.
     stream.once('close', () => body.abandon());
     let response: Response;
     try {
@@ -717,7 +722,7 @@ async function putOnce(o: {
         },
         response.status,
       );
-      // §5: only 408/429/5xx are retried; 412 (a conditional or checksum failure) and the
+      // Only 408/429/5xx are retried; 412 (a conditional or checksum failure) and the
       // other 4xx are deterministic, so the signed request is never sent again.
       if (isRetryable(response.status, undefined)) {
         throw new PutRetryableError(refusal, retryAfter(response, o.now()));
@@ -853,10 +858,10 @@ class BodyStream implements AsyncIterable<Uint8Array> {
       this.fail(this.failure);
       throw this.failure;
     } finally {
-      // N4: the last chunk is out (or the generator is being closed), so the idle timer has
+      // The last chunk is out (or the generator is being closed), so the idle timer has
       // no meaning any more — the wait for the response is bounded by the deadline alone.
       this.onFinish();
-      // N3: a generator closed by a destroyed request must still settle `done`, or
+      // A generator closed by a destroyed request must still settle `done`, or
       // `putOnce` would await it forever. Idempotent: a finished or failed body is settled.
       this.abandon();
     }
@@ -1053,7 +1058,7 @@ const failureCodeFallback = 'invalid_failure_code';
  * consumer, so only a plain token is echoed verbatim; anything else (an escape sequence that
  * would repaint the terminal, a newline that would forge an `evidgate:` line, an over-long
  * value) becomes {@link failureCodeFallback}. The machine-readable code therefore stays
- * stable, and the raw server text never reaches a stream (§5/§12.6). A missing code is
+ * stable, and the raw server text never reaches a stream. A missing code is
  * `unknown`, which is what the caller says, not this fallback.
  */
 function failureCodeLabel(raw: string): string {
@@ -1064,7 +1069,7 @@ function failureCodeLabel(raw: string): string {
  * Headers a presigned PUT must never carry, whatever the server signs: a credential
  * (`authorization`, `cookie`, `set-cookie`, `proxy-authorization`), the target
  * (`host`), a second framing (`transfer-encoding`, `connection`) — plus any `proxy-*`.
- * The client keeps its own bearer off the object store (04 §6/S3), and a response is not
+ * The client keeps its own bearer off the object store, and a response is not
  * allowed to talk it into doing otherwise.
  *
  * The transport-owned set (`expect`, `te`, `trailer`, `upgrade`, `keep-alive`,

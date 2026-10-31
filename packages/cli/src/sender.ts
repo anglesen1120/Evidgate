@@ -14,7 +14,7 @@ import { serverErrorFromResponse, transportError } from './serverError.js';
 export const maxInFlight = 4;
 
 /**
- * One request's own timeout (§9.1): a hung connection becomes a retryable transport
+ * One request's own timeout: a hung connection becomes a retryable transport
  * failure instead of stalling the send. It is also bounded by what is left of the
  * overall deadline.
  */
@@ -154,7 +154,7 @@ export async function sendBatches(
   let accepted = 0;
   let duplicates = 0;
 
-  // P3-4/PF4: one fatal error has to end every other batch's retry loop at once. Without
+  // One fatal error has to end every other batch's retry loop at once. Without
   // it a sibling already backing off a 503/429 would keep sleeping until the deadline
   // (30 min by default) before the first error was reported.
   const stopRequested = (): boolean => fatal !== undefined;
@@ -490,7 +490,7 @@ export function retryAfter(
   return Math.max(date - now, 0);
 }
 
-/** Full-jitter backoff: `random() * min(500 ms x 2^(attempt-1), 30 s)` (00 §9.1). */
+/** Full-jitter backoff: `random() * min(500 ms x 2^(attempt-1), 30 s)`. */
 export function backoffDelay(attempts: number, sample: number): number {
   const ceiling = Math.min(retryBaseMs * 2 ** (attempts - 1), retryCapMs);
   const bounded = Math.min(Math.max(sample, 0), 1);
@@ -498,7 +498,7 @@ export function backoffDelay(attempts: number, sample: number): number {
 }
 
 /**
- * Verifies a 200 body before anything advances (D7, "never advance on doubt"): one ack
+ * Verifies a 200 body before anything advances ("never advance on doubt"): one ack
  * per event, in request order, for the same `event_id`, with status `accepted` or
  * `duplicate`, and with the body's `accepted`/`duplicates` counts matching the acks.
  * `duplicate` counts as delivered (it is a resend of a batch whose ACK was lost).

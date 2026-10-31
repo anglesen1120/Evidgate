@@ -38,7 +38,7 @@ const minShard = 1;
 const maxShard = 256;
 /** Decimal digits with no leading zero and no sign; the range check follows. */
 const shardDigitsPattern = /^[1-9][0-9]{0,2}$/;
-/** openapi `finalizeRun` `manifest_hash`: `sha256:` + 64 lowercase hex (00 §7, RFC 8785). */
+/** openapi `finalizeRun` `manifest_hash`: `sha256:` + 64 lowercase hex (RFC 8785). */
 const manifestHashPattern = /^sha256:[0-9a-f]{64}$/;
 /**
  * The derived-key namespace. Versioned and part of the pre-image, so a later change to
@@ -93,9 +93,9 @@ export const runsFinalizeCommand: CommandDefinition = {
   name: 'runs finalize',
   summary: 'finalize a producer slot once its events are acked',
   requireToken: true,
-  // The spool root is required by the spool commands (D5). Refusing it here — before the
+  // The spool root is required by the spool commands. Refusing it here — before the
   // `--verbose` config dump and before any token work — is the `quickstart` project-guard
-  // pattern (contracts/cli.md §1/§10). Forcing the lazy `spoolSettings()` (CR8) is what
+  // pattern (contracts/cli.md §1/§10). Forcing the lazy `spoolSettings()` is what
   // makes a malformed `EVIDGATE_SPOOL_MAX_BYTES` this command's `invalid_config` and never
   // `runs create`'s or `auth login`'s.
   validateConfig: (config) => {
@@ -134,8 +134,8 @@ export const runsFinalizeCommand: CommandDefinition = {
 
     // Configuration before the token too: a missing spool directory is `missing_config`
     // (refused already in `validateConfig`) and costs no token exchange. The settings are
-    // memoised by that pre-flight (CR8), and `resolveSpoolDir` makes a relative value
-    // absolute, so the spool path never depends on a later `chdir` (D5) — the fallback
+    // memoised by that pre-flight, and `resolveSpoolDir` makes a relative value
+    // absolute, so the spool path never depends on a later `chdir` — the fallback
     // only narrows the type here.
     const settings = config.spoolSettings();
     const spoolDir = settings.spoolDir ?? resolveSpoolDir(env);
@@ -144,7 +144,7 @@ export const runsFinalizeCommand: CommandDefinition = {
       runId,
       producerId,
       // The run-directory cap is resolved by `validateConfig`; finalize never appends,
-      // but `ProducerSpool` validates the value it is opened with (D4).
+      // but `ProducerSpool` validates the value it is opened with.
       maxBytes: settings.spoolMaxBytes,
     });
 
@@ -164,7 +164,7 @@ export const runsFinalizeCommand: CommandDefinition = {
         }
         const lastSequence = cursor.lastAckedSequence;
         const count = cursor.ackedCount;
-        // SC9: `cursor.json` is the only source of both declared values, and a count larger
+        // `cursor.json` is the only source of both declared values, and a count larger
         // than the sequence it claims to cover cannot be a real ack prefix — it is
         // corruption, not a value worth sending. `cursor()` already checked the shape and
         // `last_acked_sequence === next_unacked_sequence - 1`; this is the remaining
@@ -252,11 +252,13 @@ export const runsFinalizeCommand: CommandDefinition = {
           );
         }
 
+        // Only after a 202: a refused finalize must keep every chunk, because the run is
+        // not closed and its events may still need a send.
         if (!keepSpool) {
           try {
             // Re-checked immediately before the recursive remove: a reporter that started
-            // writing while the finalize request was in flight must not lose its spool
-            // (D-S56-Q8). Nothing is purged when it answers `spool_locked`.
+            // writing while the finalize request was in flight must not lose its spool.
+            // Nothing is purged when it answers `spool_locked`.
             await assertNoLiveWriter(spool.directory);
             await spool.purge();
           } catch (error) {
