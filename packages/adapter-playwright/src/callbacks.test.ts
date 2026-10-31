@@ -215,7 +215,7 @@ describe('callback → envelope fidelity', () => {
     expect(capability?.supports?.step_events).toBe(false);
   });
 
-  it('surfaces a spool write failure from onEnd, never from a callback', () => {
+  it('fails the run for a spool write failure surfaced from onEnd, never from a callback', async () => {
     if (isWindows) return; // Windows is skipped, as the finding allows.
     const { reporter, spool } = makeReporter();
     reporter.onBegin();
@@ -224,6 +224,6 @@ describe('callback → envelope fidelity', () => {
     // it. This still fails after the unlink + O_EXCL hardening (unlinking a directory throws).
     mkdirSync(join(spool, 'run-1', 'pw-0', SHARDS_TMP_FILE));
     expect(() => reporter.onTestEnd(fakeTest(), fakeResult())).not.toThrow();
-    expect(() => reporter.onEnd(fullResult('passed'))).toThrow();
+    await expect(reporter.onEnd(fullResult('passed'))).resolves.toEqual({ status: 'failed' });
   });
 });

@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { FullConfig, Suite, TestCase, TestResult } from '@playwright/test/reporter';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EventEnvelope } from './envelope.js';
 import { EvidgateReporter } from './reporter.js';
@@ -269,7 +269,7 @@ describe('AC1: two shards are two producers with independent contiguous sequence
     });
   });
 
-  it('refuses an explicit producer_id that disagrees with the shard, before any envelope', () => {
+  it('refuses an explicit producer_id that disagrees with the shard, before any envelope', async () => {
     const spool = tempSpool();
     const reporter = new EvidgateReporter({
       spool_dir: spool,
@@ -277,19 +277,20 @@ describe('AC1: two shards are two producers with independent contiguous sequence
       producer_id: 'pw-0',
       engineVersion: '1.63.0',
     });
-    reporter.onBegin(fullConfig({ total: 2, current: 1 }), suiteOf([fakeTest(0)]));
-
-    // onBegin buffers (the callbacks never throw); onEnd surfaces the refusal and nothing
-    // was written: a wrong id would be a server 422 `unknown_producer` or a slot collision.
-    let refusal: unknown;
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      reporter.onEnd(fullResult());
-    } catch (error) {
-      refusal = error;
+      reporter.onBegin(fullConfig({ total: 2, current: 1 }), suiteOf([fakeTest(0)]));
+
+      // onBegin buffers (the callbacks never throw); onEnd reports the refusal and nothing
+      // was written: a wrong id would be a server 422 `unknown_producer` or a slot collision.
+      await expect(reporter.onEnd(fullResult())).resolves.toEqual({ status: 'failed' });
+      const line = String(write.mock.calls[0]?.[0]);
+      expect(line).toContain('[evidgate] reporter failure');
+      expect(line).toContain('producer_id_shard_conflict');
+      expect(readdirSync(spool)).toEqual([]);
+    } finally {
+      write.mockRestore();
     }
-    expect(String(refusal)).toMatch(/conflicts with the shard/);
-    expect(String(refusal)).toMatch(/shard-1/);
-    expect(readdirSync(spool)).toEqual([]);
   });
 
   it('keeps an explicit producer_id on an unsharded run (04.3.1 compatibility)', () => {

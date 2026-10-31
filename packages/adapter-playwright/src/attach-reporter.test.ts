@@ -13,8 +13,9 @@
 //   carries an absolute path and the body bytes, and only `test.finished` has our records);
 // - a test WITHOUT attachments takes the 04.3.1 path unchanged: same members, same `ext` keys,
 //   no CLI load at all, and two runs agree byte for byte apart from the volatile fields;
-// - `onEnd` without pending uploads is still synchronous (no promise) and still THROWS a
-//   buffered spool failure synchronously;
+// - `onEnd` without pending uploads is still synchronous (a passing run returns no promise)
+//   and reports a buffered spool failure as `{ status: 'failed' }` plus one
+//   `[evidgate] reporter failure` stderr line;
 // - the writer's once-per-run notices (`shards_floor_ahead`) reach the spool as warnings.
 import {
   mkdirSync,
@@ -29,7 +30,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { FullConfig } from '@playwright/test/reporter';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AttachmentUploader, AttachmentUploadInput } from '@evidgate/cli';
 
@@ -168,12 +169,11 @@ function fullResult(): Parameters<EvidgateReporter['onEnd']>[0] {
 }
 
 /**
- * Awaits the async `onEnd` arm. The declaration stays `void` so the pre-existing bare
- * `reporter.onEnd(...)` call sites remain legal; the Promise the callback actually returns is
- * the value awaited here.
+ * Awaits the async `onEnd` arm. `onEnd` returns `undefined` for a passing run and a promise
+ * once it reports a failure, so the helper awaits whatever the callback returned.
  */
-function endOfRun(reporter: EvidgateReporter): Promise<unknown> {
-  return reporter.onEnd(fullResult()) as unknown as Promise<unknown>;
+async function endOfRun(reporter: EvidgateReporter): Promise<unknown> {
+  return await reporter.onEnd(fullResult());
 }
 
 function spoolLines(spool: string): string[] {
@@ -397,11 +397,12 @@ describe('attachments through the reporter (04.3.3-T2.2)', () => {
     expect(strip(envelopes)).toEqual(strip(envelopesOf(second.spool)));
   });
 
-  it('throws_a_buffered_spool_failure_synchronously_when_nothing_is_pending', () => {
+  it('fails_a_buffered_spool_failure_when_nothing_is_pending', async () => {
     const root = tempDir('evidgate-rep-fail-');
     const spool = tempDir('evidgate-rep-fail-spool-');
     const { reporter } = reporterHarness(spool, root, () => uploader());
     const previous = process.env.EVIDGATE_SPOOL_MAX_BYTES;
+    const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     // One byte for the whole run directory: the very first flush must refuse the batch.
     process.env.EVIDGATE_SPOOL_MAX_BYTES = '1';
     try {
@@ -409,9 +410,11 @@ describe('attachments through the reporter (04.3.3-T2.2)', () => {
       const test = fakeTest('cannot write', 2);
       const result = fakeResult([]);
       reporter.onTestEnd(test, result);
-      // The failure is buffered, and `onEnd` rethrows it SYNCHRONOUSLY (no promise).
-      expect(() => reporter.onEnd(fullResult())).toThrow();
+      // The failure is buffered, and `onEnd` reports it through the awaited return value.
+      await expect(reporter.onEnd(fullResult())).resolves.toEqual({ status: 'failed' });
+      expect(String(write.mock.calls[0]?.[0])).toContain('[evidgate] reporter failure');
     } finally {
+      write.mockRestore();
       if (previous === undefined) delete process.env.EVIDGATE_SPOOL_MAX_BYTES;
       else process.env.EVIDGATE_SPOOL_MAX_BYTES = previous;
     }
