@@ -23,7 +23,7 @@ export const authLoginCommand: CommandDefinition = {
   options: { 'github-env': { type: 'boolean' } },
   run: async ({ config, io, env, values, deps, maskSecret }) => {
     // `--github-env` must fail before the exchange and the cache write, so an unset
-    // GITHUB_ENV never leaves a token on disk (D3).
+    // GITHUB_ENV never leaves a token on disk.
     const exportToGithub = values['github-env'] === true;
     const githubEnvPath = exportToGithub ? env['GITHUB_ENV'] : undefined;
     if (exportToGithub && (githubEnvPath === undefined || githubEnvPath === '')) {

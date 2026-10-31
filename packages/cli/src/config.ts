@@ -44,9 +44,9 @@ export type TokenSource = 'oidc' | 'actions-id-token' | 'ingest' | 'dev';
 export interface SpoolSettings {
   /** Absolute spool root (`EVIDGATE_SPOOL_DIR`), or `undefined` when it is unset. */
   readonly spoolDir: string | undefined;
-  /** The run-directory byte cap (`EVIDGATE_SPOOL_MAX_BYTES`, D4). */
+  /** The run-directory byte cap (`EVIDGATE_SPOOL_MAX_BYTES`). */
   readonly spoolMaxBytes: number;
-  /** The one send deadline in milliseconds (`EVIDGATE_SEND_DEADLINE`, D5). */
+  /** The one send deadline in milliseconds (`EVIDGATE_SEND_DEADLINE`). */
   readonly sendDeadlineMs: number;
 }
 
@@ -63,7 +63,7 @@ export interface ResolvedConfig {
   readonly devToken: string | undefined;
   readonly bindingChallenge: string | undefined;
   /**
-   * The spool surface, resolved on first call and memoised (S54 CR8). `events send` and
+   * The spool surface, resolved on first call and memoised. `events send` and
    * `runs finalize` force it in their `validateConfig` pre-flight — before the
    * `--verbose` dump and before any token work — and nothing else calls it, so a
    * malformed `EVIDGATE_SPOOL_MAX_BYTES` / `EVIDGATE_SEND_DEADLINE` cannot break a
@@ -148,7 +148,7 @@ const deadlinePattern = /^([0-9]{1,9})([smh]?)$/;
 
 /**
  * Registers every secret env value for redaction. `main` calls it before parsing argv
- * so a usage error that echoes a secret value is still redacted (QA-D1); `resolveConfig`
+ * so a usage error that echoes a secret value is still redacted; `resolveConfig`
  * calls it too, so a direct caller is covered.
  */
 export function registerEnvSecrets(env: Readonly<Record<string, string | undefined>>): void {
@@ -219,7 +219,7 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
     input.homedir ?? osHomedir(),
   );
 
-  // CR8: the spool surface stays unresolved here. The first `spoolSettings()` call
+  // The spool surface stays unresolved here. The first `spoolSettings()` call
   // resolves all three values and memoises them; a throwing resolution is not cached, so
   // every later call reports exactly the same error.
   let spool: SpoolSettings | undefined;

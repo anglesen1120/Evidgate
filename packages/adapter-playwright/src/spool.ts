@@ -551,7 +551,7 @@ export class SpoolWriter {
   private restartAt: string | undefined;
 
   constructor(options: SpoolWriterOptions) {
-    // D2: `run_id`/`producer_id` are joined into the spool path verbatim, so reject any
+    // `run_id`/`producer_id` are joined into the spool path verbatim, so reject any
     // value that could escape `spool_dir` before the first filesystem write.
     assertValidSpoolId('run_id', options.runId);
     assertValidSpoolId('producer_id', options.producerId);

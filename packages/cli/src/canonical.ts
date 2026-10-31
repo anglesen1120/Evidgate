@@ -10,7 +10,7 @@ import canonicalize from 'canonicalize';
 export const canonicalHashPrefix = 'sha256:';
 
 /**
- * 00 §5.7 S5 / `JsonCanonicalizer.MaxDepth`: the deepest container nesting either
+ * `JsonCanonicalizer.MaxDepth` on the server: the deepest container nesting either
  * runtime canonicalizes. The server's streaming reader rejects a document nested one
  * level deeper, so the CLI applies the same rule instead of handing out a digest for a
  * payload the ingest edge answers 400 for.
@@ -86,11 +86,11 @@ export function assertCanonicalRoundTrip(canonicalJson: string): void {
   }
 }
 
-/** The one rejection message for 00 §5.7 S5, thrown from both the descending and memoised paths. */
+/** The one rejection message for the depth cap, thrown from both the descending and memoised paths. */
 const depthCapMessage = `value cannot be canonicalized: a container is nested deeper than the ${canonicalMaxDepth} level cap`;
 
 /**
- * Depth cap of 00 §5.7 S5, counted the way the server's reader counts it: `level` is the
+ * Depth cap, counted the way the server's reader counts it: `level` is the
  * number of containers from the root value down to `value`, inclusive, and a container at
  * level {@link canonicalMaxDepth} + 1 is rejected. A repeated container on the current
  * path is a circular value, not depth, so the walk stops there and `canonicalize` reports

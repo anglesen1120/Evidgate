@@ -53,7 +53,7 @@ export async function main(
   deps: ExchangeDeps = {},
 ): Promise<ExitCode> {
   // Register every secret before any argument parsing, so a usage error that echoes a
-  // secret value is still redacted (QA-D1, contracts/cli.md §6).
+  // secret value is still redacted (contracts/cli.md §6).
   resetSecrets();
   registerEnvSecrets(env);
   const output = createRedactingIo(io);
