@@ -13,7 +13,7 @@ FR-10-1 asks for three environments with **separate credentials and data**. What
 
 | Environment | Runtime and where it runs | Account / region | Replica counts | Data and retention | Backup |
 |---|---|---|---|---|---|
-| **dev** | One developer workstation: PostgreSQL 18 and SeaweedFS in containers ([`../../infra/compose.dev.yml`](../../infra/compose.dev.yml)), `Evidgate.Api` and `Evidgate.Worker` as host processes under `dotnet watch`, started by [`../../scripts/dev/up.sh`](../../scripts/dev/up.sh) (01.8.1) | none — a local machine; no provider account and no region | 1 Api + 1 Worker process (the containers are the stateful services) | Disposable developer data only; **never** customer evidence. The named volumes `pg-data` and `s3-data` survive `down.sh` and are deleted by `up.sh --reset` | none — the volumes are the whole state |
+| **dev** | One developer workstation: PostgreSQL 18 and SeaweedFS in containers ([`../../infra/compose.dev.yml`](../../infra/compose.dev.yml)), `Evidgate.Api` and `Evidgate.Worker` as host processes under `dotnet watch` and the web app under `ng serve`, started by [`../../scripts/dev/up.sh`](../../scripts/dev/up.sh) (01.8.1) | none — a local machine; no provider account and no region | 1 Api + 1 Worker + 1 web dev-server process (the containers are the stateful services) | Disposable developer data only; **never** customer evidence. The named volumes `pg-data` and `s3-data` survive `down.sh` and are deleted by `up.sh --reset` | none — the volumes are the whole state |
 | **staging** | A provider account of its own, reached by the deploy exactly as prod is (10.2.1/10.2.2) | `[OPEN]` provider, region and account id — chosen by 10.8.1 (O3). It is a **separate account** from prod, recommended by `../../plans/10-operations.md` §11 (open question: whether staging shares prod's object-storage account) | `[OPEN]`: at least 1 Api and 1 Worker, sized by the load test that runs only here (10.6.1-T1) | **Sanitised data only** (FR-10-1): load-test and drill fixtures with a synthetic tenant, never a copy of customer evidence. Retention `[OPEN]` with 10.5.1-T2 | `[OPEN]` — the RPO 15 min / RTO 4 h drill target of 10.5.1 applies to prod; whether staging runs PITR is settled with the provider |
 | **prod** | Behind a load balancer, in its own provider account (FR-10-1) | `[OPEN]` provider, region and account id (10.8.1); residency is a selection criterion owned with plan 11, and no customer data lands before O3 closes | **≥ 2 `Evidgate.Api` replicas and ≥ 1 `Evidgate.Worker` replica** (FR-10-1); exact sizing follows the capacity model (10.6.1-T3) | Customer evidence, immutable, with the retention policy of plan 06 and the residency/PDPL rules of plan 11 | Managed PostgreSQL with PITR (10.5.1-T1); the restore drill (RPO 15 min / RTO 4 h) must pass before the pilot — M2 exit gate, 00 §4 |
 
@@ -310,7 +310,7 @@ scripts/check-no-secret-literals.sh
 scripts/check-no-secret-literals.sh --self-test   # the scan's own pass/fail fixtures
 
 # per-environment smoke, against a running environment
-scripts/dev/up.sh                     # dev: containers + migrations + Api and Worker
+scripts/dev/up.sh                     # dev: containers + migrations + Api, Worker and web
 scripts/smoke-environment.sh --env dev
 scripts/smoke-environment.sh --env staging --base-url http://<internal-host>:8080
 ```

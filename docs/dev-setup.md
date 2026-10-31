@@ -11,7 +11,7 @@ the emulator decision is [ADR-0004](adr/0004-s3-emulator-local-dev.md).
 | Docker daemon | PostgreSQL 18 and SeaweedFS run in compose | colima and Docker Desktop both work; `up.sh` picks up colima's socket when no default daemon answers |
 | .NET 10 SDK | Api, Worker and `Evidgate.Migrator` | on `PATH`, or in `$HOME/.dotnet` (picked up automatically) |
 | `curl`, `awk` | readiness polling, reading the SeaweedFS identity file | present on macOS and on every common Linux distribution |
-| Node 26 | TypeScript tooling and, later, `ng serve` | `npm ci` once, per the repo root `README`/CI gate |
+| Node 26 | the Angular dev server (`ng serve`) and the TypeScript tooling | `up.sh` runs `npm ci` at the repository root when `node_modules` is missing, and builds `packages/sdk` when its `dist/` is absent |
 
 ## One command
 
@@ -25,16 +25,24 @@ From a clean checkout it does, in order:
    (mode 600, fresh random passwords for the superuser and the four database roles);
 2. `docker compose -f infra/compose.dev.yml up -d --wait` — PostgreSQL 18 and
    SeaweedFS, both digest-pinned, healthy before anything else runs (no sleeps);
+   `up.sh` refuses first when another process already holds a port the stack must
+   publish ([Troubleshooting](#troubleshooting));
 3. [`scripts/dev/db-init.sh`](../scripts/dev/db-init.sh) against the compose
    PostgreSQL: superuser bootstrap → `evidgate_owner` migrates the database →
    migration 0001 creates the application roles → superuser grants them `LOGIN` +
    password (01.4.1-T2.3; the role split mirrors production, so an RLS mistake
    fails locally first);
 4. creates the dev bucket and puts the `pending/` 24 h lifecycle rule on it (T18);
-5. starts `Evidgate.Api` and `Evidgate.Worker` with `dotnet watch` on the host,
-   logging to `.local/dev/logs/` with pids under `.local/dev/pids/`;
-6. polls `GET /internal/health/ready` on both until each answers `200`, then prints
-   the URLs and the elapsed time and exits 0.
+5. installs the npm workspaces (`npm ci`) when `node_modules` is missing and, when
+   `packages/sdk/dist` is absent, builds the SDK the web app imports from there;
+   builds `Evidgate.Api` and `Evidgate.Worker` once each (two cold `dotnet watch`
+   restores would race on the shared `obj/` files), then starts them with
+   `dotnet watch` and the
+   Angular app with `ng serve` (`127.0.0.1:4200`) on the host, logging to
+   `.local/dev/logs/` with pids under `.local/dev/pids/`;
+6. polls `GET /internal/health/ready` on Api and Worker and `GET /` on the dev
+   server until each answers `200`, then prints the URLs and the elapsed time and
+   exits 0.
 
 Compose publishes both stateful ports on `127.0.0.1` only. The Worker's own probe
 listener binds all interfaces (`TcpListener(IPAddress.Any)`, 01.1.2-T1.3), so on a
@@ -57,12 +65,13 @@ image's own convention), which is the path `db-init.sh` uses as superuser.
 | `Evidgate.Worker` | readiness `http://127.0.0.1:8081/internal/health/ready` | the worker serves only the probe listener; its work happens in the database-backed queue |
 | PostgreSQL 18 | `127.0.0.1:5432`, database `evidgate` | roles `evidgate_owner` (migrations), `evidgate_app` (Api/Worker), `evidgate_operator`, `evidgate_worker_sched` |
 | SeaweedFS S3 | `http://127.0.0.1:8333`, bucket `evidgate-dev` | static local-only identity, same one the 01.8.1-T1 parity suite uses |
+| web (`ng serve`) | `http://127.0.0.1:4200` | the Angular 22 app from `apps/web`; the `development` configuration localizes to `vi` only and the dev server serves that single locale flat, so the app answers on `/` (no `/vi/` prefix). It imports `@evidgate/sdk` from `packages/sdk/dist` |
 
 ## Everyday commands
 
 ```sh
 scripts/dev/logs.sh              # compose + host logs in one stream
-scripts/dev/logs.sh worker       # api | worker | postgres | seaweedfs | all
+scripts/dev/logs.sh worker       # api | worker | web | postgres | seaweedfs | all
 scripts/dev/down.sh              # stop hosts + compose, keep volumes (AC4)
 scripts/dev/up.sh --reset        # stop hosts, delete the volumes, start clean
 ```
@@ -80,6 +89,7 @@ the Worker and the Migrator:
 | Setting | Used by | Meaning |
 | --- | --- | --- |
 | `EVIDGATE_DB_PORT`, `EVIDGATE_S3_PORT` | compose | host ports published on `127.0.0.1` |
+| `EVIDGATE_WEB_PORT` | `up.sh` (`ng serve`) | port of the Angular dev server on `127.0.0.1`; not in `.env.dev.template`, `up.sh` defaults it to `4200` |
 | `EVIDGATE_DB_SUPERUSER_PASSWORD` | compose, `db-init.sh` | bootstrap-only superuser password |
 | `EVIDGATE_OWNER_PASSWORD`, `EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_SCHED_PASSWORD` | `db-init.sh` | the four role passwords |
 | `EVIDGATE__DATABASE__CONNECTIONSTRING` | Api, Worker | `evidgate_app` — subject to RLS |
@@ -124,8 +134,6 @@ needs no dev-stack endpoint; to point the same assertions at the dev bucket, use
 
 ## Not started yet
 
-- **web** — `apps/web` is the 00 §5.2 placeholder; `ng serve` arrives with 09.1.1,
-  and `up.sh` says so instead of pretending to start it.
 - **Seed part 2** (01.8.1-T4) — the dev ingest token (`seed-dev --with-token`) and the
   sample policy revision need the ingest-token command of 02.4.2 wired into the seed
   and the policy tables of 07.1.1. Until then, create a token with
@@ -149,6 +157,7 @@ bare compose service name. The data is fully synthetic.
 | --- | --- |
 | `Cannot connect to the Docker daemon` | daemon not running: `colima start`, or start Docker Desktop. With colima, `export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` (or let `up.sh` detect it). |
 | `port is already allocated` | another PostgreSQL/SeaweedFS (or a previous stack) holds 5432/8333: change `EVIDGATE_DB_PORT`/`EVIDGATE_S3_PORT` in `.env.dev` **and** the matching URLs in it. |
+| `port <n> on 127.0.0.1 is already in use` | a host PostgreSQL/Homebrew service (or another stack, or another `ng serve`) holds the port, so `up.sh` refuses before compose starts; a publish onto a taken port would silently not apply and `db-init.sh` would then talk to that other server. Stop the listener, or change the port in `.env.dev` — for the database also the `Port=` values of the connection strings in that file. |
 | `EVIDGATE_S3_ACCESS_KEY/SECRET_KEY in .env.dev do not match …` | the identity in `.env.dev` and in `infra/seaweedfs/s3-config.json` (read by the 01.8.1-T1 parity suite) drifted apart; keep them equal. |
 | `api exited during startup` | the last 15 log lines are printed; the full log is `.local/dev/logs/api.log`. Usual causes: a mutated `.env.dev`, or the database missing a migration head. |
 | `ready` answers `503` with `journal_behind` | the running build expects a later migration than the database has: restart with `scripts/dev/up.sh` (it re-applies migrations through `db-init.sh`). |
