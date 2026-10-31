@@ -313,6 +313,43 @@ describe('artifacts upload', () => {
     expect(stderr.join('')).toContain("run 'evidgate --help' for usage");
   });
 
+  // The producer commands share one flag parser, and it refuses an empty value; the upload's
+  // own copy passed `''` through, so `--file ''` reached the path guard and `--run ''` the
+  // UUID check instead of failing as a usage error before any request.
+  it('refuses_an_empty_required_value_before_any_request', async () => {
+    const store = stubFetch(happyStore());
+    const { io, stdout, stderr } = capture();
+
+    await expect(
+      main(
+        [
+          'artifacts',
+          'upload',
+          '--run',
+          runId,
+          '--file',
+          '',
+          '--kind',
+          'trace',
+          '--execution-key',
+          executionKey,
+          '--dir',
+          root,
+        ],
+        devEnv(),
+        io,
+        { fetch: store.fetchImpl },
+      ),
+    ).resolves.toBe(3);
+
+    expect(store.calls).toHaveLength(0);
+    expect(stdout.join('')).toBe('');
+    expect(stderr.join('')).toContain(
+      'evidgate: error usage: --file must be a single, non-empty value',
+    );
+    expect(stderr.join('')).toContain("run 'evidgate --help' for usage");
+  });
+
   it('refuses_an_unknown_kind', async () => {
     const file = await evidence();
     const store = stubFetch(happyStore());

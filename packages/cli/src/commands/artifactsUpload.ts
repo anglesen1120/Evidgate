@@ -33,6 +33,8 @@ import {
 } from '../uploadPaths.js';
 import { resolveUploadDeadlineMs } from '../uploadRetry.js';
 
+import { flagValue, requiredFlag } from './eventsSendArgs.js';
+
 import type { CommandDefinition, CommandContext, ParsedValues } from './index.js';
 
 /**
@@ -279,35 +281,4 @@ function dirValues(values: ParsedValues): string[] {
 
 function usageError(message: string): CliError {
   return new CliError(message, { code: 'usage', hint: helpHint });
-}
-
-/**
- * The single value of one option, or `undefined` when it was absent. Every value option is
- * `multiple: true`, so a repetition arrives as an array; two or more entries (or a
- * non-string entry) are a `usage` error that names the flag and never its value.
- */
-function flagValue(values: ParsedValues, flag: string): string | undefined {
-  const value = values[flag];
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (Array.isArray(value) && value.length === 1 && typeof value[0] === 'string') {
-    return value[0];
-  }
-  if (Array.isArray(value) && value.length > 1) {
-    throw usageError(`--${flag} may be given only once`);
-  }
-  throw usageError(`--${flag} requires a value`);
-}
-
-/** A required string option; absent is a `usage` error, a repetition is refused. */
-function requiredFlag(values: ParsedValues, flag: string): string {
-  const value = flagValue(values, flag);
-  if (value === undefined) {
-    throw usageError(`missing required flag --${flag}`);
-  }
-  return value;
 }
