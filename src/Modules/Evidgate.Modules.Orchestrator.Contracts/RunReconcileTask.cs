@@ -139,8 +139,8 @@ public sealed record RunReconcilePayload(
     /// <summary>
     /// <c>late_evidence</c>: set only by the trigger the ingest handler enqueues for a late batch it accepted. A finalize
     /// close and a deadline sweep leave it absent, so the reconciler can tell "late evidence arrived" from "an ordinary
-    /// trigger was redelivered or replayed" — only the former may compare a run that already finished, and only while its
-    /// late window is open.
+    /// trigger was redelivered or replayed" — only the former may compare a run that already finished, and the marker
+    /// alone says so, because the window was decided when the batch was accepted.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool LateEvidence { get; init; }

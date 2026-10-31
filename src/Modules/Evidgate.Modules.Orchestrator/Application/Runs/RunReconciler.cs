@@ -8,16 +8,17 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// The Dapper read behind <see cref="IRunReconciler"/>: statements in a fixed order over the ambient tenant scope, so it
 /// joins the caller's transaction and RLS scopes every row, exactly like <see cref="RunEventScopeReader"/>. The run row
 /// is locked first and the state decides the outcome: only a <c>collecting</c> run — or a finished <c>incomplete</c> one
-/// this attempt carries late evidence for, inside its late window — is compared, and nothing is read beyond its state,
+/// this attempt carries late evidence for — is compared, and nothing is read beyond its state,
 /// because an enqueued finalize trigger is not evidence that the run is collectable. Read-only by construction — it never
 /// writes and never changes the run state; the work after the lock is the slot list, the one grouped event aggregate and,
 /// for the attempt that decides, the bounded read of the plan's uncovered executions.
 /// <para>
-/// The lock statement also answers the run's collection deadline (<c>deadline_passed</c>) and its late window
-/// (<c>late_window_open</c>), both on the database clock: the first decides between
-/// <see cref="ReconcileDisposition.Pending"/> and <see cref="ReconcileDisposition.Compared"/> when the plan still holds an
-/// open shard (before the deadline the attempt waits, past it the open shard is <c>missing_shard</c> and the attempt
-/// finishes), the second is the window late evidence was accepted in.
+/// The lock statement also answers the run's collection deadline (<c>deadline_passed</c>) on the database clock: it
+/// decides between <see cref="ReconcileDisposition.Pending"/> and <see cref="ReconcileDisposition.Compared"/> when the
+/// plan still holds an open shard (before the deadline the attempt waits, past it the open shard is
+/// <c>missing_shard</c> and the attempt finishes). The late window is not read here: whether late evidence was
+/// accepted is the ingest route's decision, taken once under its own lock when it admitted the batch, so a trigger
+/// carrying that decision stays reconcilable however long the queue took to reach it.
 /// </para>
 /// </summary>
 /// <param name="db">The Dapper path over the ambient scope; it demands an active scope before it touches the database.</param>
@@ -43,14 +44,14 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             return new ReconcileOutcome(ReconcileDisposition.RunNotFound, Comparison: null);
         }
 
-        // A run that finished as incomplete still takes evidence inside its late window, and that evidence only counts
-        // once a revision of its own says so. Both halves must hold: this attempt carries late evidence, and the run is
-        // still inside the window the ingest route accepted it through. Anything else — a redelivered finalize or
-        // deadline trigger, a replay after the window closed — would append a revision with no late event behind it, so
-        // it stays uncollectable.
+        // A run that finished as incomplete still takes evidence once a late trigger names it, and that evidence only
+        // counts once a revision of its own says so. The trigger's marker is the whole half the reconciler needs: the
+        // ingest route admitted the batch inside the window under its own lock, so that decision is authoritative here
+        // and the queue's delay cannot withdraw it — a late batch accepted at the edge of the window must still reach a
+        // revision. An ordinary trigger carries no evidence and appends a revision with nothing behind it, so it stays
+        // uncollectable.
         var late = lateTrigger
-            && string.Equals(locked.State, RunStates.Incomplete, StringComparison.Ordinal)
-            && locked.LateWindowOpen;
+            && string.Equals(locked.State, RunStates.Incomplete, StringComparison.Ordinal);
 
         // Statement 2 never runs for a run outside its collection state: nothing to compare, nothing to change.
         if (!late && !string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
@@ -156,7 +157,7 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
 
     /// <summary>
     /// One row as <see cref="ReconcileSql.LockRun"/> returns it (snake_case → PascalCase, Dapper's underscore map): the
-    /// state the attempt decides on, the collection deadline and the late window, both evaluated by the <b>database</b>.
+    /// state the attempt decides on and the collection deadline, evaluated by the <b>database</b>.
     /// </summary>
     private sealed class RunLockRow
     {
@@ -164,12 +165,6 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
 
         /// <summary>True when <c>collection_deadline_at &lt;= now()</c>; a NULL deadline reads false (never "passed").</summary>
         public bool DeadlinePassed { get; set; }
-
-        /// <summary>
-        /// True when <c>now() &lt;= collection_deadline_at + late_window_minutes</c>: the window the ingest route admits
-        /// late evidence through, read from the same row under the same lock. A NULL deadline reads false.
-        /// </summary>
-        public bool LateWindowOpen { get; set; }
     }
 
     /// <summary>One row as <see cref="ReconcileSql.ListSlots"/> returns it (snake_case → PascalCase, Dapper's underscore map).</summary>

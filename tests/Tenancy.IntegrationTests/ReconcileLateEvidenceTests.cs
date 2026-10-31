@@ -119,17 +119,18 @@ public sealed partial class ReconcileRunTests
     }
 
     /// <summary>
-    /// The window is the fail-closed edge: the ingest route admits a late batch only while
-    /// <c>now() &lt;= collection_deadline_at + late_window_minutes</c>, and a late trigger whose attempt is claimed after
-    /// that end must not compare at all. The rows are stored, but a revision written now would count evidence the run no
-    /// longer accepts, so the attempt completes having decided nothing.
+    /// The late window is decided once, by the ingest route, when it admits the batch — and that decision is what the
+    /// trigger it writes carries. A queue that reaches the attempt after the window was spent (a lagging consumer, a
+    /// lease expiry, a replay) must therefore still append revision N+1 for evidence the route already accepted and
+    /// acknowledged: a revision is the only place that evidence ever counts. Replay appends nothing, because the frozen
+    /// set has not moved.
     /// </summary>
     [Fact]
-    public async Task Late_Reconcile_After_The_Window_Closed_Appends_No_Revision()
+    public async Task Late_Reconcile_After_The_Window_Closed_Still_Appends_The_Next_Revision()
     {
         await using var world = await StartWithQueueAsync(attemptsSkip: 1);
 
-        var (runId, _) = await StartIncompleteRunAsync(world);
+        var (runId, revisionOne) = await StartIncompleteRunAsync(world);
         await OpenLateWindowAsync(world, runId);
 
         var late = await IngestQaRequests.PostEventsAsync(
@@ -144,14 +145,28 @@ public sealed partial class ReconcileRunTests
 
         // The consumer claims the trigger after the window was spent: the evidence is stored, the window is not open.
         await CloseLateWindowAsync(world, runId);
-        (await LateWindowOpenAsync(world, runId)).ShouldBeFalse();
+        (await LateWindowOpenAsync(world, runId)).ShouldBeFalse("the attempt is claimed past the window's end");
 
         await DispatchAndReconcileAsync(world, expectedReconciles: 1);
 
-        (await RevisionCountAsync(world)).ShouldBe(1, "a closed window appends nothing, not even for a late trigger");
-        (await RevisionSummaryAsync(world, runId)).RevisionNo.ShouldBe(1);
-        (await StateAsync(world, runId)).ShouldBe("incomplete");
-        (await DoneReconcilesAsync(world)).ShouldBe(1, "the attempt ran to a verdict: it compared nothing");
+        var latest = await RevisionSummaryAsync(world, runId);
+        latest.RevisionNo.ShouldBe(
+            2,
+            "the ingest decision is authoritative: accepted late evidence reaches a revision however late the queue is");
+        latest.Completeness.ShouldBe(ReconcileFinisher.Complete);
+        latest.Missing.ShouldBeEmpty();
+        (await RevisionRowAsync(world, runId, 1)).ShouldBe(
+            revisionOne,
+            "the earlier revision is immutable: the late attempt appends, it never rewrites");
+        (await StateAsync(world, runId)).ShouldBe("incomplete", "a finished run has no forward edge");
+
+        // The same attempt replayed once more, still after the window closed: the frozen set has not moved, so the
+        // finisher answers with the revision the evidence already has instead of appending a copy.
+        var (again, replay) = await ReconcileAndFinishOnHostAsync(world, runId, lateTrigger: true);
+
+        again.Disposition.ShouldBe(ReconcileDisposition.ComparedLate, Describe(again));
+        replay.ShouldNotBeNull().RevisionNo.ShouldBe(2, "a replay answers with the revision the evidence already has");
+        (await RevisionCountAsync(world)).ShouldBe(2, "one late batch appends one revision, however late it is claimed");
     }
 
     /// <summary>

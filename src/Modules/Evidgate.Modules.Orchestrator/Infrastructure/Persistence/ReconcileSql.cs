@@ -36,17 +36,14 @@ internal static class ReconcileSql
     /// never on completeness). A passed deadline is what 05.3.2-T3.1 needs to force the verdict.
     /// </para>
     /// <para>
-    /// <c>late_window_open</c> is the same window the ingest route admits late evidence through
-    /// (<see cref="RunEventScopeReader"/>, <c>now() &lt;= collection_deadline_at + late_window_minutes</c>), evaluated by
-    /// the same clock under the same lock: a compare of a finished run copies that decision instead of making a second
-    /// one, so evidence accepted at the edge of the window stays reconcilable and nothing accepted after it is.
+    /// The late window is deliberately not selected: the ingest route decides it once, when it admits the batch
+    /// (<see cref="RunEventScopeReader"/>), and the late trigger it writes carries that decision. Re-evaluating the
+    /// window here would let a lagging queue withdraw evidence the route already accepted and acknowledged.
     /// </para>
     /// </summary>
     internal const string LockRun = """
         select r.state as state,
-               coalesce(r.collection_deadline_at <= now(), false) as deadline_passed,
-               coalesce(now() <= r.collection_deadline_at + make_interval(mins => r.late_window_minutes), false)
-                   as late_window_open
+               coalesce(r.collection_deadline_at <= now(), false) as deadline_passed
           from public.run r
          where r.org_id = @org_id and r.id = @run_id
            for no key update of r

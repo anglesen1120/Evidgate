@@ -220,21 +220,22 @@ internal interface IRunReconciler
     /// Locks the run row <c>FOR NO KEY UPDATE</c>, lists the planned shards, reads the observed events per producer in
     /// one statement and compares; an attempt that decides reads the plan's executions with no recorded attempt in one
     /// more statement first. A run that finished as <c>incomplete</c> is compared too — late evidence is only counted
-    /// through a revision — but only for an attempt that <paramref name="lateTrigger"/> marks as carrying late evidence
-    /// and only while the run's late window is still open; that attempt answers
-    /// <see cref="ReconcileDisposition.ComparedLate"/> and never waits, because its verdict is written and no finalize
-    /// can close a shard any more. Every other trigger on a finished run answers
+    /// through a revision — but only for an attempt that <paramref name="lateTrigger"/> marks as carrying late evidence;
+    /// that attempt answers <see cref="ReconcileDisposition.ComparedLate"/> and never waits, because its verdict is
+    /// written and no finalize can close a shard any more. The window that evidence was admitted in is the ingest
+    /// route's decision, already taken when it accepted the batch, so a late trigger is honoured whatever the clock says
+    /// when the queue reaches it. Every other trigger on a finished run answers
     /// <see cref="ReconcileDisposition.NotCollectable"/>: a redelivered or replayed finalize/deadline trigger carries no
     /// new evidence, so it must not append a revision. Deterministic for the same rows and the same clock reading: the
-    /// comparison depends on the rows alone, and the disposition additionally on the deadline and the window the lock
-    /// statement evaluated, so the same rows answer <see cref="ReconcileDisposition.Pending"/> before
+    /// comparison depends on the rows alone, and the disposition additionally on the deadline the lock statement
+    /// evaluated, so the same rows answer <see cref="ReconcileDisposition.Pending"/> before
     /// <c>collection_deadline_at</c> and <see cref="ReconcileDisposition.Compared"/> after it. The caller decides nothing
     /// on <c>Pending</c>.
     /// </summary>
     /// <param name="runId">The run to reconcile.</param>
     /// <param name="lateTrigger">
     /// Whether this trigger was enqueued for late evidence the ingest route accepted (only that producer sets it). It is
-    /// a precondition, not a verdict: the run must also still be inside its late window.
+    /// a precondition, not a verdict: the run must also still be <c>incomplete</c>.
     /// </param>
     /// <param name="cancellationToken">Cancelled on shutdown or lease loss.</param>
     ValueTask<ReconcileOutcome> ReconcileAsync(Guid runId, bool lateTrigger, CancellationToken cancellationToken);
