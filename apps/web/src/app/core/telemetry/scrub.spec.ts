@@ -12,7 +12,7 @@
 // admitted only as one of the fixed constants of `telemetry-names.ts`, so content cannot reach a
 // name, and `error.message` is not an attribute. Row samples are assembled at runtime (`join`,
 // `repeat`) so no credential or e-mail literal sits in the repository.
-import type { AttributeValue, Attributes } from '@opentelemetry/api';
+import type { Attributes } from '@opentelemetry/api';
 
 import { scrubAttributes } from './scrub';
 
@@ -21,9 +21,9 @@ const EMAIL = ['julia.moreau', 'example.test'].join('@');
 const RUN_ID = ['3f2b9d54', '0d7e', '4c1a', '9a2e', '6b0f5c7d81c4'].join('-');
 const CREDENTIAL = 'abcdef1234567890';
 
-/** A cast through the index signature so a row may hold an array or an object, both of which drop. */
+/** A thin wrapper so a row may hold an array or an object, both of which drop. */
 function attributesOf(entries: Readonly<Record<string, unknown>>): Attributes {
-  return entries as Attributes;
+  return entries;
 }
 
 interface AttributeRow {
@@ -31,7 +31,7 @@ interface AttributeRow {
   readonly key: string;
   readonly value: unknown;
   /** `undefined` means the key is dropped. */
-  readonly expected: AttributeValue | undefined;
+  readonly expected: unknown;
 }
 
 const ATTRIBUTE_ROWS: AttributeRow[] = [
