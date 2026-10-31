@@ -2,9 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createRedactingIo, redact, redacted, registerSecret, resetSecrets } from './redact.js';
 
-// 04.2.1-T2.1/T2.2: the redaction contract (T78, 04.2.1 §8 S3 analogue) — a registered
-// secret value can never reach stdout/stderr, and an `Authorization` header is masked
-// even when its value was never registered.
+// The redaction contract: a registered secret value can never reach stdout/stderr, and an
+// `Authorization` header is masked even when its value was never registered.
 describe('redact', () => {
   beforeEach(() => {
     resetSecrets();
@@ -92,9 +91,44 @@ describe('redact', () => {
   });
 });
 
-// 04.2.4-T1.4: a presigned URL IS a bearer credential (04 §6, T18), so any http(s) URL that
-// carries a query string loses it — naming the signature parameters would leak the ones a
-// future provider names differently. a URL with userinfo before the host loses that userinfo too.
+// Redaction runs on the way out more than once (a JSON member, then the writer), so a second
+// pass must not append a second placeholder next to the first.
+describe('redaction is idempotent', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  it('leaves_an_already_redacted_query_alone', () => {
+    const url = 'https://store.test/b/k?X-Amz-Credential=AKIA%2F2026&X-Amz-Expires=900';
+    const once = redact(url);
+    expect(once).toBe('https://store.test/b/k?[REDACTED]');
+    expect(redact(once)).toBe(once);
+  });
+
+  it('leaves_an_already_redacted_url_with_userinfo_alone', () => {
+    const userinfo = ['user', 'secret'].join(':');
+    const once = redact(`https://${userinfo}@store.test/object?x=1`);
+    expect(once).toBe('https://store.test/object?[REDACTED]');
+    expect(redact(once)).toBe(once);
+  });
+
+  it('leaves_an_already_redacted_header_alone', () => {
+    const once = redact('Authorization: Bearer abc.def.ghi');
+    expect(once).toBe(`Authorization: ${redacted}`);
+    expect(redact(once)).toBe(once);
+  });
+
+  it('leaves_an_already_redacted_secret_alone', () => {
+    registerSecret('super-secret-token');
+    const once = redact('bearer super-secret-token here');
+    expect(once).toBe(`bearer ${redacted} here`);
+    expect(redact(once)).toBe(once);
+  });
+});
+
+// A presigned URL IS a bearer credential, so any http(s) URL that carries a query string
+// loses it — naming the signature parameters would leak the ones a future provider names
+// differently. A URL with userinfo before the host loses that userinfo too.
 describe('presigned URL redaction', () => {
   beforeEach(() => {
     resetSecrets();
@@ -121,5 +155,33 @@ describe('presigned URL redaction', () => {
 
   it('keeps_wrapping_punctuation_outside_the_redaction', () => {
     expect(redact('(http://127.0.0.1:9/p/x?sig=1).')).toBe('(http://127.0.0.1:9/p/x?[REDACTED]).');
+  });
+
+  it('strips_the_fragment_of_any_url', () => {
+    expect(redact('https://id.test/cb#access_token=abc&state=1')).toBe(
+      'https://id.test/cb#[REDACTED]',
+    );
+    // An empty or already-redacted fragment carries nothing to strip.
+    expect(redact('https://docs.test/page#')).toBe('https://docs.test/page#');
+    expect(redact('https://id.test/cb#[REDACTED]')).toBe('https://id.test/cb#[REDACTED]');
+  });
+
+  it('strips_userinfo_that_contains_a_separator', () => {
+    const userinfo = ['u', 'p@ss'].join(':');
+    expect(redact(`https://${userinfo}@store.test/object`)).toBe('https://store.test/object');
+  });
+
+  it('redacts_a_query_after_a_bracketed_host', () => {
+    expect(redact('http://[::1]:8080/p?sig=1')).toBe('http://[::1]:8080/p?[REDACTED]');
+    expect(redact(redact('http://[::1]:8080/p?sig=1'))).toBe('http://[::1]:8080/p?[REDACTED]');
+  });
+
+  it('does_not_stop_at_a_placeholder_inside_a_larger_query', () => {
+    // A registered secret replaced inside the query must not end the match at its `]`,
+    // which would leave the rest of the query readable.
+    registerSecret('super-secret-token');
+    const once = redact('https://store.test/b/k?token=super-secret-token&sig=leaked');
+    expect(once).toBe('https://store.test/b/k?[REDACTED]');
+    expect(redact(once)).toBe(once);
   });
 });

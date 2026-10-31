@@ -110,7 +110,7 @@ verifies the size and checksum the server reports at `complete`.
 branches on:
 
 ```sh
-evidgate gate --run <run_id>                 # one request
+evidgate gate --run <run_id>                 # one poll
 evidgate gate --run <run_id> --wait 5m       # poll until the run decides
 evidgate gate --run <run_id> --json          # one JSON object line on stdout
 ```
@@ -124,21 +124,32 @@ Only a literal `PASS` exits 0:
   runs out.
 
 Everything else exits 3 with `evidgate: error <code>`: a transport failure, a
-`401`, `403` or `404`, a `5xx`/`429` that still fails after the bounded retries, a
-body that is not JSON, a body that is not an object, a body without a `decision`
-member, and any `decision` value outside the four above (`"pass"`, `""`, a
-number).
+`401` that a freshly minted token does not fix (one refresh is attempted), a
+`403` or `404`, a `5xx`/`429` that still fails after the bounded retries, a
+refused redirect, a decision body larger than 256 KiB, a body that is not JSON, a
+body that is not an object, a body without a `decision` member, and any
+`decision` value outside the four above (`"pass"`, `""`, a number).
 
 `--wait` takes the same grammar as `EVIDGATE_SEND_DEADLINE`: bare seconds or an
 `s`/`m`/`h` suffix, greater than zero and at most 24 hours; anything else exits 3
 before any request. It polls with an exponential backoff and full jitter (1 s
 floor, 10 s cap) and honours `Retry-After` on `429`/`503` up to the same 60 s
 ceiling the rest of the client uses, so a server-named wait can be longer than
-the backoff cap. Neither ever sleeps past the deadline. Without `--wait` the
-command sends exactly one request.
+the backoff cap. Neither ever sleeps past the deadline, and the last poll starts
+on it, so a decision that lands in the final moment still counts. Without
+`--wait` the command makes one poll; the poll's own request may be replayed (up
+to 3 attempts) for a retryable answer.
+
+A server that answers only after the deadline cannot decide the run: no request is
+granted more time than the wait has left, its abort is a transport failure, and the
+command exits 3 — never 0. A token refresh keeps the same deadline, so a slow
+refresh cannot buy the replay a fresh window. The last poll is the exception: it
+starts on the deadline with the 1 ms minimum budget, so a decision that is already
+waiting there still counts.
 
 Human mode prints `gate: <DECISION> (run <run_id>)` and one `  - <reason>` line per
-reason; a pending or timed-out run explains itself on stderr. Server text is
+reason; a pending or timed-out run explains itself on stderr as
+`evidgate: gate: run <run_id> …`. Server text is
 redacted, control characters are escaped, each reason line is capped at 200
 characters, and at most 50 reasons are printed (the rest collapse into one
 `… (k more)` line), so one response cannot flood a CI log. `--json` prints

@@ -17,15 +17,25 @@ const registeredSecrets = new Set<string>();
 /** Registered secrets, longest first, so a shorter prefix cannot mask a longer value. */
 let secretsByLength: readonly string[] = [];
 
-const authorizationHeader = /(authorization\s*:\s*)[^\r\n]*/gi;
+/**
+ * The `Authorization:` header shape, name included. `redact` keeps the name (`$1`) because a
+ * reader benefits from knowing what was masked; a caller writing a single-line format (JSON)
+ * replaces the whole match instead, so the value cannot run to the end of that line.
+ */
+export const authorizationHeaderShape = /(authorization\s*:\s*)[^\r\n]*/gi;
 
 /**
- * An absolute http(s) URL. The character class stops at whitespace, quotes, angle
- * brackets and the usual closing punctuation, so wrapping text is preserved.
+ * An absolute http(s) URL. A unit is either a bracketed group — a host like `[::1]`, or an
+ * already-redacted query value — or a run of characters that stops at whitespace, quotes,
+ * angle brackets, brackets and the usual closing punctuation. That keeps wrapping text
+ * outside the match and never cuts a placeholder in half, so a redacted URL stays stable.
  */
-const absoluteUrl = /\bhttps?:\/\/[^\s"'<>`)\]}]+/gi;
-/** `scheme://userinfo@host` — userinfo is a credential pair, never printed. */
-const urlUserInfo = /^(https?:\/\/)[^/?#@]+@/i;
+const absoluteUrl = /\bhttps?:\/\/(?:\[[^\s"'<>\]]*\]|[^\s"'<>`)\]}\[])+/gi;
+/**
+ * `scheme://userinfo@host` — userinfo is a credential pair, never printed. The run is greedy
+ * up to the last `@` before the path, because the password itself may contain one.
+ */
+const urlUserInfo = /^(https?:\/\/)[^/?#]*@/i;
 
 /**
  * Registers a secret value and the forms it can take in an error message: the value
@@ -65,21 +75,33 @@ export function resetSecrets(): void {
 
 /**
  * Replaces every registered secret and any `Authorization` header value, then strips URL
- * credentials: userinfo is removed, and an http(s) URL with a query loses the whole query
- * because a presigned URL IS a bearer credential whose signature travels in it. Naming the
- * parameters to strip would leak the ones a provider names differently, so the rule is
- * positional.
+ * credentials: userinfo is removed, and an http(s) URL loses its whole query and its whole
+ * fragment, because a presigned URL IS a bearer credential whose signature travels in it (an
+ * OAuth fragment flow carries the token in the same way). Naming the parameters to strip
+ * would leak the ones a provider names differently, so the rule is positional. Rewriting an
+ * already-redacted URL is a no-op: the pattern matches the placeholder whole, so the value
+ * compares equal and stays as it is.
  */
 export function redact(text: string): string {
   let output = text;
   for (const secret of secretsByLength) {
     output = output.split(secret).join(redacted);
   }
-  output = output.replace(authorizationHeader, `$1${redacted}`);
+  output = output.replace(authorizationHeaderShape, `$1${redacted}`);
   return output.replace(absoluteUrl, (raw) => {
     const withoutUserInfo = raw.replace(urlUserInfo, '$1');
     const query = withoutUserInfo.indexOf('?');
-    return query === -1 ? withoutUserInfo : `${withoutUserInfo.slice(0, query)}?${redacted}`;
+    if (query !== -1) {
+      return withoutUserInfo.slice(query + 1) === redacted
+        ? withoutUserInfo
+        : `${withoutUserInfo.slice(0, query)}?${redacted}`;
+    }
+    const fragment = withoutUserInfo.indexOf('#');
+    const tail = withoutUserInfo.slice(fragment + 1);
+    if (fragment === -1 || tail.length === 0 || tail === redacted) {
+      return withoutUserInfo;
+    }
+    return `${withoutUserInfo.slice(0, fragment)}#${redacted}`;
   });
 }
 

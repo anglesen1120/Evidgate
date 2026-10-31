@@ -34,10 +34,11 @@ export interface PollOptions {
   readonly waitMs: number;
   readonly deps: PollDeps;
   /**
-   * One request. `budgetMs` bounds the retries that request may spend, so a single request
-   * never outlives the deadline; `undefined` leaves the request its own default budget.
+   * One request. `deadlineAt` is the absolute end of the wait, not a relative budget, so a
+   * caller that must re-authenticate can bound the replay by the same instant instead of
+   * granting it a fresh window; `undefined` (no `--wait`) leaves the request its own default.
    */
-  readonly next: (budgetMs: number | undefined) => Promise<PollStep>;
+  readonly next: (deadlineAt: number | undefined) => Promise<PollStep>;
 }
 
 /**
@@ -51,9 +52,10 @@ export async function pollDecision(options: PollOptions): Promise<GateOutcome> {
   const sleep = options.deps.sleep ?? ((milliseconds: number) => delay(milliseconds));
   const random = options.deps.random ?? Math.random;
   const deadlineAt = now() + options.waitMs;
+  const pollDeadline = options.waitMs <= 0 ? undefined : deadlineAt;
   let sleptMs = 0;
   let attempt = 1;
-  let step = await options.next(budget(options, deadlineAt, now(), sleptMs));
+  let step = await options.next(pollDeadline);
   for (;;) {
     if (step.kind === 'body' && step.outcome.decision !== null) {
       return step.outcome;
@@ -68,35 +70,18 @@ export async function pollDecision(options: PollOptions): Promise<GateOutcome> {
     const pause = Math.min(pauseMs(attempt, step, random()), left);
     await sleep(pause);
     sleptMs += pause;
-    // The last pause was clamped to what was left, so another request would start past the
-    // deadline: report the state we have instead of overshooting it.
+    attempt += 1;
+    // The request is made even when the pause was clamped to what was left: a decision that
+    // landed in the last second still counts, and the request gets the minimum budget for it.
+    step = await options.next(pollDeadline);
     if (pause >= left) {
       break;
     }
-    attempt += 1;
-    step = await options.next(budget(options, deadlineAt, now(), sleptMs));
   }
   if (step.kind === 'transient') {
     throw step.error;
   }
   return step.outcome;
-}
-
-/**
- * The retries one request may spend. Without `--wait` the request keeps its own budget (the
- * call's bounded retry); with it, the request gets only what is left, so nothing can outlive
- * the deadline.
- */
-function budget(
-  options: PollOptions,
-  deadlineAt: number,
-  now: number,
-  sleptMs: number,
-): number | undefined {
-  if (options.waitMs <= 0) {
-    return undefined;
-  }
-  return Math.max(Math.min(deadlineAt - now, options.waitMs - sleptMs), 1);
 }
 
 /** The jittered backoff, floored so the loop always sleeps, capped so it stays responsive. */

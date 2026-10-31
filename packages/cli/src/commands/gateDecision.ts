@@ -1,9 +1,10 @@
 // The gate verdict: what one `Decision` body means for the process exit code, and the two
 // output forms. Only a literal `PASS` may exit 0, and a body this module cannot read is a
 // request error, so no unreadable, unknown or missing decision can ever pass a build.
-import { CliError, escapeControlCharacters } from '../errors.js';
+import { CliError } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
-import { redact, redacted } from '../redact.js';
+import { authorizationHeaderShape, redact, redacted } from '../redact.js';
+import { sanitizeServerText } from '../serverError.js';
 
 /** The verdicts openapi `Decision` can carry; `null` in that member means still pending. */
 export type GateDecisionValue = 'PASS' | 'FAIL' | 'INCONCLUSIVE';
@@ -25,8 +26,6 @@ export interface GateOutcome {
 const maxReasonLength = 200;
 /** At most this many reason lines are printed; the rest collapse into one `(k more)` line. */
 const maxReasonLines = 50;
-/** The `Authorization:` shape the redacting writer consumes to the end of the line. */
-const headerShaped = /authorization\s*:[^\r\n]*/gi;
 
 const decisionValues: readonly GateDecisionValue[] = ['PASS', 'FAIL', 'INCONCLUSIVE'];
 
@@ -152,33 +151,18 @@ export function verdictLine(decision: GateDecisionValue, runId: string): string 
  */
 export function reasonLines(reasons: readonly string[]): string {
   const shown = reasons.slice(0, maxReasonLines);
-  const lines = shown.map((reason) => `  - ${oneLine(reason)}\n`).join('');
+  const lines = shown
+    .map((reason) => `  - ${sanitizeServerText(reason, maxReasonLength)}\n`)
+    .join('');
   const hidden = reasons.length - shown.length;
   return hidden > 0 ? `${lines}  … (${hidden} more)\n` : lines;
 }
 
-function oneLine(reason: string): string {
-  // Redaction runs first: the redactor matches a whole registered secret, so capping first
-  // would leave the prefix of a straddling token in the line. The iterator is lazy and counts
-  // code points, so the cap costs nothing and never splits a surrogate pair.
-  const safe = redact(reason);
-  let capped = '';
-  let count = 0;
-  for (const character of safe) {
-    if (count === maxReasonLength) {
-      break;
-    }
-    capped += character;
-    count += 1;
-  }
-  return escapeControlCharacters(capped);
-}
-
 /**
- * A member is redacted on its own, then stripped of any `Authorization:` shape: the writer's
- * header rule consumes to the end of the line, so a member that reads like a header would
- * otherwise swallow the closing quotes and braces and leave unparsable JSON.
+ * A member is redacted on its own, then loses any whole `Authorization:` shape: the writer's
+ * header rule runs again over the finished line and consumes to its end, so a member that
+ * still reads like a header would swallow the closing quotes and braces of the object.
  */
 function redactMember(value: string | null): string | null {
-  return value === null ? null : redact(value).replace(headerShaped, redacted);
+  return value === null ? null : redact(value).replace(authorizationHeaderShape, () => redacted);
 }
