@@ -10,15 +10,22 @@
 # EVIDGATE_S3_PORT or EVIDGATE_WEB_PORT, because a publish onto a taken port
 # silently does not apply and the migrations would run against that other server.
 #
-# usage: scripts/dev/up.sh [--reset]
+# usage: scripts/dev/up.sh [--reset] [--with-token]
 #
-#   --reset   stop the host processes and delete the named volumes pg-data and
-#             s3-data before starting again (AC4). Without it, data survives
-#             `down.sh` / `up.sh`.
+#   --reset       stop the host processes and delete the named volumes pg-data and
+#                 s3-data before starting again (AC4). Without it, data survives
+#                 `down.sh` / `up.sh`.
+#   --with-token  also run `Evidgate.Migrator seed-dev --with-token`: one dev
+#                 ingest token (project-bound, scopes artifact:write, event:write,
+#                 run:create) and one sample policy revision, minted through the
+#                 real commands on the app role. The token secret goes to this
+#                 terminal only, once: never to a log file, `.env.dev` or a
+#                 subprocess environment. Needs EVIDGATE__CI__PEPPER in .env.dev.
 #
 # Secrets: the first run copies .env.dev.template to .env.dev, fills every __...__
 # placeholder with a fresh random value and chmods it 600. No password is ever
-# printed by this script; .env.dev is git-ignored (00 §5.7 S3).
+# printed by this script; .env.dev is git-ignored (00 §5.7 S3). The only secret
+# this script prints is the dev ingest token, and only under --with-token.
 #
 # web: `ng serve` runs as the host process `web` (own pid/log like api/worker). It
 # needs the npm workspaces installed and packages/sdk built, because the app
@@ -37,7 +44,7 @@ usage() {
   cat <<'USAGE'
 Evidgate local dev stack (01.8.1).
 
-usage: scripts/dev/up.sh [--reset]
+usage: scripts/dev/up.sh [--reset] [--with-token]
 
 Brings up PostgreSQL 18 + SeaweedFS (compose, digest-pinned images), applies the
 migrations as evidgate_owner, configures the dev bucket, then starts the Api and
@@ -48,13 +55,18 @@ It refuses before compose starts when another process already holds one of the
 published ports (EVIDGATE_DB_PORT, EVIDGATE_S3_PORT) or EVIDGATE_WEB_PORT, and when
 one of the three is not digits only; see docs/dev-setup.md, Troubleshooting.
 
-  --reset   stop the host processes and delete the pg-data/s3-data volumes first
-  -h, --help  this text
+  --reset       stop the host processes and delete the pg-data/s3-data volumes first
+  --with-token  also mint the dev ingest token and the sample policy revision
+                (seed-dev --with-token). The token is printed here once; it is
+                never written to a log or .env.dev. Needs EVIDGATE__CI__PEPPER
+                in .env.dev (base64, >= 32 bytes; docs/dev-setup.md).
+  -h, --help    this text
 
 Environment read from .env.dev (created from .env.dev.template on first run):
   EVIDGATE_DB_PORT, EVIDGATE_S3_PORT, EVIDGATE_WEB_PORT, ASPNETCORE_URLS,
   EVIDGATE__WORKER__HEALTHPORT, EVIDGATE__WORKER__HEALTHADDRESS,
   EVIDGATE__DATABASE__CONNECTIONSTRING, ...
+  EVIDGATE__CI__PEPPER                      required with --with-token
   EVIDGATE_UP_READY_TIMEOUT_SECONDS overrides the 300 s readiness budget.
 USAGE
 }
@@ -198,9 +210,12 @@ port_conflict() {
     container="$(evg_compose ps -a -q "$service" 2>/dev/null || true)"
   fi
   if [ -n "$container" ]; then
+    # Only a container that is not running reaches this branch; one that runs but
+    # fails its healthcheck still counts as running, so the message must not
+    # claim an unhealthy container.
     if [ -z "$(evg_compose ps --status running -q "$service" 2>/dev/null || true)" ] \
       && port_is_open "$port"; then
-      evg_warn "port $port is held while the '$service' container exists but is not running (down or unhealthy) — if another process owns the port, compose reports it"
+      evg_warn "the '$service' container exists but is not running while something answers on port $port — if another process owns that port, starting the container fails; stop the listener or change the port"
     fi
     return 1
   fi
@@ -326,19 +341,32 @@ wait_for_ready() {
 }
 
 reset=false
-case "${1:-}" in
-  --reset) reset=true ;;
-  -h | --help)
-    usage
-    exit 0
-    ;;
-  "") ;;
-  *) die "unexpected argument '$1' (try --help)" ;;
-esac
-[ $# -le 1 ] || die "unexpected argument '$2' (try --help)"
+with_token=false
+for arg in "$@"; do
+  case "$arg" in
+    --reset) reset=true ;;
+    --with-token) with_token=true ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *) die "unexpected argument '$arg' (try --help)" ;;
+  esac
+done
 
 ensure_env_file
 evg_load_env || die "$EVG_ENV_FILE is missing"
+
+# The token seed resolves the CI pepper through ISecretProvider, like the Api and
+# the Worker, and refuses before writing anything when it is absent. Checking here
+# keeps a missing pepper from bringing the whole compose stack up first (unless the
+# seed is disabled altogether); the seed still owns the validation of the value.
+if [ "$with_token" = true ] && [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ] \
+  && [ -z "${EVIDGATE__CI__PEPPER:-}" ]; then
+  die "EVIDGATE__CI__PEPPER is not set — add it to .env.dev first (base64, >= 32 bytes:
+     openssl rand -base64 32); docs/dev-setup.md, The dev ingest token"
+fi
+
 ensure_dotnet_on_path
 ensure_docker_host
 assert_s3_identity_matches_file
@@ -373,12 +401,20 @@ evg_compose up -d --wait
 
 # 01.4.1-T2.3: the superuser bootstrap, migrations as evidgate_owner and the
 # LOGIN+password grant for the app roles. Reused, never duplicated here.
-EVIDGATE_DB_HOST=127.0.0.1 \
-  EVIDGATE_DB_PORT="$EVIDGATE_DB_PORT" \
-  EVIDGATE_DB_NAME=evidgate \
-  EVIDGATE_DB_SUPERUSER=postgres \
-  EVIDGATE_DB_CONTAINER="$EVG_PG_CONTAINER" \
-  "$SCRIPT_DIR/db-init.sh"
+db_init() {
+  EVIDGATE_DB_HOST=127.0.0.1 \
+    EVIDGATE_DB_PORT="$EVIDGATE_DB_PORT" \
+    EVIDGATE_DB_NAME=evidgate \
+    EVIDGATE_DB_SUPERUSER=postgres \
+    EVIDGATE_DB_CONTAINER="$EVG_PG_CONTAINER" \
+    "$SCRIPT_DIR/db-init.sh" "$@"
+}
+
+if [ "$with_token" = true ]; then
+  db_init --with-token
+else
+  db_init
+fi
 
 configure_dev_bucket
 
@@ -412,3 +448,11 @@ cat <<EOF
   logs   scripts/dev/logs.sh        stop   scripts/dev/down.sh
   reset  scripts/dev/up.sh --reset  (deletes the pg-data/s3-data volumes)
 EOF
+
+if [ "$with_token" = true ]; then
+  cat <<'EOF'
+
+  dev ingest token    printed once above as EVIDGATE_DEV_TOKEN=... — it is not
+                      stored anywhere; export it in your shell (docs/dev-setup.md)
+EOF
+fi

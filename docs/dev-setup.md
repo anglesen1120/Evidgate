@@ -21,6 +21,10 @@ the emulator decision is [ADR-0004](adr/0004-s3-emulator-local-dev.md).
 scripts/dev/up.sh
 ```
 
+`scripts/dev/up.sh --with-token` does the same and additionally mints the dev
+ingest token and the sample policy revision ([The dev ingest token](#the-dev-ingest-token-seed-dev---with-token));
+everything else, including the data in the volumes, is identical.
+
 From a clean checkout it does, in order:
 
 1. creates `.env.dev` from [`.env.dev.template`](../.env.dev.template) on first run
@@ -35,7 +39,8 @@ From a clean checkout it does, in order:
    password (01.4.1-T2.3; the role split mirrors production, so an RLS mistake
    fails locally first), then `Evidgate.Migrator seed-dev` writes the synthetic dev
    tenant ([The dev tenant](#the-dev-tenant-seed-dev); `EVIDGATE_DB_INIT_SEED=0`
-   skips it);
+   skips it). Under `--with-token` that seed runs after the grants instead, because
+   the token and the policy revision are written through the application role;
 4. creates the dev bucket and puts the `pending/` 24 h lifecycle rule on it (T18);
 5. installs the npm workspaces (`npm ci`) when `node_modules` is missing or older
    than `package-lock.json`, rebuilds `packages/sdk` with `tsc -b` (incremental, so
@@ -53,8 +58,9 @@ From a clean checkout it does, in order:
 
 The host tooling (`npm ci`, `tsc -b`, `ng serve`, `dotnet build`) runs without the
 `.env.dev` credentials in its environment: `lib.sh`'s `evg_run_scrubbed` drops every
-exported variable whose name matches `PASSWORD|SECRET|CONNECTIONSTRING|ACCESSKEY|S3_CONFIG`.
-Only the compose stack, `db-init.sh` and the Api and Worker processes get them.
+exported variable whose name matches
+`PASSWORD|SECRET|CONNECTIONSTRING|ACCESS_?KEY|S3_CONFIG|PEPPER|DEV_TOKEN`. Only the
+compose stack, `db-init.sh` and the Api and Worker processes get them.
 
 Compose publishes both stateful ports on `127.0.0.1` only, and the dev stack's
 Worker probe binds loopback as well: `.env.dev.template` sets
@@ -87,11 +93,12 @@ scripts/dev/logs.sh              # compose + host logs in one stream
 scripts/dev/logs.sh worker       # api | worker | web | postgres | seaweedfs | all
 scripts/dev/down.sh              # stop hosts + compose, keep volumes (AC4)
 scripts/dev/up.sh --reset        # stop hosts, delete the volumes, start clean
+scripts/dev/up.sh --with-token   # start, then mint the dev ingest token (printed once)
 ```
 
 Data lives in the named volumes `pg-data` and `s3-data`: `down.sh` then `up.sh`
-keeps everything (the database comes back at the same migration head, so
-`db-init.sh` finds nothing to migrate and the seed writes nothing); `up.sh --reset`
+keeps everything (the database comes back at the same migration head, so the
+migrations print `nothing to apply` and the seed writes nothing); `up.sh --reset`
 deletes both volumes.
 
 ## Configuration (`.env.dev`)
@@ -106,9 +113,10 @@ the Worker and the Migrator:
 | `EVIDGATE_WEB_PORT` | `up.sh` (`ng serve`) | port of the Angular dev server on `127.0.0.1`; not in `.env.dev.template`, `up.sh` defaults it to `4200` |
 | `EVIDGATE_DB_SUPERUSER_PASSWORD` | compose, `db-init.sh` | bootstrap-only superuser password |
 | `EVIDGATE_OWNER_PASSWORD`, `EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_SCHED_PASSWORD` | `db-init.sh` | the four role passwords |
-| `EVIDGATE__DATABASE__CONNECTIONSTRING` | Api, Worker | `evidgate_app` — subject to RLS |
+| `EVIDGATE__DATABASE__CONNECTIONSTRING` | Api, Worker; `db-init.sh --with-token` builds the same value from the role password and port for the seed | `evidgate_app` — subject to RLS |
 | `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` | Worker | `evidgate_worker_sched` — the scheduled owner `SECURITY DEFINER` sweeps (01.5.1-T6.2, TL T80) |
 | `EVIDGATE_MIGRATOR__CONNECTIONSTRING` | `Evidgate.Migrator` | `evidgate_owner` — the only writer of `public.schema_migration` |
+| `EVIDGATE__CI__PEPPER` | `db-init.sh --with-token` (the seed) | base64 HMAC pepper for ingest tokens and binding challenges (`EVIDGATE:CI:PEPPER`), at least 32 bytes after decoding; the seed refuses and writes nothing when it is missing or invalid. Not in `.env.dev.template`: add `EVIDGATE__CI__PEPPER=<openssl rand -base64 32>` to `.env.dev` before the first `--with-token` run |
 | `ASPNETCORE_URLS`, `EVIDGATE__WORKER__HEALTHPORT`, `EVIDGATE__WORKER__HEALTHADDRESS` | Api, Worker | HTTP endpoint, worker probe port, and the address that probe binds (`127.0.0.1` in the template; the option default is `0.0.0.0`) |
 | `DOTNET_ENVIRONMENT`, `ASPNETCORE_ENVIRONMENT` | Api, Worker | `Development` for the dev stack |
 | `EVIDGATE_S3_ENDPOINT`, `EVIDGATE_S3_REGION`, `EVIDGATE_S3_BUCKET`, `EVIDGATE_S3_ACCESS_KEY`, `EVIDGATE_S3_SECRET_KEY` | `up.sh` | local emulator coordinates and identity |
@@ -150,13 +158,79 @@ needs no dev-stack endpoint; to point the same assertions at the dev bucket, use
 `EVIDGATE_S3PARITY__ENDPOINT`, `__REGION`, `__ACCESSKEY`, `__SECRETKEY`,
 `__BUCKET` (the same three assertions 10.6.1-T2 will run against the provider).
 
-## Not started yet
+## The dev ingest token (`seed-dev --with-token`)
 
-- **Seed part 2** (01.8.1-T4) — the dev ingest token (`seed-dev --with-token`) and the
-  sample policy revision need the ingest-token command of 02.4.2 wired into the seed
-  and the policy tables of 07.1.1. Until then, create a token with
-  `POST /v1/projects/{p}/ingest-tokens` once a session exists (02.3.x), or use the
-  seeded CI binding with a GitHub OIDC token.
+`scripts/dev/up.sh --with-token` (or `scripts/dev/db-init.sh --with-token` on its own)
+mints one dev ingest token and one sample policy revision for the dev project, both
+through the real commands on the application role:
+
+- token `dev-seed`, bound to `dev-project`, scopes `artifact:write`, `event:write` and
+  `run:create`, no expiry (local only, gone with the volume);
+- one sample `policy-revision.v1` revision for `dev-project`, so the project has
+  policy content to activate. `CreatePolicyRevisionCommand` appends a **draft**
+  revision (activation is a separate command), and a run create falls back to the
+  `EVIDGATE:Runs` defaults while no revision is active, so this does not by itself
+  change how a run behaves.
+
+The seed stays idempotent: rerunning it returns the existing policy revision
+(`sha256:<hash>`) and mints no second token. Two concurrent first runs cannot both
+mint either: the seed holds a session-level PostgreSQL advisory lock across the
+check and the mint, so the second waits, then finds the live `dev-seed` token and
+mints nothing.
+
+**The secret is printed once.** The seed writes the single line
+`EVIDGATE_DEV_TOKEN=egt_...` to the terminal that ran the script. Neither script
+captures that line, tees it, stores it in `.env.dev`, exports it, or hands it to the
+Api, the Worker or the web tooling. Treat the terminal scrollback as the secret: do
+not paste it into a file, a chat or a commit, and do not run these scripts under
+`bash -x` while minting.
+
+Export it in the shell that runs the CLI (never in `.env.dev`, which every host
+process inherits):
+
+```sh
+export EVIDGATE_ENV=dev
+export EVIDGATE_API_URL=http://127.0.0.1:8080
+export EVIDGATE_PROJECT=dev-project
+export EVIDGATE_DEV_TOKEN='egt_...'   # the line the seed printed
+```
+
+**Rerunning with a live token** exits 0, mints nothing and prints no secret:
+
+```text
+seed-dev: a live token named dev-seed already exists for this project and its secret cannot be shown again; to mint a new one, reset the dev database: scripts/dev/up.sh --reset
+```
+
+Today that recovery really is a reset, because revoking needs a session
+(`DELETE /v1/ingest-tokens/{t}`) and the dev user has no login yet:
+
+```sh
+scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token
+```
+
+`--reset` deletes the `pg-data`/`s3-data` volumes, so the dev data is recreated from
+scratch (AC4).
+
+**Smoke it with the CLI.** Build the workspace package once, then use the two
+project-scoped commands the token covers:
+
+```sh
+npm run build -w @evidgate/cli
+node packages/cli/dist/bin.js manifests upload --file m.json
+node packages/cli/dist/bin.js runs create --manifest-id <manifest_id> --manifest-hash <manifest_hash>
+```
+
+Add `--json` for `{manifest_id, manifest_hash}` and `{run_id, manifest_hash, state}`.
+`runs create` answers 201 with a `run_id` when the token, the project and the manifest
+line up. Two prerequisites are still outside this story, so a fresh dev stack does
+not reach that 201 yet: the Api and Worker exit 134 in `Development` until the DI
+scope fix lands (receiver S167), and the manifest must name a suite revision that
+exists in `dev-project` — the dev seed creates none, so `manifests upload` answers 422
+`unknown_suite_revision` until catalog data exists.
+
+Without `--with-token`, nothing here runs: the seed writes the tenant only, and a
+token has to come from `POST /v1/projects/{p}/ingest-tokens` once a session exists
+(02.3.x) or from the seeded CI binding with a GitHub OIDC token.
 
 ## The dev tenant (`seed-dev`)
 
@@ -169,13 +243,18 @@ the synthetic repository id `9000000000001` (`evidgate-dev/sample`). It refuses,
 nothing, unless `DOTNET_ENVIRONMENT=Development` and the database host is local or a
 bare compose service name. The data is fully synthetic.
 
+Under `--with-token` the same seed runs after the application-role grants instead of
+before them, because it also mints the ingest token and the policy revision through
+the application role; `EVIDGATE_DB_INIT_SEED=0` skips it either way.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
 | --- | --- |
 | `cannot reach a docker daemon (try: colima start)` | no daemon answers: start one (`colima start`, or Docker Desktop). With colima, `export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` (or let `up.sh` detect it). |
-| `port <n> on 127.0.0.1 is already in use` (`up.sh`), `port is already allocated` (compose) | a host PostgreSQL/Homebrew service, another stack or another `ng serve` holds the port. `up.sh` refuses before compose starts when no container of this stack owns that service, because a publish onto a taken port would silently not apply and `db-init.sh` would then talk to that other server; compose reports the same clash when the container of this stack is down or unhealthy and another process took the port meanwhile. Stop the listener, or change the port in `.env.dev` — for the database also the `Port=` values of the connection strings, for S3 also `EVIDGATE_S3_ENDPOINT` and `EVIDGATE__OBJECT__ENDPOINT` (both carry the S3 port). |
-| `EVIDGATE_DB_PORT must be a number of digits only` | a port value in `.env.dev` carries something other than digits (`5432 `, `localhost:5432`, empty): fix the variable the message names; `up.sh` checks `EVIDGATE_DB_PORT`, `EVIDGATE_S3_PORT` and `EVIDGATE_WEB_PORT` before anything starts. |
+| `port <n> on 127.0.0.1 is already in use` (`up.sh`), `port is already allocated` (compose) | a host PostgreSQL/Homebrew service, another stack or another `ng serve` holds the port. `up.sh` refuses before compose starts when no container of this stack owns that service, because a publish onto a taken port would silently not apply and `db-init.sh` would then talk to that other server; it also warns when this stack's container exists but is not running and something answers on that port, because starting that container would then fail. Stop the listener, or change the port in `.env.dev` — for the database also the `Port=` values of the connection strings, for S3 also `EVIDGATE_S3_ENDPOINT` and `EVIDGATE__OBJECT__ENDPOINT` (both carry the S3 port). |
+| `EVIDGATE_DB_PORT must be a number of digits only` | a port value in `.env.dev` carries something other than digits (`5432 `, `localhost:5432`, `58333abc`): fix the variable the message names; `up.sh` checks `EVIDGATE_DB_PORT`, `EVIDGATE_S3_PORT` and `EVIDGATE_WEB_PORT` before anything starts. An empty value is not an error: each of the three falls back to its default (`5432`, `8333`, `4200`). |
+| `EVIDGATE__CI__PEPPER is not set` (`up.sh --with-token`), or the seed refuses with a pepper message | the token seed resolves the CI pepper like the Api does. Add `EVIDGATE__CI__PEPPER=$(openssl rand -base64 32)` to `.env.dev` (base64, at least 32 bytes after decoding) and rerun; `up.sh` refuses before compose starts, and the seed refuses before writing anything. |
 | `EVIDGATE_S3_ACCESS_KEY/SECRET_KEY in .env.dev do not match …` | the identity in `.env.dev` and in `infra/seaweedfs/s3-config.json` (read by the 01.8.1-T1 parity suite) drifted apart; keep them equal. |
 | `api exited during startup` | the last 15 log lines are printed; the full log is `.local/dev/logs/api.log`. Usual causes: a mutated `.env.dev`, or the database missing a migration head. |
 | `ready` answers `503` with `journal_behind` | the running build expects a later migration than the database has: restart with `scripts/dev/up.sh` (it re-applies migrations through `db-init.sh`). |
