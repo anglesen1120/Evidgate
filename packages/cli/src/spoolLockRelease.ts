@@ -45,8 +45,8 @@ export async function releaseSpoolLock(held: HeldSpoolLock, hooks?: SpoolLockHoo
 /**
  * Deletes every name that still carries our lock inode. A takeover renames the lock aside
  * before it decides, so a restore after our unlink fails once the quarantine name is gone;
- * a restore that already happened is removed from the path only because a quarantine link
- * still pinned our inode, which is the only proof the number was not handed to a successor.
+ * a restore that already happened is removed from the path only when a quarantine link
+ * carried our inode, the best available evidence the number was not handed to a successor.
  */
 async function scavengeQuarantinedLock(held: HeldSpoolLock): Promise<void> {
   const directory = dirname(held.path);

@@ -1,7 +1,7 @@
 // The acquire half of the lock protocol: claiming `spool.lock` by hard-linking a fully
-// written temp file, breaking a stale lock only inside the takeover mutex, and releasing
-// every name that still carries our inode. Every step keeps its order (write, fsync, close,
-// link, rename) because a crash between any two of them must leave a readable lock.
+// written temp file and breaking a stale lock only inside the takeover mutex; releasing
+// lives in spoolLockRelease.ts. Every step keeps its order (write, fsync, close, link,
+// rename) because a crash between any two of them must leave a readable lock.
 import { randomUUID } from 'node:crypto';
 import { link, lstat, open, rename } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
@@ -278,9 +278,9 @@ async function takeOverObservedLock(request: TakeoverRequest): Promise<TakeoverO
 
 /**
  * Serialises takers so only the mutex holder re-reads and breaks the lock. Breaking a dead
- * mutex leaves one window — a crashed taker, two simultaneous breakers, a third publisher —
- * but the post-rename verification below still refuses a second taker, so the lock file
- * itself never ends up with two holders.
+ * mutex leaves one window — a crashed taker, two simultaneous breakers, a third publisher,
+ * and a contender linking into the restore gap. The post-rename verification narrows it;
+ * it does not close it.
  */
 async function acquireTakeoverMutex(request: TakeoverRequest): Promise<HeldTakeoverMutex | null> {
   const path = join(request.directory, takeoverLockFileName);
@@ -369,7 +369,7 @@ async function breakObservedLock(request: TakeoverRequest): Promise<TakeoverOutc
 /**
  * Keeps the post-rename check as defence in depth: a writer that ignores the mutex can still
  * put a different lock at the path between our read and our `rename`. Such a lock is put
- * back with link-if-absent (a newer lock wins the path), never deleted.
+ * back with link-if-absent; a newer lock that won the path in the gap displaces it.
  */
 async function verifyQuarantinedLock(
   request: TakeoverRequest,
