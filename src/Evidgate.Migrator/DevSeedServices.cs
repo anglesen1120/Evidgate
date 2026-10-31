@@ -8,10 +8,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-// The generated implementation type would go to the default "Mediator" namespace; a namespace of its own keeps this
-// assembly's copy distinct from another assembly's. The DI extension class is generated into
-// Microsoft.Extensions.DependencyInjection either way — which is why a project with its own mediator aliases this one.
-[assembly: MediatorOptions(Namespace = "Evidgate.Migrator.Generated")]
+// The Mediator generator reads its options at compile time from the AddMediator call below: scoped handlers like the
+// hosts, and a namespace of its own so this assembly's generated copy stays distinct from another assembly's.
 
 namespace Evidgate.Migrator;
 
@@ -51,7 +49,11 @@ internal static class DevSeedServices
         services.AddEvidgatePersistence(configuration);
         // Lazy on purpose: the set compiles every contract with Roslyn, and a refusal must not pay for that compile.
         services.AddSingleton(_ => ContractSchemaSet.Load(contractsDirectory));
-        services.AddMediator();
+        services.AddMediator((MediatorOptions options) =>
+        {
+            options.Namespace = "Evidgate.Migrator.Generated";
+            options.ServiceLifetime = ServiceLifetime.Scoped;
+        });
         services.AddEvidgatePipeline();
         services.AddPolicyModule();
         services.AddIdentityModule(configuration);

@@ -50,6 +50,21 @@ public class PipelineOrderTests
         registered.ShouldBe(C2, ignoreOrder: false);
     }
 
+    [Fact]
+    public void Behaviours_Are_Scoped_So_Handler_Lookups_Use_The_Request_Scope()
+    {
+        var services = new ServiceCollection();
+
+        services.AddEvidgatePipelineBehaviours();
+
+        var behaviours = services
+            .Where(descriptor => descriptor.ServiceType == typeof(IPipelineBehavior<,>))
+            .ToList();
+
+        behaviours.Count.ShouldBe(PipelineBehaviourOrder.C2.Count);
+        behaviours.ShouldAllBe(descriptor => descriptor.Lifetime == ServiceLifetime.Scoped);
+    }
+
     /// <summary>
     /// The registration reads <see cref="PipelineBehaviourOrder.C2"/>, so that
     /// array — the one thing the code and the contract both name — must equal the

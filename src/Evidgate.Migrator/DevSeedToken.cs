@@ -136,6 +136,9 @@ internal static class DevSeedToken
             return MigratorExitCodes.InvalidInvocation;
         }
 
+        // The lock comes first so two first runs cannot race the tenant insert either.
+        await using var guard = await SeedGuard.AcquireAsync(dataSource).ConfigureAwait(false);
+
         // The dev user's membership is what the permission evaluator reads, so the tenant is always written first —
         // idempotently, exactly as the plain seed does.
         var seeded = DevSeed.WriteTenant(options, output, error);
@@ -144,15 +147,15 @@ internal static class DevSeedToken
             return seeded;
         }
 
-        await using var guard = await SeedGuard.AcquireAsync(dataSource).ConfigureAwait(false);
-
         // The synthetic caller exists only here: inside the guard, after the refusals, for the two commands below.
         using var tenantContext = provider.GetRequiredService<IRequestTenantContextSetter>()
             .Publish(DevSeed.OrgId, DevSeed.ProjectId);
         using var caller = provider.GetRequiredService<IRequestPrincipalSetter>()
             .Publish(RequestPrincipal.Member(DevSeed.UserId, DevSeed.UserEmail));
 
-        var mediator = provider.GetRequiredService<IMediator>();
+        // Handlers and pipeline behaviours are scoped (as in the hosts), so the mediator comes from a scope.
+        await using var scope = provider.CreateAsyncScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
         // The policy is part of every run, not of the first one: an existing token skips only the mint, so a stack whose
         // policy revision was never seeded (or was seeded by a run that predates it) still ends up with one.
