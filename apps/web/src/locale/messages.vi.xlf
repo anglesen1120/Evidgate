@@ -2005,6 +2005,22 @@
         <source>Creating project…</source>
         <target>Đang tạo dự án…</target>
       </trans-unit>
+      <trans-unit id="onboarding.create.details-label" datatype="html">
+        <source>The server refused these values</source>
+        <target>Máy chủ từ chối các giá trị này</target>
+      </trans-unit>
+      <trans-unit id="onboarding.create.failure-heading" datatype="html">
+        <source>The project could not be created</source>
+        <target>Không thể tạo dự án</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.details-label" datatype="html">
+        <source>The server refused these values</source>
+        <target>Máy chủ từ chối các giá trị này</target>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.failure-heading" datatype="html">
+        <source>The connection was not saved</source>
+        <target>Chưa lưu được kết nối</target>
+      </trans-unit>
       <trans-unit id="onboarding.connect.intro" datatype="html">
         <source>Choose one connection method. Next becomes available only after the server confirms a binding or token.</source>
         <target>Chọn một cách kết nối. Bạn chỉ có thể tiếp tục sau khi máy chủ xác nhận liên kết CI hoặc mã nạp dữ liệu.</target>
@@ -2637,6 +2653,8 @@
       <trans-unit id="onboarding.enable.retry-read" datatype="html"><source>Read the activation again</source><target>Đọc lại trạng thái kích hoạt</target></trans-unit>
       <trans-unit id="onboarding.enable.read-failed" datatype="html"><source>The activation could not be read. Reading it again is safe.</source><target>Không đọc được trạng thái kích hoạt. Đọc lại là an toàn.</target></trans-unit>
       <trans-unit id="onboarding.enable.read-failed-heading" datatype="html"><source>The activation could not be read</source><target>Không đọc được trạng thái kích hoạt</target></trans-unit>
+      <trans-unit id="onboarding.enable.confirm-failed-heading" datatype="html"><source>Collection could not be enabled</source><target>Không thể bật thu thập</target></trans-unit>
+      <trans-unit id="onboarding.enable.details-label" datatype="html"><source>The server refused these values</source><target>Máy chủ từ chối các giá trị này</target></trans-unit>
       <trans-unit id="onboarding.enable.read-wait" datatype="html"><source>The server asked you to wait before reading the activation again: <x id="remaining" equiv-text="${remaining}"/> s left of the <x id="supplied" equiv-text="${supplied}"/> s it named.</source><target>Máy chủ yêu cầu chờ trước khi đọc lại trạng thái kích hoạt: còn <x id="remaining" equiv-text="${remaining}"/> giây trong <x id="supplied" equiv-text="${supplied}"/> giây đã nêu.</target></trans-unit>
       <trans-unit id="onboarding.enable.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
       <trans-unit id="onboarding.enable.activated-by" datatype="html"><source>Activated by</source><target>Được kích hoạt bởi</target></trans-unit>
