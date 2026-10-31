@@ -319,9 +319,11 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
   it('starts no re-read when the page is already gone', async () => {
     refreshFailure.set('unavailable');
     await fixture.whenStable();
-    const page = fixture.componentInstance as unknown as { refresh: () => Promise<void> };
+    // `refresh` is protected: read it reflectively instead of widening the page's API for a test.
+    const refreshPage = Reflect.get(fixture.componentInstance, 'refresh') as () => Promise<void>;
+    const page = fixture.componentInstance;
     fixture.destroy();
-    await page.refresh();
+    await refreshPage.call(page);
     // Nothing was captured, so nothing has to be released: no listener outlives the page.
     expect(refresh).not.toHaveBeenCalled();
   });
