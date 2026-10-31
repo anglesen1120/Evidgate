@@ -119,11 +119,11 @@ describe('CreateProjectPage', () => {
     expect(projectCreated.mock.invocationCallOrder[0]).toBeLessThan(
       navigate.mock.invocationCallOrder[0]!,
     );
-    // The navigation did happen, so the marker stays armed for the activation it causes (F10).
+    // The navigation did happen, so the marker stays armed for the activation it causes.
     expect(clearCreated).not.toHaveBeenCalled();
   });
 
-  it('clears the create marker when the user navigated elsewhere before the read completed (N2)', async () => {
+  it('clears the create marker when the user navigated elsewhere before the read completed', async () => {
     const router = TestBed.inject(Router);
     projectCreated.mockImplementationOnce(() => {
       Object.defineProperty(router, 'url', { value: '/orgs/org-1/overview', configurable: true });
@@ -136,7 +136,7 @@ describe('CreateProjectPage', () => {
     expect(clearCreated).toHaveBeenCalledTimes(1);
   });
 
-  it('clears the create marker when the router declines the navigation (N2/F10)', async () => {
+  it('clears the create marker when the router declines the navigation', async () => {
     // A guard that answers `false` activated nothing: no activation is coming for the marker.
     navigate.mockResolvedValueOnce(false);
     await fill();
@@ -147,7 +147,7 @@ describe('CreateProjectPage', () => {
     expect(clearCreated).toHaveBeenCalledTimes(1);
   });
 
-  it('clears the create marker when the navigation rejects, and swallows the rejection (N2/F10)', async () => {
+  it('clears the create marker when the navigation rejects, and swallows the rejection', async () => {
     navigate.mockRejectedValueOnce(new Error('the guard threw'));
     await fill();
     await submit();
@@ -244,6 +244,47 @@ describe('CreateProjectPage', () => {
     for (const id of (input.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)) {
       expect(root.querySelector(`#${id}`), `${id} must be rendered`).not.toBeNull();
     }
+  });
+
+  it('clears server field error on edit', async () => {
+    createProject.mockRejectedValueOnce(
+      failure({
+        kind: 'validation',
+        status: 422,
+        details: [
+          { path: 'name', reason: 'A project with this name already exists.' },
+          { path: 'slug', reason: 'That slug is reserved.' },
+        ],
+      }),
+    );
+    await fill();
+    await submit();
+    await settle();
+    const name = root.querySelector<HTMLInputElement>('[name="name"]')!;
+    const slug = root.querySelector<HTMLInputElement>('[name="slug"]')!;
+    name.value = 'Storefront web 2';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    // The edited field answers for itself: its reason and its invalidity go, the other field's stay.
+    expect(name.getAttribute('aria-invalid')).toBeNull();
+    expect(name.getAttribute('aria-describedby')).toBe('onboarding-project-name-help');
+    expect(root.querySelector('#onboarding-project-name-error')?.textContent?.trim()).toBe('');
+    expect(slug.getAttribute('aria-invalid')).toBe('true');
+    expect(slug.getAttribute('aria-describedby')).toContain('onboarding-project-slug-error');
+    expect(root.querySelector('#onboarding-project-slug-error')?.textContent).toContain(
+      'That slug is reserved.',
+    );
+    // The alert keeps the rows it announced: it describes the values that were submitted.
+    const alert = root.querySelector<HTMLElement>('[data-testid="onboarding-project-details"]')!;
+    expect(alert.textContent).toContain('A project with this name already exists.');
+    // An edited field that is still invalid stays invalid, now for its own reason.
+    name.value = '   ';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(root.querySelector('#onboarding-project-name-error')?.textContent).toContain(
+      'Enter a project name.',
+    );
   });
 
   it('removes the invisible characters an envelope row carries before rendering it', async () => {
@@ -439,7 +480,7 @@ describe('CreateProjectPage', () => {
     });
   });
 
-  it('renders forbidden through T8 while leaving the create action visible and disabled', async () => {
+  it('renders forbidden through the refusal pattern while leaving the create action visible and disabled', async () => {
     createProject.mockRejectedValueOnce(
       failure({ kind: 'forbidden', status: 403, retryable: false }),
     );

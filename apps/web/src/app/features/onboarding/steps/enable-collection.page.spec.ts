@@ -1,17 +1,16 @@
-// 09.2.1-T5 (plan 09.2.1 §2 AC5, §8 rows T98 and 00 §9.1 idempotency, §9 test-plan rows for
-// `enable-collection.page.spec.ts`, §10 T5.1/T5.2, F18): the step-5 page over a mocked data service.
+// The step-5 page over a mocked data service.
 //
 // What each case here is allowed to prove, and what it is not:
-// - The page derives "already enabled" from ONE server read (`GET .../policy-activation`, F18):
+// - The page derives "already enabled" from ONE server read (`GET .../policy-activation`):
 //   200 restores the terminal panel without a command, 404 (the data service's `null`) is the only
 //   state that offers the confirm, 403 is a read-only preview with a disabled confirm, and every
 //   other failure is the shared error panel. A failed read is never treated as "no active policy".
-// - "One audited `policy_activation` row" (§9 line 124) is the SERVER's half: the page can only
-//   prove it sends one chain, one stable `Idempotency-Key` and the identical policy body, which is
-//   what the contract's replay rule needs. The audit-cardinality assertion lives in
+// - "One audited `policy_activation` row" is the SERVER's half: the page can only prove it sends one
+//   chain, one stable `Idempotency-Key` and the identical policy body, which is what the contract's
+//   replay rule needs. The audit-cardinality assertion lives in
 //   `tests/Tenancy.IntegrationTests/PolicyActivationTests.cs`, not in a component spec.
-// - The disabled state is about a missing `policy:write` (a `release_approver` reassigned away,
-//   AC5/T98), not about a server refusal: a refusal is rendered as the typed error state instead.
+// - The disabled state is about a missing `policy:write` (a `release_approver` reassigned away),
+//   not about a server refusal: a refusal is rendered as the typed error state instead.
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type {
@@ -51,14 +50,14 @@ const ACTIVATION: PolicyActivationDto = {
   changed: true,
 };
 
-/** The reload/repeat answer 07.1.1-T4 gives when the revision is already the active one. */
+/** The reload/repeat answer when the revision is already the active one. */
 const ACTIVATION_UNCHANGED: PolicyActivationDto = {
   ...ACTIVATION,
   previous_policy_revision_id: null,
   changed: false,
 };
 
-/** What the F18 read answers for a project with an active policy (07.1.1 `GET` shape). */
+/** What the activation read answers for a project with an active policy. */
 const ACTIVATION_STATE: PolicyActivationStateDto = {
   project_id: 'project-1',
   policy_revision_id: REVISION.id,
@@ -96,8 +95,8 @@ function deferredResult<T>(): {
 }
 
 /**
- * The statuses `mapApiError` marks retryable when the answer carries no envelope — the 00 §9.2
- * backoff pair (429/503) and the transient gateway pair (502/504); `core/http/error-mapper.ts`.
+ * The statuses `mapApiError` marks retryable when the answer carries no envelope — the backoff pair
+ * (429/503) and the transient gateway pair (502/504); `core/http/error-mapper.ts`.
  * A spec must not build an error shape the client cannot produce, so the helper derives the same
  * default and a caller overrides it only to pin the envelope's own `retryable` field.
  */
@@ -150,7 +149,7 @@ function readRetryAction(root: HTMLElement): HTMLButtonElement | null {
   return root.querySelector<HTMLButtonElement>('[data-testid="enable-collection-retry-read"]');
 }
 
-/** AC-F63-c: the one recovery a refused (403) read offers. */
+/** The one recovery a refused (403) read offers. */
 function readAgainButton(root: HTMLElement): HTMLButtonElement | null {
   return root.querySelector<HTMLButtonElement>('[data-testid="enable-collection-read-again"]');
 }
@@ -169,7 +168,7 @@ describe('EnableCollectionPage', () => {
   let fixture: ComponentFixture<EnableCollectionPage>;
   let root: HTMLElement;
   const permitted = signal(true);
-  /** The session's grant check: true only for the exact code the step names (AC5: `policy:write`). */
+  /** The session's grant check: true only for the exact code the step names (`policy:write`). */
   const has = vi.fn((code: string) => permitted() && code === 'policy:write');
   const createPolicyRevision = vi.fn<OnboardingDataService['createPolicyRevision']>();
   const activatePolicy = vi.fn<OnboardingDataService['activatePolicy']>();
@@ -204,10 +203,10 @@ describe('EnableCollectionPage', () => {
     await drain(fixture);
   });
 
-  it('previews the default advisory policy, states nothing is gated yet, and names the hazard (AC5, AC-F18-c)', () => {
+  it('previews the default advisory policy, states nothing is gated yet, and names the hazard', () => {
     expect(readPolicyActivation).toHaveBeenCalledExactlyOnceWith('project-1');
     const preview = text(root, '[data-testid="enable-collection-policy-preview"]');
-    // T62: the 24 h late-evidence window, in minutes, as the body carries it.
+    // The 24 h late-evidence window, in minutes, as the body carries it.
     expect(preview).toContain('1440');
     expect(preview).toContain('Not gating yet');
     expect(preview).toContain('advisory mode');
@@ -217,11 +216,11 @@ describe('EnableCollectionPage', () => {
     expect(text(root, '[data-testid="enable-collection-not-gating"]')).toContain(
       'never blocks a merge',
     );
-    // The lone creator holds `policy:write` (T98)…
+    // The lone creator holds `policy:write`…
     expect(has).toHaveBeenCalledWith('policy:write');
     expect(root.querySelector('[data-testid="enable-collection-ask-approver"]')).toBeNull();
     // …and the read answered "no activation", so the confirm is offered at once: no acknowledgement
-    // stands between the user and the action any more (F18 addendum 1).
+    // stands between the user and the action any more.
     expect(confirmButton(root)!.disabled).toBe(false);
     expect(root.querySelector('[data-testid="enable-collection-acknowledge"]')).toBeNull();
     expect(root.querySelector('input[type="checkbox"]')).toBeNull();
@@ -238,7 +237,7 @@ describe('EnableCollectionPage', () => {
     expect(activatePolicy).not.toHaveBeenCalled();
   });
 
-  it('appends the exact default body once, then activates it in advisory mode, and shows the terminal panel (AC5)', async () => {
+  it('appends the exact default body once, then activates it in advisory mode, and shows the terminal panel', async () => {
     submit(root);
     await settle();
 
@@ -285,7 +284,7 @@ describe('EnableCollectionPage', () => {
     expect(root.querySelector('[data-testid="enable-collection-error"]')).toBeNull();
   });
 
-  it('disables the confirm and asks for a release approver when the user lacks policy:write (AC5/T98)', async () => {
+  it('disables the confirm and asks for a release approver when the user lacks policy:write', async () => {
     permitted.set(false);
     await settle();
 
@@ -301,7 +300,7 @@ describe('EnableCollectionPage', () => {
     expect(activatePolicy).not.toHaveBeenCalled();
   });
 
-  it('sends nothing until the confirm is pressed (AC-F18-b)', async () => {
+  it('sends nothing until the confirm is pressed', async () => {
     await settle();
     expect(createPolicyRevision).not.toHaveBeenCalled();
     expect(activatePolicy).not.toHaveBeenCalled();
@@ -334,7 +333,7 @@ describe('EnableCollectionPage', () => {
     expect(activatePolicy.mock.calls.map(([, , intent]) => intent.idempotencyKey)).toEqual([key]);
   });
 
-  it('retries an uncertain activation with the same key, without appending again, and only on a press (00 §9.1, AC-F18-b)', async () => {
+  it('retries an uncertain activation with the same key, without appending again, and only on a press', async () => {
     activatePolicy.mockRejectedValueOnce(failure('timeout', 0, { retryable: true }));
     submit(root);
     await settle();
@@ -427,7 +426,7 @@ describe('EnableCollectionPage', () => {
     },
   );
 
-  it('never renders bidi or control characters a server label carries (T47 precedent)', async () => {
+  it('never renders bidi or control characters a server label carries', async () => {
     // U+202E (right-to-left override) and U+009B (C1 control) inside the digest, i.e. inside the
     // characters the abbreviation shows — a sanitised-after-abbreviation bug would surface here.
     const hostileHash = 'sha256:9f2c\u202E\u009B1d7b4a6e8f0a';
@@ -443,7 +442,7 @@ describe('EnableCollectionPage', () => {
     expect(enabled.querySelector('code')?.innerHTML).not.toContain('&lt;');
   });
 
-  it('says confirming activates the default policy and names the revision it replaced (F1)', async () => {
+  it('says confirming activates the default policy and names the revision it replaced', async () => {
     // The hazard is stated before the press: a confirm does replace the project's policy pointer.
     const warning = text(root, '[data-testid="enable-collection-replaces-active"]');
     expect(warning).toContain('activates the default advisory policy');
@@ -469,7 +468,7 @@ describe('EnableCollectionPage', () => {
     expect(enabled.textContent).not.toContain('Revision this replaced');
   });
 
-  it('renders the shared "Unavailable" copy instead of throwing on a malformed answer (F5)', async () => {
+  it('renders the shared "Unavailable" copy instead of throwing on a malformed answer', async () => {
     activatePolicy.mockResolvedValue({
       ...ACTIVATION,
       hash: '',
@@ -484,7 +483,7 @@ describe('EnableCollectionPage', () => {
     expect(enabled.textContent).toContain('Unavailable');
   });
 
-  it('sanitises the refusal detail rows it renders itself (R3)', async () => {
+  it('sanitises the refusal detail rows it renders itself', async () => {
     activatePolicy.mockRejectedValue(
       failure('validation', 422, {
         details: [{ path: '/late\u202Ewindow', reason: 'number_too_long\u200E' }],
@@ -499,7 +498,7 @@ describe('EnableCollectionPage', () => {
     expect(error.textContent).toContain('/latewindow');
   });
 
-  it('disables the confirm while a retryable Retry-After window is still open (R5)', async () => {
+  it('disables the confirm while a retryable Retry-After window is still open', async () => {
     activatePolicy.mockRejectedValueOnce(
       new ApiRequestError({
         kind: 'rate_limited',
@@ -559,7 +558,7 @@ describe('EnableCollectionPage', () => {
     expect(document.activeElement).toBe(root.querySelector('#enable-confirm-failed-heading'));
   });
 
-  it('moves focus to the terminal heading when the confirm goes away (QA-01)', async () => {
+  it('moves focus to the terminal heading when the confirm goes away', async () => {
     submit(root);
     await settle();
 
@@ -569,7 +568,7 @@ describe('EnableCollectionPage', () => {
     expect(document.activeElement).toBe(heading);
   });
 
-  it('re-appends after a failed append and keeps one activation key across attempts (R4)', async () => {
+  it('re-appends after a failed append and keeps one activation key across attempts', async () => {
     createPolicyRevision.mockRejectedValueOnce(failure('timeout', 0, { retryable: true }));
     submit(root);
     await settle();
@@ -593,7 +592,7 @@ describe('EnableCollectionPage', () => {
     expect(root.querySelector('[data-testid="enable-collection-enabled"]')).not.toBeNull();
   });
 
-  it('mints a new key after a non-retryable refusal (R4)', async () => {
+  it('mints a new key after a non-retryable refusal', async () => {
     activatePolicy.mockRejectedValueOnce(failure('conflict', 409));
     submit(root);
     await settle();
@@ -609,7 +608,7 @@ describe('EnableCollectionPage', () => {
     expect(keys[0]).not.toBe(keys[1]);
   });
 
-  it('retries a retryable failure through the main confirm button with the same key (R4)', async () => {
+  it('retries a retryable failure through the main confirm button with the same key', async () => {
     activatePolicy.mockRejectedValueOnce(failure('timeout', 0, { retryable: true }));
     submit(root);
     await settle();
@@ -625,7 +624,7 @@ describe('EnableCollectionPage', () => {
     expect(root.querySelector('[data-testid="enable-collection-enabled"]')).not.toBeNull();
   });
 
-  it('sends no activation when the append settles after the step was left (F3)', async () => {
+  it('sends no activation when the append settles after the step was left', async () => {
     const deferred = deferredResult<PolicyRevisionDto>();
     createPolicyRevision.mockImplementationOnce(() => deferred.promise);
     submit(root);
@@ -678,7 +677,7 @@ describe('EnableCollectionPage activation read', () => {
     return fixture;
   }
 
-  it('restores the terminal panel from the read alone and sends no command (AC-T5.2-1)', async () => {
+  it('restores the terminal panel from the read alone and sends no command', async () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem');
     readPolicyActivation.mockResolvedValue(ACTIVATION_STATE);
     const fixture = await createPage();
@@ -711,7 +710,7 @@ describe('EnableCollectionPage activation read', () => {
     setItem.mockRestore();
   });
 
-  it('renders an enforcing mode verbatim and never the advisory claim (AC-F18-a)', async () => {
+  it('renders an enforcing mode verbatim and never the advisory claim', async () => {
     readPolicyActivation.mockResolvedValue(ACTIVATION_STATE_ENFORCING);
     const fixture = await createPage();
     const root = fixture.nativeElement as HTMLElement;
@@ -755,7 +754,7 @@ describe('EnableCollectionPage activation read', () => {
     },
   );
 
-  it('never renders bidi or control characters an activation read carries (D4, T47 precedent)', async () => {
+  it('never renders bidi or control characters an activation read carries', async () => {
     // Every server-provided member of the read is hostile at once: the digest (sanitised before it
     // is abbreviated), the actor, and the revision id.
     readPolicyActivation.mockResolvedValue({
@@ -780,7 +779,7 @@ describe('EnableCollectionPage activation read', () => {
     expect(enabled.querySelector('code')?.innerHTML).not.toContain('&lt;');
   });
 
-  it('keeps the confirm disabled until the read settles (AC-T5.2-3)', async () => {
+  it('keeps the confirm disabled until the read settles', async () => {
     const deferred = deferredResult<PolicyActivationStateDto | null>();
     readPolicyActivation.mockImplementation(() => deferred.promise);
     const fixture = await createPage();
@@ -802,7 +801,7 @@ describe('EnableCollectionPage activation read', () => {
     expect(confirmButton(root)!.getAttribute('aria-describedby')).toBe('enable-replaces-warning');
   });
 
-  it('offers the confirm when the read answers no activation (404) (AC-T5.2-3, AC-F18-b)', async () => {
+  it('offers the confirm when the read answers no activation (404)', async () => {
     readPolicyActivation.mockResolvedValue(null);
     const fixture = await createPage();
     const root = fixture.nativeElement as HTMLElement;
@@ -816,7 +815,7 @@ describe('EnableCollectionPage activation read', () => {
     expect(createPolicyRevision).not.toHaveBeenCalled();
   });
 
-  it('disables the confirm and names the unreadable state on 403 (AC-T5.2-3, AC-F18-c)', async () => {
+  it('disables the confirm and names the unreadable state on 403', async () => {
     readPolicyActivation.mockRejectedValue(failure('forbidden', 403));
     const fixture = await createPage();
     const root = fixture.nativeElement as HTMLElement;
@@ -857,7 +856,7 @@ describe('EnableCollectionPage activation read', () => {
     expect(root.querySelector('[data-testid="enable-collection-unreadable"]')).not.toBeNull();
   });
 
-  it('renders the shared error state and re-reads on retry for a 503 (AC-T5.2-3)', async () => {
+  it('renders the shared error state and re-reads on retry for a 503', async () => {
     readPolicyActivation
       .mockRejectedValueOnce(failure('unavailable', 503, { retryable: true }))
       .mockResolvedValueOnce(null);
@@ -886,7 +885,7 @@ describe('EnableCollectionPage activation read', () => {
     expect(activatePolicy).not.toHaveBeenCalled();
   });
 
-  it('returns focus to the named failure heading after each failed re-read (AC-F63-b)', async () => {
+  it('returns focus to the named failure heading after each failed re-read', async () => {
     // Two consecutive failures of the same read: the control the user pressed is replaced by the
     // answer, so the page must hand focus to its own named target instead of dropping it on <body>.
     readPolicyActivation.mockRejectedValue(failure('unavailable', 503));
@@ -922,7 +921,7 @@ describe('EnableCollectionPage activation read', () => {
     expect(activatePolicy).not.toHaveBeenCalled();
   });
 
-  it('closes the read controls for the answer’s own interval and opens them when it elapses (AC-F63-a)', async () => {
+  it('closes the read controls for the answer’s own interval and opens them when it elapses', async () => {
     // The page's own interval is faked, together with the clock it is measured against, and nothing
     // else: the framework's scheduling and the spec's own macrotask stay real, so the wait is
     // advanced instead of waited for without freezing the render.
@@ -977,7 +976,7 @@ describe('EnableCollectionPage activation read', () => {
     }
   });
 
-  it('offers one read-only recovery on a refused (403) read, keyboard reachable (AC-F63-c)', async () => {
+  it('offers one read-only recovery on a refused (403) read, keyboard reachable', async () => {
     readPolicyActivation.mockRejectedValue(failure('forbidden', 403));
     const fixture = await createPage();
     const root = fixture.nativeElement as HTMLElement;
@@ -1001,7 +1000,7 @@ describe('EnableCollectionPage activation read', () => {
     expect(confirmButton(root)!.disabled).toBe(true);
 
     // The control issues the read and nothing else — twice, so a repeated failure proves the focus
-    // rule too (AC-F63-b): the pressed control is replaced, and focus returns to its successor.
+    // rule too: the pressed control is replaced, and focus returns to its successor.
     readAgain!.focus();
     expect(document.activeElement).toBe(readAgain);
     readAgain!.click();
@@ -1019,7 +1018,7 @@ describe('EnableCollectionPage activation read', () => {
     expect(confirmButton(root)!.disabled).toBe(true);
   });
 
-  it('never opens a wait window for a refused read, whatever the answer carries (AC-F63-c)', async () => {
+  it('never opens a wait window for a refused read, whatever the answer carries', async () => {
     // A `403` is a refusal, not a throttled attempt: an answer that still carries a `Retry-After`
     // must not close the one recovery a refused read offers, or the page would strand the user for
     // an interval nobody asked them to wait.
@@ -1049,7 +1048,7 @@ describe('EnableCollectionPage activation read', () => {
     ['rate_limited', 429, null],
     ['unavailable', 503, null],
   ] as const)(
-    're-reads a retryable %s read failure through the shared Retry action at once (AC-T5.2-3)',
+    're-reads a retryable %s read failure through the shared Retry action at once',
     async (kind, status, retryAfterSeconds) => {
       // The shape the client produces (`core/http/error-mapper.ts`): a 429 or 503 read is retryable,
       // and a 429 carries the `Retry-After` interval the answer named.
@@ -1086,7 +1085,7 @@ describe('EnableCollectionPage activation read', () => {
     ['unauthenticated', 401],
     ['unexpected', 500],
   ] as const)(
-    'never treats a non-retryable %s read failure as "no active policy" (AC-T5.2-3)',
+    'never treats a non-retryable %s read failure as "no active policy"',
     async (kind, status) => {
       // A 401 and a 500 are not retryable in the contract, so the shared pattern renders no Retry and
       // the page's own re-read control is the action — still never read as "no active policy".
@@ -1180,7 +1179,7 @@ describe('EnableCollectionPage activation read', () => {
     },
   );
 
-  it('has no acknowledgement control in any read state (AC-F18-a)', async () => {
+  it('has no acknowledgement control in any read state', async () => {
     readPolicyActivation.mockResolvedValue(null);
     const fixture = await createPage();
     const root = fixture.nativeElement as HTMLElement;
@@ -1188,7 +1187,7 @@ describe('EnableCollectionPage activation read', () => {
     expect(root.querySelector('[data-testid="enable-collection-acknowledge"]')).toBeNull();
     expect(root.querySelector('input[type="checkbox"]')).toBeNull();
     expect(root.textContent).not.toContain('I understand this replaces the active policy');
-    // The warning itself stays, and the control is described by it (AC-F18-c).
+    // The warning itself stays, and the control is described by it.
     expect(root.querySelector('#enable-replaces-warning')).not.toBeNull();
     expect(confirmButton(root)!.getAttribute('aria-describedby')).toContain(
       'enable-replaces-warning',
@@ -1247,7 +1246,7 @@ describe('EnableCollectionPage scope changes', () => {
     await drain(host);
   });
 
-  it('clears the appended revision and the intent when the scope moves (F3)', async () => {
+  it('clears the appended revision and the intent when the scope moves', async () => {
     press();
     await drainHost();
     expect(hostRoot.querySelector('[data-testid="enable-collection-enabled"]')).not.toBeNull();
@@ -1268,7 +1267,7 @@ describe('EnableCollectionPage scope changes', () => {
     expect(activatePolicy.mock.calls[1]![2].idempotencyKey).not.toBe(firstKey);
   });
 
-  it('re-reads the activation when the scope moves and shows what the new read answers (AC-T5.2-3)', async () => {
+  it('re-reads the activation when the scope moves and shows what the new read answers', async () => {
     // The first read (the host's initial project) already answered 404 during setup.
     readPolicyActivation
       .mockReset()
@@ -1314,7 +1313,7 @@ describe('EnableCollectionPage scope changes', () => {
     expect(confirmButton(hostRoot)!.disabled).toBe(false);
   });
 
-  it('drops the late answer of the project a project change left behind (D9)', async () => {
+  it('drops the late answer of the project a project change left behind', async () => {
     // The setup read for project-1 already answered 404; this test owns the next two reads.
     const deferred = deferredResult<PolicyActivationStateDto | null>();
     readPolicyActivation
@@ -1345,7 +1344,7 @@ describe('EnableCollectionPage scope changes', () => {
     expect(confirmButton(hostRoot)).toBeNull();
   });
 
-  it('keeps a lost re-read’s focus request out of the next scope’s failure (AC-F63-b)', async () => {
+  it('keeps a lost re-read’s focus request out of the next scope’s failure', async () => {
     // A read the user pressed Retry for, left in flight while the scope moves: its focus request
     // belongs to a press that no longer exists, so the new scope's *first* failure — an answer to
     // nobody's press — must leave focus where it is.

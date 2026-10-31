@@ -49,5 +49,5 @@ Skip link and focus handoff (`e2e/shell/keyboard.spec.ts`), scope switcher keybo
 - Login: `apps/web/e2e/shell/a11y-keyboard-login.spec.ts`
 - Project switch: `apps/web/e2e/shell/a11y-keyboard-scope.spec.ts`
 - Run detail: `apps/web/e2e/shell/a11y-keyboard-runs.spec.ts`
-- Onboarding: `apps/web/e2e/shell/a11y-keyboard-onboarding.spec.ts` (covers the whole wizard; F-ONB-04 and F-ONB-06 fixed by F63 #287, F-ONB-05 and F-ONB-07..10 fixed by #325)
+- Onboarding: `apps/web/e2e/shell/a11y-keyboard-onboarding.spec.ts`, `a11y-keyboard-onboarding-enable.spec.ts` and `a11y-keyboard-onboarding-resume.spec.ts` (together they cover the whole wizard; F-ONB-04 and F-ONB-06 fixed by F63 #287, F-ONB-05 and F-ONB-07..10 fixed by #325)
 - Failure triage, evidence viewer: not built, no walkthrough possible.

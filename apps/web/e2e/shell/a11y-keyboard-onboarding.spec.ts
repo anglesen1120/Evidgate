@@ -1,28 +1,33 @@
-// 09.8.1-T1.2 (plan 09.8.1 §10 T1.2, story AC2): the onboarding wizard walked with the keyboard
-// only — `page.keyboard` for every interaction, no `page.click`, no `locator.click`, no
-// `locator.focus()`, no `{ force: true }` — asserting `document.activeElement` by element identity
-// (test id, id, role) at every stop, and that the focused element actually renders its focus ring.
-// Each walk starts a fresh document at the skip link and enters the main region with Enter, so
-// every stop on the way is one a keyboard visitor really crosses.
+// The onboarding wizard's first two steps walked with the keyboard only — `page.keyboard` for every
+// interaction — asserting `document.activeElement` by element identity at every stop, and that the
+// focused element actually renders its focus ring. Each walk starts a fresh document at the skip
+// link and enters the main region with Enter, so every stop on the way is one a keyboard visitor
+// really crosses.
 //
-// The walkthrough follows `docs/a11y/parts/onboarding.md` "Keyboard walkthrough plan" W1–W4. Every
-// stop it claims is one a keyboard visitor really crosses, and the refusal paths the plan names are
-// walked too: each step that disables or unmounts the control it was pressed from parks focus on a
-// target the page owns (the waiting line, then its own refusal heading), and no assertion here pins
-// a dropped-focus fallback as expected behaviour.
-//
-// Everything else is the AC2 claim this spec exists to prove: the skip link, the stepper, each
-// step's own content, the reveal handoffs ConnectCiPage already implements, Back, Next and the
-// terminal heading after the confirm — all reached and left without a pointer.
-import { expect, test, type Locator, type Page } from '@playwright/test';
+// The walkthrough follows `docs/a11y/parts/onboarding.md` "Keyboard walkthrough plan" W1–W2. The
+// refusal paths the plan names are walked too: each step that disables or unmounts the control it
+// was pressed from parks focus on a target the page owns (the waiting line, then its own refusal
+// heading), and no assertion here pins a dropped-focus fallback as expected behaviour.
+import { expect, test } from '@playwright/test';
 
+import { danglingDescriptions } from './dangling-descriptions';
 import {
-  activationReadToggle,
+  enterMainByKeyboard,
+  enabledTabStops,
+  expectKeyboardFocus,
+  MAIN,
+  pressTab,
+  QUICKSTART_SNIPPET,
+  SKIP_LINK,
+  stepButton,
+  STEP_TITLE,
+  tabUntil,
+} from './onboarding-keyboard';
+import {
   backButton,
   CREATED_PROJECT,
   CREATED_PROJECT_NAME,
   CREATED_PROJECT_SLUG,
-  ENABLE_GRANTS_TOGGLE,
   expectCurrentStep,
   expectNoReveal,
   FIXTURE_BINDING_CHALLENGE,
@@ -35,23 +40,8 @@ import {
   seedQueryWith,
   shell,
   stepItem,
-  TOKEN_USED_LAST_USED_AT,
-  TOKEN_USED_NAME,
-  type StepNumber,
 } from './onboarding-support';
 import { ORG_ACME, withVariant } from './support';
-
-/** The shell's skip link: the first stop of a fresh document (shell.component.html:1-8). */
-const SKIP_LINK = 'a.skip-link';
-/** The shell's main region, the skip target and the anchor the walkthrough resumes from. */
-const MAIN = '#main-content';
-/** The wizard's own step heading — the announcement target of every step move. */
-const STEP_TITLE = '#onboarding-step-title';
-/**
- * The quickstart's focusable block: the `<pre tabindex="0">` is the Tab stop, while its
- * `data-testid="cli-quickstart-snippet"` sits on the `<code>` it renders.
- */
-const QUICKSTART_SNIPPET = '[data-testid="cli-quickstart"] pre';
 
 /**
  * The OIDC form's values, exactly as `fixtures/web-api/ci-binding-create/input.json` records the
@@ -64,145 +54,6 @@ const REF_PATTERNS = 'refs/heads/main';
 const WORKFLOW_REFS = 'acme/storefront-web/.github/workflows/evidgate.yml@refs/heads/main';
 /** The name this walkthrough types into the token form; the corpus echoes its own name back. */
 const TOKEN_NAME = 'CI upload (keyboard)';
-
-/** One stepper item's button, addressed by the item's DOM contract rather than by its label. */
-function stepButton(page: Page, step: StepNumber) {
-  return stepItem(page, step).locator('button');
-}
-
-/** Presses Tab `times` times: the only way this suite moves focus forward. */
-async function pressTab(page: Page, times = 1): Promise<void> {
-  for (let index = 0; index < times; index += 1) {
-    await page.keyboard.press('Tab');
-  }
-}
-
-/**
- * Puts focus on the wizard's main region with real keys only, for the walks that start inside it:
- * a fresh document starts its tab order at the shell's skip link, and Enter on it activates the
- * skip target (`main#main-content`, `tabindex="-1"`). Both stops are asserted by identity and by
- * their focus ring.
- *
- * This replaces `page.locator(MAIN).focus()`, which AC2 does not allow (a programmatic focus move
- * is not a keyboard one) and which also skipped the two stops a keyboard visitor really crosses on
- * the way in.
- */
-async function enterMainByKeyboard(page: Page): Promise<void> {
-  await pressTab(page);
-  await expectKeyboardFocus(page, page.locator(SKIP_LINK), 'the skip link before the walk');
-  await page.keyboard.press('Enter');
-  await expectKeyboardFocus(page, page.locator(MAIN), 'the main region before the walk');
-}
-
-/**
- * AC2's second clause: the focused control is visibly focused, not merely focused. Every focusable
- * in these flows declares the `--eg-focus` ring (2px, 2px offset — `onboarding-shell.component.css`,
- * `connect-ci.page.css`, `state-panel.css`, `cli-quickstart.component.css`, `connect-step-reveal
- * .component.css`, `enable-collection.page.css`, `shell.component.css`); an `outline: none` anywhere
- * on that path would leave a keyboard visitor guessing, so the computed outline is what is asserted.
- *
- * Every call follows a Tab or Enter — this file moves focus only with real key presses, never with
- * `locator.focus()` — which is what makes the assertion honest for the two targets styled
- * `:focus-visible` only (`main#main-content`, `#onboarding-step-title`): both are reached by an
- * Enter, so the browser reports them as keyboard-focused. The headings the pages focus themselves
- * after a step move (the reveal heading, the connect panel headings, `#enable-enabled-heading`) are
- * styled on `:focus` instead, so they render a ring either way.
- */
-async function expectFocusRing(page: Page, context: string): Promise<void> {
-  const focused = await page.evaluate(() => {
-    const element = document.activeElement;
-    if (element === null) return null;
-    const style = getComputedStyle(element);
-    return {
-      tag: element.tagName.toLowerCase(),
-      id: element.id,
-      testId: element.getAttribute('data-testid'),
-      outlineStyle: style.outlineStyle,
-      outlineWidth: style.outlineWidth,
-    };
-  });
-
-  const name =
-    focused === null
-      ? 'nothing'
-      : `${focused.tag}${focused.id === '' ? '' : `#${focused.id}`}${
-          focused.testId === null ? '' : `[data-testid="${focused.testId}"]`
-        }`;
-
-  expect(focused, `${context}: nothing holds focus`).not.toBeNull();
-  expect(focused?.outlineStyle, `${context}: ${name} renders no focus outline`).not.toBe('none');
-  expect(
-    Number.parseFloat(focused?.outlineWidth ?? '0'),
-    `${context}: ${name} renders a zero-width focus outline`,
-  ).toBeGreaterThan(0);
-}
-
-/** Asserts the focused element by identity, then that it is visibly focused. */
-async function expectKeyboardFocus(page: Page, locator: Locator, context: string): Promise<void> {
-  await expect(locator, `${context}: focus identity`).toBeFocused();
-  await expectFocusRing(page, context);
-}
-
-/**
- * Tabs forward until `selector` holds focus, returning the stops crossed. A walk into a form whose
- * Tab order belongs to other slices uses this instead of a programmatic focus move: every stop on
- * the way is one a keyboard visitor really crosses, and a target the walk cannot reach fails with
- * the list of stops it did reach.
- */
-async function tabUntil(page: Page, selector: string, limit = 40): Promise<readonly string[]> {
-  const crossed: string[] = [];
-  for (let index = 0; index < limit; index += 1) {
-    await page.keyboard.press('Tab');
-    const reached = await page.evaluate((target) => {
-      const element = document.activeElement as HTMLElement | null;
-      if (element === null) return { hit: false, stop: 'nothing' };
-      const name =
-        element.id !== ''
-          ? `#${element.id}`
-          : `${element.tagName.toLowerCase()}${
-              element.getAttribute('data-testid') === null
-                ? ''
-                : `[data-testid="${element.getAttribute('data-testid')}"]`
-            }`;
-      return { hit: element.matches(target), stop: name };
-    }, selector);
-    if (reached.hit) return crossed;
-    crossed.push(reached.stop);
-  }
-  throw new Error(`${selector} is not in the Tab order; stopped at ${crossed.join(' → ')}`);
-}
-
-/**
- * Every enabled Tab stop inside the main region, named by its DOM contract. The identity list is
- * the budget assertion: a stray stop (a new control, a `tabindex="0"` wrapper) shows up by name, so
- * the check cannot pass by counting alone.
- */
-async function enabledTabStops(page: Page): Promise<readonly string[]> {
-  return page.evaluate(() => {
-    const main = document.querySelector('#main-content');
-    if (main === null) return [];
-
-    return Array.from(
-      main.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]'),
-    )
-      .filter((element) => {
-        if (element.tabIndex < 0) return false;
-        if (element.matches(':disabled')) return false;
-        if (element.closest('[inert]') !== null) return false;
-        const style = getComputedStyle(element);
-        if (style.visibility === 'hidden' || style.display === 'none') return false;
-        return element.getClientRects().length > 0;
-      })
-      .map((element) => {
-        const step = element.closest('[data-testid^="onboarding-step-"]');
-        if (step !== null) return `${step.getAttribute('data-testid')} button`;
-        const testId = element.getAttribute('data-testid');
-        if (testId !== null) return testId;
-        if (element.id !== '') return `#${element.id}`;
-        return element.tagName.toLowerCase();
-      });
-  });
-}
 
 test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () => {
   test('the skip link, the stepper, both fields and the submit carry the flow into step 2', async ({
@@ -331,15 +182,16 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
     await expect(name).toHaveAttribute('aria-invalid', 'true');
     await expect(name).toHaveAccessibleDescription(/a project with this name already exists/);
     // Every id a control is described by resolves to a rendered element.
-    const described = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('[aria-describedby]')).flatMap((element) =>
-        (element.getAttribute('aria-describedby') ?? '')
-          .split(/\s+/)
-          .filter(Boolean)
-          .map((id) => ({ id, rendered: document.getElementById(id) !== null })),
-      ),
-    );
-    expect(described.filter((entry) => !entry.rendered)).toEqual([]);
+    expect(await danglingDescriptions(page)).toEqual([]);
+
+    // Editing the refused field answers for it: the inline reason and its invalidity go on the first
+    // keystroke, while the alert keeps the rows it announced for the values that were submitted.
+    await tabUntil(page, '#onboarding-project-name');
+    await page.keyboard.type(' 2');
+    await expect(name).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(name).not.toHaveAccessibleDescription(/a project with this name already exists/);
+    await expect(details).toContainText('a project with this name already exists');
+    expect(await danglingDescriptions(page)).toEqual([]);
   });
 });
 
@@ -514,210 +366,5 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
     );
     // The field's own node is not a live region while the details alert carries the sentence.
     await expect(page.locator('#connect-repo-name-error')).not.toHaveAttribute('aria-live', /.*/);
-  });
-});
-
-test.describe('W3 — step 5, enable collection', () => {
-  test('the confirm completes the step and hands focus to its terminal heading', async ({
-    page,
-  }) => {
-    // `permissions-list-onboarding-enable` is the wizard's grants plus `policy:write`, so the
-    // confirm is offered and enabled; the seed's own activation read is the contract's 404.
-    await page.goto(
-      withVariant(
-        onboardingPath('en'),
-        seedQueryWith('onboarding-evidence', [ENABLE_GRANTS_TOGGLE]),
-      ),
-    );
-    await expect(shell(page)).toBeVisible();
-    await expectCurrentStep(page, 5);
-
-    // 1. All five stepper buttons are enabled at step 5; the confirm follows them directly. The walk
-    //    into the region is the skip link and its Enter, not a programmatic focus move.
-    await enterMainByKeyboard(page);
-    await pressTab(page, 5);
-    await expectKeyboardFocus(page, stepButton(page, 5), 'stepper 5 is the last stepper stop');
-    await expect(stepItem(page, 5)).toHaveAttribute('aria-current', 'step');
-
-    await pressTab(page);
-    const confirm = page.locator('[data-testid="enable-collection-confirm"]');
-    await expectKeyboardFocus(page, confirm, 'the enable confirm');
-    await expect(confirm).toBeEnabled();
-    // The replace hazard is stated before the press, and it is the confirm's own description.
-    await expect(confirm).toHaveAttribute('aria-describedby', /enable-replaces-warning/);
-    await expect(confirm).toHaveAccessibleDescription(
-      /replace a policy activated after this page read/i,
-    );
-
-    // 2. Enter confirms: the preview is replaced by the terminal panel, whose heading takes focus.
-    await page.keyboard.press('Enter');
-    await expectKeyboardFocus(
-      page,
-      page.locator('#enable-enabled-heading'),
-      'the terminal heading after the confirm',
-    );
-    await expect(page.locator('[data-testid="enable-collection-enabled"]')).toBeVisible();
-    await expect(page.locator('[data-testid="enable-collection-policy-preview"]')).toHaveCount(0);
-
-    // 3. Back follows the terminal panel; Next is disabled on the last step.
-    await pressTab(page);
-    await expectKeyboardFocus(page, backButton(page), 'Back after the terminal panel');
-    await expect(nextButton(page)).toBeDisabled();
-  });
-
-  test('an unreadable activation keeps the confirm disabled and out of the tab order', async ({
-    page,
-  }) => {
-    await page.goto(
-      withVariant(
-        onboardingPath('en'),
-        seedQueryWith('onboarding-evidence', [
-          ENABLE_GRANTS_TOGGLE,
-          activationReadToggle('forbidden'),
-        ]),
-      ),
-    );
-    await expect(shell(page)).toBeVisible();
-    await expectCurrentStep(page, 5);
-
-    // The 403 read is a state, not a failure: the preview stands, the confirm is natively disabled
-    // and described by the unreadable notice (and no longer by a permission the session holds).
-    const confirm = page.locator('[data-testid="enable-collection-confirm"]');
-    await expect(page.locator('#enable-activation-unreadable')).toBeVisible();
-    await expect(confirm).toBeDisabled();
-    await expect(confirm).toHaveAttribute('aria-describedby', /enable-activation-unreadable/);
-    await expect(confirm).not.toHaveAttribute('aria-describedby', /enable-permission/);
-
-    // A keyboard user therefore can never submit a state the server refused to describe: the sixth
-    // Tab after the main region skips the disabled confirm and lands on the refused read's one
-    // recovery (F63, AC-F63-c) — a real button that re-runs the read and never a command — and Back
-    // follows it.
-    await enterMainByKeyboard(page);
-    await pressTab(page, 6);
-    await expectKeyboardFocus(
-      page,
-      page.locator('[data-testid="enable-collection-read-again"]'),
-      'the refused read’s only recovery',
-    );
-    await pressTab(page);
-    await expectKeyboardFocus(page, backButton(page), 'Back, with the disabled confirm skipped');
-  });
-  test('a refused confirm names itself and hands focus to the heading that names it', async ({
-    page,
-  }) => {
-    await page.goto(
-      withVariant(
-        onboardingPath('en'),
-        seedQueryWith('onboarding-evidence', [
-          ENABLE_GRANTS_TOGGLE,
-          'fixture.variant.createPolicyRevision=unknown-field',
-        ]),
-      ),
-    );
-    await expect(shell(page)).toBeVisible();
-    await expectCurrentStep(page, 5);
-    await enterMainByKeyboard(page);
-
-    await tabUntil(page, '[data-testid="enable-collection-confirm"]');
-    await page.keyboard.press('Enter');
-
-    const heading = page.locator('#enable-confirm-failed-heading');
-    await expectKeyboardFocus(page, heading, 'the page-owned heading of a refused confirm');
-    // The section takes its name from that heading, so the refusal is announced as one region.
-    await expect(page.locator('[data-testid="enable-collection-error"]')).toHaveAccessibleName(
-      /collection could not be enabled/i,
-    );
-    const details = page.getByTestId('enable-collection-details');
-    await expect(details).toHaveAttribute('role', 'alert');
-    await expect(details).toHaveAccessibleName(/the server refused these values/i);
-    await expect(details).toContainText('/flaky_budget_max');
-    await expect(page.locator('[data-testid="enable-collection-enabled"]')).toHaveCount(0);
-  });
-});
-
-test.describe('W4 — resume at step 3, Back into step 2, health panel and quickstart', () => {
-  test('step 3 → Back → step 2 → Next, with no stray stop from the health panel', async ({
-    page,
-    context,
-  }) => {
-    // A successful Copy is part of the path; the clipboard read needs the grant.
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await page.goto(onboardingUrl('en', 'onboarding-token-used'));
-    await expect(shell(page)).toBeVisible();
-    await expectCurrentStep(page, 3);
-
-    // 1. Three enabled stepper buttons at step 3; the step-3 placeholder holds no focusable, so the
-    //    next stop after the stepper is Back. The walk into the region is the skip link and its
-    //    Enter, not a programmatic focus move.
-    await enterMainByKeyboard(page);
-    await pressTab(page, 3);
-    await expectKeyboardFocus(page, stepButton(page, 3), 'stepper 3 is the last stepper stop');
-    await pressTab(page);
-    await expectKeyboardFocus(page, backButton(page), 'Back after the step-3 placeholder');
-
-    // 2. Enter steps back: the heading and the connect page follow.
-    await page.keyboard.press('Enter');
-    await expectKeyboardFocus(page, page.locator(STEP_TITLE), 'the step-2 heading after Back');
-    await expectCurrentStep(page, 2);
-
-    // 3. The health panel is static text a screen reader reads in place: no Tab stop at all.
-    const health = page.locator('[data-testid="connection-health"]');
-    await expect(health).toHaveAttribute('data-health-state', 'healthy');
-    await expect(
-      health.locator('button, a, input, textarea, select, [tabindex="0"]'),
-      'the health panel added a Tab stop between the stepper and the quickstart',
-    ).toHaveCount(0);
-
-    // 4. Its rows are the server's metadata: the token name, its status pill and the recorded use.
-    const credentialRow = health.locator('[data-testid="connection-health-credential"]');
-    await expect(credentialRow).toHaveCount(1);
-    await expect(credentialRow.locator('strong')).toContainText(TOKEN_USED_NAME);
-    await expect(
-      credentialRow.locator('.status-pill__label'),
-      'the credential row renders a status label',
-    ).not.toBeEmpty();
-    await expect(health.locator('[data-testid="connection-health-last-use"] time')).toHaveAttribute(
-      'datetime',
-      TOKEN_USED_LAST_USED_AT,
-    );
-
-    // 5. The quickstart snippet is where the panel pair hands the keyboard on, and Copy succeeds.
-    await pressTab(page);
-    const snippet = page.locator(QUICKSTART_SNIPPET);
-    await expectKeyboardFocus(page, snippet, 'the CLI quickstart snippet after Back');
-    await expect(snippet).toHaveAccessibleName('CLI quickstart');
-
-    await pressTab(page);
-    const copyButton = page.locator('[data-testid="cli-quickstart-copy"]');
-    await expectKeyboardFocus(page, copyButton, 'the quickstart copy button');
-    await page.keyboard.press('Enter');
-    await expect(
-      page.locator('[data-testid="cli-quickstart-copy-status"]'),
-      'a successful copy announces itself',
-    ).not.toHaveText('');
-    // Success leaves focus on the control that copied; only the failure path pulls it to the <pre>.
-    await expect(
-      copyButton,
-      'a successful copy moved focus away from its own control',
-    ).toBeFocused();
-    await expect(snippet).not.toBeFocused();
-
-    // 6. The health panel and the quickstart add no stop between Copy and the first form field.
-    await pressTab(page);
-    await expectKeyboardFocus(
-      page,
-      page.locator('[data-testid="connect-oidc-repo-id"]'),
-      'the first OIDC field after the quickstart',
-    );
-
-    // Next is enabled on this seed (its step 2 is done), and Enter advances to step 3 with focus on
-    // the step heading. From the first OIDC field the remaining stops are: 3 more fields, the OIDC
-    // submit, the token name, the token submit, the row's Rotate, Back, then Next.
-    await pressTab(page, 9);
-    await expectKeyboardFocus(page, nextButton(page), 'Next at the end of the step-2 tab order');
-    await expect(nextButton(page)).toBeEnabled();
-    await page.keyboard.press('Enter');
-    await expectKeyboardFocus(page, page.locator(STEP_TITLE), 'the step-3 heading after Next');
-    await expectCurrentStep(page, 3);
   });
 });
