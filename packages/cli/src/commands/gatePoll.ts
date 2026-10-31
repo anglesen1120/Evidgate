@@ -43,9 +43,10 @@ export interface PollOptions {
 
 /**
  * Polls until a body carries a decision, the wait is spent, or the last answer was transient.
- * A spent wait on a pending body returns that body (exit code 2); a spent wait on a transient
- * failure throws it, so the caller reports the real failure (exit code 3) rather than a
- * pending verdict.
+ * A spent wait on a pending body returns that body (exit code 2). A spent wait on a transient
+ * failure throws it (exit code 3) — unless an earlier poll already reported the run pending,
+ * in which case that pending answer is the state the wait ended in: the last request is cut
+ * off by the deadline's own 1 ms budget, and an abort is not an answer the run gave.
  */
 export async function pollDecision(options: PollOptions): Promise<GateOutcome> {
   const now = options.deps.now ?? Date.now;
@@ -55,10 +56,14 @@ export async function pollDecision(options: PollOptions): Promise<GateOutcome> {
   const pollDeadline = options.waitMs <= 0 ? undefined : deadlineAt;
   let sleptMs = 0;
   let attempt = 1;
+  let lastPending: GateOutcome | undefined;
   let step = await options.next(pollDeadline);
   for (;;) {
     if (step.kind === 'body' && step.outcome.decision !== null) {
       return step.outcome;
+    }
+    if (step.kind === 'body') {
+      lastPending = step.outcome;
     }
     if (options.waitMs <= 0) {
       break;
@@ -79,6 +84,9 @@ export async function pollDecision(options: PollOptions): Promise<GateOutcome> {
     }
   }
   if (step.kind === 'transient') {
+    if (lastPending !== undefined) {
+      return lastPending;
+    }
     throw step.error;
   }
   return step.outcome;

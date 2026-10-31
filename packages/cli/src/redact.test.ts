@@ -176,6 +176,41 @@ describe('presigned URL redaction', () => {
     expect(redact(redact('http://[::1]:8080/p?sig=1'))).toBe('http://[::1]:8080/p?[REDACTED]');
   });
 
+  it('redacts_past_an_unbalanced_bracket', () => {
+    expect(redact('https://store.test/x?meta=[&sig=SECRET')).toBe(
+      'https://store.test/x?[REDACTED]',
+    );
+    expect(redact('https://store.test/x?[REDACTED]')).toBe('https://store.test/x?[REDACTED]');
+  });
+
+  it('redacts_a_fragment_that_precedes_a_question_mark', () => {
+    expect(redact('https://id.test/cb#access_token=SECRET?state=1')).toBe(
+      'https://id.test/cb#[REDACTED]',
+    );
+    expect(redact('https://id.test/cb#[REDACTED]')).toBe('https://id.test/cb#[REDACTED]');
+  });
+
+  it('redacts_past_punctuation_that_cannot_be_in_a_url', () => {
+    expect(redact('https://store.test/x?meta=[[1]]&sig=SECRET')).toBe(
+      'https://store.test/x?[REDACTED]',
+    );
+    expect(redact('https://store.test/x?a=1)&sig=SECRET')).toBe('https://store.test/x?[REDACTED]');
+    expect(redact('https://store.test/x?f={a}&sig=SECRET')).toBe('https://store.test/x?[REDACTED]');
+    expect(redact('https://s.test/f(1).png?sig=SECRET')).toBe('https://s.test/f(1).png?[REDACTED]');
+    expect(redact('https://id.test/cb#[REDACTED]]&x=SECRET')).toBe('https://id.test/cb#[REDACTED]');
+  });
+
+  it('keeps_a_json_escape_after_the_redacted_credential', () => {
+    expect(redact('"url":"https://a/b?x=1\\""')).toBe('"url":"https://a/b?[REDACTED]\\""');
+  });
+
+  it('stays_stable_when_a_short_secret_is_a_fragment_of_the_placeholder', () => {
+    registerSecret('RED');
+    const once = redact('value RED here');
+    expect(once).toBe(`value ${redacted} here`);
+    expect(redact(once)).toBe(once);
+  });
+
   it('does_not_stop_at_a_placeholder_inside_a_larger_query', () => {
     // A registered secret replaced inside the query must not end the match at its `]`,
     // which would leave the rest of the query readable.

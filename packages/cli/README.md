@@ -145,7 +145,9 @@ granted more time than the wait has left, its abort is a transport failure, and 
 command exits 3 — never 0. A token refresh keeps the same deadline, so a slow
 refresh cannot buy the replay a fresh window. The last poll is the exception: it
 starts on the deadline with the 1 ms minimum budget, so a decision that is already
-waiting there still counts.
+waiting there still counts. When that last request is instead cut off before it
+answers, the abort is not a verdict: a run that answered pending earlier exits 2,
+and only a run that never answered at all exits 3.
 
 Human mode prints `gate: <DECISION> (run <run_id>)` and one `  - <reason>` line per
 reason; a pending or timed-out run explains itself on stderr as

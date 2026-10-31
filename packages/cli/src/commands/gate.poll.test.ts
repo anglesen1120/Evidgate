@@ -48,6 +48,26 @@ function rateLimited(retryAfterSeconds: string): Response {
   );
 }
 
+/** Rejects as soon as the request's abort signal fires: a server that never answers. */
+function hangUntilAborted(
+  input: Request | string | URL,
+  init: RequestInit | undefined,
+  reject: (reason: Error) => void,
+): void {
+  const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+  if (signal === undefined) {
+    throw new Error('the request carries no abort signal');
+  }
+  const abort = (): void => {
+    reject(new DOMException('the operation was aborted', 'AbortError'));
+  };
+  if (signal.aborted) {
+    abort();
+    return;
+  }
+  signal.addEventListener('abort', abort);
+}
+
 describe('gate --wait', () => {
   const dirs = cacheDirs();
 
@@ -243,6 +263,45 @@ describe('gate --wait', () => {
       `/v1/runs/${runId}/decision`,
       '/v1/ci/token',
     ]);
+  });
+
+  it('reports pending when the poll at the deadline is aborted before it answers', async () => {
+    const env = await devEnv(dirs);
+    let requests = 0;
+    // The first poll answers pending; every later one hangs until the per-attempt budget
+    // aborts it, which is what the deadline's 1 ms window does on a real network.
+    const fetchImpl: typeof fetch = (input, init) =>
+      new Promise<Response>((resolve, reject) => {
+        requests += 1;
+        if (requests === 1) {
+          resolve(decided({ decision: null }));
+          return;
+        }
+        hangUntilAborted(input, init, reject);
+      });
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--wait', '1s']), env, out, fetchImpl);
+
+    expect(code).toBe(2);
+    // The aborted request may be replayed inside the poll's own budget, so the count is a
+    // lower bound; what matters is that the pending answer, not the abort, decides the exit.
+    expect(requests).toBeGreaterThanOrEqual(2);
+    expect(out.stderr.join('')).toBe(`evidgate: gate: run ${runId} is still pending after 1s\n`);
+  });
+
+  it('exits 3 when no poll ever produced an answer', async () => {
+    const env = await devEnv(dirs);
+    const fetchImpl: typeof fetch = (input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        hangUntilAborted(input, init, reject);
+      });
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--wait', '1s']), env, out, fetchImpl);
+
+    expect(code).toBe(3);
+    expect(out.stdout.join('')).toBe('');
   });
 
   it('exits 3 at the deadline when the server keeps answering 5xx', async () => {

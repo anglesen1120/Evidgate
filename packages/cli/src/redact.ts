@@ -25,12 +25,27 @@ let secretsByLength: readonly string[] = [];
 export const authorizationHeaderShape = /(authorization\s*:\s*)[^\r\n]*/gi;
 
 /**
- * An absolute http(s) URL. A unit is either a bracketed group — a host like `[::1]`, or an
- * already-redacted query value — or a run of characters that stops at whitespace, quotes,
- * angle brackets, brackets and the usual closing punctuation. That keeps wrapping text
- * outside the match and never cuts a placeholder in half, so a redacted URL stays stable.
+ * An absolute http(s) URL. Only the characters that cannot appear in one end the match —
+ * whitespace, `"`, `<`, `>`, a backtick — so a `)`, `]` or `}` inside a path can never cut the
+ * match short of its query. Wrapping punctuation is separated again in `credentialEnd`.
  */
-const absoluteUrl = /\bhttps?:\/\/(?:\[[^\s"'<>\]]*\]|[^\s"'<>`)\]}\[])+/gi;
+const absoluteUrl = /\bhttps?:\/\/[^\s"<>`]+/gi;
+/** Characters that belong to the surrounding text or to a JSON escape, not to the credential. */
+const urlTrailingPunctuation: Record<string, true> = {
+  '.': true,
+  ',': true,
+  ';': true,
+  ':': true,
+  '!': true,
+  '?': true,
+  '\\': true,
+  ')': true,
+  ']': true,
+  '}': true,
+  '>': true,
+  "'": true,
+  '"': true,
+};
 /**
  * `scheme://userinfo@host` — userinfo is a credential pair, never printed. The run is greedy
  * up to the last `@` before the path, because the password itself may contain one.
@@ -78,31 +93,76 @@ export function resetSecrets(): void {
  * credentials: userinfo is removed, and an http(s) URL loses its whole query and its whole
  * fragment, because a presigned URL IS a bearer credential whose signature travels in it (an
  * OAuth fragment flow carries the token in the same way). Naming the parameters to strip
- * would leak the ones a provider names differently, so the rule is positional. Rewriting an
- * already-redacted URL is a no-op: the pattern matches the placeholder whole, so the value
- * compares equal and stays as it is.
+ * would leak the ones a provider names differently, so the rule is positional. Only an
+ * absolute http(s) URL is recognised; a scheme-relative or percent-encoded one is not text
+ * this command produces, and widening the rule would start masking unrelated words.
+ * Rewriting an already-redacted URL is a no-op, so the writer's second pass cannot grow it.
  */
 export function redact(text: string): string {
+  // The text is split on the placeholder first, so a secret registered as a short fragment of
+  // `[REDACTED]` cannot rewrite one and grow it on every pass.
+  let output = text.split(redacted).map(replaceSecrets).join(redacted);
+  output = output.replace(authorizationHeaderShape, `$1${redacted}`);
+  return output.replace(absoluteUrl, redactUrl);
+}
+
+/** Replaces every registered secret in text that carries no placeholder yet. */
+function replaceSecrets(text: string): string {
   let output = text;
   for (const secret of secretsByLength) {
     output = output.split(secret).join(redacted);
   }
-  output = output.replace(authorizationHeaderShape, `$1${redacted}`);
-  return output.replace(absoluteUrl, (raw) => {
-    const withoutUserInfo = raw.replace(urlUserInfo, '$1');
-    const query = withoutUserInfo.indexOf('?');
-    if (query !== -1) {
-      return withoutUserInfo.slice(query + 1) === redacted
-        ? withoutUserInfo
-        : `${withoutUserInfo.slice(0, query)}?${redacted}`;
+  return output;
+}
+
+/**
+ * Redacts one matched URL: the userinfo goes, and so does everything after the first `?` or
+ * `#`. Punctuation that belongs to the surrounding text — a closing bracket from wrapping
+ * text, or the backslash of a JSON escape — stays outside the placeholder, and an
+ * already-redacted URL is returned unchanged, so a second pass cannot grow it.
+ */
+function redactUrl(raw: string): string {
+  const withoutUserInfo = raw.replace(urlUserInfo, '$1');
+  const start = credentialStart(withoutUserInfo);
+  if (start === -1) {
+    return withoutUserInfo;
+  }
+  const tail = withoutUserInfo.slice(start + 1);
+  if (tail.length === 0) {
+    return withoutUserInfo;
+  }
+  const end = credentialEnd(tail);
+  if (tail.slice(0, end) === redacted) {
+    return withoutUserInfo;
+  }
+  return `${withoutUserInfo.slice(0, start + 1)}${redacted}${tail.slice(end)}`;
+}
+
+/** Where the credential inside a URL tail ends: trailing punctuation and escapes stay out. */
+function credentialEnd(tail: string): number {
+  let end = tail.length;
+  while (end > 0) {
+    const last = tail[end - 1] as string;
+    if (urlTrailingPunctuation[last] !== true || tail.slice(0, end).endsWith(redacted)) {
+      return end;
     }
-    const fragment = withoutUserInfo.indexOf('#');
-    const tail = withoutUserInfo.slice(fragment + 1);
-    if (fragment === -1 || tail.length === 0 || tail === redacted) {
-      return withoutUserInfo;
-    }
-    return `${withoutUserInfo.slice(0, fragment)}#${redacted}`;
-  });
+    end -= 1;
+  }
+  return end;
+}
+
+/**
+ * Where the credential part of a URL begins: the first `?` or `#`, whichever comes first. A
+ * fragment counts because an OAuth implicit flow carries its token there, and a `?` inside a
+ * fragment must not hide the fragment in front of it.
+ */
+function credentialStart(url: string): number {
+  const query = url.indexOf('?');
+  const fragment = url.indexOf('#');
+  if (query === -1 || fragment === -1) {
+    return Math.max(query, fragment);
+  }
+  return Math.min(query, fragment);
 }
 
 /** Wraps an `Io` so every write is redacted. */

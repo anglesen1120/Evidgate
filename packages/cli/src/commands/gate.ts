@@ -333,6 +333,13 @@ function boundedErrorBody(response: Response): Response {
         controller.close();
         return;
       }
+      if (!(value instanceof Uint8Array)) {
+        // A non-byte chunk (only an injected fetch can produce one) would leave the cap
+        // unsized, so the body is cut here instead of being read without a bound.
+        await reader.cancel().catch(() => undefined);
+        controller.close();
+        return;
+      }
       bytes += value.byteLength;
       if (bytes > maxErrorBodyBytes) {
         await reader.cancel().catch(() => undefined);
