@@ -309,11 +309,35 @@ describe('gate', () => {
     }
   });
 
-  it('does not read an oversized error body whole', async () => {
+  it('stops reading an oversized error body at the cap', async () => {
     const env = await devEnv(dirs);
-    const body = 'x'.repeat(200 * 1024);
+    const chunk = new Uint8Array(8 * 1024).fill(0x78);
+    let pulled = 0;
+    let cancelled = 0;
+    // 200 KiB of unparseable text in 8 KiB chunks, counted, so removing the cap shows up.
+    const stream = (): ReadableStream<Uint8Array> => {
+      let enqueued = 0;
+      return new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (enqueued === 25) {
+            controller.close();
+            return;
+          }
+          enqueued += 1;
+          pulled += 1;
+          controller.enqueue(chunk);
+        },
+        cancel() {
+          cancelled += 1;
+        },
+      });
+    };
     const stub = stubFetch(
-      () => new Response(body, { status: 500, headers: { 'content-type': 'application/json' } }),
+      () =>
+        new Response(stream(), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        }),
     );
     const out = capture();
 
@@ -321,8 +345,11 @@ describe('gate', () => {
 
     expect(code).toBe(3);
     expect(out.stderr.join('')).toContain('error request_failed: the run decision request failed');
-    // The truncated envelope cannot name the failure, and a 5xx stays retryable.
     expect(stub.calls).toHaveLength(3);
+    // Each attempt stops just past the 64 KiB cap (8 chunks, one overflow chunk, plus the one
+    // the source buffers eagerly) and cancels the rest of the body.
+    expect(cancelled).toBe(3);
+    expect(pulled).toBeLessThanOrEqual(3 * 10);
   });
 
   it('exits 3 on 403 without retrying', async () => {
