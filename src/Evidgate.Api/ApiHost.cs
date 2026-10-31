@@ -103,7 +103,9 @@ public static partial class ApiHost
         // register ICallerAuthenticator, none exists yet so a deployed host authenticates nobody.
         builder.Services.AddSingleton<TenantResolver>();
 
-        builder.Services.AddMediator();
+        // Scoped, not the generator's Singleton default: handlers consume the per-request tenant
+        // transaction and scoped stores. The option is read at compile time, so each host sets it.
+        builder.Services.AddMediator((MediatorOptions options) => options.ServiceLifetime = ServiceLifetime.Scoped);
 
         // 01.4.2-T4: the single data-access path and the C2 pipeline (00 §5.5 C2).
         // Mediator's generated implementation stays registered by the host — the

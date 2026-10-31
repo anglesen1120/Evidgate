@@ -67,7 +67,9 @@ public static class WorkerHost
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        builder.Services.AddMediator();
+        // Scoped, not the generator's Singleton default: handlers consume the per-request tenant
+        // transaction and scoped stores. The option is read at compile time, so each host sets it.
+        builder.Services.AddMediator((MediatorOptions options) => options.ServiceLifetime = ServiceLifetime.Scoped);
 
         // 01.4.2-T4: the same C2 pipeline as the Api — a Mediator dispatch inside
         // the worker must still pass telemetry/validation/tenant/authorization/
