@@ -1,32 +1,32 @@
-// 04.2.3-T1.4: `evidgate events send` — the CLI's send path (04.2.3 §1, §2 AC1–AC4,
-// §5; contracts/cli.md §11). One invocation does up to two things in this order:
+// `evidgate events send` — the CLI's send path (contracts/cli.md §11). One invocation does up
+// to two things in this order:
 //
-// 1. **Intake** (`--from <file|->`): stream one JSONL file of 00 §9.4 envelopes, validate
-//    every line against the shared Ajv envelope schema, group the lines by their own
-//    `producer_id` and append them to the producer's spool under the exclusive
-//    `spool.lock` (D2) — after refusing while the reporter still holds that producer's
-//    `writer.lock` (D-S56-Q8, `spool_locked`). The cap is enforced twice: a running byte
-//    total during the stream (so memory stays bounded by about the cap and an oversized
-//    input is refused while it is still being read) and one pre-append total over every
-//    producer before the first write, so a refused intake writes nothing at all (CR2/CR3).
-//    `append` re-checks under the lock; the failure is `spool_cap_exceeded` (exit 3)
-//    naming run, producer and range.
-// 2. **Drain**: for `--producer <p>` or every producer directory of the run, read the
-//    unacked events from `cursor.json`'s `next_unacked_sequence`, pack them into
-//    ≤ 500-event / ≤ 1 MiB batches with a derived `Idempotency-Key`, and send them with
-//    one deadline (`EVIDGATE_SEND_DEADLINE`) and jittered backoff. Each ack advances the
-//    cursor over the *contiguous* prefix only, so a restart resumes at the first unacked
-//    sequence and no event is skipped or re-sent under a different identity (AC1/AC2).
+// 1. **Intake** (`--from <file|->`): stream one JSONL file of event envelopes, validate every
+//    line against the shared Ajv envelope schema, group the lines by their own `producer_id`
+//    and append them to the producer's spool under the exclusive `spool.lock` — after
+//    refusing while the reporter still holds that producer's `writer.lock` (`spool_locked`).
+//    The cap is enforced twice: a running byte total during the stream (so memory stays
+//    bounded by about the cap and an oversized input is refused while it is still being read)
+//    and one pre-append total over every producer before the first write, so a refusal on that
+//    total writes nothing at all. Each producer's guard then runs before THAT producer's
+//    directory is created, so a refused producer leaves none behind, though earlier producers
+//    of the same run may already be appended. `append` re-checks under the lock; the failure is
+//    `spool_cap_exceeded` (exit 3) naming run, producer and range.
+// 2. **Drain**: for `--producer <p>` or every producer directory of the run, read the unacked
+//    events from `cursor.json`'s `next_unacked_sequence`, pack them into ≤ 500-event / ≤ 1 MiB
+//    batches with a derived `Idempotency-Key`, and send them with one deadline
+//    (`EVIDGATE_SEND_DEADLINE`) and jittered backoff. Each ack advances the cursor over the
+//    *contiguous* prefix only, so a restart resumes at the first unacked sequence and no event
+//    is skipped or re-sent under a different identity.
 //
-// The command never deletes spool data: acked chunks stay until `runs finalize` purges
-// the producer directory (D2/D7). A 401 purges the cached CI token (the `runs create`
-// rule, contracts/cli.md §7); 403/422 and every other 4xx keep it and surface the
-// server's `error.code` + `request_id` verbatim (T9).
+// The command never deletes spool data: acked chunks stay until `runs finalize` purges the
+// producer directory. A 401 purges the cached CI token (contracts/cli.md §7); 403/422 and
+// every other 4xx keep it and surface the server's `error.code` (when it is a safe identifier)
+// and `request_id`, sanitized.
 //
-// Every flag is validated BEFORE `getToken()`, so a bad flag makes no request and no
-// token exchange at all (04.2.2 §8/§9 `runs create` rule). Each option is single-use
-// (`multiple: true`), so a repetition is refused as `usage` instead of silently taking
-// the last value.
+// Every flag is validated BEFORE `getToken()`, so a bad flag makes no request and no token
+// exchange at all. Each option is single-use (`multiple: true`), so a repetition is refused as
+// `usage` instead of silently taking the last value.
 import { createReadStream } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -75,10 +75,10 @@ const producerPattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 
 /**
  * The seams `main` forwards (`ExchangeDeps`) plus the ones a deadline-bounded send needs
- * (04.2.3 contract §sender.ts `SendDeps`) and the stdin surrogate for `--from -`. All are
- * optional, so the production path falls back to the real clock, `Math.random`, the
- * global `fetch`, a real timer and `process.stdin`; a spec injects each of them, which is
- * what makes AC1's ten-minute outage and AC2's restart deterministic (no real waiting).
+ * (`SendDeps`) and the stdin surrogate for `--from -`. All are optional, so the production
+ * path falls back to the real clock, `Math.random`, the global `fetch`, a real timer and
+ * `process.stdin`; a spec injects each of them, which is what makes an outage window and a
+ * restart deterministic with no real waiting.
  */
 interface EventsSendSeams extends ExchangeDeps {
   readonly now?: () => number;
@@ -98,12 +98,11 @@ export const eventsSendCommand: CommandDefinition = {
   name: 'events send',
   summary: 'send the spooled event envelopes of a run',
   requireToken: true,
-  // D5/CR8: the spool root is required and refused here, before the `--verbose` dump and
-  // before any flag, token or filesystem work (main runs `validateConfig` right after
-  // `resolveConfig`). Forcing `spoolSettings()` is also what makes a malformed
-  // `EVIDGATE_SPOOL_MAX_BYTES` or `EVIDGATE_SEND_DEADLINE` an `invalid_config` for THIS
-  // command only: the surface is lazy, so `runs create` and the other non-spool commands
-  // never read those variables at all.
+  // The spool root is required and refused here, before the `--verbose` dump and before any
+  // flag, token or filesystem work. Forcing `spoolSettings()` is also what makes a malformed
+  // `EVIDGATE_SPOOL_MAX_BYTES` or `EVIDGATE_SEND_DEADLINE` an `invalid_config` only for the
+  // commands that read the spool surface: `runs create`, `auth`, `config check` and
+  // `manifests upload` never read those variables at all.
   validateConfig: (config) => {
     if (config.spoolSettings().spoolDir === undefined) {
       throw spoolDirMissingError();
@@ -125,7 +124,7 @@ async function runEventsSend(context: CommandContext): Promise<ExitCode> {
   const seams = deps as EventsSendSeams;
 
   // Flags first, token second: an invalid flag reaches neither the token exchange nor the
-  // spool. Both ids become path segments verbatim (S3), so the spool-id rules are applied
+  // spool. Both ids become path segments verbatim, so the spool-id rules are applied
   // in addition to the wire shapes.
   const runId = requiredFlag(values, 'run');
   if (!uuidPattern.test(runId)) {
@@ -144,14 +143,14 @@ async function runEventsSend(context: CommandContext): Promise<ExitCode> {
     throw usageError(`--from must be a file path or ${stdinName}`);
   }
 
-  // Configuration before the token too (D5): `validateConfig` already forced the lazy
-  // settings, so this is a memoised read and cannot re-parse or re-fail (CR8).
+  // Configuration before the token too: `validateConfig` already forced the lazy
+  // settings, so this is a memoised read and cannot re-parse or re-fail.
   const settings = config.spoolSettings();
   const spoolDir = settings.spoolDir ?? resolveSpoolDir(env);
   const maxBytes = settings.spoolMaxBytes;
   // One Ajv compile for the whole invocation: the validator is stateless, and both the
-  // intake and the drain must apply exactly the same verdicts as the server (T42). The
-  // schemas are the ones compiled into the package, so no contracts directory is read.
+  // intake and the drain must apply exactly the same verdicts as the server. The schemas are
+  // the ones compiled into the package, so no contracts directory is read.
   const validate = createEnvelopeValidator();
 
   if (from !== undefined) {
@@ -195,7 +194,7 @@ async function intake(o: {
     string,
     { readonly lines: string[]; first: number; last: number; bytes: number }
   >();
-  // CR2/PF3/SC2: the run directory's size is read once here, and the byte total is kept
+  // The run directory's size is read once here, and the byte total is kept
   // while the input streams, so the cap is refused as soon as the input could not be
   // spooled. Memory therefore stays bounded by about `maxBytes` instead of by the size of
   // the file or the stdin stream. The bytes counted are exactly what `append` writes:
@@ -228,7 +227,7 @@ async function intake(o: {
       const first = group?.first ?? routed.sequence;
       if (usedBytes + intakeBytes + lineBytes > o.maxBytes) {
         // Nothing has been written yet and nothing will be: the whole intake is refused
-        // while the offending line is still the last one held (CR2). The range is what
+        // while the offending line is still the last one held. The range is what
         // was read for that producer so far, so it names the run and the producer the
         // operator has to act on.
         throw new SpoolCapExceededError({
@@ -264,12 +263,9 @@ async function intake(o: {
     throw inputError(`cannot read ${sourceName}: ${errno}`);
   }
 
-  // CR3: ONE cap check over the TOTAL of every producer before the first append, so the
-  // intake is all-or-nothing across producers. Without it, a run directory that grew
-  // while the input streamed could have producer A appended and then fail on producer B,
-  // leaving a half-applied intake that the same `--from` file could not be replayed into.
-  // `append` re-checks per producer under the lock, which stays the authority for a
-  // spool that another process grows concurrently.
+  // One cap check over the TOTAL before the first append, so a total over the cap writes
+  // nothing at all. The appends below stay per producer, so a failure there can still leave
+  // the earlier producers written; `append` re-checks under the lock.
   const usedBeforeAppend = await runDirBytes(o.spoolDir, o.runId);
   let requiredBytes = 0;
   for (const [producerId, group] of groups) {
@@ -320,11 +316,11 @@ async function intake(o: {
         maxBytes: o.maxBytes,
         createIfMissing: true,
       }));
-    // `append` checks the run-directory cap before writing (all-or-nothing per call), so
-    // a full spool leaves the spool byte-identical and raises `spool_cap_exceeded` (AC3).
-    // The continuation is re-checked under the lock, which is the authoritative read. The
-    // appender is also a chunk writer, so it refuses while the reporter still writes
-    // (D-S56-Q8): `spool_locked`, exit 3, before a single line is appended.
+    // `append` checks the run-directory cap before writing (all-or-nothing per call), so a
+    // full spool stays byte-identical and the call raises `spool_cap_exceeded`. The
+    // continuation is re-checked under the lock, which is the authoritative read. The
+    // appender is also a chunk writer, so it refuses while the reporter still writes:
+    // `spool_locked`, exit 3, before a single line is appended.
     await spool.withLock(
       async () => {
         const current = await nextExpectedSequence(spool);
@@ -348,7 +344,7 @@ async function drain(o: {
   readonly onlyProducer: string | undefined;
   readonly spoolDir: string;
   readonly maxBytes: number;
-  /** The one send deadline (D5), already resolved by the command's `validateConfig`. */
+  /** The one send deadline, already resolved by the command's `validateConfig`. */
   readonly sendDeadlineMs: number;
   readonly validate: (line: string, sequence: number) => void;
   readonly io: CommandContext['io'];
@@ -380,11 +376,11 @@ async function drain(o: {
       maxBytes: o.maxBytes,
     });
     // The range only exists inside the lock; it is kept for the failure hint so an error
-    // names the run, the producer and what is still unsent (AC3, T9 surfacing).
+    // names the run, the producer and what is still unsent.
     let unsent: { readonly first: number; readonly last: number } | null = null;
     try {
-      // D-S56-Q8: a live `writer.lock` makes the drain refuse with `spool_locked` (exit 3)
-      // before the range is read, so nothing is acked and nothing is sent.
+      // A live `writer.lock` makes the drain refuse with `spool_locked` (exit 3) before the
+      // range is read, so nothing is acked and nothing is sent.
       const outcome = await spool.withLock(
         async () => {
           const range = await spool.unsentRange();
@@ -392,7 +388,7 @@ async function drain(o: {
           if (range === null) {
             return undefined;
           }
-          // D4: a run directory already above the cap is reported before anything is sent,
+          // A run directory already above the cap is reported before anything is sent,
           // naming run, unsent range and cap — never a silent drop.
           const usedBytes = await runDirBytes(o.spoolDir, o.runId);
           if (usedBytes > o.maxBytes) {
@@ -427,7 +423,7 @@ async function drain(o: {
         }
       }
     } catch (error) {
-      // CR7: the failure names the FULL unsent range as it stands after the send settled
+      // The failure names the FULL unsent range as it stands after the send settled
       // (everything from the first unacked sequence to the last durable one), not only the
       // range of the batch that failed. A spool that cannot be re-read (corrupt, removed)
       // falls back to the range read before the send, so the message never loses the hint.
@@ -471,7 +467,7 @@ async function drain(o: {
  *
  * `sendBatches` delivers acks in completion order, and with up to four batches in flight
  * that order is not the sequence order. The cursor may only advance over a prefix with no
- * hole (D1/D7), so completed batches are held in a map keyed by their first sequence and
+ * hole, so completed batches are held in a map keyed by their first sequence and
  * the cursor is advanced while the expected sequence is present. An ack that completes
  * behind a gap is therefore durable in the map and applied as soon as the gap fills, and
  * the `ack` call itself is monotonic and re-checks the sequence on disk.
@@ -548,13 +544,13 @@ async function nextExpectedSequence(spool: ProducerSpool): Promise<number> {
 }
 
 /**
- * Maps a send failure to the `CliError` the operator sees, keeping the server's
- * `error.code` and `request_id` verbatim (T9): nothing here re-words
- * `producer_slot_taken`, `unknown_producer`, `deadline_exceeded` or `transport_failed`.
- * The run, the producer and the range that did not advance are added, because the spool
- * is what the operator has to act on; that range is the FULL unsent range read after the
- * send settled (CR7), and the failing batch's own range is only the fallback for a spool
- * that cannot be read again. A `CliError` raised by the spool itself
+ * Maps a send failure to the `CliError` the operator sees, keeping the server's `error.code`
+ * when it is a safe identifier and its `request_id` sanitized: nothing here re-words
+ * `producer_slot_taken`, `unknown_producer`,
+ * `deadline_exceeded` or `transport_failed`. The run, the producer and the range that did not
+ * advance are added, because the spool is what the operator has to act on; that range is the
+ * FULL unsent range read after the send settled, and the failing batch's own range is only
+ * the fallback for a spool that cannot be read again. A `CliError` raised by the spool itself
  * (`spool_cap_exceeded`, `spool_corrupt`, `spool_locked`, `spool_missing`, …) is already
  * precise and is returned unchanged.
  */
@@ -572,13 +568,13 @@ async function mapSendFailure(
   }
   if (error instanceof SendFailedError) {
     if (error.status === 401) {
-      // Best-effort, like `runs create`: the server's error is the one that must surface
-      // (04.2.1 §6). A 403/422 keeps the token, because neither says it is dead.
+      // Best-effort, like `runs create`: the server's error is the one that must surface.
+      // A 403/422 keeps the token, because neither says it is dead.
       await deleteCachedToken(o.config).catch(() => undefined);
     }
-    // CR7: `first..last` is the settled unsent range, so batches that were never
-    // dispatched and acks held behind a gap are covered too; the failing batch's range is
-    // used only when the spool could not be read after the failure.
+    // `first..last` is the settled unsent range, so batches that were never dispatched and
+    // acks held behind a gap are covered too; the failing batch's range is used only when
+    // the spool could not be read after the failure.
     const first = o.unsent === null ? error.firstSequence : o.unsent.first;
     const last = o.unsent === null ? error.lastSequence : o.unsent.last;
     return new CliError(
@@ -610,7 +606,7 @@ async function mapSendFailure(
       {
         code: 'envelope_invalid',
         hint:
-          'the spooled line is not a valid 00 §9.4 envelope; the server would reject the ' +
+          'the spooled line is not a valid event envelope; the server would reject the ' +
           'whole batch',
       },
     );
@@ -629,11 +625,11 @@ function unsentSuffix(range: { readonly first: number; readonly last: number } |
 /**
  * Streams one JSONL source as lines. Only a bounded amount of text is held: the longest
  * line seen plus one read block. A line above {@link maxSpoolLineBytes} — the spool
- * reader's own bound (S54 N3) — is refused as input rather than buffered, and the bound is
+ * reader's own bound — is refused as input rather than buffered, and the bound is
  * measured in UTF-8 BYTES, not UTF-16 code units: a multibyte line that fits the unit count
  * but not the byte count would otherwise be spooled and then be `spool_corrupt` for the
  * reader, blocking that producer. A final line without a trailing newline IS accepted here
- * (intake is not the spool reader, whose torn-tail rule is D3).
+ * (intake is not the spool reader, whose torn-tail rule drops such a line).
  */
 async function* splitLines(
   source: AsyncIterable<Uint8Array>,
@@ -746,10 +742,10 @@ function routeLine(
 }
 
 /**
- * The D4 cap failure found before sending: the run directory is already over
- * `EVIDGATE_SPOOL_MAX_BYTES`, so nothing can be appended and the drain stops rather than
- * send part of a spool it cannot grow. The message names the run, the bytes in use, the
- * cap and the unsent range of the producer being drained (AC3).
+ * The cap failure found before sending: the run directory is already over
+ * `EVIDGATE_SPOOL_MAX_BYTES`, so nothing can be appended and the drain stops rather than send
+ * part of a spool it cannot grow. The message names the run, the bytes in use, the cap and
+ * the unsent range of the producer being drained.
  */
 function capBreach(o: {
   readonly runId: string;
@@ -784,7 +780,7 @@ function inputError(message: string): CliError {
 function envelopeInvalid(message: string): CliError {
   return new CliError(message, {
     code: 'envelope_invalid',
-    hint: 'each spool line must be one 00 §9.4 event envelope',
+    hint: 'each spool line must be one event envelope',
   });
 }
 

@@ -1,70 +1,48 @@
-// 04.3.1-T1.1: the spool writer (decision 4 / task file §4). Layout is the task file's
-// literal contract, extended by 04.3.3-T1 (D-S56-Q1):
+// The spool writer. The on-disk layout is a contract with the CLI reader:
 //
-//   <spool_dir>/<run_id>/<producer_id>/NNNNNN.jsonl   (6-digit zero-padded chunks)
-//   <spool_dir>/<run_id>/<producer_id>/shards.json    { producer_id, shard_index,
-//                                                       shard_total?, sequence_next,
-//                                                       last_restart_at? }
-//   <spool_dir>/<run_id>/<producer_id>/writer.lock    { pid, started_at } (writerLock.ts)
+//   <spool_dir>/<run_id>/<producer_id>/NNNNNN.jsonl     (6-digit zero-padded chunks)
+//   <spool_dir>/<run_id>/<producer_id>/shards.json      { producer_id, shard_index,
+//                                                         shard_total?, sequence_next,
+//                                                         last_restart_at? }
+//   <spool_dir>/<run_id>/<producer_id>/writer.lock      { pid, started_at } (writerLock.ts)
 //   <spool_dir>/<run_id>/<producer_id>/checkpoint.json  legacy, read-only fallback
 //
-// 04.2.3's `<org_hash>/…/journal.seq` + `cursor.json` text is a recorded gap, not
-// followed (STATUS.md 04.3.1 row). `cursor.json` and `spool.lock` belong to the CLI
-// (contracts/cli.md §11) and are never written here.
+// `cursor.json` and `spool.lock` belong to the CLI (contracts/cli.md §11), never to this writer.
 //
-// 04.3.3-T1 replaced the per-flush `checkpoint.json` with `shards.json` as the single
-// reporter-owned sequence record: it is written atomically (tmp + fsync + rename +
-// directory fsync) at ROTATION, CLOSE and RESTART DETECTION only — never on a per-callback
-// flush, which was ~13 ms of extra fsync work per callback — and a legacy `checkpoint.json`
-// is read as a fallback and never written again (D-S54-Q2/D-S56-Q1: the chunk scan is the
-// authority, so the record can be sparse). Its `sequence_next` is the sequence after the
-// last line that reached a chunk, never one this writer only buffered (F1: a rotation
-// happens mid-batch, and an ahead value would leave a hole after a crash that the CLI
-// reader refuses as `spool_corrupt`); a value that was already on disk at open is kept as a
-// floor and never raised (D-S56-Q9). Because the record is advisory, a failing record write
-// at rotation is remembered and retried at the next rotation/close instead of failing the
-// flush (F2).
+// `shards.json` is the single reporter-owned sequence record, written atomically at rotation,
+// close and restart detection only — a per-callback fsync costs measurable time. The chunk scan
+// stays authoritative, so the record may be sparse and may lag: `sequence_next` is the sequence
+// after the last line that reached a chunk, never one only buffered here (a rotation mid-batch
+// would leave a hole after a crash that the reader refuses as `spool_corrupt`).
 //
-// Notices (04.3.3-T2, plan 04.3.3 §10 "reporter spool leftovers" (c)/(e)): two advisory
-// conditions are queued ONCE per writer and handed out by `takeNotices()`, so a caller can
-// surface them before `close()` does — a `shards.json` write that failed at rotation (the
-// flush still succeeded, so nothing else would report it until `close`), and a record floor
-// read at open that is ahead of `last chunk sequence + 1` (a hand-edited or legacy file: the
-// resume is unchanged and still honours the floor, D-S56-Q9, the reporter only wants to know
-// it READ such a record). The queue never throws and never carries a path.
+// A value already on disk at open is a floor and is never raised; a failed record write is retried
+// at the next rotation or close instead of failing the flush, because the record is advisory.
 //
-// Hardening: every spool open is `O_NOFOLLOW` and (outside Windows) `O_NONBLOCK`, and a
-// write target is `lstat`-refused unless it is a regular file, so a planted symlink, FIFO or
-// device can neither be followed nor block the writer (PS3, F5).
+// Two advisory conditions are queued once per writer for `takeNotices()`: a failed record write at
+// rotation (the flush succeeded, so nothing else would report it), and a record floor read at open
+// that is ahead of `last chunk sequence + 1` (a hand-edited or legacy file — the resume is
+// unchanged). The queue never throws and never carries a path.
 //
-// Durability: envelopes are appended per callback (O(1), no whole-suite buffering) into
-// a small pending batch; a flush writes the batch and fsyncs the chunk. A crash loses at
-// most `flushThreshold - 1` envelopes, and those sequences are minted again on restart.
-// On restart the writer reconciles `sequence_next` against the highest sequence already on
-// disk — the last COMPLETE parseable line of the highest chunk, scanning backwards, then
-// lower chunks — so a sequence is never reused (T84, AC2). A torn tail (a crash
-// mid-`writeSync` leaves a partial line with no trailing newline) is truncated back to the
-// last newline and fsynced before the first append, so the JSONL stays line-delimited for
-// the reader.
+// Hardening: `O_NOFOLLOW` and, outside Windows, `O_NONBLOCK` on every open, and a write target is
+// `lstat`-refused unless regular, so a planted symlink, FIFO or device can neither be followed nor
+// block the writer.
 //
-// Restart rule (T84, AC2): opening an existing producer directory keeps the SAME
-// `producer_id` (no restart suffix is ever minted), records `last_restart_at`, and resumes
-// the sequence where the durable chunks end.
+// Durability: per-callback appends go to a small pending batch, so O(1) per callback and no
+// whole-suite buffering; a flush writes it and fsyncs, so a crash loses at most
+// `flushThreshold - 1` envelopes and those sequences are minted again. On restart the record is
+// reconciled against the highest sequence on disk (the last complete line of the highest chunk,
+// backwards, then lower chunks), so a sequence is never reused, and a torn tail is truncated to the
+// last newline and fsynced before the first append.
 //
-// Single writer (04.3.3-T1): the writer holds `writer.lock` for its whole life, so two live
-// processes sharing `(run_id, producer_id)` cannot interleave lines; a second one fails
-// with `spool_writer_locked` naming the pid, and a lock left by a dead process is taken
-// over (writerLock.ts, ported from the CLI).
+// A restart keeps the SAME `producer_id`, records `last_restart_at` and resumes where the durable
+// chunks end. `writer.lock` is held for the writer's whole life, so two live processes sharing
+// `(run_id, producer_id)` cannot interleave lines; the second fails with `spool_writer_locked` and
+// a dead holder's lock is taken over (writerLock.ts, ported from the CLI).
 //
-// Cap (04.3.3-T1, contracts/cli.md §11.4): `EVIDGATE_SPOOL_MAX_BYTES` caps one run
-// directory (every producer). The running total is scanned once at open, incremented by
-// what this writer appends, and re-scanned at rotation; a batch that would cross the cap is
-// refused with `spool_cap_exceeded` BEFORE a byte is written, so there is never a silent
-// drop or a partial line.
-//
-// Rotation: a chunk rotates when it reaches `chunkMaxBytes` (1 MiB) or `chunkMaxLines`
-// (1000), whichever comes first, always to `highest + 1`; a chunk is never deleted by this
-// writer (D-S54-Q2: only a successful finalize purges the producer directory).
+// Cap and rotation: `EVIDGATE_SPOOL_MAX_BYTES` caps one run directory (scanned at open, incremented
+// by our appends, re-scanned at rotation) and a batch that would cross it is refused with
+// `spool_cap_exceeded` BEFORE a byte is written. A chunk rotates at `chunkMaxBytes` (1 MiB) or
+// `chunkMaxLines` (1000), always to `highest + 1`; only a successful finalize purges the directory.
 import {
   chmodSync,
   closeSync,
@@ -109,12 +87,12 @@ export const DEFAULT_CHUNK_MAX_BYTES = 1024 * 1024;
 export const DEFAULT_CHUNK_MAX_LINES = 1000;
 export const SPOOL_DIR_MODE = 0o700;
 export const SPOOL_FILE_MODE = 0o600;
-/** 04.3.3-T1 (D-S56-Q1): the single reporter-owned sequence record. */
+/** The single reporter-owned sequence record. */
 export const SHARDS_FILE = 'shards.json';
 export const SHARDS_TMP_FILE = 'shards.json.tmp';
 /**
- * 04.3.1-T1's sequence store. Read as a fallback when `shards.json` is absent and never
- * written again (04.3.3-T1); a leftover staging name is cleaned up at open.
+ * The legacy sequence store: read as a fallback when `shards.json` is absent and never written
+ * again; a leftover staging name is cleaned up at open.
  */
 export const CHECKPOINT_FILE = 'checkpoint.json';
 export const CHECKPOINT_TMP_FILE = 'checkpoint.json.tmp';
@@ -134,29 +112,28 @@ const MAX_SHARD_INDEX = 256;
 
 /**
  * `O_NOFOLLOW` is undefined on Windows; degrade to a plain open there, where the POSIX
- * symlink/ownership hardening does not apply (S3).
+ * symlink/ownership hardening does not apply.
  */
 const O_NOFOLLOW: number = process.platform === 'win32' ? 0 : fsConstants.O_NOFOLLOW;
 
 /**
- * F5: a planted FIFO must never block a spool open. `O_NONBLOCK` is a no-op on a regular
- * file; on a FIFO it makes a read open return immediately (the descriptor is then refused by
- * the regular-file check) and a write open fail with `ENXIO` instead of waiting for a reader.
- * The writer paths refuse a non-regular target by `lstat` before the open, so they never get
- * that far.
+ * A planted FIFO must never block a spool open. `O_NONBLOCK` is a no-op on a regular file; on a
+ * FIFO it makes a read open return immediately (the descriptor is then refused by the
+ * regular-file check) and a write open fail with `ENXIO` instead of waiting for a reader. The
+ * writer paths refuse a non-regular target by `lstat` before the open, so they never get that far.
  */
 const O_NONBLOCK: number = process.platform === 'win32' ? 0 : fsConstants.O_NONBLOCK;
 
-/** The only characters allowed in a `run_id`/`producer_id` path segment (S3, F8). */
+/** The only characters allowed in a `run_id`/`producer_id` path segment. */
 const SPOOL_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 /** Envelope `producer_id` `maxLength` (contracts/schemas/event-envelope.v1.json). */
 export const SPOOL_ID_MAX_LENGTH = 128;
 
 /**
- * Thrown at construction when `run_id` or `producer_id` is not a safe single path
- * segment. Both are joined into the spool path verbatim, so an id containing `..`, a
- * path separator, a NUL or a control character could escape `spool_dir` (S3).
+ * Thrown at construction when `run_id` or `producer_id` is not a safe single path segment. Both
+ * are joined into the spool path verbatim, so an id containing `..`, a path separator, a NUL or a
+ * control character could escape `spool_dir`.
  */
 export class EvidgateInvalidSpoolIdError extends Error {
   readonly field: 'run_id' | 'producer_id';
@@ -189,10 +166,10 @@ export class EvidgateInvalidSpoolConfigError extends Error {
 }
 
 /**
- * `spool_cap_exceeded` (04.3.3-T1, contracts/cli.md §11.4): the run's spool cannot take the
- * pending batch without crossing `EVIDGATE_SPOOL_MAX_BYTES`. Nothing of that batch was
- * written, so the caller sees a refusal rather than a silent drop or a partial line; the
- * reporter turns it into the same spool-write failure it reports for any other write error.
+ * `spool_cap_exceeded`: the run's spool cannot take the pending batch without crossing
+ * `EVIDGATE_SPOOL_MAX_BYTES`. Nothing of that batch was written, so the caller sees a refusal
+ * rather than a silent drop or a partial line; the reporter turns it into the same spool-write
+ * failure it reports for any other write error.
  */
 export class EvidgateSpoolCapExceededError extends Error {
   readonly code = 'spool_cap_exceeded';
@@ -227,7 +204,7 @@ export class EvidgateSpoolCapExceededError extends Error {
  * `spool_shard_mismatch`: the producer directory already carries a `shards.json` that names
  * a different producer or shard slot than the caller passed. That is a client bug (two runs
  * sharing a spool dir, or a recomputed shard index), so the writer refuses at construction
- * and never overwrites the record (AC2, T84).
+ * and never overwrites the record.
  */
 export class EvidgateShardRecordMismatchError extends Error {
   readonly code = 'spool_shard_mismatch';
@@ -297,8 +274,8 @@ export function assertValidSpoolId(field: 'run_id' | 'producer_id', value: strin
 }
 
 /**
- * Defence in depth for S3: even after id validation, the resolved writer directory must
- * stay inside the resolved spool root.
+ * Defence in depth: even after id validation, the resolved writer directory must stay inside the
+ * resolved spool root.
  */
 function assertWithinSpoolDir(spoolDir: string, directory: string): void {
   const root = resolve(spoolDir);
@@ -369,14 +346,13 @@ export function assertValidShardOption(shard: SpoolShard): void {
 }
 
 /**
- * D-S56-Q1 resume rule: `max(record, lastChunkSequence + 1)`. The record is a FLOOR, never a
- * ceiling — a stored value ahead of the chunks is honoured, because reuse is the only
- * sequence-related refusal the server has (`422 sequence_reused`, contracts/events/
- * ordering.md §1) while a hole is an accepted reconciliation fact (§3, §4 "continues at
- * checkpoint + 1"). Clamping to the chunks would re-emit a sequence the server already
- * accepted the moment a chunk file is lost or truncated, which AC2 forbids outright.
- * An unusable value (PS8(b): not a safe integer `>= 1`) is dropped while reading the record,
- * so a corrupt value can never move the cursor at all.
+ * The resume rule: `max(record, lastChunkSequence + 1)`. The record is a FLOOR, never a ceiling —
+ * a stored value ahead of the chunks is honoured, because reuse is the only sequence-related
+ * refusal the server has (`422 sequence_reused`, contracts/events/ordering.md) while a hole is an
+ * accepted reconciliation fact ("continues at checkpoint + 1"). Clamping to the chunks would
+ * re-emit a sequence the server already accepted the moment a chunk file is lost or truncated. An
+ * unusable value (not a safe integer `>= 1`) is dropped while reading the record, so a corrupt
+ * value can never move the cursor at all.
  */
 function reconcileSequenceNext(durableNext: number, storedNext: number | undefined): number {
   if (storedNext === undefined) return durableNext;
@@ -417,16 +393,16 @@ function directoryBytes(directory: string): number {
   return total;
 }
 
-/** The shard slot a producer stands for (task file §4, T54); `index` is 1-based. */
+/** The shard slot a producer stands for; `index` is 1-based. */
 export interface SpoolShard {
   index: number;
   total?: number;
 }
 
 /**
- * `shards.json` — the reporter-owned sequence record (task file §4, D-S56-Q1). It is
- * written at rotation, close and restart detection only; the chunk scan stays authoritative
- * for the resume sequence, so the record may lag behind the chunks after a crash.
+ * `shards.json` — the reporter-owned sequence record. It is written at rotation, close and
+ * restart detection only; the chunk scan stays authoritative for the resume sequence, so the
+ * record may lag behind the chunks after a crash.
  */
 export interface ShardsRecord {
   producer_id: string;
@@ -436,7 +412,7 @@ export interface ShardsRecord {
   last_restart_at?: string;
 }
 
-/** The legacy `checkpoint.json` shape (04.3.1 §4), read-only since 04.3.3-T1. */
+/** The legacy `checkpoint.json` shape, read-only. */
 export interface SpoolCheckpoint {
   producer_id: string;
   next_sequence: number;
@@ -458,7 +434,7 @@ export interface SpoolWriterOptions {
   spoolDir: string;
   runId: string;
   producerId: string;
-  /** The manifest shard slot this producer stands for (04.3.3-T1, T54). */
+  /** The manifest shard slot this producer stands for. */
   shard?: SpoolShard;
   /** Envelopes buffered before an automatic flush. Default {@link DEFAULT_FLUSH_THRESHOLD}. */
   flushThreshold?: number;
@@ -478,7 +454,7 @@ export interface SpoolWriterOptions {
   lock?: Omit<WriterLockOptions, 'now'>;
 }
 
-/** The advisory conditions {@link SpoolWriter.takeNotices} can report (04.3.3-T2). */
+/** The advisory conditions {@link SpoolWriter.takeNotices} can report. */
 export type SpoolNoticeCode = 'shards_write_failed' | 'shards_floor_ahead';
 
 /**
@@ -547,13 +523,12 @@ export class SpoolWriter {
   /**
    * The floor this producer directory already carried when the writer opened:
    * `max(durableNextSequence, stored sequence_next | next_sequence at open)`. The record is
-   * never written below it (D-S56-Q9), so a floor that arrived on disk is not thrown away by
-   * the first rewrite, while nothing this writer only buffered can push the record ahead of
-   * the chunks (F1).
+   * never written below it, so a floor that arrived on disk is not thrown away by the first
+   * rewrite, while nothing this writer only buffered can push the record ahead of the chunks.
    */
   private recordFloor: number;
   private nextSequence: number;
-  /** The last `shards.json` write failure (F2: the record is advisory, the failure is kept). */
+  /** The last `shards.json` write failure: the record is advisory, so the failure is kept. */
   private shardsFailure: Error | undefined;
   /** Queued {@link SpoolNotice}s not yet taken; each code is queued at most once per writer. */
   private notices: SpoolNotice[] = [];
@@ -576,7 +551,7 @@ export class SpoolWriter {
   private restartAt: string | undefined;
 
   constructor(options: SpoolWriterOptions) {
-    // D2: `run_id`/`producer_id` are joined into the spool path verbatim, so reject any
+    // `run_id`/`producer_id` are joined into the spool path verbatim, so reject any
     // value that could escape `spool_dir` before the first filesystem write.
     assertValidSpoolId('run_id', options.runId);
     assertValidSpoolId('producer_id', options.producerId);
@@ -599,17 +574,17 @@ export class SpoolWriter {
       this.shardTotal = options.shard.total;
     }
     mkdirSync(this.directory, { recursive: true, mode: SPOOL_DIR_MODE });
-    // S3: the run and producer directories are ours to create or reuse; reject a planted
+    // The run and producer directories are ours to create or reuse; reject a planted
     // symlink or a foreign-owned directory and force 0700 on an owned one. `spool_dir`
     // itself is left as given (a symlinked spool root is allowed, and a pre-existing
     // spool root keeps its mode).
     this.hardenDirectory(join(options.spoolDir, options.runId));
     this.hardenDirectory(this.directory);
-    // D-S56-Q1: the record is read before the lock so a mismatch is a clean refusal with
-    // nothing to undo; the chunk scan below stays authoritative for the sequence.
+    // The record is read before the lock so a mismatch is a clean refusal with nothing to undo;
+    // the chunk scan below stays authoritative for the sequence.
     const record = this.readShardsRecord();
     const legacy = record === null ? this.readCheckpoint() : null;
-    // 04.3.3-T1: one live writer per producer directory. A second live process fails with
+    // One live writer per producer directory. A second live process fails with
     // `spool_writer_locked` naming the holder; a dead one is taken over.
     this.lock = acquireWriterLock(this.directory, options.lock ?? {});
     trackLock(this.lock);
@@ -617,28 +592,27 @@ export class SpoolWriter {
       this.runBytes = directoryBytes(join(options.spoolDir, options.runId));
       this.recordBytes = this.existingRecordBytes();
       this.chunkIndex = this.highestChunkIndex();
-      // F9: read the highest chunk once and share the buffer with the torn-tail repair,
-      // the sequence scan and the open, instead of reading it three times.
+      // Read the highest chunk once and share the buffer with the torn-tail repair, the
+      // sequence scan and the open, instead of reading it three times.
       const highestChunk =
         this.chunkIndex < 1 ? null : this.readChunkIfExists(this.chunkPath(this.chunkIndex));
       const repairedChunk = this.truncateTornTail(highestChunk);
       const lastSequence = this.lastSequenceInChunks(repairedChunk);
       this.durableNextSequence = lastSequence + 1;
-      // D-S56-Q1: `max(record, lastChunkSequence + 1)` — the record is a floor, so a record
-      // ahead of the chunks can never be reused (see `reconcileSequenceNext`).
+      // `max(record, lastChunkSequence + 1)` — the record is a floor, so a record ahead of the
+      // chunks can never be reused (see `reconcileSequenceNext`).
       this.nextSequence = reconcileSequenceNext(
         this.durableNextSequence,
         record?.sequence_next ?? legacy?.next_sequence,
       );
-      // F1/D-S56-Q9: the reconciled value is the floor this directory already carried. It is
-      // the only thing that may hold the record above the chunks, and it never grows: what
-      // this writer only buffered must not reach the record (a crash would then skip
-      // sequences, which the CLI reader refuses as a hole in `spool_corrupt`).
+      // The reconciled value is the floor this directory already carried. It is the only thing
+      // that may hold the record above the chunks, and it never grows: what this writer only
+      // buffered must not reach the record (a crash would then skip sequences, which the CLI
+      // reader refuses as a hole in `spool_corrupt`).
       this.recordFloor = this.nextSequence;
-      // 04.3.3-T2 (hand-over (e)): a record ahead of `last chunk sequence + 1` is a floor the
-      // resume above honours (D-S56-Q9, unchanged), and no writer of ours mints such a file —
-      // so reading one means a hand-edited or legacy record. Say so once; the floor itself
-      // still wins.
+      // A record ahead of `last chunk sequence + 1` is a floor the resume above honours, and no
+      // writer of ours mints such a file — so reading one means a hand-edited or legacy record.
+      // Say so once; the floor itself still wins.
       if (record?.sequence_next !== undefined && record.sequence_next > this.durableNextSequence) {
         const floor = String(record.sequence_next);
         const highest = String(lastSequence);
@@ -648,7 +622,7 @@ export class SpoolWriter {
         );
       }
       this.openChunk(repairedChunk);
-      // Restart detection (T84): any durable state means this producer ran before. The same
+      // Restart detection: any durable state means this producer ran before. The same
       // `producer_id` is kept (no suffix is ever minted); the restart is recorded so the
       // continuity is provable from the spool, and a stale record is corrected.
       if (highestChunk !== null || record !== null || legacy !== null) {
@@ -673,8 +647,8 @@ export class SpoolWriter {
   }
 
   /**
-   * How many times `shards.json` has been written (04.3.3-T1 cadence seam: rotation, close
-   * and restart detection only — a per-callback flush must never bump it).
+   * How many times `shards.json` has been written (cadence seam: rotation, close and restart
+   * detection only — a per-callback flush must never bump it).
    */
   get shardsWriteCount(): number {
     return this.recordWrites;
@@ -691,24 +665,23 @@ export class SpoolWriter {
   }
 
   /**
-   * The last advisory `shards.json` write failure (F2). A rotation that could not write the
-   * record keeps going — the chunk scan is the resume authority — and the next rotation or
-   * `close` retries; this seam says whether the last attempt failed, so a caller (or a test)
-   * can tell a refused record from a written one. `close` still throws when its own retry
-   * fails, because that is the last chance to record the state. Since 04.3.3-T2 the first
-   * such failure at rotation also surfaces as a `shards_write_failed` notice from
-   * {@link takeNotices}, so a caller need not poll this getter mid-run (a later successful
-   * write clears it, which would hide the failure from a caller that reads it late).
+   * The last advisory `shards.json` write failure. A rotation that could not write the record
+   * keeps going — the chunk scan is the resume authority — and the next rotation or `close`
+   * retries; this seam says whether the last attempt failed, so a caller (or a test) can tell a
+   * refused record from a written one. `close` still throws when its own retry fails, because
+   * that is the last chance to record the state. The first such failure at rotation also surfaces
+   * as a `shards_write_failed` notice from {@link takeNotices}, so a caller need not poll this
+   * getter mid-run (a later successful write clears it, which would hide the failure from a
+   * caller that reads it late).
    */
   get lastShardsWriteFailure(): Error | undefined {
     return this.shardsFailure;
   }
 
   /**
-   * Returns the notices queued since the last call and clears them (04.3.3-T2). Each code is
-   * queued AT MOST ONCE per writer, and this method never throws — a notice is a best-effort
-   * report, so a caller may drain it at any point (boot, rotation, end of run) without
-   * affecting the spool.
+   * Returns the notices queued since the last call and clears them. Each code is queued AT MOST
+   * ONCE per writer, and this method never throws — a notice is a best-effort report, so a caller
+   * may drain it at any point (boot, rotation, end of run) without affecting the spool.
    */
   takeNotices(): readonly SpoolNotice[] {
     const notices = this.notices;
@@ -716,7 +689,7 @@ export class SpoolWriter {
     return notices;
   }
 
-  /** Queues one notice per code; a repeat of an already-queued code is dropped (04.3.3-T2). */
+  /** Queues one notice per code; a repeat of an already-queued code is dropped. */
   private pushNotice(code: SpoolNoticeCode, message: string): void {
     if (this.noticedCodes.has(code)) return;
     this.noticedCodes.add(code);
@@ -740,8 +713,8 @@ export class SpoolWriter {
 
   /**
    * Writes the pending batch and fsyncs the chunk. The `EVIDGATE_SPOOL_MAX_BYTES` check runs
-   * first, so a refused batch leaves the spool byte-identical — no partial line and no
-   * silent drop — and `shards.json` is deliberately not touched here (04.3.3-T1 cadence).
+   * first, so a refused batch leaves the spool byte-identical — no partial line and no silent
+   * drop — and `shards.json` is deliberately not touched here (the write cadence above).
    */
   flush(): void {
     if (this.pending.length === 0) return;
@@ -761,10 +734,9 @@ export class SpoolWriter {
       }
       this.fsyncChunk();
     } catch (error) {
-      // CR4/PS4: an envelope that never reached the chunk stays queued so a later flush
-      // can retry it instead of silently dropping evidence; the error still propagates.
-      // Envelopes already written (and fsynced) are not re-queued, so a retry cannot
-      // duplicate a durable line.
+      // An envelope that never reached the chunk stays queued so a later flush can retry it
+      // instead of silently dropping evidence; the error still propagates. Envelopes already
+      // written (and fsynced) are not re-queued, so a retry cannot duplicate a durable line.
       if (written < batch.length) {
         this.pending = batch.slice(written).concat(this.pending);
       }
@@ -810,8 +782,8 @@ export class SpoolWriter {
     try {
       this.writeAll(this.fd, buffer);
     } catch (error) {
-      // PS4: roll the chunk back to the last complete line so the JSONL stays parseable
-      // and the reader never sees a fragment; the original error still propagates.
+      // Roll the chunk back to the last complete line so the JSONL stays parseable and the
+      // reader never sees a fragment; the original error still propagates.
       try {
         ftruncateSync(this.fd, startOffset);
       } catch {
@@ -826,7 +798,7 @@ export class SpoolWriter {
     this.runBytes += buffer.byteLength;
   }
 
-  /** `spool_cap_exceeded` before the first byte of a batch (AC3: never a partial append). */
+  /** `spool_cap_exceeded` before the first byte of a batch, so an append is never partial. */
   private assertRunCap(requiredBytes: number): void {
     if (this.runBytes + requiredBytes <= this.maxRunBytes) return;
     throw new EvidgateSpoolCapExceededError({
@@ -839,8 +811,8 @@ export class SpoolWriter {
   }
 
   /**
-   * PS4: `writeSync` may write fewer bytes than asked (ENOSPC, EINTR, quota); loop until
-   * the whole buffer is written so a short write cannot leave a torn line.
+   * `writeSync` may write fewer bytes than asked (ENOSPC, EINTR, quota); loop until the whole
+   * buffer is written so a short write cannot leave a torn line.
    */
   private writeAll(fd: number, buffer: Buffer): void {
     let written = 0;
@@ -857,32 +829,31 @@ export class SpoolWriter {
   }
 
   /**
-   * Writes `shards.json` atomically (tmp + fsync + rename + directory fsync). Called at
-   * rotation, close and restart detection ONLY (04.3.3-T1 cadence): the chunk scan recovers
-   * the sequence, so this record never has to be on the per-callback path. The value is the
-   * sequence after the last line that reached a chunk, never one the writer only buffered —
-   * an ahead value would read as a gap after a crash (F1). Only a floor that was already on
-   * disk when this writer opened survives (D-S56-Q9).
+   * Writes `shards.json` atomically (tmp + fsync + rename + directory fsync). Called at rotation,
+   * close and restart detection ONLY: the chunk scan recovers the sequence, so this record never
+   * has to be on the per-callback path. The value is the sequence after the last line that
+   * reached a chunk, never one the writer only buffered — an ahead value would read as a gap
+   * after a crash. Only a floor that was already on disk when this writer opened survives.
    */
   private writeShardsRecord(): void {
     const record: ShardsRecord = {
       producer_id: this.producerId,
       ...(this.shardIndex === undefined ? {} : { shard_index: this.shardIndex }),
       ...(this.shardTotal === undefined ? {} : { shard_total: this.shardTotal }),
-      // F1: `durableNextSequence`, not `nextSequence`. A rotation happens mid-batch, so
+      // `durableNextSequence`, not `nextSequence`. A rotation happens mid-batch, so
       // `nextSequence` already covers envelopes still buffered; writing that value leaves a
       // record ahead of the chunks after a crash, and the resumed writer skips sequences
       // straight into a hole the CLI reader rejects (`spool_corrupt`, "skips the expected").
-      // `recordFloor` keeps a floor that arrived on disk (D-S56-Q9) without ever raising it.
+      // `recordFloor` keeps a floor that arrived on disk without ever raising it.
       sequence_next: Math.max(this.durableNextSequence, this.recordFloor),
       ...(this.restartAt === undefined ? {} : { last_restart_at: this.restartAt }),
     };
     const body = Buffer.from(`${JSON.stringify(record)}\n`, 'utf8');
     const tmpPath = join(this.directory, SHARDS_TMP_FILE);
     const targetPath = join(this.directory, SHARDS_FILE);
-    // PS3: clear a leftover tmp (a crash between write and rename) and re-create it with
-    // O_EXCL|O_NOFOLLOW, so a planted `shards.json.tmp -> victim` symlink is never
-    // truncated or followed.
+    // Clear a leftover tmp (a crash between write and rename) and re-create it with
+    // O_EXCL|O_NOFOLLOW, so a planted `shards.json.tmp -> victim` symlink is never truncated or
+    // followed.
     try {
       unlinkSync(tmpPath);
     } catch (error) {
@@ -940,10 +911,10 @@ export class SpoolWriter {
     try {
       this.openChunk(null);
     } catch (error) {
-      // CR4/PS4: a failed rotation must not leave the writer unable to flush. Restore the
-      // previous chunk's index and counters and reopen it, so the envelopes re-queued by
-      // `flush` can be written on a later call once the obstacle is gone (the README
-      // promise). The rotation error still propagates.
+      // A failed rotation must not leave the writer unable to flush. Restore the previous
+      // chunk's index and counters and reopen it, so the envelopes re-queued by `flush` can be
+      // written on a later call once the obstacle is gone (the README promise). The rotation
+      // error still propagates.
       this.chunkIndex = previousIndex;
       this.chunkBytes = previousBytes;
       this.chunkLines = previousLines;
@@ -955,17 +926,16 @@ export class SpoolWriter {
       }
       throw error;
     }
-    // 04.3.3-T1 cadence: the closed chunk is durable, so this is the moment the record can
-    // say `sequence_next` for it. Rotation is also the only place the cap cache is re-read
+    // The write cadence: the closed chunk is durable, so this is the moment the record can say
+    // `sequence_next` for it. Rotation is also the only place the cap cache is re-read
     // (other producers may have written since the open), which keeps the hot path O(batch).
     this.refreshRunBytes();
-    // F2: the record is ADVISORY — the chunk scan is authoritative on resume — so an
-    // ENOSPC/EIO while writing it must never fail the flush that just made the batch
-    // durable. The failure is remembered (`lastShardsWriteFailure`) and retried at the next
-    // write point (the next rotation or close), which re-derives the value from live
-    // counters, so nothing has to be replayed; the FIRST such failure also queues a
-    // `shards_write_failed` notice (04.3.3-T2), because this path has no other reporter. An
-    // identity refusal is a client bug and is still raised:
+    // The record is ADVISORY — the chunk scan is authoritative on resume — so an ENOSPC/EIO
+    // while writing it must never fail the flush that just made the batch durable. The failure
+    // is remembered (`lastShardsWriteFailure`) and retried at the next write point (the next
+    // rotation or close), which re-derives the value from live counters, so nothing has to be
+    // replayed; the FIRST such failure also queues a `shards_write_failed` notice, because this
+    // path has no other reporter. An identity refusal is a client bug and is still raised:
     // `EvidgateShardRecordMismatchError` comes from the constructor's record READ, never from
     // this write, and this catch never covers it.
     try {
@@ -974,11 +944,11 @@ export class SpoolWriter {
       if (error instanceof EvidgateShardRecordMismatchError) throw error;
       const failure = error instanceof Error ? error : new Error(String(error));
       this.shardsFailure = failure;
-      // 04.3.3-T2 (hand-over (c)): the flush above already succeeded, so this failure has no
-      // other reporter until `close` — where it arrives as a thrown error, not as a reason.
-      // Queue it once (a second failed rotation adds nothing) and name the code only: the
-      // message travels to the caller, so it must never carry the record path. A `code` that
-      // is not a short bare token (or no code at all) falls back to the error class name.
+      // The flush above already succeeded, so this failure has no other reporter until `close`
+      // — where it arrives as a thrown error, not as a reason. Queue it once (a second failed
+      // rotation adds nothing) and name the code only: the message travels to the caller, so it
+      // must never carry the record path. A `code` that is not a short bare token (or no code at
+      // all) falls back to the error class name.
       const errno = (failure as NodeJS.ErrnoException).code;
       const reason =
         typeof errno === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(errno) ? errno : failure.name;
@@ -1003,10 +973,10 @@ export class SpoolWriter {
       this.chunkBytes = 0;
       this.chunkLines = 0;
     }
-    // PS3: O_NOFOLLOW so a planted chunk symlink is refused; openVerified then rejects a
-    // non-regular or foreign-owned file and forces 0600 on the descriptor. F5: the append
-    // open is the one that would BLOCK on a planted FIFO, so the target is refused before
-    // the open when it is not a regular file.
+    // O_NOFOLLOW so a planted chunk symlink is refused; openVerified then rejects a non-regular
+    // or foreign-owned file and forces 0600 on the descriptor. The append open is the one that
+    // would BLOCK on a planted FIFO, so the target is refused before the open when it is not a
+    // regular file.
     this.assertWritableTargetIsRegularFile(path);
     this.fd = this.openVerified(
       path,
@@ -1029,18 +999,18 @@ export class SpoolWriter {
   }
 
   /**
-   * A crash mid-`writeSync` can leave a partial line with no trailing newline at the end
-   * of the highest chunk. Appending after it would concatenate the new JSON onto the
-   * fragment and corrupt the JSONL for the reader, so truncate the fragment back to the
-   * last newline and fsync before the first append. Returns the repaired content so the
-   * caller can share it with the sequence scan and the chunk open (F9).
+   * A crash mid-`writeSync` can leave a partial line with no trailing newline at the end of the
+   * highest chunk. Appending after it would concatenate the new JSON onto the fragment and
+   * corrupt the JSONL for the reader, so truncate the fragment back to the last newline and
+   * fsync before the first append. Returns the repaired content so the caller can share it with
+   * the sequence scan and the chunk open.
    */
   private truncateTornTail(content: Buffer | null): Buffer | null {
     if (content === null) return null;
     if (content.byteLength === 0 || content[content.byteLength - 1] === 0x0a) return content;
     const lastNewline = content.lastIndexOf(0x0a);
     const path = this.chunkPath(this.chunkIndex);
-    // PS3: O_NOFOLLOW so a planted chunk symlink is refused.
+    // O_NOFOLLOW so a planted chunk symlink is refused.
     const fd = this.openVerified(path, fsConstants.O_RDWR | O_NOFOLLOW);
     try {
       ftruncateSync(fd, lastNewline + 1);
@@ -1052,11 +1022,11 @@ export class SpoolWriter {
   }
 
   /**
-   * The highest sequence already durable on disk. Scans chunks from the highest index
-   * down, and within each chunk from the last line backwards, so a torn or corrupt final
-   * line falls back to the previous COMPLETE parseable line instead of dropping the whole
-   * chunk (D1: otherwise the counter restarts at 1 and reuses durable sequences). The
-   * highest chunk's already-read (and repaired) buffer is reused instead of re-read (F9).
+   * The highest sequence already durable on disk. Scans chunks from the highest index down, and
+   * within each chunk from the last line backwards, so a torn or corrupt final line falls back to
+   * the previous COMPLETE parseable line instead of dropping the whole chunk — otherwise the
+   * counter restarts at 1 and reuses durable sequences. The highest chunk's already-read (and
+   * repaired) buffer is reused instead of re-read.
    */
   private lastSequenceInChunks(highestContent: Buffer | null): number {
     const indices = readdirSync(this.directory)
@@ -1075,12 +1045,12 @@ export class SpoolWriter {
         if (line === undefined || line.length === 0) continue;
         try {
           const parsed = JSON.parse(line) as { sequence?: unknown };
-          // F4: only a safe integer `>= 1` is a sequence, exactly as the `shards.json` and
+          // Only a safe integer `>= 1` is a sequence, exactly as the `shards.json` and
           // `checkpoint.json` readers require. `1e300` (a float past the safe range) or a
-          // negative/float value is not a sequence this writer may resume after: it would
-          // move the counter to an imprecise number and the record would carry it. Such a
-          // line is unreadable, and — like the `catch` below for a non-JSON tail — the scan
-          // keeps going backwards to the last line that IS a sequence.
+          // negative/float value is not a sequence this writer may resume after: it would move
+          // the counter to an imprecise number and the record would carry it. Such a line is
+          // unreadable, and — like the `catch` below for a non-JSON tail — the scan keeps going
+          // backwards to the last line that IS a sequence.
           const sequence = parsed.sequence;
           if (typeof sequence === 'number' && Number.isSafeInteger(sequence) && sequence >= 1) {
             return sequence;
@@ -1094,10 +1064,10 @@ export class SpoolWriter {
   }
 
   /**
-   * Reads `shards.json` (04.3.3-T1). Returns `null` when the file is absent or unusable — a
-   * torn/corrupt record is ignored, because the chunk scan alone recovers the sequence — and
-   * refuses (`spool_shard_mismatch`, no overwrite) when the record names another producer or
-   * shard slot than the caller passed: that is a client bug, not a resume (AC2).
+   * Reads `shards.json`. Returns `null` when the file is absent or unusable — a torn/corrupt
+   * record is ignored, because the chunk scan alone recovers the sequence — and refuses
+   * (`spool_shard_mismatch`, no overwrite) when the record names another producer or shard slot
+   * than the caller passed: that is a client bug, not a resume.
    */
   private readShardsRecord(): StoredShards | null {
     const path = join(this.directory, SHARDS_FILE);
@@ -1118,7 +1088,7 @@ export class SpoolWriter {
         ? parsed.shard_index
         : undefined;
     // A record for another producer or shard slot is a client bug (two runs sharing a spool
-    // dir, or a recomputed shard index), not a resume: refuse and never overwrite (AC2).
+    // dir, or a recomputed shard index), not a resume: refuse and never overwrite.
     const indexDisagrees =
       this.shardIndex !== undefined && shardIndex !== undefined && shardIndex !== this.shardIndex;
     if (parsed.producer_id !== this.producerId || indexDisagrees) {
@@ -1134,8 +1104,8 @@ export class SpoolWriter {
         },
       });
     }
-    // PS8(b): a tampered/corrupt record must not jump the sequence to an imprecise value
-    // (1e300, 2**53), so require a safe integer; the chunk scan then decides (D-S56-Q1).
+    // A tampered/corrupt record must not jump the sequence to an imprecise value (1e300,
+    // 2**53), so require a safe integer; the chunk scan then decides.
     const sequenceNext =
       typeof parsed.sequence_next === 'number' &&
       Number.isSafeInteger(parsed.sequence_next) &&
@@ -1160,13 +1130,13 @@ export class SpoolWriter {
   }
 
   /**
-   * Reads the legacy `checkpoint.json` (04.3.1 §4) as a fallback when `shards.json` is
-   * absent. It is never written again (04.3.3-T1); a leftover staging name is removed here,
-   * so an old crash between write and rename cannot leave one behind forever.
+   * Reads the legacy `checkpoint.json` as a fallback when `shards.json` is absent. It is never
+   * written again; a leftover staging name is removed here, so an old crash between write and
+   * rename cannot leave one behind forever.
    */
   private readCheckpoint(): SpoolCheckpoint | null {
     try {
-      // Best-effort cleanup of 04.3.1's staging name: we never write it again, and a crash
+      // Best-effort cleanup of the legacy staging name: we never write it again, and a crash
       // between its write and rename could otherwise leave it behind forever. `unlink` never
       // follows a symlink, and a non-file entry is left alone (it is not ours to remove).
       unlinkSync(join(this.directory, CHECKPOINT_TMP_FILE));
@@ -1186,8 +1156,8 @@ export class SpoolWriter {
     if (typeof parsed !== 'object' || parsed === null) return null;
     if (
       typeof parsed.next_sequence === 'number' &&
-      // PS8(b): a tampered/corrupt checkpoint must not jump the sequence to an imprecise
-      // value (1e300, 2**53), so require a safe integer.
+      // A tampered/corrupt checkpoint must not jump the sequence to an imprecise value
+      // (1e300, 2**53), so require a safe integer.
       Number.isSafeInteger(parsed.next_sequence) &&
       parsed.next_sequence >= 1
     ) {
@@ -1203,15 +1173,15 @@ export class SpoolWriter {
   private readRecordFile(path: string): string | null {
     let fd: number;
     try {
-      // F5: `O_NONBLOCK` so a planted FIFO opens without waiting for a writer; the `fstat`
-      // below then refuses the non-regular descriptor instead of blocking the reporter.
+      // `O_NONBLOCK` so a planted FIFO opens without waiting for a writer; the `fstat` below
+      // then refuses the non-regular descriptor instead of blocking the reporter.
       fd = openSync(path, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') return null;
       // ELOOP (a planted symlink), EACCES, EIO: a record we cannot read is refused rather
       // than read as absent, so a symlinked or unreadable record can never be replaced
-      // silently (PS3, the same rule the chunks follow).
+      // silently — the same rule the chunks follow.
       throw new Error(
         `@evidgate/playwright-reporter: refusing to read spool record ${path} (${code ?? 'unknown OS error'})`,
       );
@@ -1265,11 +1235,11 @@ export class SpoolWriter {
   }
 
   /**
-   * F5: a write open must never reach a planted FIFO/socket/device or a directory. `open`
-   * with `O_WRONLY` on a FIFO would wait for a reader (or, with one, write spool lines into
-   * a pipe), so the target is inspected first and refused when it exists and is not a
-   * regular file. A symlink is refused too (`O_NOFOLLOW` would turn it into `ELOOP`); the
-   * caller's `openVerified` still re-checks the descriptor for a race.
+   * A write open must never reach a planted FIFO/socket/device or a directory. `open` with
+   * `O_WRONLY` on a FIFO would wait for a reader (or, with one, write spool lines into a pipe),
+   * so the target is inspected first and refused when it exists and is not a regular file. A
+   * symlink is refused too (`O_NOFOLLOW` would turn it into `ELOOP`); the caller's
+   * `openVerified` still re-checks the descriptor for a race.
    */
   private assertWritableTargetIsRegularFile(path: string): void {
     let stats: Stats;
@@ -1287,13 +1257,13 @@ export class SpoolWriter {
   }
 
   /**
-   * PS3/F5: opens a spool file with the given flags (plus `O_NONBLOCK`, see below) and
-   * verifies the descriptor: it must be a regular file owned by the current process, and
-   * (when a mode is given) is forced to that mode. A non-regular file (a symlink target,
-   * FIFO or device) or a foreign-owned file is rejected. On Windows the ownership/mode
-   * checks are skipped. `O_NONBLOCK` is added here so no call site can forget it: it is a
-   * no-op on a regular file and stops a planted FIFO from blocking whichever open reaches it
-   * first (`readChunk`, the torn-tail truncation, the append or the record staging file).
+   * Opens a spool file with the given flags (plus `O_NONBLOCK`, see below) and verifies the
+   * descriptor: it must be a regular file owned by the current process, and (when a mode is
+   * given) is forced to that mode. A non-regular file (a symlink target, FIFO or device) or a
+   * foreign-owned file is rejected. On Windows the ownership/mode checks are skipped.
+   * `O_NONBLOCK` is added here so no call site can forget it: it is a no-op on a regular file
+   * and stops a planted FIFO from blocking whichever open reaches it first (`readChunk`, the
+   * torn-tail truncation, the append or the record staging file).
    */
   private openVerified(path: string, flags: number, mode?: number): number {
     const fd = openSync(path, flags | O_NONBLOCK, mode);
@@ -1321,10 +1291,10 @@ export class SpoolWriter {
   }
 
   /**
-   * PS3: a directory the writer creates or reuses under `spool_dir` must be a real
-   * directory owned by the current process; a symlink or a foreign-owned directory is
-   * rejected, and an owned one is forced to 0700. `spool_dir` itself is never passed here
-   * (a symlinked spool root is allowed and keeps its mode).
+   * A directory the writer creates or reuses under `spool_dir` must be a real directory owned by
+   * the current process; a symlink or a foreign-owned directory is rejected, and an owned one is
+   * forced to 0700. `spool_dir` itself is never passed here (a symlinked spool root is allowed and
+   * keeps its mode).
    */
   private hardenDirectory(path: string): void {
     const stats = lstatSync(path);
@@ -1356,7 +1326,7 @@ export class SpoolWriter {
     }
   }
 
-  /** Reads a chunk through an O_NOFOLLOW, ownership-checked descriptor (PS3). */
+  /** Reads a chunk through an O_NOFOLLOW, ownership-checked descriptor. */
   private readChunk(path: string): Buffer {
     const fd = this.openVerified(path, fsConstants.O_RDONLY | O_NOFOLLOW);
     try {

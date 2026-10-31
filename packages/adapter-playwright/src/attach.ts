@@ -1,34 +1,31 @@
-// 04.3.3-T2.2: the attachment pipeline between `result.attachments` and the `artifact_ids`
-// of `test.finished` (04.3.3 §2 AC5–AC7, §5 "Upload call", §6 attachment states, §7
-// Performance/NFR-04-1, §8, §9 `attach.test.ts`).
+// The attachment pipeline between `result.attachments` and the `artifact_ids` of `test.finished`.
 //
 // Why a pipeline object instead of code inside `onTestEnd`: the callback must stay cheap and
 // synchronous for the common case (no attachments), and the upload work must survive past the
 // callback — Playwright gives the reporter no chance to await per-test work, only `onEnd`. So
-// this object owns the three pieces the wave-1 modules provide and the reporter does not have
-// to reason about any of them:
-// - `attachMap.mapAttachment` (kind, media type, sensitive flag; AC4/AC7),
-// - `attachPaths.createPathGuard` (allow-listed roots, symlink and traversal refusal, size;
-//   AC6) and `attachMap.isOverCap` (per-kind cap, checked BEFORE a byte is read),
-// - `drain.UploadDrain` (bounded concurrency, one deadline; AC5/NFR-04-1).
+// this object owns the three pieces the mapping, guard and drain modules provide and the
+// reporter does not have to reason about any of them:
+// - `attachMap.mapAttachment` (kind, media type, sensitive flag),
+// - `attachPaths.createPathGuard` (allow-listed roots, symlink and traversal refusal, size) and
+//   `attachMap.isOverCap` (per-kind cap, checked BEFORE a byte is read),
+// - `drain.UploadDrain` (bounded concurrency, one deadline).
 //
-// Dependency direction (coordinator decision Q1): this file is the ONE place in the reporter
-// that loads `@evidgate/cli` at runtime, and only lazily — a run without an uploadable
-// attachment never pays for the import, and a failed import (a broken install) degrades to one
-// `attachments_unavailable` warning per run while every test result is still emitted (AC5).
-// A missing CLI configuration (`missing_config`/`invalid_config` from
-// `createAttachmentUploader`) is `attachments_unconfigured`, once per run; the spool-only
-// offline mode keeps working unchanged.
+// Dependency direction: this file is the ONE place in the reporter that loads `@evidgate/cli` at
+// runtime, and only lazily — a run without an uploadable attachment never pays for the import,
+// and a failed import (a broken install) degrades to one `attachments_unavailable` warning per
+// run while every test result is still emitted. A missing CLI configuration
+// (`missing_config`/`invalid_config` from `createAttachmentUploader`) is
+// `attachments_unconfigured`, once per run; the spool-only offline mode keeps working unchanged.
 //
 // Order of operations per attachment is what makes the refusals free: map (pure) → path guard
 // (no CLI, no read) → uploader config (memoised) → per-kind cap → `drain.submit(upload)`. A
 // refused attachment therefore costs no request at all.
 //
-// Secret hygiene (04.3.3 §8 S3, DECISIONS §7): an upload failure becomes a record plus a
-// warning that name only the file's BASE name, the kind and the CLI's own error `code`. The
-// error message is never forwarded — it can embed a presigned URL or a path — and the artifact
-// id is only taken from a completed upload whose value is a UUID. The token and the presigned
-// URL live inside the CLI's uploader and never reach an envelope.
+// Secret hygiene: an upload failure becomes a record plus a warning that name only the file's
+// BASE name, the kind and the CLI's own error `code`. The error message is never forwarded — it
+// can embed a presigned URL or a path — and the artifact id is only taken from a completed
+// upload whose value is a UUID. The token and the presigned URL live inside the CLI's uploader
+// and never reach an envelope.
 //
 // Bounds: at most {@link MAX_ATTACHMENTS_PER_TEST} attachments of one test and
 // {@link MAX_ATTACHMENTS_PER_RUN} per run are considered; the overflow is skipped with ONE
@@ -96,8 +93,8 @@ const CODE_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/u;
  * test: Playwright reported attachments but the reporter has no planned execution key.
  * `attachment_upload_failed` names the CLI/server code only; `attachment_drain_deadline` is
  * one per run at `onEnd`; `attachment_limit` is one per run. `shards_write_failed` and
- * `shards_floor_ahead` are the writer's own once-per-run notices (04.3.3-T2, handed over from
- * 04.3.3-T1).
+ * `shards_floor_ahead` are the writer's own once-per-run notices, handed over from the spool
+ * writer.
  */
 export type AttachmentWarningCode =
   | 'attachments_unavailable'
@@ -136,7 +133,7 @@ export interface AttachmentRecord {
 /** One attempt's attachments, as the reporter hands them over. */
 export interface AttachmentProcessInput {
   readonly attachments: readonly PlaywrightAttachment[];
-  /** The suite or case opted in through the `evidgate.sensitive` annotation (AC7). */
+  /** The suite or case opted in through the `evidgate.sensitive` annotation. */
   readonly sensitiveAnnotated: boolean;
   readonly runId: string;
   readonly producerId: string;
@@ -154,7 +151,7 @@ export interface AttachmentProcessResult {
 
 /** What {@link AttachmentPipeline.finish} reports after the drain deadline. */
 export interface AttachmentFinishResult {
-  /** True when the deadline fired before every upload settled (NFR-04-1). */
+  /** True when the deadline fired before every upload settled. */
   timedOut: boolean;
   /** Jobs the deadline had to abandon. */
   abandoned: number;
@@ -163,7 +160,7 @@ export interface AttachmentFinishResult {
 }
 
 export interface AttachmentPipelineOptions {
-  /** The allow-listed roots (`defaultAttachmentRoots`); AC6. */
+  /** The allow-listed roots (`defaultAttachmentRoots`). */
   readonly roots: readonly string[];
   /** The directory relative attachment paths and roots resolve against. */
   readonly cwd: string;
@@ -172,8 +169,8 @@ export interface AttachmentPipelineOptions {
   /** The CLI's `EVIDGATE_*` surface, never the ambient process env read directly. */
   readonly env?: Readonly<Record<string, string | undefined>>;
   /**
-   * The single runtime load of `@evidgate/cli` (coordinator decision Q1). Memoised, so a run
-   * imports the CLI at most once; a spec injects a fake module here.
+   * The single runtime load of `@evidgate/cli`. Memoised, so a run imports the CLI at most
+   * once; a spec injects a fake module here.
    */
   readonly importCli?: () => Promise<CliModule>;
   /** Requested upload parallelism; `UploadDrain` clamps it to at most 2 per shard. */
@@ -201,9 +198,9 @@ interface OneOutcome {
 /** An attachment that survives mapping: everything the queued job needs to read. */
 interface UploadPlan {
   readonly attachment: MappedAttachment;
-  /** AC7's final flag: the annotation, or the kind's default. */
+  /** The final sensitivity flag: the annotation, or the kind's default. */
   readonly sensitive: boolean;
-  /** The mapping-time warnings (the AC7 wire gap) the record's warning carries. */
+  /** The mapping-time warnings the record's warning carries. */
   readonly warnings: readonly AttachmentWarning[];
 }
 
@@ -238,7 +235,7 @@ export class AttachmentPipeline {
   private readonly guard: PathGuard;
   private readonly drain: UploadDrain;
   private readonly deadlineMs: number;
-  /** The allow-list, handed to the CLI's own guard unchanged (the two must agree, AC6). */
+  /** The allow-list, handed to the CLI's own guard unchanged (the two must agree). */
   private readonly roots: readonly string[];
   private readonly cwd: string;
   private readonly env: Readonly<Record<string, string | undefined>>;
@@ -277,14 +274,14 @@ export class AttachmentPipeline {
     return this.attempts.size > 0;
   }
 
-  /** The drain deadline this pipeline was built with (NFR-04-1). */
+  /** The drain deadline this pipeline was built with. */
   get drainDeadlineMs(): number {
     return this.deadlineMs;
   }
 
   /**
    * Maps, guards, caps and uploads one attempt's attachments. Never rejects: every failure is
-   * a record plus a warning, so the caller can always emit the test result (AC5).
+   * a record plus a warning, so the caller can always emit the test result.
    *
    * The upload JOBS of one attachment start in the order they were queued (`UploadDrain` keeps
    * at most two in flight). Their PUTs may still interleave: a job's own first awaits (the path
@@ -306,7 +303,7 @@ export class AttachmentPipeline {
   /**
    * Starts the drain deadline and waits for every in-flight attempt, including the ones still
    * resolving an attachment path or a lazily loaded uploader. Resolves at the deadline even if
-   * an upload hangs (NFR-04-1); never rejects.
+   * an upload hangs; never rejects.
    */
   async finish(): Promise<AttachmentFinishResult> {
     const drained = await this.drain.finish();
@@ -361,7 +358,7 @@ export class AttachmentPipeline {
       await Promise.all(pending);
       // Once per run, and never swallowed by a job the deadline abandoned: the warning belongs
       // to the ATTEMPT that observed the uploader state, so a job whose step was discarded can
-      // no longer consume it (F5).
+      // no longer consume it.
       this.noteRunWarning(warnings);
       for (const slot of slots) {
         if (slot === undefined) continue;
@@ -371,7 +368,7 @@ export class AttachmentPipeline {
       }
     } catch {
       // `plan()` and `settle()` already turn every documented failure into a record; this is
-      // the belt-and-braces path (an unexpected bug) and still keeps the test result (AC5).
+      // the belt-and-braces path (an unexpected bug) and still keeps the test result.
       warnings.push({
         code: 'attachments_unavailable',
         message: 'the attachment pipeline failed; the remaining attachments were skipped',
@@ -381,7 +378,7 @@ export class AttachmentPipeline {
   }
 
   /**
-   * The synchronous half of one attachment: map it, apply AC7's sensitivity rule and, when it
+   * The synchronous half of one attachment: map it, apply the sensitivity rule and, when it
    * is not uploadable at all, answer the record directly. Everything async (guard, uploader
    * load, cap, upload) travels through the drain so the deadline covers it.
    */
@@ -403,9 +400,9 @@ export class AttachmentPipeline {
       };
     }
     const candidate = mapped.attachment;
-    // AC7: the annotation opts in, and a trace is sensitive by default (T57). Never
-    // downgraded — the record and the warning below are the only carriers, because the wire
-    // has no sensitivity member yet (contracts/cli.md `createArtifactUploadUrl`, D-S56-Q7).
+    // The annotation opts in, and a trace is sensitive by default. Never downgraded — the
+    // record and the warning below are the only carriers, because the wire has no sensitivity
+    // member yet (contracts/cli.md `createArtifactUploadUrl`).
     const sensitive = candidate.sensitive || candidate.kind === 'trace';
     const warnings: AttachmentWarning[] = [];
     if (candidate.sensitive && candidate.kind !== 'trace') {
@@ -433,10 +430,9 @@ export class AttachmentPipeline {
     const warnings = [...plan.warnings];
     const candidate = plan.attachment;
     try {
-      // AC6 first: no CLI load and no request for a path outside the allow-list. This await is
+      // The allow-list first: no CLI load and no request for a path outside it. This await is
       // also why two started jobs can issue their PUTs in either order: the guard (and the
-      // uploader load below) resolves per file, so `UploadDrain`'s FIFO is a START order only
-      // (O-4).
+      // uploader load below) resolves per file, so `UploadDrain`'s FIFO is a START order only.
       const verdict = await this.guard.check(candidate.path);
       if (!verdict.ok) {
         return { state: 'skipped', code: verdict.code, message: verdict.message, warnings };
@@ -447,7 +443,7 @@ export class AttachmentPipeline {
         // The run-level warning (`attachments_unavailable`/`attachments_unconfigured`) is
         // claimed once per run by the ATTEMPT that observed this state, in `runAttempt` — not
         // here: a job abandoned at the deadline must not consume a warning no envelope then
-        // carries (F5).
+        // carries.
         return { state: 'unconfigured', warnings };
       }
       // The cap is checked on the guard's own size, before the CLI reads a byte.
@@ -469,7 +465,7 @@ export class AttachmentPipeline {
       // facade reads it at ITS checkpoints (before the file is opened, after the digest, after
       // the bearer and before the first mint) and answers `upload_aborted`. A PUT already in
       // flight runs to its own deadline — abandoned at the next checkpoint, never cancelled
-      // mid-PUT (`uploadFile` takes no signal; that engine is 04.2.4-T1).
+      // mid-PUT (`uploadFile` takes no signal).
       const uploaded = await uploader.upload(
         {
           runId: input.runId,
@@ -494,8 +490,8 @@ export class AttachmentPipeline {
       }
       return { state: 'uploaded', artifactId: uploaded.artifactId, warnings };
     } catch (error) {
-      // S3: the CLI error's CODE only. Its message can embed a presigned URL, a token echo or
-      // a path (04.3.3 §8), so it is never forwarded.
+      // The CLI error's CODE only. Its message can embed a presigned URL, a token echo or a
+      // path, so it is never forwarded.
       const code = errorCode(error);
       return {
         state: 'failed',
@@ -571,7 +567,7 @@ export class AttachmentPipeline {
   /**
    * The one lazy `@evidgate/cli` load of a run, memoised. A failed import or an unresolvable
    * configuration answers a NULL uploader plus the ONE warning the first attempt emits: the
-   * run keeps emitting every test result and stays spool-only (AC5, Q1, Q3).
+   * run keeps emitting every test result and stays spool-only.
    */
   private uploader(): Promise<UploaderState> {
     this.uploaderState ??= this.loadUploader().then((state) => {
@@ -605,7 +601,7 @@ export class AttachmentPipeline {
       cli = await this.cliModule;
     } catch {
       // A broken install is not a configuration problem: the import's own error text (which
-      // names module paths) is never forwarded (Q1).
+      // names module paths) is never forwarded.
       return {
         uploader: null,
         warning: {
@@ -625,7 +621,7 @@ export class AttachmentPipeline {
       });
       return { uploader, warning: undefined, emitted: false };
     } catch (error) {
-      // Q3: the CLI's `missing_config`/`invalid_config` disables uploads for the whole run
+      // The CLI's `missing_config`/`invalid_config` disables uploads for the whole run
       // (one warning), and the spool-only offline mode is unchanged. The code is forwarded,
       // the message is not.
       return {
@@ -658,7 +654,7 @@ export class AttachmentPipeline {
 
 /**
  * The CLI's error `code` as a bare token, or `unknown`. The MESSAGE is deliberately not
- * forwarded: it can embed a presigned URL, a token echo or a filesystem path (§8 S3).
+ * forwarded: it can embed a presigned URL, a token echo or a filesystem path.
  */
 function errorCode(error: unknown): string {
   if (typeof error !== 'object' || error === null || !('code' in error)) return 'unknown';

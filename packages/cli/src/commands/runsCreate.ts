@@ -1,26 +1,24 @@
-// 04.2.2-T2.1: `evidgate runs create` — opens a run for an already-uploaded manifest
-// with `POST /v1/projects/{p}/runs`, the `Idempotency-Key` header the route requires and
-// the `run_id`/`manifest_hash`/`state` output (04.2.2 §2 AC2–AC5, §5, §9; contracts/cli.md
-// §9). Every flag is validated BEFORE `getToken()`, so a bad flag makes no request at all
-// — not even the token exchange (the `manifests upload` rule, 04.2.2 §8). Each option is
-// single-use: every option is `multiple: true` so a repetition is refused as `usage`
-// instead of silently taking the last value (§9 step 1). Lengths count code points
-// (`--release` 1..128, the `--ci-ref` name 1..255), `refs/pull/<N>/merge` holds `N` to a
-// safe integer ≥ 1, and the 201 `state` must match `^[a-z][a-z0-9_]{0,31}$` before
-// anything is printed (§9 steps 1 and 3).
+// `evidgate runs create` — opens a run for an already-uploaded manifest with
+// `POST /v1/projects/{p}/runs`, the `Idempotency-Key` header the route requires and the
+// `run_id`/`manifest_hash`/`state` output (contracts/cli.md §9). Every flag is validated
+// BEFORE `getToken()`, so a bad flag makes no request at all — not even the token exchange.
+// Each option is single-use (`multiple: true`) so a repetition is refused as `usage` instead
+// of silently taking the last value. Lengths count code points (`--release` 1..128, the
+// `--ci-ref` name 1..255), `refs/pull/<N>/merge` holds `N` to a safe integer ≥ 1, and the 201
+// `state` must match `^[a-z][a-z0-9_]{0,31}$` before anything is printed.
 //
-// The request never carries a policy, suite or environment: the server pins those from
-// the manifest and the project's active policy, so a client-selected override has no
-// owning story (D-S47-Q1, 2026-10-14). It also never reads `GITHUB_*` (or any other CI
-// variable) to build the identity block; a `--ci-ref` the operator passes is the only
-// source, and the server marks such a run `unverified_ref = true` (05.2.2-T1).
+// The request never carries a policy, suite or environment: the server pins those from the
+// manifest and the project's active policy, so a client-selected override would let a caller
+// pick the rules it is judged by. It also never reads `GITHUB_*` (or any other CI variable)
+// to build the identity block; a `--ci-ref` the operator passes is the only source, and the
+// server marks such a run `unverified_ref = true`.
 //
-// A 401 purges the cached CI token (04.2.1-T1 hand-over, contracts/cli.md §7/§9); a 403
-// or a 409 keeps it, because neither says the token is dead.
+// A 401 purges the cached CI token (contracts/cli.md §7/§9); a 403 or a 409 keeps it, because
+// neither says the token is dead.
 //
-// The request is replay-safe: it carries the derived `Idempotency-Key`, so a network
-// failure, a 429 or a 5xx is retried a bounded number of times by `callApi` with the same
-// key and body, and every other 4xx is final.
+// The request is replay-safe: it carries the derived `Idempotency-Key`, so a network failure,
+// a 429 or a 5xx is retried a bounded number of times by `callApi` with the same key and
+// body unless the error envelope says `retryable: false`, and every other 4xx is final.
 import { createHash } from 'node:crypto';
 
 import { createRun, type CreateRunRequest, type RunRefRequest } from '@evidgate/sdk';
@@ -57,8 +55,8 @@ const maxRefNameLength = 255;
 /** `CreateRunRequest.release`: 1..128 code points (openapi `CreateRunRequest.release`). */
 const maxReleaseLength = 128;
 /**
- * The derived-key namespace. Versioned and part of the pre-image, so a later change to
- * the derivation cannot silently reuse a stored key (AC4).
+ * The derived-key namespace. Versioned and part of the pre-image, so a later change to the
+ * derivation cannot silently reuse a stored key and replay it against a different body.
  */
 const runKeyVersion = 'evidgate.run-key.v1';
 /**
@@ -73,7 +71,7 @@ const pullRequestRefPattern = /^refs\/pull\/([1-9][0-9]*)\/merge$/;
  */
 const statePattern = /^[a-z][a-z0-9_]{0,31}$/;
 
-/** Inputs of the AC4 derived key: exactly the values a `runs create` request is built from. */
+/** Inputs of the derived key: exactly the values a `runs create` request is built from. */
 export interface RunIdempotencyKeyInput {
   /** The `--manifest-id` value. */
   readonly manifestId: string;
@@ -89,9 +87,8 @@ export interface RunIdempotencyKeyInput {
 }
 
 /**
- * The AC4 derived `Idempotency-Key` (amended 2026-10-14, D-S47-Q1): the lowercase hex
- * SHA-256 of the UTF-8 JSON array `['evidgate.run-key.v1', manifest_hash, manifest_id,
- * release ?? null, ci_ref ?? null]`.
+ * The derived `Idempotency-Key`: the lowercase hex SHA-256 of the UTF-8 JSON array
+ * `['evidgate.run-key.v1', manifest_hash, manifest_id, release ?? null, ci_ref ?? null]`.
  *
  * A JSON array is unambiguous (no separator can collide with a value) and the field order
  * is fixed, so two invocations with the same inputs — in the same process or across
@@ -184,11 +181,12 @@ export const runsCreateCommand: CommandDefinition = {
     }
     if (!response.ok) {
       if (response.status === 401) {
-        // Best-effort: the server's error is the one that must surface (04.2.1 §6).
+        // Best-effort: the server's error is the one that must surface, but a refused
+        // bearer must not be reused by the next command.
         await deleteCachedToken(config).catch(() => undefined);
       }
-      // A 409 `idempotency_conflict` (same key, different body, T11) therefore reaches
-      // stderr as `evidgate: error idempotency_conflict` and exits 3.
+      // A 409 `idempotency_conflict` (same key, different body) therefore reaches stderr as
+      // `evidgate: error idempotency_conflict` and exits 3.
       throw serverErrorFromResponse(result.error, response, {
         code: 'request_failed',
         message: `the run create failed (HTTP ${response.status})`,
@@ -263,13 +261,12 @@ function requiredFlag(values: ParsedValues, flag: string): string {
 }
 
 /**
- * Maps `--ci-ref` to the only `ref` member the CLI ever sends (05.2.2-T1). The value
- * must be a full ref: `refs/heads/<name>` (branch), `refs/tags/<name>` (tag) or
- * `refs/pull/<N>/merge` (pull request, `N` a safe integer ≥ 1, so ≤ 9007199254740991).
- * Anything else — an unprefixed branch name, an empty ref, another `refs/` namespace, a
- * malformed PR ref, an `N` beyond the safe range — is a `usage` error before any token
- * work. No `head_sha`/`base_sha`/`trigger_event` is ever sent, and no CI environment
- * variable is read.
+ * Maps `--ci-ref` to the only `ref` member the CLI ever sends. The value must be a full ref:
+ * `refs/heads/<name>` (branch), `refs/tags/<name>` (tag) or `refs/pull/<N>/merge` (pull
+ * request, `N` a safe integer ≥ 1, so ≤ 9007199254740991). Anything else — an unprefixed
+ * branch name, an empty ref, another `refs/` namespace, a malformed PR ref, an `N` beyond the
+ * safe range — is a `usage` error before any token work. No `head_sha`/`base_sha`/
+ * `trigger_event` is ever sent, and no CI environment variable is read.
  */
 function parseCiRef(ciRef: string): RunRefRequest {
   const heads = /^refs\/heads\/(.+)$/.exec(ciRef);

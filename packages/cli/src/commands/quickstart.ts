@@ -1,14 +1,15 @@
-// 04.2.4-T2.1: `evidgate quickstart` — renders a CI recipe for this project to stdout
-// or to a file (04.2.4 §2 AC5, §5, §9). It is a pure local template: no network call,
-// no token read, no cache read (`requireToken: false`). The GitHub template uses the
-// OIDC exchange (`id-token: write`) so no long-lived secret is ever stored; the only
-// stored setting is the repository configuration VARIABLE `EVIDGATE_API_URL`.
+// `evidgate quickstart` — renders a CI recipe for this project to stdout or to a file. It is
+// a pure local template: no network call, no token read, no cache read (`requireToken:
+// false`). The GitHub template uses the OIDC exchange (`id-token: write`) so no long-lived
+// secret is ever stored; the only stored settings are the repository variables
+// `EVIDGATE_API_URL` and `EVIDGATE_EXECUTION` (a non-secret digest).
 //
 // The rendered CLI pin is the exact `version` from `packages/cli/package.json`
-// (`readCliVersion`), never a range or `latest`. The project value is interpolated
-// into YAML and shell, so it is guarded by `renderableProject` first: a value that
-// could break out of the template (a `${{ }}` expression, a quote, a colon, a leading
-// dash) is refused as `invalid_config` and never echoed.
+// (`readCliVersion`), never a range or `latest`, so a generated workflow keeps working after
+// a release. The project value is interpolated into YAML and shell, so it is guarded by
+// `renderableProject` first: a value that could break out of the template (a `${{ }}`
+// expression, a quote, a colon, a leading dash) is refused as `invalid_config` and never
+// echoed.
 import { lstatSync } from 'node:fs';
 import { mkdir, open, realpath, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -37,14 +38,15 @@ export interface QuickstartRender {
 const helpHint = "run 'evidgate --help' for usage";
 
 /**
- * A project value safe to interpolate into a YAML scalar and a shell single-quoted
- * string: an alphanumeric first character, then alphanumerics, `.`, `_` and `-`, up to
- * 128 characters. This refuses `${{ … }}`, quotes, colons, whitespace and a leading
- * `-`, so the rendered template cannot be broken out of (04.2.4 §8).
+ * A project value safe to interpolate into a YAML scalar and a shell single-quoted string: an
+ * alphanumeric first character, then alphanumerics, `.`, `_` and `-`, up to 128 characters.
+ * This refuses `${{ … }}`, quotes, colons, whitespace and a leading `-`, so the rendered
+ * template cannot be broken out of.
  */
 const renderableProject = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
-/** The pinned action SHAs, kept identical to `.github/workflows/ci.yml` (AC5). */
+/** The pinned action SHAs, kept identical to `.github/workflows/ci.yml` so a generated
+ * workflow and this repository's own run the same action code. */
 const checkoutAction = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1';
 const setupNodeAction = 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0';
 
@@ -53,8 +55,8 @@ export const quickstartCommand: CommandDefinition = {
   summary: 'print a CI recipe for this project',
   requireToken: false,
   options: { format: { type: 'string' }, write: { type: 'string' } },
-  // Runs before `main`'s `--verbose` dump, so an unrenderable project is refused
-  // without that dump echoing the value (04.2.4 §8).
+  // Runs before `main`'s `--verbose` dump, so an unrenderable project is refused without
+  // that dump echoing the value into a CI log.
   validateConfig: (config) => {
     readProject(config.project);
   },
@@ -87,7 +89,7 @@ export function renderQuickstart({ format, project, version }: QuickstartRender)
   return format === 'generic' ? renderGeneric(project, version) : renderGithub(project, version);
 }
 
-/** `--format` defaults to `github`; any other value is a usage error (AC5). */
+/** `--format` defaults to `github`; any other value is a usage error. */
 function readFormat(value: unknown): QuickstartFormat {
   if (value === undefined) {
     return 'github';
@@ -98,7 +100,7 @@ function readFormat(value: unknown): QuickstartFormat {
   throw usageError('--format must be github or generic');
 }
 
-/** Refuses a project the template cannot render; the value is never echoed (AC5). */
+/** Refuses a project the template cannot render; the value is never echoed back. */
 function readProject(project: string): string {
   if (!renderableProject.test(project)) {
     throw new CliError(
@@ -119,16 +121,15 @@ function npx(version: string, args: string): string {
 }
 
 /**
- * The GitHub Actions template. Fork-safe by construction (11.6.1-T2, mirroring
- * `fixtures/ci-recipes/github-fork-safe.yml`): the workflow grants nothing at the top
- * level; the credential-free `test` job runs on `pull_request` and `push`; the `upload`
- * job that mints the token runs only on `workflow_dispatch` or a push to the default
- * branch, inside the secretless environment `evidgate-upload`, with `contents: read` +
- * `id-token: write` so the exchange step can present the GitHub OIDC JWT.
- * `EVIDGATE_API_URL` and `EVIDGATE_EXECUTION` are repository configuration VARIABLES —
- * the only stored settings (`EVIDGATE_EXECUTION` is the planned execution's 64-hex
- * digest, not a secret). No `secrets.` reference exists. The rules and their sources are
- * in `docs/security/customer-ci-recipe.md`.
+ * The GitHub Actions template. Fork-safe by construction (mirroring
+ * `fixtures/ci-recipes/github-fork-safe.yml`): the workflow grants nothing at the top level;
+ * the credential-free `test` job runs on `pull_request` and `push`; the `upload` job that
+ * mints the token runs only on `workflow_dispatch` or a push to the default branch, inside the
+ * secretless environment `evidgate-upload`, with `contents: read` + `id-token: write` so the
+ * exchange step can present the GitHub OIDC JWT. `EVIDGATE_API_URL` and `EVIDGATE_EXECUTION`
+ * are repository configuration VARIABLES — the only stored settings (`EVIDGATE_EXECUTION` is
+ * the planned execution's 64-hex digest, not a secret). No `secrets.` reference exists. The
+ * rules and their sources are in `docs/security/customer-ci-recipe.md`.
  */
 function renderGithub(project: string, version: string): string {
   return `# Evidgate quickstart — GitHub Actions workflow (rendered by \`evidgate quickstart\`).
@@ -335,7 +336,7 @@ ${npx(version, 'artifacts upload --run "$run_id" --file test-results/trace.zip -
 
 /**
  * Injectable fs seam for `writeTemplate`: a spec replaces `writeFile` to exercise the
- * post-`open` cleanup path (CR-2) without a real disk-full or I/O failure.
+ * post-`open` cleanup path without a real disk-full or I/O failure.
  */
 export interface WriteTemplateDeps {
   /** Replaces `handle.writeFile`; the default writes `text` as UTF-8. */
@@ -352,9 +353,9 @@ export interface WriteTemplateDeps {
  * with the exclusive `wx` flag (never overwriting) and mode 0o644, and missing parent
  * directories inside the cwd are created. Returns the path relative to the cwd.
  *
- * Every filesystem failure is mapped to a `CliError` (CR-1): a path-shape errno is
- * `usage`, anything else is `write_failed`, and the message is fixed — it never carries
- * the Node error text or an absolute path.
+ * Every filesystem failure is mapped to a `CliError`: a path-shape errno is `usage`, anything
+ * else is `write_failed`, and the message is fixed — it never carries the Node error text or
+ * an absolute path, which may be host-specific.
  */
 export async function writeTemplate(
   target: string,
@@ -396,8 +397,8 @@ export async function writeTemplate(
       throw error;
     }
     if (handle !== undefined) {
-      // CR-2: a failed write must not leave the created file behind, or a retry would
-      // hit `file exists` on the exclusive create.
+      // A failed write must not leave the created file behind, or a retry would hit
+      // `file exists` on the exclusive create.
       await cleanupFailedWrite(handle, realTarget);
     }
     throw writeError(error);
@@ -416,10 +417,10 @@ export function isInside(base: string, candidate: string): boolean {
 }
 
 /**
- * Maps a filesystem failure in the `--write` path to a `CliError` (CR-1). Path-shape
- * errno codes are `usage`; every other failure — permissions, read-only filesystem,
- * full disk, I/O — is `write_failed`. Each message is fixed and never contains the Node
- * error message or an absolute path.
+ * Maps a filesystem failure in the `--write` path to a `CliError`. Path-shape errno codes are
+ * `usage`; every other failure — permissions, read-only filesystem, full disk, I/O — is
+ * `write_failed`. Each message is fixed and never contains the Node error message or an
+ * absolute path.
  */
 function writeError(error: unknown): CliError {
   switch ((error as NodeJS.ErrnoException | null)?.code) {
@@ -436,7 +437,7 @@ function writeError(error: unknown): CliError {
   }
 }
 
-/** CR-2: closes the handle and best-effort removes the file a failed write created. */
+/** Closes the handle and best-effort removes the file a failed write created. */
 async function cleanupFailedWrite(handle: FileHandle, path: string): Promise<void> {
   await handle.close().catch(() => undefined);
   await unlink(path).catch(() => undefined);

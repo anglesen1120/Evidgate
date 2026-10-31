@@ -1,9 +1,7 @@
-// 04.2.1-T1.2: the single token entry point every later command uses (04.2.1 §5
-// `auth/refresh.ts`). The dev path is unchanged (AC8: no exchange, no cache, no
-// network). An OIDC / actions-id-token / ingest source reuses the cached `ci_producer`
-// token while it is fresh (`exp - now > 60 s`), otherwise exchanges at
-// `POST /v1/ci/token` and rewrites the cache; a 401/403 purges the entry so the next
-// run re-authenticates cleanly (04.2.1 §6).
+// The single token entry point every command uses. The dev path does no exchange, no cache
+// and no network. An OIDC / actions-id-token / ingest source reuses the cached `ci_producer`
+// token while it is fresh (`exp - now > 60 s`), otherwise exchanges at `POST /v1/ci/token`
+// and rewrites the cache; a 401/403 purges the entry so the next run re-authenticates.
 import {
   resolveTokenSource,
   tokenSourceNames,
@@ -32,8 +30,8 @@ export async function getToken(
 ): Promise<TokenResult> {
   const source = resolveTokenSource(config);
   if (source === 'dev') {
-    // M1 dev path (AC8): no exchange, no cache, no network. The token is registered so
-    // it can never reach a writer even if a later error message embeds it (SEC6).
+    // Dev path: no exchange, no cache, no network. The token is registered so it can never
+    // reach a writer even if a later error message embeds it.
     const token = resolveDevToken(config);
     registerSecret(token);
     return { token, source: 'dev' };

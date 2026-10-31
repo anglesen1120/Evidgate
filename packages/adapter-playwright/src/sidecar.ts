@@ -1,4 +1,4 @@
-// 04.3.2-T1.1: the `evidgate.cases.yaml` sidecar loader (03.1.1-T1.3, TL T55).
+// The `evidgate.cases.yaml` sidecar loader.
 // The file is untrusted input from a customer repository, so it is read as *data*: the size is
 // capped before the content is read, the YAML is parsed with the core schema and refused when it
 // carries an anchor, alias, tag, merge key, duplicate key or a second document, the result is
@@ -7,8 +7,8 @@
 // A manifest is looked up in each test file's own directory and in every ancestor directory up to
 // the common ancestor of the test files (the server reads every manifest of the tree and resolves
 // each entry with `RepoPath.Combine`), each manifest is read once, and the bytes read for one run
-// are capped in aggregate. Warnings are data — the identity layer (04.3.2-T1.2) turns them into
-// `run.log` envelopes — and a message never echoes file content beyond the offending path or key.
+// are capped in aggregate. Warnings are data — the identity layer turns them into `run.log`
+// envelopes — and a message never echoes file content beyond the offending path or key.
 import {
   closeSync,
   constants,
@@ -28,7 +28,7 @@ import type { Node as YamlNode, ParseOptions, SchemaOptions } from 'yaml';
 
 import { SIDECAR_SCHEMA_V1 } from './sidecarSchema.js';
 
-/** The file name that marks a sidecar (03.1.1-T1.1). */
+/** The file name that marks a sidecar. */
 export const SIDECAR_FILE_NAME = 'evidgate.cases.yaml';
 
 /** Hard cap on the sidecar text, mirroring the server reader's `MaxChars`. */
@@ -184,7 +184,7 @@ function schemaValidator(): ValidateFunction<SidecarDocument> {
 }
 
 /**
- * Where the loader may look for a manifest (04.3.3-T1, Note from #32).
+ * Where the loader may look for a manifest.
  */
 export interface SidecarLoadOptions {
   /**
@@ -234,8 +234,8 @@ export function loadSidecarIndex(
   }
 
   const manifests = new Set<string>();
-  // 04.3.3-T1 (#32): a pinned root makes the manifest set independent of the shard's own test
-  // files. Without one, the common ancestor of the given files stands in for the repository root.
+  // A pinned root makes the manifest set independent of the shard's own test files. Without one,
+  // the common ancestor of the given files stands in for the repository root.
   const root =
     options.rootDir !== undefined && options.rootDir.length > 0
       ? normalizePath(options.rootDir)

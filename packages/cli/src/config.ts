@@ -1,14 +1,8 @@
-// 04.2.1-T2.1: `EVIDGATE_*` configuration resolution (04.2.1 §5 `config.ts`, AC5).
-// Precedence is explicit `--flag` > `EVIDGATE_*` env > built-in default; an empty env
-// value counts as unset and a token value is never accepted from a flag (argv is
-// visible in `ps`, 04.2.1 §5). Every secret read here is registered for redaction.
-// 04.2.1-T1.1: adds `cacheDir` (the token-cache location, §5 `auth/token-cache.ts`).
-// 04.2.3-T1.4: adds the spool surface — `EVIDGATE_SPOOL_DIR` (D5, optional here because
-// only the spool commands need it and they raise `missing_config` themselves),
-// `EVIDGATE_SPOOL_MAX_BYTES` (D4) and `EVIDGATE_SEND_DEADLINE` (D5). All three are
-// env-only: no flag can carry them. They are resolved LAZILY ({@link SpoolSettings},
-// S54 CR8): a malformed spool value must never break `runs create`, `auth login` or any
-// other command that does not touch the spool.
+// `EVIDGATE_*` configuration resolution. Precedence is `--flag` > env > default; an
+// empty env value counts as unset, and no token is accepted from a flag because argv is
+// visible in `ps`. Every secret read here is registered for redaction. The spool
+// variables are env-only and resolved lazily, so a malformed spool value can never break
+// a command that does not touch the spool.
 import { homedir as osHomedir } from 'node:os';
 import { posix, resolve, win32 } from 'node:path';
 
@@ -43,23 +37,23 @@ export interface ResolveConfigInput {
 export type TokenSource = 'oidc' | 'actions-id-token' | 'ingest' | 'dev';
 
 /**
- * The spool surface (04.2.3 D4/D5): the root (still optional — only the spool commands
- * decide it is required), the run-directory byte cap and the one send deadline. Resolved
- * together by {@link resolveSpoolSettings}; never by `resolveConfig` itself (S54 CR8).
+ * The spool surface: the root (optional here — only the spool commands decide it is
+ * required), the run-directory byte cap and the one send deadline. Resolved together by
+ * {@link resolveSpoolSettings}, never by `resolveConfig`, so other commands never pay for it.
  */
 export interface SpoolSettings {
   /** Absolute spool root (`EVIDGATE_SPOOL_DIR`), or `undefined` when it is unset. */
   readonly spoolDir: string | undefined;
-  /** The run-directory byte cap (`EVIDGATE_SPOOL_MAX_BYTES`, D4). */
+  /** The run-directory byte cap (`EVIDGATE_SPOOL_MAX_BYTES`). */
   readonly spoolMaxBytes: number;
-  /** The one send deadline in milliseconds (`EVIDGATE_SEND_DEADLINE`, D5). */
+  /** The one send deadline in milliseconds (`EVIDGATE_SEND_DEADLINE`). */
   readonly sendDeadlineMs: number;
 }
 
 export interface ResolvedConfig {
   readonly apiUrl: string;
   readonly project: string;
-  /** Absolute token-cache directory (04.2.1-T1.1); the platform default ends in `evidgate`. */
+  /** Absolute token-cache directory; the platform default ends in `evidgate`. */
   readonly cacheDir: string;
   readonly env: string | undefined;
   readonly oidcToken: string | undefined;
@@ -69,7 +63,7 @@ export interface ResolvedConfig {
   readonly devToken: string | undefined;
   readonly bindingChallenge: string | undefined;
   /**
-   * The spool surface, resolved on first call and memoised (S54 CR8). `events send` and
+   * The spool surface, resolved on first call and memoised. `events send` and
    * `runs finalize` force it in their `validateConfig` pre-flight — before the
    * `--verbose` dump and before any token work — and nothing else calls it, so a
    * malformed `EVIDGATE_SPOOL_MAX_BYTES` / `EVIDGATE_SEND_DEADLINE` cannot break a
@@ -82,7 +76,7 @@ export interface ResolvedConfig {
   readonly json: boolean;
 }
 
-/** Every environment variable the CLI reads (04.2.1 §5). */
+/** Every environment variable the CLI reads. */
 export const envNames = {
   apiUrl: 'EVIDGATE_API_URL',
   project: 'EVIDGATE_PROJECT',
@@ -102,7 +96,7 @@ export const envNames = {
 const apiUrlNames = `${envNames.apiUrl} (or --api-url)`;
 const projectNames = `${envNames.project} (or --project)`;
 
-/** The single `missing_config` entry for "no token source is set" (04.2.1-T2 §Config). */
+/** The single `missing_config` entry for "no token source is set". */
 export const tokenSourceNames =
   `a token source: ${envNames.oidcToken}, ${envNames.actionsIdTokenRequestUrl} + ` +
   `${envNames.actionsIdTokenRequestToken}, ${envNames.ingestToken} or ${envNames.devToken}`;
@@ -118,7 +112,7 @@ export function isLoopbackApiUrl(apiUrl: string): boolean {
   return loopbackHosts[new URL(apiUrl).hostname] === true;
 }
 
-/** `EVIDGATE_ENV` after trim + lower-case: a short, log-safe label (04.2.1-T2 §Config). */
+/** `EVIDGATE_ENV` after trim + lower-case: a short, log-safe label. */
 const envPattern = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 
 /** Whitespace, C0/C1 controls and Unicode format characters are all rejected. */
@@ -137,10 +131,10 @@ const pathForbidden = /[\p{Cc}\p{Cf}]/u;
  */
 export const maxSpoolMaxBytes = 1_099_511_627_776;
 
-/** `EVIDGATE_SEND_DEADLINE` default: 30 minutes for the whole send (04.2.3 D5). */
+/** `EVIDGATE_SEND_DEADLINE` default: 30 minutes for the whole send. */
 export const defaultSendDeadlineMs = 1_800_000;
 
-/** `EVIDGATE_SEND_DEADLINE` ceiling: 24 hours (04.2.3 D5). */
+/** `EVIDGATE_SEND_DEADLINE` ceiling: 24 hours. */
 export const maxSendDeadlineMs = 86_400_000;
 
 /** A bare decimal integer, used for the byte count and for bare deadline seconds. */
@@ -154,12 +148,12 @@ const deadlinePattern = /^([0-9]{1,9})([smh]?)$/;
 
 /**
  * Registers every secret env value for redaction. `main` calls it before parsing argv
- * so a usage error that echoes a secret value is still redacted (QA-D1); `resolveConfig`
+ * so a usage error that echoes a secret value is still redacted; `resolveConfig`
  * calls it too, so a direct caller is covered.
  */
 export function registerEnvSecrets(env: Readonly<Record<string, string | undefined>>): void {
   registerSecret(rawEnv(env, envNames.oidcToken));
-  // 04.2.1-T1.1 (D4/S2): the request URL carries a signed query, so it is a secret too.
+  // The request URL carries a signed query, so it is a secret too.
   registerSecret(rawEnv(env, envNames.actionsIdTokenRequestUrl));
   registerSecret(rawEnv(env, envNames.actionsIdTokenRequestToken));
   registerSecret(rawEnv(env, envNames.ingestToken));
@@ -169,14 +163,14 @@ export function registerEnvSecrets(env: Readonly<Record<string, string | undefin
 
 /**
  * Resolves the whole `EVIDGATE_*` surface into one frozen object. Every missing
- * required name is collected before throwing, so one run reports them all (AC5).
+ * required name is collected before throwing, so one run reports them all.
  */
 export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
   const { env } = input;
   const flags = input.flags ?? {};
 
   // Register every secret before any validation can throw, so an error message that
-  // happens to embed one is still redacted by the writer in `main` (T78).
+  // happens to embed one is still redacted by the writer in `main`.
   registerEnvSecrets(env);
 
   const apiUrlRaw = flagOrEnv(flags.apiUrl, trimmedEnv(env, envNames.apiUrl));
@@ -225,7 +219,7 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
     input.homedir ?? osHomedir(),
   );
 
-  // CR8: the spool surface stays unresolved here. The first `spoolSettings()` call
+  // The spool surface stays unresolved here. The first `spoolSettings()` call
   // resolves all three values and memoises them; a throwing resolution is not cached, so
   // every later call reports exactly the same error.
   let spool: SpoolSettings | undefined;
@@ -252,11 +246,9 @@ export function resolveConfig(input: ResolveConfigInput): ResolvedConfig {
 }
 
 /**
- * The spool surface `events send` and `runs finalize` need (04.2.3 D4/D5), resolved in
- * the same order the eager fields used to be: root, cap, deadline. The errors are
- * unchanged (`invalid_config` naming the variable, never echoing the value), so a
- * malformed value reads the same to the operator as before — it is simply reported only
- * by the commands that would use it (S54 CR8).
+ * The spool surface `events send` and `runs finalize` need, resolved in the order root,
+ * cap, deadline. Errors name the variable and never echo the value, and only the commands
+ * that use the spool report them, so a malformed value cannot break any other command.
  */
 export function resolveSpoolSettings(
   env: Readonly<Record<string, string | undefined>>,
@@ -298,7 +290,7 @@ export function resolveTokenSource(config: TokenSourceFields): TokenSource | und
   return undefined;
 }
 
-/** `--verbose` dump: every secret field is `[REDACTED]` or `unset` (T78). */
+/** `--verbose` dump: every secret field is `[REDACTED]` or `unset`. */
 export function formatConfigForVerbose(config: ResolvedConfig): string {
   return [
     'evidgate: resolved config',
@@ -312,8 +304,8 @@ export function formatConfigForVerbose(config: ResolvedConfig): string {
     `  ingest_token=${maskSecret(config.ingestToken)}`,
     `  dev_token=${maskSecret(config.devToken)}`,
     `  binding_challenge=${maskSecret(config.bindingChallenge)}`,
-    // Paths and counts are not secrets (04.2.3 T78 scope): the operator needs to see
-    // which spool and cap a send will use.
+    // Paths and counts are not secrets: the operator needs to see which spool and cap a
+    // send will use.
     ...spoolDumpLines(config),
     `  token_source=${resolveTokenSource(config) ?? 'none'}`,
     `  verbose=${String(config.verbose)}`,
@@ -322,11 +314,10 @@ export function formatConfigForVerbose(config: ResolvedConfig): string {
 }
 
 /**
- * The spool lines of the `--verbose` dump. The surface is lazy (CR8) and this dump runs
- * for commands that never touch the spool, so an invalid value is reported as
- * `spool_settings=invalid (<code>)` instead of failing the command — the spool commands
- * themselves already refused with that exact error in `validateConfig`, which `main`
- * runs BEFORE this dump.
+ * The spool lines of the `--verbose` dump. The surface is lazy and this dump runs for
+ * commands that never touch the spool, so an invalid value is reported as
+ * `spool_settings=invalid (<code>)` instead of failing the command; the spool commands
+ * themselves already refused with that error before `main` reaches this dump.
  */
 function spoolDumpLines(config: ResolvedConfig): string[] {
   let settings: SpoolSettings;
@@ -347,7 +338,7 @@ function maskSecret(value: string | undefined): string {
   return value === undefined ? 'unset' : redacted;
 }
 
-/** Raw env read: an empty string counts as unset (04.2.1-T2 §Config). */
+/** Raw env read: an empty string counts as unset. */
 function rawEnv(
   env: Readonly<Record<string, string | undefined>>,
   name: string,
@@ -382,12 +373,10 @@ function invalidConfig(names: string, reason: string): CliError {
 }
 
 /**
- * The token-cache directory (04.2.1 §5 `auth/token-cache.ts`): `EVIDGATE_CACHE_DIR`
- * used as-is, else `%LOCALAPPDATA%\evidgate` on Windows, else
- * `$XDG_CACHE_HOME/evidgate`, else `<home>/.cache/evidgate`. `EVIDGATE_CACHE_DIR` must
- * be an absolute path; a relative one is `invalid_config` naming the variable and never
- * echoing the value (SEC3). A relative `XDG_CACHE_HOME` / `LOCALAPPDATA` is ignored and
- * the next default is used (XDG Base Directory spec), never an error.
+ * The token-cache directory: `EVIDGATE_CACHE_DIR` as-is, else the platform cache dir
+ * under `evidgate`. A relative override is `invalid_config` naming the variable only, so
+ * the value is never echoed; a relative `XDG_CACHE_HOME`/`LOCALAPPDATA` is ignored per the
+ * XDG spec and the next default is used rather than failing.
  */
 function resolveCacheDir(
   env: Readonly<Record<string, string | undefined>>,
@@ -420,9 +409,9 @@ function requireAbsolutePath(value: string, name: string, paths: typeof posix): 
 }
 
 /**
- * The `missing_config` entry for "no spool root is set" (04.2.3 D5). Exported so a
- * command can refuse the configuration in its `validateConfig` pre-flight, before the
- * `--verbose` dump and before any token work.
+ * The `missing_config` entry for "no spool root is set". Exported so a command can refuse
+ * the configuration in its `validateConfig` pre-flight, before the `--verbose` dump and
+ * any token work.
  */
 export function spoolDirMissingError(): CliError {
   return new CliError(`missing configuration: ${envNames.spoolDir}`, {
@@ -432,12 +421,11 @@ export function spoolDirMissingError(): CliError {
 }
 
 /**
- * `EVIDGATE_SPOOL_DIR` (04.2.3 D5): required by the spool commands, with no default.
- * The value is trimmed and absolute-resolved, so a relative one is anchored at the
- * process's current directory — the same rule the merged reporter applies when it joins
- * `<spool_dir>/<run_id>/<producer_id>`. An unset, empty or blank value is
- * `missing_config` naming the variable, never a path; a control character is
- * `invalid_config`, so a value can neither forge a log line nor reach the filesystem.
+ * `EVIDGATE_SPOOL_DIR`: required by the spool commands, with no default. The value is
+ * trimmed and absolute-resolved, the same rule the reporter applies when it joins
+ * `<spool_dir>/<run_id>/<producer_id>`. An unset or blank value is `missing_config` naming
+ * the variable, never a path; a control character is `invalid_config`, so a value can
+ * neither forge a log line nor reach the filesystem.
  */
 export function resolveSpoolDir(env: Readonly<Record<string, string | undefined>>): string {
   const directory = resolveOptionalSpoolDir(env);
@@ -462,11 +450,10 @@ function resolveOptionalSpoolDir(
 }
 
 /**
- * `EVIDGATE_SPOOL_MAX_BYTES` (04.2.3 D4): the run-directory cap, a positive decimal byte
- * count, defaulting to 256 MiB ({@link defaultSpoolMaxBytes}). Zero, a negative or
- * fractional value, a unit suffix, junk and anything above {@link maxSpoolMaxBytes} is
- * `invalid_config` naming the variable; the raw value is never echoed (it could forge a
- * log line and is never needed to fix the value).
+ * `EVIDGATE_SPOOL_MAX_BYTES`: the run-directory cap, a positive decimal byte count
+ * defaulting to 256 MiB. Zero, a fraction, a unit suffix, junk or a value above the 1 TiB
+ * ceiling is `invalid_config` naming the variable, and the raw value is never echoed
+ * because it could forge a log line.
  */
 export function resolveSpoolMaxBytes(env: Readonly<Record<string, string | undefined>>): number {
   const value = trimmedEnv(env, envNames.spoolMaxBytes);
@@ -487,9 +474,8 @@ export function resolveSpoolMaxBytes(env: Readonly<Record<string, string | undef
 }
 
 /**
- * `EVIDGATE_SEND_DEADLINE` (04.2.3 D5): one deadline for the whole send, as a bare
- * integer number of seconds or `<n>s` / `<n>m` / `<n>h`. Default 30 minutes, ceiling
- * 24 hours; zero, a fraction, an unknown unit and junk are `invalid_config`.
+ * `EVIDGATE_SEND_DEADLINE`: one deadline for the whole send, as bare seconds or `<n>s`,
+ * `<n>m`, `<n>h`. Default 30 minutes, ceiling 24 hours; anything else is `invalid_config`.
  */
 export function resolveSendDeadlineMs(env: Readonly<Record<string, string | undefined>>): number {
   const value = trimmedEnv(env, envNames.sendDeadline);
@@ -517,9 +503,9 @@ export function resolveSendDeadlineMs(env: Readonly<Record<string, string | unde
 }
 
 /**
- * Absolute URL, `https:` (or `http:` on loopback only), no userinfo, no query or
- * fragment; a trailing `/` is normalised away (04.2.1-T2 §Config). The raw value is
- * never echoed — it may carry credentials (SEC3).
+ * Absolute URL, `https:` (or `http:` on loopback only), without userinfo, query or
+ * fragment; a trailing `/` is normalised away. The raw value is never echoed because it
+ * may carry credentials.
  */
 function validateApiUrl(value: string): string {
   if (value.includes('?') || value.includes('#')) {

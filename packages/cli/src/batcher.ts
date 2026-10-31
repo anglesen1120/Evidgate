@@ -1,31 +1,23 @@
-// 04.2.3-T1.2: the CLI's batching half of the send path (04.2.3 §1, AC4). A spool
-// line is one 00 §9.4 envelope; `POST /v1/runs/{r}/events` takes a batch
-// `{"events":[...]}` capped at 500 events and 1 MiB *before* compression
-// (contracts/schemas/event-envelope.v1.json, 00 §9.4, FR-04-2). This module packs
-// spool lines into those bodies and derives the per-batch `Idempotency-Key`.
+// The CLI's batching half of the send path. A spool line is one event envelope;
+// `POST /v1/runs/{r}/events` takes a batch `{"events":[...]}` capped at 500 events and 1 MiB
+// *before* compression (contracts/schemas/event-envelope.v1.json). This module packs spool
+// lines into those bodies and derives the per-batch `Idempotency-Key`.
 //
-// Two invariants decide the design:
+// Two invariants decide the design: the body is the exact spool line texts, concatenated and
+// never re-serialised, so a resend after a lost ACK or a restart sends the same bytes and the
+// server's body hash cannot drift; and packing is streaming, because a 256 MiB spool must
+// never land in memory.
 //
-//  * The body is the EXACT spool line texts, concatenated — never re-serialised.
-//    A resend after a lost ACK, a process restart or a re-pack therefore sends the
-//    same bytes (A9/A10, AC5), so the server's body hash — and the idempotency
-//    identity folded from `(sequence, event_id)` — cannot drift.
-//  * Packing is streaming: `packBatches` is an async generator that holds one
-//    batch of events at a time, so a 256 MiB spool never lands in memory
-//    (task §8 Resource safety, AC3/AC4).
+// Validation happens per line, before the line joins a batch, through the same Ajv 8 registry
+// the server mirrors: an invalid envelope fails the run with the offending `sequence` named
+// instead of travelling to the server and coming back as a 422. The mapped `details[]` rows are
+// the `path` + `reason` pair only — no event field value, which may be sensitive local test data
+// — while the thrown error's own message names the offending `event_id` and `sequence`.
 //
-// Validation happens per line, before the line joins a batch, through the same
-// Ajv 8 registry the server mirrors (01.3.2-T2.2 `loadContractSchemas`, rulings
-// T42): an invalid envelope fails the run with the offending `sequence` named
-// instead of travelling to the server and coming back as a 422. The mapped
-// `details[]` rows are the 00 §9.2 `path` + `reason` pair only — never an event
-// value, which may be sensitive local test data (task §8 S3 analogue).
-//
-// Before the schema verdict, each line is also checked against the directory it was
-// read from (task §8 SC5): its `producer_id` must be that producer directory, and a
-// `run_id` it declares must be the run being sent. A spool is a made-to-be-tampered
-// input (any local process may write it), so a planted line stops the run instead of
-// being sent under another producer's batch key.
+// Before the schema verdict, each line is also checked against the directory it was read
+// from: its `producer_id` must be that producer directory, and a `run_id` it declares must be
+// the run being sent. A spool is a made-to-be-tampered input (any local process may write it),
+// so a planted line stops the run instead of being sent under another producer's batch key.
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 
@@ -35,7 +27,7 @@ import { invalidJsonReason, loadContractSchemas, type ContractSchemaSet } from '
 
 import type { SpoolEvent } from './spool.js';
 
-/** Contract cap on the number of events in one batch (00 §9.3/§9.4, FR-04-2). */
+/** Contract cap on the number of events in one batch. */
 export const maxBatchEvents = 500;
 /** Contract cap on the batch body before compression: 1 MiB (event-envelope.v1 `x-max-bytes`). */
 export const maxBatchBytes = 1_048_576;
@@ -85,12 +77,12 @@ export interface EnvelopeDetail {
 }
 
 /**
- * One unit of work for the sender: the events of a batch, the exact body bytes to
- * POST and the derived `Idempotency-Key` (04.2.3 contract §batcher.ts).
+ * One unit of work for the sender: the events of a batch, the exact body bytes to POST and
+ * the derived `Idempotency-Key`.
  *
- * `body` is the raw `{"events":[...]}` JSON, at most {@link maxBatchBytes} bytes;
- * `gzipBody` is present only when compressing actually helps (AC4) and the sender
- * decides which representation to transmit.
+ * `body` is the raw `{"events":[...]}` JSON, at most {@link maxBatchBytes} bytes; `gzipBody`
+ * is present only when compressing actually helps, and the sender decides which
+ * representation to transmit.
  */
 export interface Batch {
   /** The packed events, in spool order; 1..{@link maxBatchEvents} entries. */
@@ -112,10 +104,9 @@ export interface Batch {
 }
 
 /**
- * A single event cannot fit a batch body even on its own: `{"events":[<line>]}`
- * exceeds the 1 MiB pre-compression cap (AC4). Thrown from {@link packBatches}
- * before anything is sent, naming the event by `event_id` and `sequence` so the
- * operator can find the offending case.
+ * A single event cannot fit a batch body even on its own: `{"events":[<line>]}` exceeds the
+ * 1 MiB pre-compression cap. Thrown from {@link packBatches} before anything is sent, naming
+ * the event by `event_id` and `sequence` so the operator can find the offending case.
  */
 export class OversizedEventError extends Error {
   readonly eventId: string;
@@ -222,20 +213,18 @@ function summariseDetails(details: readonly EnvelopeDetail[]): string {
 }
 
 /**
- * The per-batch `Idempotency-Key` (04.2.3 contract §batcher.ts, 00 §7): `batch:` +
- * the lowercase hex SHA-256 of the UTF-8 JSON array
+ * The per-batch `Idempotency-Key`: `batch:` + the lowercase hex SHA-256 of the UTF-8 JSON array
  *
  * ```text
  * ["evidgate.batch-key.v1", run_id, producer_id, [[sequence, event_id], …]]
  * ```
  *
- * A JSON array is unambiguous (no separator can collide with a value) and the
- * member order is fixed, so the same batch derives the same key in a fresh
- * process after a crash — a restart re-sends the identical `Idempotency-Key` and
- * the server de-duplicates instead of storing twice (AC2/AC5, A9). Any change of
- * `run_id`, `producer_id`, or of one `(sequence, event_id)` pair — including
- * reordering — derives a different key, and an empty batch's key is never reused
- * for a non-empty one. The key feeds no secret (ids only) and is 70 characters.
+ * A JSON array is unambiguous (no separator can collide with a value) and the member order is
+ * fixed, so the same batch derives the same key in a fresh process after a crash: a restart
+ * re-sends the identical key and the server de-duplicates instead of storing twice. Any change
+ * of `run_id`, `producer_id`, or of one `(sequence, event_id)` pair — including reordering —
+ * derives a different key, and an empty batch's key is never reused for a non-empty one. The
+ * key feeds no secret (ids only).
  */
 export function deriveBatchIdempotencyKey(
   runId: string,
@@ -268,22 +257,21 @@ export interface PackBatchesOptions {
   readonly maxBytes?: number;
 }
 
-/** The 00 §9.4 member naming the producer a line belongs to (required by the schema). */
+/** The envelope member naming the producer a line belongs to (required by the schema). */
 const producerIdMember = 'producer_id';
 /** The member that ties a line to one run; the schema does not require it (yet). */
 const runIdMember = 'run_id';
 
 /**
- * The identity rejection of one spool line, when the line contradicts the directory it
- * was read from (security review SC5, 04.2.3 §8): `producer_id` must be the producer
- * directory the line sits in, and a line that *declares* a `run_id` must declare the run
- * being sent. A line planted in `<run>/A/` that claims producer B would otherwise travel
- * under the batch key derived from A (and be stored under the wrong producer once the
- * server trusted the local framing), so the run stops here instead.
+ * The identity rejection of one spool line, when the line contradicts the directory it was
+ * read from: `producer_id` must be the producer directory the line sits in, and a line that
+ * *declares* a `run_id` must declare the run being sent. A line planted in `<run>/A/` that
+ * claims producer B would otherwise travel under the batch key derived from A (and be stored
+ * under the wrong producer once the server trusted the local framing), so the run stops here.
  *
  * Members that are absent (or not strings) are left to the schema: `producer_id` is
- * `required`, and any `run_id` at all is an `additionalProperties` rejection — this check
- * only adds the mismatch the schema cannot see, and it never echoes the line's own value.
+ * `required`, and any `run_id` at all is an `additionalProperties` rejection. This check only
+ * adds the mismatch the schema cannot see, and never echoes the line's own value.
  */
 function identityMismatchOf(
   line: string,
@@ -321,19 +309,18 @@ function identityMismatchOf(
 }
 
 /**
- * Packs spool events into batches (AC4): at most `maxEvents` events and at most
- * `maxBytes` body bytes pre-compression, counting the opener, one separator per
- * gap and the closer. The generator pulls from `events` only as far as the batch
- * being built needs — a full batch is yielded before the next event is pulled, so
- * at most one batch of events (plus the single candidate event in hand) is held
- * in memory — and calls `o.validate` per line before the line joins a batch.
+ * Packs spool events into batches: at most `maxEvents` events and at most `maxBytes` body
+ * bytes pre-compression, counting the opener, one separator per gap and the closer. The
+ * generator pulls from `events` only as far as the batch being built needs — a full batch is
+ * yielded before the next event is pulled, so at most one batch of events (plus the single
+ * candidate event in hand) is held in memory — and calls `o.validate` per line before the
+ * line joins a batch.
  *
- * Order of the per-event checks: the transport cap first (an event that cannot
- * travel fails with its `event_id` even when it is also malformed), then the
- * line↔directory identity (see {@link identityMismatchOf}, which needs one
- * `JSON.parse` per line — the same parse `validate` does, on the same text), then
- * schema validation. A later batch is never produced once a line throws: the run
- * stops at that sequence (task §6 failure path).
+ * Order of the per-event checks: the transport cap first (an event that cannot travel fails
+ * with its `event_id` even when it is also malformed), then the line↔directory identity (see
+ * {@link identityMismatchOf}, which needs one `JSON.parse` per line — the same parse
+ * `validate` does, on the same text), then schema validation. A later batch is never produced
+ * once a line throws: the run stops at that sequence.
  */
 export async function* packBatches(
   events: AsyncIterable<SpoolEvent>,
@@ -449,19 +436,17 @@ function buildBody(events: readonly SpoolEvent[], bodyBytes: number): Buffer {
 }
 
 /**
- * The gzip decision (AC4): compress, and keep the result only when it is at most
- * 90 % of the raw body AND saves more than 1 KiB — below that the
- * `Content-Encoding` hop and the extra buffering are not worth it. The level is
- * fixed (and Node's gzip carries no timestamp), so the same body always gzips to
- * the same bytes.
+ * The gzip decision: compress, and keep the result only when it is at most 90 % of the raw
+ * body AND saves more than 1 KiB — below that the `Content-Encoding` hop and the extra
+ * buffering are not worth it. The level is fixed (and Node's gzip carries no timestamp), so
+ * the same body always gzips to the same bytes.
  *
- * A gzip body is also dropped when it would compress *too well*: the server refuses
- * a decoded body larger than `MaxExpansionRatio × compressed.Length` with a
- * non-retryable 413 `batch_too_large` (a decompression-bomb guard), so a batch of
- * highly repetitive events that reaches, say, 800:1 must go out as the raw body,
- * which is at most 1 MiB and always accepted. The cap is the default server ratio
- * minus one point of margin; the comparison mirrors the server's `>` boundary, so an
- * exactly-at-the-cap ratio still travels compressed.
+ * A gzip body is also dropped when it would compress *too well*: the server refuses a decoded
+ * body larger than `MaxExpansionRatio × compressed.Length` with a non-retryable 413
+ * `batch_too_large` (a decompression-bomb guard), so a batch of highly repetitive events that
+ * reaches, say, 800:1 must go out as the raw body, which is at most 1 MiB and always accepted.
+ * The cap is the default server ratio minus one point of margin; the comparison mirrors the
+ * server's `>` boundary, so an exactly-at-the-cap ratio still travels compressed.
  */
 function decideGzip(body: Buffer): Buffer | undefined {
   const compressed = gzipSync(body, { level: 6 });
@@ -479,28 +464,11 @@ function decideGzip(body: Buffer): Buffer | undefined {
 }
 
 /**
- * Builds the pre-send validator for one spool line (04.2.3 contract §batcher.ts,
- * ruling T42): Ajv 8 through the shared `loadContractSchemas` registry — the same
- * compiled schemas, error mapping and `details[]` rows as the server — so a line
- * that would be a 422 never leaves the machine.
- *
- * The line is validated as a one-item batch (`{"events":[<line>]}`) rather than
- * through the registry's batch/no-batch dispatch, because a single-event object
- * takes the item branch there while a *batch-shaped* line would be accepted as a
- * body of its own. Wrapping keeps "one line = one envelope" exact: a line that
- * carries an `events` member is an unexpected member of the event object
- * (`additional_properties` at `/events`), never a nested batch. The
- * `/events/0` prefix the registry puts on item rows is stripped, so `details[]`
- * paths point into the event itself and equal the corpus sidecars
- * (`fixtures/contracts/vectors/event-envelope.v1`). The 1 MiB cap is not part of
- * this verdict — it belongs to the body that travels; see
- * {@link validateEnvelopeLine}.
- *
- * The schemas are the ones compiled into the package (`loadPackagedContractSchemas`), so a
- * command validates from an install with no repository above it — there is no directory
- * search and no current-working-directory dependency. Pass a directory only to validate
- * against another copy of `contracts/`. Both the schema load and the Ajv compile happen
- * once, when the validator is created.
+ * Builds the pre-send validator for one spool line: the same Ajv schemas, error mapping and
+ * `details[]` rows the server computes, so a line that would be a 422 never leaves the machine.
+ * Each line is wrapped as a one-item batch on purpose: validated bare, a batch-shaped line
+ * would be accepted as a body of its own. The packaged schemas keep this free of any
+ * contracts-directory or working-directory dependency.
  */
 export function createEnvelopeValidator(
   contractsDirectory?: string,

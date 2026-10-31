@@ -1,32 +1,7 @@
-// 04.2.3-T1.1: the CLI-side single-writer lock on `<spool_dir>/<run_id>/<producer_id>`.
-//
-// D2 of the 04.2.3 contract: `events send` and `runs finalize` are the only CLI writers of
-// a producer directory, and they must never interleave with a second CLI process. The lock
-// is `spool.lock`, mode 0600, whose whole content is `{ pid, started_at }` — no token, no
-// argv, nothing a support bundle could leak.
-//
-// D-S56-Q8 adds the second half of the model: the reporter now holds its own
-// `<producer_dir>/writer.lock` for the life of a writer, and the CLI only *inspects* that
-// lock (`assertNoLiveWriter`) before it reads, acks, finalises or purges a chunk stream. A
-// live reporter is `spool_locked` (never waited for, never taken over); a dead one is
-// ignored and left in place, because the reporter's next start breaks it with its own
-// rename-aside takeover. The CLI never creates, rewrites or deletes `writer.lock`, so it
-// can never destroy a live successor's lock. The upload journal (`uploads/*.json`) does
-// not pass through this check: a live test run must not block an artifact upload.
-//
-// Creation is atomic with the content: the record is written to a unique 0600 temp file in
-// the same directory, fsynced, and hard-linked to `spool.lock`. `link` is the winner
-// decision (EEXIST = held), so `spool.lock` is never observable empty or torn; that is what
-// lets a lock which does not parse be treated as foreign instead of as a writer mid-create.
-//
-// Takeover of a dead holder never unlinks the path: the lock is renamed aside, the moved
-// file is re-read, and it is deleted only when it still names the dead holder observed
-// before the rename. Anything else is a live successor's lock and is put back with
-// link-if-absent semantics. A lock naming a live pid is never taken over (pid reuse is
-// accepted as a risk).
-//
-// The lock is advisory within this package: it guards a directory, not an fd, so every
-// reader/writer of the spool goes through `withSpoolLock`.
+// The CLI-side single-writer lock on a producer directory: `events send` and
+// `runs finalize` must never interleave. The CLI only inspects the reporter's
+// `writer.lock` and never creates, rewrites or deletes it, so a live successor's lock
+// cannot be destroyed.
 import { randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import { link, lstat, open, readdir, rename, unlink } from 'node:fs/promises';
@@ -59,7 +34,7 @@ const defaultTakeoverAttempts = 3;
 /** No lock record is longer than a few dozen bytes; anything larger is not a lock. */
 const maxLockFileBytes = 1024;
 
-/** The lock file's whole content (task file §4 / D2). Nothing else is ever written. */
+/** The lock file's whole content: no token, no argv, nothing a support bundle could leak. */
 export interface SpoolLockFile {
   readonly pid: number;
   readonly startedAt: string;
@@ -505,7 +480,7 @@ async function readSpoolLockPath(path: string): Promise<SpoolLockFile | null> {
 }
 
 /**
- * The reporter's own lock (D-S56-Q8, `@evidgate/playwright-reporter` `writerLock.ts`):
+ * The reporter's own lock (`@evidgate/playwright-reporter` `writerLock.ts`):
  * `<producer_dir>/writer.lock`, mode 0600, whole content `{ pid, started_at }`, held for
  * the life of a writer. It is never the CLI's: only {@link assertNoLiveWriter} reads it.
  */
@@ -520,7 +495,7 @@ export interface WriterLockCheckOptions {
 }
 
 /**
- * `spool_locked` (D-S56-Q8, exit 3): the reporter is writing this producer right now, so
+ * `spool_locked` (exit 3): the reporter is writing this producer right now, so
  * nothing may read, ack, finalize or purge its chunk stream. The message names the pid.
  */
 export class WriterLockedError extends CliError {
@@ -556,7 +531,7 @@ export function readWriterLock(directory: string): Promise<SpoolLockFile | null>
 }
 
 /**
- * Refuses when the reporter holds a *live* `writer.lock` (D-S56-Q8). Called under the
+ * Refuses when the reporter holds a *live* `writer.lock`. Called under the
  * CLI's own `spool.lock`, so a second CLI can never be inside the same producer directory.
  *
  * - live pid -> `WriterLockedError` (`spool_locked`, exit 3), naming the pid. Nothing is
@@ -590,6 +565,6 @@ export async function assertNoLiveWriter(
  * by a live reporter, only the chunk readers/purgers are.
  */
 export interface ProducerLockOptions extends WriterLockCheckOptions {
-  /** Refuse with `spool_locked` while the reporter holds `writer.lock` (D-S56-Q8). */
+  /** Refuse with `spool_locked` while the reporter holds `writer.lock`. */
   readonly requireNoLiveWriter?: boolean;
 }

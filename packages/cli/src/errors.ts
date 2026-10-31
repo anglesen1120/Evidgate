@@ -1,8 +1,7 @@
-// 04.2.1-T2.1: the single error type every CLI failure path raises. The exit code is
-// always 3 (`ExitCode.Error`) — the `code` string is the machine-readable subcode that
-// reaches stderr as `evidgate: error <code>: <message>` (04.2.1 §5, AC4/AC5). The
-// constructor takes no exit-code override, so a subcode can never change the exit code
-// (contracts/cli.md §2).
+// The single error type every CLI failure path raises. The exit code is always 3
+// (`ExitCode.Error`); `code` is the machine-readable subcode printed as
+// `evidgate: error <code>: <message>`. The constructor takes no exit-code override, so a
+// subcode can never change the process exit code (contracts/cli.md §2).
 export interface CliErrorOptions {
   /** Machine-readable subcode, e.g. `missing_config`, `dev_token_refused`, `usage`. */
   readonly code: string;

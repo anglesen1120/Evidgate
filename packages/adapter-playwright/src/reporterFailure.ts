@@ -13,6 +13,15 @@ export function failureCode(failure: Error): string {
   return SAFE_FAILURE_CODES[code] === true || ERRNO_CODE.test(code) ? code : UNEXPECTED_FAILURE;
 }
 
+/**
+ * Normalises a thrown value into an `Error`. The callbacks buffer whatever a spool, a lock or
+ * an injected resolver throws, and they may throw a non-Error, but a buffered failure must
+ * stay diagnosable (`failureCode` reads `.code`).
+ */
+export function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
 /** The adapter's own reason codes (`spool.ts`, `writerLock.ts`) plus the shard conflict. */
 const SAFE_FAILURE_CODES: Readonly<Record<string, true>> = {
   invalid_config: true,

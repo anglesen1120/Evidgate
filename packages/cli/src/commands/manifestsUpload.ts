@@ -1,8 +1,7 @@
-// 04.2.2-T1.1: `evidgate manifests upload` — reads the manifest file, sends it
-// byte-for-byte to `POST /v1/projects/{p}/manifests` and prints `manifest_id` +
-// `manifest_hash` (04.2.2 §5, AC1). The file is read and capped BEFORE `getToken()`,
-// so an unreadable or oversize file makes no request at all — not even the token
-// exchange. A 401 purges the cached CI token (04.2.1-T1 hand-over, contracts/cli.md
+// `evidgate manifests upload` — reads the manifest file, sends it byte-for-byte to
+// `POST /v1/projects/{p}/manifests` and prints `manifest_id` + `manifest_hash`. The file is
+// read and capped BEFORE `getToken()`, so an unreadable or oversize file makes no request at
+// all — not even the token exchange. A 401 purges the cached CI token (contracts/cli.md
 // §7/§8); a 403 keeps it, because a scope refusal does not invalidate the token.
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -38,9 +37,9 @@ const createManifestPath = '/projects/{p}/manifests';
  * the same pointer (contracts/cli.md §5 `usage` row); keep the two literals in sync.
  */
 const helpHint = "run 'evidgate --help' for usage";
-// D-2: `O_NONBLOCK` keeps `open` from blocking on a FIFO — without it the non-regular-file
-// check below never runs, because the open waits for a writer. Regular-file reads are
-// unaffected. win32 has no `O_NONBLOCK`, so the flags reduce to `O_RDONLY` (plain `'r'`).
+// `O_NONBLOCK` keeps `open` from blocking on a FIFO — without it the non-regular-file check
+// below never runs, because the open waits for a writer. Regular-file reads are unaffected.
+// win32 has no `O_NONBLOCK`, so the flags reduce to `O_RDONLY` (plain `'r'`).
 const openReadFlags = constants.O_RDONLY | (constants.O_NONBLOCK ?? 0);
 /** `manifest_id` is a UUID and `manifest_hash` is `sha256:<64 hex>` (openapi `ManifestAccepted`). */
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -56,8 +55,8 @@ export const manifestsUploadCommand: CommandDefinition = {
     if (typeof file !== 'string' || file.length === 0) {
       throw new CliError('missing required flag --file', { code: 'usage', hint: helpHint });
     }
-    // The file is read (and capped) before any token work: an oversize or unreadable
-    // file must not trigger a request, including the token exchange (04.2.2 §8).
+    // The file is read (and capped) before any token work: an oversize or unreadable file
+    // must not trigger a request, including the token exchange.
     const body = await readManifestFile(file);
     const { token } = await getToken(config, deps);
     const client = createApiClient(config, token, deps.fetch ?? fetch);
@@ -66,8 +65,8 @@ export const manifestsUploadCommand: CommandDefinition = {
     const idempotencyKey = createHash('sha256').update(body).digest('hex');
     const result = await callApi(
       (signal) => createManifestRawBytes(client, config.project, idempotencyKey, body, signal),
-      // The digest key makes the upload replay-safe, so a transport failure, a 429 or a 5xx
-      // is retried with the SAME key and the SAME bytes.
+      // The digest key makes the upload replay-safe, so a transport failure, a 429 or a 5xx is
+      // retried with the SAME key and the SAME bytes unless the envelope says `retryable: false`.
       { policy: 'replay-safe', deps },
     );
     const response = result.response;
@@ -77,7 +76,8 @@ export const manifestsUploadCommand: CommandDefinition = {
     }
     if (!response.ok) {
       if (response.status === 401) {
-        // Best-effort: the server's error is the one that must surface (04.2.1 §6).
+        // Best-effort: the server's error is the one that must surface, but a refused
+        // bearer must not be reused by the next command.
         await deleteCachedToken(config).catch(() => undefined);
       }
       throw serverErrorFromResponse(result.error, response, {

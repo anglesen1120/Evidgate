@@ -1,29 +1,6 @@
-// 04.2.3-T1.3: the sender — every batch the batcher packed is POSTed to
-// `POST /v1/runs/{r}/events` (contracts/openapi.yaml:368-444) over the one SDK client
-// (`client.ts`: validated base URL, bearer, `redirect: 'error'`), at most `maxInFlight`
-// batches in flight, under ONE deadline for the whole send.
-//
-// Delivery rules this module owns (04.2.3 §2 AC1/AC5, §5, §7, §8; task §9):
-// - the raw bytes the batcher produced are posted as-is (optionally gzipped) with the
-//   batch's own `Idempotency-Key`; a retry resends the SAME bytes, the SAME key and
-//   therefore the SAME `event_id`s, so a lost ACK can never create a second identity;
-// - only 408/429/5xx and transport failures are retried, with full-jitter exponential
-//   backoff (500 ms x2, cap 30 s); `Retry-After` (delta-seconds or HTTP-date) is honoured
-//   as a floor over that backoff, so `Retry-After: 0` still backs off. An envelope
-//   `retryable: false` stops the retry even on a 5xx;
-// - 401 and every other 4xx fail fast: the server's `error.code` and `request_id` reach
-//   the caller verbatim (T9) and the batch is never silently retried;
-// - every ack is verified (one ack per event, same `event_id`/position, status
-//   `accepted`/`duplicate`); anything else is `ack_mismatch` and nothing advances
-//   ("never advance on doubt", D7/§6);
-// - `duplicate` acks count as delivered (a resend after a lost ACK is expected);
-// - on the first fatal error the sender stops pulling, starts no further retry attempt or
-//   backoff wait on any other batch, lets the in-flight batches settle (their acks still
-//   reach `onBatchAcked`, so the cursor moves over them), then throws that first fatal
-//   error; the batch iterator is closed on every exit, so its spool chunk is never leaked;
-// - the bearer token is never part of a message: refusals reuse `serverErrorFromResponse`
-//   (which redacts every registered secret), transport failures use the fixed
-//   `transportError` text, and a deadline message names only code/status/request id.
+// The sender posts each packed batch over the one SDK client, at most `maxInFlight` in
+// flight under ONE deadline. A retry reuses the same bytes, key and event ids, so a lost
+// ACK cannot create a second identity, and every ack is verified before the cursor moves.
 import { isErrorEnvelope, postRunEvents, type Client, type EventBatch } from '@evidgate/sdk';
 
 import type { Batch } from './batcher.js';
@@ -33,21 +10,21 @@ import { escapeControlCharacters } from './errors.js';
 import { redact } from './redact.js';
 import { serverErrorFromResponse, transportError } from './serverError.js';
 
-/** Batches in flight per run (04.2.3 §8 backoff discipline). A caller may only lower it. */
+/** Batches in flight per run. A caller may only lower it. */
 export const maxInFlight = 4;
 
 /**
- * One request's own timeout (§9.1): a hung connection becomes a retryable transport
+ * One request's own timeout: a hung connection becomes a retryable transport
  * failure instead of stalling the send. It is also bounded by what is left of the
  * overall deadline.
  */
 const perRequestTimeoutMs = 30_000;
-/** Exponential backoff base and cap (04.2.3 §5; 00 §9.1). */
+/** Exponential backoff base and cap. */
 const retryBaseMs = 500;
 const retryCapMs = 30_000;
 /** A request id is echoed at most this long — the `serverError.ts` text cap. */
 const maxRequestIdLength = 200;
-/** The code a transport failure carries on a `SendFailedError` (task §T1.3 surface). */
+/** The code a transport failure carries on a `SendFailedError`. */
 const transportFailedCode = 'transport_failed';
 const ackMismatchCode = 'ack_mismatch';
 const deadlineExceededCode = 'deadline_exceeded';
@@ -105,9 +82,9 @@ export interface SendFailedErrorOptions {
 
 /**
  * The one failure a send raises. `code`, `requestId` and `status` are the server's values
- * verbatim (T9), so `events send` can print `evidgate: error producer_slot_taken` plus the
- * request id without re-interpreting anything; the batch's sequence range names what did
- * not advance the cursor.
+ * verbatim, so `events send` prints `evidgate: error producer_slot_taken` plus the request
+ * id without re-interpreting anything; the batch's sequence range names what did not
+ * advance the cursor.
  */
 export class SendFailedError extends Error {
   readonly code: string;
@@ -177,7 +154,7 @@ export async function sendBatches(
   let accepted = 0;
   let duplicates = 0;
 
-  // P3-4/PF4: one fatal error has to end every other batch's retry loop at once. Without
+  // One fatal error has to end every other batch's retry loop at once. Without
   // it a sibling already backing off a 503/429 would keep sleeping until the deadline
   // (30 min by default) before the first error was reported.
   const stopRequested = (): boolean => fatal !== undefined;
@@ -292,7 +269,7 @@ function concurrencyLimit(requested: number | undefined): number {
 
 /**
  * One batch, retried until it is acked or the deadline/failure ends it. The bytes, the
- * `Idempotency-Key` and the event ids are the batch's own on every attempt (AC5).
+ * `Idempotency-Key` and the event ids are the batch's own on every attempt.
  *
  * `stopRequested` is the send's own fatal flag: once a sibling batch (or the iterator)
  * has failed nothing else can win, so this batch starts no further attempt and takes no
@@ -457,9 +434,9 @@ export function attemptSignal(deadlineAt: number, now: number): AbortSignal {
 }
 
 /**
- * Retryable per 04.2.3 §5: 408, 429 and 5xx, unless the 00 §9.2 envelope says
- * `retryable: false` (a permanent 5xx must not be retried). Every other status — 401,
- * 403, 404, 409, 413, 422 — is permanent.
+ * Retryable: 408, 429 and 5xx, unless the response envelope says `retryable: false` (a
+ * permanent 5xx must not be retried). Every other status — 401, 403, 404, 409, 413, 422 —
+ * is permanent.
  */
 export function isRetryable(status: number, error: unknown): boolean {
   const retryable = status === 408 || status === 429 || status >= 500;
@@ -513,7 +490,7 @@ export function retryAfter(
   return Math.max(date - now, 0);
 }
 
-/** Full-jitter backoff: `random() * min(500 ms x 2^(attempt-1), 30 s)` (00 §9.1). */
+/** Full-jitter backoff: `random() * min(500 ms x 2^(attempt-1), 30 s)`. */
 export function backoffDelay(attempts: number, sample: number): number {
   const ceiling = Math.min(retryBaseMs * 2 ** (attempts - 1), retryCapMs);
   const bounded = Math.min(Math.max(sample, 0), 1);
@@ -521,7 +498,7 @@ export function backoffDelay(attempts: number, sample: number): number {
 }
 
 /**
- * Verifies a 200 body before anything advances (D7, "never advance on doubt"): one ack
+ * Verifies a 200 body before anything advances ("never advance on doubt"): one ack
  * per event, in request order, for the same `event_id`, with status `accepted` or
  * `duplicate`, and with the body's `accepted`/`duplicates` counts matching the acks.
  * `duplicate` counts as delivered (it is a resend of a batch whose ACK was lost).
