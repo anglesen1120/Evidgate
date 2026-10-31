@@ -49,8 +49,9 @@ internal interface IReconcileFinisher
     /// <param name="runId">The run the reconciler just compared; its row is already locked by this transaction.</param>
     /// <param name="comparison">The event-evidence result of the attempt (never null; only a compared outcome has one).</param>
     /// <param name="settlement">
-    /// Which settled run the comparison belongs to: <see cref="ReconcileSettlement.DecideCollection"/> moves the run
-    /// state, <see cref="ReconcileSettlement.AppendLateEvidence"/> leaves it alone.
+    /// Which settled run the comparison belongs to: <see cref="ReconcileSettlement.DecideCollection"/> and
+    /// <see cref="ReconcileSettlement.CloseOverdue"/> move the run state, <see cref="ReconcileSettlement.AppendLateEvidence"/>
+    /// leaves it alone.
     /// </param>
     /// <param name="cancellationToken">Cancelled on shutdown or lease loss.</param>
     /// <returns>The persisted completeness and revision.</returns>
@@ -84,6 +85,15 @@ internal enum ReconcileSettlement
     /// state stays where it is — a finished run has no forward edge, so the revision alone carries the new completeness.
     /// </summary>
     AppendLateEvidence,
+
+    /// <summary>
+    /// The run is <c>queued</c> or <c>running</c> and its collection deadline has passed, so this revision is its
+    /// verdict: the attempt closes it <c>incomplete</c> through the declared <c>queued|running → incomplete</c> edge.
+    /// It never reads <c>complete</c> — the run never reached collecting, so its evidence proves nothing about the plan —
+    /// and its <c>missing[]</c> is never empty: a comparison that named nothing still records what is absent
+    /// (<c>missing_shard</c> while a slot exists, <c>missing_result</c> when the plan has none).
+    /// </summary>
+    CloseOverdue,
 }
 
 /// <summary>
@@ -94,7 +104,9 @@ internal enum ReconcileSettlement
 /// and every planned shard closed. Missing evidence never reads as complete, and a run with zero planned shards is
 /// <c>incomplete</c> with no reason: nothing was proven, so nothing is claimed (fail closed). The comparison already
 /// names a planned execution that recorded no attempt, so a producer that finalized with a matching declared count can
-/// never complete a run whose plan says more cases ran than its attempts prove.
+/// never complete a run whose plan says more cases ran than its attempts prove. A forced close
+/// (<see cref="ReconcileSettlement.CloseOverdue"/>) is never complete and never reasonless, whatever the comparison and
+/// the freeze answered — the run never reached collecting, so its evidence proves nothing about the plan.
 /// </para>
 /// <para>
 /// <b>missing[]</b>: the comparison's codes in the order the comparer produced them (producer id, then code, then
@@ -199,14 +211,20 @@ internal sealed class ReconcileFinisher(
             AddCode(missing, seen, ReconcileMissingCodes.ArtifactMissing);
         }
 
-        var isComplete = missing.Count == 0
+        // (d) A run the deadline closed never reads complete and never carries an empty missing[]: the run never reached
+        // collecting, so its evidence proves nothing about the plan. The one reason such a comparison can lack is added
+        // here, whichever way the comparison came out.
+        AddForcedReason(comparison, settlement, missing, seen);
+
+        var isComplete = settlement != ReconcileSettlement.CloseOverdue
+            && missing.Count == 0
             && comparison.ShardsPlanned > 0
             && comparison.ShardsClosed == comparison.ShardsPlanned;
         var completeness = isComplete ? Complete : Incomplete;
 
         var parameters = new { org_id = orgId, run_id = runId };
 
-        // (c) A late append is idempotent against its own evidence. The consumer commits this transaction and only then
+        // (e) A late append is idempotent against its own evidence. The consumer commits this transaction and only then
         // completes the task row, so a crash in between re-claims the same attempt; appending a second, identical
         // revision would break "one late batch, one revision". Equal evidence answers with the revision already recorded
         // instead of a copy of it.
@@ -221,7 +239,7 @@ internal sealed class ReconcileFinisher(
             }
         }
 
-        // (d) The manifest hash the revision records, read tenant-first from the run's own manifest row.
+        // (f) The manifest hash the revision records, read tenant-first from the run's own manifest row.
         var manifestHash = await db
             .QuerySingleOrDefaultAsync<string>(
                 EvidenceRevisionSql.SelectManifestHash,
@@ -261,7 +279,7 @@ internal sealed class ReconcileFinisher(
                 $"the evidence_revision insert of run {runId:D} answered no revision number");
         }
 
-        // (e) The pointer move, in the same transaction and after the insert: 0049's guard refuses anything but the latest
+        // (g) The pointer move, in the same transaction and after the insert: 0049's guard refuses anything but the latest
         // revision of this run, so a short update (no row) is an integrity failure, not a silent no-op.
         var moved = await db
             .ExecuteAsync(
@@ -276,14 +294,16 @@ internal sealed class ReconcileFinisher(
                 $"run {runId:D} did not accept the evidence pointer in this tenant ({moved} row(s) updated)");
         }
 
-        // (f) The state edge, last and only for a collecting run: collecting -> complete|incomplete through the guarded
-        // run-state transition (it re-takes the run row this transaction already holds FOR NO KEY UPDATE, which is a no-op
-        // for the holder). A system edge is credited to the system actor, which is what a task consumer is; the outbox
-        // row and the audit row join this unit of work. Late evidence appends a revision and never moves the state: the
-        // run already finished as incomplete, and both terminal states are the run's last word, so the revision — not
-        // the state — is what a later reader follows. `incomplete -> complete` is not an edge the machine allows
-        // (collecting writes both verdicts), and inventing one would let new evidence rewrite a finished verdict.
-        if (settlement == ReconcileSettlement.DecideCollection)
+        // (h) The state edge, last: collecting -> complete|incomplete from a collection decision, queued|running ->
+        // incomplete from a forced close, both through the guarded run-state transition (it re-takes the run row this
+        // transaction already holds FOR NO KEY UPDATE, which is a no-op for the holder). An applied edge is credited to
+        // the system actor, which is what a task consumer is, and its outbox row and audit row join this unit of work;
+        // a run that left queued/running meanwhile answers NoOp, not an applied edge. Late evidence appends a revision
+        // and never moves the state: the run already finished as incomplete, and both terminal states are the run's last
+        // word, so the revision — not the state — is what a later reader follows. `incomplete -> complete` is not an
+        // edge the machine allows (collecting writes both verdicts), and inventing one would let new evidence rewrite a
+        // finished verdict.
+        if (settlement is ReconcileSettlement.DecideCollection or ReconcileSettlement.CloseOverdue)
         {
             var transition = await runStates
                 .TransitionAsync(
@@ -339,6 +359,32 @@ internal sealed class ReconcileFinisher(
         }
 
         return new ReconcileFinalization(latest.Completeness, latest.Id, latest.RevisionNo);
+    }
+
+    /// <summary>
+    /// Records the reason a forced close can never omit. The run never reached collecting, so a comparison that named
+    /// nothing still says what is absent: <c>missing_shard</c> while the plan holds a slot, <c>missing_result</c> when it
+    /// holds none — both closed-list codes, so neither invents a reason the CHECK would refuse.
+    /// </summary>
+    /// <param name="comparison">The comparison this attempt persists.</param>
+    /// <param name="settlement">How the attempt settles the run; only a forced close adds the reason.</param>
+    /// <param name="missing">The codes kept so far, in order.</param>
+    /// <param name="seen">The set of the codes kept so far.</param>
+    private static void AddForcedReason(
+        ReconcileComparison comparison,
+        ReconcileSettlement settlement,
+        List<string> missing,
+        HashSet<string> seen)
+    {
+        if (settlement != ReconcileSettlement.CloseOverdue || missing.Count > 0)
+        {
+            return;
+        }
+
+        AddCode(
+            missing,
+            seen,
+            comparison.ShardsPlanned > 0 ? ReconcileMissingCodes.MissingShard : ReconcileMissingCodes.MissingResult);
     }
 
     /// <summary>

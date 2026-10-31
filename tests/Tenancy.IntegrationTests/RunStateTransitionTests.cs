@@ -204,7 +204,15 @@ public sealed class RunStateTransitionTests
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
 
-        foreach (var (from, to) in new[] { ("running", "complete"), ("queued", "collecting"), ("queued", "complete") })
+        // `incomplete` is reachable only from `queued`, `running` and `collecting`: a run cannot be closed
+        // before its plan is committed, so `created -> incomplete` is a forward-skip like `running -> complete`.
+        foreach (var (from, to) in new[]
+        {
+            ("running", "complete"),
+            ("queued", "collecting"),
+            ("queued", "complete"),
+            ("created", "incomplete"),
+        })
         {
             var runId = await RunInStateAsync(world, from);
             var drive = DriveTo(from).ToList();

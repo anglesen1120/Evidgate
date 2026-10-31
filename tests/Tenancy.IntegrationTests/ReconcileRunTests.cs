@@ -580,12 +580,15 @@ public sealed partial class ReconcileRunTests
     /// <summary>The reasons of one outcome as <c>code:producer:detail</c>, for a readable failure message.</summary>
     /// <summary>
     /// The settlement the consumer derives from an outcome: only a late comparison appends a revision to a run that
-    /// already finished, so only it must leave the run state alone.
+    /// already finished, and an overdue comparison is a forced close, so neither leaves the decision to the collecting
+    /// edge.
     /// </summary>
-    private static ReconcileSettlement Settlement(ReconcileOutcome outcome) =>
-        outcome.Disposition == ReconcileDisposition.ComparedLate
-            ? ReconcileSettlement.AppendLateEvidence
-            : ReconcileSettlement.DecideCollection;
+    private static ReconcileSettlement Settlement(ReconcileOutcome outcome) => outcome.Disposition switch
+    {
+        ReconcileDisposition.ComparedLate => ReconcileSettlement.AppendLateEvidence,
+        ReconcileDisposition.ComparedOverdue => ReconcileSettlement.CloseOverdue,
+        _ => ReconcileSettlement.DecideCollection,
+    };
 
     private static string Describe(ReconcileOutcome outcome) =>
         outcome.Comparison is null
@@ -1120,14 +1123,15 @@ public sealed partial class ReconcileRunTests
         }
     }
 
-    // ------------------------------------------------------------------ T2.1: only a collecting run is compared
+    // ------------------------------------------------------------------ T2.1: a run outside its deadline is not compared
 
     /// <summary>
     /// The trigger is not evidence that the run is collectable (05.3.2 §7): a run that cannot take evidence —
-    /// <c>complete</c>, <c>canceled</c> or still <c>running</c> — answers <c>NotCollectable</c>, compares nothing,
-    /// writes no revision and leaves the state alone. The zero <c>evidence_revision</c> row is the half a retrying
-    /// consumer would otherwise duplicate. <c>incomplete</c> is here too, for an ordinary trigger: only a trigger that
-    /// carries late evidence compares a finished run, and only inside its window
+    /// <c>complete</c>, <c>canceled</c>, or still <c>running</c> inside its collection deadline — answers
+    /// <c>NotCollectable</c>, compares nothing, writes no revision and leaves the state alone (past that deadline the
+    /// same run is force-closed instead: <c>ReconcileForcedIncompleteTests</c>). The zero <c>evidence_revision</c> row is
+    /// the half a retrying consumer would otherwise duplicate. <c>incomplete</c> is here too, for an ordinary trigger:
+    /// only a trigger that carries late evidence compares a finished run, and only inside its window
     /// (<see cref="Reconcile_IncompleteRun_WithLateTrigger_ComparesLate"/>).
     /// </summary>
     /// <param name="state">The run state the reconcile trigger arrives too late for.</param>
