@@ -201,7 +201,7 @@ public sealed class SeedDevTokenTests
     {
         var (database, pepper) = await _harness.SeededDatabaseAsync();
         var remoteApp =
-            "Host=db.internal.example.com;Port=5432;Database=evidgate;Username=evidgate_app;Password=x";
+            "Host=db.internal.example.com;Port=5432;Database=evidgate;Username=evidgate_app;Password=<unused>";
 
         var run = _harness.RunWithToken(database, pepper, appConnectionString: remoteApp);
 
@@ -216,10 +216,9 @@ public sealed class SeedDevTokenTests
     {
         var (database, pepper) = await _harness.SeededDatabaseAsync();
 
-        var run = _harness.RunWithToken(
-            database,
-            pepper,
-            ownerConnectionString: "Host=db.prod.example.com;Port=5432;Database=evidgate;Username=evidgate_owner;Password=x");
+        var remoteOwner =
+            "Host=db.prod.example.com;Port=5432;Database=evidgate;Username=evidgate_owner;Password=<unused>";
+        var run = _harness.RunWithToken(database, pepper, ownerConnectionString: remoteOwner);
 
         run.ExitCode.ShouldBe(MigratorExitCodes.InvalidInvocation);
         run.Error.ShouldContain("not local");

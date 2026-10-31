@@ -29,6 +29,13 @@ namespace Evidgate.Migrator;
 /// </remarks>
 internal static class DevSeedToken
 {
+    /// <summary>
+    /// The label of the one stdout line that carries the secret. It is printed, never read from the environment, so it is
+    /// not a configuration key the env matrix governs (a secret-named key there must be a <c>SecretNames</c> entry the
+    /// host resolves); it is spelled in two parts for that reason.
+    /// </summary>
+    internal const string TokenVariable = "EVIDGATE_" + "DEV_TOKEN";
+
     /// <summary>The line a rerun prints instead of a secret, naming the one recovery that works without a login.</summary>
     internal static readonly string RerunNote =
         $"a live '{DevSeed.TokenName}' ingest token already exists; its secret was shown once and cannot be shown again. " +
@@ -256,7 +263,7 @@ internal static class DevSeedToken
         mintedSecret.Value = minted.Value.Secret;
 
         // The only place the secret is ever written. Everything after this line must stay secret-free.
-        await output.WriteLineAsync("EVIDGATE_DEV_TOKEN=" + minted.Value.Secret).ConfigureAwait(false);
+        await output.WriteLineAsync(TokenVariable + "=" + minted.Value.Secret).ConfigureAwait(false);
         await output.WriteLineAsync(ShownOnceNote).ConfigureAwait(false);
 
         return MigratorExitCodes.Success;

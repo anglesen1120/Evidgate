@@ -32,7 +32,7 @@ public static class MigratorHost
           seed-dev --with-token
                           also mint ONE dev ingest token (name dev-seed, no expiry) and ONE sample policy revision for the
                           dev project, through the real Identity/Policy commands on the app-role connection; the token
-                          is printed once on stdout as EVIDGATE_DEV_TOKEN=…, and a rerun prints how to recover instead;
+                          is printed once on stdout as {DevSeedToken.TokenVariable}=…, and a rerun prints how to recover instead;
                           refuses unless Development, every database host is local, {SecretNames.CiPepper} is configured
                           and {SecretNames.DatabaseConnectionString} carries the app role
 

@@ -30,7 +30,7 @@
     {
       "key": "EVIDGATE__DATABASE__CONNECTIONSTRING",
       "scope": "runtime",
-      "consumers": ["api", "dev-stack", "worker"],
+      "consumers": ["api", "dev-stack", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": true,
       "requiredBy": "src/BuildingBlocks/Persistence/Options/DatabaseOptions.cs",
@@ -53,7 +53,7 @@
     {
       "key": "EVIDGATE__IDENTITY__CUSTOMROLESENABLED",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "boolean",
       "requiredAtBoot": false,
       "constraints": {},
@@ -93,7 +93,7 @@
     {
       "key": "EVIDGATE__CI__SIGNINGKEY",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -113,7 +113,7 @@
     {
       "key": "EVIDGATE__CI__ISSUER",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -133,7 +133,7 @@
     {
       "key": "EVIDGATE__CI__AUDIENCE",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -153,7 +153,7 @@
     {
       "key": "EVIDGATE__CI__TOKENLIFETIMEMINUTES",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -176,7 +176,7 @@
     {
       "key": "EVIDGATE__CI__PEPPER",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -196,7 +196,7 @@
     {
       "key": "EVIDGATE__CI__PEPPERVERSION",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {},
@@ -216,7 +216,7 @@
     {
       "key": "EVIDGATE__CI__PREVIOUSPEPPER",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -236,7 +236,7 @@
     {
       "key": "EVIDGATE__CI__PREVIOUSPEPPERVERSION",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {},
@@ -256,7 +256,7 @@
     {
       "key": "EVIDGATE__CI__GITHUBOIDCISSUER",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -276,7 +276,7 @@
     {
       "key": "EVIDGATE__CI__GITHUBOIDCAUDIENCE",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -296,7 +296,7 @@
     {
       "key": "EVIDGATE__CI__GITHUBJWKSURI",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -316,7 +316,7 @@
     {
       "key": "EVIDGATE__CI__MAXSKEWSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -339,7 +339,7 @@
     {
       "key": "EVIDGATE__CI__EXCHANGEBURSTLIMIT",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -362,7 +362,7 @@
     {
       "key": "EVIDGATE__CI__DENIEDEVENTNAMES",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -382,7 +382,7 @@
     {
       "key": "EVIDGATE__CI__EXCHANGEWINDOWSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -405,7 +405,7 @@
     {
       "key": "EVIDGATE__LOGIN__PUBLICBASEURL",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -425,7 +425,7 @@
     {
       "key": "EVIDGATE__LOGIN__STATELIFETIMESECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -448,7 +448,7 @@
     {
       "key": "EVIDGATE__LOGIN__RETRYAFTERSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -471,7 +471,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__CLIENTID",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -491,7 +491,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__CLIENTSECRET",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -511,7 +511,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__ISSUER",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -531,7 +531,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__AUTHORIZATIONENDPOINT",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -551,7 +551,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__TOKENENDPOINT",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -571,7 +571,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__JWKSURI",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -591,7 +591,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__CLOCKSKEWSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -614,7 +614,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__JWKSTTLSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -637,7 +637,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__JWKSMINREFRESHSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -660,7 +660,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__HTTPTIMEOUTSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -683,7 +683,7 @@
     {
       "key": "EVIDGATE__OIDC__GOOGLE__MAXRESPONSEBYTES",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -706,7 +706,7 @@
     {
       "key": "EVIDGATE__OAUTH__GITHUB__CLIENTID",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -726,7 +726,7 @@
     {
       "key": "EVIDGATE__OAUTH__GITHUB__CLIENTSECRET",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -746,7 +746,7 @@
     {
       "key": "EVIDGATE__OAUTH__GITHUB__AUTHORIZEURL",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -766,7 +766,7 @@
     {
       "key": "EVIDGATE__OAUTH__GITHUB__TOKENURL",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -786,7 +786,7 @@
     {
       "key": "EVIDGATE__OAUTH__GITHUB__APIBASEURL",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -806,7 +806,7 @@
     {
       "key": "EVIDGATE__OAUTH__GITHUB__HTTPTIMEOUTSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -829,7 +829,7 @@
     {
       "key": "EVIDGATE__OAUTH__GITHUB__MAXRESPONSEBYTES",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -852,7 +852,7 @@
     {
       "key": "EVIDGATE__SESSION__PEPPER",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -872,7 +872,7 @@
     {
       "key": "EVIDGATE__SESSION__PEPPERVERSION",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {},
@@ -892,7 +892,7 @@
     {
       "key": "EVIDGATE__SESSION__IDLESECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -915,7 +915,7 @@
     {
       "key": "EVIDGATE__SESSION__ABSOLUTESECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -938,7 +938,7 @@
     {
       "key": "EVIDGATE__SESSION__PREVIOUSPEPPER",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -958,7 +958,7 @@
     {
       "key": "EVIDGATE__SESSION__PREVIOUSPEPPERVERSION",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {},
@@ -978,7 +978,7 @@
     {
       "key": "EVIDGATE__INVITE__PEPPER",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -998,7 +998,7 @@
     {
       "key": "EVIDGATE__INVITE__PEPPERVERSION",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {},
@@ -1018,7 +1018,7 @@
     {
       "key": "EVIDGATE__ISOLATION__SELFCHECK",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {
@@ -1275,7 +1275,7 @@
     {
       "key": "EVIDGATE__TASKS__BACKOFFBASESECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1298,7 +1298,7 @@
     {
       "key": "EVIDGATE__TASKS__BACKOFFMAXSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1321,7 +1321,7 @@
     {
       "key": "EVIDGATE__TASKS__BATCHSIZE",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1344,7 +1344,7 @@
     {
       "key": "EVIDGATE__TASKS__DEFAULTQUEUECONCURRENCY",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1367,7 +1367,7 @@
     {
       "key": "EVIDGATE__TASKS__DISPATCHBATCHSIZE",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1390,7 +1390,7 @@
     {
       "key": "EVIDGATE__TASKS__DISPATCHDEFAULTQUEUE",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -1410,7 +1410,7 @@
     {
       "key": "EVIDGATE__TASKS__DISPATCHPOLLMILLISECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1433,7 +1433,7 @@
     {
       "key": "EVIDGATE__TASKS__POLLINTERVALMILLISECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1456,7 +1456,7 @@
     {
       "key": "EVIDGATE__TASKS__QUEUEROUTES__<n>__QUEUE",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -1476,7 +1476,7 @@
     {
       "key": "EVIDGATE__TASKS__QUEUEROUTES__<n>__TASKTYPE",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -1496,7 +1496,7 @@
     {
       "key": "EVIDGATE__TASKS__QUEUES__<n>__CONCURRENCY",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1519,7 +1519,7 @@
     {
       "key": "EVIDGATE__TASKS__QUEUES__<n>__NAME",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -1539,7 +1539,7 @@
     {
       "key": "EVIDGATE__TASKS__SCHEDULELOOKBACKSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1562,7 +1562,7 @@
     {
       "key": "EVIDGATE__TASKS__SCHEDULEPOLLMILLISECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1585,7 +1585,7 @@
     {
       "key": "EVIDGATE__TASKS__SWEEPCONNECTIONSTRING",
       "scope": "runtime",
-      "consumers": ["api", "dev-stack", "worker"],
+      "consumers": ["api", "dev-stack", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -1605,7 +1605,7 @@
     {
       "key": "EVIDGATE__TASKS__VISIBILITYTIMEOUTSECONDS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {
@@ -1628,7 +1628,7 @@
     {
       "key": "EVIDGATE__TELEMETRY__OTLPENDPOINT",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {
@@ -1650,7 +1650,7 @@
     {
       "key": "EVIDGATE__TELEMETRY__SAMPLERATIO",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -1670,7 +1670,7 @@
     {
       "key": "EVIDGATE__TELEMETRY__SERVICEVERSION",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
