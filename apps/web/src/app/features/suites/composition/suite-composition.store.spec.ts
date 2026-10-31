@@ -60,6 +60,25 @@ describe('SuiteCompositionStore', () => {
     expect(store.loadError()).toBeNull();
   });
 
+  it('reports a missing address as not-found and drops any read still in flight', async () => {
+    const store = TestBed.inject(SuiteCompositionStore);
+    const pending = deferred<SuiteRevisionDto>();
+    getRevision.mockReturnValueOnce(pending.promise);
+    const reading = store.load(revision.id);
+    expect(store.status()).toBe('loading');
+
+    store.markMissing();
+    expect(store.status()).toBe('not-found');
+    expect(store.revision()).toBeNull();
+    expect(store.view()).toBeNull();
+
+    // The read of the earlier address must not land on top of the not-found screen.
+    pending.resolve(revision);
+    await reading;
+    expect(store.status()).toBe('not-found');
+    expect(store.revision()).toBeNull();
+  });
+
   it('clears the old composition while another revision is loading', async () => {
     const store = TestBed.inject(SuiteCompositionStore);
     await store.load(revision.id);

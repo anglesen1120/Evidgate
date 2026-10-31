@@ -2741,6 +2741,11 @@
       <trans-unit id="suites.composition.optional" datatype="html"><source>Optional</source></trans-unit>
       <trans-unit id="suites.composition.ordinal" datatype="html"><source>Ordinal</source></trans-unit>
       <trans-unit id="suites.composition.no-member" datatype="html"><source>No member</source></trans-unit>
+      <trans-unit id="suites.composition.variant-params" datatype="html"><source>Variant parameters</source></trans-unit>
+      <trans-unit id="suites.composition.flat-matrix-note" datatype="html"><source>This revision has more cells than a matrix can show, so its members are listed as a flat table.</source></trans-unit>
+      <trans-unit id="suites.composition.show-more" datatype="html"><source>Show more</source></trans-unit>
+      <trans-unit id="suites.composition.members-shown" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/> members.</source></trans-unit>
+      <trans-unit id="suites.composition.dependencies-shown" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/> dependencies.</source></trans-unit>
       <trans-unit id="suites.composition.dependencies" datatype="html"><source>Dependencies</source></trans-unit>
       <trans-unit id="suites.composition.each-child-member-depends-on-the-parent-member-s" datatype="html"><source>Each child member depends on the parent member shown beside it.</source></trans-unit>
       <trans-unit id="suites.composition.parent-member" datatype="html"><source>Parent member</source></trans-unit>

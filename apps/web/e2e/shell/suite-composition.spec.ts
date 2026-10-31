@@ -102,7 +102,9 @@ for (const locale of LOCALES) {
     // the surface offers no control that could be mistaken for an edit affordance.
     const surface = page.getByTestId('suite-composition');
     await expect(
-      surface.locator('button, [role="button"], input, select, textarea, [contenteditable="true"]'),
+      surface.locator(
+        'button, [role="button"], input, select, textarea, [contenteditable]:not([contenteditable="false"])',
+      ),
     ).toHaveCount(0);
   });
 
@@ -110,6 +112,10 @@ for (const locale of LOCALES) {
     await page.goto(revisionPath(locale, 'empty', EMPTY.id));
     await composition(page, 'ready');
     await expect(page.locator(MATRIX)).toHaveCount(0);
+    // The heading stays the screen's own name; the empty revision says so where the matrix would
+    // have been, so the two never collapse into one message.
+    await expect(page.getByTestId('suite-composition-state')).toBeFocused();
+    await expect(page.getByTestId('suite-matrix-empty')).toBeVisible();
     await expect(page.locator(STRATEGY)).toBeVisible();
     await expect(page.getByTestId('suite-warnings-items')).toHaveCount(0);
     await expect(page.getByTestId('suite-published-notice')).toHaveCount(0);

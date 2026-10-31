@@ -2736,6 +2736,11 @@
       <trans-unit id="suites.composition.optional" datatype="html"><source>Optional</source><target>Tùy chọn</target></trans-unit>
       <trans-unit id="suites.composition.ordinal" datatype="html"><source>Ordinal</source><target>Thứ tự</target></trans-unit>
       <trans-unit id="suites.composition.no-member" datatype="html"><source>No member</source><target>Không có thành viên</target></trans-unit>
+      <trans-unit id="suites.composition.variant-params" datatype="html"><source>Variant parameters</source><target>Tham số biến thể</target></trans-unit>
+      <trans-unit id="suites.composition.flat-matrix-note" datatype="html"><source>This revision has more cells than a matrix can show, so its members are listed as a flat table.</source><target>Bản sửa đổi này có nhiều ô hơn mức ma trận có thể hiển thị, nên các thành viên được liệt kê thành bảng phẳng.</target></trans-unit>
+      <trans-unit id="suites.composition.show-more" datatype="html"><source>Show more</source><target>Hiển thị thêm</target></trans-unit>
+      <trans-unit id="suites.composition.members-shown" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/> members.</source><target>Đang hiển thị <x id="shown"/> trên <x id="total"/> thành viên.</target></trans-unit>
+      <trans-unit id="suites.composition.dependencies-shown" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/> dependencies.</source><target>Đang hiển thị <x id="shown"/> trên <x id="total"/> phụ thuộc.</target></trans-unit>
       <trans-unit id="suites.composition.dependencies" datatype="html"><source>Dependencies</source><target>Phụ thuộc</target></trans-unit>
       <trans-unit id="suites.composition.each-child-member-depends-on-the-parent-member-s" datatype="html"><source>Each child member depends on the parent member shown beside it.</source><target>Mỗi thành viên con phụ thuộc vào thành viên cha hiển thị bên cạnh.</target></trans-unit>
       <trans-unit id="suites.composition.parent-member" datatype="html"><source>Parent member</source><target>Thành viên cha</target></trans-unit>

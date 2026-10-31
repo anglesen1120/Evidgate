@@ -6,11 +6,13 @@ import {
   effect,
   ElementRef,
   inject,
+  linkedSignal,
   untracked,
   viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
+import { LIST_CHUNK } from './suite-composition.model';
 import { SuiteCompositionStore } from './suite-composition.store';
 import { SuiteWarningListComponent } from './suite-warning-list.component';
 
@@ -52,6 +54,13 @@ export class SuiteCompositionComponent {
     optional: $localize`:@@suites.composition.optional:Optional`,
     ordinal: $localize`:@@suites.composition.ordinal:Ordinal`,
     noMember: $localize`:@@suites.composition.no-member:No member`,
+    variantParams: $localize`:@@suites.composition.variant-params:Variant parameters`,
+    flatMatrixNote: $localize`:@@suites.composition.flat-matrix-note:This revision has more cells than a matrix can show, so its members are listed as a flat table.`,
+    showMore: $localize`:@@suites.composition.show-more:Show more`,
+    membersShown: (shown: number, total: number) =>
+      $localize`:@@suites.composition.members-shown:Showing ${shown}:shown: of ${total}:total: members.`,
+    dependenciesShown: (shown: number, total: number) =>
+      $localize`:@@suites.composition.dependencies-shown:Showing ${shown}:shown: of ${total}:total: dependencies.`,
     dependencies: $localize`:@@suites.composition.dependencies:Dependencies`,
     dependencyNote: $localize`:@@suites.composition.each-child-member-depends-on-the-parent-member-s:Each child member depends on the parent member shown beside it.`,
     parent: $localize`:@@suites.composition.parent-member:Parent member`,
@@ -84,17 +93,53 @@ export class SuiteCompositionComponent {
       case 'error':
         return { title: this.copy.errorTitle, body: this.copy.errorBody };
       case 'ready':
-        return {
-          title: this.store.view()?.rows.length === 0 ? this.copy.emptyTitle : this.copy.title,
-          body: '',
-        };
+        // The heading names the screen whatever the revision holds; an empty revision says so in
+        // the matrix section, so this heading never has to carry a second meaning.
+        return { title: this.copy.title, body: '' };
     }
   });
+
+  /**
+   * How many rows each chunked list shows. Both derive from the served view, so a new revision
+   * starts again at one chunk instead of inheriting how far the previous one was opened.
+   */
+  protected readonly memberLimit = linkedSignal({
+    source: () => this.store.view(),
+    computation: () => LIST_CHUNK,
+  });
+  protected readonly dependencyLimit = linkedSignal({
+    source: () => this.store.view(),
+    computation: () => LIST_CHUNK,
+  });
+  protected readonly visibleMembers = computed(() =>
+    (this.store.view()?.flatMembers ?? []).slice(0, this.memberLimit()),
+  );
+  protected readonly visibleDependencies = computed(() =>
+    (this.store.view()?.dependencies ?? []).slice(0, this.dependencyLimit()),
+  );
+  protected readonly listChunk = LIST_CHUNK;
+
+  // Growing the window never moves focus: the button that was pressed stays in place, and the
+  // count region announces the new total. Once every row is shown the control stays mounted and
+  // says so with `aria-disabled` — removing it would drop the focus a keyboard user just used.
+  protected showMoreMembers(): void {
+    const total = this.store.view()?.flatMembers.length ?? 0;
+    if (this.visibleMembers().length >= total) return;
+    this.memberLimit.update((limit) => limit + LIST_CHUNK);
+  }
+
+  protected showMoreDependencies(): void {
+    const total = this.store.view()?.dependencies.length ?? 0;
+    if (this.visibleDependencies().length >= total) return;
+    this.dependencyLimit.update((limit) => limit + LIST_CHUNK);
+  }
 
   constructor() {
     effect(() => {
       const revisionId = this.params()?.get('revisionId');
-      if (revisionId) untracked(() => void this.store.load(revisionId));
+      // An address that names no revision has nothing to read: the screen must show its not-found
+      // state rather than hold the loading presentation forever.
+      untracked(() => (revisionId ? void this.store.load(revisionId) : this.store.markMissing()));
     });
     // Focus follows the committed state, after its heading exists in the DOM. A render effect
     // avoids racing asynchronous reads or scheduling focus on a heading that has been removed.

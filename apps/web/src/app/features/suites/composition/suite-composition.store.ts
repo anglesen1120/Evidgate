@@ -52,6 +52,15 @@ export const SuiteCompositionStore = signalStore(
     // may replace its revision or error, including when the older request fails last.
     let generation = 0;
     return {
+      /**
+       * The route names no revision, so there is nothing to read. Reported as `not-found` because
+       * that is the state a reader understands, and it also bars a pending read of an earlier
+       * address from landing on the screen afterwards.
+       */
+      markMissing(): void {
+        generation += 1;
+        patchState(store, { revision: null, status: 'not-found', loadError: null });
+      },
       async load(revisionId: string): Promise<void> {
         const read = ++generation;
         patchState(store, { revision: null, status: 'loading', loadError: null });

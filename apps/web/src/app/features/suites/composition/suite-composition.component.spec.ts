@@ -19,8 +19,50 @@ const revision = ready.body as SuiteRevisionDto;
 const publishedRevision = published.body as SuiteRevisionDto;
 const emptyRevision = empty.body as SuiteRevisionDto;
 const editAffordances =
-  'button, input, select, textarea, [contenteditable], [role="button"], [role="textbox"], ' +
-  '[role="combobox"], [role="slider"], [role="spinbutton"], [role="checkbox"], [role="switch"]';
+  'button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), ' +
+  '[role="button"], [role="textbox"], [role="combobox"], [role="slider"], [role="spinbutton"], ' +
+  '[role="checkbox"], [role="switch"]';
+
+/** A revision whose members fill a rows × columns grid, one member per cell. */
+function gridRevision(rows: number, columns: number): SuiteRevisionDto {
+  const members: SuiteRevisionDto['members'] = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      members.push({
+        id: `member-${row}-${column}`,
+        case_revision_id: `case-${String(row).padStart(3, '0')}`,
+        variant_hash: `variant-${column}`,
+        params: { column },
+        required: column % 2 === 0,
+        ordinal: column,
+      });
+    }
+  }
+  return { ...revision, members, edges: [] };
+}
+
+/**
+ * A revision whose grid has `rows × columns` cells but only `placed` members, so the layout is
+ * `flat` while the member list stays short enough to exhaust in one press. The stride hits every
+ * row and every column while `placed` stays below their product, which is what makes the cell
+ * count — not the member count — the reason for the flat layout.
+ */
+function sparseGridRevision(rows: number, columns: number, placed: number): SuiteRevisionDto {
+  const members: SuiteRevisionDto['members'] = [];
+  for (let index = 0; index < placed; index += 1) {
+    const row = index % rows;
+    const column = index % columns;
+    members.push({
+      id: `member-${index}`,
+      case_revision_id: `case-${String(row).padStart(3, '0')}`,
+      variant_hash: `variant-${column}`,
+      params: { column },
+      required: column % 2 === 0,
+      ordinal: index,
+    });
+  }
+  return { ...revision, members, edges: [] };
+}
 
 /**
  * The deferred resolver by hand: `Promise.withResolvers` is ES2024 and this project compiles
@@ -141,19 +183,186 @@ describe('SuiteCompositionComponent', () => {
     expect(warnings?.textContent).not.toContain('No warnings');
   });
 
-  it('distinguishes an empty revision from an unavailable composition', async () => {
+  it('keeps its constant heading and shows the empty message inside the matrix section', async () => {
     getRevision.mockResolvedValue(emptyRevision);
     const { root } = await open(emptyRevision.id);
-    expect(root.textContent).toContain('No members in this revision');
     const heading = root.querySelector('[data-testid="suite-composition-state"]');
-    expect(heading?.textContent).toBe('No members in this revision');
+    expect(heading?.textContent).toBe('Suite composition');
     expect(document.activeElement).toBe(heading);
+    const emptyMessage = root.querySelector('[data-testid="suite-matrix-empty"]');
+    expect(emptyMessage?.textContent).toBe('No members in this revision');
+    expect(root.textContent).toContain('no composition matrix to display');
     expect(root.textContent).toContain('No dependencies declared');
     expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
     expect(root.getAttribute('data-suite-composition-status')).toBe('ready');
     expect(root.querySelector('[data-testid="suite-strategy"]')?.textContent).toContain(
       'No sharding',
     );
+  });
+
+  it('draws the matrix for a small grid and no member table at all', async () => {
+    getRevision.mockResolvedValue(gridRevision(3, 3));
+    const { root } = await open();
+
+    expect(root.querySelector('[data-testid="suite-matrix"]')).not.toBeNull();
+    expect(root.querySelectorAll('[data-suite-matrix-row]')).toHaveLength(3);
+    expect(root.querySelector('[data-testid="suite-members-flat"]')).toBeNull();
+    expect(root.querySelector('[data-testid="suite-flat-note"]')).toBeNull();
+    expect(root.querySelector('[data-testid="suite-members-more"]')).toBeNull();
+  });
+
+  it('lists an oversized grid flat in chunks of 200 and keeps focus on Show more', async () => {
+    getRevision.mockResolvedValue(gridRevision(60, 60));
+    const { root, harness } = await open();
+    const flat = root.querySelector('[data-testid="suite-members-flat"]');
+
+    expect(root.querySelector('[data-testid="suite-matrix"]')).toBeNull();
+    expect(root.querySelector('[data-testid="suite-flat-note"]')?.textContent).toContain(
+      'flat table',
+    );
+    expect(flat?.querySelectorAll('thead th')).toHaveLength(5);
+    expect(flat?.querySelectorAll('tbody tr')).toHaveLength(200);
+    const shown = root.querySelector('[data-testid="suite-members-shown"]');
+    expect(shown?.getAttribute('role')).toBe('status');
+    expect(shown?.textContent).toContain('Showing 200 of 3600 members');
+    const first = flat?.querySelector('tbody tr');
+    expect(first?.textContent).toContain('case-000');
+    expect(first?.textContent).toContain('column=0');
+    expect(first?.textContent).toContain('Required');
+    expect(first?.querySelector('[data-suite-flat-member-id]')?.textContent).toBe('member-0-0');
+
+    const more = root.querySelector<HTMLButtonElement>('[data-testid="suite-members-more"]');
+    expect(more?.tagName).toBe('BUTTON');
+    more?.focus();
+    more?.click();
+    harness.fixture.detectChanges();
+
+    expect(flat?.querySelectorAll('tbody tr')).toHaveLength(400);
+    expect(shown?.textContent).toContain('Showing 400 of 3600 members');
+    expect(document.activeElement).toBe(more);
+  });
+
+  it('chunks a long dependency list and tracks each row by both member ids', async () => {
+    const edges = Array.from({ length: 201 }, (_, index) => ({
+      parent_member_id: `parent-${index}`,
+      child_member_id: `child-${index}`,
+    }));
+    getRevision.mockResolvedValue({ ...revision, edges });
+    const { root, harness } = await open();
+    const rows = () => root.querySelectorAll('.dependencies li');
+
+    expect(rows()).toHaveLength(200);
+    const shown = root.querySelector('[data-testid="suite-dependencies-shown"]');
+    expect(shown?.getAttribute('role')).toBe('status');
+    expect(shown?.textContent).toContain('Showing 200 of 201 dependencies');
+
+    const more = root.querySelector<HTMLButtonElement>('[data-testid="suite-dependencies-more"]');
+    more?.focus();
+    more?.click();
+    harness.fixture.detectChanges();
+
+    expect(rows()).toHaveLength(201);
+    // The control outlives its last chunk, so the focus a keyboard user spent on it survives.
+    expect(more?.isConnected).toBe(true);
+    expect(more?.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(more);
+    expect(shown?.textContent).toContain('Showing 201 of 201 dependencies');
+    const firstRow = rows().item(0);
+    expect(
+      [...(firstRow?.querySelectorAll('dd bdi') ?? [])].map((node) => node.textContent),
+    ).toEqual(['parent-0', 'child-0']);
+    const lastRow = rows().item(200);
+    expect(
+      [...(lastRow?.querySelectorAll('dd bdi') ?? [])].map((node) => node.textContent),
+    ).toEqual(['parent-200', 'child-200']);
+  });
+
+  it('lists every member of an oversized sparse grid that fits one chunk, with no control', async () => {
+    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 200));
+    const { root } = await open();
+    const flat = root.querySelector('[data-testid="suite-members-flat"]');
+
+    // The grid is too large for a matrix, yet the member list is not chunked: the table must still
+    // render every member, because the layout decision is about cells, not about the member count.
+    expect(root.querySelector('[data-testid="suite-flat-note"]')).not.toBeNull();
+    expect(flat?.querySelectorAll('tbody tr')).toHaveLength(200);
+    expect(root.querySelector('[data-testid="suite-members-shown"]')).toBeNull();
+    expect(root.querySelector('[data-testid="suite-members-more"]')).toBeNull();
+  });
+
+  it('restarts both chunk windows when another oversized revision opens', async () => {
+    const next = {
+      ...gridRevision(60, 60),
+      id: '018f0000-0000-7000-8000-00000000c901',
+      edges: Array.from({ length: 201 }, (_, index) => ({
+        parent_member_id: `p-${index}`,
+        child_member_id: `c-${index}`,
+      })),
+    };
+    getRevision.mockResolvedValue(gridRevision(60, 60));
+    const { harness, root } = await open();
+    const memberRows = () => root.querySelectorAll('[data-testid="suite-members-flat"] tbody tr');
+    const dependencyRows = () => root.querySelectorAll('.dependencies li');
+    expect(memberRows()).toHaveLength(200);
+
+    root.querySelector<HTMLButtonElement>('[data-testid="suite-members-more"]')?.click();
+    harness.fixture.detectChanges();
+    expect(memberRows()).toHaveLength(400);
+
+    getRevision.mockResolvedValue(next);
+    await harness.navigateByUrl(
+      `/projects/project-1/suites/revisions/${next.id}`,
+      SuiteCompositionComponent,
+    );
+    await harness.fixture.whenStable();
+    harness.fixture.detectChanges();
+
+    // A new revision starts at one chunk again instead of inheriting how far the last one was
+    // opened; the dependency list, chunked for the first time here, does the same.
+    expect(memberRows()).toHaveLength(200);
+    expect(dependencyRows()).toHaveLength(200);
+  });
+
+  it('keeps the exhausted member control in place and makes its last press a no-op', async () => {
+    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 201));
+    const { root, harness } = await open();
+    const rows = () => root.querySelectorAll('[data-testid="suite-members-flat"] tbody tr');
+
+    expect(rows()).toHaveLength(200);
+    const shown = root.querySelector('[data-testid="suite-members-shown"]');
+    expect(shown?.textContent).toContain('Showing 200 of 201 members');
+    const more = root.querySelector<HTMLButtonElement>('[data-testid="suite-members-more"]');
+    expect(more?.getAttribute('aria-disabled')).toBe('false');
+    more?.focus();
+    more?.click();
+    harness.fixture.detectChanges();
+
+    expect(rows()).toHaveLength(201);
+    expect(shown?.textContent).toContain('Showing 201 of 201 members');
+    expect(more?.isConnected).toBe(true);
+    expect(more?.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(more);
+
+    more?.click();
+    harness.fixture.detectChanges();
+    expect(rows()).toHaveLength(201);
+    expect(document.activeElement).toBe(more);
+  });
+
+  it('reports an address naming no revision as not found instead of loading forever', async () => {
+    const fixture = TestBed.createComponent(SuiteCompositionComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.getAttribute('data-suite-composition-status')).toBe('not-found');
+    expect(root.querySelector('[data-testid="suite-composition"]')?.getAttribute('aria-busy')).toBe(
+      'false',
+    );
+    const heading = root.querySelector('[data-testid="suite-composition-state"]');
+    expect(heading?.textContent).toBe('Suite revision not found');
+    expect(document.activeElement).toBe(heading);
+    expect(getRevision).not.toHaveBeenCalled();
   });
 
   it('explains an unreadable strategy rather than displaying a guessed shard count', async () => {
@@ -209,6 +418,9 @@ describe('SuiteCompositionComponent', () => {
     const { harness, root } = await open();
     const heading = root.querySelector('[data-testid="suite-composition-state"]');
     expect(root.getAttribute('data-suite-composition-status')).toBe('loading');
+    expect(root.querySelector('[data-testid="suite-composition"]')?.getAttribute('aria-busy')).toBe(
+      'true',
+    );
     expect(heading?.textContent).toBe('Loading suite composition');
     expect(document.activeElement).toBe(heading);
     root.tabIndex = -1;
@@ -221,6 +433,9 @@ describe('SuiteCompositionComponent', () => {
     // committed status, which is what the heading and its focus move belong to.
     harness.fixture.detectChanges();
     expect(root.getAttribute('data-suite-composition-status')).toBe('ready');
+    expect(root.querySelector('[data-testid="suite-composition"]')?.getAttribute('aria-busy')).toBe(
+      'false',
+    );
     expect(heading?.textContent).toBe('Suite composition');
     expect(document.activeElement).toBe(heading);
   });

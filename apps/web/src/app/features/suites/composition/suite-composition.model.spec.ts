@@ -1,8 +1,9 @@
-import type { SuiteEdgeDto } from '@evidgate/sdk';
+import type { SuiteEdgeDto, SuiteMemberDto } from '@evidgate/sdk';
 import draftDocument from '../../../../../../../fixtures/web-api/suite-revision/input.json';
 import emptyDocument from '../../../../../../../fixtures/web-api/suite-revision-empty/input.json';
 import {
   compositionView,
+  MATRIX_CELL_LIMIT,
   strategySummary,
   variantParameters,
   type CompositionSource,
@@ -23,19 +24,50 @@ function defined<T>(value: T | undefined, what: string): T {
   return value;
 }
 
-describe('composition view', () => {
-  it('turns members into variant columns in ordinal order, one per distinct variant hash', () => {
-    const view = compositionView(draft);
-    const distinct = draft.members
-      .map((member) => member.variant_hash)
-      .filter((hash, index, all) => all.indexOf(hash) === index);
+/** A revision whose members fill a rows × columns grid, one member per cell. */
+function grid(rows: number, columns: number): CompositionSource {
+  const members: SuiteMemberDto[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      members.push({
+        id: `member-${row}-${column}`,
+        case_revision_id: `case-${String(row).padStart(3, '0')}`,
+        variant_hash: `variant-${column}`,
+        params: { column },
+        required: column % 2 === 0,
+        ordinal: column,
+      });
+    }
+  }
+  return { members, edges: [], shard_strategy: { kind: 'none' } };
+}
 
-    expect(view.columns.map((column) => column.variantHash)).toEqual(distinct);
+describe('composition view', () => {
+  it('orders columns by member arrival, not by variant hash', () => {
+    // Reordering the fixture is what makes this an ordering test: the served order would agree
+    // with a sorted column list, so only arrived-out-of-hash-order members can tell them apart.
+    const byOrdinal = (ordinal: number) =>
+      defined(
+        draft.members.find((member) => member.ordinal === ordinal),
+        `the member at ordinal ${ordinal}`,
+      );
+    const c3 = byOrdinal(3);
+    const a1First = byOrdinal(0);
+    const a1Second = byOrdinal(1);
+    const b2 = byOrdinal(2);
+    const arrival = [c3, a1First, a1Second, b2];
+    const view = compositionView({ ...draft, members: arrival });
+    const hashes = view.columns.map((column) => column.variantHash);
+
+    expect(hashes).toEqual([c3.variant_hash, a1First.variant_hash, b2.variant_hash]);
     expect(view.columns.length).toBe(3);
-    const firstColumn = defined(view.columns[0], 'the first variant column');
-    const thirdColumn = defined(view.columns[2], 'the third variant column');
-    expect(firstColumn.params).toEqual(['browser=chromium', 'locale=vi']);
-    expect(thirdColumn.params).toEqual([]);
+    expect(hashes).not.toEqual([...new Set(arrival.map((member) => member.variant_hash))].sort());
+    // The column carries the parameters of the first member that arrived under its hash.
+    expect(defined(view.columns[1], 'the second variant column').params).toEqual([
+      'browser=chromium',
+      'locale=vi',
+    ]);
+    expect(defined(view.columns[0], 'the first variant column').params).toEqual([]);
   });
 
   it('groups one row per case revision, sorted, with the served member in its cell', () => {
@@ -70,36 +102,72 @@ describe('composition view', () => {
 
     expect(view.rows).toEqual([]);
     expect(view.columns).toEqual([]);
+    expect(view.layout).toBe('matrix');
+    expect(view.flatMembers).toEqual([]);
     expect(view.dependencies).toEqual([]);
     expect(view.strategy).toEqual({ kind: 'none' });
   });
 
-  it('resolves both ends of a dependency edge to their members', () => {
+  it('keeps the served parent and child ids of every edge, in arrival order', () => {
     const view = compositionView(draft);
-    const served = defined(draft.edges[0], 'a served dependency edge');
-    const dependency = defined(view.dependencies[0], 'the first dependency row');
 
-    expect(view.dependencies.length).toBe(draft.edges.length);
-    expect(dependency).toEqual({
-      parentMemberId: served.parent_member_id,
-      parent: draft.members.find((member) => member.id === served.parent_member_id),
-      childMemberId: served.child_member_id,
-      child: draft.members.find((member) => member.id === served.child_member_id),
-    });
+    expect(view.dependencies).toEqual(
+      draft.edges.map((edge) => ({
+        parentMemberId: edge.parent_member_id,
+        childMemberId: edge.child_member_id,
+      })),
+    );
+    expect(view.dependencies.length).toBeGreaterThan(0);
   });
 
-  it('keeps the id and a null member when an edge names a member the revision does not hold', () => {
+  it('keeps both ids of an edge naming a member the revision does not hold', () => {
     const served = defined(draft.members[0], 'the first served member');
     const edge: SuiteEdgeDto = {
       parent_member_id: served.id,
       child_member_id: '018f0000-0000-7000-8000-00000000c3ff',
     };
     const view = compositionView({ ...draft, edges: [edge] });
-    const dependency = defined(view.dependencies[0], 'the first dependency row');
 
-    expect(dependency.parent).toEqual(served);
-    expect(dependency.child).toBeNull();
-    expect(dependency.childMemberId).toBe(edge.child_member_id);
+    expect(view.dependencies).toEqual([
+      { parentMemberId: edge.parent_member_id, childMemberId: edge.child_member_id },
+    ]);
+  });
+});
+
+describe('member layout', () => {
+  it('keeps the matrix below the cell limit and builds no flat rows', () => {
+    const view = compositionView(grid(3, 3));
+
+    expect(view.layout).toBe('matrix');
+    expect(view.rows).toHaveLength(3);
+    expect(view.columns).toHaveLength(3);
+    expect(view.flatMembers).toEqual([]);
+  });
+
+  it('keeps the matrix at exactly the cell limit and goes flat one cell past it', () => {
+    // 50 × 50 fills the limit; 61 × 41 is one cell over, so the product and not the member count
+    // is what decides.
+    expect(compositionView(grid(50, 50)).layout).toBe('matrix');
+    const overLimit = compositionView(grid(61, 41));
+
+    expect(overLimit.layout).toBe('flat');
+    expect(overLimit.flatMembers).toHaveLength(61 * 41);
+  });
+
+  it('lists every member of an oversized grid flat, in arrival order, with its served fields', () => {
+    const view = compositionView(grid(60, 60));
+
+    expect(MATRIX_CELL_LIMIT).toBe(2500);
+    expect(view.layout).toBe('flat');
+    expect(view.flatMembers).toHaveLength(3600);
+    expect(defined(view.flatMembers[0], 'the first flat row')).toEqual({
+      memberId: 'member-0-0',
+      caseRevisionId: 'case-000',
+      params: ['column=0'],
+      required: true,
+      ordinal: 0,
+    });
+    expect(view.flatMembers.at(-1)?.memberId).toBe('member-59-59');
   });
 });
 
@@ -130,6 +198,32 @@ describe('shard strategy summary', () => {
       count: 4,
       balanceBy: 'count',
     });
+  });
+
+  it.each([1, 256])('accepts the schema boundary shard count %i', (count) => {
+    // The schema allows 1 to 256 inclusive, so both ends must be a count and not unavailable.
+    expect(strategySummary({ kind: 'count', count, balance_by: 'duration' })).toEqual({
+      kind: 'count',
+      count,
+      balanceBy: 'duration',
+    });
+    expect(strategySummary({ kind: 'count', count, balance_by: 'count' })).toEqual({
+      kind: 'count',
+      count,
+      balanceBy: 'count',
+    });
+    expect(strategySummary({ kind: 'count', count })).toEqual({
+      kind: 'count',
+      count,
+      balanceBy: null,
+    });
+  });
+
+  it('reports a missing strategy document as unavailable instead of throwing', () => {
+    // `compositionView` hands the served document straight to this function, so the guard here is
+    // what keeps a `null` or absent `shard_strategy` from throwing anywhere on the screen.
+    expect(strategySummary(null)).toEqual({ kind: 'unavailable' });
+    expect(strategySummary(undefined)).toEqual({ kind: 'unavailable' });
   });
 
   it('reports unavailable for every document it cannot read as the schema defines', () => {

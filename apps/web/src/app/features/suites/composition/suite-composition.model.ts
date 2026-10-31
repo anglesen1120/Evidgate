@@ -9,9 +9,9 @@
 // text. The view therefore shows exactly those identifiers. A cell holds the served member, so
 // `required`, `ordinal` and the member id all come from the wire unchanged.
 //
-// Why a failed lookup is `null` rather than a guess: a dependency edge names member ids of the
-// same revision (the table's foreign keys make that structural), so a lookup that misses is a
-// wire the client does not understand, and the view keeps the raw id instead of inventing a name.
+// Why a dependency edge keeps only its ids: an edge names member ids of the same revision (the
+// table's foreign keys make that structural), and the screen shows what the wire carries, so
+// resolving each end to its member would build a second copy the template never reads.
 
 import type { SuiteEdgeDto, SuiteMemberDto, SuiteRevisionDto } from '@evidgate/sdk';
 
@@ -29,13 +29,27 @@ export interface CompositionRow {
   readonly byVariant: ReadonlyMap<string, SuiteMemberDto>;
 }
 
-/** One served dependency edge, with each end resolved to its member where the revision holds it. */
+/** One served dependency edge in arrival order; each end is the member id the wire carries. */
 export interface DependencyRow {
   readonly parentMemberId: string;
-  readonly parent: SuiteMemberDto | null;
   readonly childMemberId: string;
-  readonly child: SuiteMemberDto | null;
 }
+
+/** One served member as the flat table shows it, in arrival (ordinal) order. */
+export interface FlatMemberRow {
+  readonly memberId: string;
+  readonly caseRevisionId: string;
+  /** The member's parameter document as `key=value` strings, sorted; empty when it has none. */
+  readonly params: readonly string[];
+  readonly required: boolean;
+  readonly ordinal: number;
+}
+
+/**
+ * How the members are drawn. A matrix draws every row against every column, so its size is that
+ * product; once it passes `MATRIX_CELL_LIMIT` the flat list is the only shape that stays readable.
+ */
+export type MemberLayout = 'matrix' | 'flat';
 
 /**
  * The shard strategy as the screen can state it. `unavailable` is a real state, not a placeholder:
@@ -55,23 +69,42 @@ export type StrategySummary =
 export interface SuiteCompositionView {
   readonly columns: readonly VariantColumn[];
   readonly rows: readonly CompositionRow[];
+  readonly layout: MemberLayout;
+  /** The served members for the flat table; empty in `matrix` layout, which renders `rows`. */
+  readonly flatMembers: readonly FlatMemberRow[];
   readonly dependencies: readonly DependencyRow[];
   readonly strategy: StrategySummary;
 }
 
-/** The members, edges and strategy document the view reads from a served revision. */
+/**
+ * The members, edges and strategy document the view reads from a served revision. The strategy
+ * document is read through `strategySummary`, which accepts the `null` a served revision can carry
+ * even though the contract types the field as an object, so the screen says `unavailable` instead
+ * of throwing.
+ */
 export type CompositionSource = Pick<SuiteRevisionDto, 'members' | 'edges' | 'shard_strategy'>;
 
 /** Upper bound the shard strategy schema sets on `count`; a larger value is not a shard count. */
 const MAX_SHARD_COUNT = 256;
 
+/** The most cells one matrix may draw; above it the flat member table takes over. */
+export const MATRIX_CELL_LIMIT = 2500;
+
+/** Rows one `Show more` press appends to a chunked list. */
+export const LIST_CHUNK = 200;
+
 export function compositionView(revision: CompositionSource): SuiteCompositionView {
   const columns = variantColumns(revision.members);
-  const membersById = new Map(revision.members.map((member) => [member.id, member]));
+  const rows = compositionRows(revision.members);
+  const layout: MemberLayout = rows.length * columns.length > MATRIX_CELL_LIMIT ? 'flat' : 'matrix';
   return {
     columns,
-    rows: compositionRows(revision.members),
-    dependencies: revision.edges.map((edge) => dependencyRow(edge, membersById)),
+    rows,
+    layout,
+    // The flat rows exist for the layout that renders them; building them in matrix layout would
+    // allocate one object per member for a table the screen never shows.
+    flatMembers: layout === 'flat' ? flatMemberRows(revision.members) : [],
+    dependencies: revision.edges.map((edge) => dependencyRow(edge)),
     strategy: strategySummary(revision.shard_strategy),
   };
 }
@@ -104,16 +137,22 @@ function compositionRows(members: readonly SuiteMemberDto[]): readonly Compositi
     .map(([caseRevisionId, byVariant]) => ({ caseRevisionId, byVariant }));
 }
 
-function dependencyRow(
-  edge: SuiteEdgeDto,
-  membersById: ReadonlyMap<string, SuiteMemberDto>,
-): DependencyRow {
+function dependencyRow(edge: SuiteEdgeDto): DependencyRow {
   return {
     parentMemberId: edge.parent_member_id,
-    parent: membersById.get(edge.parent_member_id) ?? null,
     childMemberId: edge.child_member_id,
-    child: membersById.get(edge.child_member_id) ?? null,
   };
+}
+
+/** Every served member as one flat row, in the order the members arrive (their ordinal order). */
+function flatMemberRows(members: readonly SuiteMemberDto[]): readonly FlatMemberRow[] {
+  return members.map((member) => ({
+    memberId: member.id,
+    caseRevisionId: member.case_revision_id,
+    params: variantParameters(member.params),
+    required: member.required,
+    ordinal: member.ordinal,
+  }));
 }
 
 /**
@@ -134,7 +173,12 @@ function scalarText(value: unknown): string {
   return JSON.stringify(value) ?? '';
 }
 
-export function strategySummary(strategy: Record<string, unknown>): StrategySummary {
+export function strategySummary(
+  strategy: Record<string, unknown> | null | undefined,
+): StrategySummary {
+  // A missing document is unreadable, not "no sharding": saying `none` would claim the revision
+  // declares no sharding when the wire said nothing the screen can read.
+  if (strategy === null || strategy === undefined) return { kind: 'unavailable' };
   const kind = strategy['kind'];
   if (kind === 'none') return { kind: 'none' };
   if (kind !== 'count') return { kind: 'unavailable' };

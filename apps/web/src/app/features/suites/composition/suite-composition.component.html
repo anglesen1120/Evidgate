@@ -1,4 +1,7 @@
-<section data-testid="suite-composition" [attr.aria-busy]="store.status() === 'loading'">
+<section
+  data-testid="suite-composition"
+  [attr.aria-busy]="store.status() === 'idle' || store.status() === 'loading'"
+>
   <h1 #stateHeading tabindex="-1" data-testid="suite-composition-state">{{ state().title }}</h1>
   @if (store.status() !== 'ready') {
     <p role="status">{{ state().body }}</p>
@@ -70,7 +73,66 @@
     <section class="panel" aria-labelledby="suite-matrix-heading">
       <h2 id="suite-matrix-heading">{{ copy.matrix }}</h2>
       @if (view.rows.length === 0) {
+        <p data-testid="suite-matrix-empty">{{ copy.emptyTitle }}</p>
         <p>{{ copy.emptyBody }}</p>
+      } @else if (view.layout === 'flat') {
+        <p data-testid="suite-flat-note">{{ copy.flatMatrixNote }}</p>
+        @if (view.flatMembers.length > listChunk) {
+          <p role="status" data-testid="suite-members-shown">
+            {{ copy.membersShown(visibleMembers().length, view.flatMembers.length) }}
+          </p>
+        }
+        <div class="matrix-scroll" tabindex="0" role="region" [attr.aria-label]="copy.matrix">
+          <table data-testid="suite-members-flat">
+            <thead>
+              <tr>
+                <th scope="col">{{ copy.caseRevision }}</th>
+                <th scope="col">{{ copy.variantParams }}</th>
+                <th scope="col">{{ copy.required }}</th>
+                <th scope="col">{{ copy.ordinal }}</th>
+                <th scope="col">{{ copy.member }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of visibleMembers(); track member.memberId) {
+                <tr data-suite-flat-member>
+                  <th scope="row">
+                    <bdi class="identifier">{{ member.caseRevisionId }}</bdi>
+                  </th>
+                  <td>
+                    @if (member.params.length === 0) {
+                      <p>{{ copy.noParameters }}</p>
+                    } @else {
+                      <ul class="parameters">
+                        @for (parameter of member.params; track $index) {
+                          <li>
+                            <bdi>{{ parameter }}</bdi>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </td>
+                  <td>{{ member.required ? copy.required : copy.optional }}</td>
+                  <td>{{ member.ordinal }}</td>
+                  <td>
+                    <bdi class="identifier" data-suite-flat-member-id>{{ member.memberId }}</bdi>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (view.flatMembers.length > listChunk) {
+          <button
+            type="button"
+            class="show-more"
+            data-testid="suite-members-more"
+            [attr.aria-disabled]="visibleMembers().length >= view.flatMembers.length"
+            (click)="showMoreMembers()"
+          >
+            {{ copy.showMore }}
+          </button>
+        }
       } @else {
         <div class="matrix-scroll" tabindex="0" role="region" [attr.aria-label]="copy.matrix">
           <table data-testid="suite-matrix">
@@ -139,8 +201,16 @@
         <p>{{ copy.noDependencies }}</p>
       } @else {
         <p>{{ copy.dependencyNote }}</p>
+        @if (view.dependencies.length > listChunk) {
+          <p role="status" data-testid="suite-dependencies-shown">
+            {{ copy.dependenciesShown(visibleDependencies().length, view.dependencies.length) }}
+          </p>
+        }
         <ul class="dependencies">
-          @for (dependency of view.dependencies; track $index) {
+          @for (
+            dependency of visibleDependencies();
+            track dependency.parentMemberId + '/' + dependency.childMemberId
+          ) {
             <li>
               <dl class="metadata">
                 <div>
@@ -159,6 +229,17 @@
             </li>
           }
         </ul>
+        @if (view.dependencies.length > listChunk) {
+          <button
+            type="button"
+            class="show-more"
+            data-testid="suite-dependencies-more"
+            [attr.aria-disabled]="visibleDependencies().length >= view.dependencies.length"
+            (click)="showMoreDependencies()"
+          >
+            {{ copy.showMore }}
+          </button>
+        }
       }
     </section>
     <app-suite-warning-list [warnings]="null" />
