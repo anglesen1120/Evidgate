@@ -409,7 +409,7 @@ export class CreateProjectPage {
     focusWaitingLine(this.busyStatus);
     await this.creation.run();
     await this.finishCreation();
-    requestRefusalFocus(this.announceFailure, this.creation.error() !== null);
+    requestRefusalFocus(this.announceFailure, this.creation.error());
   }
 
   protected async retry(): Promise<void> {
@@ -417,7 +417,7 @@ export class CreateProjectPage {
     focusWaitingLine(this.busyStatus);
     await this.creation.retry();
     await this.finishCreation();
-    requestRefusalFocus(this.announceFailure, this.creation.error() !== null);
+    requestRefusalFocus(this.announceFailure, this.creation.error());
   }
 
   private async finishCreation(): Promise<void> {

@@ -11,6 +11,9 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 
 import { focusRefusalHeading, focusWaitingLine, requestRefusalFocus } from './step-focus';
 
+/** The request only asks whether the press failed, so any error value arms it. */
+const REFUSAL = { kind: 'conflict' };
+
 /** A step that renders a waiting line, and a refusal heading only while it shows a refusal. */
 @Component({
   selector: 'app-step-focus-host',
@@ -109,9 +112,11 @@ describe('focusWaitingLine', () => {
 describe('requestRefusalFocus', () => {
   it('arms the request only for a refusal', () => {
     const request = signal(false);
-    requestRefusalFocus(request, false);
+    requestRefusalFocus(request, null);
     expect(request()).toBe(false);
-    requestRefusalFocus(request, true);
+    requestRefusalFocus(request, undefined);
+    expect(request()).toBe(false);
+    requestRefusalFocus(request, REFUSAL);
     expect(request()).toBe(true);
   });
 });
@@ -125,7 +130,7 @@ describe('focusRefusalHeading', () => {
     host.holdWaitingLine();
 
     host.refusal.set(true);
-    requestRefusalFocus(host.request, true);
+    requestRefusalFocus(host.request, REFUSAL);
     await fixture.whenStable();
     // The refusal is shown but its heading is not mounted yet: the request stays armed, so the pass
     // that mounts the heading spends it instead of stranding the visitor on the waiting line.
@@ -144,7 +149,7 @@ describe('focusRefusalHeading', () => {
     const root = fixture.nativeElement as HTMLElement;
     host.holdWaitingLine();
 
-    requestRefusalFocus(host.request, true);
+    requestRefusalFocus(host.request, REFUSAL);
     await fixture.whenStable();
     expect(host.request()).toBe(false);
     expect(focused()).toBe(root.querySelector('[data-testid="waiting"]'));
@@ -163,7 +168,7 @@ describe('focusRefusalHeading', () => {
     await fixture.whenStable();
     host.holdWaitingLine();
 
-    requestRefusalFocus(host.request, true);
+    requestRefusalFocus(host.request, REFUSAL);
     await fixture.whenStable();
     expect(focused()).toBe(root.querySelector('[data-testid="refusal"]'));
 
@@ -180,7 +185,7 @@ describe('focusRefusalHeading', () => {
     const host = fixture.componentInstance;
     const root = fixture.nativeElement as HTMLElement;
 
-    requestRefusalFocus(host.request, true);
+    requestRefusalFocus(host.request, REFUSAL);
     await fixture.whenStable();
     expect(host.request()).toBe(false);
     expect(focused()).toBeNull();
@@ -189,7 +194,7 @@ describe('focusRefusalHeading', () => {
     host.refusal.set(true);
     await fixture.whenStable();
     expect(focused()).toBeNull();
-    requestRefusalFocus(host.request, true);
+    requestRefusalFocus(host.request, REFUSAL);
     await fixture.whenStable();
     expect(focused()).toBe(root.querySelector('[data-testid="refusal"]'));
   });

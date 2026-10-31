@@ -19,11 +19,11 @@ export function focusWaitingLine(target: FocusTarget): void {
 }
 
 /**
- * Records that a refused press owes focus to the page's own refusal heading. Only the page's own
- * presses arm it, so a background re-read that fails on its own never moves focus.
+ * Arms the refusal-focus request when a press of the page's own command ended with `error`. Only the
+ * page's own presses reach it, so a background re-read that fails on its own never moves focus.
  */
-export function requestRefusalFocus(request: WritableSignal<boolean>, refused: boolean): void {
-  if (!refused) return;
+export function requestRefusalFocus(request: WritableSignal<boolean>, error: unknown): void {
+  if (error === null || error === undefined) return;
   request.set(true);
 }
 

@@ -256,4 +256,102 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
     expect(root.querySelector('[data-testid="connect-ci-refresh-failed"]')).toBeNull();
     expect(document.activeElement).toBe(nameField);
   });
+
+  it('releases the re-read focus listener when the page is destroyed mid-read', async () => {
+    refreshFailure.set('unavailable');
+    await fixture.whenStable();
+    field('connect-token-name').focus();
+    const removed = vi.spyOn(document, 'removeEventListener');
+    const focusRemovals = (): number =>
+      removed.mock.calls.filter((call) => call[0] === 'focusin').length;
+    let finishRead: () => void = () => undefined;
+    refresh.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRead = resolve;
+        }),
+    );
+    try {
+      retryButton().click();
+      // Still watching while the read is in flight: the release belongs to the settle paths.
+      expect(focusRemovals()).toBe(0);
+      fixture.destroy();
+      // The pass that would spend the place never runs, so the destroy path owes the release.
+      expect(focusRemovals()).toBe(1);
+      finishRead();
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      // Released exactly once, and the read that settled on a destroyed page puts nothing back.
+      expect(focusRemovals()).toBe(1);
+      expect(document.activeElement).toBe(field('connect-token-name'));
+    } finally {
+      removed.mockRestore();
+    }
+  });
+
+  it('keeps the focus the visitor moved when the read disables the pressed control', async () => {
+    tokens.set([TOKEN]);
+    refreshFailure.set('unavailable');
+    await fixture.whenStable();
+    const rotate = root.querySelector<HTMLButtonElement>('[data-testid="connect-token-rotate"]')!;
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    try {
+      refresh.mockImplementationOnce(() => {
+        // The visitor moved on before the read took the permission the control was usable with.
+        elsewhere.focus();
+        permitted.set(false);
+        refreshFailure.set(null);
+        return Promise.resolve();
+      });
+      rotate.focus();
+      retryButton().click();
+      await settle();
+      expect(rotate.disabled).toBe(true);
+      // A focus the visitor moved themselves is never taken back to the panel heading.
+      expect(document.activeElement).toBe(elsewhere);
+    } finally {
+      elsewhere.remove();
+    }
+  });
+
+  it('starts no re-read when the page is already gone', async () => {
+    refreshFailure.set('unavailable');
+    await fixture.whenStable();
+    const page = fixture.componentInstance as unknown as { refresh: () => Promise<void> };
+    fixture.destroy();
+    await page.refresh();
+    // Nothing was captured, so nothing has to be released: no listener outlives the page.
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('leaves the visitor alone when the read takes the place they had moved to', async () => {
+    tokens.set([TOKEN]);
+    refreshFailure.set('unavailable');
+    await fixture.whenStable();
+    const rotate = root.querySelector<HTMLButtonElement>('[data-testid="connect-token-rotate"]')!;
+    const tokenHeading = root.querySelector('#connect-token-heading');
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    try {
+      refresh.mockImplementationOnce(() => {
+        // The visitor moved on and the read then took that place too, leaving them on `<body>`:
+        // their own move is not a place this handoff is owed, so no heading takes it back.
+        elsewhere.focus();
+        permitted.set(false);
+        elsewhere.remove();
+        refreshFailure.set(null);
+        return Promise.resolve();
+      });
+      rotate.focus();
+      retryButton().click();
+      await settle();
+      expect(rotate.disabled).toBe(true);
+      expect(document.activeElement).toBe(document.body);
+      expect(document.activeElement).not.toBe(tokenHeading);
+    } finally {
+      elsewhere.remove();
+    }
+  });
 });

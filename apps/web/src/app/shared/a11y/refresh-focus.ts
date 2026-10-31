@@ -1,3 +1,5 @@
+import { signal } from '@angular/core';
+
 /**
  * Keeps the visitor's place across a re-read they asked for.
  *
@@ -74,8 +76,8 @@ export function restoreRefreshFocus(
   const active = document.activeElement;
   const control = handoff.control;
   if (control.isConnected && !control.matches(':disabled')) {
-    // Still usable, so it is still the place to be. Only a focus the read itself dropped on
-    // `<body>` is taken back.
+    // Still usable, so it is still where the visitor was: only a focus the read itself dropped on
+    // `<body>` is taken back, while a focus the visitor moved is left alone.
     if (active === null || active === document.body) control.focus();
     return;
   }
@@ -84,4 +86,47 @@ export function restoreRefreshFocus(
   // the read made unusable, or dropped on `<body>`, is the place this handoff puts back.
   if (active !== null && active !== document.body && active !== control) return;
   (handoff.panel === 'token' ? headings.token : headings.binding)?.focus();
+}
+
+/**
+ * Holds one page's re-read place from the press until the pass that spends it, so a page destroyed
+ * mid-read still releases the document listener instead of leaking it.
+ */
+export class RefreshFocusSession {
+  private pending: RefreshFocusHandoff | null = null;
+  private readonly spent = signal<RefreshFocusHandoff | null>(null);
+
+  constructor(private readonly document: Document) {}
+
+  /** Records the place the read may take; a read with nothing of the page's focused holds none. */
+  capture(
+    host: HTMLElement,
+    version: number,
+    panelOf: (control: HTMLElement) => 'binding' | 'token',
+  ): void {
+    this.pending = captureRefreshFocus(this.document, host, version, panelOf);
+  }
+
+  /** Moves the held place on to the pass that spends it, once the read has settled. */
+  settle(): void {
+    const handoff = this.pending;
+    this.pending = null;
+    if (handoff !== null) this.spent.set(handoff);
+  }
+
+  /** Takes the settled place for the render pass that spends it, or `null` when there is none. */
+  spend(): RefreshFocusHandoff | null {
+    const handoff = this.spent();
+    if (handoff !== null) this.spent.set(null);
+    return handoff;
+  }
+
+  /** Releases whatever is still held, for a page destroyed before either path could spend it. */
+  release(): void {
+    const pending = this.pending;
+    this.pending = null;
+    if (pending !== null) releaseRefreshFocus(this.document, pending);
+    const spent = this.spend();
+    if (spent !== null) releaseRefreshFocus(this.document, spent);
+  }
 }

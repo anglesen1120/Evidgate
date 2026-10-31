@@ -367,7 +367,7 @@ export class EnableCollectionPage {
     if (this.confirmDisabled()) return;
     focusWaitingLine(this.busyStatusRef);
     await this.activation.run();
-    requestRefusalFocus(this.announceConfirmFailure, this.failure() !== null);
+    requestRefusalFocus(this.announceConfirmFailure, this.failure());
   }
 
   /** An explicit retry of the same intent: same key, same appended revision. */
@@ -380,7 +380,7 @@ export class EnableCollectionPage {
     if (!this.retryEligible()) return;
     focusWaitingLine(this.busyStatusRef);
     await this.activation.retry();
-    requestRefusalFocus(this.announceConfirmFailure, this.failure() !== null);
+    requestRefusalFocus(this.announceConfirmFailure, this.failure());
   }
 
   /**

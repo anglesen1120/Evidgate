@@ -21,10 +21,9 @@ import { OnboardingDataService } from '../../../core/data/onboarding-data.servic
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import {
-  captureRefreshFocus,
+  RefreshFocusSession,
   releaseRefreshFocus,
   restoreRefreshFocus,
-  type RefreshFocusHandoff,
 } from '../../../shared/a11y/refresh-focus';
 import {
   focusRefusalHeading,
@@ -88,11 +87,8 @@ export class ConnectCiPage {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private scopeVersion = 0;
   private readonly healthClock = new HealthBoundaryClock(() => this.store.tokens());
-  /**
-   * A re-read this page asked for, waiting for the DOM to commit before it is decided: the control
-   * it was pressed from may be gone by then, and only the committed DOM knows.
-   */
-  private readonly refreshHandoff = signal<RefreshFocusHandoff | null>(null);
+  /** The place a re-read may take, held from the press until the pass that spends it. */
+  private readonly refreshFocus = new RefreshFocusSession(this.document);
   private readonly bindingHeading = viewChild<ElementRef<HTMLHeadingElement>>('bindingHeading');
   private readonly tokenHeading = viewChild<ElementRef<HTMLHeadingElement>>('tokenHeading');
   private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeadingEl');
@@ -304,9 +300,8 @@ export class ConnectCiPage {
     // A re-read may remove what the visitor pressed, so the place is put back after the DOM commits.
     afterRenderEffect({
       write: () => {
-        const handoff = this.refreshHandoff();
+        const handoff = this.refreshFocus.spend();
         if (handoff === null) return;
-        this.refreshHandoff.set(null);
         releaseRefreshFocus(this.document, handoff);
         restoreRefreshFocus(this.document, handoff, this.scopeVersion, {
           binding: this.bindingHeading()?.nativeElement,
@@ -316,8 +311,8 @@ export class ConnectCiPage {
     });
     this.destroyRef.onDestroy(() => {
       this.healthClock.stop();
-      const handoff = this.refreshHandoff();
-      if (handoff !== null) releaseRefreshFocus(this.document, handoff);
+      // The pass that spends a held place never runs on a destroyed page, so release it here.
+      this.refreshFocus.release();
       endOfSession();
     });
   }
@@ -441,22 +436,21 @@ export class ConnectCiPage {
   }
 
   protected async refresh(): Promise<void> {
-    if (this.busy() || this.refreshing()) return;
+    if (this.destroyRef.destroyed || this.busy() || this.refreshing()) return;
     // Where the visitor is, captured before the read can replace what they pressed. Whether that
     // place survives is only knowable once the DOM has committed, so the move is decided there.
-    const handoff = captureRefreshFocus(
-      this.document,
-      this.host.nativeElement,
-      this.scopeVersion,
-      (control) =>
-        control.closest('[data-testid="connect-token-panel"]') === null ? 'binding' : 'token',
+    this.refreshFocus.capture(this.host.nativeElement, this.scopeVersion, (control) =>
+      control.closest('[data-testid="connect-token-panel"]') === null ? 'binding' : 'token',
     );
     this.refreshing.set(true);
     try {
       await this.store.refresh(this.orgId(), this.projectId());
     } finally {
-      this.refreshing.set(false);
-      this.refreshHandoff.set(handoff);
+      // A destroyed page owes no move: onDestroy already released the place this read held.
+      if (!this.destroyRef.destroyed) {
+        this.refreshing.set(false);
+        this.refreshFocus.settle();
+      }
     }
   }
 
@@ -486,7 +480,7 @@ export class ConnectCiPage {
       if (!isApiRequestError(error)) throw error;
       if (this.isCurrent(version, orgId, projectId)) {
         this.failure.set(error.error);
-        requestRefusalFocus(this.announceFailure, this.failure() !== null);
+        requestRefusalFocus(this.announceFailure, this.failure());
         if (error.error.kind === 'timeout' || error.error.kind === 'network') {
           // Reconcile metadata only: the failed response may hide a committed write.
           await this.store.refresh(orgId, projectId);
