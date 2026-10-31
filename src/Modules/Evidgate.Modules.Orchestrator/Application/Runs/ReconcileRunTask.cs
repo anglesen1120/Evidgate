@@ -50,7 +50,9 @@ internal sealed partial class ReconcileRunTaskHandler(
         await using var attemptScope = scopeFactory.CreateAsyncScope();
 
         var reconciler = attemptScope.ServiceProvider.GetRequiredService<IRunReconciler>();
-        var outcome = await reconciler.ReconcileAsync(payload.RunId, cancellationToken).ConfigureAwait(false);
+        var outcome = await reconciler
+            .ReconcileAsync(payload.RunId, payload.LateEvidence, cancellationToken)
+            .ConfigureAwait(false);
 
         // The four values are taken first so the log call's arguments stay locals (CA1873: no work behind a disabled
         // log level). They are numbers and one interned token; the payload is never among them.
@@ -74,15 +76,23 @@ internal sealed partial class ReconcileRunTaskHandler(
         // T2.3/T2.4: a compared attempt is finished in the SAME ambient tenant transaction (the reconciler has already
         // locked the run FOR NO KEY UPDATE and its comparison is this attempt's own read). RunNotFound, NotCollectable
         // and Pending reach no finisher at all — nothing to freeze, nothing to append, nothing to transition: a pending
-        // attempt waits for the open shard or for the collection deadline, so the run stays collecting. An exception here
-        // is not caught: it must abort the attempt so the consumer rolls the transaction back and retries it.
-        if (comparison is null || outcome.Disposition != ReconcileDisposition.Compared)
+        // attempt waits for the open shard or for the collection deadline, so the run stays collecting. A late attempt
+        // (the run already finished as incomplete and new evidence arrived) appends a revision and settles no state.
+        // An exception here is not caught: it must abort the attempt so the consumer rolls the transaction back and
+        // retries it.
+        if (comparison is null || outcome.Disposition is not (ReconcileDisposition.Compared or ReconcileDisposition.ComparedLate))
         {
             return;
         }
 
+        var settlement = outcome.Disposition == ReconcileDisposition.ComparedLate
+            ? ReconcileSettlement.AppendLateEvidence
+            : ReconcileSettlement.DecideCollection;
+
         var finisher = attemptScope.ServiceProvider.GetRequiredService<IReconcileFinisher>();
-        var finalization = await finisher.FinishAsync(payload.RunId, comparison, cancellationToken).ConfigureAwait(false);
+        var finalization = await finisher
+            .FinishAsync(payload.RunId, comparison, settlement, cancellationToken)
+            .ConfigureAwait(false);
 
         LogFinalized(logger, payload.RunId, finalization.Completeness, finalization.RevisionNo);
     }
@@ -98,6 +108,7 @@ internal sealed partial class ReconcileRunTaskHandler(
         ReconcileDisposition.NotCollectable => "not_collectable",
         ReconcileDisposition.Pending => "pending",
         ReconcileDisposition.Compared => "compared",
+        ReconcileDisposition.ComparedLate => "compared_late",
         _ => "unknown",
     };
 

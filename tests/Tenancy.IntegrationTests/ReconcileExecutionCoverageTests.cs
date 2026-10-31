@@ -413,12 +413,13 @@ public sealed class ReconcileExecutionCoverageTests
         await using var services = world.Api.Services.CreateAsyncScope();
         await using var scope = await services.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
             .BeginAsync(world.Org, null, false, Token);
-        var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>().ReconcileAsync(runId, Token);
+        var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>()
+            .ReconcileAsync(runId, lateTrigger: false, Token);
         ReconcileFinalization? finalization = null;
         if (outcome.Disposition == ReconcileDisposition.Compared && outcome.Comparison is { } comparison)
         {
             finalization = await services.ServiceProvider.GetRequiredService<IReconcileFinisher>()
-                .FinishAsync(runId, comparison, Token);
+                .FinishAsync(runId, comparison, ReconcileSettlement.DecideCollection, Token);
         }
 
         await scope.CommitAsync();

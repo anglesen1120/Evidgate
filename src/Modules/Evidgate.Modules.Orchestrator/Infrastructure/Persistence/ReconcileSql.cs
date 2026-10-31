@@ -35,6 +35,11 @@ internal static class ReconcileSql
     /// attempt waits for every planned shard instead of forcing a decision on an unset deadline (fail open on waiting,
     /// never on completeness). A passed deadline is what 05.3.2-T3.1 needs to force the verdict.
     /// </para>
+    /// <para>
+    /// The late window is deliberately not selected: the ingest route decides it once, when it admits the batch
+    /// (<see cref="RunEventScopeReader"/>), and the late trigger it writes carries that decision. Re-evaluating the
+    /// window here would let a lagging queue withdraw evidence the route already accepted and acknowledged.
+    /// </para>
     /// </summary>
     internal const string LockRun = """
         select r.state as state,
@@ -85,12 +90,12 @@ internal static class ReconcileSql
     /// unrelated type never becomes an unfinished attempt.
     /// </para>
     /// <para>
-    /// Two flag counts ride along in the same pass, and neither narrows the acknowledged total above:
-    /// <c>stale_count</c> counts the stored events with <c>stale = true</c> (an older epoch that still filled its
-    /// sequence slot), and <c>blocked_count</c> counts the <c>test.finished</c> events whose normalized status is
-    /// <c>blocked</c> — a failed setup, which marks its dependants blocked (00 §8.3). The comparer turns a non-zero
-    /// count on a closed shard into <c>stale_epoch</c> / <c>setup_error</c>, so a stale or blocked event can never leave
-    /// the evidence looking complete (D-S119-Q2 risk, 05.3.2-T2.3).
+    /// A flag count rides along in the same pass and does not narrow the acknowledged total above: <c>blocked_count</c>
+    /// counts the <c>test.finished</c> events whose normalized status is <c>blocked</c> — a failed setup, which marks its
+    /// dependants blocked (00 §8.3). The comparer turns a non-zero count on a closed shard into <c>setup_error</c>, so a
+    /// blocked event can never leave the evidence looking complete. <c>event.stale</c> is
+    /// not counted: nothing writes it, because no producer's current epoch is stored anywhere to compare against, and a
+    /// count that can only ever be zero would claim a check this module does not make.
     /// </para>
     /// </summary>
     internal const string ObservedEvents = """
@@ -103,7 +108,6 @@ internal static class ReconcileSql
                    max(e.sequence) as max_sequence,
                    count(e.sequence) filter (where e.type = 'test.finished' and e.normalized_status is null)
                        as unknown_status_count,
-                   count(e.sequence) filter (where e.stale) as stale_count,
                    count(e.sequence) filter (where e.type = 'test.finished' and e.normalized_status = 'blocked')
                        as blocked_count
               from public.producer_slot s
@@ -133,7 +137,6 @@ internal static class ReconcileSql
                g.max_sequence as max_sequence,
                g.unknown_status_count as unknown_status_count,
                coalesce(u.unfinished_started_count, 0) as unfinished_started_count,
-               g.stale_count as stale_count,
                g.blocked_count as blocked_count
           from grouped g
           left join unfinished u on u.producer_id = g.producer_id

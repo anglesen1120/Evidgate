@@ -7,15 +7,18 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// <summary>
 /// The Dapper read behind <see cref="IRunReconciler"/>: statements in a fixed order over the ambient tenant scope, so it
 /// joins the caller's transaction and RLS scopes every row, exactly like <see cref="RunEventScopeReader"/>. The run row
-/// is locked first and the state decides the outcome: a run that is not <c>collecting</c> is never compared, and nothing
-/// is read beyond its state, because an enqueued finalize trigger is not evidence that the run is collectable. Read-only
-/// by construction — it never writes and never changes the run state; the work after the lock is the slot list, the one
-/// grouped event aggregate and, for the attempt that decides, the bounded read of the plan's uncovered executions.
+/// is locked first and the state decides the outcome: only a <c>collecting</c> run — or a finished <c>incomplete</c> one
+/// this attempt carries late evidence for — is compared, and nothing is read beyond its state,
+/// because an enqueued finalize trigger is not evidence that the run is collectable. Read-only by construction — it never
+/// writes and never changes the run state; the work after the lock is the slot list, the one grouped event aggregate and,
+/// for the attempt that decides, the bounded read of the plan's uncovered executions.
 /// <para>
-/// The lock statement also answers the run's collection deadline (<c>deadline_passed</c>, the database clock), which
+/// The lock statement also answers the run's collection deadline (<c>deadline_passed</c>) on the database clock: it
 /// decides between <see cref="ReconcileDisposition.Pending"/> and <see cref="ReconcileDisposition.Compared"/> when the
-/// plan still holds an open shard: before the deadline the attempt waits, past it the open shard is
-/// <c>missing_shard</c> and the attempt finishes.
+/// plan still holds an open shard (before the deadline the attempt waits, past it the open shard is
+/// <c>missing_shard</c> and the attempt finishes). The late window is not read here: whether late evidence was
+/// accepted is the ingest route's decision, taken once under its own lock when it admitted the batch, so a trigger
+/// carrying that decision stays reconcilable however long the queue took to reach it.
 /// </para>
 /// </summary>
 /// <param name="db">The Dapper path over the ambient scope; it demands an active scope before it touches the database.</param>
@@ -23,7 +26,10 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) : IRunReconciler
 {
     /// <inheritdoc />
-    public async ValueTask<ReconcileOutcome> ReconcileAsync(Guid runId, CancellationToken cancellationToken)
+    public async ValueTask<ReconcileOutcome> ReconcileAsync(
+        Guid runId,
+        bool lateTrigger,
+        CancellationToken cancellationToken)
     {
         var orgId = scopes.Require().OrgId;
         var parameters = new { org_id = orgId, run_id = runId };
@@ -38,8 +44,17 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             return new ReconcileOutcome(ReconcileDisposition.RunNotFound, Comparison: null);
         }
 
+        // A run that finished as incomplete still takes evidence once a late trigger names it, and that evidence only
+        // counts once a revision of its own says so. The trigger's marker is the whole half the reconciler needs: the
+        // ingest route admitted the batch inside the window under its own lock, so that decision is authoritative here
+        // and the queue's delay cannot withdraw it — a late batch accepted at the edge of the window must still reach a
+        // revision. An ordinary trigger carries no evidence and appends a revision with nothing behind it, so it stays
+        // uncollectable.
+        var late = lateTrigger
+            && string.Equals(locked.State, RunStates.Incomplete, StringComparison.Ordinal);
+
         // Statement 2 never runs for a run outside its collection state: nothing to compare, nothing to change.
-        if (!string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
+        if (!late && !string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
         {
             return new ReconcileOutcome(ReconcileDisposition.NotCollectable, Comparison: null);
         }
@@ -76,7 +91,6 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 row.MaxSequence,
                 row.UnknownStatusCount,
                 row.UnfinishedStartedCount,
-                row.StaleCount,
                 row.BlockedCount);
         }
 
@@ -86,7 +100,9 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         // that lock and decide exactly once. `deadline_passed` comes from the lock statement, evaluated by the database.
         // A waiting attempt returns here, before the coverage read: it decides nothing, and coverage cannot turn a wait
         // into a verdict, so the bounded read of the plan is spent only on the attempt that compares for real.
-        if (HasOpenShard(planned) && !locked.DeadlinePassed)
+        // A finished run never waits: its verdict is already written, its open shard would never close now that no
+        // finalize is accepted, and waiting would leave the late evidence unread for good.
+        if (!late && HasOpenShard(planned) && !locked.DeadlinePassed)
         {
             return new ReconcileOutcome(
                 ReconcileDisposition.Pending,
@@ -98,7 +114,7 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
             .ConfigureAwait(false);
 
         return new ReconcileOutcome(
-            ReconcileDisposition.Compared,
+            late ? ReconcileDisposition.ComparedLate : ReconcileDisposition.Compared,
             ReconcileComparer.Compare(planned, seen, MapCoverage(coverage)));
     }
 
@@ -141,7 +157,7 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
 
     /// <summary>
     /// One row as <see cref="ReconcileSql.LockRun"/> returns it (snake_case → PascalCase, Dapper's underscore map): the
-    /// state the attempt decides on and the collection deadline the <b>database</b> evaluated.
+    /// state the attempt decides on and the collection deadline, evaluated by the <b>database</b>.
     /// </summary>
     private sealed class RunLockRow
     {
@@ -185,8 +201,6 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         public long UnknownStatusCount { get; set; }
 
         public long UnfinishedStartedCount { get; set; }
-
-        public long StaleCount { get; set; }
 
         public long BlockedCount { get; set; }
     }

@@ -78,6 +78,23 @@ internal static class EvidenceRevisionSql
         """;
 
     /// <summary>
+    /// The latest revision of the run, read before a late append decides whether it has anything new to record: the
+    /// watermark is the run's stored event count, so an equal one means no new event arrived; the frozen artifact set
+    /// is read alongside it because a re-freeze can resolve an artifact without any event moving (a parse finished in
+    /// between), and that is different evidence at the same watermark. A late reconcile runs after the consumer committed the previous
+    /// attempt's transaction and may be re-claimed when that process died before stamping the row <c>done</c>
+    /// (<c>TaskConsumer</c> commits the scope, then completes the row), so this read is what keeps one attempt one
+    /// revision.
+    /// </summary>
+    internal const string SelectLatestRevision = """
+        select er.id, er.revision_no, er.completeness, er.event_watermark, er.artifact_set_hash
+          from public.evidence_revision er
+         where er.org_id = @org_id and er.run_id = @run_id
+         order by er.revision_no desc
+         limit 1
+        """;
+
+    /// <summary>
     /// The pointer move 0036/0049 grant the app role: exactly the column <c>current_evidence_revision_id</c>, and
     /// <c>0049</c>'s <c>guard_run_evidence_pointer</c> refuses any value that is not the latest revision of this run. It
     /// runs after the insert in the same transaction, so the pointer can never be ahead of or behind the rows.

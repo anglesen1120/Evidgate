@@ -148,8 +148,12 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   projection of `(org_id, run_id, collection_deadline_at)` for the overdue and still-collectable runs of
   every tenant, which `evidgate_worker_sched` alone may execute: `public.run` stays ungranted to the sweep
   role, so a platform sweep can name the runs to reconcile without reading a tenant's row
+  (notes at the end of this file); and `0057` is 06.5.1's parse-state indexes — `task_parse_artifact_idx` on
+  `public.task` and `outbox_parse_artifact_idx` on `public.outbox`, each `(org_id, (payload ->>
+'artifact_id'))` and partial on the rows the freeze's "is this artifact's parse verdict still owed"
+  anti-joins ask about, so neither lookup is a scan of a mechanism table once per ready artifact
   (notes at the end of this file);
-  the next free number is `0057`; a gap means two branches invented the same sequence and neither history can be trusted.
+  the next free number is `0058`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -816,3 +820,39 @@ through the real runner against a throwaway PostgreSQL 18 container.
   executed yet, so `lock_timeout = '5s'` is the only contended wait. `create or replace` + repeatable
   `revoke`/`grant`, so a re-run is a no-op in substance, and there is no down migration: dropping the
   function would make the sweep fail loudly instead of silently skipping every run.
+
+## Notes on the parse-state indexes (`0057`)
+
+- Why it exists: 06.5.1's freeze refuses to count a ready raw report until its parse verdict exists, and
+  reads two rows for that: an `artifact_parse` task row that has not reached `done`, and the completion's
+  undispatched `artifact_parse` outbox row — the window between the upload commit and the dispatcher's
+  task insert, where no task row exists yet. The queue keeps a finished row only until `task.sweep`
+  deletes it (`state in ('done','dead_letter')` past the retention setting), so a dead-lettered parse
+  older than that leaves its report looking unparsed again, and that window is the freeze's documented
+  bound. The freeze evaluates both anti-joins once per ready artifact, up to
+  `FreezeRequest.MaxReadyArtifacts` (50 000) in one call, so each lookup must be an index probe and never
+  a scan of a mechanism table: 00 §5.7 P4 forbids a per-row path that reads a table the caller does not
+  need.
+- The shape: two partial expression indexes over `(org_id, (payload ->> 'artifact_id'))`, on
+  `public.task` `where task_type = 'artifact_parse' and state <> 'done'` and on `public.outbox`
+  `where task_type = 'artifact_parse' and dispatched_at is null`. `org_id` is a column because both
+  tables carry no policy, so the anti-join's org equality has to come from the index too; the expression
+  is `jsonb_object_field_text`, which is immutable and therefore legal, and the value is the lowercase
+  `D` GUID `CompleteArtifactUpload` serialises, the same form `artifact.id::text` gives. The partial
+  predicates spell the freeze's terms verbatim, and a statement that spells a filter differently does
+  not match the predicate and simply keeps its own plan instead of reading a subset the predicate never
+  promised.
+- Locks and deployment: the file runs in the migrator's per-script transaction, so each index is built
+  with a plain `create index` (SHARE lock: readers continue, writes queue) and the file's
+  `set local lock_timeout = '5s'` bounds the wait for that lock — a busy table fails the migration for a
+  retry instead of stalling every task write. `if not exists` makes a re-run a no-op.
+- Grants and policy: none change. An index is not granted on, `evidgate_app` already holds `select` on
+  both tables, and neither deliberately carries a row-level-security policy (`0008`/`0006`: the claim
+  and the dispatcher scan every org by design), so tenant separation is the explicit
+  `t.org_id = a.org_id` / `o.org_id = a.org_id` predicate every statement on them must keep — the
+  freeze's anti-joins included. The index repeats `org_id` as a column, it never replaces the predicate,
+  and a reader must not treat the missing policy as covered by an index. No `security definer` function is involved, so neither
+  `scripts/check-rls.py`'s `DEFINER_AUDIT_EXEMPT` nor the isolation suite's owner-definer allow-list
+  gains an entry.
+- No down migration: dropping the index would not roll back behaviour, it would silently return the
+  freeze to a sequential scan of the queue.
