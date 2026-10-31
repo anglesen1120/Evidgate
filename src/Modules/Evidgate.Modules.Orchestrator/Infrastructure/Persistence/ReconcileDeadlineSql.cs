@@ -2,8 +2,7 @@ namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 
 /// <summary>
 /// The two statements of the collection-deadline sweep: the platform scan that reads which runs are
-/// overdue, and the per-tenant probe that keeps a sweep from queueing a reconcile the previous sweep
-/// already queued.
+/// overdue, and the per-tenant probe that says which attempt of each one the sweep may still queue.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -17,10 +16,10 @@ namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 /// </para>
 /// <para>
 /// The probe runs inside the run's own tenant scope and names <c>org_id</c> explicitly, and that filter
-/// is the whole of its boundary: <c>public.outbox</c> is a mechanism table and deliberately carries no
-/// tenant policy (0006 — the dispatcher scans every org by design), so nothing else narrows the read. It
-/// reads the key rather than a count so the sweep can enqueue the runs a page has not queued yet in one
-/// statement instead of one round trip per run.
+/// is the whole of its boundary: <c>public.outbox</c> and <c>public.task</c> are mechanism tables and
+/// deliberately carry no tenant policy (0006 — the dispatcher scans every org by design), so nothing else
+/// narrows the read. It reads the keys with the state of the task each became rather than a count, so the
+/// sweep can decide every run of a page in one statement instead of one round trip per run.
 /// </para>
 /// </remarks>
 internal static class ReconcileDeadlineSql
@@ -36,8 +35,22 @@ internal static class ReconcileDeadlineSql
         """;
 
     /// <summary>
-    /// The deadline keys of one org already in its outbox, among the keys a page carries: one statement for
-    /// the whole page, so the probe costs one round trip instead of one per run.
+    /// The deadline attempts of one org already written to its outbox, among the keys a page carries, with what
+    /// became of each: whether it was handed to the queue, and the state of the task it became (null when the row
+    /// is still undispatched — or when its task is gone): one statement for the whole page, so the probe costs one
+    /// round trip instead of one per run.
+    /// <para>
+    /// The join is the only link from a trigger to the work it produced: a task row carries no outbox id, it
+    /// carries <c>'outbox:' || outbox.id</c> as its own idempotency key, so that expression — not a column — is
+    /// what pairs the two. <c>org_id</c> is named on both sides: neither table has a tenant policy, so the
+    /// predicates are the whole boundary, and a task row of another tenant can never answer for this one.
+    /// </para>
+    /// <para>
+    /// Dispatch inserts the tasks and stamps <c>dispatched_at</c> in one transaction, so a stamped row with no task
+    /// row lost its task to retention, never to a half-finished dispatch. The flag is projected as a boolean because
+    /// the decision only ever asks whether the row reached the queue, and that answer cannot be confused with the
+    /// null state of a row that has not.
+    /// </para>
     /// <para>
     /// The keys travel as JSON text and are unpacked in SQL. A <c>string[]</c> parameter cannot be bound here:
     /// the tenant Dapper path registers a read-only <c>string[]</c> type handler (writes are EF Core's), so
@@ -45,10 +58,21 @@ internal static class ReconcileDeadlineSql
     /// <c>TextArrayParameter</c>, which is internal to its own assembly.
     /// </para>
     /// </summary>
-    internal const string ExistingKeys = """
-        select idempotency_key
-          from public.outbox
-         where org_id = @org_id
-           and idempotency_key in (select t.value from jsonb_array_elements_text(@keys::jsonb) as t(value))
+    internal const string AttemptStates = """
+        select o.idempotency_key as "IdempotencyKey",
+               (o.dispatched_at is not null) as "Dispatched",
+               t.state as "TaskState"
+          from public.outbox o
+          left join public.task t
+            on t.idempotency_key = 'outbox:' || o.id::text
+           and t.org_id = @org_id
+         where o.org_id = @org_id
+           and o.idempotency_key in (select k.value from jsonb_array_elements_text(@keys::jsonb) as k(value))
         """;
 }
+
+/// <summary>One deadline attempt as the probe projects it: its outbox key, whether it reached the queue, and its task.</summary>
+/// <param name="IdempotencyKey">The outbox idempotency key of the attempt.</param>
+/// <param name="Dispatched">Whether the dispatcher stamped the row, i.e. its task was inserted.</param>
+/// <param name="TaskState">The task's state, or null while the row is undispatched or once its task is purged.</param>
+internal sealed record DeadlineAttemptRow(string IdempotencyKey, bool Dispatched, string? TaskState);

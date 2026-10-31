@@ -33,7 +33,9 @@ internal static class ReconcileSql
     /// <c>coalesce(r.collection_deadline_at &lt;= now(), false)</c>: <c>0031</c> declares the column <c>NOT NULL</c>, so
     /// the coalesce never fires today — it keeps a NULL (were the column ever relaxed) meaning "not passed", i.e. the
     /// attempt waits for every planned shard instead of forcing a decision on an unset deadline (fail open on waiting,
-    /// never on completeness). A passed deadline is what 05.3.2-T3.1 needs to force the verdict.
+    /// never on completeness). A passed deadline is what 05.3.2-T3.1 needs to force the verdict — the open shard of a
+    /// <c>collecting</c> run becomes <c>missing_shard</c>, and a <c>queued</c> or <c>running</c> run is closed
+    /// <c>incomplete</c> because no finalize will ever enqueue the attempt that decides it.
     /// </para>
     /// <para>
     /// The late window is deliberately not selected: the ingest route decides it once, when it admits the batch
