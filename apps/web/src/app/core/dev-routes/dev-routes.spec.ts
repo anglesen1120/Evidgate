@@ -18,6 +18,8 @@ import { RunDetailPage } from '../../features/runs/detail/run-detail.page';
 import { PolicyPage } from '../../features/settings/policy/policy.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
 import { SecretsPage } from '../../features/settings/secrets/secrets.page';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the review-only route loads the real composition screen.
+import { SuiteCompositionComponent } from '../../features/suites/composition/suite-composition.component';
 import { ShellComponent } from '../../shell/layout/shell.component';
 import { authGuard, orgScopeGuard, projectScopeGuard } from '../guards';
 import { devRoutes } from './dev-routes.fixtures';
@@ -26,7 +28,7 @@ describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(5);
+    expect(table).toHaveLength(6);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();
@@ -107,5 +109,27 @@ describe('dev routes (review only)', () => {
       if (!load) throw new Error('no lazy run detail review route');
       expect(await load()).toBe(RunDetailPage);
     }
+  });
+  it('mounts the real composition screen on its pinned revision deep link, review-only', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/suite-composition');
+    expect(route?.component).toBe(ShellComponent);
+    const org = route?.children?.[0];
+    expect(org?.path).toBe('orgs/:orgId');
+    expect(org?.canMatch).toEqual([authGuard, orgScopeGuard]);
+    const project = org?.children?.[0];
+    expect(project?.path).toBe('projects/:projectId');
+    expect(project?.canMatch?.[0]).toBe(projectScopeGuard);
+    // The second gate is the entry's own `suite:read`; a guard closure has no identity, so the
+    // count is what a pin can assert.
+    expect(project?.canMatch).toHaveLength(2);
+    // The product `suites` segment is kept, so the address the spec opens is the one the app's own
+    // deep link would produce; only the phase gate differs.
+    const suites = project?.children?.[0];
+    expect(suites?.path).toBe('suites');
+    const leaf = suites?.children?.find(
+      (entry) => entry.path === 'revisions/:revisionId',
+    )?.loadComponent;
+    if (leaf === undefined) throw new Error('no lazy suite composition review route');
+    expect(await leaf()).toBe(SuiteCompositionComponent);
   });
 });

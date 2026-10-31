@@ -34,6 +34,7 @@ const MARKERS = [
   'dev/settings-policy',
   'dev/run-list',
   'dev/run-detail',
+  'dev/suite-composition',
 ] as const;
 
 /** A corpus body string long enough to count as a leak signal, and absent from production code. */

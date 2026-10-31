@@ -2712,6 +2712,56 @@
       <trans-unit id="runs.detail.attempts.loading-more" datatype="html"><source>Loading more attempts</source><target>Đang tải thêm lần thử</target></trans-unit>
       <trans-unit id="runs.detail.attempts.more-loaded" datatype="html"><source>More attempts loaded</source><target>Đã tải thêm lần thử</target></trans-unit>
       <trans-unit id="runs.detail.environment-revision" datatype="html"><source>Revision</source><target>Bản sửa đổi</target></trans-unit>
+      <trans-unit id="suites.composition.suite-composition" datatype="html"><source>Suite composition</source><target>Thành phần bộ kiểm thử</target></trans-unit>
+      <trans-unit id="suites.composition.revision" datatype="html"><source>Revision</source><target>Bản sửa đổi</target></trans-unit>
+      <trans-unit id="suites.composition.status" datatype="html"><source>Status</source><target>Trạng thái</target></trans-unit>
+      <trans-unit id="suites.composition.revision-hash" datatype="html"><source>Revision hash</source><target>Mã băm bản sửa đổi</target></trans-unit>
+      <trans-unit id="suites.composition.this-published-revision-is-immutable-and-read-on" datatype="html"><source>This published revision is immutable and read-only.</source><target>Bản sửa đổi đã xuất bản này là bất biến và chỉ đọc.</target></trans-unit>
+      <trans-unit id="suites.composition.this-draft-is-shown-read-only" datatype="html"><source>This draft is shown read-only.</source><target>Bản nháp này được hiển thị ở chế độ chỉ đọc.</target></trans-unit>
+      <trans-unit id="suites.composition.shard-strategy" datatype="html"><source>Shard strategy</source><target>Chiến lược chia shard</target></trans-unit>
+      <trans-unit id="suites.composition.strategy-is-read-only-in-this-view" datatype="html"><source>Strategy is read-only in this view.</source><target>Chiến lược chỉ đọc trong màn hình này.</target></trans-unit>
+      <trans-unit id="suites.composition.no-sharding" datatype="html"><source>No sharding</source><target>Không chia shard</target></trans-unit>
+      <trans-unit id="suites.composition.shard-count" datatype="html"><source>Shard count</source><target>Số shard</target></trans-unit>
+      <trans-unit id="suites.composition.balance-by" datatype="html"><source>Balance by</source><target>Cân bằng theo</target></trans-unit>
+      <trans-unit id="suites.composition.duration" datatype="html"><source>Duration</source><target>Thời lượng</target></trans-unit>
+      <trans-unit id="suites.composition.member-count" datatype="html"><source>Member count</source><target>Số thành viên</target></trans-unit>
+      <trans-unit id="suites.composition.no-balancing-specified" datatype="html"><source>No balancing specified</source><target>Không chỉ định cân bằng</target></trans-unit>
+      <trans-unit id="suites.composition.strategy-unavailable-this-revision-has-an-unreco" datatype="html"><source>Strategy unavailable: this revision has an unrecognized shard strategy.</source><target>Chiến lược không khả dụng: bản sửa đổi này có chiến lược chia shard không nhận dạng được.</target></trans-unit>
+      <trans-unit id="suites.composition.composition-matrix" datatype="html"><source>Composition matrix</source><target>Ma trận thành phần</target></trans-unit>
+      <trans-unit id="suites.composition.case-revisions-by-variant-each-populated-cell-sh" datatype="html"><source>Case revisions by variant. Each populated cell shows its member identifier, requirement and ordinal.</source><target>Bản sửa đổi ca kiểm thử theo biến thể. Mỗi ô có dữ liệu hiển thị mã thành viên, mức bắt buộc và thứ tự.</target></trans-unit>
+      <trans-unit id="suites.composition.case-revision" datatype="html"><source>Case revision</source><target>Bản sửa đổi ca kiểm thử</target></trans-unit>
+      <trans-unit id="suites.composition.no-parameters" datatype="html"><source>No parameters</source><target>Không có tham số</target></trans-unit>
+      <trans-unit id="suites.composition.member" datatype="html"><source>Member</source><target>Thành viên</target></trans-unit>
+      <trans-unit id="suites.composition.required" datatype="html"><source>Required</source><target>Bắt buộc</target></trans-unit>
+      <trans-unit id="suites.composition.optional" datatype="html"><source>Optional</source><target>Tùy chọn</target></trans-unit>
+      <trans-unit id="suites.composition.ordinal" datatype="html"><source>Ordinal</source><target>Thứ tự</target></trans-unit>
+      <trans-unit id="suites.composition.no-member" datatype="html"><source>No member</source><target>Không có thành viên</target></trans-unit>
+      <trans-unit id="suites.composition.variant-params" datatype="html"><source>Variant parameters</source><target>Tham số biến thể</target></trans-unit>
+      <trans-unit id="suites.composition.flat-matrix-note" datatype="html"><source>This revision has more cells than a matrix can show, so its members are listed as a flat table.</source><target>Bản sửa đổi này có nhiều ô hơn mức ma trận có thể hiển thị, nên các thành viên được liệt kê thành bảng phẳng.</target></trans-unit>
+      <trans-unit id="suites.composition.show-more" datatype="html"><source>Show more</source><target>Hiển thị thêm</target></trans-unit>
+      <trans-unit id="suites.composition.members-shown" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/> members.</source><target>Đang hiển thị <x id="shown"/> trên <x id="total"/> thành viên.</target></trans-unit>
+      <trans-unit id="suites.composition.dependencies-shown" datatype="html"><source>Showing <x id="shown" equiv-text="shown"/> of <x id="total" equiv-text="total"/> dependencies.</source><target>Đang hiển thị <x id="shown"/> trên <x id="total"/> phụ thuộc.</target></trans-unit>
+      <trans-unit id="suites.composition.dependencies" datatype="html"><source>Dependencies</source><target>Phụ thuộc</target></trans-unit>
+      <trans-unit id="suites.composition.each-child-member-depends-on-the-parent-member-s" datatype="html"><source>Each child member depends on the parent member shown beside it.</source><target>Mỗi thành viên con phụ thuộc vào thành viên cha hiển thị bên cạnh.</target></trans-unit>
+      <trans-unit id="suites.composition.parent-member" datatype="html"><source>Parent member</source><target>Thành viên cha</target></trans-unit>
+      <trans-unit id="suites.composition.child-member" datatype="html"><source>Child member</source><target>Thành viên con</target></trans-unit>
+      <trans-unit id="suites.composition.no-dependencies-declared" datatype="html"><source>No dependencies declared</source><target>Không khai báo phụ thuộc</target></trans-unit>
+      <trans-unit id="suites.composition.no-members-in-this-revision" datatype="html"><source>No members in this revision</source><target>Bản sửa đổi này không có thành viên</target></trans-unit>
+      <trans-unit id="suites.composition.this-revision-has-no-members-so-there-is-no-comp" datatype="html"><source>This revision has no members, so there is no composition matrix to display.</source><target>Bản sửa đổi này không có thành viên nên không có ma trận thành phần để hiển thị.</target></trans-unit>
+      <trans-unit id="suites.composition.loading-suite-composition" datatype="html"><source>Loading suite composition</source><target>Đang tải thành phần bộ kiểm thử</target></trans-unit>
+      <trans-unit id="suites.composition.reading-the-pinned-members-variants-and-dependen" datatype="html"><source>Reading the pinned members, variants and dependencies.</source><target>Đang đọc các thành viên, biến thể và phụ thuộc đã ghim.</target></trans-unit>
+      <trans-unit id="suites.composition.suite-revision-not-found" datatype="html"><source>Suite revision not found</source><target>Không tìm thấy bản sửa đổi bộ kiểm thử</target></trans-unit>
+      <trans-unit id="suites.composition.this-revision-does-not-exist-or-is-not-available" datatype="html"><source>This revision does not exist or is not available in this project. Check the revision link.</source><target>Bản sửa đổi này không tồn tại hoặc không khả dụng trong dự án này. Hãy kiểm tra liên kết.</target></trans-unit>
+      <trans-unit id="suites.composition.suite-revision-access-denied" datatype="html"><source>Suite revision access denied</source><target>Bị từ chối truy cập bản sửa đổi bộ kiểm thử</target></trans-unit>
+      <trans-unit id="suites.composition.you-do-not-have-permission-to-view-this-revision" datatype="html"><source>You do not have permission to view this revision. Ask a project administrator for access.</source><target>Bạn không có quyền xem bản sửa đổi này. Hãy nhờ quản trị viên dự án cấp quyền.</target></trans-unit>
+      <trans-unit id="suites.composition.suite-composition-unavailable" datatype="html"><source>Suite composition unavailable</source><target>Thành phần bộ kiểm thử không khả dụng</target></trans-unit>
+      <trans-unit id="suites.composition.the-suite-service-is-temporarily-unavailable-rel" datatype="html"><source>The suite service is temporarily unavailable. Reload this page later.</source><target>Dịch vụ bộ kiểm thử tạm thời không khả dụng. Hãy tải lại trang sau.</target></trans-unit>
+      <trans-unit id="suites.composition.suite-composition-could-not-be-loaded" datatype="html"><source>Suite composition could not be loaded</source><target>Không thể tải thành phần bộ kiểm thử</target></trans-unit>
+      <trans-unit id="suites.composition.the-revision-could-not-be-read-check-your-connec" datatype="html"><source>The revision could not be read. Check your connection and reload this page.</source><target>Không thể đọc bản sửa đổi. Hãy kiểm tra kết nối và tải lại trang.</target></trans-unit>
+      <trans-unit id="suites.warnings.suite-warnings" datatype="html"><source>Suite warnings</source><target>Cảnh báo bộ kiểm thử</target></trans-unit>
+      <trans-unit id="suites.warnings.warnings-unavailable" datatype="html"><source>Warnings unavailable</source><target>Cảnh báo không khả dụng</target></trans-unit>
+      <trans-unit id="suites.warnings.the-suite-revision-response-does-not-include-war" datatype="html"><source>The suite revision response does not include warning details.</source><target>Phản hồi bản sửa đổi bộ kiểm thử không kèm chi tiết cảnh báo.</target></trans-unit>
+      <trans-unit id="suites.warnings.no-warnings-reported" datatype="html"><source>No warnings reported.</source><target>Không có cảnh báo nào được báo cáo.</target></trans-unit>
     </body>
   </file>
 </xliff>

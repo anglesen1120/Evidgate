@@ -1,0 +1,247 @@
+<section
+  data-testid="suite-composition"
+  [attr.aria-busy]="store.status() === 'idle' || store.status() === 'loading'"
+>
+  <h1 #stateHeading tabindex="-1" data-testid="suite-composition-state">{{ state().title }}</h1>
+  @if (store.status() !== 'ready') {
+    <p role="status">{{ state().body }}</p>
+  }
+  @if (store.revision(); as revision) {
+    <header class="panel">
+      <dl class="metadata">
+        <div>
+          <dt>{{ copy.revision }}</dt>
+          <dd data-revision-no>{{ revision.revision_no }}</dd>
+        </div>
+        <div>
+          <dt>{{ copy.status }}</dt>
+          <dd data-revision-status>
+            <bdi>{{ revision.status }}</bdi>
+          </dd>
+        </div>
+        <div class="hash">
+          <dt>{{ copy.hash }}</dt>
+          <dd>
+            <bdi class="identifier">{{ revision.revision_hash }}</bdi>
+          </dd>
+        </div>
+      </dl>
+      @if (revision.status === 'published') {
+        <p class="notice" data-testid="suite-published-notice">{{ copy.published }}</p>
+      } @else {
+        <p class="notice">{{ copy.draft }}</p>
+      }
+    </header>
+  }
+  @if (store.view(); as view) {
+    <section class="panel" aria-labelledby="suite-strategy-heading" data-testid="suite-strategy">
+      <h2 id="suite-strategy-heading">{{ copy.strategy }}</h2>
+      <p>{{ copy.strategyReadOnly }}</p>
+      @switch (view.strategy.kind) {
+        @case ('none') {
+          <p>{{ copy.noSharding }}</p>
+        }
+        @case ('count') {
+          <dl class="metadata">
+            <div>
+              <dt>{{ copy.shardCount }}</dt>
+              <dd>{{ view.strategy.count }}</dd>
+            </div>
+            <div>
+              <dt>{{ copy.balance }}</dt>
+              <dd>
+                @switch (view.strategy.balanceBy) {
+                  @case ('duration') {
+                    {{ copy.duration }}
+                  }
+                  @case ('count') {
+                    {{ copy.count }}
+                  }
+                  @default {
+                    {{ copy.noBalance }}
+                  }
+                }
+              </dd>
+            </div>
+          </dl>
+        }
+        @case ('unavailable') {
+          <p>{{ copy.strategyUnavailable }}</p>
+        }
+      }
+    </section>
+    <section class="panel" aria-labelledby="suite-matrix-heading">
+      <h2 id="suite-matrix-heading">{{ copy.matrix }}</h2>
+      @if (view.rows.length === 0) {
+        <p data-testid="suite-matrix-empty">{{ copy.emptyTitle }}</p>
+        <p>{{ copy.emptyBody }}</p>
+      } @else if (view.layout === 'flat') {
+        <p data-testid="suite-flat-note">{{ copy.flatMatrixNote }}</p>
+        @if (view.flatMembers.length > listChunk) {
+          <p role="status" data-testid="suite-members-shown">
+            {{ copy.membersShown(visibleMembers().length, view.flatMembers.length) }}
+          </p>
+        }
+        <div class="matrix-scroll" tabindex="0" role="region" [attr.aria-label]="copy.matrix">
+          <table data-testid="suite-members-flat">
+            <thead>
+              <tr>
+                <th scope="col">{{ copy.caseRevision }}</th>
+                <th scope="col">{{ copy.variantParams }}</th>
+                <th scope="col">{{ copy.required }}</th>
+                <th scope="col">{{ copy.ordinal }}</th>
+                <th scope="col">{{ copy.member }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of visibleMembers(); track member.memberId) {
+                <tr data-suite-flat-member>
+                  <th scope="row">
+                    <bdi class="identifier">{{ member.caseRevisionId }}</bdi>
+                  </th>
+                  <td>
+                    @if (member.params.length === 0) {
+                      <p>{{ copy.noParameters }}</p>
+                    } @else {
+                      <ul class="parameters">
+                        @for (parameter of member.params; track $index) {
+                          <li>
+                            <bdi>{{ parameter }}</bdi>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </td>
+                  <td>{{ member.required ? copy.required : copy.optional }}</td>
+                  <td>{{ member.ordinal }}</td>
+                  <td>
+                    <bdi class="identifier" data-suite-flat-member-id>{{ member.memberId }}</bdi>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (view.flatMembers.length > listChunk) {
+          <button
+            type="button"
+            class="show-more"
+            data-testid="suite-members-more"
+            [attr.aria-disabled]="visibleMembers().length >= view.flatMembers.length"
+            (click)="showMoreMembers()"
+          >
+            {{ copy.showMore }}
+          </button>
+        }
+      } @else {
+        <div class="matrix-scroll" tabindex="0" role="region" [attr.aria-label]="copy.matrix">
+          <table data-testid="suite-matrix">
+            <caption>
+              {{
+                copy.caption
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ copy.caseRevision }}</th>
+                @for (column of view.columns; track column.variantHash) {
+                  <th scope="col">
+                    <bdi class="identifier">{{ column.variantHash }}</bdi>
+                    @if (column.params.length === 0) {
+                      <p>{{ copy.noParameters }}</p>
+                    } @else {
+                      <ul class="parameters">
+                        @for (parameter of column.params; track $index) {
+                          <li>
+                            <bdi>{{ parameter }}</bdi>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of view.rows; track row.caseRevisionId) {
+                <tr data-suite-matrix-row>
+                  <th scope="row">
+                    <bdi class="identifier">{{ row.caseRevisionId }}</bdi>
+                  </th>
+                  @for (column of view.columns; track column.variantHash) {
+                    <td>
+                      @if (row.byVariant.get(column.variantHash); as member) {
+                        <dl>
+                          <div>
+                            <dt>{{ copy.member }}</dt>
+                            <dd>
+                              <bdi class="identifier" data-suite-member-id>{{ member.id }}</bdi>
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>{{ member.required ? copy.required : copy.optional }}</dt>
+                            <dd>{{ copy.ordinal }} {{ member.ordinal }}</dd>
+                          </div>
+                        </dl>
+                      } @else {
+                        <span>{{ copy.noMember }}</span>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+    <section class="panel" aria-labelledby="suite-dependencies-heading">
+      <h2 id="suite-dependencies-heading">{{ copy.dependencies }}</h2>
+      @if (view.dependencies.length === 0) {
+        <p>{{ copy.noDependencies }}</p>
+      } @else {
+        <p>{{ copy.dependencyNote }}</p>
+        @if (view.dependencies.length > listChunk) {
+          <p role="status" data-testid="suite-dependencies-shown">
+            {{ copy.dependenciesShown(visibleDependencies().length, view.dependencies.length) }}
+          </p>
+        }
+        <ul class="dependencies">
+          @for (
+            dependency of visibleDependencies();
+            track dependency.parentMemberId + '/' + dependency.childMemberId
+          ) {
+            <li>
+              <dl class="metadata">
+                <div>
+                  <dt>{{ copy.parent }}</dt>
+                  <dd>
+                    <bdi class="identifier">{{ dependency.parentMemberId }}</bdi>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ copy.child }}</dt>
+                  <dd>
+                    <bdi class="identifier">{{ dependency.childMemberId }}</bdi>
+                  </dd>
+                </div>
+              </dl>
+            </li>
+          }
+        </ul>
+        @if (view.dependencies.length > listChunk) {
+          <button
+            type="button"
+            class="show-more"
+            data-testid="suite-dependencies-more"
+            [attr.aria-disabled]="visibleDependencies().length >= view.dependencies.length"
+            (click)="showMoreDependencies()"
+          >
+            {{ copy.showMore }}
+          </button>
+        }
+      }
+    </section>
+    <app-suite-warning-list [warnings]="null" />
+  }
+</section>

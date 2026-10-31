@@ -1,0 +1,18 @@
+{
+  "operation_id": "getSuiteRevision",
+  "variant": "revision-forbidden",
+  "status": 403,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000c0ff"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "forbidden",
+      "message": "Access to this resource is not permitted.",
+      "request_id": "018f0000-0000-7000-8000-00000000c0ff",
+      "retryable": false,
+      "details": []
+    }
+  }
+}
