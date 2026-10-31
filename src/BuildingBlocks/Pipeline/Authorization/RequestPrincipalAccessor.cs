@@ -2,9 +2,8 @@ namespace Evidgate.BuildingBlocks.Pipeline.Authorization;
 
 /// <summary>
 /// The ambient caller of the current async flow — the principal-side mirror of
-/// <c>IRequestTenantContextAccessor</c>, and ambient for the same reason: the C2
-/// behaviours are singletons under Mediator's default lifetime, so a scoped
-/// service could never be injected into them.
+/// <c>IRequestTenantContextAccessor</c>, and ambient for the same reason: the entry
+/// point writes it once per flow and the scoped C2 behaviours read it.
 /// <para>
 /// Fail-closed by construction: <see cref="Current"/> is null when no entry point
 /// resolved a caller, and the C2 authorization stage denies null rather than

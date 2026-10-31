@@ -85,7 +85,9 @@ public static class EvidgatePipelineServiceCollectionExtensions
 
         foreach (var behaviour in PipelineBehaviourOrder.C2)
         {
-            services.AddSingleton(typeof(IPipelineBehavior<,>), behaviour);
+            // Scoped: the behaviours look handlers up through their injected IServiceProvider, which must be
+            // the request scope's. A singleton behaviour would resolve scoped handlers from the root provider.
+            services.AddScoped(typeof(IPipelineBehavior<,>), behaviour);
         }
 
         return services;

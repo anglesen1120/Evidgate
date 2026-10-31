@@ -25,10 +25,9 @@ public sealed record RequestTenantContext(Guid OrgId, Guid? ProjectId) : IReques
 
 /// <summary>
 /// The ambient request tenant of the current async flow — the pipeline-side mirror
-/// of <c>ITenantScopeAccessor</c>. The ambient slot is needed because the pipeline
-/// behaviours are singletons under Mediator's default lifetime (Mediator
-/// resolves <c>IEnumerable&lt;IPipelineBehavior&lt;,&gt;&gt;</c> from the root
-/// container), so a scoped service could never be injected into them.
+/// of <c>ITenantScopeAccessor</c>. A singleton with an async-local slot: the host's
+/// resolver or the worker's task claim writes it, the scoped behaviours read it
+/// across the async flow of one request, so nothing is shared between requests.
 /// </summary>
 public interface IRequestTenantContextAccessor
 {
