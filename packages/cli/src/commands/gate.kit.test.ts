@@ -193,7 +193,7 @@ export async function devEnv(
 export async function oidcEnv(
   dirs: CacheDirs,
   extra: Record<string, string> = {},
-): Promise<Record<string, string>> {
+): Promise<Record<string, string> & { EVIDGATE_CACHE_DIR: string }> {
   return {
     EVIDGATE_API_URL: 'https://api.evidgate.test',
     EVIDGATE_PROJECT: project,
