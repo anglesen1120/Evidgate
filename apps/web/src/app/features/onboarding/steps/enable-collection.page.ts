@@ -60,6 +60,7 @@ import {
   sanitizeLabel,
   sanitizedIdentifier,
 } from './default-policy';
+import { fieldDetails } from './field-details';
 
 /** The revision this page appended for the current intent, and the key it belongs to. */
 interface AppendedRevision {
@@ -183,11 +184,23 @@ export class EnableCollectionPage {
    * of a different read.
    */
   private refocusGeneration: number | null = null;
+  /** Set when this page's own confirm or retry was refused; the render pass takes it and clears it. */
+  private readonly announceConfirmFailure = signal(false);
   private readonly readFailureHeadingRef = viewChild<ElementRef<HTMLElement>>('readFailureHeading');
+  private readonly confirmFailureHeadingRef =
+    viewChild<ElementRef<HTMLElement>>('confirmFailureHeading');
+  private readonly busyStatusRef = viewChild<ElementRef<HTMLElement>>('busyStatus');
   private readonly readAgainRef = viewChild<ElementRef<HTMLButtonElement>>('readAgainControl');
-  /** The shared pattern's title is a sibling of the page's own heading once a read has failed. */
+  /**
+   * Both page-owned failure headings sit above the shared pattern's title, which is therefore one
+   * level below them in every branch that renders a failure.
+   */
   protected readonly failureHeadingLevel = computed<2 | 3 | 4>(() =>
-    this.readFailure() !== null ? 4 : 3,
+    this.failureView() !== null ? 4 : 3,
+  );
+  /** The section's accessible name is the heading of the failure it actually shows. */
+  protected readonly failureHeadingId = computed(() =>
+    this.readFailure() !== null ? 'enable-read-failed-heading' : 'enable-confirm-failed-heading',
   );
   /** Only a failure the contract calls retryable offers the same-intent retry action. */
   protected readonly retryEligible = computed(
@@ -220,7 +233,10 @@ export class EnableCollectionPage {
     return reasons.join(' ');
   });
   protected readonly advisoryMode = computed(() => this.enabled()?.mode === 'advisory');
+  /** The failure the panel renders: a failed read first, then a refused confirm. */
   protected readonly failureView = computed(() => this.readFailure() ?? this.failure());
+  /** The envelope's field rows of whichever failure is on screen (00 §9.2). */
+  protected readonly details = computed(() => fieldDetails(this.failureView()?.details ?? []));
   /**
    * The terminal panel's sentence. Only this page's own confirm can report what changed, and its
    * answer is always the default policy in `advisory` mode; a read-only panel says where it came
@@ -294,6 +310,8 @@ export class EnableCollectionPage {
   private readonly readFailedMessage = $localize`:@@onboarding.enable.read-failed:The activation could not be read. Reading it again is safe.`;
   /** AC-F63-b: the named target a failed re-read returns focus to. */
   protected readonly readFailedHeading = $localize`:@@onboarding.enable.read-failed-heading:The activation could not be read`;
+  protected readonly confirmFailedHeading = $localize`:@@onboarding.enable.confirm-failed-heading:Collection could not be enabled`;
+  protected readonly detailsLabel = $localize`:@@onboarding.enable.details-label:The server refused these values`;
   protected readonly previewHeading = $localize`:@@onboarding.enable.preview-heading:Default advisory policy`;
   protected readonly notGatingCopy = $localize`:@@onboarding.enable.not-gating:Not gating yet. This policy runs in advisory mode, so Evidgate records what it would have decided and never blocks a merge.`;
   protected readonly lateWindowLabel = $localize`:@@onboarding.enable.late-window:Late-evidence window`;
@@ -367,6 +385,16 @@ export class EnableCollectionPage {
       this.refocusGeneration = null;
       target.nativeElement.focus();
     });
+    // The confirm disables itself while the chain runs, so the press cannot keep focus. The busy
+    // line takes the place first (`confirm`), and a refusal then hands it to the page-owned heading
+    // — never to the alert, whose body a focus move would read a second time.
+    effect(() => {
+      if (!this.announceConfirmFailure()) return;
+      const heading = this.confirmFailureHeadingRef()?.nativeElement;
+      if (heading === undefined) return;
+      this.announceConfirmFailure.set(false);
+      heading.focus();
+    });
     this.destroyRef.onDestroy(() => {
       this.readGeneration++;
       this.clearReadWait();
@@ -377,7 +405,9 @@ export class EnableCollectionPage {
   /** The confirm action, once per user intent (guarded by the runner while it runs). */
   protected async confirm(): Promise<void> {
     if (this.confirmDisabled()) return;
+    this.focusBusy();
     await this.activation.run();
+    this.announceFailureIfRefused();
   }
 
   /** An explicit retry of the same intent: same key, same appended revision. */
@@ -388,7 +418,23 @@ export class EnableCollectionPage {
       return;
     }
     if (!this.retryEligible()) return;
+    this.focusBusy();
     await this.activation.retry();
+    this.announceFailureIfRefused();
+  }
+
+  /**
+   * A refused confirm disables the control it was pressed from, so the page hands focus to its own
+   * heading once that renders — the busy line holds the place until then.
+   */
+  private announceFailureIfRefused(): void {
+    if (this.failure() === null) return;
+    this.announceConfirmFailure.set(true);
+  }
+
+  /** Hands the place to the waiting line, which stays mounted while the chain runs. */
+  private focusBusy(): void {
+    this.busyStatusRef()?.nativeElement.focus();
   }
 
   /**

@@ -368,6 +368,35 @@ describe('EnableCollectionPage', () => {
     expect(root.querySelector('[data-testid="enable-collection-enabled"]')).not.toBeNull();
   });
 
+  it('names a refused confirm, announces its field rows once, and takes focus alone', async () => {
+    activatePolicy.mockRejectedValueOnce(
+      failure('validation', 422, { details: [{ path: '/mode', reason: 'invalid_value' }] }),
+    );
+    submit(root);
+    await settle();
+
+    // The section takes its name from whichever page-owned heading this branch rendered.
+    const section = root.querySelector('[data-testid="enable-collection-error"]')!;
+    expect(section.getAttribute('aria-labelledby')).toBe('enable-confirm-failed-heading');
+    const heading = root.querySelector<HTMLElement>('#enable-confirm-failed-heading');
+    expect(heading).not.toBeNull();
+    expect(heading!.tagName).toBe('H3');
+    expect(root.querySelector('#enable-read-failed-heading')).toBeNull();
+    // The press disabled the confirm, so the place goes to that heading — never into an alert.
+    expect(document.activeElement).toBe(heading);
+    expect(heading!.closest('[role="alert"]')).toBeNull();
+
+    // The rows the envelope carried are spoken from one labelled alert, sanitised as text.
+    const details = root.querySelector<HTMLElement>('[data-testid="enable-collection-details"]');
+    expect(details).not.toBeNull();
+    expect(details!.getAttribute('role')).toBe('alert');
+    const label = root.querySelector(`#${details!.getAttribute('aria-labelledby')}`);
+    expect(label?.textContent).toContain('The server refused');
+    expect(details!.textContent).toContain('invalid_value');
+    // The shared pattern's own title is one outline level below the page's heading.
+    expect(root.querySelector('app-error-pattern h4')).not.toBeNull();
+  });
+
   it.each([
     ['conflict', 409],
     ['validation', 422],

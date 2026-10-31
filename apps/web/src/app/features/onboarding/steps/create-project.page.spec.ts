@@ -214,6 +214,61 @@ describe('CreateProjectPage', () => {
     await fixture.whenStable();
   });
 
+  it('links a field refusal to its control, and only while that refusal is shown', async () => {
+    createProject.mockRejectedValueOnce(
+      failure({
+        kind: 'validation',
+        status: 422,
+        message: 'The payload was refused.',
+        details: [{ path: 'name', reason: 'A project with this name already exists.' }],
+      }),
+    );
+    await fill();
+    await submit();
+    await settle();
+    const input = root.querySelector<HTMLInputElement>('[name="name"]')!;
+    const error = root.querySelector('#onboarding-project-name-error')!;
+    expect(error.textContent).toContain('A project with this name already exists.');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')).toContain('onboarding-project-name-error');
+    // The details alert speaks the same sentence; the field's own live region must stay off.
+    expect(error.hasAttribute('aria-live')).toBe(false);
+    const alert = root.querySelector<HTMLElement>('[data-testid="onboarding-project-details"]')!;
+    expect(alert.getAttribute('role')).toBe('alert');
+    const label = alert.getAttribute('aria-labelledby')!;
+    expect(root.querySelector(`#${label}`)?.textContent).toContain('The server refused');
+    // Nothing described may point outside the document once the refusal is replaced.
+    createProject.mockResolvedValueOnce(PROJECT);
+    await submit();
+    await settle();
+    for (const id of (input.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)) {
+      expect(root.querySelector(`#${id}`), `${id} must be rendered`).not.toBeNull();
+    }
+  });
+
+  it('holds focus on the waiting line while the request runs, then on the refusal heading', async () => {
+    let rejectPending: (error: unknown) => void = () => undefined;
+    const pending = new Promise<ProjectDto>((_resolve, reject) => {
+      rejectPending = reject;
+    });
+    createProject.mockImplementationOnce(() => pending);
+    await fill();
+    await submit();
+    expect(document.activeElement).toBe(
+      root.querySelector('[data-testid="onboarding-project-busy"]'),
+    );
+    rejectPending(
+      failure({
+        kind: 'validation',
+        status: 422,
+        details: [{ path: 'slug', reason: 'This slug is taken.' }],
+      }),
+    );
+    await settle();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(root.querySelector('#onboarding-project-failure-heading'));
+  });
+
   it('retains visible disabled mutation controls when permission is missing', async () => {
     permitted.set(false);
     await fixture.whenStable();

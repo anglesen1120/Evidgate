@@ -28,6 +28,7 @@ import { CliQuickstartComponent } from '../health/cli-quickstart.component';
 import { ConnectionHealthComponent } from '../health/connection-health.component';
 import { deriveConnectionHealth, type ConnectionHealth } from '../health/connection-health';
 import { OnboardingStore } from '../onboarding.store';
+import { fieldDetails, reasonFor } from './field-details';
 
 /**
  * The create-binding form's two list fields, named once so the validators, the error copy and
@@ -71,6 +72,14 @@ export class ConnectCiPage {
   private healthBoundaryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly bindingHeading = viewChild<ElementRef<HTMLHeadingElement>>('bindingHeading');
   private readonly tokenHeading = viewChild<ElementRef<HTMLHeadingElement>>('tokenHeading');
+  private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeading');
+  private readonly busyStatusRef = viewChild<ElementRef<HTMLElement>>('busyStatus');
+  /**
+   * Set when a press of this page's own command was refused. The render pass moves focus to the
+   * refusal heading once it exists; a background re-read never sets it, so a refresh that lands on
+   * its own moves nothing.
+   */
+  private readonly announceFailure = signal(false);
   protected readonly busy = signal(false);
   protected readonly refreshing = signal(false);
   protected readonly failure = signal<ApiError | null>(null);
@@ -108,6 +117,19 @@ export class ConnectCiPage {
     const length = [...this.tokenName().trim()].length;
     return length < 1 || length > MAX_TOKEN_NAME_LENGTH;
   });
+  /** The envelope's field rows (00 §9.2) of the refusal on screen, and the reason per control. */
+  protected readonly details = computed(() => fieldDetails(this.failure()?.details ?? []));
+  protected readonly serverRepoIdError = computed(() => reasonFor(this.details(), 'repository_id'));
+  protected readonly serverRepoNameError = computed(() =>
+    reasonFor(this.details(), 'repository_full_name'),
+  );
+  protected readonly serverRefsError = computed(() =>
+    reasonFor(this.details(), 'allowed_ref_patterns'),
+  );
+  protected readonly serverWorkflowsError = computed(() =>
+    reasonFor(this.details(), 'allowed_workflow_refs'),
+  );
+  protected readonly serverTokenNameError = computed(() => reasonFor(this.details(), 'name'));
 
   protected readonly intro = $localize`:@@onboarding.connect.intro:Choose one connection method. Next becomes available only after the server confirms a binding or token.`;
   protected readonly oidcTitle = $localize`:@@onboarding.connect.oidc-title:GitHub Actions (OIDC)`;
@@ -152,6 +174,8 @@ export class ConnectCiPage {
   protected readonly copiedLabel = $localize`:@@onboarding.connect.copied:Value copied.`;
   protected readonly dismissLabel = $localize`:@@onboarding.connect.dismiss:Dismiss secret`;
   protected readonly refreshFailedLabel = $localize`:@@onboarding.connect.refresh-failed:The connection was saved, but progress could not be refreshed. Retry loading metadata; do not create the connection again.`;
+  protected readonly failureHeading = $localize`:@@onboarding.connect.failure-heading:The connection was not saved`;
+  protected readonly detailsLabel = $localize`:@@onboarding.connect.details-label:The server refused these values`;
   protected readonly refreshLabel = $localize`:@@onboarding.connect.refresh:Retry loading metadata`;
   protected readonly pendingLabel = $localize`:@@onboarding.connect.pending:Pending verification`;
   protected readonly activeLabel = $localize`:@@onboarding.connect.active:Active`;
@@ -223,6 +247,15 @@ export class ConnectCiPage {
     // mounted under a router outlet while the session ends, and a timer that fires afterwards would
     // repaint a credential panel for a session that no longer exists.
     const endOfSession = this.session.onSessionEnd(() => this.clearHealthBoundaryTimer());
+    // The refusal heading is the page's own focus target: outside both alerts, so the move neither
+    // repeats an announcement nor leaves the visitor on `<body>` after a disabled press.
+    effect(() => {
+      if (!this.announceFailure()) return;
+      const heading = this.failureHeadingRef()?.nativeElement;
+      if (heading === undefined) return;
+      this.announceFailure.set(false);
+      heading.focus();
+    });
     this.destroyRef.onDestroy(() => {
       this.clearHealthBoundaryTimer();
       endOfSession();
@@ -387,6 +420,11 @@ export class ConnectCiPage {
     } finally {
       this.refreshing.set(false);
     }
+    // A re-read that landed removes the notice — and with it the pressed control, the only stop
+    // this visitor was on. The first panel below the notice takes the place back; a re-read that
+    // failed leaves the notice (and the focus) exactly where it was.
+    if (this.store.refreshFailure() !== null) return;
+    this.bindingHeading()?.nativeElement.focus();
   }
 
   private isCurrent(version: number, orgId: string, projectId: string): boolean {
@@ -404,6 +442,9 @@ export class ConnectCiPage {
     orgId: string,
     projectId: string,
   ): Promise<void> {
+    // Every command disables the control it was pressed from, so the waiting line takes the place
+    // before that happens and holds it until the answer hands it on (a reveal, or a refusal).
+    this.busyStatusRef()?.nativeElement.focus();
     this.busy.set(true);
     this.failure.set(null);
     try {
@@ -412,6 +453,7 @@ export class ConnectCiPage {
       if (!isApiRequestError(error)) throw error;
       if (this.isCurrent(version, orgId, projectId)) {
         this.failure.set(error.error);
+        this.announceFailure.set(true);
         if (error.error.kind === 'timeout' || error.error.kind === 'network') {
           // Reconcile metadata only: the failed response may hide a committed write.
           await this.store.refresh(orgId, projectId);
