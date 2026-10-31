@@ -101,6 +101,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:177",
         ["evidgate.session_cleanup"] = "0048_identity_session_routes.sql:479",
         ["evidgate.healing_switch_set_system"] = "0052_healing_switch.sql:211",
+        ["evidgate.reconcile_overdue_runs"] = "0056_reconcile_missing_result.sql:107",
     };
 
     /// <summary>

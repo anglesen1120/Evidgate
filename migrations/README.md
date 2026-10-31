@@ -139,10 +139,14 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   in its own notes below; and `0055` is the tenant-policy role fix — `tenant_isolation` re-created
   `TO evidgate_app` on `security_event` (`0053`) and on `healing_llm_call`/`healing_llm_budget` (`0054`),
   whose policy was declared without a `TO` clause and therefore applied to PUBLIC, plus the
-  `evidgate_operator` `select` revoked on all three tables (notes at the end of this file); and
-  `0056` is the reconciler's plan-coverage reason — `evidence_revision_missing_check` re-created over
+  `evidgate_operator` `select` revoked on all three tables (notes at the end of this file);
+  and `0056` is the reconciler's plan-coverage reason — `evidence_revision_missing_check` re-created over
   the `0049` list with `missing_result` appended (added `not valid`, then validated), so a planned
-  execution that never produced an attempt can be recorded instead of the revision insert being refused
+  execution that never produced an attempt can be recorded instead of the revision insert being refused —
+  plus the collection-deadline scan `evidgate.reconcile_overdue_runs`, a read-only `security definer`
+  projection of `(org_id, run_id, collection_deadline_at)` for the overdue and still-collectable runs of
+  every tenant, which `evidgate_worker_sched` alone may execute: `public.run` stays ungranted to the sweep
+  role, so a platform sweep can name the runs to reconcile without reading a tenant's row
   (notes at the end of this file);
   the next free number is `0057`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
@@ -764,3 +768,45 @@ through the real runner against a throwaway PostgreSQL 18 container.
   name `missing_result` would refuse those rows under a narrower CHECK, which is why there is no down
   migration.
 
+
+## Notes on the collection-deadline scan (`0056`)
+
+- Why the function exists: a reconcile is enqueued only by the finalize that closes a producer slot,
+  and the attempt itself compares `collection_deadline_at` with the database clock. A run whose last
+  shard never finalizes therefore gets no attempt and stays `collecting` past its deadline, with no
+  outbox row and no platform path that looks at it again. The missing piece is a periodic scan, and the
+  platform sweeps run as `evidgate_worker_sched`, which `0031` grants no privilege on `public.run`
+  (and which has no system GUC to read around row level security). `evidgate.audit_org_ids` (`0015`) is
+  the same shape for the audit walk: the sweep role reaches one owner `security definer` function that
+  projects only the identifiers it needs, and every write it then performs runs in the tenant's own
+  scope as `evidgate_app`.
+- What it exposes: `(org_id, run_id, collection_deadline_at)` for the rows of `public.run` whose
+  `state` is `collecting` and whose `collection_deadline_at` is at or before `now()` — nothing else, no
+  business column, no event, no plan. `running` is excluded on purpose: the reconcile the sweep queues
+  refuses every state but `collecting` (it gates on the state before it reads the deadline), and only a
+  finalize moves `running -> collecting`, so a queued attempt for a `running` run could never do
+  anything while its key — one per run — would mark that run's deadline attempt as spent. The run this
+  sweep exists for is the one whose shard never finalizes, and that run is stuck in `collecting`.
+  Four properties are part of the contract:
+  the deadline is compared by the database (a caller cannot widen the window, and the clock is the one
+  the triggered attempt will use); the scan is keyset-paged on `(org_id, id)`, ordered on the primary
+  key's tenant prefix then the id, so a page boundary can neither repeat nor skip a run whatever else
+  commits meanwhile; the row limit is clamped inside the body (`1..1000`, default `100`), so a caller
+  cannot ask for the whole table; and the body is `stable`, one snapshot per call. `set search_path = ''`
+  and a schema-qualified relation keep the definer body immune to a caller's `search_path`.
+- Grants: `security definer` on `evidgate_owner` (the posture of every sweep helper — the owner is the
+  only role with a policy-free view, and `scripts/check-rls.py` audits the body), `public` revoked,
+  `EXECUTE` granted to `evidgate_worker_sched` alone. `evidgate_app` and `evidgate_operator` cannot call
+  it; their path to a run is the tenant routes. The function is read-only, so it is exempt from the
+  role-scoped-policy and operator-gate rules the same lint applies to a table: it takes no lock on
+  `public.run` beyond the reader's and writes nothing.
+- How `check-rls` reads it: the new entry in `DEFINER_AUDIT_EXEMPT` names this function and the reason
+  its unqualified body reference is not a finding (the relation is `public.`-qualified and the function
+  names no `join`/`update` target at all); `tests/Isolation.Tests/Rls/ResolverTests.cs` pins the same
+  decision in its owner-definer allow-list, so deleting either the function or its grant turns the
+  other list into a finding rather than a silent pass.
+- Deployment: migrate before app. Nothing existing calls the function — it is inert until the Worker
+  that scans is rolled out — and the statements are catalog writes on a function no other session has
+  executed yet, so `lock_timeout = '5s'` is the only contended wait. `create or replace` + repeatable
+  `revoke`/`grant`, so a re-run is a no-op in substance, and there is no down migration: dropping the
+  function would make the sweep fail loudly instead of silently skipping every run.

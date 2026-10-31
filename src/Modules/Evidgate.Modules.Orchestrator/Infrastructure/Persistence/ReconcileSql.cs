@@ -150,6 +150,13 @@ internal static class ReconcileSql
     /// <c>(org_id, run_id)</c> and each probe is the <c>case_attempt_run_execution_attempt_key</c> prefix
     /// <c>(org_id, run_id, execution_key)</c>. Both tables are FORCE RLS with an app-role tenant policy and the
     /// predicates carry <c>org_id</c> explicitly, so neither side can answer for another tenant.
+    /// <para>
+    /// The read is unordered: the comparer sorts its reasons totally (producer, code, detail), so an <c>order by</c>
+    /// here would repeat that work. A resolver-written <c>blocked</c> dependant row counts as covered — it reports a
+    /// status — while its shard's <c>setup_error</c> comes from the failing producer's own event; nothing calls
+    /// <c>IBlockedAttemptResolver</c> today, and whoever wires it in must also count those rows toward
+    /// <c>setup_error</c>.
+    /// </para>
     /// </summary>
     internal const string ListUncoveredExecutions = """
         select pe.execution_key as execution_key,
@@ -161,6 +168,5 @@ internal static class ReconcileSql
                  from public.case_attempt ca
                 where ca.org_id = @org_id and ca.run_id = @run_id
                   and ca.execution_key = pe.execution_key)
-         order by pe.shard_id, pe.execution_key
         """;
 }

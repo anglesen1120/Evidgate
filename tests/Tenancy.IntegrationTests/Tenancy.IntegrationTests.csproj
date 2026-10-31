@@ -16,6 +16,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <!-- 02.1.1-T2: the registry routes run through the real Api composition. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- The collection-deadline sweep drives the real schedule runner at a controlled instant. -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
   <ItemGroup>
     <!-- The suite bootstraps as superuser and applies the real migrations through the

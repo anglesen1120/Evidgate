@@ -41,6 +41,43 @@ public static class RunReconcileContract
         string.Create(CultureInfo.InvariantCulture, $"orchestrator:run:{runId:D}:reconcile:{producerId}");
 
     /// <summary>
+    /// The producer id the collection-deadline trigger writes in its payload: a sweep names no shard,
+    /// so the reconciler reads no declaration (the deadline path never compares a shard's high-water
+    /// mark).
+    /// </summary>
+    public const string DeadlineProducerId = "deadline";
+
+    /// <summary>
+    /// The outbox idempotency key of the collection-deadline trigger:
+    /// <c>orchestrator:run:{run}:reconcile:deadline</c>.
+    /// <para>
+    /// One key per run, not per fire: a run's collection deadline is fixed when the run is created, so
+    /// every sweep that finds the same run overdue writes the same key and <c>outbox_org_idem_uq</c>
+    /// keeps two sweeps from queueing two attempts. A second attempt after the deadline could only
+    /// conclude what the first one did.
+    /// </para>
+    /// </summary>
+    /// <param name="runId">The run the sweep found past its collection deadline.</param>
+    public static string DeadlineIdempotencyKey(Guid runId) =>
+        string.Create(CultureInfo.InvariantCulture, $"orchestrator:run:{runId:D}:reconcile:{DeadlineProducerId}");
+
+    /// <summary>
+    /// The payload of the collection-deadline trigger: the run and the two declaration fields a payload
+    /// of this type always carries, at zero, which the deadline path ignores.
+    /// </summary>
+    /// <param name="runId">The run the sweep found past its collection deadline.</param>
+    public static string DeadlinePayloadJson(Guid runId) =>
+        PayloadJson(runId, DeadlineProducerId, declaredLastSequence: 0, declaredCount: 0);
+
+    /// <summary>
+    /// The task type (and schedule name) of the collection deadline sweep: a platform task that scans
+    /// every tenant's overdue runs and enqueues one <see cref="OutboxTaskType"/> row per run. It is a
+    /// separate type from the trigger it produces, so an unregistered handler parks the sweep without
+    /// touching the finalize path.
+    /// </summary>
+    public const string DeadlineSweepTaskType = "orchestrator.run.reconcile.deadline";
+
+    /// <summary>
     /// The payload of one reconcile trigger as JSON: the run, the shard and the values that shard declared
     /// at its close (T68), which is what the reconciler compares against the acknowledged events.
     /// </summary>
