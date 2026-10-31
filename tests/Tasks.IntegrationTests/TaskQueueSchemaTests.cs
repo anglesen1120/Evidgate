@@ -5,11 +5,11 @@ using Xunit;
 namespace Tasks.IntegrationTests;
 
 /// <summary>
-/// 01.5.1 §3/§4 and §8 (00 §5.4.3 least privilege): the shape of `task` — a
-/// mechanism table, so no row level security policy at all — the seven indexes the
-/// claim, the lease reclaim, the scheduler, the operator list and the retention
-/// sweep are built on, and the grants that keep `evidgate_operator` and the sweep
-/// role out of it.
+/// The shape of `task` — a mechanism table, so no row level security policy at
+/// all — the exact index set the claim, the lease reclaim, the scheduler, the
+/// operator list, the retention sweep and the evidence freeze's parse anti-join
+/// are built on, and the grants that keep `evidgate_operator` and the sweep role
+/// out of it.
 /// </summary>
 [Collection(TasksSuite.Name)]
 [Trait("Category", "Docker")]
@@ -59,6 +59,7 @@ public sealed class TaskQueueSchemaTests
             "task_dead_idx",
             "task_fire_uq",
             "task_idem_uq",
+            "task_parse_artifact_idx",
             "task_pkey",
             "task_terminal_idx",
         ]);
