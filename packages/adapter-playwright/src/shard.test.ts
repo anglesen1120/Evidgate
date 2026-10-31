@@ -195,7 +195,7 @@ describe('AC1: two shards are two producers with independent contiguous sequence
         reporter.onTestBegin(test, fakeResult());
         reporter.onTestEnd(test, fakeResult());
       }
-      reporter.onEnd(fullResult());
+      void reporter.onEnd(fullResult());
     }
 
     expect(readdirSync(join(spool, runId)).sort()).toEqual(['shard-1', 'shard-2']);
@@ -241,7 +241,7 @@ describe('AC1: two shards are two producers with independent contiguous sequence
     reporter.onBegin(fullConfig(null), suiteOf([fakeTest(0)]));
     reporter.onTestBegin(fakeTest(0), fakeResult());
     reporter.onTestEnd(fakeTest(0), fakeResult());
-    reporter.onEnd(fullResult());
+    void reporter.onEnd(fullResult());
 
     const record = readShardsRecord(spool, 'run-unsharded', 'shard-1');
     expect(record).toMatchObject({ producer_id: 'shard-1', shard_index: 1 });
@@ -259,7 +259,7 @@ describe('AC1: two shards are two producers with independent contiguous sequence
     reporter.onBegin(fullConfig({ total: 3, current: 2 }), suiteOf([fakeTest(0)]));
     reporter.onTestBegin(fakeTest(0), fakeResult());
     reporter.onTestEnd(fakeTest(0), fakeResult());
-    reporter.onEnd(fullResult());
+    void reporter.onEnd(fullResult());
 
     expect(readdirSync(join(spool, 'run-explicit-match'))).toEqual(['shard-2']);
     expect(readShardsRecord(spool, 'run-explicit-match', 'shard-2')).toMatchObject({
@@ -304,7 +304,7 @@ describe('AC1: two shards are two producers with independent contiguous sequence
     reporter.onBegin(fullConfig(null), suiteOf([fakeTest(0)]));
     reporter.onTestBegin(fakeTest(0), fakeResult());
     reporter.onTestEnd(fakeTest(0), fakeResult());
-    reporter.onEnd(fullResult());
+    void reporter.onEnd(fullResult());
 
     expect(readdirSync(join(spool, 'run-legacy'))).toEqual(['pw-legacy-0']);
     const record = readShardsRecord(spool, 'run-legacy', 'pw-legacy-0');

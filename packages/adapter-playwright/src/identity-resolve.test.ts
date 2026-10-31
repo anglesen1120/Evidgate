@@ -431,7 +431,7 @@ describe('reporter identity wiring', () => {
       test,
       fakeResult({ steps: [{ title: 'step', category: 'test.step', duration: 2, steps: [] }] }),
     );
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const envelopes = readEnvelopes(spool);
     for (const type of ['test.started', 'test.finished', 'test.step']) {
@@ -459,7 +459,7 @@ describe('reporter identity wiring', () => {
       }),
       fakeResult(),
     );
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const duplicates = warningsOf(readEnvelopes(spool)).filter(
       (warning) => warning.code === 'duplicate_case_id',
@@ -526,7 +526,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ annotations: [{ type: 'evidgate.id', description: CASE_A }] });
     reporter.onBegin();
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
     const envelopes = readEnvelopes(spool);
     expect(envelopes.find((item) => item.type === 'test.started')?.ext.target_env).toBe('chromium');
     expect(
@@ -540,7 +540,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ annotations: [{ type: 'evidgate.id', description: CASE_A }] });
     reporter.onBegin();
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
     const envelopes = readEnvelopes(spool);
     expect(envelopes.find((item) => item.type === 'test.started')?.ext.target_env).toBe(
       'staging-eu',
@@ -559,7 +559,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ id: 't1', file: join(dir, 'a.spec.ts') });
     reporter.onBegin(undefined, fakeSuite([test]));
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
     expect(started?.ext.case_id).toBe(CASE_B);
@@ -577,7 +577,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ id: 't1', file: join(dir, 'a.spec.ts') });
     reporter.onBegin(undefined, fakeSuite([test]));
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
     expect(started?.ext.case_id).toBe(CASE_B);
@@ -588,7 +588,7 @@ describe('reporter identity wiring', () => {
     const { reporter, spool } = makeReporter();
     const test = fakeTest({ id: 't1', file: join(dir, 'a.spec.ts') });
     reporter.onBegin(undefined, fakeSuite([test]));
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const envelopes = readEnvelopes(spool);
     expect(envelopes[0]?.ext.capability).toBeDefined();
@@ -604,7 +604,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ annotations: [{ type: 'evidgate.id', description: CASE_A }] });
     reporter.onBegin();
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
     expect(started?.execution_key).toBe(resolved);
@@ -625,7 +625,7 @@ describe('reporter identity wiring', () => {
         fakeResult(),
       );
     }
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const warnings = warningsOf(readEnvelopes(spool));
     expect(warnings.filter((warning) => warning.code === 'duplicate_case_id')).toHaveLength(
@@ -657,7 +657,7 @@ describe('reporter identity wiring', () => {
       reporter.onTestBegin(test, fakeResult());
       reporter.onTestEnd(test, fakeResult());
     }
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const envelopes = readEnvelopes(spool);
     expect(envelopes.length).toBeGreaterThan(0);
@@ -728,7 +728,7 @@ describe('reporter identity wiring', () => {
       fakeTest({ id: 'unmapped', file: 'tests/unmapped.spec.ts' }),
       fakeResult(),
     );
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const warnings = warningsOf(readEnvelopes(spool));
     expect(warnings.filter((warning) => warning.code === 'duplicate_case_id')).toHaveLength(
@@ -750,7 +750,7 @@ describe('reporter identity wiring', () => {
     const { reporter, spool } = makeReporter();
     const test = fakeTest({ id: 't1', file: join(dir, 'a.spec.ts') });
     reporter.onBegin(undefined, fakeSuite([test]));
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const truncated = warningsOf(readEnvelopes(spool)).find(
       (warning) => warning.code === 'warnings_truncated',
@@ -818,7 +818,7 @@ describe('reporter identity wiring', () => {
     ];
     reporter.onBegin();
     for (const test of tests) reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const invalid = warningsOf(readEnvelopes(spool)).filter(
       (warning) => warning.code === 'invalid_target_env',

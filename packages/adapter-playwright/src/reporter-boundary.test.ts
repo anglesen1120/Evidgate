@@ -61,7 +61,7 @@ describe('reporter option and env boundaries', () => {
       engineVersion: '1.63.0',
     });
     reporter.onBegin();
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     expect(existsSync(join(spool, 'opt-root', 'opt-run', 'pw-0', '000001.jsonl'))).toBe(true);
     expect(existsSync(join(spool, 'env-root'))).toBe(false);
@@ -74,7 +74,7 @@ describe('reporter option and env boundaries', () => {
 
     const reporter = new EvidgateReporter({ producer_id: 'pw-0', engineVersion: '1.63.0' });
     reporter.onBegin();
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     expect(existsSync(join(spool, 'env-run', 'pw-0', '000001.jsonl'))).toBe(true);
   });
@@ -92,7 +92,7 @@ describe('reporter option and env boundaries', () => {
       engineVersion: '1.63.0',
     });
     reporter.onBegin();
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     expect(existsSync(join(spool, 'run-1', 'shard-1', '000001.jsonl'))).toBe(true);
     expect(existsSync(join(spool, 'run-1', 'from-env'))).toBe(false);

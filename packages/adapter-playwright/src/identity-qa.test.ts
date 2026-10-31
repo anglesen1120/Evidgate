@@ -186,7 +186,7 @@ describe('independent identity QA', () => {
       });
       reporter.onBegin();
       reporter.onTestBegin(testCase('env'), { retry: 0 } as TestResult);
-      reporter.onEnd(fullResult);
+      void reporter.onEnd(fullResult);
       const events = envelopes(spool);
       expect(events.find((event) => event.type === 'test.started')?.ext.target_env).toBe(
         'chromium',

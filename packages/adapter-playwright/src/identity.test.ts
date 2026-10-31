@@ -76,7 +76,7 @@ describe('execution_key identity', () => {
     const { reporter, spool } = makeReporter();
     reporter.onBegin();
     reporter.onTestBegin(fakeTest(), fakeResult());
-    reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+    void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
 
     for (const envelope of readEnvelopes(spool)) {
       expect(envelope.execution_key).toBe(PLACEHOLDER_EXECUTION_KEY);
@@ -90,7 +90,7 @@ describe('execution_key identity', () => {
     reporter.onBegin();
     reporter.onTestBegin(fakeTest(), fakeResult());
     reporter.onTestEnd(fakeTest(), fakeResult());
-    reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+    void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
 
     const envelopes = readEnvelopes(spool);
     for (const envelope of envelopes.filter((item) => item.type !== 'run.log')) {
@@ -113,7 +113,7 @@ describe('execution_key identity', () => {
     reporter.onBegin();
     reporter.onTestBegin(annotated, fakeResult());
     reporter.onTestEnd(annotated, fakeResult());
-    reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+    void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
 
     const finished = readEnvelopes(spool).find((item) => item.type === 'test.finished');
     expect(finished?.ext.case_id).toBe('11111111-1111-1111-1111-111111111111');

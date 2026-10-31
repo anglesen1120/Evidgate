@@ -46,7 +46,7 @@ describe('unicode titles', () => {
     });
     reporter.onBegin();
     reporter.onTestBegin(fakeTest(title), fakeResult());
-    reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+    void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
 
     const dir = join(spool, 'run-1', 'pw-0');
     const raw = readdirSync(dir)

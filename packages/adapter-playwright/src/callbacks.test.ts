@@ -99,7 +99,7 @@ describe('callback → envelope fidelity', () => {
       reporter.onTestBegin(test, fakeResult());
       reporter.onTestEnd(test, fakeResult());
     }
-    reporter.onEnd(fullResult('passed'));
+    void reporter.onEnd(fullResult('passed'));
 
     const envelopes = readEnvelopes(spool);
     expect(envelopes.filter((item) => item.type === 'test.started')).toHaveLength(3);
@@ -123,7 +123,7 @@ describe('callback → envelope fidelity', () => {
     const { reporter, spool } = makeReporter();
     reporter.onBegin();
     reporter.onTestBegin(fakeTest(), fakeResult({ status: 'passed', duration: 99 }));
-    reporter.onEnd(fullResult('passed'));
+    void reporter.onEnd(fullResult('passed'));
 
     const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
     expect(started).toBeDefined();
@@ -135,7 +135,7 @@ describe('callback → envelope fidelity', () => {
     const { reporter, spool } = makeReporter();
     reporter.onBegin();
     reporter.onTestEnd(fakeTest(), fakeResult({ status: 'timedOut', duration: 4321 }));
-    reporter.onEnd(fullResult('failed'));
+    void reporter.onEnd(fullResult('failed'));
 
     const finished = readEnvelopes(spool).find((item) => item.type === 'test.finished');
     expect(finished?.status).toBe('timedOut');
@@ -145,7 +145,7 @@ describe('callback → envelope fidelity', () => {
   it('AC2: onBegin/onEnd emit run.log markers only', () => {
     const { reporter, spool } = makeReporter();
     reporter.onBegin();
-    reporter.onEnd(fullResult('failed'));
+    void reporter.onEnd(fullResult('failed'));
 
     const envelopes = readEnvelopes(spool);
     expect(envelopes.map((item) => item.type)).toEqual(['run.log', 'run.log', 'run.log']);
@@ -161,7 +161,7 @@ describe('callback → envelope fidelity', () => {
     reporter.onBegin();
     reporter.onTestBegin(fakeTest(), fakeResult({ retry: 2 }));
     reporter.onTestEnd(fakeTest(), fakeResult({ retry: 2 }));
-    reporter.onEnd(fullResult('passed'));
+    void reporter.onEnd(fullResult('passed'));
 
     const attempts = readEnvelopes(spool)
       .filter((item) => item.type !== 'run.log')
@@ -183,7 +183,7 @@ describe('callback → envelope fidelity', () => {
       fakeTest(),
       fakeResult({ steps: [fakeStep({ title: 'first', category: 'test.step' }), nested] }),
     );
-    reporter.onEnd(fullResult('passed'));
+    void reporter.onEnd(fullResult('passed'));
 
     const steps = readEnvelopes(spool).filter((item) => item.type === 'test.step');
     expect(steps.map((item) => item.ext.title)).toEqual(['first', 'outer', 'inner']);
@@ -195,7 +195,7 @@ describe('callback → envelope fidelity', () => {
     reporter.onBegin();
     reporter.onTestBegin(fakeTest(), fakeResult());
     reporter.onTestEnd(fakeTest(), fakeResult({ steps: [fakeStep()] }));
-    reporter.onEnd(fullResult('passed'));
+    void reporter.onEnd(fullResult('passed'));
 
     const envelopes = readEnvelopes(spool);
     expect(envelopes.filter((item) => item.type === 'test.step')).toHaveLength(0);
@@ -206,7 +206,7 @@ describe('callback → envelope fidelity', () => {
   it('AC6: supports.step_events follows the steps option', () => {
     const { reporter, spool } = makeReporter({ steps: false });
     reporter.onBegin();
-    reporter.onEnd(fullResult('passed'));
+    void reporter.onEnd(fullResult('passed'));
 
     const carrier = readEnvelopes(spool)[0];
     // The capability carrier is our own document; read the flag through a narrow shape.

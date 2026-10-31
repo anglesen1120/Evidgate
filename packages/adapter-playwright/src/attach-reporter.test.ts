@@ -437,7 +437,7 @@ describe('attachments through the reporter (04.3.3-T2.2)', () => {
     const test = fakeTest('after a floor-ahead record', 4);
     const result = fakeResult([]);
     reporter.onTestEnd(test, result);
-    reporter.onEnd(fullResult());
+    void reporter.onEnd(fullResult());
 
     const notices = envelopesOf(spool).filter((item) => warnOf(item).code === 'shards_floor_ahead');
     expect(notices).toHaveLength(1);
