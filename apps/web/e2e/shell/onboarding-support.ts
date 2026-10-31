@@ -85,6 +85,10 @@ export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
   'onboarding-enabled': 5,
 };
 
+// A wizard that has not finished steps 1-4 cannot have been activated, so those seeds pin the contract's
+// 404; the un-toggled answer is an activated project, which would complete step 5 ahead of steps 1-4.
+const NOT_ACTIVATED = activationReadToggle('not-found');
+
 /**
  * The toggles one seed needs. Every operation the wizard reads is pinned by the seed that makes it
  * decisive. `onboarding-token` (09.2.1-T2) is the one seed whose ingest-token page carries a token
@@ -99,10 +103,6 @@ export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
  * one-shot reveal and its clearing on navigation, and `onboarding-token` proves the resume: the
  * panel re-rendered from server metadata only, with Next enabled because `done[2]` already holds.
  */
-// A wizard that has not finished steps 1-4 cannot have been activated, so those seeds pin the contract's
-// 404; the un-toggled answer is an activated project, which would complete step 5 ahead of steps 1-4.
-const NOT_ACTIVATED = activationReadToggle('not-found');
-
 const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
   'onboarding-empty': [
     'fixture.variant.listProjects=onboarding-empty',
@@ -319,13 +319,14 @@ export function credentialListRefusalUrl(
 }
 
 /**
- * The wizard address carrying the wizard's grants and nothing else.
+ * The wizard address carrying the wizard's grants and the activation 404 pin, no seed.
  *
  * Grants are *session* state: every boot re-reads `listPermissions`, and the default catalogue page
  * holds no `project:*` code, so the onboarding route's own permission guard would refuse a reload
  * that dropped the grant toggle. A seed is *wizard* state, so a re-opened wizard carries the grants
  * and no seed at all: the step has to come from the resources the server reports. The activation
- * read stays pinned to its 404 so step 5 is not reported done ahead of the step the wizard resumed on.
+ * read stays pinned to its 404 so step 5 is not reported done ahead of the step the wizard resumed
+ * on.
  */
 export function grantsOnlyUrl(locale: ShellLocale, projectId: string | null = null): string {
   return withVariant(onboardingPath(locale, projectId), `?${WIZARD_GRANTS}&${NOT_ACTIVATED}`);
