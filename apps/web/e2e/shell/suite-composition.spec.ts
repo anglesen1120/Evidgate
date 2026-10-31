@@ -1,10 +1,12 @@
 // The suite composition screen on the real fixtures build: one pinned revision read, its matrix,
-// strategy and dependency list, the published revision's read-only notice, and the states the read
-// can answer with (empty, 404, 403, 503). Every address here is the review one, because `suites` is
-// a phase-G4 entry whose product deep link does not match in this build.
+// strategy and dependency list, the published revision's read-only notice, the oversized revision
+// no matrix can draw, and the states the read can answer with (empty, 404, 403, 503). Every address
+// here is the review one, because `suites` is a phase-G4 entry whose product deep link does not
+// match in this build.
 import { expect, test, type Page } from '@playwright/test';
 import draftFixture from '../../../../fixtures/web-api/suite-revision/input.json';
 import emptyFixture from '../../../../fixtures/web-api/suite-revision-empty/input.json';
+import largeFixture from '../../../../fixtures/web-api/suite-revision-large/input.json';
 import publishedFixture from '../../../../fixtures/web-api/suite-revision-published/input.json';
 import {
   activeElement,
@@ -25,6 +27,10 @@ const SUITE_READ_GRANT = '?fixture.variant.listPermissions=settings-policy-reado
 const DRAFT = draftFixture.body;
 const PUBLISHED = publishedFixture.body;
 const EMPTY = emptyFixture.body;
+const LARGE = largeFixture.body;
+
+/** The rows one `Show more` press appends; mirrors `LIST_CHUNK` in `suite-composition.model.ts`. */
+const LIST_CHUNK = 200;
 
 /** The review address one revision hangs off (see `dev-routes.fixtures.ts`). */
 const REVISIONS = [
@@ -106,6 +112,8 @@ for (const locale of LOCALES) {
         'button, [role="button"], input, select, textarea, [contenteditable]:not([contenteditable="false"])',
       ),
     ).toHaveCount(0);
+    // The read-only notice is the one block only this revision renders, so the scan covers it.
+    await expectNoA11yViolations(page, `suite composition published ${locale}`);
   });
 
   test(`a revision with no member renders its own empty state (${locale})`, async ({ page }) => {
@@ -119,6 +127,7 @@ for (const locale of LOCALES) {
     await expect(page.locator(STRATEGY)).toBeVisible();
     await expect(page.getByTestId('suite-warnings-items')).toHaveCount(0);
     await expect(page.getByTestId('suite-published-notice')).toHaveCount(0);
+    await expectNoA11yViolations(page, `suite composition empty ${locale}`);
   });
 
   test(`refused, missing and unavailable revisions render their own states (${locale})`, async ({
@@ -136,6 +145,61 @@ for (const locale of LOCALES) {
       await expect(page.locator(MATRIX)).toHaveCount(0);
       await expect(page.locator(STRATEGY)).toHaveCount(0);
       await expect(page.locator(WARNINGS_UNAVAILABLE)).toHaveCount(0);
+      // Each refusal renders a heading plus one status line and nothing else, so a scan per state
+      // covers the pattern rather than one state standing in for the other two.
+      await expectNoA11yViolations(page, `suite composition ${state.status} ${locale}`);
+    }
+  });
+
+  test(`an oversized revision renders flat, pages its members and keeps focus (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(revisionPath(locale, 'large', LARGE.id));
+    await composition(page, 'ready');
+    // `suite-revision-large` holds more cells than `MATRIX_CELL_LIMIT`, so the matrix must not be
+    // in the document at all: this is what fails the case if the page ever draws a matrix instead.
+    await expect(page.locator(MATRIX)).toHaveCount(0);
+    await expect(page.getByTestId('suite-flat-note')).toBeVisible();
+    const flat = page.getByTestId('suite-members-flat');
+    const rows = flat.locator('tbody tr');
+    const shown = page.getByTestId('suite-members-shown');
+    await expect(flat).toBeVisible();
+    await expect(flat.locator('thead th')).toHaveCount(5);
+    await expect(rows).toHaveCount(LIST_CHUNK);
+    // The two numbers are the only part of the count sentence both locales carry, so they are what
+    // this case reads; the sentence itself is pinned by the component spec and the i18n gate.
+    await expect(shown).toContainText(new RegExp(`\\b${LIST_CHUNK}\\b`));
+    await expect(shown).toContainText(new RegExp(`\\b${LARGE.members.length}\\b`));
+    await expectNoA11yViolations(page, `suite composition flat ${locale}`);
+
+    const more = page.getByTestId('suite-members-more');
+    await more.click();
+    // One press appends a whole chunk, so the page grows to every served member and the control
+    // stays mounted (it is the focus a keyboard user just spent).
+    await expect(rows).toHaveCount(LARGE.members.length);
+    await expect(shown).toContainText(new RegExp(`\\b${LARGE.members.length}\\b`));
+    await expect(more).toBeFocused();
+    // The focused element is the pressed control, never the heading the route focused on load; the
+    // test id is locale-free, unlike the control's label.
+    expect(
+      await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? ''),
+    ).toBe('suite-members-more');
+    await expect(more).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  test(`Enter and Space activate Show more in the real browser (${locale})`, async ({ page }) => {
+    const rows = page.getByTestId('suite-members-flat').locator('tbody tr');
+    const more = page.getByTestId('suite-members-more');
+    // jsdom runs no default action for a key press, so the component spec can only prove the page
+    // leaves both keys alone; this case is where the browser's own activation is observed.
+    for (const key of ['Enter', 'Space']) {
+      await page.goto(revisionPath(locale, 'large', LARGE.id));
+      await composition(page, 'ready');
+      await expect(rows).toHaveCount(LIST_CHUNK);
+      await more.focus();
+      await page.keyboard.press(key);
+      await expect(rows, `${key} pages the member list`).toHaveCount(LARGE.members.length);
+      await expect(more, `${key} leaves focus on the control`).toBeFocused();
     }
   });
 

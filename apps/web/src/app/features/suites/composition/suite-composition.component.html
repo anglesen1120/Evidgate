@@ -72,6 +72,13 @@
     </section>
     <section class="panel" aria-labelledby="suite-matrix-heading">
       <h2 id="suite-matrix-heading">{{ copy.matrix }}</h2>
+      @if (view.layout === 'matrix' && view.duplicateMembers > 0) {
+        <!-- Only the matrix collapses a repeated cell; the flat table lists every served member,
+             so this note would claim a row is hidden when it is on screen. -->
+        <p class="notice" data-testid="suite-duplicate-members">
+          {{ copy.duplicateMembers(view.duplicateMembers) }}
+        </p>
+      }
       @if (view.rows.length === 0) {
         <p data-testid="suite-matrix-empty">{{ copy.emptyTitle }}</p>
         <p>{{ copy.emptyBody }}</p>

@@ -147,6 +147,7 @@ import runsListOnboardingRun from '../../../../../../fixtures/web-api/runs-list-
 import suiteRevision from '../../../../../../fixtures/web-api/suite-revision/input.json';
 import suiteRevisionEmpty from '../../../../../../fixtures/web-api/suite-revision-empty/input.json';
 import suiteRevisionForbidden from '../../../../../../fixtures/web-api/suite-revision-forbidden/input.json';
+import suiteRevisionLarge from '../../../../../../fixtures/web-api/suite-revision-large/input.json';
 import suiteRevisionNotFound from '../../../../../../fixtures/web-api/suite-revision-not-found/input.json';
 import suiteRevisionPublished from '../../../../../../fixtures/web-api/suite-revision-published/input.json';
 import suiteRevisionUnavailable from '../../../../../../fixtures/web-api/suite-revision-unavailable/input.json';
@@ -621,12 +622,15 @@ export interface FixtureCatalogRow {
  * than `403`, so step 5 does not mount under it).
  * Its `X-Request-Id` (`…a10e`) is distinct again, and the body names the same id.
  *
- * The six `suite-revision*` rows answer the pinned revision read (`getSuiteRevision`,
+ * The seven `suite-revision*` rows answer the pinned revision read (`getSuiteRevision`,
  * `GET /v1/suite-revisions/{r}`) the composition screen mounts: `ok` is a draft whose shard
  * strategy is `count`, `published` is the immutable revision (status and the read-only notice come
  * from the body, not from a client guess), `empty` is a revision with no member, `revision-not-found`
  * and `revision-forbidden` are the two refusals the screen renders as its own states, and
- * `revision-unavailable` is the `503` with a `Retry-After`. Every 2xx document carries the wire
+ * `revision-unavailable` is the `503` with a `Retry-After`. `large` is the one revision no matrix can
+ * draw — 64 case revisions over 45 variants is 2880 cells, past `MATRIX_CELL_LIMIT` — so it is also
+ * the only row that opens the flat table and its `Show more` control (288 members, one chunk of 200
+ * first). Every 2xx document carries the wire
  * members and none of them a warnings member, because the read has none to send.
  */
 export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
@@ -823,6 +827,7 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   { name: 'suite-revision', document: suiteRevision },
   { name: 'suite-revision-empty', document: suiteRevisionEmpty },
   { name: 'suite-revision-forbidden', document: suiteRevisionForbidden },
+  { name: 'suite-revision-large', document: suiteRevisionLarge },
   { name: 'suite-revision-not-found', document: suiteRevisionNotFound },
   { name: 'suite-revision-published', document: suiteRevisionPublished },
   { name: 'suite-revision-unavailable', document: suiteRevisionUnavailable },

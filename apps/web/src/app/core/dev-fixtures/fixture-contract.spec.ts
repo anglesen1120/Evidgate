@@ -846,6 +846,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       'suite-revision',
       'suite-revision-published',
       'suite-revision-empty',
+      'suite-revision-large',
       'suite-revision-not-found',
       'suite-revision-forbidden',
       'suite-revision-unavailable',
@@ -887,6 +888,19 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(isRecord(draft) && draft['status'] === 'draft').toBe(true);
     const empty = corpusDocument('suite-revision-empty').body;
     expect(isRecord(empty) && (empty['members'] as readonly unknown[]).length).toBe(0);
+    // The oversized row exists for one reason: its case revisions × variants product is past the
+    // 2500 cells a matrix may draw, so the browser case proves the flat table took over. A corpus
+    // trimmed below that would leave the case asserting a layout the fixture no longer forces.
+    const large = corpusDocument('suite-revision-large').body;
+    const cells = (body: unknown): number => {
+      if (!isRecord(body)) return 0;
+      const members = body['members'] as readonly Record<string, unknown>[];
+      return (
+        new Set(members.map((member) => member['case_revision_id'])).size *
+        new Set(members.map((member) => member['variant_hash'])).size
+      );
+    };
+    expect(cells(large)).toBeGreaterThan(2500);
   });
   for (const fixture of CORPUS) {
     it(`validates fixtures/web-api/${fixture.name} against contracts/openapi.yaml`, () => {
