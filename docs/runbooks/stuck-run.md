@@ -19,7 +19,7 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 **Prerequisites.**
 
 - A checkout of the release tag this incident is about (every cite here is a line in that tree).
-- A database session for each role named in the queries below, obtained the way [environments](environments.md) describes for the environment you are in. A read-only session is enough for everything in this runbook.
+- A database session as `evidgate_app`, obtained the way [environments](environments.md) describes for the environment you are in; a read-only session is enough for everything here except the cross-tenant scan in §3.2, which needs a platform/DBA-owned read session (§3.2).
 - The `org_id` and `run_id` you are investigating (both UUIDs; never paste a customer name, URL or repository name into a ticket).
 - Nothing else. In particular you do **not** need the API, the CLI, or an operator credential for the detection half.
 
@@ -28,13 +28,13 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 | Role | What it can read here | Use it for |
 |---|---|---|
 | `evidgate_app` | the rows of **one** org, once `evidgate.org_id` is set in the transaction (§3.1); `public.task` and `public.outbox` are mechanism tables with no tenant policy, so an app-role read of those spans every org (`migrations/0008_platform_task_queue.sql:82-87`, `migrations/0006_platform_outbox.sql:14`) | the per-tenant queries, and every sweep/queue inspection |
-| `evidgate_owner` | **every** org's rows, through the permissive `run_owner_backfill` policy (`migrations/0031_orchestration_run.sql:161-163`) | the cross-tenant detection query (§3.2) |
+| `evidgate_owner` | **every** org's rows, through the permissive `run_owner_backfill` policy (`migrations/0031_orchestration_run.sql:161-163`) | nothing you hold: it is a migration/administration credential, not an on-call one ([dead-letter runbook](dead-letter.md) §3.1). §3.2's cross-tenant scan needs a platform/DBA-owned break-glass read session — ⚠️ until the 02.8.1 grant-gated reader exists |
 | `evidgate_operator` | the `run` and `evidence_revision` **grants** exist (`migrations/0031_orchestration_run.sql:167`, `migrations/0049_orchestration_evidence_revision.sql:164`) but no operator policy does, so an operator session reads **zero rows** (`migrations/0031_orchestration_run.sql:152-155`) | nothing in this runbook — do not try |
 | `evidgate_worker_sched` | no privilege on `run` (`migrations/0031_orchestration_run.sql:168`); only `EXECUTE` on `evidgate.reconcile_overdue_runs` (`migrations/0056_reconcile_missing_result.sql:154`) | nothing by hand; the Worker uses it |
 
 **Rules.**
 
-1. Every query here is a `SELECT` inside `start transaction read only`. Never write a hand-written `UPDATE`/`DELETE`/`INSERT`. The app role cannot even do a table-level `UPDATE` on `public.run` (`migrations/0031_orchestration_run.sql:165`); its only column grant is `state` (`migrations/0036_orchestration_run_state_grant.sql:34`), and using it by hand bypasses the transition guard, the optimistic `version` check and the `run.state_changed` audit row.
+1. Every query here is a `SELECT` inside `start transaction read only`. Never write a hand-written `UPDATE`/`DELETE`/`INSERT`. The app role holds no table-level `UPDATE` on `public.run` (`migrations/0031_orchestration_run.sql:165`); it holds exactly three column grants: `update (updated_at)` (`migrations/0034_ingestion_event_and_batch.sql:252`), `update (state)` (`migrations/0036_orchestration_run_state_grant.sql:34`) and `update (current_evidence_revision_id)` (`migrations/0049_orchestration_evidence_revision.sql:255`). Only the pointer move is guarded at the database (`migrations/0049_orchestration_evidence_revision.sql:186-219`); `state` and `updated_at` have no transition guard at all, so a hand `UPDATE` bypasses the adjacency check, the optimistic `version` guard and the `run.state_changed` audit row.
 2. The tenant tables are `FORCE ROW LEVEL SECURITY` (`migrations/0031_orchestration_run.sql:143-144`, `migrations/0049_orchestration_evidence_revision.sql:145`). An app-role session with no tenant setting sees zero rows, never an error (`migrations/0002_foundation_evidgate_schema.sql:30-33`).
 3. Set the tenant with the parameterised form of `SET LOCAL` — `select set_config('evidgate.org_id', …, true)` inside the transaction — never string-built SQL (00 §5.4.2, `plans/00-overview.md:184`; read-only query transactions, 00 §5.5 C1, `plans/00-overview.md:200`).
 4. A verdict that this runbook cannot produce must be escalated with its evidence (§7), not manufactured.
@@ -46,7 +46,7 @@ The run state vocabulary is a closed CHECK (`migrations/0031_orchestration_run.s
 | State | Written by | Meaning when a run sits here past `collection_deadline_at` |
 |---|---|---|
 | `created` | nothing — the comment on `RunStates.Created` says a run is inserted as `queued` (`src/Modules/Evidgate.Modules.Orchestrator/Domain/RunStateMachine.cs:10`), and the CHECK still allows the literal | should be impossible in a normal flow; a row here is a defect or a hand-made fixture. Escalate (§7) |
-| `queued` | the create-run insert writes it (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/CreateRunCommand.cs:539`); the column default is the never-persisted `created` (`migrations/0031_orchestration_run.sql:103`) | still `queued` means **no event batch and no finalize ever arrived** — the run is distinguishable from `running` on exactly that: a `running` run accepted events (or finalized) and then stopped short of `collecting`. Either way no reconcile was ever queued. Escalate (§7) |
+| `queued` | the create-run insert writes the literal (`src/Modules/Evidgate.Modules.Orchestrator/Infrastructure/Persistence/OrchestratorSql.cs:125-134`, literal at `:131`), and the handler echoes it back in the response (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/CreateRunCommand.cs:539`); the column default is the never-persisted `created` (`migrations/0031_orchestration_run.sql:103`) | still `queued` means **no event batch and no finalize ever arrived** — the run is distinguishable from `running` on exactly that: a `running` run accepted events (or finalized) and then stopped short of `collecting`. Either way no reconcile was ever queued. Escalate (§7) |
 | `running` | two writers, both internal: the first accepted **event batch** moves `queued → running` (`src/Modules/Evidgate.Modules.Ingestion/Application/Commands/IngestEventBatch.cs:228-241`, literal at `:127`), and a finalize that arrives before any event steps `queued → running` first (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/FinalizeShardCommand.cs:296-308`) | events were accepted (or a finalize landed) but nothing ever opened `collecting`, so no reconcile was queued. Escalate (§7) |
 | `collecting` | the first finalize (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/FinalizeShardCommand.cs:310-321`) | the sweep's target: the reconciler has not produced a verdict yet. Follow §5.1 |
 | `complete` / `incomplete` / `canceled` | the finisher (`collecting → complete \| incomplete`, `src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileFinisher.cs:231-244`); nothing writes `canceled` today (§5.3) | terminal; not stuck. Out of scope |
@@ -88,10 +88,10 @@ Notes.
 - `current_evidence_revision_id` is the pointer the finisher sets (`migrations/0036_orchestration_run_state_grant.sql:31-32`); a non-null pointer on a `collecting` run is worth recording in the ticket.
 - Cost: only `collecting` has a dedicated partial index (`run_collecting_idx`, `migrations/0056_reconcile_missing_result.sql:85-87`). The other three literals are a sequential scan of `run`, which is fine at pilot volume and is why this query is a maintenance-window tool, not a per-page one.
 
-### 3.2 Every tenant, as the owner role
+### 3.2 Every tenant, via a platform/DBA read session (break-glass)
 
 ```sql
--- Role: evidgate_owner (cross-tenant). Read-only.
+-- Role: evidgate_owner, run by the platform/DBA owner as a break-glass read session. Read-only.
 -- migrations/0031_orchestration_run.sql:161-163 (run_owner_backfill policy, using (true))
 start transaction read only;
 select org_id,
@@ -109,7 +109,7 @@ select org_id,
 commit;
 ```
 
-This is the query an alert would run, and the one the staging drill (T2.2) uses. `evidgate_owner` is the only role that sees more than one tenant here; `evidgate_operator` sees nothing (§1) and `evidgate_worker_sched` has no table privilege (`migrations/0031_orchestration_run.sql:168`). The owner role is a migration/administration credential — take it from the environment's own secret store, never from an application host.
+This is the query an alert would run, and the one the staging drill (T2.2) uses. `evidgate_owner` is the only role that sees more than one tenant here; `evidgate_operator` sees nothing (§1) and `evidgate_worker_sched` has no table privilege (`migrations/0031_orchestration_run.sql:168`). `evidgate_owner` is a migration/administration credential, not an on-call one ([dead-letter runbook](dead-letter.md) §3.1), so this scan is a **break-glass action**: a platform/DBA-owned read-only session, requested per incident and recorded in the handover note (§7: who, when, why). ⚠️ Until the 02.8.1 grant-gated reader exists there is no audited path an on-call operator can run this through, and taking the credential from an application host is never the alternative.
 
 ### 3.3 Triage
 
@@ -117,7 +117,7 @@ This is the query an alert would run, and the one the staging drill (T2.2) uses.
 |---|---|---|
 | `collecting`, past deadline, outbox key present and dispatched, task row `done` | sweep alive, attempt ran, verdict should exist | re-read the run and its revisions (§5.1 step 5) |
 | `collecting`, past deadline, no outbox key | the sweep has not seen this run | §5.1 steps 1–2 |
-| `collecting`, past deadline, task row `dead_letter` or a task row stuck `active` with an expired lease | queue-side failure | §4, then the [dead-letter runbook](dead-letter.md) |
+| `collecting`, past deadline, task row `dead_letter` or a task row stuck `active` with an expired lease | queue-side failure | §4, then the [dead-letter runbook](dead-letter.md) — §7.1 when the dead-lettered row is the `…:reconcile:deadline` key |
 | `queued` or `running`, past deadline | no finalize landed; nothing will reconcile it | §7 — escalate; there is no operator path |
 | `created`, past deadline | abnormal row | §7 — escalate |
 | terminal state | not stuck | stop; if the verdict looks wrong, that is a contract defect, not this runbook |
@@ -221,20 +221,23 @@ So the operator's job on a `collecting` run is **to verify the chain, not to dec
 1. **Is the sweep firing?** §4.3. Nothing in two hours → platform incident; hand off, do not touch the run.
 2. **Did the scan name this run?** §4.2. Key absent after at least one fire means the scan did not select it. Re-run §3.1 and confirm the state is exactly `collecting` and the deadline really is in the past **on the database clock** — the function and the attempt both use `now()` (`migrations/0056_reconcile_missing_result.sql:145`), not an application clock. `[INFERENCE]`: a skew between your laptop and the database is the usual explanation.
 3. **Key present, `dispatched_at` null past one poll interval.** The outbox dispatcher is behind. That is the queue path, not the run: see the [dead-letter runbook](dead-letter.md) and the dispatcher's own health, and escalate if it is down.
-4. **Task row exists, `state = 'active'` with an expired lease.** Normal — the next claim pass reclaims it (§4.1). **`state = 'dead_letter'`**: the attempts are gone and the replay path is the operator ingress, which denies every call today (§5.3), so escalate with the task id.
+4. **Task row exists, `state = 'active'` with an expired lease.** Normal — the next claim pass reclaims it (§4.1). **`state = 'dead_letter'`**: the attempts are gone and the replay path is the operator ingress, which denies every call today (§5.3), so escalate with the task id. When the dead-lettered row is the `…:reconcile:deadline` key the run is never re-queued — the sweep skips a run whose key exists in any state — so recovery steps are [dead-letter runbook](dead-letter.md) §7.1 (§7, carried row).
 5. **Task row `done` and the run still `collecting`.** First check *which* trigger that row came from (§4.2 lists both key shapes). A per-producer trigger that finishes `pending` before the deadline is normal: an open shard before the deadline is not a verdict, so the run stays `collecting` (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/RunReconciler.cs:83-94`). A **deadline** row (`…:reconcile:deadline`) that is `done` while the run is still `collecting` and the deadline has passed contradicts the finisher's single transaction — the revision insert, the pointer move and the state change commit together (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileFinisher.cs:22-27`; `src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs:74-82`) — so take it to the Orchestrator owner with the task id, the run id and the timestamps.
 
 ```sql
--- Role: evidgate_app with evidgate.org_id set, or evidgate_owner. Read-only.
+-- Role: evidgate_app, inside a tenant-scoped read-only transaction. Read-only.
 -- migrations/0049_orchestration_evidence_revision.sql:78-89 (columns), :118-119 (index)
+start transaction read only;
+select set_config('evidgate.org_id', :'org_id', true);
 select revision_no, completeness, missing, outcome, created_at
   from public.evidence_revision
  where org_id = :'org_id'
    and run_id = :'run_id'
  order by revision_no desc;
+commit;
 ```
 
-A revision is **the** verdict record and it is append-only (`migrations/0049_orchestration_evidence_revision.sql:162-165`: `revoke update, delete`; insert guard trigger at `:123-142`). `missing` is the closed list of eight reasons, including `missing_result` for a planned execution with no terminal attempt (`migrations/0056_reconcile_missing_result.sql:58-66`). If this query returns nothing, no verdict exists — and nothing in this runbook may create one (§6).
+A revision is **the** verdict record and it is append-only (`migrations/0049_orchestration_evidence_revision.sql:162-165`: `revoke update, delete`; insert guard trigger at `:123-142`). `missing` is the closed list of eight reasons, including `missing_result` for a planned execution with no terminal attempt (`migrations/0056_reconcile_missing_result.sql:58-66`). Zero rows here is **not** by itself "no verdict exists": the tenant policy matches nothing without the `set_config` of this transaction, so a missing GUC also returns zero rows and never an error (`migrations/0002_foundation_evidgate_schema.sql:30-33`). Confirm the session is tenant-scoped by re-running §3.1 first — if §3.1 returns this run and this query still shows nothing, no verdict exists, and nothing in this runbook may create one (§6).
 
 ### 5.2 `queued`, `running` or `created` past the deadline: escalate, no SQL
 
@@ -273,11 +276,12 @@ If the incident needs an outcome the platform cannot produce, the answer is the 
 Other gaps this runbook states plainly.
 
 - **`created` is not covered either.** The sweep's predicate names one literal (`migrations/0056_reconcile_missing_result.sql:144`), and the carried row names two states; `created` rows past the deadline are equally invisible. Same escalation, and worth adding to the same contract change.
+- **A dead-lettered deadline trigger is never re-armed.** `docs/status-carried.md:420` records it: the key `orchestrator:run:{run}:reconcile:deadline` is enqueued once and the sweep skips a run whose key exists in any state, so once that task dead-letters the run stays `collecting` and is never re-queued. Recovery steps are [dead-letter runbook](dead-letter.md) §7.1; receiver: the next reconcile/outbox task.
 - **No runner lease or epoch to inspect.** `job` / `job_lease` with a per-lease `epoch` (00 §5.3, `plans/00-overview.md:178`) is V2 and has no migration; `run` has no lease or heartbeat column. §4 inspects the `task` lease instead, and says so. `[OPEN]`
 - **Cancel is declared but not served** (§5.3). `⚠️` `STATUS.md:280` disagrees with the tree.
 - **The operator ingress denies every call** (§5.3), so the dead-letter replay route the queue path needs is not usable by a human today either.
-- **The alert link does not exist yet.** 10.7.1-T2.1's done-when is "runbook committed and linked from the stuck-run/incomplete-rate alert" (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:100`); the alert rules themselves are 10.3.1-T5 and are not in the tree. `[OPEN]`
-- **No drill has run.** T2.2 (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:101`) is a staging drill by a non-author: kill a worker mid-run, then follow this runbook. `[INFERENCE]` recipe for the drill, from the state table: create a run with two producer slots, finalize one so the run enters `collecting`, and let `collection_deadline_at` pass without the second finalize; the sweep then settles it to `incomplete`, which is the observable AC3 outcome reachable today (§5.3). Use fixture tenants and synthetic identifiers only.
+- **The alert link does not exist yet.** 10.7.1-T2.1's done-when is "runbook committed and linked from the stuck-run/incomplete-rate alert" (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:105`); the alert rules themselves are 10.3.1-T5 and are not in the tree. `[OPEN]`
+- **No drill has run.** T2.2 (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:106`) is a staging drill by a non-author: kill a worker mid-run, then follow this runbook. `[INFERENCE]` recipe for the drill, from the state table: create a run with two producer slots, finalize one so the run enters `collecting`, and let `collection_deadline_at` pass without the second finalize; the sweep then settles it to `incomplete`, which is the observable AC3 outcome reachable today (§5.3). Use fixture tenants and synthetic identifiers only.
 
 ## 8. Evidence table
 
@@ -289,11 +293,12 @@ Every SQL identifier this runbook uses, and where it is created or granted. The 
 | `run.state` + `run_state_check` (`created`, `queued`, `running`, `collecting`, `complete`, `incomplete`, `canceled`) | column + CHECK | `migrations/0031_orchestration_run.sql:103`, `:118-119` |
 | `run.collection_deadline_at` | column (`not null`) | `migrations/0031_orchestration_run.sql:104` |
 | `run.version`, `run.updated_at` | columns (shared trigger) | `migrations/0031_orchestration_run.sql:106-108`, `:136-141` |
-| `run.current_evidence_revision_id` | column + app grant | `migrations/0036_orchestration_run_state_grant.sql:31-32` |
+| `run.current_evidence_revision_id` | column (0036) + app write grant (0049) | `migrations/0036_orchestration_run_state_grant.sql:31-32`; `migrations/0049_orchestration_evidence_revision.sql:255` |
 | `run_project_created_idx` | index | `migrations/0031_orchestration_run.sql:134` |
 | `run` RLS: enable + force, `run_tenant` (app, `evidgate.current_org_id()`), `run_owner_backfill` (owner, `true`) | policies | `migrations/0031_orchestration_run.sql:143-150`, `:161-163` |
 | `run` grants: app `select, insert` + `revoke update, delete`; operator `select` (no policy → zero rows); worker_sched `revoke all` | grants | `migrations/0031_orchestration_run.sql:152-155`, `:165-168` |
-| `grant update (state) on public.run to evidgate_app` | grant | `migrations/0036_orchestration_run_state_grant.sql:34` |
+| `run` column grants to `evidgate_app`: `update (updated_at)`, `update (state)`, `update (current_evidence_revision_id)` — no table-level `UPDATE` | column grants | `migrations/0034_ingestion_event_and_batch.sql:252`; `migrations/0036_orchestration_run_state_grant.sql:34`; `migrations/0049_orchestration_evidence_revision.sql:255`; table-level `revoke update, delete` `migrations/0031_orchestration_run.sql:165` |
+| `guard_run_evidence_pointer` + trigger `run_evidence_pointer_guard` (the only DB guard on those grants) | function + trigger | `migrations/0049_orchestration_evidence_revision.sql:186-219` |
 | `evidgate.current_org_id()` | function (`nullif(current_setting('evidgate.org_id', true), '')`) | `migrations/0002_foundation_evidgate_schema.sql:30-33` |
 | `evidgate.reconcile_overdue_runs(uuid, uuid, integer)` | function (stable, security definer, `search_path = ''`) | `migrations/0056_reconcile_missing_result.sql:132-150` |
 | `reconcile_overdue_runs` grants: `revoke all from public`, `grant execute to evidgate_worker_sched` | grants | `migrations/0056_reconcile_missing_result.sql:152-154` |
