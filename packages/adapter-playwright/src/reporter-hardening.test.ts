@@ -216,7 +216,7 @@ describe('PS2: duration_ms is omitted or rounded to satisfy the schema', () => {
         ],
       }),
     );
-    reporter.onEnd(fullResult('passed'));
+    void reporter.onEnd(fullResult('passed'));
 
     const envelopes = readEnvelopes(spool);
     for (const envelope of envelopes) {
@@ -248,7 +248,7 @@ describe('PS6: the step tree is walked lazily in depth-first order', () => {
     // 33 branches + 66 leaves = 99 steps, so the walk crosses the 64-envelope threshold.
     const steps = Array.from({ length: 33 }, (_, index) => branch(index));
     reporter.onTestEnd(fakeTest(), fakeResult({ steps }));
-    reporter.onEnd(fullResult('passed'));
+    void reporter.onEnd(fullResult('passed'));
 
     const titles = readEnvelopes(spool)
       .filter((item) => item.type === 'test.step')

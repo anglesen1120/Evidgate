@@ -46,6 +46,24 @@ export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
   private readonly route = inject(ActivatedRoute);
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
+
+  /**
+   * Re-asserts the focus a create earned after the app shell's own post-navigation move.
+   *
+   * `shell/layout/shell.component.ts` focuses `<main>` for every navigation that changes the path —
+   * a create navigates, so it does — and that callback runs after this render pass. For a step the
+   * wizard opened on the user's behalf the step heading is the better target, so the move is
+   * repeated once the shell's callback has run. Nothing else is re-asserted: Next and Back stay on
+   * the same path, and a page load moves no focus at all.
+   */
+  private reassertStepFocus(target: HTMLElement): void {
+    setTimeout(() => {
+      // The heading is replaced when the wizard's own read lands; a detached node must not receive
+      // focus, and a target that already holds it needs no second move.
+      if (!target.isConnected || document.activeElement === target) return;
+      target.focus();
+    });
+  }
   /**
    * The page's own heading. It is the one named element every branch of the shell renders, so a
    * retry that fails has somewhere stable to put focus: the retry button itself is replaced by the
@@ -59,6 +77,14 @@ export class OnboardingShellComponent {
    * render it caused was already queued, and the write is what schedules the pass that focuses.
    */
   private readonly announceReloadFailure = signal(false);
+  /**
+   * Set when this activation renders the step a create opened. The store bumps `focusToken` before
+   * this instance exists, so the token check below would treat the move as already honoured and
+   * leave focus on `<body>` where the pressed submit was; this makes the hand-off explicit. A
+   * signal, like `announceReloadFailure`: a reused instance must re-run the render pass even though
+   * no tracked value changed.
+   */
+  private readonly announceCreatedStep = signal(false);
   protected readonly orgId = signal('');
   private readonly projectId = signal<string | null>(null);
   /**
@@ -113,6 +139,9 @@ export class OnboardingShellComponent {
         // reads: this store is a route-level singleton, so its ready state can be a derivation of
         // an earlier visit (S71 N1). Retry (`reload`) loads unconditionally too.
         if (this.store.consumeCreated(orgId, projectId)) {
+          // The create opened this step on the user's behalf, so the render pass below moves focus
+          // to its heading — the marker is what says the move is theirs, not a page load's.
+          this.announceCreatedStep.set(true);
           return;
         }
         // A revisit inherits the token of a step moved in an earlier activation; adopting it as
@@ -124,12 +153,19 @@ export class OnboardingShellComponent {
     afterRenderEffect(() => {
       // Focus follows a step the user moved — next, back, a step click, or the step a create
       // opened — and never the first ready render of a page load or a Retry (S71 F2).
+      const created = this.announceCreatedStep();
       const token = this.store.focusToken();
-      if (this.store.status() !== 'ready' || token <= this.focusedToken) {
+      if (this.store.status() !== 'ready' || (!created && token <= this.focusedToken)) {
         return;
       }
+      // A ready derivation can land one render before the step that renders the heading: keep the
+      // cue rather than spending it, so the pass that mounts the target moves the focus.
+      const heading = this.heading();
+      if (heading === undefined) return;
       this.focusedToken = token;
-      this.heading()?.nativeElement.focus();
+      this.announceCreatedStep.set(false);
+      heading.nativeElement.focus();
+      if (created) this.reassertStepFocus(heading.nativeElement);
     });
 
     afterRenderEffect(() => {

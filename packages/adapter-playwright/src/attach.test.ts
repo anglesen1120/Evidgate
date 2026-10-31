@@ -702,7 +702,7 @@ describe('attachment pipeline (04.3.3-T2.2)', () => {
     expect(finished).toMatchObject({ timedOut: true, deadlineAttempts: 1 });
   });
 
-  it('skips_every_attachment_of_an_attempt_without_a_planned_execution_key', () => {
+  it('skips_every_attachment_of_an_attempt_without_a_planned_execution_key', async () => {
     const root = tempDir('evidgate-attach-placeholder-');
     const trace = file(root, 'trace-placeholder.zip');
     const spool = tempDir('evidgate-attach-placeholder-spool-');
@@ -720,13 +720,14 @@ describe('attachment pipeline (04.3.3-T2.2)', () => {
     reporter.onBegin(configFor(root));
     reporter.onTestBegin(test, result);
     reporter.onTestEnd(test, result);
-    // No upload is pending, so `onEnd` is the synchronous shape and returns no promise.
+    // No upload is pending, so the end sequence already wrote every envelope; this
+    // unannotated run then trips the identity gate, whose failed status the promise carries.
     const returned = reporter.onEnd(fullResult());
-    expect(isThenable(returned)).toBe(false);
 
     const envelopes = readEnvelopesAt(spool);
     expect(envelopes.find((item) => item.type === 'test.finished')?.artifact_ids).toBeUndefined();
     expect(warningCodes(envelopes)).toContain('attachment_no_execution_key');
+    await expect(returned).resolves.toEqual({ status: 'failed' });
   });
 
   it('bounds_one_test_and_the_run_with_one_attachment_limit_warning (§7 bounds)', async () => {
@@ -819,12 +820,11 @@ function fullResult(): Parameters<EvidgateReporter['onEnd']>[0] {
 }
 
 /**
- * Awaits the async `onEnd` arm. The declaration stays `void` so the pre-existing bare
- * `reporter.onEnd(...)` call sites remain legal; the Promise the callback actually returns is
- * the value awaited here.
+ * Awaits the async `onEnd` arm. `onEnd` returns `undefined` for a passing run and a promise
+ * once it reports a failure, so the helper awaits whatever the callback returned.
  */
-function endOfRun(reporter: EvidgateReporter): Promise<unknown> {
-  return reporter.onEnd(fullResult()) as unknown as Promise<unknown>;
+async function endOfRun(reporter: EvidgateReporter): Promise<unknown> {
+  return await reporter.onEnd(fullResult());
 }
 
 function spoolDirOf(spool: string): string {
@@ -865,9 +865,4 @@ function warningCodes(envelopes: readonly EventEnvelope[]): string[] {
   return envelopes
     .map((envelope) => warnOf(envelope).code)
     .filter((code): code is string => code !== undefined);
-}
-
-function isThenable(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null || !('then' in value)) return false;
-  return typeof value.then === 'function';
 }

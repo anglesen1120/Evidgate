@@ -320,7 +320,7 @@ function synthetic(
     reporter.onTestBegin(test, result);
     reporter.onTestEnd(test, result);
   });
-  reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+  void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
   return spoolEvents(dir, 'synthetic');
 }
 

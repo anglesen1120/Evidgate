@@ -73,14 +73,21 @@ function stubFetch(handler: (request: Request) => Response | Promise<Response>):
   return { fetchImpl, calls };
 }
 
-/** `main()` with the injected `fetch` stub — the only transport the specs use. */
+/**
+ * `main()` with the injected `fetch` stub — the only transport the specs use — and a
+ * retry backoff that neither waits nor jitters, so a retried request stays instant.
+ */
 function invoke(
   argv: ReadonlyArray<string>,
   env: Readonly<Record<string, string | undefined>>,
   out: Captured,
   fetchImpl: typeof fetch,
 ): Promise<number> {
-  return main(argv, env, out.io, { fetch: fetchImpl });
+  return main(argv, env, out.io, {
+    fetch: fetchImpl,
+    sleep: () => Promise.resolve(),
+    random: () => 0,
+  });
 }
 
 function jsonResponse(
@@ -355,7 +362,7 @@ describe('runs finalize', () => {
       const text = out.stderr.join('');
       expect(text).toContain(`evidgate: error ${code}: `);
       expect(text).toContain('evidgate: request_id: req-3');
-      // Exactly one request: no retry, no second attempt under a fresh key.
+      // Exactly one request: a permanent refusal is never retried.
       expect(stub.calls).toHaveLength(1);
       // A refused finalize keeps every byte: the slot was not declared.
       expect(existsSync(producerDir)).toBe(true);
@@ -732,7 +739,9 @@ describe('runs finalize', () => {
 
     expect(out.stderr.join('')).toContain('evidgate: error transport: ');
     expect(out.stdout.join('')).toBe('');
-    expect(stub.calls).toHaveLength(1);
+    // A finalize is replay-safe (derived key, same body), so the transport failure is
+    // retried up to the bounded attempt count before the command fails.
+    expect(stub.calls).toHaveLength(3);
     expect(existsSync(producerDir)).toBe(true);
   });
 

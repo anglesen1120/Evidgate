@@ -129,7 +129,7 @@ describe('capability document', () => {
       engineVersion: '1.63.0',
     });
     reporter.onBegin();
-    reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+    void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
 
     const envelopes = readEnvelopes(spool);
     const first = envelopes[0];
@@ -151,7 +151,7 @@ describe('capability document', () => {
     reporter.onBegin();
     reporter.onTestBegin(fakeTest(), fakeResult());
     reporter.onTestEnd(fakeTest(), fakeResult());
-    reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+    void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
 
     const envelopes = readEnvelopes(spool);
     expect(envelopes.length).toBeGreaterThan(0);

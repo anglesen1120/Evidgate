@@ -1,0 +1,23 @@
+{
+  "operation_id": "createCiBinding",
+  "variant": "validation",
+  "status": 422,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000e5"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "validation_failed",
+      "message": "the payload was refused; see the field details",
+      "request_id": "018f0000-0000-7000-8000-0000000000e5",
+      "retryable": false,
+      "details": [
+        {
+          "path": "/repository_full_name",
+          "reason": "the GitHub App cannot read this repository"
+        }
+      ]
+    }
+  }
+}

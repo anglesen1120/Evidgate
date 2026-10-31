@@ -2107,6 +2107,18 @@
       <trans-unit id="onboarding.create.submitting" datatype="html">
         <source>Creating project…</source>
       </trans-unit>
+      <trans-unit id="onboarding.create.details-label" datatype="html">
+        <source>The server refused these values</source>
+      </trans-unit>
+      <trans-unit id="onboarding.create.failure-heading" datatype="html">
+        <source>The project could not be created</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.details-label" datatype="html">
+        <source>The server refused these values</source>
+      </trans-unit>
+      <trans-unit id="onboarding.connect.failure-heading" datatype="html">
+        <source>The connection was not saved</source>
+      </trans-unit>
       <trans-unit id="onboarding.connect.intro" datatype="html">
         <source>Choose one connection method. Next becomes available only after the server confirms a binding or token.</source>
       </trans-unit>
@@ -2642,6 +2654,12 @@
       <trans-unit id="onboarding.enable.retry-read" datatype="html"><source>Read the activation again</source></trans-unit>
       <trans-unit id="onboarding.enable.read-failed" datatype="html"><source>The activation could not be read. Reading it again is safe.</source></trans-unit>
       <trans-unit id="onboarding.enable.read-failed-heading" datatype="html"><source>The activation could not be read</source></trans-unit>
+      <trans-unit id="onboarding.enable.confirm-failed-heading" datatype="html">
+        <source>Collection could not be enabled</source>
+      </trans-unit>
+      <trans-unit id="onboarding.enable.details-label" datatype="html">
+        <source>The server refused these values</source>
+      </trans-unit>
       <trans-unit id="onboarding.enable.read-wait" datatype="html"><source>The server asked you to wait before reading the activation again: <x id="remaining" equiv-text="${remaining}"/> s left of the <x id="supplied" equiv-text="${supplied}"/> s it named.</source></trans-unit>
       <trans-unit id="onboarding.enable.project" datatype="html"><source>Project</source></trans-unit>
       <trans-unit id="onboarding.enable.activated-by" datatype="html"><source>Activated by</source></trans-unit>

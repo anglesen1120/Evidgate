@@ -26,9 +26,28 @@
   }
   @if (displayFailure(); as error) {
     <section data-testid="connect-ci-error">
-      <app-error-pattern [error]="error" [headingLevel]="3" />
-      @for (detail of error.details; track $index) {
-        <p class="validation">{{ detail.path }} {{ detail.reason }}</p>
+      <!-- The press disabled the control it was made with, so this heading — outside both alerts —
+           is where the visitor's place goes; the pattern's own title drops one level below it. -->
+      <h3
+        class="connect__failure-heading"
+        id="connect-failure-heading"
+        tabindex="-1"
+        #failureHeadingEl
+      >
+        {{ failureHeading }}
+      </h3>
+      <app-error-pattern [error]="error" [headingLevel]="4" />
+      @if (details().length > 0) {
+        <!-- The envelope's field rows as the second, labelled alert: without it a `path`-level
+             reason is never spoken, only printed. -->
+        <div role="alert" data-testid="connect-ci-details" aria-labelledby="connect-details-label">
+          <p id="connect-details-label" class="validation">{{ detailsLabel }}</p>
+          <ul class="validation">
+            @for (detail of details(); track $index) {
+              <li>{{ detail.path }} {{ detail.reason }}</li>
+            }
+          </ul>
+        </div>
       }
     </section>
     @if (responseUncertain()) {
@@ -38,17 +57,19 @@
   @if (store.refreshFailure()) {
     <section class="notice" data-testid="connect-ci-refresh-failed" role="status">
       <p>{{ refreshFailedLabel }}</p>
+      <!-- Not natively disabled while the re-read runs: the press must keep the focus it was made
+           with, and `refresh()` itself refuses a second press. -->
       <button
         class="state-panel__action"
         type="button"
-        [disabled]="busy() || refreshing()"
+        [attr.aria-disabled]="busy() || refreshing() ? 'true' : null"
         (click)="refresh()"
       >
         {{ refreshLabel }}
       </button>
     </section>
   }
-  <p class="busy-status" role="status">
+  <p class="busy-status" role="status" tabindex="-1" #busyStatus data-testid="connect-ci-busy">
     @if (busy()) {
       {{ busyLabel }}
     }
@@ -81,12 +102,20 @@
             autocomplete="off"
             [(ngModel)]="repositoryId"
             [disabled]="busy() || !bindingPermitted()"
-            [attr.aria-invalid]="oidcSubmitted() && repoIdInvalid() ? 'true' : null"
+            [attr.aria-invalid]="
+              (oidcSubmitted() && repoIdInvalid()) || serverRepoIdError() !== null ? 'true' : null
+            "
             [attr.aria-describedby]="'connect-repo-id-error'"
           />
-          <p id="connect-repo-id-error" class="validation" [attr.aria-live]="'polite'">
+          <p
+            id="connect-repo-id-error"
+            class="validation"
+            [attr.aria-live]="serverRepoIdError() === null ? 'polite' : null"
+          >
             @if (oidcSubmitted() && repoIdInvalid()) {
               {{ repoIdError }}
+            } @else if (serverRepoIdError(); as reason) {
+              {{ reason }}
             }
           </p>
         </div>
@@ -102,12 +131,22 @@
             spellcheck="false"
             [(ngModel)]="repositoryName"
             [disabled]="busy() || !bindingPermitted()"
-            [attr.aria-invalid]="oidcSubmitted() && repoNameInvalid() ? 'true' : null"
+            [attr.aria-invalid]="
+              (oidcSubmitted() && repoNameInvalid()) || serverRepoNameError() !== null
+                ? 'true'
+                : null
+            "
             [attr.aria-describedby]="'connect-repo-name-error'"
           />
-          <p id="connect-repo-name-error" class="validation" [attr.aria-live]="'polite'">
+          <p
+            id="connect-repo-name-error"
+            class="validation"
+            [attr.aria-live]="serverRepoNameError() === null ? 'polite' : null"
+          >
             @if (oidcSubmitted() && repoNameInvalid()) {
               {{ repoNameError }}
+            } @else if (serverRepoNameError(); as reason) {
+              {{ reason }}
             }
           </p>
         </div>
@@ -122,13 +161,21 @@
             spellcheck="false"
             [(ngModel)]="refs"
             [disabled]="busy() || !bindingPermitted()"
-            [attr.aria-invalid]="oidcSubmitted() && refsInvalid() ? 'true' : null"
+            [attr.aria-invalid]="
+              (oidcSubmitted() && refsInvalid()) || serverRefsError() !== null ? 'true' : null
+            "
             [attr.aria-describedby]="'connect-refs-hint connect-refs-error'"
           ></textarea>
           <p id="connect-refs-hint">{{ refsHint }}</p>
-          <p id="connect-refs-error" class="validation" [attr.aria-live]="'polite'">
+          <p
+            id="connect-refs-error"
+            class="validation"
+            [attr.aria-live]="serverRefsError() === null ? 'polite' : null"
+          >
             @if (oidcSubmitted() && refsInvalid()) {
               {{ refsError }}
+            } @else if (serverRefsError(); as reason) {
+              {{ reason }}
             }
           </p>
         </div>
@@ -143,13 +190,23 @@
             spellcheck="false"
             [(ngModel)]="workflows"
             [disabled]="busy() || !bindingPermitted()"
-            [attr.aria-invalid]="oidcSubmitted() && workflowsInvalid() ? 'true' : null"
+            [attr.aria-invalid]="
+              (oidcSubmitted() && workflowsInvalid()) || serverWorkflowsError() !== null
+                ? 'true'
+                : null
+            "
             [attr.aria-describedby]="'connect-workflows-hint connect-workflows-error'"
           ></textarea>
           <p id="connect-workflows-hint">{{ workflowsHint }}</p>
-          <p id="connect-workflows-error" class="validation" [attr.aria-live]="'polite'">
+          <p
+            id="connect-workflows-error"
+            class="validation"
+            [attr.aria-live]="serverWorkflowsError() === null ? 'polite' : null"
+          >
             @if (oidcSubmitted() && workflowsInvalid()) {
               {{ workflowsError }}
+            } @else if (serverWorkflowsError(); as reason) {
+              {{ reason }}
             }
           </p>
         </div>
@@ -213,12 +270,22 @@
             autocomplete="off"
             [(ngModel)]="tokenName"
             [disabled]="busy() || !tokenPermitted()"
-            [attr.aria-invalid]="tokenSubmitted() && tokenNameInvalid() ? 'true' : null"
+            [attr.aria-invalid]="
+              (tokenSubmitted() && tokenNameInvalid()) || serverTokenNameError() !== null
+                ? 'true'
+                : null
+            "
             [attr.aria-describedby]="'connect-token-name-error'"
           />
-          <p id="connect-token-name-error" class="validation" [attr.aria-live]="'polite'">
+          <p
+            id="connect-token-name-error"
+            class="validation"
+            [attr.aria-live]="serverTokenNameError() === null ? 'polite' : null"
+          >
             @if (tokenSubmitted() && tokenNameInvalid()) {
               {{ tokenNameError }}
+            } @else if (serverTokenNameError(); as reason) {
+              {{ reason }}
             }
           </p>
         </div>

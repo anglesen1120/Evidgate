@@ -5,20 +5,11 @@
 // Each walk starts a fresh document at the skip link and enters the main region with Enter, so
 // every stop on the way is one a keyboard visitor really crosses.
 //
-// The walkthrough follows `docs/a11y/parts/onboarding.md` "Keyboard walkthrough plan" W1–W4 and
-// stops at the last good step wherever a recorded finding blocks the next one. No assertion in this
-// file pins a recorded defect as expected behaviour, and none needs a click or a force to get past
-// one:
-//
-//   - **F-ONB-07** (create-project refusal: fields and submit disabled mid-request, focus dropped to
-//     `<body>`, no focus move on the refusal) blocks W1 step 8, the empty-form refusal. That case is
-//     NOT walked here; it belongs to the create page's own Vitest spec until T1.2's fix lands.
-//   - **F-ONB-08** (connect-ci refusal: focus on `<body>` while the alert speaks) blocks W2 step 14,
-//     and **F-ONB-09** (enable-collection refusal: the pressed confirm is disabled mid-flight) blocks
-//     W3 step 5. Both are refusal paths, so the happy-path walkthrough stops before them.
-//   - **F-ONB-05** (connect-ci metadata retry), **F-ONB-06** (enable-collection re-read) and
-//     **F-ONB-04** (the wizard's error-state Retry) are retry paths whose pressed control unmounts.
-//     They are not entered here: doing so would assert the dropped focus those findings record.
+// The walkthrough follows `docs/a11y/parts/onboarding.md` "Keyboard walkthrough plan" W1–W4. Every
+// stop it claims is one a keyboard visitor really crosses, and the refusal paths the plan names are
+// walked too: each step that disables or unmounts the control it was pressed from parks focus on a
+// target the page owns (the waiting line, then its own refusal heading), and no assertion here pins
+// a dropped-focus fallback as expected behaviour.
 //
 // Everything else is the AC2 claim this spec exists to prove: the skip link, the stepper, each
 // step's own content, the reveal handoffs ConnectCiPage already implements, Back, Next and the
@@ -153,6 +144,35 @@ async function expectKeyboardFocus(page: Page, locator: Locator, context: string
 }
 
 /**
+ * Tabs forward until `selector` holds focus, returning the stops crossed. A walk into a form whose
+ * Tab order belongs to other slices uses this instead of a programmatic focus move: every stop on
+ * the way is one a keyboard visitor really crosses, and a target the walk cannot reach fails with
+ * the list of stops it did reach.
+ */
+async function tabUntil(page: Page, selector: string, limit = 40): Promise<readonly string[]> {
+  const crossed: string[] = [];
+  for (let index = 0; index < limit; index += 1) {
+    await page.keyboard.press('Tab');
+    const reached = await page.evaluate((target) => {
+      const element = document.activeElement as HTMLElement | null;
+      if (element === null) return { hit: false, stop: 'nothing' };
+      const name =
+        element.id !== ''
+          ? `#${element.id}`
+          : `${element.tagName.toLowerCase()}${
+              element.getAttribute('data-testid') === null
+                ? ''
+                : `[data-testid="${element.getAttribute('data-testid')}"]`
+            }`;
+      return { hit: element.matches(target), stop: name };
+    }, selector);
+    if (reached.hit) return crossed;
+    crossed.push(reached.stop);
+  }
+  throw new Error(`${selector} is not in the Tab order; stopped at ${crossed.join(' → ')}`);
+}
+
+/**
  * Every enabled Tab stop inside the main region, named by its DOM contract. The identity list is
  * the budget assertion: a stray stop (a new control, a `tabindex="0"` wrapper) shows up by name, so
  * the check cannot pass by counting alone.
@@ -238,16 +258,8 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
     await expect(backButton(page)).toBeDisabled();
     await expect(nextButton(page)).toBeDisabled();
 
-    // 7. Enter creates the project and the wizard opens step 2 on it.
-    //
-    //    The walkthrough plan's step 7 also expects `#onboarding-step-title` to hold focus here;
-    //    the browser does not deliver that handoff. The create navigates `''` → `:projectId`, so a
-    //    new shell activation adopts the `focusToken` `projectCreated` just bumped as its own
-    //    baseline (onboarding-shell.component.ts:104-108) and its focus effect (:111-120) never
-    //    runs — the pressed submit unmounts and focus falls to `<body>`. That is the create-project
-    //    focus-order defect F-ONB-07's family records (a create loses the keyboard user's place),
-    //    so this spec stops at the last verified stop: the rendered step, its content and the
-    //    project the fixture reports. It asserts neither the missing handoff nor a body fallback.
+    // 7. Enter creates the project and the wizard opens step 2 on it, with focus on the new step's
+    //    own heading: the create marker tells the fresh activation the move is the user's.
     await page.keyboard.press('Enter');
     await expectCurrentStep(page, 2);
     await expect(page.locator('[data-testid="connect-ci-page"]')).toBeVisible();
@@ -257,6 +269,7 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
       .poll(() => new URL(page.url()).pathname, 'the create opened the created project')
       .toBe(`/en/orgs/${ORG_ACME}/onboarding/${CREATED_PROJECT}`);
     await expect(stepItem(page, 1)).toHaveAttribute('data-done', 'true');
+    await expectKeyboardFocus(page, page.locator(STEP_TITLE), 'the step 2 heading after a create');
     // The created project's name is rendered from the server's answer, not from the typed draft.
     await expect(
       page
@@ -279,6 +292,54 @@ test.describe('W1 — step 1, create project (keyboard walkthrough plan)', () =>
       '#onboarding-project-slug',
       'onboarding-project-submit',
     ]);
+  });
+  test('a refused create speaks once from a labelled alert and leaves focus on its own heading', async ({
+    page,
+  }) => {
+    // The server refuses the name: the submit is disabled for the request, so focus must land on the
+    // page's waiting line and then on the page's own refusal heading — never on <body>, never inside
+    // the alert whose text is being read anyway.
+    await page.goto(
+      withVariant(
+        onboardingPath('en'),
+        seedQueryWith('onboarding-empty', ['fixture.variant.createProject=name-taken']),
+      ),
+    );
+    await expect(shell(page)).toBeVisible();
+    await expectCurrentStep(page, 1);
+    await enterMainByKeyboard(page);
+
+    await tabUntil(page, '#onboarding-project-name');
+    await page.keyboard.type('Storefront web');
+    await pressTab(page);
+    await page.keyboard.type('storefront-web');
+    await tabUntil(page, '[data-testid="onboarding-project-submit"]');
+    await page.keyboard.press('Enter');
+
+    const heading = page.locator('#onboarding-project-failure-heading');
+    await expectKeyboardFocus(page, heading, 'the refusal heading after a refused create');
+    // The refusal heading is the page's own, outside every alert.
+    await expect(heading).not.toHaveAttribute('role', /alert/);
+
+    // The envelope's field row is announced once, by the labelled details alert, and the refused
+    // field is marked invalid with that text as its description.
+    const details = page.getByTestId('onboarding-project-details');
+    await expect(details).toHaveAttribute('role', 'alert');
+    await expect(details).toHaveAccessibleName(/the server refused these values/i);
+    await expect(details).toContainText('a project with this name already exists');
+    const name = page.locator('#onboarding-project-name');
+    await expect(name).toHaveAttribute('aria-invalid', 'true');
+    await expect(name).toHaveAccessibleDescription(/a project with this name already exists/);
+    // Every id a control is described by resolves to a rendered element.
+    const described = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('[aria-describedby]')).flatMap((element) =>
+        (element.getAttribute('aria-describedby') ?? '')
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((id) => ({ id, rendered: document.getElementById(id) !== null })),
+      ),
+    );
+    expect(described.filter((entry) => !entry.rendered)).toEqual([]);
   });
 });
 
@@ -413,6 +474,47 @@ test.describe('W2 — step 2, connect CI (OIDC then token)', () => {
     await expectKeyboardFocus(page, page.locator(STEP_TITLE), 'the step-1 heading after Back');
     await expectCurrentStep(page, 1);
   });
+  test('a refused binding is announced once and hands focus to the refusal heading', async ({
+    page,
+  }) => {
+    await page.goto(
+      withVariant(
+        onboardingPath('en'),
+        seedQueryWith('onboarding-project', ['fixture.variant.createCiBinding=validation']),
+      ),
+    );
+    await expect(shell(page)).toBeVisible();
+    await expectCurrentStep(page, 2);
+    await enterMainByKeyboard(page);
+
+    await tabUntil(page, '#connect-oidc-repo-id');
+    await page.keyboard.type(REPOSITORY_ID);
+    await pressTab(page);
+    await page.keyboard.type(REPOSITORY_NAME);
+    await pressTab(page);
+    await page.keyboard.type(REF_PATTERNS);
+    await pressTab(page);
+    await page.keyboard.type(WORKFLOW_REFS);
+    await tabUntil(page, '[data-testid="connect-oidc-submit"]');
+    await page.keyboard.press('Enter');
+
+    await expectKeyboardFocus(
+      page,
+      page.locator('#connect-failure-heading'),
+      'the refusal heading after a refused binding',
+    );
+    const details = page.getByTestId('connect-ci-details');
+    await expect(details).toHaveAttribute('role', 'alert');
+    await expect(details).toHaveAccessibleName(/the server refused these values/i);
+    await expect(details).toContainText('the GitHub App cannot read this repository');
+    const repository = page.locator('#connect-oidc-repo-name');
+    await expect(repository).toHaveAttribute('aria-invalid', 'true');
+    await expect(repository).toHaveAccessibleDescription(
+      /the GitHub App cannot read this repository/,
+    );
+    // The field's own node is not a live region while the details alert carries the sentence.
+    await expect(page.locator('#connect-repo-name-error')).not.toHaveAttribute('aria-live', /.*/);
+  });
 });
 
 test.describe('W3 — step 5, enable collection', () => {
@@ -499,6 +601,37 @@ test.describe('W3 — step 5, enable collection', () => {
     );
     await pressTab(page);
     await expectKeyboardFocus(page, backButton(page), 'Back, with the disabled confirm skipped');
+  });
+  test('a refused confirm names itself and hands focus to the heading that names it', async ({
+    page,
+  }) => {
+    await page.goto(
+      withVariant(
+        onboardingPath('en'),
+        seedQueryWith('onboarding-evidence', [
+          ENABLE_GRANTS_TOGGLE,
+          'fixture.variant.createPolicyRevision=unknown-field',
+        ]),
+      ),
+    );
+    await expect(shell(page)).toBeVisible();
+    await expectCurrentStep(page, 5);
+    await enterMainByKeyboard(page);
+
+    await tabUntil(page, '[data-testid="enable-collection-confirm"]');
+    await page.keyboard.press('Enter');
+
+    const heading = page.locator('#enable-confirm-failed-heading');
+    await expectKeyboardFocus(page, heading, 'the page-owned heading of a refused confirm');
+    // The section takes its name from that heading, so the refusal is announced as one region.
+    await expect(page.locator('[data-testid="enable-collection-error"]')).toHaveAccessibleName(
+      /collection could not be enabled/i,
+    );
+    const details = page.getByTestId('enable-collection-details');
+    await expect(details).toHaveAttribute('role', 'alert');
+    await expect(details).toHaveAccessibleName(/the server refused these values/i);
+    await expect(details).toContainText('/flaky_budget_max');
+    await expect(page.locator('[data-testid="enable-collection-enabled"]')).toHaveCount(0);
   });
 });
 

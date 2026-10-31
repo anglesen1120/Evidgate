@@ -689,7 +689,7 @@ describe('QA probe: reporter wiring beyond the delivered specs', () => {
     expect(recordCodesOf(finished)).toEqual(['unknown', 'upload_put_failed']);
   });
 
-  it('skips placeholder-key attachments with one warning carrying the count', () => {
+  it('skips placeholder-key attachments with one warning carrying the count', async () => {
     const root = tempDir('qa-s87-placeholder-root-');
     const spool = tempDir('qa-s87-placeholder-spool-');
     let imported = false;
@@ -727,8 +727,9 @@ describe('QA probe: reporter wiring beyond the delivered specs', () => {
     const finished = envelopes.find((item) => item.type === 'test.finished');
     expect(finished?.artifact_ids).toBeUndefined();
     expect(recordsOf(finished)).toHaveLength(0);
-    // Nothing uploadable was pending, so the synchronous arm answered (no promise).
-    expect(typeof returned === 'object' && returned !== null && 'then' in returned).toBe(false);
+    // Nothing uploadable was pending, so the end sequence wrote every envelope above; the
+    // unannotated run then trips the identity gate, whose failed status the promise carries.
+    await expect(returned).resolves.toEqual({ status: 'failed' });
   });
 
   it('emits nothing in a merge-reports replay, even when a test has attachments', () => {
@@ -881,18 +882,14 @@ describe('QA probe: reporter wiring beyond the delivered specs', () => {
     await endOfRun(reporter);
 
     const afterFirst = envelopesOf(spool).length;
-    let secondError: unknown;
-    try {
-      await (reporter.onEnd(fullResult()) as unknown as Promise<unknown>);
-    } catch (error) {
-      secondError = error;
-    }
+    const second = await reporter.onEnd(fullResult());
     const envelopes = envelopesOf(spool);
     // Whatever the second call does, it must not append a second run-end marker or a batch.
     expect(envelopes.filter((item) => markerOf(item) === 'run_end')).toHaveLength(1);
     expect(envelopes.length).toBe(afterFirst);
     expect(envelopes.map((item) => item.sequence)).toEqual(envelopes.map((_, index) => index + 1));
-    // Pinned observation: the closed writer makes the second call throw its buffered failure.
-    expect(secondError instanceof Error).toBe(true);
+    // Pinned observation: the closed writer refuses every append, so the second call reports
+    // that buffered failure as a failed status instead of appending or throwing.
+    expect(second).toEqual({ status: 'failed' });
   });
 });

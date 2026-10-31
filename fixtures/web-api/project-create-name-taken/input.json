@@ -1,0 +1,23 @@
+{
+  "operation_id": "createProject",
+  "variant": "name-taken",
+  "status": 422,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000cb"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "validation_failed",
+      "message": "the payload was refused; see the field details",
+      "request_id": "018f0000-0000-7000-8000-0000000000cb",
+      "retryable": false,
+      "details": [
+        {
+          "path": "name",
+          "reason": "a project with this name already exists in the organisation"
+        }
+      ]
+    }
+  }
+}

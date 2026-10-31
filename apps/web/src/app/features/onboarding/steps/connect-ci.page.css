@@ -72,6 +72,8 @@ textarea {
   resize: vertical;
 }
 h3:focus,
+.connect__failure-heading:focus,
+.busy-status:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);
@@ -97,8 +99,19 @@ textarea:disabled {
 .busy-status {
   min-block-size: var(--eg-leading-sm);
 }
-/* 09.2.1-T7: the derived health panel and the CLI quickstart sit between the intro region and
-   the two create panels. They take the page grid's gap and must shrink with the column. */
+/* The retry action stays focusable while it refuses a press, so it carries aria-disabled rather
+   than the native attribute and needs the same look. */
+.state-panel__action[aria-disabled='true'],
+.state-panel__action[aria-disabled='true']:hover,
+.state-panel__action[aria-disabled='true']:active {
+  border-color: var(--eg-border);
+  background: var(--eg-neutral-bg);
+  color: var(--eg-text-muted);
+  cursor: default;
+  box-shadow: none;
+}
+/* The derived health panel and the CLI quickstart sit between the intro region and the two create
+   panels: they take the page grid's gap and must shrink with the column. */
 app-connection-health,
 app-cli-quickstart {
   display: block;
