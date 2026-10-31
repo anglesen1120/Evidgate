@@ -8,10 +8,15 @@ import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { open, type FileHandle } from 'node:fs/promises';
 
-import { createManifest, type ManifestV1 } from '@evidgate/sdk';
+import {
+  type Client,
+  type CreateManifestErrors,
+  type CreateManifestResponses,
+} from '@evidgate/sdk';
 
 import { getToken } from '../auth/getToken.js';
 import { deleteCachedToken } from '../auth/tokenCache.js';
+import { callApi } from '../callApi.js';
 import { createApiClient } from '../client.js';
 import { CliError } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
@@ -21,7 +26,12 @@ import type { CommandDefinition } from './index.js';
 
 /** The server's documented body cap (openapi `createManifest`: "Body ≤ 256 KiB → 413"). */
 const maxManifestBytes = 256 * 1024;
-const requestTimeoutMs = 30_000;
+/**
+ * The openapi `createManifest` path, spelled once: the command calls the client's own
+ * `post` (below), whose body is untyped, because the route takes the RAW file bytes and
+ * the generated operation types the body as the parsed `ManifestV1`.
+ */
+const createManifestPath = '/projects/{p}/manifests';
 /**
  * The usage-error hint `main.ts` attaches to its parse-level usage errors (`helpHint`
  * there, module-private). Repeated here so the command-level `--file` usage error carries
@@ -51,21 +61,22 @@ export const manifestsUploadCommand: CommandDefinition = {
     const body = await readManifestFile(file);
     const { token } = await getToken(config, deps);
     const client = createApiClient(config, token, deps.fetch ?? fetch);
-    const result = await createManifest({
-      client,
-      path: { p: config.project },
-      // 00 §9.1: the route requires an `Idempotency-Key`. The file's own digest makes a
-      // retry of the same manifest replay the stored 201 instead of writing a second
-      // record, and it is the same value the server hashes into `BodySha256`.
-      headers: { 'Idempotency-Key': createHash('sha256').update(body).digest('hex') },
-      // The generated `body` is typed as the parsed `ManifestV1`, but the contract sends
-      // the RAW bytes: the server hashes the canonical form, and a JSON round trip could
-      // lose number precision. `bodySerializer: null` stops the client's default
-      // `JSON.stringify` from re-encoding them.
-      body: body as unknown as ManifestV1,
-      bodySerializer: null,
-      signal: AbortSignal.timeout(requestTimeoutMs),
-    });
+    const result = await callApi(
+      (signal) =>
+        createManifestRawBytes(
+          client,
+          config.project,
+          // 00 §9.1: the route requires an `Idempotency-Key`. The file's own digest makes a
+          // retry of the same manifest replay the stored 201 instead of writing a second
+          // record, and it is the same value the server hashes into `BodySha256`.
+          createHash('sha256').update(body).digest('hex'),
+          body,
+          signal,
+        ),
+      // The digest key makes the upload replay-safe, so a transport failure, a 429 or a 5xx
+      // is retried with the SAME key and the SAME bytes.
+      { policy: 'replay-safe', deps },
+    );
     const response = result.response;
     if (response === undefined) {
       // A network error, a timeout or a refused redirect: the SDK returns no response.
@@ -95,6 +106,30 @@ export const manifestsUploadCommand: CommandDefinition = {
     return ExitCode.Ok;
   },
 };
+
+/**
+ * `POST /v1/projects/{p}/manifests` with the file's own bytes. The generated operation
+ * types `body` as the parsed `ManifestV1`, but the contract sends the RAW bytes: the
+ * server hashes the canonical form, and a JSON round trip could lose number precision.
+ * The client's own `post` takes an untyped body, and `bodySerializer: null` stops the
+ * default `JSON.stringify` from re-encoding them, so no type assertion is needed.
+ */
+function createManifestRawBytes(
+  client: Client,
+  project: string,
+  idempotencyKey: string,
+  body: Uint8Array,
+  signal: AbortSignal,
+) {
+  return client.post<CreateManifestResponses, CreateManifestErrors>({
+    url: createManifestPath,
+    path: { p: project },
+    headers: { 'Idempotency-Key': idempotencyKey, 'Content-Type': 'application/json' },
+    body,
+    bodySerializer: null,
+    signal,
+  });
+}
 
 /**
  * Reads the manifest file with a hard byte cap. The size is never trusted from `stat`

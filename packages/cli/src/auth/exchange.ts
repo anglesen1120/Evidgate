@@ -5,10 +5,9 @@
 // `CliError` whose `code` echoes the server's `error.code` verbatim (contracts/cli.md
 // §5). The exchanged token is registered with the redactor before it is validated or
 // returned, so it can never reach a writer (T78).
-import { setTimeout as delay } from 'node:timers/promises';
-
 import { exchangeCiToken, type CiTokenRequest } from '@evidgate/sdk';
 
+import { callApi } from '../callApi.js';
 import { createApiClient } from '../client.js';
 import { envNames, isLoopbackApiUrl, resolveTokenSource, type ResolvedConfig } from '../config.js';
 import { CliError, type CliErrorOptions } from '../errors.js';
@@ -29,10 +28,14 @@ export interface ExchangedToken {
   readonly source: ExchangeSource;
 }
 
-/** Injected seams so a spec can stub transport and the 429 back-off. */
+/** Injected seams so a spec can stub transport, the clock and the retry back-off. */
 export interface ExchangeDeps {
   readonly fetch?: typeof fetch;
   readonly sleep?: (ms: number) => Promise<void>;
+  /** Uniform sample in `[0, 1)` for the jittered retry backoff. */
+  readonly random?: () => number;
+  /** Clock in milliseconds; it drives the retry budget and an HTTP-date `Retry-After`. */
+  readonly now?: () => number;
 }
 
 /** Thrown for HTTP 401/403 from `/v1/ci/token`; the caller purges the cache entry. */
@@ -47,7 +50,7 @@ export class ExchangeAuthError extends CliError {
 }
 
 const requestTimeoutMs = 30_000;
-const maxRetryAfterMs = 60_000;
+/** The wait contracts/cli.md §5 documents when a 429 names no usable `Retry-After`. */
 const defaultRetryAfterMs = 1_000;
 /** The audience the server's `CiAuthOptions.GithubOidcAudience` expects. */
 const githubOidcAudience = 'evidgate';
@@ -73,9 +76,17 @@ const bindingHints: Readonly<Record<string, string>> = {
 };
 
 /**
- * Exchanges the configured credential for a short-lived `ci_producer` token. A 429 is
- * retried once after `Retry-After`; 401/403 raise `ExchangeAuthError`; every other
- * failure raises a `CliError` (contracts/cli.md §5).
+ * Exchanges the configured credential for a short-lived `ci_producer` token. openapi
+ * `/ci/token` is "Idempotency-Key exempt: `jti` single-use is the arbiter", so a replay
+ * is not free: only the two answers the server produces BEFORE it mints a token are
+ * retried — 429 `rate_limited` and 503 `unavailable` (no signing key / issuer keys
+ * unreachable). A transport failure, a 500/502/504 or any other status is final, because
+ * the token may already exist and the single-use `jti` would refuse the replay. That makes
+ * the retry safe in the other direction too: the server's `jti` arbiter caps an exchange at
+ * one token, so no retry path here can mint a second one — the worst case is a refused
+ * replay the command reports as `token_replayed`.
+ * 401/403 raise `ExchangeAuthError`; every other failure raises a `CliError`
+ * (contracts/cli.md §5).
  */
 export async function exchangeToken(
   config: ResolvedConfig,
@@ -86,40 +97,37 @@ export async function exchangeToken(
     throw new CliError(`missing configuration: ${exchangeSourceNames}`, { code: 'missing_config' });
   }
   const fetchImpl = deps.fetch ?? fetch;
-  const sleep = deps.sleep ?? ((ms: number) => delay(ms));
   const credential = await resolveCredential(config, source, fetchImpl);
   const client = createApiClient(config, credential.bearer, fetchImpl);
   const body = buildBody(config, source, credential);
 
-  let retried = false;
-  for (;;) {
-    const result = await exchangeCiToken({
-      client,
-      body,
-      signal: AbortSignal.timeout(requestTimeoutMs),
-    });
-    const response = result.response;
-    if (response === undefined) {
-      // A network error, a timeout or a refused redirect: the SDK returns no response.
-      throw transportError(result.error);
-    }
-    if (response.ok) {
-      return readSuccess(result.data, source);
-    }
-    if (response.status === 429 && !retried) {
-      retried = true;
-      await sleep(retryAfterMs(response.headers.get('retry-after')));
-      continue;
-    }
-    const envelope = readEnvelope(result.error, response);
-    if (response.status === 401 || response.status === 403) {
-      throw new ExchangeAuthError(envelope.message, {
-        ...envelope.options,
-        status: response.status,
-      });
-    }
-    throw new CliError(envelope.message, envelope.options);
+  const result = await callApi((signal) => exchangeCiToken({ client, body, signal }), {
+    // One retry, the pre-tenant exchange's own budget: a credential is single-use, so a
+    // second replay buys nothing, and contracts/cli.md §5 documents the 1 s floor for a
+    // 429 that names no usable `Retry-After`. The budget holds two request timeouts plus
+    // the 60 s `Retry-After` cap, so a documented wait never blocks the single retry.
+    policy: 'pre-processing',
+    maxAttempts: 2,
+    budgetMs: 120_000,
+    fallbackRetryAfterMs: defaultRetryAfterMs,
+    deps,
+  });
+  const response = result.response;
+  if (response === undefined) {
+    // A network error, a timeout or a refused redirect: the SDK returns no response.
+    throw transportError(result.error);
   }
+  if (response.ok) {
+    return readSuccess(result.data, source);
+  }
+  const envelope = readEnvelope(result.error, response);
+  if (response.status === 401 || response.status === 403) {
+    throw new ExchangeAuthError(envelope.message, {
+      ...envelope.options,
+      status: response.status,
+    });
+  }
+  throw new CliError(envelope.message, envelope.options);
 }
 
 /**
@@ -325,24 +333,4 @@ function readEnvelope(error: unknown, response: Response): EnvelopeInfo {
       ...(mapped.requestId !== undefined ? { requestId: mapped.requestId } : {}),
     },
   };
-}
-
-/** `Retry-After` as delta-seconds or an HTTP-date; missing/invalid → 1 s, clamped 0..60 s. */
-function retryAfterMs(header: string | null): number {
-  const value = header?.trim();
-  if (value === undefined || value.length === 0) {
-    return defaultRetryAfterMs;
-  }
-  if (/^\d+$/.test(value)) {
-    return Math.min(Math.max(Number(value) * 1000, 0), maxRetryAfterMs);
-  }
-  // Only an IMF-fixdate (`Sun, 06 Nov 1994 08:49:37 GMT`) is parsed as an HTTP-date; a
-  // malformed delta such as `1.5` or `-5`, or other text, falls back to the default (D6).
-  if (/^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/.test(value)) {
-    const date = Date.parse(value);
-    if (Number.isFinite(date)) {
-      return Math.min(Math.max(date - Date.now(), 0), maxRetryAfterMs);
-    }
-  }
-  return defaultRetryAfterMs;
 }
