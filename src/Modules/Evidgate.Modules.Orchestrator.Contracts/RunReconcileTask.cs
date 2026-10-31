@@ -49,22 +49,44 @@ public static class RunReconcileContract
     public const string DeadlineProducerId = "deadline";
 
     /// <summary>
-    /// The outbox idempotency key of the collection-deadline trigger:
-    /// <c>orchestrator:run:{run}:reconcile:deadline</c>.
+    /// How many collection-deadline attempts one run may spend: the first, plus two re-arms after a dead letter.
     /// <para>
-    /// One key per run, not per fire: a run's collection deadline is fixed when the run is created, so
-    /// every sweep that finds the same run overdue writes the same key and <c>outbox_org_idem_uq</c>
-    /// keeps two sweeps from queueing two attempts. A second attempt after the deadline could only
-    /// conclude what the first one did.
+    /// A deadline reconcile that dead-letters leaves the run <c>collecting</c> past its deadline, so without a
+    /// re-arm the run would never reach a verdict. The bound is what stops a poison run — one whose attempt
+    /// always fails — from queueing a trigger on every fire for ever: three attempts ride out a transient
+    /// failure (a restart, a lock timeout) and a permanent one stops on its own, named by the sweep's warning,
+    /// for an operator to pick up.
+    /// </para>
+    /// </summary>
+    public const int DeadlineMaxAttempts = 3;
+
+    /// <summary>
+    /// The outbox idempotency key of one collection-deadline attempt:
+    /// <c>orchestrator:run:{run}:reconcile:deadline</c> for the first, and
+    /// <c>orchestrator:run:{run}:reconcile:deadline:{attempt}</c> for a re-arm.
+    /// <para>
+    /// One key per attempt, not per fire: every sweep that finds the same run overdue writes the same key for
+    /// the same attempt, so <c>outbox_org_idem_uq</c> keeps two sweeps from queueing two attempts. The first
+    /// attempt keeps the key rows already carry, and a later attempt exists only after the one before it
+    /// dead-lettered (<see cref="DeadlineMaxAttempts"/>).
     /// </para>
     /// </summary>
     /// <param name="runId">The run the sweep found past its collection deadline.</param>
-    public static string DeadlineIdempotencyKey(Guid runId) =>
-        string.Create(CultureInfo.InvariantCulture, $"orchestrator:run:{runId:D}:reconcile:{DeadlineProducerId}");
+    /// <param name="attempt">1-based attempt number; 1 (or lower) is the key the first sweep writes.</param>
+    public static string DeadlineIdempotencyKey(Guid runId, int attempt = 1) =>
+        attempt <= 1
+            ? string.Create(CultureInfo.InvariantCulture, $"orchestrator:run:{runId:D}:reconcile:{DeadlineProducerId}")
+            : string.Create(
+                CultureInfo.InvariantCulture,
+                $"orchestrator:run:{runId:D}:reconcile:{DeadlineProducerId}:{attempt}");
 
     /// <summary>
     /// The payload of the collection-deadline trigger: the run and the two declaration fields a payload
     /// of this type always carries, at zero, which the deadline path ignores.
+    /// <para>
+    /// Every attempt of one run carries this same document, so the only thing that tells two attempts apart is
+    /// the key — and a key is never reused with a different payload.
+    /// </para>
     /// </summary>
     /// <param name="runId">The run the sweep found past its collection deadline.</param>
     public static string DeadlinePayloadJson(Guid runId) =>
