@@ -2,11 +2,11 @@
 // `reporter: [['@evidgate/playwright-reporter', { spool_dir, run_id, producer_id }]]`.
 // It implements the four documented callbacks (onBegin/onTestBegin/onTestEnd/onEnd) and
 // emits one 00 §9.4 envelope per callback into the spool; it never opens a socket
-// (04 §7). Construction is fail-fast: missing/invalid options, an unsupported engine
-// (AC5) and a spool initialisation failure (mkdir/open) all throw before any callback.
-// After construction the callbacks never throw — a spool write failure is buffered and
-// re-thrown from onEnd so the Playwright run reports the reporter failure instead of
-// losing evidence silently (task file §5).
+// (04 §7). Construction is fail-fast: missing/invalid options and an unsupported engine
+// all throw before any callback runs. After construction the callbacks never throw:
+// a spool failure is buffered and reported from onEnd as `{ status: 'failed' }` plus one
+// `[evidgate] reporter failure` stderr line, so the run fails instead of losing evidence
+// silently.
 //
 // 04.3.2-T1.2/T1.4: every test envelope carries the resolved identity — `ext.case_id`
 // (annotation `evidgate.id`, else the sidecar manifest), `ext.variant_hash` (server
@@ -16,7 +16,7 @@
 // `{ status: 'failed' }` when any test lacked a complete identity (no `case_id`, no
 // `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`;
 // the gate also writes one `[evidgate]` line to stderr, naming the per-cause counts, so a
-// CI log explains the failure, and it overrides the status only for a `passed` run (S3/C3).
+// CI log explains the failure, and it overrides the status only for a `passed` run.
 //
 // 04.3.2-T2.1/T2.2: each attempt is its own `test.finished` with `attempt_no = retry + 1`
 // (AC5); the envelope `status` is the raw Playwright status and `ext.normalized` (plus
@@ -29,7 +29,7 @@
 // when Playwright selected a shard, or the run is refused before any envelope (two shards
 // sharing one producer would interleave one sequence). Because the config is only known
 // at `onBegin`, the spool writer is opened there — a spool initialisation failure is
-// therefore buffered from `onBegin` and re-thrown from `onEnd` like every other callback
+// therefore buffered from `onBegin` and failed from `onEnd` like every other callback
 // failure, instead of at construction. In a `merge-reports` replay the reporter emits
 // nothing: each event already reached the spool under its own shard's producer id and
 // sequence, and the replay exposes no per-event shard identity (AC3).
@@ -43,14 +43,15 @@
 // earlier test whose uploads are still in flight. Sequence numbers stay contiguous either
 // way: they are assigned at append time, never at draft time.
 // Warnings (`attachment_*`, `shards_*`) go through the capped `warn()` path. `onEnd`
-// therefore has two shapes: with nothing pending it is the synchronous callback of 04.3.1
-// (a buffered failure still THROWS synchronously); with uploads pending it returns a Promise
-// that waits for them under `attachment_drain_deadline_ms` (default 120 s, NFR-04-1) and
-// then appends the held batches. The deadline stops the WAIT only: an upload whose PUT
+// therefore has two shapes: with nothing pending it is the synchronous callback of 04.3.1;
+// with uploads pending it returns a Promise that waits for them under
+// `attachment_drain_deadline_ms` (default 120 s, NFR-04-1) and then appends the held
+// batches. The deadline stops the WAIT only: an upload whose PUT
 // already started runs until its own deadline and is abandoned at its next checkpoint, never
 // cancelled mid-PUT; one `attachment_drain_deadline` warning summarises every abandoned
-// attempt. Then the same end sequence runs, where a buffered failure surfaces as a rejection
-// instead. A merge-replay or a reporter without a writer never touches attachments at all.
+// attempt. Then the same end sequence runs in both shapes, and a buffered failure fails the
+// run through the returned status instead of a throw. A merge-replay or a
+// reporter without a writer never touches attachments at all.
 import { delimiter } from 'node:path';
 
 import type {
@@ -92,6 +93,7 @@ import {
   type VariantOutcome,
   type WarningPayload,
 } from './identity.js';
+import { failureCode, ProducerShardConflictError } from './reporterFailure.js';
 import { loadSidecarIndex, type SidecarFs } from './sidecar.js';
 import { isMergeReplay, isProducerId, resolveProducerId } from './shard.js';
 import type { ResolvedProducerId } from './shard.js';
@@ -595,7 +597,7 @@ export class EvidgateReporter implements Reporter {
         this.emitSpoolNotices();
       } catch (error) {
         // A spool failure while appending a held batch is buffered like every other callback
-        // failure: `onEnd` rethrows it (synchronously when nothing else is pending).
+        // failure, and `onEnd` fails the run for it instead of throwing.
         this.bufferedError ??= toError(error);
       } finally {
         this.attachmentsQueued -= 1;
@@ -606,40 +608,35 @@ export class EvidgateReporter implements Reporter {
   /**
    * Emits the `unmapped` summary and the `run_end` marker, then closes the spool. Returns
    * `{ status: 'failed' }` when any test lacked a complete identity (no `case_id`, no
-   * `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`
-   * (AC2/S3); Playwright awaits the return value and overrides the run status with it
+   * `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`,
+   * and likewise when a spool failure was buffered or the spool could not be closed.
+   * Playwright awaits the return value and overrides the run status with it
    * (node_modules/playwright/lib/runner/index.js:1644). The override applies only to a
-   * `passed` run — an `interrupted`/`timedout` run keeps its own status (C3). The gate
-   * also writes one `[evidgate]` line to stderr, naming the per-cause counts, so a CI log
-   * explains the failure.
+   * `passed` run — an `interrupted`/`timedout` run keeps its own status. The identity
+   * gate also writes one `[evidgate]` line to stderr, naming the per-cause counts, so a CI
+   * log explains the failure.
    *
-   * 04.3.3-T2.2 split: with no attachment work pending this is called synchronously from
-   * `onEnd`, so a buffered spool failure still THROWS synchronously; with uploads pending it
-   * is called from {@link endAfterDrain} and the same failure surfaces as a rejection, which
-   * Playwright awaits. The declaration stays `void` (Playwright's own interface allows a
-   * Promise, and it awaits whatever is returned), so both arms return their real value behind
-   * a `void` assertion: the synchronous one keeps its synchronous throw and the identity-gate
-   * object, and a Promise-typed declaration would turn every existing bare
-   * `reporter.onEnd(...)` call site into a floating promise (see the arm comments).
+   * With no attachment work pending the end sequence runs synchronously; with uploads
+   * pending it runs after {@link endAfterDrain} drains them. Neither shape throws:
+   * Playwright logs a throwing reporter as an internal reporter error and only fails the
+   * run through its own error bookkeeping, while the returned status is the documented
+   * failure channel (and a caller that drops reporter errors cannot turn the loss into a
+   * passing run). `Reporter` types no synchronous non-void return, so a failure is boxed in
+   * a resolved promise — the value Playwright awaits — and a passing run returns nothing.
    */
-  onEnd(result: FullResult): void {
-    // 04.3.3-T2.2: nothing pending → the 04.3.1 callback, unchanged and synchronous.
+  onEnd(result: FullResult): Promise<{ status: 'failed' } | undefined> | undefined {
     if (this.attachmentsQueued === 0 && !(this.pipeline?.hasPending ?? false)) {
-      // The identity-gate object is returned at runtime behind the `void` arm, exactly as the
-      // pre-split signature documented: Playwright awaits whatever comes back, and a
-      // Promise-typed declaration would make every synchronous call site a floating promise.
-      return this.finishRun(result) as unknown as void;
+      const failure = this.finishRun(result);
+      return failure === undefined ? undefined : Promise.resolve(failure);
     }
-    // Same idiom for the async arm: Playwright awaits the returned Promise, while the
-    // declared `void` keeps every existing bare `reporter.onEnd(...)` call site legal.
-    return this.endAfterDrain(result) as unknown as void;
+    return this.endAfterDrain(result);
   }
 
   /**
    * The asynchronous `onEnd` (04.3.3-T2.2): drains the attachment pipeline under the deadline,
    * appends the held batches, emits ONE `attachment_drain_deadline` warning naming how many
    * attempts lost their `artifact_ids`, then runs the synchronous end sequence. Never blocks
-   * past `attachment_drain_deadline_ms`; a buffered failure becomes a rejection.
+   * past `attachment_drain_deadline_ms`; a buffered failure fails the run, never the promise.
    */
   private async endAfterDrain(result: FullResult): Promise<{ status: 'failed' } | undefined> {
     try {
@@ -669,13 +666,13 @@ export class EvidgateReporter implements Reporter {
     return this.finishRun(result);
   }
 
-  /** The end sequence itself: summary, `run_end`, close, identity gate, buffered rethrow. */
+  /** The end sequence itself: summary, `run_end`, close, identity gate, spool-failure report. */
   private finishRun(result: FullResult): { status: 'failed' } | undefined {
     const writer = this.writer;
     if (writer !== undefined) {
       this.guard(() => {
         if (this.unidentifiedCount > 0) {
-          // C4/P3: the summary bypasses the 100-envelope cap, so the counts that explain the
+          // The summary bypasses the 100-envelope cap, so the counts that explain the
           // failure survive even when the run already emitted MAX_WARNING_ENVELOPES warnings.
           this.emitWarning({
             code: 'unmapped',
@@ -705,7 +702,7 @@ export class EvidgateReporter implements Reporter {
     }
     const gateTripped = !this.allowUnmapped && this.unidentifiedCount > 0;
     if (gateTripped) {
-      // C3: one line, so a run that fails on identity says why in the CI log.
+      // One line, so a run that fails on identity says why in the CI log.
       process.stderr.write(
         `[evidgate] ${this.unidentifiedCount} test(s) without a complete identity ` +
           `(${this.identityCauses()}); set EVIDGATE_ALLOW_UNMAPPED=1 to allow\n`,
@@ -720,17 +717,33 @@ export class EvidgateReporter implements Reporter {
       }
     }
     const failure = this.bufferedError ?? closeError;
-    if (failure !== null) throw failure;
-    if (gateTripped && result.status === 'passed') {
+    if (failure !== null) this.reportBufferedFailure(failure);
+    // Both causes fail a passed run; an already failed, timed out or interrupted run keeps
+    // its own status, and therefore its own non-zero exit code.
+    if (result.status === 'passed' && (gateTripped || failure !== null)) {
       return { status: 'failed' };
     }
     return undefined;
   }
 
   /**
+   * Reports a buffered callback failure — a spool write or close failure, a refused producer
+   * id, a throwing identity resolver — through the `onEnd` result instead of a throw,
+   * because Playwright only routes a throwing reporter into its internal reporter error
+   * bookkeeping. Only an errno/reason code leaves the process: the message can carry a
+   * resolver-supplied value, a presigned URL or the spool path, and none of those belong in
+   * a CI log.
+   */
+  private reportBufferedFailure(failure: Error): void {
+    process.stderr.write(
+      `[evidgate] reporter failure (${failureCode(failure)}); the run's evidence is incomplete\n`,
+    );
+  }
+
+  /**
    * The writer to emit into, or undefined when this reporter emits nothing: a
    * `merge-reports` replay (AC3), or a run whose `onBegin` was refused before the writer
-   * existed (the refusal is re-thrown from `onEnd`).
+   * existed (the refusal fails the run at `onEnd`).
    */
   private activeWriter(): SpoolWriter | undefined {
     if (this.mergeReplay) return undefined;
@@ -738,15 +751,15 @@ export class EvidgateReporter implements Reporter {
   }
 
   /**
-   * The producer identity this run writes under (T54/AC1/AC2).
+   * The producer identity this run writes under.
    *
    * Precedence: an explicit `producer_id` option wins over the derivation, but only when it
    * agrees with Playwright's shard. With a shard config the two must match: two shards
    * writing under one producer would interleave one sequence, and a wrong id is a server
    * 422 `unknown_producer` anyway, so the run is refused before any envelope instead of
    * failing later per batch. Without a shard config there is nothing to compare against:
-   * an explicit id is honoured as before (04.3.1-T1 configs), and the writer records no
-   * shard slot; omitting the option derives `shard-1` (T54) and records slot 1.
+   * an explicit id is honoured as before, and the writer records no shard slot; omitting
+   * the option derives `shard-1` and records slot 1.
    */
   private resolveProducer(config?: FullConfig): { producer_id: string; shard?: SpoolShard } {
     const derived = resolveProducerId(config);
@@ -756,7 +769,7 @@ export class EvidgateReporter implements Reporter {
       config.shard !== null &&
       producerId !== derived.producer_id
     ) {
-      throw new Error(
+      throw new ProducerShardConflictError(
         `@evidgate/playwright-reporter: the producer_id option ` +
           `${JSON.stringify(this.explicitProducerId)} conflicts with the shard Playwright ` +
           `selected (${String(config.shard.current)}/${String(config.shard.total)}): this ` +

@@ -128,7 +128,7 @@ describe('AC2 (T84): a restarted shard resumes the same producer', () => {
     reporter.onBegin(fullConfig(3, 1), suiteOf([fakeTest(3)]));
     reporter.onTestBegin(fakeTest(3), fakeResult());
     reporter.onTestEnd(fakeTest(3), fakeResult());
-    reporter.onEnd(fullResult());
+    void reporter.onEnd(fullResult());
 
     // One producer directory, named for the manifest slot: no `shard-1-restart`, no `-2`.
     expect(readdirSync(join(spool, runId))).toEqual(['shard-1']);
@@ -166,7 +166,7 @@ describe('AC2 (T84): a restarted shard resumes the same producer', () => {
     const spool = tempSpool();
     const runId = 'run-no-invention';
     const reporter = startRun(spool, runId, [fakeTest(0)]);
-    reporter.onEnd(fullResult());
+    void reporter.onEnd(fullResult());
 
     // The manifest declared three slots; this process owns exactly one of them, by name.
     expect(readdirSync(join(spool, runId))).toEqual(['shard-1']);

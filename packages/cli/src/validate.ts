@@ -396,7 +396,7 @@ export function canonicalUri(schemaKey: string): string {
 const schemaRoots = ['schemas', 'adapter', 'manifest', 'catalog'] as const;
 
 /** One loaded schema file: its path (for the duplicate-key message) and raw text. */
-interface SchemaDocument {
+export interface SchemaDocument {
   readonly file: string;
   readonly text: string;
 }
@@ -468,9 +468,12 @@ function listJsonFiles(directory: string): string[] {
  * system or the network.
  */
 export function loadContractSchemas(contractsDirectory: string): ContractSchemaSet {
-  const ajv = createContractAjv();
+  return compileSchemaDocuments(collectSchemaDocuments(contractsDirectory));
+}
 
-  const documents = collectSchemaDocuments(contractsDirectory);
+/** One contract schema registry from an already-collected document set. */
+export function compileSchemaDocuments(documents: Map<string, SchemaDocument>): ContractSchemaSet {
+  const ajv = createContractAjv();
 
   // The canonical URI is the address a sibling file may $ref and the key Ajv
   // resolves it under; the file's own `$id` is its file name, which nothing

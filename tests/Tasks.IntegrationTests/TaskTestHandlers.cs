@@ -127,11 +127,16 @@ public sealed class BlockingTaskProbe
     private int _runs;
     private int _cancelledAtEntry;
 
-    /// <summary>Completes when a run has reached the wait, so a test never polls for it.</summary>
-    internal Task Entered => _entered.Task;
+    /// <summary>Waits until a run has reached the wait, so a test never polls for it.</summary>
+    internal async Task WaitEnteredAsync(TimeSpan timeout, CancellationToken cancellationToken) =>
+        await _entered.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
 
-    /// <summary>Completes when a run's token fired while it was waiting.</summary>
-    internal Task Cancelled => _cancelled.Task;
+    /// <summary>Waits until a run's token fired while it was waiting.</summary>
+    internal async Task WaitCancelledAsync(TimeSpan timeout, CancellationToken cancellationToken) =>
+        await _cancelled.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Whether a run's token has fired while it was waiting.</summary>
+    internal bool HasCancelled => _cancelled.Task.IsCompleted;
 
     /// <summary>Total runs the handler saw.</summary>
     internal int Runs => Volatile.Read(ref _runs);

@@ -469,13 +469,29 @@ export function isRetryable(status: number, error: unknown): boolean {
   return !(isErrorEnvelope(error) && error.error.retryable === false);
 }
 
+/** Delta-seconds or the HTTP-date form `Retry-After` is allowed to take. */
+const deltaSecondsPattern = /^[0-9]+$/;
+const httpDatePattern = /^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+
+export interface RetryAfterOptions {
+  /**
+   * Accept only those two forms. `Date.parse` also reads text like `-5` or `1.5` as a past
+   * date, and a caller for which 0 would mean "retry at once" must not honour one.
+   */
+  readonly strict?: boolean;
+}
+
 /**
- * `Retry-After` as delta-seconds or an HTTP-date (00 §9.1). An absent or unparsable value
- * is `undefined` (the caller falls back to jittered backoff); a date in the past is 0.
+ * `Retry-After` as delta-seconds or an HTTP-date. An absent or unparsable value is
+ * `undefined` (the caller falls back to jittered backoff); a date in the past is 0.
  * The caller treats this value as a floor under the jittered backoff, so a 0 never means
  * "retry at once".
  */
-export function retryAfter(response: Response, now: number): number | undefined {
+export function retryAfter(
+  response: Response,
+  now: number,
+  options: RetryAfterOptions = {},
+): number | undefined {
   const raw = response.headers.get('retry-after');
   if (raw === null) {
     return undefined;
@@ -484,8 +500,11 @@ export function retryAfter(response: Response, now: number): number | undefined 
   if (value === '') {
     return undefined;
   }
-  if (/^[0-9]+$/.test(value)) {
+  if (deltaSecondsPattern.test(value)) {
     return Number(value) * 1000;
+  }
+  if (options.strict === true && !httpDatePattern.test(value)) {
+    return undefined;
   }
   const date = Date.parse(value);
   if (Number.isNaN(date)) {

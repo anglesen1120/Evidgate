@@ -17,12 +17,17 @@
 //
 // A 401 purges the cached CI token (04.2.1-T1 hand-over, contracts/cli.md §7/§9); a 403
 // or a 409 keeps it, because neither says the token is dead.
+//
+// The request is replay-safe: it carries the derived `Idempotency-Key`, so a network
+// failure, a 429 or a 5xx is retried a bounded number of times by `callApi` with the same
+// key and body, and every other 4xx is final.
 import { createHash } from 'node:crypto';
 
 import { createRun, type CreateRunRequest, type RunRefRequest } from '@evidgate/sdk';
 
 import { getToken } from '../auth/getToken.js';
 import { deleteCachedToken } from '../auth/tokenCache.js';
+import { callApi } from '../callApi.js';
 import { createApiClient } from '../client.js';
 import { CliError } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
@@ -30,7 +35,6 @@ import { serverErrorFromResponse, transportError } from '../serverError.js';
 
 import type { CommandDefinition, ParsedValues } from './index.js';
 
-const requestTimeoutMs = 30_000;
 /**
  * The usage-error hint `main.ts` attaches to its parse-level usage errors (`helpHint`
  * there, module-private). Repeated here so the command-level flag usage errors carry the
@@ -160,13 +164,19 @@ export const runsCreateCommand: CommandDefinition = {
       ...(release === undefined ? {} : { release }),
       ...(ref === undefined ? {} : { ref }),
     };
-    const result = await createRun({
-      client,
-      path: { p: config.project },
-      headers: { 'Idempotency-Key': idempotencyKey },
-      body,
-      signal: AbortSignal.timeout(requestTimeoutMs),
-    });
+    const result = await callApi(
+      (signal) =>
+        createRun({
+          client,
+          path: { p: config.project },
+          headers: { 'Idempotency-Key': idempotencyKey },
+          body,
+          signal,
+        }),
+      // The request carries an Idempotency-Key, so a transport failure, a 429 or a 5xx is
+      // retried with the SAME key and the SAME body: the server replays the stored run.
+      { policy: 'replay-safe', deps },
+    );
     const response = result.response;
     if (response === undefined) {
       // A network error, a timeout or a refused redirect: the SDK returns no response.

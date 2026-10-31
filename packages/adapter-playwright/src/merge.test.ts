@@ -125,7 +125,7 @@ function runShard(
     reporter.onTestBegin(test, fakeResult());
     reporter.onTestEnd(test, fakeResult());
   }
-  reporter.onEnd(fullResult());
+  void reporter.onEnd(fullResult());
 }
 
 /** The merge replay: one instance, the merged config, every shard's events in turn. */
@@ -209,7 +209,7 @@ describe('AC3: merge-reports keeps each shard’s producer and sequence', () => 
     reporter.onBegin(mergedConfig(), suiteOf([test]));
     reporter.onTestBegin(test, fakeResult());
     reporter.onTestEnd(test, fakeResult());
-    reporter.onEnd(fullResult());
+    void reporter.onEnd(fullResult());
 
     // Unsharded is `shard-1` (T54), because the argv says this is a test run, not a replay.
     expect(readdirSync(join(spool, 'run-unsharded'))).toEqual(['shard-1']);

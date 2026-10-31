@@ -626,7 +626,7 @@ describe('createEnvelopeValidator', () => {
     expect(controlThrown.message).toContain('\\u0007');
   });
 
-  it('locates the contracts tree without an explicit directory', () => {
+  it('validates with the packaged schemas when no contracts directory is passed', () => {
     const resolved = createEnvelopeValidator();
 
     expect(() => resolved(envelopeText(1), 1)).not.toThrow();

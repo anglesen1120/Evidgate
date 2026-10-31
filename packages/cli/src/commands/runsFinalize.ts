@@ -26,16 +26,18 @@
 // is a stderr warning, not an error — the run IS finalized at that point.
 //
 // A 403 `producer_slot_taken`, a 422 `unknown_producer`, a 422 `manifest_invalid` or a 409
-// is never retried: the command makes exactly one request and exits 3 with the server's
-// `error.code` and `request_id` verbatim (T9). The hint says the command is idempotent, so
-// re-running it after fixing the cause is safe. A 401 purges the cached CI token
-// (04.2.1-T1 hand-over, contracts/cli.md §7); a 403 or 422 keeps it.
+// is never retried: it exits 3 with the server's `error.code` and `request_id` verbatim
+// (T9). A transport failure, a 429 or a 5xx is retried a bounded number of times under the
+// SAME derived key and body, so a replay cannot declare a second slot. The hint says the
+// command is idempotent, so re-running it after fixing the cause is safe. A 401 purges the
+// cached CI token (04.2.1-T1 hand-over, contracts/cli.md §7); a 403 or 422 keeps it.
 import { createHash } from 'node:crypto';
 
 import { finalizeRun } from '@evidgate/sdk';
 
 import { getToken } from '../auth/getToken.js';
 import { deleteCachedToken } from '../auth/tokenCache.js';
+import { callApi } from '../callApi.js';
 import { createApiClient } from '../client.js';
 import { resolveSpoolDir, spoolDirMissingError } from '../config.js';
 import { CliError } from '../errors.js';
@@ -46,7 +48,6 @@ import { assertNoLiveWriter } from '../spoolLock.js';
 
 import type { CommandDefinition, ParsedValues } from './index.js';
 
-const requestTimeoutMs = 30_000;
 /**
  * The usage-error hint `main.ts` attaches to its parse-level usage errors (`helpHint`
  * there, module-private). Repeated here so the command-level flag usage errors carry the
@@ -214,19 +215,26 @@ export const runsFinalizeCommand: CommandDefinition = {
 
         const { token } = await getToken(config, deps);
         const client = createApiClient(config, token, deps.fetch ?? fetch);
-        const result = await finalizeRun({
-          client,
-          path: { r: runId },
-          headers: { 'Idempotency-Key': idempotencyKey },
-          body: {
-            producer_id: producerId,
-            shard,
-            last_sequence: lastSequence,
-            count,
-            manifest_hash: manifestHash,
-          },
-          signal: AbortSignal.timeout(requestTimeoutMs),
-        });
+        const body = {
+          producer_id: producerId,
+          shard,
+          last_sequence: lastSequence,
+          count,
+          manifest_hash: manifestHash,
+        };
+        const result = await callApi(
+          (signal) =>
+            finalizeRun({
+              client,
+              path: { r: runId },
+              headers: { 'Idempotency-Key': idempotencyKey },
+              body,
+              signal,
+            }),
+          // The derived key makes a replay a no-op the server recognises, so a transport
+          // failure, a 429 or a 5xx is retried with the SAME key and body.
+          { policy: 'replay-safe', deps },
+        );
         const response = result.response;
         if (response === undefined) {
           // A network error, a timeout or a refused redirect: the SDK returns no response.
@@ -239,9 +247,9 @@ export const runsFinalizeCommand: CommandDefinition = {
           }
           // A 403 `producer_slot_taken`, a 422 `unknown_producer`/`manifest_invalid` and a
           // 409 therefore reach stderr as `evidgate: error <code>` with the server's
-          // `request_id`, and exit 3. Exactly one request is made: nothing here retries,
-          // and the hint says a re-run is safe because the server arbitrates on the slot's
-          // closed marker, never on the key.
+          // `request_id`, and exit 3. None of them is retried, and the hint says a re-run
+          // is safe because the server arbitrates on the slot's closed marker, never on
+          // the key.
           throw finalizeError(result.error, response);
         }
         if (response.status !== 202) {
