@@ -12,7 +12,7 @@
 // admitted only as one of the fixed constants of `telemetry-names.ts`, so content cannot reach a
 // name, and `error.message` is not an attribute. Row samples are assembled at runtime (`join`,
 // `repeat`) so no credential or e-mail literal sits in the repository.
-import type { AttributeValue, Attributes } from '@opentelemetry/api';
+import type { Attributes } from '@opentelemetry/api';
 
 import { scrubAttributes } from './scrub';
 
@@ -21,17 +21,12 @@ const EMAIL = ['julia.moreau', 'example.test'].join('@');
 const RUN_ID = ['3f2b9d54', '0d7e', '4c1a', '9a2e', '6b0f5c7d81c4'].join('-');
 const CREDENTIAL = 'abcdef1234567890';
 
-/** A cast through the index signature so a row may hold an array or an object, both of which drop. */
-function attributesOf(entries: Readonly<Record<string, unknown>>): Attributes {
-  return entries as Attributes;
-}
-
 interface AttributeRow {
   readonly rule: string;
   readonly key: string;
   readonly value: unknown;
   /** `undefined` means the key is dropped. */
-  readonly expected: AttributeValue | undefined;
+  readonly expected: unknown;
 }
 
 const ATTRIBUTE_ROWS: AttributeRow[] = [
@@ -348,7 +343,7 @@ const ATTRIBUTE_ROWS: AttributeRow[] = [
 
 describe('scrubAttributes', () => {
   it.each(ATTRIBUTE_ROWS)('$rule', (row: AttributeRow) => {
-    const scrubbed = scrubAttributes(attributesOf({ [row.key]: row.value }));
+    const scrubbed = scrubAttributes({ [row.key]: row.value });
 
     if (row.expected === undefined) {
       expect(scrubbed).not.toHaveProperty(row.key);
@@ -358,7 +353,7 @@ describe('scrubAttributes', () => {
   });
 
   it('keeps every allowlisted key of one span and drops the rest, in one pass', () => {
-    const input = attributesOf({
+    const input: Attributes = {
       'http.request.method': 'GET',
       'evidgate.route': '/projects/:projectId/runs',
       'evidgate.locale': 'en',
@@ -367,7 +362,7 @@ describe('scrubAttributes', () => {
       'error.message': `boom for ${EMAIL}`,
       'http.url': `https://acme.example.test/v1/runs?token=${CREDENTIAL}`,
       'user.email': EMAIL,
-    });
+    };
 
     expect(scrubAttributes(input)).toEqual({
       'http.request.method': 'GET',
@@ -379,11 +374,11 @@ describe('scrubAttributes', () => {
   });
 
   it('never mutates the attributes it is given', () => {
-    const input = attributesOf({
+    const input: Attributes = {
       'error.type': 'TypeError',
       'http.route': `/v1/projects/${RUN_ID}/runs`,
       'user.email': EMAIL,
-    });
+    };
     const before = structuredClone(input);
 
     scrubAttributes(input);
