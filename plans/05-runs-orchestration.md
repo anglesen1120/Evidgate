@@ -206,6 +206,7 @@
 | 05.3.2-T3 | Collection deadline + late window (receive timestamp kept; late evidence → new revision under policy) | M | V1 | G2 | 05.3.2-T2, 07.1.1-T1 |
 | 05.3.2-T4 | Reconciliation idempotency: duplicate finalize, out-of-order finalize, late producer, retry-safe runs | M | V1 | G2 | 05.3.2-T2 |
 | 05.3.2-T5 | `evidence_revision` table owned by 05: append-only, `revision_no`, `completeness`, `missing[]` (00 §8.5 codes incl. `setup_error` — T14), `artifact_set_hash` from 06's freeze result, event watermark; unique `(org_id, run_id, revision_no)` + unique `(org_id, id)` | M | V1 | G2 | 05.3.2-T1 |
+| 05.3.2-T6 | `GET /v1/runs/{r}/evidence-revisions`: cursor-paged, newest first, `revision_no`, `created_at`, `completeness`, `missing[]`, `evaluation_id` or `null` (`null` until an evaluation exists, so the route needs no evaluation code; S171 decision A; read for the evidence panel 09.3.1-T3) | S | V1 | G2 | 05.3.2-T5 |
 
 #### Story 05.3.3 Case attempts — acceptance: every executed attempt exists exactly once per `(run, execution_key, attempt_no)` with raw status as sent plus normalised status; an attempt row becomes visible only when 04's event batch commits; a failed setup marks dependant attempts `blocked`, never `passed`.
 | ID | Task | Size | Version | Milestone | Depends on |
@@ -333,7 +334,7 @@
 |---|---|---|---|---|
 | 05.1 Manifest | 7.5 | — | — | 7.5 |
 | 05.2 Run creation | 7.5 | — | — | 7.5 |
-| 05.3 Lifecycle, finalize, reconcile | 10.0 | — | — | 10.0 |
+| 05.3 Lifecycle, finalize, reconcile | 10.5 | — | — | 10.5 |
 | 05.4 Cancel | 2.5 | — | — | 2.5 |
 | 05.5 Rerun | 5.5 | — | — | 5.5 |
 | 05.6 Release and components | 3.0 | — | — | 3.0 |
@@ -341,9 +342,9 @@
 | 05.8 Android device lease | — | 3.0 | — | 3.0 |
 | 05.9 iOS and hosted runners (placeholder, rough) | — | — | 2.0 | 2.0 |
 | 05.10 Consistency jobs | 1.5 | 1.0 | — | 2.5 |
-| **Total** | **37.5** | **22.0** | **2.0** | **61.5** |
+| **Total** | **38.0** | **22.0** | **2.0** | **62.0** |
 
-→ with 20 % buffer **73.8** person-days (V1 37.5, V2 22.0, V3 2.0 rough). Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals are the sum of their task rows.
+→ with 20 % buffer **74.4** person-days (V1 38.0, V2 22.0, V3 2.0 rough). Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 person-days; epic totals are the sum of their task rows.
 
 ## 13. Contract change requests
 
