@@ -1,10 +1,11 @@
 namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 
 /// <summary>
-/// The SQL of one reconcile attempt (05.3.2-T2.1/T2.2, plan §5 <c>ReconcileRunTask</c>): exactly three statements,
+/// The SQL of one reconcile attempt (<c>ReconcileRunTask</c>): exactly four statements,
 /// each over the ambient tenant transaction (00 §5.5 C3) and each filtering <c>org_id</c> explicitly as well as
 /// relying on row level security, exactly like <see cref="OrchestratorSql"/>. Read-only by construction — none of
-/// them writes, none reads a payload column, and none issues a statement per event or per producer (00 §5.7 P3).
+/// them writes, none reads a payload column, and none issues a statement per event, per producer or per planned
+/// execution (00 §5.7 P3).
 /// </summary>
 internal static class ReconcileSql
 {
@@ -136,5 +137,50 @@ internal static class ReconcileSql
                g.blocked_count as blocked_count
           from grouped g
           left join unfinished u on u.producer_id = g.producer_id
+        """;
+
+    /// <summary>
+    /// How many uncovered executions one reconcile attempt materialises. The read runs under the run lock on every
+    /// attempt that decides and a run can plan tens of thousands of executions, so it stops here; each row still carries
+    /// the statement's own total, which the comparer reports as one counted reason for the rest, so the cap bounds the
+    /// work without understating the gap.
+    /// </summary>
+    internal const int UncoveredExecutionLimit = 100;
+
+    /// <summary>
+    /// The run's planned executions that never reported a status: a <c>planned_execution</c> row whose
+    /// <c>execution_key</c> has no <c>case_attempt</c>. Every <c>case_attempt</c> row carries one of 0032's six terminal
+    /// <c>normalized_status</c> values (all six are verdicts, none is in flight), so the row's existence is the
+    /// terminality test and no status vocabulary is copied into this module's SQL. A started attempt that has not
+    /// finished writes no row at all — the aggregate above still counts its <c>test.started</c> as unfinished — so it
+    /// answers here as missing, while a <c>blocked</c> dependant row with no timestamps still answers as present. One
+    /// statement however many executions: the outer scan is the <c>planned_execution_run_execution_key</c> prefix
+    /// <c>(org_id, run_id)</c> and each probe is the <c>case_attempt_run_execution_attempt_key</c> prefix
+    /// <c>(org_id, run_id, execution_key)</c>. Both tables are FORCE RLS with an app-role tenant policy and the
+    /// predicates carry <c>org_id</c> explicitly, so neither side can answer for another tenant.
+    /// <para>
+    /// At most <see cref="UncoveredExecutionLimit"/> rows come back, and <c>uncovered_total</c> is the number the whole
+    /// predicate matches: a window count is evaluated before <c>limit</c>, so every returned row states the true gap even
+    /// when it was cut short. The <c>order by</c> is what makes that cut deterministic — two attempts over the same rows
+    /// read the same subset of execution keys, so the reasons and the counted remainder cannot move between attempts —
+    /// while the comparer still imposes its own total order on the reasons, since one shard's keys are not what orders
+    /// them. A resolver-written <c>blocked</c> dependant row counts as covered — it reports a status — while its shard's
+    /// <c>setup_error</c> comes from the failing producer's own event; nothing calls <c>IBlockedAttemptResolver</c> today,
+    /// and whoever wires it in must also count those rows toward <c>setup_error</c>.
+    /// </para>
+    /// </summary>
+    internal static readonly string ListUncoveredExecutions = $"""
+        select pe.execution_key as execution_key,
+               pe.shard_id as shard_id,
+               count(*) over () as uncovered_total
+          from public.planned_execution pe
+         where pe.org_id = @org_id and pe.run_id = @run_id
+           and not exists (
+               select 1
+                 from public.case_attempt ca
+                where ca.org_id = @org_id and ca.run_id = @run_id
+                  and ca.execution_key = pe.execution_key)
+         order by pe.execution_key
+         limit {UncoveredExecutionLimit}
         """;
 }

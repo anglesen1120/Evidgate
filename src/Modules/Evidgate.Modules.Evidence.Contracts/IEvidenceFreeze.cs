@@ -177,7 +177,12 @@ public sealed record MissingReason(
     int? AttemptNo,
     Guid? ArtifactId);
 
-/// <summary>The only <c>missing[]</c> code 06 originates (ruling T17); every other code is forwarded from the caller's requirement.</summary>
+/// <summary>
+/// The only <c>missing[]</c> code 06 originates (ruling T17); every other code is forwarded from the caller's requirement.
+/// The vocabulary itself is the reconciler's closed list (the <c>evidence_revision_missing_check</c> CHECK), and its
+/// plan-coverage member <c>missing_result</c> is one 06 can never produce: a planned execution with no status is the
+/// reconciler's observation, not an artifact gap, so no constant here names it.
+/// </summary>
 public static class FreezeCodes
 {
     /// <summary>00 §8.5 <c>artifact_missing</c>.</summary>

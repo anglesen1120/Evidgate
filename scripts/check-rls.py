@@ -80,6 +80,12 @@ DEFINER_AUDIT_EXEMPT = {
     "evidgate.purge_expired_ci_token_issue": "T7 sweep: bounded delete of expired replay-cache rows, observed via the task row",
     "evidgate.expire_pending_invites": "T80 sweep: bounded expiry of past-due pending invites, observed via the task row",
     "evidgate.audit_org_ids": "T80 sweep: lists org ids for the chain-verification task, which records its own findings",
+    "evidgate.reconcile_overdue_runs": (
+        "created 0056_reconcile_missing_result.sql:132 (uuid, uuid, integer): read-only sweep scan — the "
+        "collection-deadline sweep reads which runs are overdue and writes nothing here, and the attempt it "
+        "queues is the observable outcome (the run's state, its evidence_revision row, the task row); a per-call "
+        "audit row written by a read-only projection would be a write amplification on every ten-minute fire"
+    ),
     "evidgate_resolve.login_upsert_identity": (
         "created 0042_identity_login_resolvers.sql:95 (text, text, text, text, uuid, uuid): pre-tenant, no org chain to "
         "write into — a federated login resolves a person before any tenant scope exists; the org-scoped `auth.login` "
