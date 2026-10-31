@@ -1,42 +1,17 @@
-// 04.3.3-T2.2: the ONE entry the Playwright adapter uses to ship an attachment as evidence
-// (04.3.3 §2 AC5–AC7, §5 "Upload call", §7, §9). The engine underneath is 04.2.4-T1's
-// `uploadFile()`; this module is the seam that makes it usable from inside a test process.
+// The single entry the Playwright adapter uses to ship an attachment as evidence: a facade
+// over `uploadFile()` so the reporter makes no policy decision of its own, resolving config,
+// bearer, resume journal and allow-list guard exactly as `evidgate artifacts upload` does.
 //
-// Why a facade instead of importing `uploadFile()` from the reporter: the reporter must
-// make no policy decision of its own. The configuration surface, the bearer (fetched once
-// per run, not once per attachment), the resume journal and the allowed-directory guard are
-// resolved here, exactly as `evidgate artifacts upload` resolves them. The caller supplies
-// only what it alone knows: the run, this shard's manifest `producer_id`, the planned
-// `(execution_key, attempt_no)`, the mapped kind/media type and the attachment path.
+// The guard runs before the token is fetched, so a refused or oversize file costs no request,
+// not even a token exchange. The bearer is memoised per uploader; a 401 purges the cached CI
+// token and drops the memo, so the next attachment re-authenticates rather than reuse a
+// bearer the server already refused. With `EVIDGATE_SPOOL_DIR` set, the journal (per run and
+// producer) lets a crashed shard resume its artifact row instead of minting a second one.
 //
-// Order of operations is observable, and it is what makes a refused attachment cost no
-// request at all (§8 traversal/cap rows):
-// 1. `resolveConfig` runs at CREATION, so an unresolved API url or token source is the
-//    CLI's own `missing_config` before a single attachment is considered;
-// 2. per upload the file is opened by the allow-list guard — root containment, symlink,
-//    regular-file, ownership and per-kind cap checks — and hashed BEFORE the token is
-//    fetched, so neither a disallowed nor an oversize file reaches the network, not even
-//    for a token exchange;
-// 3. the token is fetched lazily and memoised once per uploader (one shard uploads many
-//    attachments). A 401 purges the cached CI token (contracts/cli.md §7) best effort and
-//    drops the memo, so the next attachment re-authenticates instead of reusing a bearer
-//    the server already refused;
-// 4. the resume journal is opened per `(run, producer)` when `EVIDGATE_SPOOL_DIR` is set,
-//    so a crashed shard resumes its artifact rows instead of minting a second one;
-// 5. the descriptor the guard pinned is closed on EVERY path, including the failing one.
-//
-// The drain deadline (NFR-04-1, 04.3.3-T2.2): the caller may hand over its `AbortSignal`. The
-// deadline stops the WAIT; it never cancels work in flight. So the signal is read at the
-// checkpoints this module controls — before the file is opened, after the digest (before the
-// bearer), after the bearer (before the journal is opened) and before the engine's first mint —
-// and an aborted call rejects with `upload_aborted`. An upload whose presigned PUT already
-// started runs until its own deadline and is ABANDONED at the next checkpoint, not cancelled
-// mid-PUT: `uploadFile()` takes no signal (its retries are 04.2.4-T1's).
-//
-// Secret hygiene (04 §6, S3): this module formats no path, token or presigned URL into any
-// message — the refusals it rethrows are the guard's own filtered text, and the success
-// value is an artifact id plus a byte count. No artifact bytes are buffered here: the
-// engine streams the file in bounded chunks (04.2.4 §8).
+// The caller's AbortSignal stops the wait, never work in flight: `uploadFile()` takes no
+// signal, so once it starts no checkpoint runs again and a presigned PUT runs to its own
+// deadline. No path, token or presigned URL is formatted into a message, and no
+// artifact bytes are buffered here.
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { getToken } from './auth/getToken.js';
@@ -59,7 +34,7 @@ import { resolveUploadDeadlineMs } from './uploadRetry.js';
 // against the CLI surface without reaching into `uploadPaths.js`.
 export type { ArtifactKind } from './uploadPaths.js';
 
-/** One attachment, after the adapter mapped it to a kind (§2 AC4, AC7). */
+/** One attachment, with the kind the adapter has already mapped it to. */
 export interface AttachmentUploadInput {
   readonly runId: string;
   /** This shard's manifest slot id (`shard-<index>`), never a guessed or suffixed one. */
@@ -87,10 +62,10 @@ export interface AttachmentUploadContext {
   /** The budget of this upload; the uploader's own default when absent. */
   readonly deadlineMs?: number;
   /**
-   * The drain deadline (04.3.3-T2.2, NFR-04-1). Read at this module's checkpoints only: an
-   * abort rejects with `upload_aborted` before the file is opened, after the digest, after the
-   * bearer and before the engine's first mint. A PUT already in flight is not cancelled; it is
-   * abandoned at the next checkpoint.
+   * The caller's drain deadline. Read at this module's checkpoints only: an abort rejects with
+   * `upload_aborted` before the file is opened, after the digest, after the bearer and before
+   * the engine's first mint. Once `uploadFile()` starts the signal is never checked again, so
+   * that PUT is not cancelled and its result is returned.
    */
   readonly signal?: AbortSignal;
 }
@@ -180,7 +155,7 @@ export function createAttachmentUploader(options: AttachmentUploaderOptions): At
     // A function, not a one-time read: `aborted` flips while this call awaits.
     const aborted = (): boolean => signal?.aborted === true;
     // The budget starts HERE, before the guard: hashing a large trace is part of the upload
-    // and must not sit outside the deadline the caller granted (04.3.3-T2.2, NFR-04-1).
+    // and must not sit outside the deadline the caller granted.
     const deadlineAt = deps.now() + deadlineMs;
     // Checkpoint 1: an aborted call opens nothing at all.
     if (aborted()) {
@@ -195,8 +170,8 @@ export function createAttachmentUploader(options: AttachmentUploaderOptions): At
       cwd,
     });
     try {
-      // Pass 1 of the two-pass upload (04.2.4 §8). Still no request: the digest is what the
-      // `upload-url` body and the signed checksum header are built from.
+      // Pass 1 of the two-pass upload. Still no request: the digest is what the `upload-url`
+      // body and the signed checksum header are built from.
       const sha256 = await hashUploadFile(opened);
 
       // Checkpoint 2: the digest is done and nothing has been requested yet, so an abandoned
@@ -240,8 +215,8 @@ export function createAttachmentUploader(options: AttachmentUploaderOptions): At
         return { artifactId: outcome.artifactId, bytes: outcome.bytes };
       } catch (error) {
         if (error instanceof UploadFailedError && error.status === 401) {
-          // Best effort (the caller's error is the one that must surface, 04.2.1 §6): the
-          // cached bearer the server just refused may not be reused by the next attachment.
+          // Best effort: the caller's error is the one that must surface, but a bearer the
+          // server just refused must not be reused by the next attachment.
           await deleteCachedToken(config).catch(() => undefined);
           tokenPromise = undefined;
         }
@@ -256,11 +231,10 @@ export function createAttachmentUploader(options: AttachmentUploaderOptions): At
 }
 
 /**
- * The resume store, resolved exactly as `evidgate artifacts upload` resolves it (04.2.4 §9,
- * contracts/cli.md §12): without `EVIDGATE_SPOOL_DIR` the upload works the same but has no
- * state to resume from, and with it the producer directory is opened/created like the spool
- * commands do and the journal writes under its `spool.lock` — only around its own writes, so
- * a long PUT never blocks `events send`.
+ * The resume store, resolved exactly as `evidgate artifacts upload` resolves it: without
+ * `EVIDGATE_SPOOL_DIR` the upload works the same but has no state to resume from, and with it
+ * the producer directory is opened like the spool commands do and the journal writes under its
+ * `spool.lock` — only around its own writes, so a long PUT never blocks `events send`.
  */
 async function openJournal(
   config: ResolvedConfig,

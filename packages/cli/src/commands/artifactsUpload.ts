@@ -1,7 +1,6 @@
-// 04.2.4-T1.4: `evidgate artifacts upload` — ships one file as evidence (04.2.4 §5,
-// contracts/cli.md §12). It is the CLI surface over `uploadFile()`: open the file with the
-// allowed-directory guard, hash it, mint an `upload-url`, PUT the bytes to the presigned
-// URL, and call `complete`.
+// `evidgate artifacts upload` — ships one file as evidence (contracts/cli.md §12). It is the
+// CLI surface over `uploadFile()`: open the file with the allowed-directory guard, hash it,
+// mint an `upload-url`, PUT the bytes to the presigned URL, and call `complete`.
 //
 // Order of operations matters and is observable:
 // 1. every flag is validated, and the kind/media-type pair resolved, BEFORE any token work;
@@ -9,11 +8,12 @@
 //    disallowed or oversize file makes no request at all — not even the token exchange;
 // 3. the token, the journal (when `EVIDGATE_SPOOL_DIR` is set) and the upload.
 //
-// The producer id is the manifest slot id of T54 (`shard-<index>`, `shard-1` unsharded); a
-// sharded job passes its own `--producer shard-<n>`, because the CLI cannot know the shard
-// index. `--execution-key` is required: it is the planned execution's sha256, which only the
-// manifest knows. A 401 purges the cached CI token (contracts/cli.md §7) and says so;
-// a 403/409/413/422 never retries and prints the server's `error.code` + `request_id`.
+// The producer id is the manifest slot id (`shard-<index>`, `shard-1` unsharded); a sharded
+// job passes its own `--producer shard-<n>`, because the CLI cannot know the shard index.
+// `--execution-key` is required: it is the planned execution's sha256, which only the manifest
+// knows. A 401 purges the cached CI token and says so; a 403/409/413/422 on the API calls
+// never retries (a 403 on the presigned PUT only re-mints the URL) and prints the server's
+// `error.code` + `request_id`.
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { getToken } from '../auth/getToken.js';
@@ -51,7 +51,7 @@ const executionKeyPattern = /^[0-9a-f]{64}$/;
 const attemptPattern = /^[1-9][0-9]{0,8}$/;
 /** openapi `createArtifactUploadUrl.media_type`: 1..255 code points, no Cc/Cf character. */
 const mediaTypePattern = /^[^\p{Cc}\p{Cf}]{1,255}$/u;
-/** [DECISION] T54: the slot id of an unsharded run; a sharded job passes `--producer`. */
+/** The slot id of an unsharded run; a sharded job must pass its own `--producer`. */
 export const defaultProducerId = 'shard-1';
 
 /** The seams `main` forwards; the upload adds its own clock/jitter/sleep defaults. */
@@ -160,7 +160,8 @@ async function runArtifactsUpload(context: CommandContext): Promise<ExitCode> {
       return ExitCode.Ok;
     } catch (error) {
       if (error instanceof UploadFailedError && error.status === 401) {
-        // Best effort: the server's error is the one that must surface (04.2.1 §6).
+        // Best effort: the server's error is the one that must surface, but the refused
+        // bearer must not be reused by the next command.
         await deleteCachedToken(config).catch(() => undefined);
       }
       throw error;
@@ -214,7 +215,7 @@ async function openJournal(
   });
 }
 
-/** The kind allow-list (T20, openapi enum); anything else is a usage error. */
+/** The openapi kind enum; anything outside it is a usage error. */
 function readKind(raw: string): ArtifactKind {
   if (!(artifactKinds as readonly string[]).includes(raw)) {
     throw usageError(`--kind must be one of ${artifactKinds.join(', ')}`);

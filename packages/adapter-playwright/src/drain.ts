@@ -1,14 +1,11 @@
-// 04.3.3-T2.2: the bounded upload drain behind `onTestEnd`/`onEnd` (04.3.3 §5 "bounded
-// drain in `onEnd`", §7 NFR-04-1 for the deadline, §7 Performance for the concurrency cap,
-// AC5; sub-task 04.3.3-T2.2).
+// The bounded upload drain behind `onTestEnd`/`onEnd`.
 //
-// Why a drain at all: events spool immediately on the event hot path (04.3.3 §10), and
-// artifact uploads run off it; NFR-04-1 caps how long a run may be held open for them
-// (`onEnd` drain deadline, default 120 s, configurable at the reporter seam). Playwright's
-// `onEnd` is the last chance to wait, so the reporter needs one object that (a) keeps the
-// number of in-flight uploads small, (b) never loses a test result because an upload
-// failed, and (c) can be cut off at the deadline without leaving an unhandled rejection
-// behind (AC5: "the test result is never lost to an artifact failure").
+// Why a drain at all: events spool immediately on the event hot path, and artifact uploads run
+// off it; a run may only be held open for them so long (`onEnd` drain deadline, default 120 s,
+// configurable at the reporter seam). Playwright's `onEnd` is the last chance to wait, so the
+// reporter needs one object that (a) keeps the number of in-flight uploads small, (b) never
+// loses a test result because an upload failed, and (c) can be cut off at the deadline without
+// leaving an unhandled rejection behind.
 //
 // Three properties this module fixes, each asserted by `drain.test.ts`:
 // - bounded concurrency: at most two uploads in flight, whatever the caller passes (the
@@ -30,21 +27,20 @@
 import { clearTimeout, setTimeout } from 'node:timers';
 
 /**
- * Default upload concurrency: two in flight (04.3.3 §7 Performance row: "upload concurrency
- * ≤ 2 per shard (reporter is inside the test process — it must not starve tests)").
+ * Default upload concurrency: two in flight. The reporter runs inside the test process, so it
+ * must not starve the tests.
  */
 export const DEFAULT_UPLOAD_CONCURRENCY = 2;
 
-/** Hard ceiling on concurrency: the same §7 Performance row, clamped rather than trusted. */
+/** Hard ceiling on concurrency: clamped rather than trusted, so a bad option opens no more. */
 export const MAX_UPLOAD_CONCURRENCY = 2;
 
-/** The `onEnd` drain deadline (04.3.3 §7 NFR-04-1): 120 s, configurable at the seam. */
+/** The `onEnd` drain deadline: 120 s, configurable at the seam. */
 export const DEFAULT_DRAIN_DEADLINE_MS = 120_000;
 
 /**
  * How one submitted job ended. A failed upload is an outcome, never a rejection: the
- * reporter turns `failed`/`deadline` into a `run.log` warning and keeps the test result
- * (AC5 failure path).
+ * reporter turns `failed`/`deadline` into a `run.log` warning and keeps the test result.
  */
 export type JobOutcome<T> =
   { status: 'done'; value: T } | { status: 'failed'; error: unknown } | { status: 'deadline' };
@@ -148,8 +144,8 @@ function clampDeadline(value: number | undefined): number {
 }
 
 /**
- * A bounded-concurrency upload queue with FIFO START order and one shared deadline
- * (04.3.3-T2.2). Jobs start in submission order; their requests may interleave.
+ * A bounded-concurrency upload queue with FIFO START order and one shared deadline. Jobs start
+ * in submission order; their requests may interleave.
  *
  * Lifecycle: `submit()` any number of times, then `finish()` once, near `onEnd`. Every
  * submitted job resolves to a {@link JobOutcome}; nothing here ever rejects.

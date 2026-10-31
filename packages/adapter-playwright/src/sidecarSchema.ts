@@ -1,7 +1,6 @@
-// 04.3.2-T1.1: embedded copy of contracts/catalog/sidecar.v1.json (03.1.1-T1.3, TL T55).
-// The reporter ships as a standalone package — the repository's contracts/ directory is not
-// present at runtime — so the sidecar schema travels with it. sidecar.test.ts asserts this
-// literal deep-equals the contract file, so the two can never drift silently.
+// Embedded copy of contracts/catalog/sidecar.v1.json: the reporter ships standalone, so the
+// repository's contracts/ directory is not present at runtime. sidecar.test.ts asserts this
+// literal deep-equals the contract file, so the two cannot drift silently.
 export const SIDECAR_SCHEMA_V1: Record<string, unknown> = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'sidecar.v1.json',

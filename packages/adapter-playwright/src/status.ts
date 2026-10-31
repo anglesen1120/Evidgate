@@ -1,14 +1,13 @@
-// 04.3.2-T2.1/T2.2: maps one Playwright attempt outcome onto the 00 §8.3 normalised
-// status (AC6). The raw `TestResult.status` is never overwritten: it travels verbatim in
-// the envelope `status` and the normalised value goes to `ext.normalized`. The mapping is
-// a pure, table-driven function; anything the table does not know — a future Playwright
-// status, an empty string — maps to `error` and is flagged `unknown`, so the reporter can
-// emit an `unknown_status` warning instead of guessing (T2.2).
+// Maps one Playwright attempt outcome onto the normalised status. The raw `TestResult.status` is
+// never overwritten: it travels verbatim in the envelope `status` and the normalised value goes
+// to `ext.normalized`. The mapping is pure and table-driven; anything the table does not know —
+// a future Playwright status, an empty string — maps to `error` and is flagged `unknown`, so the
+// reporter can emit an `unknown_status` warning instead of guessing.
 //
-// `ext.attempt` (listed in the plan §3) is deliberately not emitted: the envelope's own
-// `attempt_no` carries the attempt (`attemptOf`, AC5), and a second copy could disagree.
+// `ext.attempt` is deliberately not emitted: the envelope's own `attempt_no` carries the attempt,
+// and a second copy could disagree.
 
-/** The 00 §8.3 statuses this adapter produces (`blocked` is server-side only). */
+/** The statuses this adapter produces (`blocked` is server-side only). */
 export type NormalizedStatus = 'passed' | 'failed' | 'skipped' | 'timed_out' | 'error';
 
 export interface StatusInput {
@@ -36,7 +35,7 @@ export interface StatusMapping {
   error_summary?: string;
 }
 
-/** AC6: raw Playwright status → normalised status. Looked up by own property only. */
+/** Raw Playwright status → normalised status. Looked up by own property only. */
 export const STATUS_TABLE: Readonly<Record<string, NormalizedStatus>> = Object.freeze({
   passed: 'passed',
   failed: 'failed',
@@ -61,7 +60,7 @@ const LINE_BREAKS = /\r\n|[\n\r\u0085\u2028\u2029]/g;
 /**
  * SEC-1: control characters (lone ESC, C1 such as U+009B, NUL, BEL, VT, FF) and format
  * characters (BIDI overrides, zero-width marks) left after the ANSI strip — the
- * `sidecar.ts` UNCLEAN precedent. Removed, so a log viewer never sees a live escape.
+ * `sidecarRules.ts` UNCLEAN precedent. Removed, so a log viewer never sees a live escape.
  */
 const UNSAFE_CHARS = /[\p{Cc}\p{Cf}]/gu;
 
@@ -73,14 +72,14 @@ const UNSAFE_CHARS = /[\p{Cc}\p{Cf}]/gu;
 const ERROR_SCAN_MAX = 16 * ERROR_SUMMARY_MAX;
 
 /**
- * SEC-2: a URL's userinfo and its query/fragment — Playwright's own first lines embed the
- * call URL (`page.goto: net::ERR_… at https://host/path?token=…`), the same value class
- * the PS1 rule withholds from `pw:api` step titles. Scheme, host and path stay.
+ * A URL's userinfo and its query/fragment — Playwright's own first lines embed the call URL
+ * (`page.goto: net::ERR_… at https://host/path?token=…`), which can carry a credential.
+ * Scheme, host and path stay.
  */
 const URL_PATTERN = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/?#@]*@)?([^\s?#]*)([?#]\S*)?/gi;
 
 /**
- * Maps one attempt (AC6). Rules, in order:
+ * Maps one attempt. Rules, in order:
  * - a raw status that is not an own key of {@link STATUS_TABLE} → `error`, `unknown`;
  * - `expectedStatus: 'failed'` × raw `failed` → `passed`, `xfail` (an expected failure);
  * - `expectedStatus: 'failed'` × raw `passed` → `failed`, `xfail` (an unexpected pass
@@ -114,7 +113,7 @@ export function mapStatus(input: StatusInput): StatusMapping {
   return mapping;
 }
 
-/** AC5: Playwright's zero-based `retry` → the envelope's one-based `attempt_no`. */
+/** Playwright's zero-based `retry` → the envelope's one-based `attempt_no`. */
 export function attemptOf(result: { retry: number }): number {
   return result.retry + 1;
 }

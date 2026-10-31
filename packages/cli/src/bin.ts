@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// 04.2.1-T2.1: the executable shim. It owns the only `process.exitCode` write; `main`
-// stays pure and returns the code (04.2.1 §5, `bin evidgate`). The process-level
-// backstops are exported so `bin.test.ts` can install them without running the CLI.
+// The executable shim. It owns every `process.exitCode` write; `main` stays pure and
+// returns the code, so every command and every test exercises the same logic without a
+// process exit. The process-level backstops are exported so a test can install them
+// without running the CLI.
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -23,8 +24,8 @@ function processIo(): Io {
 }
 
 /**
- * Writes one redacted `internal_error` line and sets the exit code to 3. Shared by the
- * `main` backstop and the process-level handlers (contracts/cli.md §5).
+ * Writes one redacted `internal_error` line and sets the exit code to 3. Shared by the `main`
+ * backstop and the process-level handlers so an uncaught failure always exits non-zero.
  */
 export function reportInternalError(error: unknown, io: Io): void {
   createRedactingIo(io).stderr(`${formatInternalError(error)}\n`);

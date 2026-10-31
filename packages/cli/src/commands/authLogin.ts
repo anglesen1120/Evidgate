@@ -1,8 +1,8 @@
-// 04.2.1-T1.1: `evidgate auth login` — exchanges an OIDC JWT or ingest token for a
-// short-lived `ci_producer` token and writes it only to the `0600` cache file (or to
-// `$GITHUB_ENV` behind `::add-mask::` with `--github-env`). The token is never printed
-// (T78, AC6). `--github-env` is a per-command flag, never a global option (04.2.1-T2
-// hand-over item 2).
+// `evidgate auth login` — exchanges an OIDC JWT or ingest token for a short-lived
+// `ci_producer` token and writes it to the `0600` cache (and, with `--github-env`, also to
+// `$GITHUB_ENV` behind a `::add-mask::` line). It is never printed except inside that mask
+// line. `--github-env` is a per-command flag, never a global option, because a global one
+// would apply to commands that have no token to export.
 import { randomUUID } from 'node:crypto';
 import { appendFile } from 'node:fs/promises';
 
@@ -13,7 +13,7 @@ import { ExitCode } from '../exitCodes.js';
 
 import type { CommandDefinition } from './index.js';
 
-/** The `$GITHUB_ENV` variable the token is exported as (04.2.1 §5). */
+/** The `$GITHUB_ENV` variable the token is exported as; later steps read this name. */
 const githubEnvVariable = 'EVIDGATE_CI_TOKEN';
 
 export const authLoginCommand: CommandDefinition = {
@@ -23,7 +23,7 @@ export const authLoginCommand: CommandDefinition = {
   options: { 'github-env': { type: 'boolean' } },
   run: async ({ config, io, env, values, deps, maskSecret }) => {
     // `--github-env` must fail before the exchange and the cache write, so an unset
-    // GITHUB_ENV never leaves a token on disk (D3).
+    // GITHUB_ENV never leaves a token on disk.
     const exportToGithub = values['github-env'] === true;
     const githubEnvPath = exportToGithub ? env['GITHUB_ENV'] : undefined;
     if (exportToGithub && (githubEnvPath === undefined || githubEnvPath === '')) {
@@ -50,8 +50,9 @@ export const authLoginCommand: CommandDefinition = {
 
 /**
  * Appends `EVIDGATE_CI_TOKEN` to `$GITHUB_ENV` as a heredoc, after emitting the
- * `::add-mask::` line to the RAW stdout so the runner masks the value in later logs
- * (T78). A token with a line break is refused before anything is written.
+ * `::add-mask::` line to the RAW stdout so the runner masks the value in later logs. A token
+ * with a line break is refused before anything is written, or it would inject extra
+ * `$GITHUB_ENV` entries.
  */
 async function appendGithubEnv(
   path: string,

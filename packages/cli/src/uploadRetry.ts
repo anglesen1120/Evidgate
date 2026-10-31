@@ -1,18 +1,7 @@
-// 04.2.4-T1.2: the upload retry layer (04.2.4 §5 retry rule, §8; contracts/cli.md §12).
-//
-// One policy for all three calls of the upload (upload-url, the presigned PUT, complete):
-// only 408/429/5xx and transport failures are retried, with the SAME full-jitter backoff,
-// `Retry-After` floor and per-request timeout the 04.2.3 sender uses — `backoffDelay`,
-// `retryAfter`, `attemptSignal` and `isRetryable` are imported from `sender.ts`, so there
-// is one convention, not two. A deterministic 4xx (401/403/404/409/412/413/422) is never
-// retried: it is returned to the caller as-is and surfaces verbatim.
-//
-// The retry loop is bounded by one deadline for the whole upload
-// (`EVIDGATE_UPLOAD_DEADLINE`, mirroring `EVIDGATE_SEND_DEADLINE`'s grammar): a wait that
-// would reach the deadline fails `deadline_exceeded` instead of sleeping, and the message
-// names the last error's code/status/request id — never the URL, the file content or the
-// bearer. An expired presigned URL is NOT a retry of the PUT: `upload.ts` re-mints, because
-// the same signed URL can never work again.
+// One retry policy for all three upload calls: 408/429/5xx and transport failures share
+// the sender's backoff and timeout, deterministic 4xx is returned verbatim, and the whole
+// upload is bounded by one deadline. An expired presigned URL is not retried here but
+// re-minted by `upload.ts`, because a signature that expired can never succeed again.
 import { CliError } from './errors.js';
 import { attemptSignal, backoffDelay } from './sender.js';
 
@@ -63,7 +52,7 @@ const deadlinePattern = /^([0-9]+)([smh]?)$/;
 
 /**
  * `EVIDGATE_UPLOAD_DEADLINE`: one deadline for a whole artifact upload. Same grammar and
- * bounds as `EVIDGATE_SEND_DEADLINE` (§3): a bare integer is seconds, an `s`/`m`/`h`
+ * bounds as `EVIDGATE_SEND_DEADLINE`: a bare integer is seconds, an `s`/`m`/`h`
  * suffix scales it, default 1800000 ms, ceiling 86400000 ms. Zero, a fraction, a unit
  * suffix this grammar does not know and a longer value are `invalid_config` naming the
  * variable; the raw value is never echoed (it could forge a log line).

@@ -1,20 +1,18 @@
-// 04.3.3-T2.1: `result.attachments` → artifact kind, media type and the sensitive flag
-// (AC4, AC7; plan §5 `mapAttachment`, §8 "MIME from server allow-list only", §9
-// `attach-map.test.ts`).
+// `result.attachments` → artifact kind, media type and the sensitive flag.
 //
 // Why the fixed table is the only source of a media type: `upload-url` names a kind and a
 // media type, and the server accepts a closed list per kind
-// (`contracts/evidence/artifact-kind-defaults.v1.json`, 06.1.2-T3 — the same table
-// `packages/cli/src/uploadPaths.ts` mirrors). An attachment's own `contentType` comes from
-// the test process, so it is only *checked* against that table; a disagreement is a skip
-// (`attachment_type_mismatch`), never a re-typed upload. An extension the table does not
-// name is a skip too (`attachment_unmapped_type`) — the plan's AC4 asks for a warning, and
-// a guessed kind would file wrong evidence under the wrong retention row.
+// (`contracts/evidence/artifact-kind-defaults.v1.json` — the same table
+// `packages/cli/src/uploadPaths.ts` mirrors). An attachment's own `contentType` comes from the
+// test process, so it is only *checked* against that table; a disagreement is a skip
+// (`attachment_type_mismatch`), never a re-typed upload. An extension the table does not name is
+// a skip too (`attachment_unmapped_type`), because a guessed kind would file wrong evidence under
+// the wrong retention row.
 //
 // Nothing here reads, stats or copies a file: the mapping is pure and the byte cap needs the
 // size the path guard (`attachPaths.ts`) reports. A body-only attachment (an inline buffer
 // instead of a path) is skipped as `attachment_no_path`, because uploading it would mean
-// buffering the whole attachment inside the test process (plan §7 "no whole-file buffering").
+// buffering the whole attachment inside the test process.
 //
 // Messages carry the file's BASE name only, with control and format characters escaped, so a
 // skip can never echo a home directory into a `run.log` warning and never emits a live escape
@@ -22,7 +20,7 @@
 // keeps the tampering visible instead of hiding it).
 import { extname } from 'node:path';
 
-/** The three T20 kinds Playwright produces an attachment for (AC4). */
+/** The kinds Playwright produces an attachment for. */
 export type AttachmentKind = 'trace' | 'video' | 'screenshot';
 
 /**
@@ -40,9 +38,9 @@ export interface PlaywrightAttachment {
 }
 
 /**
- * Why an attachment is not uploaded. These are the skip codes a `run.log` warning carries
- * (plan §6 `skipped`); `attachment_over_cap`, `attachment_path_refused` and
- * `attachment_unreadable` are decided by the size check and the path guard, not here.
+ * Why an attachment is not uploaded. These are the skip codes a `run.log` warning carries;
+ * `attachment_over_cap`, `attachment_path_refused` and `attachment_unreadable` are decided by
+ * the size check and the path guard, not here.
  */
 export type SkipCode =
   | 'attachment_unmapped_type'
@@ -68,7 +66,7 @@ export type MapOutcome =
   | { readonly ok: true; readonly attachment: MappedAttachment }
   | { readonly ok: false; readonly code: SkipCode; readonly message: string };
 
-/** One AC4 row: the extension, the kind and media type it decides, and the name prefix. */
+/** One table row: the extension, the kind and media type it decides, and the name prefix. */
 interface KindRule {
   readonly kind: AttachmentKind;
   readonly mediaType: string;
@@ -77,7 +75,7 @@ interface KindRule {
 }
 
 /**
- * The AC4 table. `trace*.zip → trace`, `video*.(webm|mp4) → video`,
+ * The mapping table. `trace*.zip → trace`, `video*.(webm|mp4) → video`,
  * `*.(png|jpeg|jpg) → screenshot` — the media types are the ones the static per-kind
  * defaults accept. `trace` and `video` also require the name prefix, so `report.zip` is an
  * unmapped type rather than a trace by extension alone.
@@ -159,10 +157,10 @@ export function mapAttachment(
  * True when `bytes` exceeds the static cap of `kind` (`true` also for a size that is not a
  * non-negative finite number, because such a size is not a size). A cap of `undefined`
  * means the project's policy row is the only cap, so nothing is refused locally — exactly
- * at the cap passes, cap + 1 fails (AC6, plan §9 "size cap boundary").
+ * at the cap passes, the next byte fails.
  *
- * The caps themselves live in `packages/cli` (`artifactKindMaxBytes`, 06.1.2-T3): this
- * package must not keep a second copy that could drift from the server's contract.
+ * The caps themselves live in `packages/cli` (`artifactKindMaxBytes`): this package must
+ * not keep a second copy that could drift from the server's contract.
  */
 export function isOverCap(
   kind: AttachmentKind,

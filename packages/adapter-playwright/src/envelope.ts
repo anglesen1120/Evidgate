@@ -1,26 +1,23 @@
-// 04.3.1-T1.1/T1.2: the 00 §9.4 event envelope v1 as this reporter emits it. The
-// envelope is closed (`additionalProperties: false` in contracts/schemas/event-envelope.v1.json),
-// so only the members the schema declares are ever set; `sequence` is assigned by the
-// spool writer (the per-producer authority), which is why the pre-sequence shape is a
-// separate type.
+// The event envelope v1 as this reporter emits it. The envelope is closed
+// (`additionalProperties: false` in contracts/schemas/event-envelope.v1.json), so only the
+// members the schema declares are ever set; `sequence` is assigned by the spool writer (the
+// per-producer authority), which is why the pre-sequence shape is a separate type.
 //
-// 04.3.3-T2.2: `artifact_ids` is the schema's own member for the artifacts a `test.finished`
-// references (04.3.3 AC5). It is set only on a `test.finished` whose attempt completed at
-// least one upload, in attachment order and deduplicated by the caller, and is absent —
-// never an empty array — for every other event.
+// `artifact_ids` is set only on a `test.finished` whose attempt completed at least one upload
+// (attachment order, deduplicated by the caller), and is absent — never an empty array — on
+// every other event.
 import { uuidv7 } from './uuidv7.js';
 
 /** `schema_version` is a const 1 in the contract. */
 export const EVENT_SCHEMA_VERSION = 1 as const;
 
 /**
- * `ext.schema` for every envelope this reporter emits: `<adapter-name>/<protocol-major>`
- * per 00 §9.4 (`"ext": { "schema": "adapter-name/1" }`) and the task file §3. The
- * capability carrier is distinguished by `ext.capability`, not by a different schema.
+ * `ext.schema` for every envelope this reporter emits: `<adapter-name>/<protocol-major>`.
+ * The capability carrier is distinguished by `ext.capability`, not by a different schema.
  */
 export const EXT_SCHEMA = 'playwright/1';
 
-/** The event types 00 §9.4 defines; the reporter never invents another (AC2). */
+/** The event types the envelope contract defines; the reporter never invents another. */
 export type EventType =
   'test.started' | 'test.step' | 'test.finished' | 'run.log' | 'producer.heartbeat';
 
@@ -41,12 +38,12 @@ export interface UnsignedEnvelope {
   occurred_at: string;
   status?: string;
   duration_ms?: number;
-  /** Ids of the artifacts a `test.finished` references (04.3.3 AC5); never empty. */
+  /** Ids of the artifacts a `test.finished` references; never empty. */
   artifact_ids?: string[];
   ext: ExtPayload;
 }
 
-/** A complete 00 §9.4 envelope line. */
+/** A complete envelope line, with the writer's per-producer `sequence`. */
 export interface EventEnvelope extends UnsignedEnvelope {
   sequence: number;
 }
