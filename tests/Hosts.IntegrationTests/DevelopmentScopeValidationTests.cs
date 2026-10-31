@@ -45,6 +45,7 @@ public sealed class DevelopmentScopeValidationTests
         var builder = WorkerHostFactory.Create(UnreachableConnectionString, healthPort: 0);
         builder.ConfigureContainer(new DefaultServiceProviderFactory(Validating));
 
+        // Building the host is the assertion; validation is forced above, so the environment is irrelevant.
         using IHost host = builder.Build();
     }
 }

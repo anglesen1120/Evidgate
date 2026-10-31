@@ -57,9 +57,12 @@ public class PipelineOrderTests
 
         services.AddEvidgatePipelineBehaviours();
 
-        services
+        var behaviours = services
             .Where(descriptor => descriptor.ServiceType == typeof(IPipelineBehavior<,>))
-            .ShouldAllBe(descriptor => descriptor.Lifetime == ServiceLifetime.Scoped);
+            .ToList();
+
+        behaviours.Count.ShouldBe(PipelineBehaviourOrder.C2.Count);
+        behaviours.ShouldAllBe(descriptor => descriptor.Lifetime == ServiceLifetime.Scoped);
     }
 
     /// <summary>
