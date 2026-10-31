@@ -118,7 +118,7 @@ function run(test: TestCase, attempts: readonly TestResult[]): EventEnvelope[] {
     reporter.onTestBegin(test, result);
     reporter.onTestEnd(test, result);
   }
-  reporter.onEnd({ status: 'failed', startTime: new Date(), duration: 1 });
+  void reporter.onEnd({ status: 'failed', startTime: new Date(), duration: 1 });
   return readEnvelopes(spool);
 }
 

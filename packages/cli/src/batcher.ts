@@ -27,12 +27,10 @@
 // input (any local process may write it), so a planted line stops the run instead of
 // being sent under another producer's batch key.
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 import { escapeControlCharacters } from './errors.js';
+import { loadPackagedContractSchemas } from './packagedSchemas.js';
 import { invalidJsonReason, loadContractSchemas, type ContractSchemaSet } from './validate.js';
 
 import type { SpoolEvent } from './spool.js';
@@ -498,18 +496,19 @@ function decideGzip(body: Buffer): Buffer | undefined {
  * this verdict — it belongs to the body that travels; see
  * {@link validateEnvelopeLine}.
  *
- * `contractsDirectory` defaults to the `contracts/` tree next to (or above) this
- * module — found when running from `src/` in the repository and from `dist/` of
- * an installed package alike; pass it explicitly to point at another copy. No
- * build or publish step copies `contracts/` into the package yet (`build` is a
- * bare `tsc -b`), so an installed command passes the directory rather than relying
- * on the default. Both the schema load and the Ajv compile happen once, when the
- * validator is created.
+ * The schemas are the ones compiled into the package (`loadPackagedContractSchemas`), so a
+ * command validates from an install with no repository above it — there is no directory
+ * search and no current-working-directory dependency. Pass a directory only to validate
+ * against another copy of `contracts/`. Both the schema load and the Ajv compile happen
+ * once, when the validator is created.
  */
 export function createEnvelopeValidator(
   contractsDirectory?: string,
 ): (line: string, sequence: number) => void {
-  const schemas = loadContractSchemas(contractsDirectory ?? defaultContractsDirectory());
+  const schemas =
+    contractsDirectory === undefined
+      ? loadPackagedContractSchemas()
+      : loadContractSchemas(contractsDirectory);
   return (line, sequence) => {
     const details = validateEnvelopeLine(schemas, line);
     if (details.length === 0) {
@@ -595,40 +594,4 @@ function eventIdOf(line: string): string | undefined {
     return undefined;
   }
   return value;
-}
-
-/** How many directories above this module the default `contracts/` search walks. */
-const maxAncestorLevels = 8;
-/** The schema that must exist for a directory to count as the contracts tree. */
-const contractsProbe = join('schemas', `${envelopeSchemaKey}.json`);
-
-/**
- * Locates the contracts tree without relying on the current working directory
- * (a CI job runs `evidgate` from anywhere): walk up from this module and take the
- * first directory that holds `contracts/schemas/event-envelope.v1.json`, or
- * `schemas/event-envelope.v1.json` itself — the latter is a package that ships
- * the schema tree at its own root. Fails loud rather than validating against
- * nothing.
- */
-function defaultContractsDirectory(): string {
-  const start = dirname(fileURLToPath(import.meta.url));
-  let level = start;
-  for (let depth = 0; depth < maxAncestorLevels; depth += 1) {
-    const contracts = join(level, 'contracts');
-    if (existsSync(join(contracts, contractsProbe))) {
-      return contracts;
-    }
-    if (existsSync(join(level, contractsProbe))) {
-      return level;
-    }
-    const parent = dirname(level);
-    if (parent === level) {
-      break;
-    }
-    level = parent;
-  }
-  throw new Error(
-    `cannot locate ${join('contracts', contractsProbe)} above '${start}'; ` +
-      'pass the contracts directory explicitly',
-  );
 }

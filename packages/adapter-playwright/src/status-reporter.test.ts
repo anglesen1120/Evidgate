@@ -84,7 +84,7 @@ function runOne(test: TestCase, result: TestResult): EventEnvelope[] {
   reporter.onBegin();
   reporter.onTestBegin(test, result);
   reporter.onTestEnd(test, result);
-  reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+  void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
 
   const dir = join(spool, 'run-1', 'pw-0');
   const envelopes: EventEnvelope[] = [];

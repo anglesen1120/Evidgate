@@ -72,7 +72,7 @@ describe('unknown fields', () => {
 
     reporter.onBegin();
     reporter.onTestEnd(test, result);
-    reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+    void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
 
     const finished = readEnvelopes(spool).find((item) => item.type === 'test.finished');
     expect(Object.keys(finished ?? {}).sort()).toEqual([

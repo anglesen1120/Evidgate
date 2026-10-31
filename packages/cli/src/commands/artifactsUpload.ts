@@ -84,7 +84,9 @@ export const artifactsUploadCommand: CommandDefinition = {
 
 async function runArtifactsUpload(context: CommandContext): Promise<ExitCode> {
   const { config, io, values, env, deps } = context;
-  const seams = deps as ArtifactsUploadSeams;
+  // `ExchangeDeps` already satisfies the seam set: every extra seam is optional, so `main`'s
+  // `deps` is forwarded as-is and the upload's own defaults fill `now`/`random`.
+  const seams: ArtifactsUploadSeams = deps;
 
   // 1. Flags and configuration first: nothing below can reach the network otherwise.
   const runId = requiredFlag(values, 'run');

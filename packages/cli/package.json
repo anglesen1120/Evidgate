@@ -5,14 +5,24 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "bin": {
     "evidgate": "dist/bin.js"
   },
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "node scripts/embed-contracts.mjs && tsc -b",
+    "embed:contracts": "node scripts/embed-contracts.mjs",
     "test": "vitest run"
   },
   "dependencies": {

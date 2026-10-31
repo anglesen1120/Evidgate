@@ -15,6 +15,18 @@ workspace build. Once published, pin the exact version:
 npx --yes --package @evidgate/cli@<version> -- evidgate --help
 ```
 
+## Contract schemas
+
+The spool commands validate every envelope against the same JSON Schemas the
+server uses, and the package cannot read `contracts/` at runtime: the texts are
+embedded into `src/contracts.generated.ts` by `scripts/embed-contracts.mjs`
+(`npm run embed:contracts -w @evidgate/cli`, also part of
+`npm run build -w @evidgate/cli`, but not the root `npm run build`).
+The committed module is generated and guarded by the parity test
+`src/packagedSchemas.test.ts`. After editing `contracts/schemas` (or another
+embedded contract directory), run `npm run build -w @evidgate/cli` to
+regenerate it rather than editing the module.
+
 ## Configuration
 
 - `EVIDGATE_API_URL` — the API root **without** `/v1` (the client appends it).

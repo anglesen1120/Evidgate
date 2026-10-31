@@ -431,7 +431,7 @@ describe('reporter identity wiring', () => {
       test,
       fakeResult({ steps: [{ title: 'step', category: 'test.step', duration: 2, steps: [] }] }),
     );
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const envelopes = readEnvelopes(spool);
     for (const type of ['test.started', 'test.finished', 'test.step']) {
@@ -459,7 +459,7 @@ describe('reporter identity wiring', () => {
       }),
       fakeResult(),
     );
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const duplicates = warningsOf(readEnvelopes(spool)).filter(
       (warning) => warning.code === 'duplicate_case_id',
@@ -469,7 +469,7 @@ describe('reporter identity wiring', () => {
     expect(duplicates[0]?.message).toContain('tests/other.spec.ts:9:1');
   });
 
-  it('AC2: a conflict emits identity_conflict, no case_id, and onEnd fails', () => {
+  it('AC2: a conflict emits identity_conflict, no case_id, and onEnd fails', async () => {
     const dir = sidecarDir({
       'math.spec.ts': '',
       'evidgate.cases.yaml': `version: 1\ncases:\n  - file: math.spec.ts\n    evidgate.id: ${CASE_B}\n`,
@@ -488,7 +488,7 @@ describe('reporter identity wiring', () => {
     expect(finished?.ext.identity_conflict).toBe(true);
     expect(finished?.ext.case_id).toBeUndefined();
 
-    expect(reporter.onEnd(fullResult)).toEqual({ status: 'failed' });
+    await expect(reporter.onEnd(fullResult)).resolves.toEqual({ status: 'failed' });
   });
 
   it('AC2: EVIDGATE_ALLOW_UNMAPPED=1 keeps an unmapped run from failing', () => {
@@ -499,11 +499,11 @@ describe('reporter identity wiring', () => {
     expect(reporter.onEnd(fullResult)).toBeUndefined();
   });
 
-  it('AC2: an unmapped-only run fails without the flag', () => {
+  it('AC2: an unmapped-only run fails without the flag', async () => {
     const { reporter, spool } = makeReporter();
     reporter.onBegin();
     reporter.onTestBegin(fakeTest(), fakeResult());
-    expect(reporter.onEnd(fullResult)).toEqual({ status: 'failed' });
+    await expect(reporter.onEnd(fullResult)).resolves.toEqual({ status: 'failed' });
 
     const summary = warningsOf(readEnvelopes(spool)).find((warning) => warning.code === 'unmapped');
     expect(summary?.count).toBe(1);
@@ -526,7 +526,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ annotations: [{ type: 'evidgate.id', description: CASE_A }] });
     reporter.onBegin();
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
     const envelopes = readEnvelopes(spool);
     expect(envelopes.find((item) => item.type === 'test.started')?.ext.target_env).toBe('chromium');
     expect(
@@ -540,7 +540,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ annotations: [{ type: 'evidgate.id', description: CASE_A }] });
     reporter.onBegin();
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
     const envelopes = readEnvelopes(spool);
     expect(envelopes.find((item) => item.type === 'test.started')?.ext.target_env).toBe(
       'staging-eu',
@@ -559,7 +559,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ id: 't1', file: join(dir, 'a.spec.ts') });
     reporter.onBegin(undefined, fakeSuite([test]));
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
     expect(started?.ext.case_id).toBe(CASE_B);
@@ -577,7 +577,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ id: 't1', file: join(dir, 'a.spec.ts') });
     reporter.onBegin(undefined, fakeSuite([test]));
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
     expect(started?.ext.case_id).toBe(CASE_B);
@@ -588,7 +588,7 @@ describe('reporter identity wiring', () => {
     const { reporter, spool } = makeReporter();
     const test = fakeTest({ id: 't1', file: join(dir, 'a.spec.ts') });
     reporter.onBegin(undefined, fakeSuite([test]));
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const envelopes = readEnvelopes(spool);
     expect(envelopes[0]?.ext.capability).toBeDefined();
@@ -604,7 +604,7 @@ describe('reporter identity wiring', () => {
     const test = fakeTest({ annotations: [{ type: 'evidgate.id', description: CASE_A }] });
     reporter.onBegin();
     reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
     expect(started?.execution_key).toBe(resolved);
@@ -625,7 +625,7 @@ describe('reporter identity wiring', () => {
         fakeResult(),
       );
     }
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const warnings = warningsOf(readEnvelopes(spool));
     expect(warnings.filter((warning) => warning.code === 'duplicate_case_id')).toHaveLength(
@@ -657,7 +657,7 @@ describe('reporter identity wiring', () => {
       reporter.onTestBegin(test, fakeResult());
       reporter.onTestEnd(test, fakeResult());
     }
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const envelopes = readEnvelopes(spool);
     expect(envelopes.length).toBeGreaterThan(0);
@@ -666,13 +666,13 @@ describe('reporter identity wiring', () => {
     }
   });
 
-  it('C3: writes one stderr line when the identity gate trips and overrides only a passed run', () => {
+  it('C3: writes one stderr line when the identity gate trips and overrides only a passed run', async () => {
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       const { reporter } = makeReporter();
       reporter.onBegin();
       reporter.onTestBegin(fakeTest(), fakeResult());
-      expect(reporter.onEnd(fullResult)).toEqual({ status: 'failed' });
+      await expect(reporter.onEnd(fullResult)).resolves.toEqual({ status: 'failed' });
       expect(write).toHaveBeenCalledTimes(1);
       const line = String(write.mock.calls[0]?.[0]);
       expect(line).toContain('[evidgate]');
@@ -728,7 +728,7 @@ describe('reporter identity wiring', () => {
       fakeTest({ id: 'unmapped', file: 'tests/unmapped.spec.ts' }),
       fakeResult(),
     );
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const warnings = warningsOf(readEnvelopes(spool));
     expect(warnings.filter((warning) => warning.code === 'duplicate_case_id')).toHaveLength(
@@ -750,7 +750,7 @@ describe('reporter identity wiring', () => {
     const { reporter, spool } = makeReporter();
     const test = fakeTest({ id: 't1', file: join(dir, 'a.spec.ts') });
     reporter.onBegin(undefined, fakeSuite([test]));
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const truncated = warningsOf(readEnvelopes(spool)).find(
       (warning) => warning.code === 'warnings_truncated',
@@ -760,7 +760,7 @@ describe('reporter identity wiring', () => {
     expect(truncated?.count).toBe(2001 - MAX_WARNING_ENVELOPES);
   });
 
-  it('S3: a test whose variant params were refused counts toward the identity gate', () => {
+  it('S3: a test whose variant params were refused counts toward the identity gate', async () => {
     const { reporter, spool } = makeReporter();
     const test = fakeTest({
       annotations: [{ type: 'evidgate.id', description: CASE_A }],
@@ -771,14 +771,14 @@ describe('reporter identity wiring', () => {
     });
     reporter.onBegin();
     reporter.onTestBegin(test, fakeResult());
-    const gate = reporter.onEnd(fullResult);
+    const gate = await reporter.onEnd(fullResult);
     const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
     expect(started?.ext.case_id).toBe(CASE_A);
     expect(started?.ext.variant_hash).toBeUndefined();
     expect(gate).toEqual({ status: 'failed' });
   });
 
-  it('S3: a test with no valid target env counts toward the identity gate', () => {
+  it('S3: a test with no valid target env counts toward the identity gate', async () => {
     const { reporter, spool } = makeReporter();
     const test = fakeTest({
       annotations: [{ type: 'evidgate.id', description: CASE_A }],
@@ -786,7 +786,7 @@ describe('reporter identity wiring', () => {
     });
     reporter.onBegin();
     reporter.onTestBegin(test, fakeResult());
-    const gate = reporter.onEnd(fullResult);
+    const gate = await reporter.onEnd(fullResult);
     const started = readEnvelopes(spool).find((item) => item.type === 'test.started');
     expect(started?.ext.case_id).toBe(CASE_A);
     expect(started?.ext.target_env).toBeUndefined();
@@ -818,7 +818,7 @@ describe('reporter identity wiring', () => {
     ];
     reporter.onBegin();
     for (const test of tests) reporter.onTestBegin(test, fakeResult());
-    reporter.onEnd(fullResult);
+    void reporter.onEnd(fullResult);
 
     const invalid = warningsOf(readEnvelopes(spool)).filter(
       (warning) => warning.code === 'invalid_target_env',

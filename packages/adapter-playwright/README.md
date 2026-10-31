@@ -59,16 +59,16 @@ Playwright loads a reporter module and uses its **default export** as the report
 
 Construction throws (before any callback runs) for:
 
-- a missing `spool_dir`, `run_id` or `producer_id` option;
+- a missing `spool_dir` or `run_id` option;
 - an invalid `run_id`/`producer_id` (`EvidgateInvalidSpoolIdError`);
-- an unsupported `@playwright/test` version (`EvidgateUnsupportedEngineError`, AC5);
-- **spool initialisation**: `mkdir` or opening the chunk or `shards.json` under `spool_dir`
-  fails (unwritable, read-only or unmountable `spool_dir`, `EACCES`, `ENOSPC`). The
-  reporter fails the Playwright startup rather than running with no spool.
+- an unsupported `@playwright/test` version (`EvidgateUnsupportedEngineError`, AC5).
 
-After construction the callbacks never throw: a spool **write** failure is buffered and
-re-thrown from `onEnd`, so the Playwright run reports the reporter failure instead of
-losing evidence silently.
+The spool writer opens at `onBegin`, because the producer id comes from the shard Playwright
+selects. A `spool_dir` that cannot be created or written (`EACCES`, `ENOSPC`, a read-only
+mount) is therefore not a startup throw: after construction the callbacks never throw, and
+that failure is buffered and reported from `onEnd` as `{ status: 'failed' }` plus one
+`[evidgate] reporter failure` line on stderr. The same holds for a write or `close()` failure
+later in the run, so the Playwright run fails instead of losing evidence silently.
 
 ### `producer_id` has no env fallback
 
@@ -173,9 +173,12 @@ types; it never invents another.
 | `onEnd`       | `run.log` `run_end` (`status` = run status) + flush + `shards.json`                                                 |
 
 `attempt_no = result.retry + 1`, one `test.finished` per attempt (never a merged status).
-Callbacks never throw: a spool write failure is buffered
-and re-thrown from `onEnd`, so the Playwright run reports the reporter failure instead of
-losing evidence silently. Every `test.started`/`test.finished`/`test.step` envelope also
+Callbacks never throw: a spool write failure is buffered and reported from `onEnd` as
+`{ status: 'failed' }` plus one `[evidgate] reporter failure (<code>)` line on stderr, so the
+Playwright run fails instead of losing evidence silently. The line carries an errno or the
+adapter's own reason code only, so a resolver's message or an upload error can never print a
+secret. Every
+`test.started`/`test.finished`/`test.step` envelope also
 carries the resolved identity (`ext.case_id`, `ext.variant_hash`, `ext.target_env`,
 `ext.identity_conflict` — see Identity below); every `test.finished` also carries the
 mapped status (`ext.normalized`, `ext.skip_reason`, `ext.xfail`, `ext.error_summary` — see
@@ -310,9 +313,14 @@ Every test envelope carries the resolved identity. The full contract is
   writes one `[evidgate]` line to stderr naming the per-cause counts
   (`N conflicted, N no case_id, N no variant_hash, N no target_env`). The causes are
   counted independently, so one test can appear in several of them (a conflicted test has
-  no `case_id`); the leading `N test(s)` counts each test once. Playwright awaits the
-  reporter's `onEnd` result and overrides the run status with it, so a run that lost
-  identity fails the CI job instead of passing with partial evidence.
+  no `case_id`); the leading `N test(s)` counts each test once. A buffered spool failure —
+  a refused write, a failing `close()`, or a `spool_dir` the reporter could not create —
+  fails the same way: `{ status: 'failed' }` on a `passed` run plus one
+  `[evidgate] reporter failure (<code>)` line that names only the errno or the adapter's own
+  reason code — never the error message, a parameter value or the spool path.
+  Playwright awaits the reporter's `onEnd` result and overrides the run status with it, so
+  a run that lost identity or evidence fails the CI job instead of passing with partial
+  evidence.
 
 `execution_key` stays server-owned (00 §7): the reporter emits
 `PLACEHOLDER_EXECUTION_KEY = '0'.repeat(64)` (valid per the schema pattern
@@ -588,3 +596,7 @@ swallowed late rejections), `attach` (the AC5/AC7 wiring: `artifact_ids` on
 warning) and `cli-boundary` (this package's only runtime `import('@evidgate/cli')` is the
 one lazy load in `attach.ts`, every other file only takes types, and `packages/cli` never
 imports this adapter).
+
+`reporter-spool-failure.e2e` drives the same CLI with a spool the reporter cannot write (a
+read-only directory, or the byte cap where mode bits are not enforced) and asserts the run
+exits non-zero with one path-free `[evidgate] reporter failure` line.
