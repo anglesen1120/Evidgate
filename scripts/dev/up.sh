@@ -3,8 +3,12 @@
 # stack: PostgreSQL 18 + SeaweedFS from infra/compose.dev.yml (digest-pinned),
 # the dev role split and migrations through scripts/dev/db-init.sh, the pending/
 # 24 h lifecycle rule on the dev bucket (T18), then Evidgate.Api and
-# Evidgate.Worker under `dotnet watch` on the host. It exits 0 only once both
-# processes answer GET /internal/health/ready with 200 (AC1).
+# Evidgate.Worker under `dotnet watch` plus the Angular app under `ng serve` on
+# the host. It exits 0 only once both .NET processes answer
+# GET /internal/health/ready with 200 (AC1) and the dev server answers 200. It
+# refuses up front when another process already holds EVIDGATE_DB_PORT,
+# EVIDGATE_S3_PORT or EVIDGATE_WEB_PORT, because a publish onto a taken port
+# silently does not apply and the migrations would run against that other server.
 #
 # usage: scripts/dev/up.sh [--reset]
 #
@@ -16,8 +20,9 @@
 # placeholder with a fresh random value and chmods it 600. No password is ever
 # printed by this script; .env.dev is git-ignored (00 §5.7 S3).
 #
-# web: `ng serve` is deliberately not started — apps/web is still the 00 §5.2
-# placeholder and the Angular app arrives with 09.1.1.
+# web: `ng serve` runs as the host process `web` (own pid/log like api/worker). It
+# needs the npm workspaces installed and packages/sdk built, because the app
+# imports the SDK from its git-ignored dist/; this script does both when missing.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -35,13 +40,18 @@ usage: scripts/dev/up.sh [--reset]
 
 Brings up PostgreSQL 18 + SeaweedFS (compose, digest-pinned images), applies the
 migrations as evidgate_owner, configures the dev bucket, then starts the Api and
-the Worker with `dotnet watch` and waits for both readiness endpoints.
+the Worker with `dotnet watch` and the Angular app with `ng serve` on the host,
+and waits for both .NET readiness endpoints and the dev server.
+
+It refuses before compose starts when another process already holds one of the
+published ports (EVIDGATE_DB_PORT, EVIDGATE_S3_PORT) or EVIDGATE_WEB_PORT; see
+docs/dev-setup.md, Troubleshooting.
 
   --reset   stop the host processes and delete the pg-data/s3-data volumes first
   -h, --help  this text
 
 Environment read from .env.dev (created from .env.dev.template on first run):
-  EVIDGATE_DB_PORT, EVIDGATE_S3_PORT, ASPNETCORE_URLS,
+  EVIDGATE_DB_PORT, EVIDGATE_S3_PORT, EVIDGATE_WEB_PORT, ASPNETCORE_URLS,
   EVIDGATE__WORKER__HEALTHPORT, EVIDGATE__WORKER__HEALTHADDRESS,
   EVIDGATE__DATABASE__CONNECTIONSTRING, ...
   EVIDGATE_UP_READY_TIMEOUT_SECONDS overrides the 300 s readiness budget.
@@ -137,14 +147,16 @@ export_s3_config_for_compose() {
 }
 
 # Bucket + the pending/ 24 h lifecycle (T18). The request runs inside the
-# SeaweedFS container with its own curl, so no host S3 client is required.
+# SeaweedFS container with its own curl, so no host S3 client is required; it
+# therefore targets the container's own S3 port, not the host port that
+# EVIDGATE_S3_PORT publishes (they differ whenever the port is overridden).
 configure_dev_bucket() {
-  local bucket="${EVIDGATE_S3_BUCKET}" endpoint="${EVIDGATE_S3_ENDPOINT}" code
+  local bucket="${EVIDGATE_S3_BUCKET}" endpoint="http://127.0.0.1:8333" code
   local credentials="${EVIDGATE_S3_ACCESS_KEY}:${EVIDGATE_S3_SECRET_KEY}"
   local sigv4='aws:amz:us-east-1:s3'
 
   code="$(evg_compose exec -T seaweedfs curl -s -o /dev/null -w '%{http_code}' \
-    --aws-sigv4 "$sigv4" --user "$credentials" -X PUT "$endpoint/$bucket")"
+    --aws-sigv4 "$sigv4" --user "$credentials" -X PUT "$endpoint/$bucket" || true)"
   # 409 is the emulator's "bucket already exists" (up.sh is re-runnable).
   case "$code" in
     200 | 409) ;;
@@ -153,10 +165,106 @@ configure_dev_bucket() {
 
   code="$(evg_compose exec -T seaweedfs curl -s -o /dev/null -w '%{http_code}' \
     --aws-sigv4 "$sigv4" --user "$credentials" \
-    -X PUT --data-binary @- "$endpoint/$bucket?lifecycle=" <"$EVG_S3_LIFECYCLE_FILE")"
+    -X PUT --data-binary @- "$endpoint/$bucket?lifecycle=" <"$EVG_S3_LIFECYCLE_FILE" || true)"
   [ "$code" = "200" ] || die "putting the lifecycle rule on '$bucket' failed (HTTP ${code:-none})"
 
   info "bucket $bucket ready with the pending/ 24 h lifecycle rule ($EVG_S3_LIFECYCLE_FILE)"
+}
+
+# True when something accepts TCP on 127.0.0.1:$1. A loopback listener answers at
+# once, so the watchdog only bounds a pathological case (macOS has no timeout(1)
+# and no extra tool is wanted here).
+port_is_open() {
+  local port="$1" probe watchdog
+  ( exec 3<>"/dev/tcp/127.0.0.1/$port" ) 2>/dev/null &
+  probe=$!
+  ( sleep 2; kill -9 "$probe" 2>/dev/null ) >/dev/null 2>&1 &
+  watchdog=$!
+  if wait "$probe"; then
+    { kill "$watchdog" 2>/dev/null; wait "$watchdog"; } 2>/dev/null || true
+    return 0
+  fi
+  { kill "$watchdog" 2>/dev/null; wait "$watchdog"; } 2>/dev/null || true
+  return 1
+}
+
+# True when another process already holds 127.0.0.1:$2 and the service of this
+# stack that should own it ($1, `-` for a host process) is not the one running
+# there. A compose publish onto a taken port silently does not apply, and db-init
+# then talks to that other server — a Homebrew postgresql@17 on 5432 answers
+# "role evidgate_owner does not exist". A re-run of up.sh must pass, hence the
+# service check.
+port_conflict() {
+  local service="$1" port="$2" running=""
+  if [ "$service" != "-" ]; then
+    running="$(evg_compose ps --status running -q "$service" 2>/dev/null || true)"
+  fi
+  if [ -n "$running" ]; then
+    return 1
+  fi
+  port_is_open "$port"
+}
+
+# Refuse before compose starts, so the failure names the port and the variable
+# instead of surfacing later as a misleading database error.
+preflight_ports() {
+  if port_conflict postgres "$EVIDGATE_DB_PORT"; then
+    die "port $EVIDGATE_DB_PORT on 127.0.0.1 is already in use, so PostgreSQL 18 cannot be
+     published there (another server answers instead, and the migrations would run
+     against it). Set EVIDGATE_DB_PORT in .env.dev and the Port= value of the
+     connection strings in that file, or stop the process holding the port
+     (docs/dev-setup.md, Troubleshooting)."
+  fi
+  if port_conflict seaweedfs "$EVIDGATE_S3_PORT"; then
+    die "port $EVIDGATE_S3_PORT on 127.0.0.1 is already in use, so SeaweedFS cannot be
+     published there. Set EVIDGATE_S3_PORT and EVIDGATE_S3_ENDPOINT in .env.dev, or
+     stop the process holding the port (docs/dev-setup.md, Troubleshooting)."
+  fi
+  if ! evg_host_is_running web && port_conflict - "$EVIDGATE_WEB_PORT"; then
+    die "port $EVIDGATE_WEB_PORT on 127.0.0.1 is already in use, so ng serve cannot bind
+     it. Set EVIDGATE_WEB_PORT in .env.dev, or stop the process holding the port
+     (docs/dev-setup.md, Troubleshooting)."
+  fi
+}
+
+# The role passwords up.sh exported from .env.dev. The web toolchain needs none of
+# them: `npm ci` runs lifecycle scripts and `ng serve` is a third-party build, so
+# neither gets the dev credentials in its environment.
+WEB_ENV_SCRUB=(
+  -u EVIDGATE_DB_SUPERUSER_PASSWORD -u EVIDGATE_OWNER_PASSWORD
+  -u EVIDGATE_APP_PASSWORD -u EVIDGATE_OPERATOR_PASSWORD
+  -u EVIDGATE_WORKER_SCHED_PASSWORD
+)
+
+# Api and Worker share project references; two `dotnet watch` processes that both
+# restore on a cold checkout race on the shared obj/*.nuget.g.targets files
+# ("already exists"). Building each once, in sequence, makes the two restores no-ops.
+build_hosts() {
+  local project
+  for project in Evidgate.Api Evidgate.Worker; do
+    info "building $project"
+    dotnet build "$EVG_ROOT/src/$project" --nologo -v q \
+      || die "dotnet build of $project failed — run: dotnet build src/$project"
+  done
+}
+
+# apps/web imports @evidgate/sdk, whose main/types point into packages/sdk/dist —
+# git-ignored, so absent on a clean checkout. The reference build that the gate
+# runs first (scripts/verify.sh tsc-build runs `tsc -b`) is therefore a
+# prerequisite of `ng serve`; npm ci is needed once per checkout for the same reason.
+ensure_web_prerequisites() {
+  command -v node >/dev/null 2>&1 || die "node is required for ng serve (Node 26, docs/dev-setup.md)"
+  command -v npm >/dev/null 2>&1 || die "npm is required for ng serve (Node 26, docs/dev-setup.md)"
+  if [ ! -d "$EVG_ROOT/node_modules" ]; then
+    info "installing the npm workspaces (npm ci)"
+    ( cd "$EVG_ROOT" && env "${WEB_ENV_SCRUB[@]}" npm ci --silent ) \
+      || die "npm ci failed — fix what it printed and re-run"
+  fi
+  if [ ! -f "$EVG_ROOT/packages/sdk/dist/src/index.d.ts" ]; then
+    info "building packages/sdk (the web app imports it from dist/)"
+    ( cd "$EVG_ROOT" && env "${WEB_ENV_SCRUB[@]}" npx tsc -b packages/sdk ) \
+      || die "building packages/sdk failed"
+  fi
 }
 
 start_host() {
@@ -226,19 +334,23 @@ export_s3_config_for_compose
 # Ports have defaults in compose and in the hosts, so an older .env.dev stays usable.
 : "${EVIDGATE_DB_PORT:=5432}"
 : "${EVIDGATE_S3_PORT:=8333}"
+: "${EVIDGATE_WEB_PORT:=4200}"
 : "${ASPNETCORE_URLS:=http://127.0.0.1:8080}"
 : "${EVIDGATE__WORKER__HEALTHPORT:=8081}"
 : "${EVIDGATE__WORKER__HEALTHADDRESS:=127.0.0.1}"
 export EVIDGATE__WORKER__HEALTHADDRESS
 : "${EVIDGATE_S3_ENDPOINT:=http://127.0.0.1:${EVIDGATE_S3_PORT}}"
 : "${EVIDGATE_S3_BUCKET:=evidgate-dev}"
-export EVIDGATE_DB_PORT EVIDGATE_S3_PORT EVIDGATE_S3_ENDPOINT EVIDGATE_S3_BUCKET
+export EVIDGATE_DB_PORT EVIDGATE_S3_PORT EVIDGATE_WEB_PORT
+export EVIDGATE_S3_ENDPOINT EVIDGATE_S3_BUCKET
 
 if [ "$reset" = true ]; then
   info "--reset: stopping the host processes and deleting the pg-data/s3-data volumes"
   evg_stop_hosts
   evg_compose down -v
 fi
+
+preflight_ports
 
 info "starting PostgreSQL 18 and SeaweedFS (docker compose up -d --wait)"
 evg_compose up -d --wait
@@ -254,20 +366,31 @@ EVIDGATE_DB_HOST=127.0.0.1 \
 
 configure_dev_bucket
 
+ensure_web_prerequisites
+build_hosts
+
 start_host api dotnet watch --project "$EVG_ROOT/src/Evidgate.Api" --non-interactive run
 start_host worker dotnet watch --project "$EVG_ROOT/src/Evidgate.Worker" --non-interactive run
+# CI=1 and NG_CLI_ANALYTICS=false keep `ng serve` non-interactive: a first run
+# would otherwise ask about usage-data sharing and wait for an answer under nohup.
+start_host web env "${WEB_ENV_SCRUB[@]}" CI=1 NG_CLI_ANALYTICS=false \
+  npm run start -w apps/web -- --host 127.0.0.1 --port "$EVIDGATE_WEB_PORT"
 
 wait_for_ready api "${ASPNETCORE_URLS}/internal/health/ready"
 wait_for_ready worker "http://127.0.0.1:${EVIDGATE__WORKER__HEALTHPORT}/internal/health/ready"
+# The development configuration localizes to `vi` only, and `ng serve` serves a
+# single locale flat (forceI18nFlatOutput), so the app keeps its own base href `/`:
+# a 200 from the root is what proves the workspace compiled. 300 s covers that.
+wait_for_ready web "http://127.0.0.1:${EVIDGATE_WEB_PORT}/"
 
 info "dev stack up in $((SECONDS - START_SECONDS))s"
 cat <<EOF
 
   Api                 ${ASPNETCORE_URLS}   (GET ${ASPNETCORE_URLS}/internal/health/ready)
   Worker              readiness http://127.0.0.1:${EVIDGATE__WORKER__HEALTHPORT}/internal/health/ready
+  web (ng serve)      http://127.0.0.1:${EVIDGATE_WEB_PORT}/
   PostgreSQL 18       127.0.0.1:${EVIDGATE_DB_PORT}   database evidgate (roles: owner/app/operator/worker_sched)
   SeaweedFS S3        ${EVIDGATE_S3_ENDPOINT}   bucket ${EVIDGATE_S3_BUCKET}
-  web (ng serve):     not started — apps/web arrives with 09.1.1
 
   logs   scripts/dev/logs.sh        stop   scripts/dev/down.sh
   reset  scripts/dev/up.sh --reset  (deletes the pg-data/s3-data volumes)

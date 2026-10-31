@@ -12,7 +12,7 @@ EVG_ENV_TEMPLATE="$EVG_ROOT/.env.dev.template"
 EVG_S3_CONFIG_FILE="$EVG_ROOT/infra/seaweedfs/s3-config.json"
 EVG_S3_LIFECYCLE_FILE="$EVG_ROOT/infra/seaweedfs/pending-lifecycle.xml"
 EVG_PG_CONTAINER="evidgate-dev-postgres"
-EVG_HOST_NAMES=(api worker)
+EVG_HOST_NAMES=(api worker web)
 EVG_LOG_DIR="$EVG_ROOT/.local/dev/logs"
 EVG_PID_DIR="$EVG_ROOT/.local/dev/pids"
 
@@ -71,7 +71,9 @@ evg_process_tree() {
 # SIGTERM — it logs "Waiting for a file to change" and stays — so the wait is for
 # the app it owns (the deepest descendant), which is allowed its graceful
 # shutdown budget of up to 10 s (Evidgate.Api/Worker ShutdownTimeout); the
-# watchers are then reaped with SIGKILL when still present. Safe when nothing runs.
+# watchers are then reaped with SIGKILL when still present. `npm run start` (the
+# web host) forwards the signal to `ng serve`, so the same wait applies to it.
+# Safe when nothing runs.
 evg_stop_host() {
   local name="$1" pid_file pid app_pid deadline
   pid_file="$EVG_PID_DIR/$name.pid"

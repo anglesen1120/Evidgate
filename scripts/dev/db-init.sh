@@ -162,8 +162,14 @@ SQL
 #    evidgate_app, evidgate_operator and evidgate_worker_sched without LOGIN.
 printf 'db-init: applying migrations as evidgate_owner\n'
 migrator_connection_string="Host=$DB_HOST;Port=$DB_PORT;Database=$DB_NAME;Username=evidgate_owner;Password=$(dsn_quote "$EVIDGATE_OWNER_PASSWORD")"
-EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
-  dotnet run --project "$ROOT/src/Evidgate.Migrator" -- --status >/dev/null
+# The status probe is the first connect as evidgate_owner: on success its output is
+# noise, but on failure it is the only evidence (wrong server, missing role) — the
+# migrations that follow would fail with something less specific.
+if ! status_output="$(EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
+  dotnet run --project "$ROOT/src/Evidgate.Migrator" -- --status 2>&1)"; then
+  printf '%s\n' "$status_output" >&2
+  die "Evidgate.Migrator --status failed against $DB_HOST:$DB_PORT/$DB_NAME (output above)"
+fi
 EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
   dotnet run --project "$ROOT/src/Evidgate.Migrator"
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 01.8.1-T2.2 — follows the local dev stack's logs: the compose services and the
-# `dotnet watch` host logs up.sh writes under .local/dev/logs/.
+# host logs up.sh writes under .local/dev/logs/ (api, worker and web).
 #
-# usage: scripts/dev/logs.sh [api|worker|postgres|seaweedfs|all]
+# usage: scripts/dev/logs.sh [api|worker|web|postgres|seaweedfs|all]
 #
 # `all` (the default) follows compose in the background and the host logs in the
 # foreground, so a single terminal shows both. Ctrl-C stops following, not the
@@ -21,6 +21,7 @@ usage: scripts/dev/logs.sh [target]
 
   api        follow .local/dev/logs/api.log (dotnet watch)
   worker     follow .local/dev/logs/worker.log (dotnet watch)
+  web        follow .local/dev/logs/web.log (ng serve)
   postgres   docker compose logs -f postgres
   seaweedfs  docker compose logs -f seaweedfs
   all        everything (default); Ctrl-C stops following only
@@ -33,7 +34,7 @@ case "$target" in
     usage
     exit 0
     ;;
-  api | worker)
+  api | worker | web)
     log_file="$EVG_LOG_DIR/$target.log"
     [ -f "$log_file" ] || evg_die "no $target log yet — is the stack up? (scripts/dev/up.sh)"
     exec tail -n 100 -F "$log_file"
@@ -60,7 +61,7 @@ tail_pid=""
 evg_compose logs -f --tail=50 &
 compose_pid=$!
 if [ ${#host_logs[@]} -eq 0 ]; then
-  evg_info "no host logs yet in $EVG_LOG_DIR (up.sh writes api.log/worker.log) — following compose only"
+  evg_info "no host logs yet in $EVG_LOG_DIR (up.sh writes api.log/worker.log/web.log) — following compose only"
   tail_pid="$compose_pid"
 else
   tail -n 50 -F "${host_logs[@]}" &
