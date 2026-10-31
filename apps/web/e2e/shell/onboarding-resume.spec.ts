@@ -66,12 +66,13 @@ test.describe('a reload mid-flow resumes from the server (AC1)', () => {
     await expectNoStepInStorage(page, 'after the create');
 
     // The reload of AC1: a browser boot re-reads the permission catalogue, and the default page
-    // holds no `project:*` code, so the wizard's grants are re-attached and nothing else is. The
+    // holds no `project:*` code, so the wizard's grants and the activation 404 pin are re-attached, no seed. The
     // step itself must come from the server's resources — the seed the flow started from is gone.
     await page.goto(grantsOnlyUrl('en', CREATED_PROJECT));
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 2);
     await expectStepDone(page, 1, true);
+    await expectStepDone(page, 5, false);
     expect(new URL(page.url()).pathname, 'the reload left the address the wizard resumed on').toBe(
       `/en/orgs/${ORG_ACME}/onboarding/${CREATED_PROJECT}`,
     );

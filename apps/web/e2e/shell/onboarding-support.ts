@@ -85,6 +85,10 @@ export const SEED_STEP: Readonly<Record<OnboardingSeed, StepNumber>> = {
   'onboarding-enabled': 5,
 };
 
+// A wizard that has not finished steps 1-4 cannot have been activated, so those seeds pin the contract's
+// 404; the un-toggled answer is an activated project, which would complete step 5 ahead of steps 1-4.
+const NOT_ACTIVATED = activationReadToggle('not-found');
+
 /**
  * The toggles one seed needs. Every operation the wizard reads is pinned by the seed that makes it
  * decisive. `onboarding-token` (09.2.1-T2) is the one seed whose ingest-token page carries a token
@@ -113,6 +117,7 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-project',
     'fixture.variant.listRuns=onboarding-project',
+    NOT_ACTIVATED,
   ],
   // The token path: one active token, an empty binding page, no run.
   'onboarding-token': [
@@ -120,6 +125,7 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-token',
     'fixture.variant.listRuns=onboarding-project',
+    NOT_ACTIVATED,
   ],
   // 09.2.1-T7: the same position with the token page holding the credential metadata the health
   // panel derives from — an `active` token that was used (its `last_used_at` recorded) and, for the
@@ -130,18 +136,21 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-token-used',
     'fixture.variant.listRuns=onboarding-project',
+    NOT_ACTIVATED,
   ],
   'onboarding-unusable': [
     'fixture.variant.getProject=onboarding-project',
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-unusable',
     'fixture.variant.listRuns=onboarding-project',
+    NOT_ACTIVATED,
   ],
   'onboarding-connected': [
     'fixture.variant.getProject=onboarding-connected',
     'fixture.variant.listCiBindings=onboarding-connected',
     'fixture.variant.listIngestTokens=onboarding-connected',
     'fixture.variant.listRuns=onboarding-connected',
+    NOT_ACTIVATED,
   ],
   // Both run seeds share the `onboarding-run` reads (binding + one `complete` run whose recorded
   // decision is `FAIL`, so the AC6 no-verdict check runs on a failing run) and differ only in
@@ -152,6 +161,7 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.listIngestTokens=onboarding-run',
     'fixture.variant.listRuns=onboarding-run',
     'fixture.variant.getRun=onboarding-run-complete',
+    NOT_ACTIVATED,
   ],
   'onboarding-evidence': [
     'fixture.variant.getProject=onboarding-run',
@@ -309,15 +319,17 @@ export function credentialListRefusalUrl(
 }
 
 /**
- * The wizard address carrying the wizard's grants and nothing else.
+ * The wizard address carrying the wizard's grants and the activation 404 pin, no seed.
  *
  * Grants are *session* state: every boot re-reads `listPermissions`, and the default catalogue page
  * holds no `project:*` code, so the onboarding route's own permission guard would refuse a reload
  * that dropped the grant toggle. A seed is *wizard* state, so a re-opened wizard carries the grants
- * and no seed at all: the step has to come from the resources the server reports.
+ * and no seed at all: the step has to come from the resources the server reports. The activation
+ * read stays pinned to its 404 so step 5 is not reported done ahead of the step the wizard resumed
+ * on.
  */
 export function grantsOnlyUrl(locale: ShellLocale, projectId: string | null = null): string {
-  return withVariant(onboardingPath(locale, projectId), `?${WIZARD_GRANTS}`);
+  return withVariant(onboardingPath(locale, projectId), `?${WIZARD_GRANTS}&${NOT_ACTIVATED}`);
 }
 
 /** One stepper item of the DOM contract. */

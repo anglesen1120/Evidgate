@@ -53,10 +53,12 @@ function providerButton(page: Page, provider: 'Google' | 'GitHub') {
  * `land` answers the `302` the real API sends once the provider has authenticated the visitor: the
  * bottom half of the round trip, where this app's callback page takes over.
  *
- * `stay` answers `204`, which a browser does NOT commit as a new document, so the sign-in page stays
- * exactly as the app left it — providers disabled, its own focus target holding the ring. That is
+ * `stay` aborts the start request, which a browser does NOT commit as a new document, so the sign-in
+ * page stays exactly as the app left it — providers disabled, its own focus target holding the ring. That is
  * the state F-LOGIN-02 is about; a real `302` would leave the page instead, and Playwright waits for
- * that navigation rather than showing it.
+ * that navigation rather than showing it. A fulfilled `204` is not used: Playwright 1.64 keeps waiting
+ * on the navigation it leaves pending, and `aborted` (unlike `failed`) cancels without committing an
+ * error page.
  */
 async function stubProviderIdp(page: Page, answer: 'land' | 'stay'): Promise<StartCall[]> {
   const calls: StartCall[] = [];
@@ -65,7 +67,7 @@ async function stubProviderIdp(page: Page, answer: 'land' | 'stay'): Promise<Sta
     const returnUrl = url.searchParams.get('returnUrl');
     calls.push({ url, callback: returnUrl });
     if (answer === 'stay') {
-      await route.fulfill({ status: 204 });
+      await route.abort('aborted');
       return;
     }
     await route.fulfill({
@@ -162,7 +164,7 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
   test('Enter on a provider keeps a visible focus target on the page while the redirect is pending', async ({
     page,
   }) => {
-    // `stay`: the IdP answers without a new document, so the page the app left on screen is the page
+    // `stay`: the start request is aborted, so no document is committed and the page the app left on screen is the page
     // asserted here — providers disabled, one start request, the heading holding the ring.
     const starts = await stubProviderIdp(page, 'stay');
 
