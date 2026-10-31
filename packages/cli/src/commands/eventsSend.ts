@@ -150,7 +150,8 @@ async function runEventsSend(context: CommandContext): Promise<ExitCode> {
   const spoolDir = settings.spoolDir ?? resolveSpoolDir(env);
   const maxBytes = settings.spoolMaxBytes;
   // One Ajv compile for the whole invocation: the validator is stateless, and both the
-  // intake and the drain must apply exactly the same verdicts as the server (T42).
+  // intake and the drain must apply exactly the same verdicts as the server (T42). The
+  // schemas are the ones compiled into the package, so no contracts directory is read.
   const validate = createEnvelopeValidator();
 
   if (from !== undefined) {

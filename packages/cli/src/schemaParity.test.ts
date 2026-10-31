@@ -235,7 +235,7 @@ describe('envelope validator vs fixtures/contracts (T42)', () => {
     expect(error.message).not.toContain('0197c9a4-0f3b-7d21-8a2c-5e9f3b7d6e21');
   });
 
-  it('finds the contracts tree through the default lookup, not the corpus path', () => {
+  it('validates the corpus through the packaged schemas, not the corpus path', () => {
     const resolved = createEnvelopeValidator();
     const accepted = vectors.filter(
       (vector) => vector.verdict.valid && shapeOf(vector.text) === 'event',
