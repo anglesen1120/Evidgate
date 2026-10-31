@@ -2,11 +2,11 @@
 // `reporter: [['@evidgate/playwright-reporter', { spool_dir, run_id, producer_id }]]`.
 // It implements the four documented callbacks (onBegin/onTestBegin/onTestEnd/onEnd) and
 // emits one 00 §9.4 envelope per callback into the spool; it never opens a socket
-// (04 §7). Construction is fail-fast: missing/invalid options, an unsupported engine
-// (AC5) all throw before any callback runs. After construction the callbacks never throw:
+// (04 §7). Construction is fail-fast: missing/invalid options and an unsupported engine
+// all throw before any callback runs. After construction the callbacks never throw:
 // a spool failure is buffered and reported from onEnd as `{ status: 'failed' }` plus one
 // `[evidgate] reporter failure` stderr line, so the run fails instead of losing evidence
-// silently (task file §5).
+// silently.
 //
 // 04.3.2-T1.2/T1.4: every test envelope carries the resolved identity — `ext.case_id`
 // (annotation `evidgate.id`, else the sidecar manifest), `ext.variant_hash` (server
@@ -16,7 +16,7 @@
 // `{ status: 'failed' }` when any test lacked a complete identity (no `case_id`, no
 // `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`;
 // the gate also writes one `[evidgate]` line to stderr, naming the per-cause counts, so a
-// CI log explains the failure, and it overrides the status only for a `passed` run (S3/C3).
+// CI log explains the failure, and it overrides the status only for a `passed` run.
 //
 // 04.3.2-T2.1/T2.2: each attempt is its own `test.finished` with `attempt_no = retry + 1`
 // (AC5); the envelope `status` is the raw Playwright status and `ext.normalized` (plus
@@ -93,6 +93,7 @@ import {
   type VariantOutcome,
   type WarningPayload,
 } from './identity.js';
+import { failureCode, ProducerShardConflictError } from './reporterFailure.js';
 import { loadSidecarIndex, type SidecarFs } from './sidecar.js';
 import { isMergeReplay, isProducerId, resolveProducerId } from './shard.js';
 import type { ResolvedProducerId } from './shard.js';
@@ -607,18 +608,18 @@ export class EvidgateReporter implements Reporter {
   /**
    * Emits the `unmapped` summary and the `run_end` marker, then closes the spool. Returns
    * `{ status: 'failed' }` when any test lacked a complete identity (no `case_id`, no
-   * `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`
-   * (AC2/S3), and likewise when a spool failure was buffered or the spool could not be
-   * closed. Playwright awaits the return value and overrides the run status with it
+   * `variant_hash`, no `target_env`, or a conflict), unless `EVIDGATE_ALLOW_UNMAPPED=1`,
+   * and likewise when a spool failure was buffered or the spool could not be closed.
+   * Playwright awaits the return value and overrides the run status with it
    * (node_modules/playwright/lib/runner/index.js:1644). The override applies only to a
-   * `passed` run — an `interrupted`/`timedout` run keeps its own status (C3). The identity
+   * `passed` run — an `interrupted`/`timedout` run keeps its own status. The identity
    * gate also writes one `[evidgate]` line to stderr, naming the per-cause counts, so a CI
    * log explains the failure.
    *
-   * 04.3.3-T2.2 split: with no attachment work pending the end sequence runs synchronously;
-   * with uploads pending it runs after {@link endAfterDrain} drains them. Neither shape
-   * throws: Playwright logs a throwing reporter as an internal reporter error and only fails
-   * the run through its own error bookkeeping, while the returned status is the documented
+   * With no attachment work pending the end sequence runs synchronously; with uploads
+   * pending it runs after {@link endAfterDrain} drains them. Neither shape throws:
+   * Playwright logs a throwing reporter as an internal reporter error and only fails the
+   * run through its own error bookkeeping, while the returned status is the documented
    * failure channel (and a caller that drops reporter errors cannot turn the loss into a
    * passing run). `Reporter` types no synchronous non-void return, so a failure is boxed in
    * a resolved promise — the value Playwright awaits — and a passing run returns nothing.
@@ -671,7 +672,7 @@ export class EvidgateReporter implements Reporter {
     if (writer !== undefined) {
       this.guard(() => {
         if (this.unidentifiedCount > 0) {
-          // C4/P3: the summary bypasses the 100-envelope cap, so the counts that explain the
+          // The summary bypasses the 100-envelope cap, so the counts that explain the
           // failure survive even when the run already emitted MAX_WARNING_ENVELOPES warnings.
           this.emitWarning({
             code: 'unmapped',
@@ -701,7 +702,7 @@ export class EvidgateReporter implements Reporter {
     }
     const gateTripped = !this.allowUnmapped && this.unidentifiedCount > 0;
     if (gateTripped) {
-      // C3: one line, so a run that fails on identity says why in the CI log.
+      // One line, so a run that fails on identity says why in the CI log.
       process.stderr.write(
         `[evidgate] ${this.unidentifiedCount} test(s) without a complete identity ` +
           `(${this.identityCauses()}); set EVIDGATE_ALLOW_UNMAPPED=1 to allow\n`,
@@ -750,15 +751,15 @@ export class EvidgateReporter implements Reporter {
   }
 
   /**
-   * The producer identity this run writes under (T54/AC1/AC2).
+   * The producer identity this run writes under.
    *
    * Precedence: an explicit `producer_id` option wins over the derivation, but only when it
    * agrees with Playwright's shard. With a shard config the two must match: two shards
    * writing under one producer would interleave one sequence, and a wrong id is a server
    * 422 `unknown_producer` anyway, so the run is refused before any envelope instead of
    * failing later per batch. Without a shard config there is nothing to compare against:
-   * an explicit id is honoured as before (04.3.1-T1 configs), and the writer records no
-   * shard slot; omitting the option derives `shard-1` (T54) and records slot 1.
+   * an explicit id is honoured as before, and the writer records no shard slot; omitting
+   * the option derives `shard-1` and records slot 1.
    */
   private resolveProducer(config?: FullConfig): { producer_id: string; shard?: SpoolShard } {
     const derived = resolveProducerId(config);
@@ -1050,37 +1051,4 @@ function hasSensitiveAnnotation(test: TestCase, result: TestResult): boolean {
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
-}
-
-/**
- * The one part of a buffered failure that is safe to log: a POSIX errno or one of the
- * adapter's own fixed reason codes. Anything else — a resolver's message, an upload error
- * carrying a presigned URL, a caller-crafted `code` — degrades to a constant label, so no
- * value a caller controls can reach the line.
- */
-function failureCode(failure: Error): string {
-  const code: unknown = (failure as NodeJS.ErrnoException).code;
-  if (typeof code !== 'string') return UNEXPECTED_FAILURE;
-  return SAFE_FAILURE_CODES[code] === true || ERRNO_CODE.test(code) ? code : UNEXPECTED_FAILURE;
-}
-
-/** The adapter's own reason codes (`spool.ts`, `writerLock.ts`) plus the shard conflict. */
-const SAFE_FAILURE_CODES: Readonly<Record<string, true>> = {
-  invalid_config: true,
-  spool_cap_exceeded: true,
-  spool_shard_mismatch: true,
-  invalid_shard: true,
-  spool_writer_locked: true,
-  spool_unsafe_path: true,
-  producer_id_shard_conflict: true,
-};
-
-/** A POSIX errno name; the node fs errors the spool can raise all use this shape. */
-const ERRNO_CODE = /^E[A-Z]{2,15}$/;
-
-const UNEXPECTED_FAILURE = 'unexpected_error';
-
-/** An explicit `producer_id` that disagrees with the shard Playwright selected. */
-class ProducerShardConflictError extends Error {
-  readonly code = 'producer_id_shard_conflict';
 }

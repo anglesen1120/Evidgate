@@ -81,5 +81,8 @@ for (const [key, text] of schemas) {
 }
 lines.push('};', '');
 
-writeFileSync(outputFile, lines.join('\n'), 'utf8');
+const generatedText = lines.join('\n');
+if (!existsSync(outputFile) || readFileSync(outputFile, 'utf8') !== generatedText) {
+  writeFileSync(outputFile, generatedText, 'utf8');
+}
 process.stdout.write(`embedded ${schemas.size} contract schemas into ${outputFile}\n`);

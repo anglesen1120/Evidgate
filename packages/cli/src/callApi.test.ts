@@ -38,7 +38,7 @@ function fakeClock(startAt = 1_700_000_000_000): FakeClock {
   return { deps, sleeps, at: (): number => time };
 }
 
-/** A `503` (or any status) with the 00 §9.2 envelope the sender also classifies. */
+/** A `503` (or any status) with the error envelope the sender also classifies. */
 function envelopeResponse(status: number, retryable = true, headers = {}): Response {
   return new Response(
     JSON.stringify({
@@ -69,7 +69,7 @@ function respondWith(...responses: ReadonlyArray<Response | undefined>) {
       if (response === undefined) {
         return { error: new Error('connection refused') };
       }
-      // The SDK parses a non-2xx body into `error`, which is how a 00 §9.2 envelope
+      // The SDK parses a non-2xx body into `error`, which is how an error envelope
       // reaches `isRetryable`; the stub does the same.
       const error = response.ok
         ? undefined
@@ -168,6 +168,23 @@ describe('callApi', () => {
     await callApi(stub.operation, optionsFor(clock.deps, { policy: 'pre-processing' }));
 
     expect(clock.sleeps).toEqual([maxRetryAfterMs]);
+  });
+
+  it('a_malformed_retry_after_falls_back_to_the_configured_floor', async () => {
+    for (const header of ['-5', '1.5', 'garbage']) {
+      const clock = fakeClock();
+      const stub = respondWith(
+        envelopeResponse(429, true, { 'retry-after': header }),
+        okResponse(),
+      );
+
+      await callApi(stub.operation, optionsFor(clock.deps, { fallbackRetryAfterMs: 1_000 }));
+
+      expect(stub.calls, header).toHaveLength(2);
+      // `Date.parse` reads these as a past date (0 ms); a malformed header must not turn
+      // the retry into an immediate one, so the floor is the whole wait.
+      expect(clock.sleeps, header).toEqual([1_000]);
+    }
   });
 
   it('a_wait_that_outlives_the_budget_ends_the_retries', async () => {

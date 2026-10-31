@@ -1,21 +1,6 @@
-// The one bounded-retry call the idempotent commands share. `runs create`,
-// `runs finalize` and `manifests upload` send an `Idempotency-Key`, so replaying them is
-// safe by construction: every attempt re-issues the caller's operation with the SAME key
-// and the SAME body bytes, and the server replays the stored answer. `auth/exchange.ts`
-// carries no key — openapi `/ci/token` is "Idempotency-Key exempt: `jti` single-use is the
-// arbiter" — so it may only retry the answers that provably happen before the exchange
-// runs (429 `rate_limited`, 503 `unavailable`), never a transport failure or a 500/502:
-// those may follow a token that was already minted, and the single-use `jti` would then
-// refuse the replay.
-//
-// The policy is deliberately small: at most `maxAttempts` requests and ONE wall-clock
-// budget for the whole call, with the sender's own full-jitter backoff, `Retry-After`
-// parser and per-request timeout (`sender.ts`, the 04.2.3 single convention) rather than a
-// second spelling of them. `Retry-After` is a floor under the jitter — a delta-seconds or
-// an HTTP-date value — capped at `maxRetryAfterMs`, and a wait that would outlive the
-// budget ends the retries instead of sleeping. Every other 4xx is permanent. Nothing is
-// logged here: the caller maps the final outcome with `serverErrorFromResponse` /
-// `transportError`, which redact every registered secret, so no attempt can echo a token.
+// The one bounded-retry path the idempotent commands share: replaying is safe only when the
+// request carries an `Idempotency-Key`, and the unkeyed token exchange may retry only the
+// answers the server gives before it mints a single-use token.
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { attemptSignal, backoffDelay, isRetryable, retryAfter } from './sender.js';
@@ -26,14 +11,14 @@ export const maxCallAttempts = 3;
 export const defaultCallBudgetMs = 60_000;
 /** A caller may raise the budget, but never past this ceiling. */
 export const maxCallBudgetMs = 300_000;
-/** A server-named wait is honoured up to this; a longer one ends the retries. */
+/** A server-named wait is clamped to this cap, so a longer one waits this much. */
 export const maxRetryAfterMs = 60_000;
 
 /**
  * What the call may retry.
  * - `replay-safe`: the request carries an `Idempotency-Key` (or is a GET), so a transport
- *   failure, 429 and 5xx are all retried, unless the 00 §9.2 envelope says
- *   `retryable: false`. Every other 4xx — 408 included — is final.
+ *   failure, 429 and 5xx are all retried, unless the envelope says `retryable: false`.
+ *   Every other 4xx — 408 included — is final.
  * - `pre-processing`: the unkeyed token exchange. Only 429 and 503 are retried — both are
  *   answers the server produces before it mints a token (openapi `/ci/token`).
  * - `none`: exactly one request.
@@ -157,28 +142,9 @@ function retryWait(
   if (!retryable) {
     return undefined;
   }
-  const named = namedRetryAfter(response, now);
-  const floor = named === undefined ? fallbackRetryAfterMs : named;
+  const named = retryAfter(response, now, { strict: true });
+  const floor = named === undefined ? fallbackRetryAfterMs : Math.min(named, maxRetryAfterMs);
   return Math.max(backoffDelay(attempt, sample), floor);
-}
-
-/** The two `Retry-After` forms openapi allows (00 §9.1): delta-seconds or an HTTP-date. */
-const deltaSecondsPattern = /^[0-9]+$/;
-const httpDatePattern = /^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
-
-/**
- * The server's named wait, capped at `maxRetryAfterMs`, or `undefined` when it named none.
- * Only those two forms are honoured: the shared parser defers to `Date.parse`, which also
- * reads text like `-5` or `1.5` as a past date, and a malformed header must fall back to
- * the caller's floor instead of silently becoming "retry at once".
- */
-function namedRetryAfter(response: Response, now: number): number | undefined {
-  const raw = response.headers.get('retry-after')?.trim();
-  if (raw === undefined || (!deltaSecondsPattern.test(raw) && !httpDatePattern.test(raw))) {
-    return undefined;
-  }
-  const parsed = retryAfter(response, now);
-  return parsed === undefined ? undefined : Math.min(parsed, maxRetryAfterMs);
 }
 
 function clampAttempts(requested: number | undefined): number {

@@ -61,18 +61,11 @@ export const manifestsUploadCommand: CommandDefinition = {
     const body = await readManifestFile(file);
     const { token } = await getToken(config, deps);
     const client = createApiClient(config, token, deps.fetch ?? fetch);
+    // Fixed before the call so every attempt sends one value: the file digest is what the
+    // server also hashes into `BodySha256`, so a retry replays the stored 201.
+    const idempotencyKey = createHash('sha256').update(body).digest('hex');
     const result = await callApi(
-      (signal) =>
-        createManifestRawBytes(
-          client,
-          config.project,
-          // 00 §9.1: the route requires an `Idempotency-Key`. The file's own digest makes a
-          // retry of the same manifest replay the stored 201 instead of writing a second
-          // record, and it is the same value the server hashes into `BodySha256`.
-          createHash('sha256').update(body).digest('hex'),
-          body,
-          signal,
-        ),
+      (signal) => createManifestRawBytes(client, config.project, idempotencyKey, body, signal),
       // The digest key makes the upload replay-safe, so a transport failure, a 429 or a 5xx
       // is retried with the SAME key and the SAME bytes.
       { policy: 'replay-safe', deps },
