@@ -1,23 +1,28 @@
-using System.Globalization;
+using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Migrator;
 using Shouldly;
 using Xunit;
 
 namespace Migrator.IntegrationTests;
 
-/// <summary>01.8.1-T3.1 (AC3): <c>seed-dev</c> writes the synthetic dev tenant idempotently and refuses outside dev.</summary>
+/// <summary><c>seed-dev</c> writes the synthetic dev tenant idempotently, then the dev catalog suite, and refuses outside dev.</summary>
 [Collection(MigratorPostgresSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SeedDevTests
 {
     private readonly PostgresMigratorFixture _fixture;
+    private readonly SeedDevTokenHarness _harness;
 
-    public SeedDevTests(PostgresMigratorFixture fixture) => _fixture = fixture;
+    public SeedDevTests(PostgresMigratorFixture fixture)
+    {
+        _fixture = fixture;
+        _harness = new SeedDevTokenHarness(fixture);
+    }
 
     [Fact]
     public async Task SeedDev_RunTwice_SameCounts()
     {
-        var database = await MigratedDatabaseAsync();
+        var database = await _harness.MigratedDatabaseAsync();
 
         var first = RunSeed(database, "Development");
         first.ExitCode.ShouldBe(MigratorExitCodes.Success, first.Error);
@@ -34,7 +39,7 @@ public sealed class SeedDevTests
     [Fact]
     public async Task SeedDev_SeedsTheRolesOfTheCatalogue_AndAnActiveBinding()
     {
-        var database = await MigratedDatabaseAsync();
+        var database = await _harness.MigratedDatabaseAsync();
         RunSeed(database, "Development").ExitCode.ShouldBe(MigratorExitCodes.Success);
 
         (await _fixture.ScalarAsync<string>(
@@ -53,7 +58,7 @@ public sealed class SeedDevTests
     [InlineData(null)]
     public async Task SeedDev_OutsideDevelopment_Refuses_AndWritesNothing(string? environment)
     {
-        var database = await MigratedDatabaseAsync();
+        var database = await _harness.MigratedDatabaseAsync();
 
         var run = RunSeed(database, environment);
 
@@ -79,9 +84,14 @@ public sealed class SeedDevTests
     [Fact]
     public void SeedDev_AgainstASharedHost_Refuses_BeforeConnecting()
     {
-        var run = Run(
-            "Host=db.prod.example.com;Port=5432;Database=evidgate;Username=evidgate_owner;Password=x",
-            "Development");
+        // Both connections name the shared host: the owner guard fires first, and the app-host guard behind it would
+        // refuse the same way, so the run never reaches either database.
+        var variables = SeedDevTokenHarness.NoEnvironment();
+        variables[MigratorOptions.ConnectionStringVariable] = SharedHost("evidgate_owner");
+        variables[DevSeed.EnvironmentVariable] = "Development";
+        variables[SecretNames.DatabaseConnectionString] = SharedHost("evidgate_app");
+
+        var run = SeedDevTokenHarness.Run(["seed-dev"], variables);
 
         run.ExitCode.ShouldBe(MigratorExitCodes.InvalidInvocation);
         run.Error.ShouldContain("not local");
@@ -90,30 +100,13 @@ public sealed class SeedDevTests
     [Fact]
     public void SeedDev_Usage_Mentions_TheCommand() => MigratorHost.Usage.ShouldContain("seed-dev");
 
-    private async Task<string> MigratedDatabaseAsync()
-    {
-        var database = await _fixture.CreateDatabaseAsync();
-        MigratorHarness.Run(PostgresMigratorFixture.RepoMigrationsPath, _fixture.OwnerConnectionString(database))
-            .ExitCode.ShouldBe(MigratorExitCodes.Success);
+    private static string SharedHost(string role) =>
+        $"Host=db.prod.example.com;Port=5432;Database=evidgate;Username={role};Password=x";
 
-        return database;
-    }
-
-    private (int ExitCode, string Output, string Error) RunSeed(string database, string? environment) =>
-        Run(_fixture.OwnerConnectionString(database), environment);
-
-    private static (int ExitCode, string Output, string Error) Run(string connectionString, string? environment)
-    {
-        var output = new StringWriter(CultureInfo.InvariantCulture);
-        var error = new StringWriter(CultureInfo.InvariantCulture);
-        var variables = new Dictionary<string, string?>
-        {
-            [MigratorOptions.ConnectionStringVariable] = connectionString,
-            [DevSeed.EnvironmentVariable] = environment,
-        };
-
-        return (MigratorHost.Run(["seed-dev"], output, error, variables), output.ToString(), error.ToString());
-    }
+    private SeedDevTokenHarness.RunResult RunSeed(string database, string? environment) =>
+        SeedDevTokenHarness.Run(
+            ["seed-dev"],
+            _harness.Variables(database, pepper: string.Empty, environment, omitPepper: true));
 
     private async Task<SeedCounts> CountsAsync(string database) => new(
         await _fixture.ScalarAsync<long>(database, "select count(*) from public.organization"),

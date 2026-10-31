@@ -27,8 +27,10 @@ public static class MigratorHost
           (no arguments)  apply every pending migration, one transaction per file
           --status        print applied, pending and drifted files; exit {MigratorExitCodes.ChecksumMismatch} on drift, applies nothing
           --dry-run       print the pending files without applying anything
-          seed-dev        write the synthetic dev tenant (org, project, dev user + roles, CI binding); idempotent;
-                          refuses unless DOTNET_ENVIRONMENT=Development and the database host is local (01.8.1-T3)
+          seed-dev        write the synthetic dev tenant (org, project, dev user + roles, CI binding) and the dev
+                          project's sample case, suite and suite revision, through the real Catalog commands on the
+                          app-role connection; idempotent; refuses unless DOTNET_ENVIRONMENT=Development and every
+                          database host is local
           seed-dev --with-token
                           also mint ONE dev ingest token (name dev-seed, no expiry) and ONE sample policy revision for the
                           dev project, through the real Identity/Policy commands on the app-role connection; the token
@@ -38,7 +40,7 @@ public static class MigratorHost
 
         environment:
           {MigratorOptions.ConnectionStringVariable}   (required) owner-role connection string
-          {SecretNames.DatabaseConnectionString}   (required by --with-token) app-role (evidgate_app) connection string
+          {SecretNames.DatabaseConnectionString}   (required) app-role (evidgate_app) connection string
           {SecretNames.CiPepper}   (required by --with-token) base64 pepper, at least {CiSecrets.MinKeyBytes} bytes
           {MigratorOptions.MigrationsPathVariable}     (optional) defaults to <repo>/migrations
           {MigratorOptions.CommandTimeoutVariable} (optional) seconds per statement, default {MigratorOptions.DefaultCommandTimeoutSeconds} = no timeout

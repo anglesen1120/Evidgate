@@ -26,6 +26,9 @@
          real commands, never by a second copy of the credential or policy logic. -->
     <ProjectReference Include="..\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Modules\Evidgate.Modules.Policy\Evidgate.Modules.Policy.csproj" PrivateAssets="all" />
+    <!-- seed-dev's base run: the dev project's case, suite and suite revision are written by the Catalog
+         module's own service and commands, so a manifest has a real suite revision to name. -->
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <!-- The redactor and the options' ToString are internal by design (00 §5.7 S3);
