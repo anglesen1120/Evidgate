@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Identity;
+using Evidgate.Modules.Orchestrator;
 using Evidgate.Modules.Policy;
 using Mediator;
 using Microsoft.Extensions.Configuration;
@@ -59,6 +60,7 @@ internal static class DevSeedServices
         services.AddCatalogModule();
         services.AddPolicyModule();
         services.AddIdentityModule(configuration);
+        services.AddOrchestratorModule();
 
         return services.BuildServiceProvider();
     }

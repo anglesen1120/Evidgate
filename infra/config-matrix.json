@@ -1232,7 +1232,7 @@
     {
       "key": "EVIDGATE__RUNS__DEFAULTCOLLECTIONTIMEOUT",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "string",
       "requiredAtBoot": false,
       "constraints": {},
@@ -1252,7 +1252,7 @@
     {
       "key": "EVIDGATE__RUNS__DEFAULTLATEWINDOWMINUTES",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "constraints": {

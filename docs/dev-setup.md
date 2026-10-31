@@ -119,6 +119,7 @@ the Worker and the Migrator:
 | `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` | Worker | `evidgate_worker_sched` — the scheduled owner `SECURITY DEFINER` sweeps (01.5.1-T6.2, TL T80) |
 | `EVIDGATE_MIGRATOR__CONNECTIONSTRING` | `Evidgate.Migrator` | `evidgate_owner` — the only writer of `public.schema_migration` |
 | `EVIDGATE__CI__PEPPER` | `db-init.sh --with-token` (the seed) | base64 HMAC pepper for ingest tokens and binding challenges (`EVIDGATE:CI:PEPPER`), at least 32 bytes after decoding; the seed refuses and writes nothing when it is missing or invalid. Not in `.env.dev.template`: add `EVIDGATE__CI__PEPPER=<openssl rand -base64 32>` to `.env.dev` before the first `--with-token` run |
+| `EVIDGATE__CI__SIGNINGKEY` | Api | HS256 key of the `ci_producer` tokens `POST /v1/ci/token` mints and every CI route accepts; base64, at least 32 bytes after decoding. Not in `.env.dev.template`: add `EVIDGATE__CI__SIGNINGKEY=<openssl rand -base64 48>` to `.env.dev` and restart the Api, otherwise `/ci/token` answers 503 `CI authentication is not configured` |
 | `ASPNETCORE_URLS`, `EVIDGATE__WORKER__HEALTHPORT`, `EVIDGATE__WORKER__HEALTHADDRESS` | Api, Worker | HTTP endpoint, worker probe port, and the address that probe binds (`127.0.0.1` in the template; the option default is `0.0.0.0`) |
 | `DOTNET_ENVIRONMENT`, `ASPNETCORE_ENVIRONMENT` | Api, Worker | `Development` for the dev stack |
 | `EVIDGATE_S3_ENDPOINT`, `EVIDGATE_S3_REGION`, `EVIDGATE_S3_BUCKET`, `EVIDGATE_S3_ACCESS_KEY`, `EVIDGATE_S3_SECRET_KEY` | `up.sh` | local emulator coordinates and identity |
@@ -193,9 +194,23 @@ process inherits):
 ```sh
 export EVIDGATE_ENV=dev
 export EVIDGATE_API_URL=http://127.0.0.1:8080
-export EVIDGATE_PROJECT=dev-project
-export EVIDGATE_DEV_TOKEN='egt_...'   # the line the seed printed
+export EVIDGATE_PROJECT=0198a000-0000-7000-8000-00000000d002
+export EVIDGATE_INGEST_TOKEN='egt_...'   # the EVIDGATE_DEV_TOKEN line the seed printed
 ```
+
+The seed prints `EVIDGATE_DEV_TOKEN=egt_...`; that value is an ingest token, and
+the CLI exchanges it at `POST /v1/ci/token` for a short-lived `ci_producer` token
+when it reads it from **`EVIDGATE_INGEST_TOKEN`**. The Api accepts only the minted
+`ci_producer` token on the CI routes: `EVIDGATE_DEV_TOKEN` is sent raw as a bearer,
+so `runs create` and `manifests upload` answer 401 with it. Keep the `DEV_TOKEN`
+wording only for what the seed prints, and never export that variable for the CLI.
+
+The exchange needs `EVIDGATE__CI__SIGNINGKEY` in `.env.dev` (see
+[Configuration](#configuration-envdev)); without it `/ci/token` answers 503
+`CI authentication is not configured`. One producer token is cached per API URL and
+project under `EVIDGATE_CACHE_DIR` (default `~/.cache/evidgate`), so after
+`up.sh --reset` the seeded token is a new secret: use a fresh cache directory or
+delete `<cache>/ci-token.*.json` before running the CLI.
 
 **Rerunning with a live token** exits 0, mints nothing and prints no secret; the
 scripts say so and name the one recovery:
@@ -233,7 +248,14 @@ needs (they are the database's, so they are stable per volume and change only on
 ```text
 seed-dev: catalog suite dev-seed-smoke revision 1 sha256:<64 hex> (created)
 seed-dev: manifest inputs suite_revision_id=<uuid> case_revision_id=<uuid>
+seed-dev: environment dev revision 1 sha256:<64 hex> (created)
+seed-dev: manifest inputs environment_revision_id=<uuid> environment_key=dev
 ```
+
+The environment line is printed by the same run: the seed writes one `dev`
+environment revision for `dev-project` through the Orchestrator command, because
+`runs create` refuses a manifest that names an unknown or null environment revision
+and the seeded ingest token has no `environment:write` to create one itself.
 
 Read them from the output of the run that seeded the stack (`scripts/dev/up.sh`
 and `scripts/dev/db-init.sh` print the seed's stdout), or ask for them again at any
@@ -241,9 +263,15 @@ time — a rerun writes nothing and repeats the same two lines with `(already
 present)`:
 
 ```sh
+# Both roles: the seed writes the tenant as the owner and the catalog half as the app role.
 EVIDGATE_MIGRATOR__CONNECTIONSTRING='Host=127.0.0.1;Port=5432;Database=evidgate;Username=evidgate_owner;Password=<EVIDGATE_OWNER_PASSWORD>' \
+EVIDGATE__DATABASE__CONNECTIONSTRING='Host=127.0.0.1;Port=5432;Database=evidgate;Username=evidgate_app;Password=<EVIDGATE_APP_PASSWORD>' \
 DOTNET_ENVIRONMENT=Development dotnet run --project src/Evidgate.Migrator -- seed-dev
 ```
+
+Both `Port=` values must be the `EVIDGATE_DB_PORT` of `.env.dev` (the default is
+`5432`). Or run [`scripts/dev/db-init.sh`](../scripts/dev/db-init.sh), which builds
+the two connection strings from `.env.dev` and prints the same lines.
 
 Take the shape from the contract vector
 [`fixtures/contracts/vectors/manifest.v1/acc-01-golden.json`](../fixtures/contracts/vectors/manifest.v1/acc-01-golden.json)
@@ -255,14 +283,18 @@ revision:
   `matrix.case_revision_ids`) → the `case_revision_id` the seed printed, with
   `planned_executions`, `matrix` and `shard_plan` trimmed to that one case the way
   the vector repeats its entries;
-- `environment_revision_id` → `null`: the field is optional in V1, and the dev
-  project has no environment revision until 05.1.2 lands one.
+- `environment_revision_id` → the `environment_revision_id` the seed printed (the
+  one `dev` revision of `dev-project`, whose `base_urls.local` is
+  `http://127.0.0.1:8080`). The upload only checks that the revision exists in the
+  project; `env_needs.target_envs` and each `planned_executions[].target_env` are
+  free-form labels at this milestone, so leave the vector's `staging` as it is, or
+  use `dev` to read consistently.
 
 `runs create` answers 201 with a `run_id` when the token, the project and the
 manifest line up.
 
-Without `--with-token`, no token is seeded: the seed writes the tenant and the
-catalog suite only, and a token has to come from
+Without `--with-token`, no token is seeded: the seed writes the tenant, the
+catalog suite and the environment revision only, and a token has to come from
 `POST /v1/projects/{p}/ingest-tokens` once a session exists (02.3.x) or from the
 seeded CI binding with a GitHub OIDC token.
 
@@ -285,7 +317,21 @@ catalog tables): one case `dev seed smoke` and its case revision, one suite
 `manifests upload` has a suite revision to name. Rerunning finds all four and adds
 nothing: the sample's content is fixed, so the ids and the revision hash stay the
 same, and the seed prints them again ([Smoke it with the
-CLI](#the-dev-ingest-token-seed-dev---with-token)).
+CLI](#the-dev-ingest-token-seed-dev---with-token)). The same run then writes one
+`dev` environment revision for the project, through the Orchestrator module's own
+command, so a manifest and a run have a real `environment_revision_id`; its content
+is fixed too (a loopback base URL, no dependency versions, no secret references), so
+a rerun finds it by the module's content hash, adds nothing and prints the same id
+with `(already present)`.
+
+Every lookup comes first and is paged: the case by its annotation id, the suite by
+its slug, and the revision by its content hash (the revision preview). A dev project
+the seed did not create is protected twice: it stops when other **active** cases
+exist, because the registration service marks every active case absent from its
+one-file sample tree missing, and if one arrives while it registers, the registration
+is rolled back instead of committed. The seed also never resubmits the sample
+content to the create command, which would move the suite's head back to that older
+revision and off a newer one.
 
 Under `--with-token` the same seed also mints the ingest token and the sample
 policy revision through the application role; `EVIDGATE_DB_INIT_SEED=0` skips it

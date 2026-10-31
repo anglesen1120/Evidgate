@@ -30,8 +30,9 @@ internal static class DevSeedRun
     /// <param name="output">Where progress goes.</param>
     /// <param name="error">Where a refusal or failure goes.</param>
     /// <remarks>
-    /// The catalog sample is part of every seed, not of one switch: both modes run here, and a stack seeded only by
-    /// <c>--with-token</c> would otherwise have no suite revision for a manifest to name.
+    /// The catalog sample and the environment revision are part of every seed, not of one switch: both modes run here,
+    /// and a stack seeded only by <c>--with-token</c> would otherwise have no suite revision or environment revision for
+    /// a manifest and a run to name.
     /// </remarks>
     internal static async Task<int> RunModulesAsync(
         MigratorOptions options,
@@ -89,9 +90,19 @@ internal static class DevSeedRun
         var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
         var cataloged = await DevSeedCatalog.WriteAsync(mediator, scope.ServiceProvider, output, error).ConfigureAwait(false);
-        if (cataloged != MigratorExitCodes.Success || commands is null)
+        if (cataloged != MigratorExitCodes.Success)
         {
             return cataloged;
+        }
+
+        // The environment revision is part of every seed too: a run refuses a manifest whose environment_revision_id is
+        // unknown or null, and the ingest token cannot create one itself.
+        var (environmentRevisionId, environmentExit) = await DevSeedEnvironment
+            .WriteAsync(mediator, scope.ServiceProvider, output, error)
+            .ConfigureAwait(false);
+        if (environmentRevisionId is null || commands is null)
+        {
+            return environmentExit;
         }
 
         return await commands(mediator, scope.ServiceProvider).ConfigureAwait(false);

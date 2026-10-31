@@ -14,8 +14,10 @@ namespace Evidgate.Migrator;
 /// machine or a bare compose service name (no dots): a seed pointed at a shared database is the mistake this guard
 /// exists for. The data is fully synthetic. After the tenant, one catalog suite with one case is written through the
 /// Catalog module's own service and commands on the app role (<see cref="DevSeedCatalog"/>), so a manifest has a suite
-/// revision to name; <c>seed-dev --with-token</c> then also mints one dev ingest token and one sample policy revision
-/// the same way (<see cref="DevSeedToken"/>), so no credential, policy or catalog row is ever composed by hand.
+/// revision to name, and one environment revision through the Orchestrator command (<see cref="DevSeedEnvironment"/>), so
+/// a run has an <c>environment_revision_id</c>; <c>seed-dev --with-token</c> then also mints one dev ingest token and one
+/// sample policy revision the same way (<see cref="DevSeedToken"/>), so no credential, policy, catalog or environment row
+/// is ever composed by hand.
 /// </remarks>
 public static class DevSeed
 {
@@ -121,9 +123,7 @@ public static class DevSeed
             return refusal;
         }
 
-        return withToken
-            ? DevSeedToken.Run(options, environment, output, error)
-            : DevSeedToken.Run(options, environment, output, error, withToken: false);
+        return DevSeedToken.Run(options, environment, output, error, withToken: withToken);
     }
 
     /// <summary>Null when the seed may run; else the exit code, after the refusal is written and nothing else was done.</summary>

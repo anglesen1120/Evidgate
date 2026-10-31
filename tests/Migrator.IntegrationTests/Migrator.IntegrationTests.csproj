@@ -17,9 +17,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Evidgate.Migrator\Evidgate.Migrator.csproj" />
     <!-- The Migrator keeps its module references private (they would leak internal handlers into every test
-         project that references it); the token seed runs them in this host, so they are referenced here. -->
+         project that references it); the token seed runs them in this host, so they are referenced here. The
+         seed's newer-revision regression also sends a Catalog command, hence the Catalog reference too. -->
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Policy\Evidgate.Modules.Policy.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />

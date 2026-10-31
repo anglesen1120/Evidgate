@@ -762,6 +762,12 @@
       "evidgate.modules.catalog.contracts": {
         "type": "Project"
       },
+      "evidgate.modules.evidence.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
+        }
+      },
       "evidgate.modules.identity": {
         "type": "Project",
         "dependencies": {
@@ -779,6 +785,35 @@
         }
       },
       "evidgate.modules.identity.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
+        }
+      },
+      "evidgate.modules.ingestion.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
+        }
+      },
+      "evidgate.modules.orchestrator": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Contracts.Validation": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Modules.Catalog.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Ingestion.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Orchestrator.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Policy.Contracts": "[1.0.0, )",
+          "Mediator.Abstractions": "[3.0.2, )"
+        }
+      },
+      "evidgate.modules.orchestrator.contracts": {
         "type": "Project",
         "dependencies": {
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"

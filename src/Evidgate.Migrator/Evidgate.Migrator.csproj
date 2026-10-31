@@ -29,6 +29,9 @@
     <!-- seed-dev's base run: the dev project's case, suite and suite revision are written by the Catalog
          module's own service and commands, so a manifest has a real suite revision to name. -->
     <ProjectReference Include="..\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" PrivateAssets="all" />
+    <!-- seed-dev's run inputs: the dev environment revision a manifest names is written by the Orchestrator
+         module's own command, because the seeded ingest token cannot call that route itself. -->
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Orchestrator\Evidgate.Modules.Orchestrator.csproj" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <!-- The redactor and the options' ToString are internal by design (00 §5.7 S3);
