@@ -72,6 +72,7 @@ test.describe('a reload mid-flow resumes from the server (AC1)', () => {
     await expect(shell(page)).toBeVisible();
     await expectCurrentStep(page, 2);
     await expectStepDone(page, 1, true);
+    await expectStepDone(page, 5, false);
     expect(new URL(page.url()).pathname, 'the reload left the address the wizard resumed on').toBe(
       `/en/orgs/${ORG_ACME}/onboarding/${CREATED_PROJECT}`,
     );
