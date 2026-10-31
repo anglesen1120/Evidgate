@@ -96,7 +96,7 @@ const kindExtensions: Readonly<Record<string, readonly string[]>> = {
   raw_report: ['.xml', '.json', '.html', '.htm', '.zip'],
 };
 
-/** A file name is echoed on stdout, so match the control/format refusal of `config.ts`. */
+/** A file name is echoed on stdout, so match the control/format refusal of `configResolve.ts`. */
 const forbiddenInFileName = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 /**

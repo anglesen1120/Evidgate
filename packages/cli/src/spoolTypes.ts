@@ -11,7 +11,7 @@ export interface SpoolEvent {
   readonly line: string;
   /**
    * UTF-8 bytes of `line` including its `\n`, measured when the line was read. Nothing on
-   * the send path reads it: the batcher sizes a batch from `line` itself (`batcher.ts`
+   * the send path reads it: the batcher sizes a batch from `line` itself (`batchPack.ts`
    * body accounting) and the sender builds the body from `line`. It is kept because the
    * spool specs assert the measured length is exactly the on-disk byte count.
    */

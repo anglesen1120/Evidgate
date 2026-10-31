@@ -22,7 +22,7 @@ export function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-/** The adapter's own reason codes (`spool.ts`, `writerLock.ts`) plus the shard conflict. */
+/** The adapter's own reason codes (`spoolErrors.ts`) plus the shard conflict. */
 const SAFE_FAILURE_CODES: Readonly<Record<string, true>> = {
   invalid_config: true,
   spool_cap_exceeded: true,
