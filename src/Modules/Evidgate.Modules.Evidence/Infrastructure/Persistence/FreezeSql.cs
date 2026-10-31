@@ -28,6 +28,27 @@ internal static class FreezeSql
     /// <c>@project_id</c> is also applied to <c>public.run</c> (F9): the artifact's own <c>project_id</c> filter stays,
     /// and the run join makes an artifact that carries a foreign project still unreachable.
     /// </para>
+    /// <para>
+    /// <b>A report counts only once its parse has decided.</b> Completing an upload leaves a raw report <c>ready</c>
+    /// before the out-of-process parse runs, and that parse can still move it to <c>rejected</c>; a revision is
+    /// immutable, so an artifact frozen in between would sit in a revision as evidence the parser later refused. The
+    /// <c>artifact_parse</c> task row is therefore the verdict's own signal: the consumer marks it <c>done</c> only
+    /// after the handler's transaction committed, so no unfinished (or dead-lettered) parse row means the report is
+    /// either parsed or was never scheduled — anything else is left out here and reaches the caller as the missing
+    /// required artifact instead, never as evidence.
+    /// </para>
+    /// <para>
+    /// The window that closes is as long as the verdict's row is kept: <c>task.sweep</c> deletes terminal rows
+    /// (<c>done</c>, <c>dead_letter</c>) past the retention setting, so a parse that dead-lettered more than that
+    /// setting's span before a freeze leaves a <c>ready</c> report with no row left to read, and only the run's own
+    /// retention bounds that case; a dispatcher-lag freeze (parse committed, task row not yet <c>done</c>) counts the
+    /// report as the missing requirement, never as rejected evidence.
+    /// </para>
+    /// <para>
+    /// <b><c>public.task</c> carries no row-level security</b> (0008: the dispatcher's claim scans every org by
+    /// design) and <c>evidgate_app</c> reads it unprivileged, so <c>t.org_id = a.org_id</c> is the whole isolation of
+    /// the anti-join: the task's <c>payload -&gt;&gt; 'artifact_id'</c> alone would match another tenant's row.
+    /// </para>
     /// </summary>
     internal const string SelectReadyArtifacts = """
         select a.id as artifact_id,
@@ -50,6 +71,13 @@ internal static class FreezeSql
            and a.run_id = @run_id
            and (@project_id::uuid is null or a.project_id = @project_id::uuid)
            and a.state = 'ready'
+           and not exists (
+                 select 1
+                   from public.task t
+                  where t.org_id = a.org_id
+                    and t.task_type = 'artifact_parse'
+                    and t.state <> 'done'
+                    and t.payload ->> 'artifact_id' = a.id::text)
          limit @max_rows
         """;
 
@@ -69,7 +97,8 @@ internal static class FreezeSql
     /// ordering) into the outer <c>UPDATE … FROM</c>. The statement returns the number of rows it actually updated,
     /// which the service compares with the number of rows it sent (F3, D-S57-Q11): a row that left <c>ready</c>, or
     /// was resolved by a concurrent freeze, after the read is simply absent from <c>batch</c> and shortens the count
-    /// instead of being silently reported as resolved.
+    /// instead of being silently reported as resolved. It repeats no parse gate: <c>batch</c> holds only ids the read
+    /// already admitted, and re-testing them would turn a parse that started in between into a spurious short count.
     /// </para>
     /// </summary>
     internal const string ResolveAttemptIds = """

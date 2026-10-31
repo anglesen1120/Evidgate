@@ -148,8 +148,12 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   projection of `(org_id, run_id, collection_deadline_at)` for the overdue and still-collectable runs of
   every tenant, which `evidgate_worker_sched` alone may execute: `public.run` stays ungranted to the sweep
   role, so a platform sweep can name the runs to reconcile without reading a tenant's row
-  (notes at the end of this file);
-  the next free number is `0057`; a gap means two branches invented the same sequence and neither history can be trusted.
+  (notes at the end of this file); and `0057` is 06.5.1's parse-state index — the partial expression
+  index `task_parse_artifact_idx` on `public.task ((payload ->> 'artifact_id'))` `where task_type =
+  'artifact_parse' and state <> 'done'`, so the freeze's "is this artifact's parse verdict still owed"
+  anti-join stops being a sequential scan of the whole queue once per ready artifact (notes at the end
+  of this file);
+  the next free number is `0058`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -816,3 +820,34 @@ through the real runner against a throwaway PostgreSQL 18 container.
   executed yet, so `lock_timeout = '5s'` is the only contended wait. `create or replace` + repeatable
   `revoke`/`grant`, so a re-run is a no-op in substance, and there is no down migration: dropping the
   function would make the sweep fail loudly instead of silently skipping every run.
+
+## Notes on the parse-state index (`0057`)
+
+- Why it exists: 06.5.1's freeze refuses to count a ready raw report whose `artifact_parse` task has not
+  finished (`task.state <> 'done'` is the only "verdict still owed" signal; the queue keeps a finished
+  row only until `task.sweep` deletes it — `SweepTaskHandlers` deletes `state in ('done','dead_letter')`
+  rows past the retention setting, so a dead-lettered parse older than that leaves its report looking
+  unparsed again, and that window is the freeze's documented bound). The freeze evaluates that anti-join
+  once per ready artifact, up to
+  `FreezeRequest.MaxReadyArtifacts` (50 000) in one call, so the lookup must be an index probe and never
+  a scan of the queue: 00 §5.7 P4 forbids a per-row path that reads a table the caller does not need.
+- The shape: an expression index over `(payload ->> 'artifact_id')`, partial on
+  `task_type = 'artifact_parse' and state <> 'done'`. The expression is
+  `jsonb_object_field_text`, which is immutable and therefore legal; the value is the lowercase `D`
+  GUID `CompleteArtifactUpload` serialises, the same form `artifact.id::text` gives. The partial
+  predicate spells the freeze's terms verbatim, so the planner can serve the whole `NOT EXISTS` from the
+  index, and a statement that spells the filter differently does not match the predicate and simply
+  keeps its own plan instead of reading a subset the predicate never promised.
+- Locks and deployment: the file runs in the migrator's per-script transaction, so the index is built
+  with a plain `create index` (SHARE lock: readers continue, writes queue) and the file's
+  `lock_timeout = '3s'` bounds the wait for that lock — a busy queue fails the migration for a retry
+  instead of stalling every task write. `if not exists` makes a re-run a no-op.
+- Grants and policy: none change. An index is not granted on, `evidgate_app` already holds `select` on
+  `public.task` from `0008`, and `public.task` deliberately carries NO row-level-security policy
+  (`0008`: the claim scans every org by design), so tenant separation is the explicit
+  `t.org_id = a.org_id` predicate every statement on it must keep — the freeze's anti-join included.
+  Nothing here changes that, and a reader must not treat the missing policy as covered by an index. No `security definer` function is involved, so neither
+  `scripts/check-rls.py`'s `DEFINER_AUDIT_EXEMPT` nor the isolation suite's owner-definer allow-list
+  gains an entry.
+- No down migration: dropping the index would not roll back behaviour, it would silently return the
+  freeze to a sequential scan of the queue.

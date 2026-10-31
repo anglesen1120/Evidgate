@@ -29,6 +29,13 @@ internal sealed record ParseArtifactPayload(Guid ArtifactId);
 /// value to their own caller and store nothing), so writing a result here would be a second, unrouted representation.
 /// </para>
 /// <para>
+/// <b>The absence of a verdict is the freeze's own signal.</b> Evidence counts a report only when its
+/// <c>artifact_parse</c> row is <c>done</c>, and the consumer writes <c>done</c> only after this handler's
+/// transaction committed, so a rejection can never be read as frozen evidence; a parse that never finishes (a
+/// dead-lettered row) keeps the report out of every revision for as long as the task sweep retains that row, and an
+/// operator replay after it is gone is what puts the report back in front of a freeze.
+/// </para>
+/// <para>
 /// <b>The child's own rejection is still a verdict.</b> A run that ends 0 with its marker may hold a <c>rejected</c>
 /// record — the child's decision on content it refuses (a DTD, an unsafe archive entry, an input over the cap) — and
 /// that record is the verdict: the artifact is rejected with the record's <c>reason</c> when that value is shaped like

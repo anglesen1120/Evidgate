@@ -10,7 +10,9 @@ namespace Evidgate.Modules.Evidence.Contracts;
 /// Reading is one statement and writing is at most one statement, whatever the number of artifacts or requirements
 /// (00 §5.7 P2/P3): the <c>ready</c> artifacts of the run are left-joined to <c>case_attempt</c> by
 /// <c>(execution_key, attempt_no)</c>, and the pairs that resolved for the first time are persisted by one idempotent
-/// <c>UPDATE … WHERE attempt_id IS NULL</c>. Only <c>ready</c> artifacts count (00 §8.4).
+/// <c>UPDATE … WHERE attempt_id IS NULL</c>. Only <c>ready</c> artifacts count (00 §8.4), and a raw report only once its
+/// <c>artifact_parse</c> task finished: a revision is immutable, so a report the parser may still refuse stays out, and is
+/// reported as the missing requirement instead, until its parse task row is <c>done</c> or no longer retained.
 /// </para>
 /// <para>
 /// <b>No-mutation contract (06.5.1 §6).</b> A <c>ready</c> artifact's <c>object_key</c> and <c>checksum</c> never change, and its
@@ -23,7 +25,7 @@ namespace Evidgate.Modules.Evidence.Contracts;
 public interface IEvidenceFreeze
 {
     /// <summary>
-    /// Freezes the evidence of <see cref="FreezeRequest.RunId"/>: lists its <c>ready</c> artifacts with
+    /// Freezes the evidence of <see cref="FreezeRequest.RunId"/>: lists its <c>ready</c> artifacts whose parse has decided with
     /// <c>(execution_key, attempt_no)</c> resolved to <c>case_attempt</c>, reports the pairs that do not resolve as
     /// <see cref="FreezeResult.Orphans"/> (ruling T17: never dropped, never resolved to a wrong attempt, <c>attempt_id</c> stays
     /// null), compares the caller's <see cref="FreezeRequest.Required"/> set with what is <c>ready</c> and returns the gaps in

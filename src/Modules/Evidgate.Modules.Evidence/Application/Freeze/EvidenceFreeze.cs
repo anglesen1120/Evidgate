@@ -15,10 +15,12 @@ namespace Evidgate.Modules.Evidence.Application.Freeze;
 /// resolution and the canonical hash all run on the ambient scope, so the caller's rollback also undoes the
 /// <c>attempt_id</c> resolution (AC6, 00 §5.5 C3), and it makes no network call (00 §5.7 P5).
 /// <para>
-/// One read statement answers every <c>ready</c> artifact of the run with the attempt its
-/// <c>(execution_key, attempt_no)</c> resolves to; the requirement comparison, the orphan classification and the hash
-/// are decided entirely in memory over that result, and at most one <c>UPDATE</c> persists the pairs that resolved for
-/// the first time — two statements whatever the number of artifacts or requirements (AC6, 00 §5.7 P2/P3).
+/// One read statement answers every <c>ready</c> artifact of the run whose parse has decided, with the attempt its
+/// <c>(execution_key, attempt_no)</c> resolves to; a report still awaiting its parse verdict is left out, so the caller
+/// reports it as a missing requirement instead of freezing evidence a later rejection would contradict. The requirement
+/// comparison, the orphan classification and the hash are decided entirely in memory over that result, and at most one
+/// <c>UPDATE</c> persists the pairs that resolved for the first time — two statements whatever the number of artifacts
+/// or requirements (AC6, 00 §5.7 P2/P3).
 /// </para>
 /// <para>
 /// Both bounds fail closed instead of handing back a result the stored rows disagree with: a run above
@@ -45,8 +47,10 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
         var scope = scopes.Require();
 
         // Statement 1: every ready artifact of the run with its resolved case_attempt, one statement however many
-        // artifacts and requirements the call carries. An unknown or foreign run simply answers no row. The limit is
-        // one past the cap, so the row that proves the run is too large is still read (F4, D-S57-Q10).
+        // artifacts and requirements the call carries. A raw report whose parse has not decided is not one of them:
+        // the artifact_parse task row is the verdict's signal (FreezeSql.SelectReadyArtifacts). An unknown or foreign
+        // run simply answers no row. The limit is one past the cap, so the row that proves the run is too large is
+        // still read (F4, D-S57-Q10).
         var rows = await db.QueryAsync<ReadyArtifactRow>(
             FreezeSql.SelectReadyArtifacts,
             new
