@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Evidgate.Modules.Orchestrator.Contracts;
 
@@ -70,6 +71,39 @@ public static class RunReconcileContract
         PayloadJson(runId, DeadlineProducerId, declaredLastSequence: 0, declaredCount: 0);
 
     /// <summary>
+    /// The outbox idempotency key of one accepted late batch:
+    /// <c>orchestrator:run:{run}:reconcile:late:{producer}:{lastSequence}</c>.
+    /// <para>
+    /// The run finished as <c>incomplete</c>, so no finalize will ever close another slot and nothing else would
+    /// reconcile the late evidence into a revision. The key names the shard and the high-water mark that batch added:
+    /// two late batches carry two marks and enqueue two triggers, while a resend of evidence already stored inserts no
+    /// row at all (the ingest handler enqueues only for accepted rows), so the duplicate can never append a second
+    /// revision. <c>producer_id</c> never contains the <c>:</c> separator (0034's charset bound), so the key stays
+    /// unambiguous.
+    /// </para>
+    /// </summary>
+    /// <param name="runId">The run the late evidence belongs to.</param>
+    /// <param name="producerId">The shard that delivered it late.</param>
+    /// <param name="lastSequence">The highest sequence that batch newly stored for that shard.</param>
+    public static string LateIdempotencyKey(Guid runId, string producerId, long lastSequence) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"orchestrator:run:{runId:D}:reconcile:late:{producerId}:{lastSequence}");
+
+    /// <summary>
+    /// The payload of the late-evidence trigger: the run and the delivering shard, with the two declaration fields a
+    /// payload of this type always carries, at zero, and <see cref="RunReconcilePayload.LateEvidence"/> set. The reconciler
+    /// re-reads the slot's stored declaration under its own lock, so a declaration copied here could only drift from it
+    /// (the deadline trigger takes the same shape).
+    /// </summary>
+    /// <param name="runId">The run the late evidence belongs to.</param>
+    /// <param name="producerId">The shard that delivered it late.</param>
+    public static string LatePayloadJson(Guid runId, string producerId) =>
+        JsonSerializer.Serialize(
+            new RunReconcilePayload(runId, producerId, 0, 0) { LateEvidence = true },
+            PayloadOptions);
+
+    /// <summary>
     /// The task type (and schedule name) of the collection deadline sweep: a platform task that scans
     /// every tenant's overdue runs and enqueues one <see cref="OutboxTaskType"/> row per run. It is a
     /// separate type from the trigger it produces, so an unregistered handler parks the sweep without
@@ -100,4 +134,14 @@ public sealed record RunReconcilePayload(
     Guid RunId,
     string ProducerId,
     long DeclaredLastSequence,
-    int DeclaredCount);
+    int DeclaredCount)
+{
+    /// <summary>
+    /// <c>late_evidence</c>: set only by the trigger the ingest handler enqueues for a late batch it accepted. A finalize
+    /// close and a deadline sweep leave it absent, so the reconciler can tell "late evidence arrived" from "an ordinary
+    /// trigger was redelivered or replayed" — only the former may compare a run that already finished, and the marker
+    /// alone says so, because the window was decided when the batch was accepted.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool LateEvidence { get; init; }
+}

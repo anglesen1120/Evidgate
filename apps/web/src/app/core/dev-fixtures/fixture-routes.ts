@@ -187,6 +187,9 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'getPolicyActivation', method: 'GET', path: '/projects/{p}/policy-activation' },
   { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}', idKeyParameter: 'id' },
   { operationId: 'listPolicyRevisions', method: 'GET', path: '/policies/{id}/revisions' },
+  // The pinned revision read of the composition screen. Its states are selected by variant, the
+  // same way the run detail's are: the id in the path never picks the document.
+  { operationId: 'getSuiteRevision', method: 'GET', path: '/suite-revisions/{r}' },
 ];
 
 const API_PREFIX = `${API_BASE_PATH}/`;
