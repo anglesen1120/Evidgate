@@ -23,16 +23,18 @@
 // before the rename. Anything else is a live successor's lock and is put back with
 // link-if-absent semantics. A lock naming a live pid is never taken over (pid reuse is
 // accepted as a risk).
+//
+// The lock record itself (its file name, size bound and reader) lives in `writerLockRecord.ts`, and
+// the refusal types in `spoolErrors.ts`; this module owns the acquisition, takeover and release
+// protocol.
 import { randomUUID } from 'node:crypto';
 import {
   closeSync,
-  constants as fsConstants,
   fstatSync,
   fsyncSync,
   linkSync,
   lstatSync,
   openSync,
-  readFileSync,
   readdirSync,
   renameSync,
   unlinkSync,
@@ -40,18 +42,25 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-/** The lock file name inside a producer directory (never the CLI's `spool.lock`). */
-export const WRITER_LOCK_FILE = 'writer.lock';
+import { EvidgateSpoolUnsafePathError, EvidgateSpoolWriterLockedError } from './spoolErrors.js';
+import {
+  lockRecord,
+  readWriterLock,
+  readWriterLockPath,
+  WRITER_LOCK_FILE,
+  type WriterLockFile,
+} from './writerLockRecord.js';
+
+export { EvidgateSpoolUnsafePathError, EvidgateSpoolWriterLockedError };
+export {
+  isMissingLockErrno,
+  readWriterLock,
+  WRITER_LOCK_FILE,
+  type WriterLockFile,
+} from './writerLockRecord.js';
+
 /** `writer.lock` is created 0600 like every other spool file. */
 export const WRITER_LOCK_FILE_MODE = 0o600;
-
-/**
- * `O_NOFOLLOW` is undefined on Windows, where the POSIX symlink hardening does not apply
- * (the same degrade the merged writer uses).
- */
-const O_NOFOLLOW: number = process.platform === 'win32' ? 0 : fsConstants.O_NOFOLLOW;
-/** Without `O_NONBLOCK` an `open` of a planted FIFO blocks the thread forever. */
-const O_NONBLOCK: number = process.platform === 'win32' ? 0 : fsConstants.O_NONBLOCK;
 
 /**
  * A lock file written by an older writer (or by anything else) may still be empty for a
@@ -61,14 +70,6 @@ const O_NONBLOCK: number = process.platform === 'win32' ? 0 : fsConstants.O_NONB
 const defaultProbeDelayMs = 10;
 /** Bounded takeover attempts, so two processes racing over a dead lock cannot loop. */
 const defaultTakeoverAttempts = 3;
-/** No lock record is longer than a few dozen bytes; anything larger is not a lock. */
-const maxLockFileBytes = 1024;
-
-/** The lock file's whole content. Nothing else is ever written. */
-export interface WriterLockFile {
-  readonly pid: number;
-  readonly started_at: string;
-}
 
 export interface WriterLockOptions {
   /** Pid recorded in the lock. Defaults to `process.pid`; injected by tests. */
@@ -81,46 +82,6 @@ export interface WriterLockOptions {
   readonly maxTakeoverAttempts?: number;
   /** Pause before the confirming re-read of an unreadable lock. Defaults to 10 ms. */
   readonly probeDelayMs?: number;
-}
-
-/**
- * `spool_writer_locked`: a live process already writes this `(run_id, producer_id)`.
- * The error names the holder's pid when the lock file named one.
- */
-export class EvidgateSpoolWriterLockedError extends Error {
-  readonly code = 'spool_writer_locked';
-  /** The lock file that is held. */
-  readonly lockPath: string;
-  /** The live holder's pid, when the lock file named one. */
-  readonly holderPid?: number;
-
-  constructor(lockPath: string, holderPid?: number) {
-    super(
-      holderPid === undefined
-        ? `@evidgate/playwright-reporter: the producer spool is locked by another process (${lockPath})`
-        : `@evidgate/playwright-reporter: the producer spool is locked by live process ${holderPid} (${lockPath})`,
-    );
-    this.name = 'EvidgateSpoolWriterLockedError';
-    this.lockPath = lockPath;
-    if (holderPid !== undefined) this.holderPid = holderPid;
-  }
-}
-
-/**
- * `spool_unsafe_path`: the lock path cannot be inspected (I/O, permissions, descriptors) or
- * the filesystem cannot hard-link the record into place. Nothing was taken over.
- */
-export class EvidgateSpoolUnsafePathError extends Error {
-  readonly code = 'spool_unsafe_path';
-  readonly path: string;
-  readonly errno: string | undefined;
-
-  constructor(path: string, message: string, errno?: string) {
-    super(`@evidgate/playwright-reporter: ${message} (${path})`);
-    this.name = 'EvidgateSpoolUnsafePathError';
-    this.path = path;
-    if (errno !== undefined) this.errno = errno;
-  }
 }
 
 /** A held lock: the path, the record written, and the inode that record lives in. */
@@ -197,11 +158,6 @@ export function acquireWriterLock(
     // 'taken' and 'retry' both leave the slot to the next attempt, which links again.
   }
   throw new EvidgateSpoolWriterLockedError(path);
-}
-
-/** The whole lock record: `{ pid, started_at }` and nothing else. */
-function lockRecord(pid: number, startedAt: string): string {
-  return `${JSON.stringify({ pid, started_at: startedAt })}\n`;
 }
 
 /**
@@ -394,17 +350,6 @@ function restoreQuarantinedLock(quarantined: string, path: string): boolean {
 }
 
 /**
- * Reads a producer directory's lock, or `null` when there is none (or when it cannot be
- * read as a lock: a torn, empty, symlinked or foreign file is treated as stale by the
- * caller, never as a token-bearing document). A lock the filesystem could not be asked
- * about (I/O, descriptor exhaustion, permissions) raises `spool_unsafe_path` instead of
- * reading as absent, so such a failure can never turn into a takeover of a live lock.
- */
-export function readWriterLock(directory: string): WriterLockFile | null {
-  return readWriterLockPath(join(directory, WRITER_LOCK_FILE));
-}
-
-/**
  * Removes the lock only when it is still ours: a lock taken over by another process (or
  * rewritten by it) is left untouched, so a slow holder can never delete its successor's
  * lock. When the path no longer carries a lock at all, a concurrent verified takeover may
@@ -455,60 +400,6 @@ function scavengeQuarantinedLock(held: HeldWriterLock): void {
     if (stats.dev !== held.dev || stats.ino !== held.ino) continue;
     removeIfPresent(candidate);
   }
-}
-
-/**
- * Errnos from inspecting the lock path that mean "there is no lock record here": the file is
- * gone, a symlink we refuse to follow, or a FIFO/device with no reader. Any other errno is a
- * real IO or permission failure and must never be read as "stale".
- */
-export function isMissingLockErrno(code: string | undefined): boolean {
-  return code === 'ENOENT' || code === 'ELOOP' || code === 'ENXIO';
-}
-
-/**
- * Reads one lock record. The open is `O_NOFOLLOW|O_NONBLOCK` and the descriptor must name a
- * regular file of a plausible size, so a symlink, FIFO or device planted at the lock path
- * (by another user of a shared spool, or by a hostile writer) can neither be followed nor
- * block the writer. `null` means "no record here" only for {@link isMissingLockErrno}, a
- * non-regular or oversized file, or unparseable content; any other errno throws.
- */
-function readWriterLockPath(path: string): WriterLockFile | null {
-  let text: string;
-  try {
-    const fd = openSync(path, fsConstants.O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
-    try {
-      const stats = fstatSync(fd);
-      if (!stats.isFile() || stats.size > maxLockFileBytes) return null;
-      text = readFileSync(fd, 'utf8');
-    } finally {
-      closeSync(fd);
-    }
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    // Only "there is nothing to read" means "no lock". EMFILE/ENFILE/EIO/EACCES say the
-    // filesystem could not be inspected, and calling that "stale" would let a live lock be
-    // taken over, so the writer refuses instead.
-    if (isMissingLockErrno(code)) return null;
-    throw new EvidgateSpoolUnsafePathError(
-      path,
-      `cannot inspect the spool writer lock (${code ?? 'unknown OS error'}); nothing was taken over`,
-      code,
-    );
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== 'object' || parsed === null) return null;
-  const record: object = parsed;
-  const pid: unknown = 'pid' in record ? record.pid : undefined;
-  const startedAt: unknown = 'started_at' in record ? record.started_at : undefined;
-  if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) return null;
-  if (typeof startedAt !== 'string' || startedAt.length === 0) return null;
-  return { pid, started_at: startedAt };
 }
 
 function removeIfPresent(path: string): void {

@@ -111,3 +111,43 @@ export class EvidgateInvalidShardError extends Error {
     this.name = 'EvidgateInvalidShardError';
   }
 }
+
+/**
+ * `spool_writer_locked`: a live process already writes this `(run_id, producer_id)`.
+ * The error names the holder's pid when the lock file named one.
+ */
+export class EvidgateSpoolWriterLockedError extends Error {
+  readonly code = 'spool_writer_locked';
+  /** The lock file that is held. */
+  readonly lockPath: string;
+  /** The live holder's pid, when the lock file named one. */
+  readonly holderPid?: number;
+
+  constructor(lockPath: string, holderPid?: number) {
+    super(
+      holderPid === undefined
+        ? `@evidgate/playwright-reporter: the producer spool is locked by another process (${lockPath})`
+        : `@evidgate/playwright-reporter: the producer spool is locked by live process ${holderPid} (${lockPath})`,
+    );
+    this.name = 'EvidgateSpoolWriterLockedError';
+    this.lockPath = lockPath;
+    if (holderPid !== undefined) this.holderPid = holderPid;
+  }
+}
+
+/**
+ * `spool_unsafe_path`: the lock path cannot be inspected (I/O, permissions, descriptors) or
+ * the filesystem cannot hard-link the record into place. Nothing was taken over.
+ */
+export class EvidgateSpoolUnsafePathError extends Error {
+  readonly code = 'spool_unsafe_path';
+  readonly path: string;
+  readonly errno: string | undefined;
+
+  constructor(path: string, message: string, errno?: string) {
+    super(`@evidgate/playwright-reporter: ${message} (${path})`);
+    this.name = 'EvidgateSpoolUnsafePathError';
+    this.path = path;
+    if (errno !== undefined) this.errno = errno;
+  }
+}
