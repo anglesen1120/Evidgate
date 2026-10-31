@@ -63,8 +63,7 @@ internal static class DevSeedServices
 
     /// <summary>
     /// The environment snapshot as configuration: the environment-variables source turns <c>__</c> into <c>:</c>, so the
-    /// explicit secret names (<c>EVIDGATE__CI__PEPPER</c>) are read by the same <c>EVIDGATE:CI:PEPPER</c> keys the
-    /// hosts read.
+    /// secret names the hosts resolve through <c>SecretNames</c> are read by the same configuration keys the hosts read.
     /// </summary>
     private static IConfiguration Configuration(IReadOnlyDictionary<string, string?>? environment)
     {

@@ -125,7 +125,7 @@ internal static class DevSeedToken
     {
         await using var provider = DevSeedServices.Compose(environment, contractsDirectory, loggerProvider);
 
-        // Resolving the data source validates EVIDGATE__DATABASE__CONNECTIONSTRING and the evidgate_app role pin, so a
+        // Resolving the data source validates the application connection string and the evidgate_app role pin, so a
         // missing or wrong-role app connection fails closed here — before the owner-role tenant write below.
         var dataSource = provider.GetRequiredService<NpgsqlDataSource>();
         var appHost = new NpgsqlConnectionStringBuilder(dataSource.ConnectionString).Host;
