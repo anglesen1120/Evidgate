@@ -1,7 +1,7 @@
 namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 
 /// <summary>
-/// The SQL of one reconcile attempt (05.3.2-T2.1/T2.2, plan §5 <c>ReconcileRunTask</c>): exactly four statements,
+/// The SQL of one reconcile attempt (<c>ReconcileRunTask</c>): exactly four statements,
 /// each over the ambient tenant transaction (00 §5.5 C3) and each filtering <c>org_id</c> explicitly as well as
 /// relying on row level security, exactly like <see cref="OrchestratorSql"/>. Read-only by construction — none of
 /// them writes, none reads a payload column, and none issues a statement per event, per producer or per planned
