@@ -4,7 +4,6 @@ import {
   DestroyRef,
   type ElementRef,
   computed,
-  effect,
   inject,
   input,
   signal,
@@ -17,10 +16,21 @@ import type { CreateProjectRequest } from '@evidgate/sdk';
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { createIntentRunner } from '../../../core/http/retry';
 import { SessionStore } from '../../../core/session/session.store';
+import {
+  focusRefusalHeading,
+  focusWaitingLine,
+  requestRefusalFocus,
+} from '../../../shared/a11y/step-focus';
 import { RequestStateComponent } from '../../../shared/ui/states';
 import { OnboardingStore } from '../onboarding.store';
 import { sanitizeLabel } from './default-policy';
 import { describedBy, fieldDetails, reasonFor } from './field-details';
+import {
+  NO_DISMISSED_REASONS,
+  dismissFieldReason,
+  showsFieldReason,
+  type DismissedReasons,
+} from './server-reasons';
 
 @Component({
   selector: 'app-onboarding-create-project',
@@ -136,6 +146,7 @@ import { describedBy, fieldDetails, reasonFor } from './field-details';
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="name"
           #nameField="ngModel"
+          (input)="dismissServerReason('name')"
           (invalid)="submitted.set(true)"
           [disabled]="busy() || !permitted()"
           [attr.aria-invalid]="nameError === null ? null : 'true'"
@@ -174,6 +185,7 @@ import { describedBy, fieldDetails, reasonFor } from './field-details';
           [attr.pattern]="nonBlankPattern"
           [(ngModel)]="slug"
           #slugField="ngModel"
+          (input)="dismissServerReason('slug')"
           (invalid)="submitted.set(true)"
           [disabled]="busy() || !permitted()"
           [attr.aria-invalid]="slugError === null ? null : 'true'"
@@ -320,8 +332,26 @@ export class CreateProjectPage {
       ),
     ),
   );
-  protected readonly serverNameError = computed(() => reasonFor(this.details(), 'name'));
-  protected readonly serverSlugError = computed(() => reasonFor(this.details(), 'slug'));
+  /** The reasons the visitor has answered by editing a field; see `server-reasons.ts`. */
+  private readonly dismissed = signal<DismissedReasons>(NO_DISMISSED_REASONS);
+  /**
+   * The reason `field` still shows, or `null`.
+   *
+   * A reason is cleared by the first edit of its own field — not by a render, a focus or a later
+   * refill — because the listed refusal describes the values that were submitted, and the visitor
+   * is the one who says a value is no longer the one they meant.
+   */
+  private serverReason(field: string): string | null {
+    if (!showsFieldReason(this.dismissed(), this.creation.error(), field)) return null;
+    return reasonFor(this.details(), field);
+  }
+  protected readonly serverNameError = computed(() => this.serverReason('name'));
+  protected readonly serverSlugError = computed(() => this.serverReason('slug'));
+  /** Clears one field's displayed reason as soon as the visitor edits it; the alert keeps its rows. */
+  protected dismissServerReason(field: string): void {
+    this.dismissed.set(dismissFieldReason(this.dismissed(), this.creation.error(), field));
+  }
+
   /** Refusals that print their own envelope rows; the other kinds render a pattern without one. */
   protected readonly showsEnvelopeDetails = computed(() => {
     const failure = this.creation.error();
@@ -356,17 +386,10 @@ export class CreateProjectPage {
     // The refusal heading is the page's own focus target: outside every alert, so moving there
     // repeats nothing. The kind is decided before the ref is read, because an effect can run
     // before this component's DOM update and the ref may still be the heading being removed.
-    effect(() => {
-      const failure = this.creation.error();
-      if (!this.announceFailure()) return;
-      if (failure === null || !this.showsEnvelopeDetails()) {
-        this.announceFailure.set(false);
-        return;
-      }
-      const heading = this.failureHeadingRef()?.nativeElement;
-      if (heading === undefined) return;
-      this.announceFailure.set(false);
-      heading.focus();
+    focusRefusalHeading({
+      request: this.announceFailure,
+      heading: this.failureHeadingRef,
+      shown: () => this.creation.error() !== null && this.showsEnvelopeDetails(),
     });
   }
 
@@ -381,32 +404,20 @@ export class CreateProjectPage {
       this.creation.reset();
     }
     this.submittedBody.set(body);
-    this.focusBusy();
+    // The request disables the pressed submit, so the waiting line holds the place until the page
+    // hands it on — to the new step on success, or to the refusal heading.
+    focusWaitingLine(this.busyStatus);
     await this.creation.run();
     await this.finishCreation();
-    this.announceFailureIfRefused();
+    requestRefusalFocus(this.announceFailure, this.creation.error() !== null);
   }
 
   protected async retry(): Promise<void> {
     if (!this.permitted()) return;
-    this.focusBusy();
+    focusWaitingLine(this.busyStatus);
     await this.creation.retry();
     await this.finishCreation();
-    this.announceFailureIfRefused();
-  }
-
-  /**
-   * The request disables the pressed submit, which drops focus to `<body>` while the answer is in
-   * flight. The waiting state is a stable node that stays mounted, so it holds the place until the
-   * page hands it on — to the new step on success, or to the refusal heading.
-   */
-  private focusBusy(): void {
-    this.busyStatus()?.nativeElement.focus();
-  }
-
-  private announceFailureIfRefused(): void {
-    if (this.creation.error() === null) return;
-    this.announceFailure.set(true);
+    requestRefusalFocus(this.announceFailure, this.creation.error() !== null);
   }
 
   private async finishCreation(): Promise<void> {

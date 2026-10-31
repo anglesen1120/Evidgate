@@ -1,29 +1,18 @@
-// 09.2.1-T5 (plan 09.2.1 §2 AC5, §5 "Step 5 Enable collection", §8 rows T98 and 00 §9.1
-// idempotency, §10 T5.1/T5.2; 07.1.1-T3/T4; ruling T62): the wizard's step 5.
+// The wizard's step 5. The page reads the project's activation on entry and on every org/project
+// scope change: a 200 restores the terminal panel without a command, and only a 404 (the data
+// service's null) permits the default-policy confirm. A forbidden read keeps the preview read-only,
+// every other failure uses the shared error panel, and the derived step comes from that same server
+// read — no localStorage, session flag or cookie remembers completion.
 //
-// The page reads the project's activation on entry and on every org/project scope change. A 200
-// restores the terminal panel without a command; only a 404 (the data service's null) permits the
-// default-policy confirm. A forbidden read keeps the preview read-only, and every other failure
-// uses the shared error panel. OnboardingProgressService derives done[5] from the same server read;
-// there is no localStorage, session flag or cookie memory of completion.
+// One intent keeps its activation key and appended revision through explicit retries; the runner
+// never retries or starts a second in-flight chain. A confirm can replace only a policy activated
+// after the absent-activation read, and that warning is always described by the button.
 //
-// The default preview and create-then-activate chain remain interim until F18 addendum 2 moves
-// default-policy creation server-side. One intent retains its activation key and appended revision
-// through explicit retries; the runner never retries or starts a second in-flight chain itself.
-// A confirm can replace only a policy activated after the absent-activation read. Its warning is
-// always described by the button. policy:write remains required, with ask-approver copy otherwise.
-//
-// Read and command answers render their actual mode; only advisory gets the not-gating copy.
-// Terminal metadata is interpolated, ids and the mode are sanitised, and the hash is sanitised
-// before shortening.
-// The heading takes focus after either a successful read or confirm. Refusals use app-error-pattern
-// so the typed server message, code and request id are preserved rather than replaced by fixed copy.
-//
-// F63 completes the read's own failure handling: a failed read keeps the answer's `Retry-After`
-// window (the runner's rule for the confirm, measured on the page's injected clock, with the
-// countdown as text rather than a live region), both read controls stay disabled until it elapses,
-// a re-read the user asked for returns focus to the named failure heading or to the 403 recovery
-// control, and a refused read offers exactly one control that re-runs the read and never a command.
+// The heading takes focus after a successful read or confirm. Refusals use app-error-pattern so the
+// typed server message, code and request id survive instead of being replaced by fixed copy, and a
+// failed read keeps its own `Retry-After` window: both read controls stay disabled until it elapses,
+// and a re-read the visitor asked for returns focus to the named failure heading or to the recovery
+// control a 403 leaves.
 
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -32,7 +21,6 @@ import {
   Component,
   DestroyRef,
   ElementRef,
-  InjectionToken,
   computed,
   effect,
   inject,
@@ -47,10 +35,14 @@ import type {
 } from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
-import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import type { Intent } from '../../../core/http/intent';
 import { createIntentRunner } from '../../../core/http/retry';
 import { SessionStore } from '../../../core/session/session.store';
+import {
+  focusRefusalHeading,
+  focusWaitingLine,
+  requestRefusalFocus,
+} from '../../../shared/a11y/step-focus';
 import { ErrorPatternComponent } from '../../../shared/ui/states';
 import {
   DEFAULT_ADVISORY_POLICY,
@@ -60,6 +52,12 @@ import {
   sanitizeLabel,
   sanitizedIdentifier,
 } from './default-policy';
+import {
+  type ActivationRead,
+  READ_CLOCK,
+  createReadWaitWindow,
+  readActivationState,
+} from './enable-collection.read';
 import { fieldDetails } from './field-details';
 
 /** The revision this page appended for the current intent, and the key it belongs to. */
@@ -68,27 +66,6 @@ interface AppendedRevision {
   readonly projectId: string;
   readonly revision: PolicyRevisionDto;
 }
-
-type ActivationRead =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'active'; readonly state: PolicyActivationStateDto }
-  | { readonly kind: 'none' }
-  | { readonly kind: 'forbidden' }
-  | { readonly kind: 'error'; readonly error: ApiError };
-
-/** Largest delay a browser or Node timer accepts; a longer interval is clamped to it. */
-const MAX_WAIT_DELAY_MS = 2 ** 31 - 1;
-
-/**
- * The clock a failed read's `Retry-After` wait is measured against. `createIntentRunner` takes its
- * clock the same way — an option (`IntentRunnerOptions.now` in `core/http/retry.ts`), never a bare
- * `Date.now` — but a read has no intent and no runner, so the page owns the same rule and the same
- * seam: a spec overrides this provider and advances the wait without waiting for it.
- */
-export const READ_CLOCK = new InjectionToken<() => number>('evidgate.onboarding.read-clock', {
-  providedIn: 'root',
-  factory: () => (): number => Date.now(),
-});
 
 @Component({
   selector: 'app-onboarding-enable-collection',
@@ -105,6 +82,9 @@ export class EnableCollectionPage {
   private readonly destroyRef = inject(DestroyRef);
   /** The clock the confirm's and the read's `Retry-After` windows are measured against. */
   private readonly now = inject(READ_CLOCK);
+  /** The failed read's window; the runner owns the same rule for the confirm. */
+  private readonly readWait = createReadWaitWindow(() => this.now());
+  protected readonly readWaitText = this.readWait.text;
   /**
    * The append that belongs to the current intent. Kept in per-visit component state (never in
    * storage) so a retry after an activation failure reuses the revision instead of appending again,
@@ -144,44 +124,10 @@ export class EnableCollectionPage {
     return kind === 'timeout' || kind === 'network';
   });
   /**
-   * AC-F63-a: a failed read's `Retry-After` window, as this page renders it. The runner owns the
-   * same rule for the confirm, but a read has no intent to protect, so the page keeps its own: one
-   * deadline from the answer's own `retryAfterSeconds`, one second-tick for the visible countdown
-   * (never a poll for eligibility — the tick only re-renders the remainder — and never a live
-   * region: the state sheet asks for the interval as text, not a per-second announcement).
-   */
-  private readonly readWaitDeadline = signal<number | null>(null);
-  /** The server's own interval for the open window, in whole seconds; `null` when none is open. */
-  private readonly readWaitSupplied = signal<number | null>(null);
-  /** The clock reading the countdown is rendered against; rewritten by the tick. */
-  private readonly readWaitNow = signal(0);
-  private readWaitTimer: ReturnType<typeof setInterval> | null = null;
-  /** Whole seconds left in the open window; `null` when no window is open. */
-  protected readonly readWaitSeconds = computed<number | null>(() => {
-    const deadline = this.readWaitDeadline();
-    if (deadline === null) return null;
-    const left = deadline - this.readWaitNow();
-    return left > 0 ? Math.max(1, Math.ceil(left / 1000)) : null;
-  });
-  /** True while the failed read's window is open: both read controls stay disabled. */
-  protected readonly readWaitOpen = computed(() => this.readWaitSeconds() !== null);
-  /**
-   * The wait as the panel states it: neutral about *why* the server closed the read (the page shows
-   * it for any answer that names an interval, not only a `429`), the time left, and the interval the
-   * server itself named — so a reader can tell a countdown from a guess about a missing interval.
-   */
-  protected readonly readWaitText = computed<string | null>(() => {
-    const remaining = this.readWaitSeconds();
-    if (remaining === null) return null;
-    const supplied = this.readWaitSupplied() ?? remaining;
-    return $localize`:@@onboarding.enable.read-wait:The server asked you to wait before reading the activation again: ${remaining}:remaining: s left of the ${supplied}:supplied: s it named.`;
-  });
-  /**
-   * AC-F63-b: the generation of the re-read this page's own press started, so only *that* read's
-   * answer may hand focus to the named failure target. The first read, a scope change and the
-   * shell's reload leave it `null`, which is what keeps the page from moving focus on a render
-   * nobody asked for — and a press whose read was lost to a scope change cannot refocus the answer
-   * of a different read.
+   * The generation of the re-read this page's own press started, so only *that* read's answer may
+   * hand focus to the named failure target. The first read, a scope change and the shell's reload
+   * leave it `null`, which keeps the page from moving focus on a render nobody asked for — and a
+   * press whose read was lost to a scope change cannot refocus the answer of a different read.
    */
   private refocusGeneration: number | null = null;
   /**
@@ -211,7 +157,7 @@ export class EnableCollectionPage {
       this.permitted() && this.activationRead().kind === 'none' && this.activation.retryEligible(),
   );
   /**
-   * R5: a retryable failure whose `Retry-After` window is still open disables the confirm natively —
+   * A retryable failure whose `Retry-After` window is still open disables the confirm natively —
    * pressing it could only be a no-op (`run()` from a retryable failure waits), so the control must
    * not invite the press. The window belongs to the runner, not to this page.
    */
@@ -228,7 +174,7 @@ export class EnableCollectionPage {
       this.activationRead().kind !== 'none' ||
       this.waitingForRetryAfter(),
   );
-  /** The warning remains described even after acknowledgement removal (F18 addendum 1). */
+  /** The warning stays described even after an acknowledgement is removed, so it is always named. */
   protected readonly confirmDescribedBy = computed(() => {
     const reasons = ['enable-replaces-warning'];
     if (!this.permitted()) reasons.push('enable-permission');
@@ -238,7 +184,7 @@ export class EnableCollectionPage {
   protected readonly advisoryMode = computed(() => this.enabled()?.mode === 'advisory');
   /** The failure the panel renders: a failed read first, then a refused confirm. */
   protected readonly failureView = computed(() => this.readFailure() ?? this.failure());
-  /** The envelope's field rows of whichever failure is on screen (00 §9.2). */
+  /** The envelope's field rows of whichever failure is on screen. */
   protected readonly details = computed(() => fieldDetails(this.failureView()?.details ?? []));
   /**
    * The terminal panel's sentence. Only this page's own confirm can report what changed, and its
@@ -259,7 +205,7 @@ export class EnableCollectionPage {
    */
   protected readonly retryDisabled = computed(() =>
     this.readFailure() !== null
-      ? this.busy() || this.readWaitOpen()
+      ? this.busy() || this.readWait.open()
       : !this.retryEligible() || this.busy(),
   );
 
@@ -279,7 +225,7 @@ export class EnableCollectionPage {
     sanitizedIdentifier(this.enabled()?.policy_revision_id),
   );
   protected readonly enabledBy = computed(() => sanitizedIdentifier(this.enabled()?.activated_by));
-  /** F5: guarded members, so a malformed answer renders "unavailable" instead of throwing. */
+  /** Guarded members, so a malformed answer renders "unavailable" instead of throwing. */
   protected readonly enabledHash = computed(() => policyHashLabel(this.enabled()?.hash));
   protected readonly enabledInstant = computed(() =>
     activationInstantLabel(this.enabled()?.activated_at),
@@ -297,7 +243,7 @@ export class EnableCollectionPage {
       ? appended.revision.revision_no
       : null;
   });
-  /** R3: the page renders the envelope's detail paths itself, so it renders them sanitised. */
+  /** The page renders the envelope's detail paths itself, so it renders them sanitised. */
   protected clean(value: string | null | undefined): string {
     return sanitizeLabel(value ?? '');
   }
@@ -311,7 +257,7 @@ export class EnableCollectionPage {
   protected readonly activeReadCopy = $localize`:@@onboarding.enable.active-read:This project is enabled. This panel is built from the activation recorded on the server, so reloading the wizard shows the same state.`;
   protected readonly retryReadLabel = $localize`:@@onboarding.enable.retry-read:Read the activation again`;
   private readonly readFailedMessage = $localize`:@@onboarding.enable.read-failed:The activation could not be read. Reading it again is safe.`;
-  /** AC-F63-b: the named target a failed re-read returns focus to. */
+  /** The named target a failed re-read returns focus to. */
   protected readonly readFailedHeading = $localize`:@@onboarding.enable.read-failed-heading:The activation could not be read`;
   protected readonly confirmFailedHeading = $localize`:@@onboarding.enable.confirm-failed-heading:Collection could not be enabled`;
   protected readonly detailsLabel = $localize`:@@onboarding.enable.details-label:The server refused these values`;
@@ -347,10 +293,16 @@ export class EnableCollectionPage {
     this.abandonOnScopeChange();
     this.focusEnabledHeading();
     this.focusReadAnswer();
-    this.focusConfirmFailure();
+    // The press disabled the confirm, so a refusal hands the place to the page's own heading — never
+    // to the alert, whose body a focus move would read a second time.
+    focusRefusalHeading({
+      request: this.announceConfirmFailure,
+      heading: this.confirmFailureHeadingRef,
+      shown: () => this.failure() !== null && this.readFailure() === null,
+    });
     this.destroyRef.onDestroy(() => {
       this.readGeneration++;
-      this.clearReadWait();
+      this.readWait.clear();
       this.activation.reset();
     });
   }
@@ -410,33 +362,12 @@ export class EnableCollectionPage {
     });
   }
 
-  /**
-   * The press disabled the confirm, so a refusal hands the place to the page's own heading — never
-   * to the alert, whose body a focus move would read a second time. A request whose failure has
-   * been cleared, or whose panel a failed read now owns, is dropped rather than spent later.
-   */
-  private focusConfirmFailure(): void {
-    effect(() => {
-      if (!this.announceConfirmFailure()) return;
-      // The heading renders only for a refusal this page still shows; anything else strands the
-      // request, and a stranded one would move focus on a render nobody pressed for.
-      if (this.failure() === null || this.readFailure() !== null) {
-        this.announceConfirmFailure.set(false);
-        return;
-      }
-      const heading = this.confirmFailureHeadingRef()?.nativeElement;
-      if (heading === undefined) return;
-      this.announceConfirmFailure.set(false);
-      heading.focus();
-    });
-  }
-
   /** The confirm action, once per user intent (guarded by the runner while it runs). */
   protected async confirm(): Promise<void> {
     if (this.confirmDisabled()) return;
-    this.focusBusy();
+    focusWaitingLine(this.busyStatusRef);
     await this.activation.run();
-    this.announceFailureIfRefused();
+    requestRefusalFocus(this.announceConfirmFailure, this.failure() !== null);
   }
 
   /** An explicit retry of the same intent: same key, same appended revision. */
@@ -447,66 +378,19 @@ export class EnableCollectionPage {
       return;
     }
     if (!this.retryEligible()) return;
-    this.focusBusy();
+    focusWaitingLine(this.busyStatusRef);
     await this.activation.retry();
-    this.announceFailureIfRefused();
+    requestRefusalFocus(this.announceConfirmFailure, this.failure() !== null);
   }
 
   /**
-   * A refused confirm disables the control it was pressed from, so the page hands focus to its own
-   * heading once that renders — the busy line holds the place until then.
-   */
-  private announceFailureIfRefused(): void {
-    if (this.failure() === null) return;
-    this.announceConfirmFailure.set(true);
-  }
-
-  /** Hands the place to the waiting line, which stays mounted while the chain runs. */
-  private focusBusy(): void {
-    this.busyStatusRef()?.nativeElement.focus();
-  }
-
-  /**
-   * AC-F63-c: the only way out of a refused (`403`) read. Reading is side-effect free, so repeating
-   * it is always safe — and it is all this control does: the confirm stays natively disabled, so no
-   * create or activation can start from here.
+   * The only way out of a refused (`403`) read. Reading is side-effect free, so repeating it is
+   * always safe — and it is all this control does: the confirm stays natively disabled, so no create
+   * or activation can start from here.
    */
   protected async readAgain(): Promise<void> {
     if (this.reading()) return;
     await this.readActivation(true);
-  }
-
-  /**
-   * Start the failed read's `Retry-After` window from the answer's own interval. The same rule the
-   * runner applies to the confirm (`core/http/retry.ts`): an absent, negative or non-finite interval
-   * is no interval, so the control opens at once, and a positive one is one timer, never a poll.
-   */
-  private startReadWait(seconds: number | null): void {
-    this.clearReadWait();
-    const interval = seconds !== null && Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
-    if (interval === null || interval === 0) return;
-    const startedAt = this.now();
-    this.readWaitSupplied.set(interval);
-    this.readWaitNow.set(startedAt);
-    // Clamped like a runner's delay: a value above the timer maximum would fire at once and turn a
-    // hostile interval into no wait at all.
-    this.readWaitDeadline.set(startedAt + Math.min(interval * 1000, MAX_WAIT_DELAY_MS));
-    this.readWaitTimer = setInterval(() => {
-      const instant = this.now();
-      this.readWaitNow.set(instant);
-      const deadline = this.readWaitDeadline();
-      if (deadline !== null && deadline <= instant) this.clearReadWait();
-    }, 1000);
-  }
-
-  /** Close the window (the countdown's own deadline, a new attempt, or this page going away). */
-  private clearReadWait(): void {
-    if (this.readWaitTimer !== null) {
-      clearInterval(this.readWaitTimer);
-      this.readWaitTimer = null;
-    }
-    this.readWaitDeadline.set(null);
-    this.readWaitSupplied.set(null);
   }
 
   /**
@@ -522,47 +406,19 @@ export class EnableCollectionPage {
     const orgId = this.orgId();
     const projectId = this.projectId();
     // A new attempt abandons the previous failure's window, as `attempt()` does for the runner.
-    this.clearReadWait();
+    this.readWait.clear();
     this.activationRead.set({ kind: 'loading' });
     const current = (): boolean =>
       !this.destroyRef.destroyed &&
       this.readGeneration === generation &&
       this.orgId() === orgId &&
       this.projectId() === projectId;
-    try {
-      const state = await this.data.readPolicyActivation(projectId);
-      if (current()) {
-        this.activationRead.set(state === null ? { kind: 'none' } : { kind: 'active', state });
-      }
-    } catch (error: unknown) {
-      // A scope change or a destroyed page already invalidated this generation, abort or not, so
-      // nothing is written for it. Everything else — including a cancellation that reached a read
-      // this page still owns, whatever its class or realm — is an absent answer, not an absence of
-      // activation: it becomes a rendered state with a way back, never a stuck loading panel.
-      if (!current()) return;
-      // A throw that is not the gateway's typed failure is a bug in the call path, not an absence of
-      // activation: it still becomes a rendered state with a way back, never a stuck loading panel.
-      const failure: ApiError = isApiRequestError(error)
-        ? error.error
-        : {
-            kind: 'unexpected',
-            status: 0,
-            code: 'client_error',
-            message: this.readFailedMessage,
-            requestId: null,
-            retryable: true,
-            details: [],
-            retryAfterSeconds: null,
-          };
-      // AC-F63-a: the answer's own interval opens the read's window; an absent one opens it not at
-      // all, so the control is usable at once (the runner's own rule for the confirm). A `403` is a
-      // refusal, not a throttled attempt: it offers the read-only recovery instead, so nothing this
-      // answer carries may close that control for an interval nobody asked the user to wait.
-      if (failure.status !== 403) this.startReadWait(failure.retryAfterSeconds);
-      this.activationRead.set(
-        failure.status === 403 ? { kind: 'forbidden' } : { kind: 'error', error: failure },
-      );
-    }
+    const read = await readActivationState(this.data, projectId, this.readFailedMessage);
+    // A scope change or a destroyed page already invalidated this generation, abort or not, so
+    // nothing is written for it.
+    if (!current()) return;
+    if (read.kind === 'error') this.readWait.start(read.error.retryAfterSeconds);
+    this.activationRead.set(read);
   }
 
   /**
@@ -578,7 +434,7 @@ export class EnableCollectionPage {
    * Append the default body, then activate it — both under `intent`.
    *
    * The scope is captured once so a change mid-flight cannot split the chain across two projects,
-   * and F3 closes the window between the two calls: an append that settles after the page went away
+   * and the window between the two calls is closed: an append that settles after the page went away
    * or the scope moved must NOT be followed by the activation command, which would otherwise commit
    * a `policy_activation` for a view the user has left. The chain is abandoned the way the runner
    * understands (`AbortError`), so no failure is shown and the half-written append is harmless — it

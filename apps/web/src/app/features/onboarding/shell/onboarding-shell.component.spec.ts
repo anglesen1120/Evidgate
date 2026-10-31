@@ -1,8 +1,8 @@
 import { Component, computed, input, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, type ParamMap } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
 import type { ProjectDto } from '@evidgate/sdk';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 import { SessionStore } from '../../../core/session/session.store';
 import {
@@ -43,6 +43,14 @@ class EnableCollectionStub {
 interface StubScope {
   orgId: string;
   projectId: string | null;
+}
+
+/**
+ * The router the shell reads for its navigation handoff. These cases arrive with the navigation
+ * already finished, so no event is in flight and none waits for the created step's handoff.
+ */
+function finishedRouter(): { events: Subject<unknown>; currentNavigation: () => unknown } {
+  return { events: new Subject<unknown>(), currentNavigation: () => null };
 }
 
 function shellStore(createdScope: () => StubScope | null = () => null) {
@@ -132,6 +140,7 @@ describe('OnboardingShellComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: OnboardingStore, useValue: store },
+        { provide: Router, useValue: finishedRouter() },
         {
           provide: ActivatedRoute,
           useValue: { pathFromRoot: [{ paramMap: orgParams }, { paramMap: childParams }] },
@@ -444,6 +453,7 @@ describe('OnboardingShellComponent over the real store (S71 F1/N1)', () => {
         OnboardingStore,
         { provide: OnboardingProgressService, useValue: { load: progressLoad } },
         { provide: SessionStore, useValue: { adoptCreatedProject: vi.fn() } },
+        { provide: Router, useValue: finishedRouter() },
         {
           provide: ActivatedRoute,
           useValue: { pathFromRoot: [{ paramMap: orgParams }, { paramMap: childParams }] },

@@ -1,6 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  Injector,
+  afterNextRender,
   afterRenderEffect,
   inject,
   signal,
@@ -8,8 +10,8 @@ import {
 } from '@angular/core';
 import type { ElementRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute } from '@angular/router';
-import { combineLatest, distinctUntilChanged, map } from 'rxjs';
+import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
+import { combineLatest, distinctUntilChanged, filter, map } from 'rxjs';
 
 import {
   ErrorPatternComponent,
@@ -45,25 +47,20 @@ import { StepPendingComponent } from './step-pending.component';
 export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
 
   /**
-   * Re-asserts the focus a create earned after the app shell's own post-navigation move.
+   * How far the handoff for the step a create opened has got.
    *
-   * `shell/layout/shell.component.ts` focuses `<main>` for every navigation that changes the path —
-   * a create navigates, so it does — and that callback runs after this render pass. For a step the
-   * wizard opened on the user's behalf the step heading is the better target, so the move is
-   * repeated once the shell's callback has run. Nothing else is re-asserted: Next and Back stay on
-   * the same path, and a page load moves no focus at all.
+   * `shell/layout/shell.component.ts` focuses `<main>` for every navigation that changes the path,
+   * and a create navigates, so it does. Its callback is queued first because that component exists
+   * first, which is what lets the handoff queued here run last and win. The step-move pass must
+   * therefore not spend this cue before the handoff has run: a heading focused earlier would be
+   * replaced by the shell's `<main>` focus, and the visitor's place with it.
    */
-  private reassertStepFocus(target: HTMLElement): void {
-    setTimeout(() => {
-      // The heading is replaced when the wizard's own read lands; a detached node must not receive
-      // focus, and a target that already holds it needs no second move.
-      if (!target.isConnected || document.activeElement === target) return;
-      target.focus();
-    });
-  }
+  private readonly createdHandoff = signal<'none' | 'queued' | 'ran'>('none');
   /**
    * The page's own heading. It is the one named element every branch of the shell renders, so a
    * retry that fails has somewhere stable to put focus: the retry button itself is replaced by the
@@ -116,6 +113,17 @@ export class OnboardingShellComponent {
   ];
 
   constructor() {
+    // The handoff for a create waits for the navigation to end: the app shell focuses `<main>` for
+    // that same navigation, and a heading focused before it would lose the move again.
+    this.router.events
+      .pipe(
+        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => {
+        if (!this.announceCreatedStep() || this.createdHandoff() !== 'none') return;
+        this.queueCreatedHandoff();
+      });
     // Parent route carries orgId; the optional child carries projectId. Subscribe to the
     // full chain so a reused component reloads for either scope change, without local flags.
     combineLatest(this.route.pathFromRoot.map((route) => route.paramMap))
@@ -134,14 +142,22 @@ export class OnboardingShellComponent {
       .subscribe(({ orgId, projectId }) => {
         this.orgId.set(orgId);
         this.projectId.set(projectId);
+        // A cue belongs to the activation that armed it: reaching another scope abandons the old
+        // one rather than letting it move focus on a step the create did not open.
+        this.announceCreatedStep.set(false);
+        this.createdHandoff.set('none');
         // The one activation the create's own load published may render it instead of reading it
         // again — that is the single fan-out after a creation (S71 F1). Every other activation
         // reads: this store is a route-level singleton, so its ready state can be a derivation of
         // an earlier visit (S71 N1). Retry (`reload`) loads unconditionally too.
         if (this.store.consumeCreated(orgId, projectId)) {
-          // The create opened this step on the user's behalf, so the render pass below moves focus
-          // to its heading — the marker is what says the move is theirs, not a page load's.
+          // The create opened this step on the user's behalf, so the handoff below moves focus to
+          // its heading — the marker is what says the move is theirs, not a page load's.
           this.announceCreatedStep.set(true);
+          // A navigation that is still activating publishes the shell's `<main>` focus only when it
+          // ends, and nothing in this pass can run after that: the handoff waits for NavigationEnd,
+          // which queues it for the pass where the shell has already moved.
+          if (this.router.currentNavigation() === null) this.queueCreatedHandoff();
           return;
         }
         // A revisit inherits the token of a step moved in an earlier activation; adopting it as
@@ -158,6 +174,11 @@ export class OnboardingShellComponent {
       if (this.store.status() !== 'ready' || (!created && token <= this.focusedToken)) {
         return;
       }
+      // The step a create opened waits for the post-navigation handoff: the app shell focuses
+      // `<main>` for that same navigation, so a heading focused in this pass would lose it again.
+      if (created && this.createdHandoff() !== 'ran') {
+        return;
+      }
       // A ready derivation can land one render before the step that renders the heading: keep the
       // cue rather than spending it, so the pass that mounts the target moves the focus.
       const heading = this.heading();
@@ -165,7 +186,6 @@ export class OnboardingShellComponent {
       this.focusedToken = token;
       this.announceCreatedStep.set(false);
       heading.nativeElement.focus();
-      if (created) this.reassertStepFocus(heading.nativeElement);
     });
 
     afterRenderEffect(() => {
@@ -183,6 +203,45 @@ export class OnboardingShellComponent {
       this.announceReloadFailure.set(false);
       heading.focus();
     });
+  }
+
+  /**
+   * Queues the created step's handoff for the end of the next render. Registered after the app
+   * shell's own callback for the same navigation, so it runs after that `<main>` focus, and once
+   * only — a later NavigationEnd for the same activation finds the cue already queued.
+   */
+  private queueCreatedHandoff(): void {
+    if (this.createdHandoff() !== 'none') return;
+    this.createdHandoff.set('queued');
+    // Registered in the read phase, which every default-phase callback of the same pass runs
+    // before: the app shell writes `<main>` as the navigation's first stop there, so the heading
+    // becomes the last stop whatever order the two subscribers registered in. The callback is
+    // queued once per cue, so a pass with no callback left cannot accumulate them.
+    afterNextRender(
+      {
+        read: () => {
+          this.createdHandoff.set('ran');
+          this.focusCreatedStep();
+        },
+      },
+      { injector: this.injector },
+    );
+  }
+
+  /**
+   * Hands the created step its focus, now that nothing later in this navigation will move it.
+   *
+   * The heading is resolved here, never held: the wizard replaces it whenever the step changes, and
+   * a cue that finds no mounted heading is kept for the pass that mounts one. Marking the handoff
+   * as run first is what tells the step-move pass that the shell's own move has already happened.
+   */
+  private focusCreatedStep(): void {
+    if (!this.announceCreatedStep() || this.store.status() !== 'ready') return;
+    const heading = this.heading()?.nativeElement;
+    if (heading === undefined || !heading.isConnected) return;
+    this.announceCreatedStep.set(false);
+    this.focusedToken = this.store.focusToken();
+    heading.focus();
   }
 
   protected canSelect(step: StepNumber): boolean {

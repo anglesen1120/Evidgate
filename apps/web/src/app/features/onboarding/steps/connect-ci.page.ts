@@ -1,10 +1,11 @@
 // Server-derived connection metadata and a component-scoped, one-time reveal: secret-bearing
 // commands never create an Idempotency intent and never auto-retry.
-import { DatePipe } from '@angular/common';
+import { DatePipe, DOCUMENT } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   afterRenderEffect,
   computed,
   effect,
@@ -12,7 +13,6 @@ import {
   input,
   signal,
   viewChild,
-  type ElementRef,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
@@ -20,6 +20,17 @@ import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import {
+  captureRefreshFocus,
+  releaseRefreshFocus,
+  restoreRefreshFocus,
+  type RefreshFocusHandoff,
+} from '../../../shared/a11y/refresh-focus';
+import {
+  focusRefusalHeading,
+  focusWaitingLine,
+  requestRefusalFocus,
+} from '../../../shared/a11y/step-focus';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { ConnectStepRevealComponent } from '../../../shared/ui/reveal/connect-step-reveal.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
@@ -28,9 +39,16 @@ import { CONNECT_LIST_LIMIT } from '../data/onboarding-progress.service';
 import { CliQuickstartComponent } from '../health/cli-quickstart.component';
 import { ConnectionHealthComponent } from '../health/connection-health.component';
 import { deriveConnectionHealth, type ConnectionHealth } from '../health/connection-health';
+import { HealthBoundaryClock } from '../health/health-boundary';
 import { OnboardingStore } from '../onboarding.store';
 import { sanitizeLabel } from './default-policy';
-import { fieldDetails, reasonFor } from './field-details';
+import { describedBy, fieldDetails, reasonFor } from './field-details';
+import {
+  NO_DISMISSED_REASONS,
+  dismissFieldReason,
+  showsFieldReason,
+  type DismissedReasons,
+} from './server-reasons';
 
 /**
  * The create-binding form's two list fields, named once so the validators, the error copy and
@@ -41,9 +59,6 @@ const MAX_REF_ENTRIES = 32;
 
 /** The ingest-token name limit in Unicode code points (contract `name` `maxLength: 128`). */
 const MAX_TOKEN_NAME_LENGTH = 128;
-
-/** Browsers clamp larger timeout delays; re-arm long-lived credentials after each capped wait. */
-const MAX_HEALTH_TIMEOUT_MS = 2 ** 31 - 1;
 
 @Component({
   selector: 'app-onboarding-connect-ci',
@@ -69,9 +84,15 @@ export class ConnectCiPage {
   private readonly data = inject(OnboardingDataService);
   private readonly session = inject(SessionStore);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly document = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private scopeVersion = 0;
-  private readonly healthNow = signal(new Date());
-  private healthBoundaryTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly healthClock = new HealthBoundaryClock(() => this.store.tokens());
+  /**
+   * A re-read this page asked for, waiting for the DOM to commit before it is decided: the control
+   * it was pressed from may be gone by then, and only the committed DOM knows.
+   */
+  private readonly refreshHandoff = signal<RefreshFocusHandoff | null>(null);
   private readonly bindingHeading = viewChild<ElementRef<HTMLHeadingElement>>('bindingHeading');
   private readonly tokenHeading = viewChild<ElementRef<HTMLHeadingElement>>('tokenHeading');
   private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeadingEl');
@@ -129,17 +150,34 @@ export class ConnectCiPage {
     );
     return fieldDetails(rows);
   });
-  protected readonly serverRepoIdError = computed(() => reasonFor(this.details(), 'repository_id'));
+  /** The reasons the visitor has answered by editing a field; see `server-reasons.ts`. */
+  private readonly dismissed = signal<DismissedReasons>(NO_DISMISSED_REASONS);
+  /**
+   * The reason `field` still shows, or `null`.
+   *
+   * A reason is cleared by the first edit of its own field — not by a render, a focus or a later
+   * refill — because the listed refusal describes the values that were submitted, and the visitor
+   * is the one who says a value is no longer the one they meant.
+   */
+  private serverReason(field: string): string | null {
+    if (!showsFieldReason(this.dismissed(), this.failure(), field)) return null;
+    return reasonFor(this.details(), field);
+  }
+  protected readonly serverRepoIdError = computed(() => this.serverReason('repository_id'));
   protected readonly serverRepoNameError = computed(() =>
-    reasonFor(this.details(), 'repository_full_name'),
+    this.serverReason('repository_full_name'),
   );
-  protected readonly serverRefsError = computed(() =>
-    reasonFor(this.details(), 'allowed_ref_patterns'),
-  );
+  protected readonly serverRefsError = computed(() => this.serverReason('allowed_ref_patterns'));
   protected readonly serverWorkflowsError = computed(() =>
-    reasonFor(this.details(), 'allowed_workflow_refs'),
+    this.serverReason('allowed_workflow_refs'),
   );
-  protected readonly serverTokenNameError = computed(() => reasonFor(this.details(), 'name'));
+  protected readonly serverTokenNameError = computed(() => this.serverReason('name'));
+
+  /** Clears one field's displayed reason as soon as the visitor edits it; the alert keeps its rows. */
+  protected dismissServerReason(field: string): void {
+    this.dismissed.set(dismissFieldReason(this.dismissed(), this.failure(), field));
+  }
+  protected readonly describedBy = describedBy;
 
   protected readonly intro = $localize`:@@onboarding.connect.intro:Choose one connection method. Next becomes available only after the server confirms a binding or token.`;
   protected readonly oidcTitle = $localize`:@@onboarding.connect.oidc-title:GitHub Actions (OIDC)`;
@@ -207,7 +245,7 @@ export class ConnectCiPage {
       tokens: this.store.tokens(),
       bindingsTruncated: this.store.bindingsTruncated(),
       tokensTruncated: this.store.tokensTruncated(),
-      now: this.healthNow(),
+      now: this.healthClock.now(),
     }),
   );
   /**
@@ -249,60 +287,39 @@ export class ConnectCiPage {
       this.overlapEndsAt.set(null);
     });
     effect((onCleanup) => {
-      this.scheduleHealthBoundary(this.store.tokens());
-      onCleanup(() => this.clearHealthBoundaryTimer());
+      this.store.tokens();
+      this.healthClock.arm();
+      onCleanup(() => this.healthClock.stop());
     });
-    // The health boundary timer is session-scoped work: signing out must stop it, even when this
-    // step's signals do not change again — the page can stay mounted under a router outlet while
-    // the session ends, and a timer that fires afterwards would repaint a credential panel for a
-    // session that no longer exists.
-    const endOfSession = this.session.onSessionEnd(() => this.clearHealthBoundaryTimer());
+    // Signing out stops the timer too: this step can stay mounted while the session ends.
+    const endOfSession = this.session.onSessionEnd(() => this.healthClock.stop());
     // The refusal heading is the page's own focus target: outside both alerts, so the move neither
     // repeats an announcement nor leaves the visitor on `<body>` after a disabled press. The cue is
     // consumed after render, so a refusal whose heading never renders cannot leave it armed.
+    focusRefusalHeading({
+      request: this.announceFailure,
+      heading: this.failureHeadingRef,
+      afterRender: true,
+    });
+    // A re-read may remove what the visitor pressed, so the place is put back after the DOM commits.
     afterRenderEffect({
       write: () => {
-        if (!this.announceFailure()) return;
-        this.announceFailure.set(false);
-        this.failureHeadingRef()?.nativeElement.focus();
+        const handoff = this.refreshHandoff();
+        if (handoff === null) return;
+        this.refreshHandoff.set(null);
+        releaseRefreshFocus(this.document, handoff);
+        restoreRefreshFocus(this.document, handoff, this.scopeVersion, {
+          binding: this.bindingHeading()?.nativeElement,
+          token: this.tokenHeading()?.nativeElement,
+        });
       },
     });
     this.destroyRef.onDestroy(() => {
-      this.clearHealthBoundaryTimer();
+      this.healthClock.stop();
+      const handoff = this.refreshHandoff();
+      if (handoff !== null) releaseRefreshFocus(this.document, handoff);
       endOfSession();
     });
-  }
-
-  private clearHealthBoundaryTimer(): void {
-    if (this.healthBoundaryTimer !== undefined) {
-      clearTimeout(this.healthBoundaryTimer);
-      this.healthBoundaryTimer = undefined;
-    }
-  }
-
-  private scheduleHealthBoundary(tokens: readonly IngestTokenView[]): void {
-    this.clearHealthBoundaryTimer();
-    const now = Date.now();
-    this.healthNow.set(new Date(now));
-    let nextBoundary = Infinity;
-    for (const token of tokens) {
-      const boundary =
-        token.status === 'active'
-          ? token.expires_at
-          : token.status === 'rotated'
-            ? token.overlap_ends_at
-            : null;
-      if (boundary != null) {
-        const timestamp = Date.parse(boundary);
-        if (timestamp > now && timestamp < nextBoundary) nextBoundary = timestamp;
-      }
-    }
-    if (Number.isFinite(nextBoundary)) {
-      this.healthBoundaryTimer = setTimeout(
-        () => this.scheduleHealthBoundary(tokens),
-        Math.min(nextBoundary - now, MAX_HEALTH_TIMEOUT_MS),
-      );
-    }
   }
 
   protected dismissReveal(): void {
@@ -425,17 +442,22 @@ export class ConnectCiPage {
 
   protected async refresh(): Promise<void> {
     if (this.busy() || this.refreshing()) return;
+    // Where the visitor is, captured before the read can replace what they pressed. Whether that
+    // place survives is only knowable once the DOM has committed, so the move is decided there.
+    const handoff = captureRefreshFocus(
+      this.document,
+      this.host.nativeElement,
+      this.scopeVersion,
+      (control) =>
+        control.closest('[data-testid="connect-token-panel"]') === null ? 'binding' : 'token',
+    );
     this.refreshing.set(true);
     try {
       await this.store.refresh(this.orgId(), this.projectId());
     } finally {
       this.refreshing.set(false);
+      this.refreshHandoff.set(handoff);
     }
-    // A re-read that landed removes the notice — and with it the pressed control, the only stop
-    // this visitor was on. The first panel below the notice takes the place back; a re-read that
-    // failed leaves the notice (and the focus) exactly where it was.
-    if (this.store.refreshFailure() !== null) return;
-    this.bindingHeading()?.nativeElement.focus();
   }
 
   private isCurrent(version: number, orgId: string, projectId: string): boolean {
@@ -455,7 +477,7 @@ export class ConnectCiPage {
   ): Promise<void> {
     // Every command disables the control it was pressed from, so the waiting line takes the place
     // before that happens and holds it until the answer hands it on (a reveal, or a refusal).
-    this.busyStatusRef()?.nativeElement.focus();
+    focusWaitingLine(this.busyStatusRef);
     this.busy.set(true);
     this.failure.set(null);
     try {
@@ -464,7 +486,7 @@ export class ConnectCiPage {
       if (!isApiRequestError(error)) throw error;
       if (this.isCurrent(version, orgId, projectId)) {
         this.failure.set(error.error);
-        this.announceFailure.set(true);
+        requestRefusalFocus(this.announceFailure, this.failure() !== null);
         if (error.error.kind === 'timeout' || error.error.kind === 'network') {
           // Reconcile metadata only: the failed response may hide a committed write.
           await this.store.refresh(orgId, projectId);
