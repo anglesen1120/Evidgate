@@ -113,6 +113,9 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-project',
     'fixture.variant.listRuns=onboarding-project',
+    // Steps 1-4 are not all done, so the project cannot have been activated: pin the contract's 404
+    // (the un-toggled answer is an activated project, which would complete step 5 ahead of 1-4).
+    activationReadToggle('not-found'),
   ],
   // The token path: one active token, an empty binding page, no run.
   'onboarding-token': [
@@ -120,6 +123,9 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-token',
     'fixture.variant.listRuns=onboarding-project',
+    // Steps 1-4 are not all done, so the project cannot have been activated: pin the contract's 404
+    // (the un-toggled answer is an activated project, which would complete step 5 ahead of 1-4).
+    activationReadToggle('not-found'),
   ],
   // 09.2.1-T7: the same position with the token page holding the credential metadata the health
   // panel derives from — an `active` token that was used (its `last_used_at` recorded) and, for the
@@ -130,18 +136,27 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-token-used',
     'fixture.variant.listRuns=onboarding-project',
+    // Steps 1-4 are not all done, so the project cannot have been activated: pin the contract's 404
+    // (the un-toggled answer is an activated project, which would complete step 5 ahead of 1-4).
+    activationReadToggle('not-found'),
   ],
   'onboarding-unusable': [
     'fixture.variant.getProject=onboarding-project',
     'fixture.variant.listCiBindings=onboarding-project',
     'fixture.variant.listIngestTokens=onboarding-unusable',
     'fixture.variant.listRuns=onboarding-project',
+    // Steps 1-4 are not all done, so the project cannot have been activated: pin the contract's 404
+    // (the un-toggled answer is an activated project, which would complete step 5 ahead of 1-4).
+    activationReadToggle('not-found'),
   ],
   'onboarding-connected': [
     'fixture.variant.getProject=onboarding-connected',
     'fixture.variant.listCiBindings=onboarding-connected',
     'fixture.variant.listIngestTokens=onboarding-connected',
     'fixture.variant.listRuns=onboarding-connected',
+    // Steps 1-4 are not all done, so the project cannot have been activated: pin the contract's 404
+    // (the un-toggled answer is an activated project, which would complete step 5 ahead of 1-4).
+    activationReadToggle('not-found'),
   ],
   // Both run seeds share the `onboarding-run` reads (binding + one `complete` run whose recorded
   // decision is `FAIL`, so the AC6 no-verdict check runs on a failing run) and differ only in
@@ -152,6 +167,9 @@ const SEED_TOGGLES: Readonly<Record<OnboardingSeed, readonly string[]>> = {
     'fixture.variant.listIngestTokens=onboarding-run',
     'fixture.variant.listRuns=onboarding-run',
     'fixture.variant.getRun=onboarding-run-complete',
+    // Steps 1-4 are not all done, so the project cannot have been activated: pin the contract's 404
+    // (the un-toggled answer is an activated project, which would complete step 5 ahead of 1-4).
+    activationReadToggle('not-found'),
   ],
   'onboarding-evidence': [
     'fixture.variant.getProject=onboarding-run',
