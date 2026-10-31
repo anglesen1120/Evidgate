@@ -5,8 +5,8 @@
 //
 // The implementation is split by concern, and this module is the surface every caller
 // imports: shapes and on-disk constants (`spoolLockTypes`), the read/classify path
-// (`spoolLockRead`), the reporter's lock check (`spoolLockWriter`) and the
-// acquire/release path with the stale-lock takeover (`spoolLockAcquire`).
+// (`spoolLockRead`), the reporter's lock check (`spoolLockWriter`), the acquire path with
+// the stale-lock takeover (`spoolLockAcquire`) and the release path (`spoolLockRelease`).
 export {
   spoolLockFileName,
   spoolLockFileMode,

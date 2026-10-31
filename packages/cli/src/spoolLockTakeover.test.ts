@@ -227,7 +227,11 @@ describe('withSpoolLock — stale takeover', () => {
     const aFailure = failureOf(a);
     await entryRead.promise;
 
-    // The empty entry is released and B links its own lock into the freed name.
+    // The empty entry is released and B links its own lock into the freed name. A hard link
+    // keeps the released inode alive, so B's lock cannot land on its number and the re-stat
+    // below differs from the observed entry on every filesystem.
+    const releasedEntry = join(root, 'released-empty-entry');
+    await link(lockPath, releasedEntry);
     await rm(lockPath);
     const b = withSpoolLock(
       directory,
@@ -293,8 +297,8 @@ describe('withSpoolLock — stale takeover', () => {
     const releaseHolder = deferred();
     const quarantined = deferred();
     const releaseTaker = deferred();
-    // The holder is a real one whose pid the taker's probe reads as dead: a finished
-    // process whose pid was reused, the only way a live record is stale.
+    // The holder is a real one whose pid the taker's probe cannot see — another pid
+    // namespace, say — which is the only way a live record reads as dead here.
     const holder = withSpoolLock(
       directory,
       async () => {
@@ -373,5 +377,79 @@ describe('withSpoolLock — stale takeover', () => {
     // A live taker's mutex and the stale lock it is still working on stay where they are.
     expect(await readFile(mutexPath, 'utf8')).toBe(liveMutex);
     expect(await readFile(lockPath, 'utf8')).toBe(staleLock);
+  });
+
+  it('refuses a breaker that resumes after another reclaimed the same dead mutex', async () => {
+    // Both contenders observed the same dead mutex. The delayed one resumes only after the
+    // fast one published its live mutex; deleting that by name would seat both as takers.
+    await writeFile(lockPath, lockText(deadPid), { mode: spoolLockFileMode });
+    await writeFile(mutexPath, lockText(4444), { mode: spoolLockFileMode });
+    const reclaimParked = deferred();
+    const releaseReclaim = deferred();
+    const quarantined = deferred();
+    const releaseQuarantine = deferred();
+    // Every contender is alive to the others; the planted lock and mutex name dead pids.
+    const alivePids = [1111, 2222];
+    const probe = (pid: number): boolean => alivePids.includes(pid);
+    // Which contenders got as far as holding the lock: exactly one may ever appear here.
+    const holders: string[] = [];
+
+    const delayed = withSpoolLock(
+      directory,
+      () => {
+        holders.push('delayed');
+        return Promise.resolve('delayed');
+      },
+      {
+        pid: 1111,
+        now: () => fixedNow,
+        isProcessAlive: probe,
+        hooks: {
+          beforeDeadMutexReclaim: async () => {
+            reclaimParked.resolve();
+            await releaseReclaim.promise;
+          },
+        },
+      },
+    );
+    const delayedFailure = failureOf(delayed);
+    await reclaimParked.promise;
+
+    // The fast contender reclaims that mutex, takes it, quarantines the stale lock and then
+    // holds the mutex while the delayed breaker resumes.
+    const fast = withSpoolLock(
+      directory,
+      () => {
+        holders.push('fast');
+        return Promise.resolve('fast');
+      },
+      {
+        pid: 2222,
+        now: () => fixedNow,
+        isProcessAlive: probe,
+        hooks: {
+          afterQuarantine: async () => {
+            quarantined.resolve();
+            await releaseQuarantine.promise;
+          },
+        },
+      },
+    );
+    await quarantined.promise;
+
+    releaseReclaim.resolve();
+    try {
+      const locked = expectError(await delayedFailure, SpoolLockedError);
+      expect(locked.code).toBe('spool_locked');
+      // The refused breaker names the taker in the mutex it moved, and that mutex is back.
+      expect(locked.holderPid).toBe(2222);
+      expect(await readFile(mutexPath, 'utf8')).toBe(lockText(2222));
+    } finally {
+      releaseQuarantine.resolve();
+    }
+    expect(await fast).toBe('fast');
+    // One holder, and it is the contender whose live mutex the delayed breaker found.
+    expect(holders).toEqual(['fast']);
+    expect(await readdir(directory)).toEqual([]);
   });
 });

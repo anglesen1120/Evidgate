@@ -32,9 +32,9 @@ export interface SpoolLockFile {
 }
 
 /**
- * Seams that park a contender inside the stale-lock takeover so a spec can interleave a
- * competitor deterministically. They are never set in production and change no outcome on
- * their own; each one runs exactly where its name says.
+ * Seams that park a contender inside the stale-lock takeover or its release so a spec can
+ * interleave a competitor deterministically. They are never set in production and change
+ * no outcome on their own; each one runs exactly where its name says.
  */
 export interface SpoolLockHooks {
   /** After a stale lock was observed and before the takeover mutex is taken. */
@@ -43,6 +43,10 @@ export interface SpoolLockHooks {
   readonly afterQuarantine?: () => Promise<void>;
   /** After the lock at the path was read and before its inode is confirmed again. */
   readonly afterEntryRead?: () => Promise<void>;
+  /** After a dead mutex was re-checked and immediately before its reclaim rename. */
+  readonly beforeDeadMutexReclaim?: () => Promise<void>;
+  /** After the holder unlinks its matched record, before quarantine scavenging. */
+  readonly afterReleaseUnlink?: () => Promise<void>;
 }
 
 export interface SpoolLockOptions {
@@ -56,6 +60,18 @@ export interface SpoolLockOptions {
   readonly maxTakeoverAttempts?: number;
   /** Takeover seams for the race specs; absent in production. */
   readonly hooks?: SpoolLockHooks;
+}
+
+/**
+ * A lock this process holds: where it is, what it records, and which inode carries it, so
+ * release can still find the record after a takeover renamed it aside.
+ */
+export interface HeldSpoolLock {
+  readonly path: string;
+  readonly pid: number;
+  readonly startedAt: string;
+  readonly dev: number;
+  readonly ino: number;
 }
 
 /** `spool_locked`: a live process holds this producer directory (exit 3, contracts/cli.md). */

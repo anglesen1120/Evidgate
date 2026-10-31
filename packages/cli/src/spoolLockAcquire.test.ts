@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { chmodSync, writeFileSync } from 'node:fs';
 import {
   chmod,
+  link,
   mkdir,
   mkdtemp,
   open,
@@ -216,8 +217,8 @@ describe('withSpoolLock', () => {
           return { pid, ran, failure };
         }),
       );
-      // Never two holders at once: a loser either sees the winner alive or puts its lock
-      // back and fails; the takeover never yields two live holders.
+      // Never two holders at once: a loser either sees the winner's live record or retries
+      // its link; the takeover never yields two live holders.
       expect(maxInFlight).toBe(1);
       expect(outcomes.filter((outcome) => outcome.ran).length).toBeGreaterThan(0);
       for (const outcome of outcomes.filter((candidate) => !candidate.ran)) {
@@ -263,7 +264,7 @@ describe('withSpoolLock', () => {
     expect(await readdir(directory)).toEqual([]);
   });
 
-  it('puts back a live lock whose content did not match the stale one it took over', async () => {
+  it('refuses a live lock that replaced the stale one before the takeover re-read it', async () => {
     await writeLock(`${JSON.stringify({ pid: deadPid, started_at: fixedIso })}\n`);
     const foreign = `${JSON.stringify({ pid: 4242, started_at: 'live-successor' })}\n`;
     let swapped = false;
@@ -293,7 +294,7 @@ describe('withSpoolLock', () => {
     expect(swapped).toBe(true);
     expect(locked.holderPid).toBe(4242);
     expect(ran).toBe(false);
-    // The lock we had not observed is back at its path, byte for byte.
+    // The successor's lock was never moved: the re-read under the mutex found it alive.
     expect(await readFile(lockPath, 'utf8')).toBe(foreign);
     expect(await readdir(directory)).toEqual([spoolLockFileName]);
   });
@@ -322,6 +323,30 @@ describe('withSpoolLock', () => {
     );
     expect(await readLockText()).toBeNull();
     expect(await readdir(directory)).toEqual([]);
+  });
+
+  it('leaves a successor lock that took our freed inode number after our own unlink', async () => {
+    // Once we unlink, our number is free for a successor's lock. Here a hard link keeps our
+    // inode reachable, so the successor's record can sit at the path on our number without
+    // waiting for the allocator — the same state a recycled number produces.
+    const pinned = join(root, 'pinned-holder');
+    const successor = `${JSON.stringify({ pid: 7777, started_at: 'successor' })}\n`;
+    await withSpoolLock(
+      directory,
+      async () => {
+        await link(lockPath, pinned);
+      },
+      {
+        hooks: {
+          afterReleaseUnlink: async () => {
+            await writeFile(pinned, successor, { mode: spoolLockFileMode });
+            await link(pinned, lockPath);
+          },
+        },
+      },
+    );
+    expect(await readFile(lockPath, 'utf8')).toBe(successor);
+    expect(await readdir(directory)).toEqual([spoolLockFileName]);
   });
 
   it('releases only a lock that still carries its own pid and started_at', async () => {
