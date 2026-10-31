@@ -105,8 +105,9 @@ public sealed class ReconcileDeadlineSweepTests
         // only what the second sweep adds, not a row the first attempt left behind.
         await DispatchAsync(world);
 
-        // The next fire finds the same run (it is still past its deadline), and the key keeps it from queueing a second
-        // attempt: one run is one deadline attempt, whatever the sweep does next.
+        // The next fire does not even see this run any more: the attempt decided it, so the scan no longer names it.
+        // A done attempt is spent, and a spent attempt is only re-armed while its run is still overdue — nothing
+        // re-arms a run that already has a verdict.
         clock.Advance(TimeSpan.FromMinutes(10));
         await SweepAsync(world, clock);
         (await DispatchAsync(world)).Enqueued.ShouldBe(
@@ -138,26 +139,32 @@ public sealed class ReconcileDeadlineSweepTests
     }
 
     [Fact]
-    public async Task Sweep_RunningRunPastItsDeadline_IsNotQueued()
+    public async Task Sweep_RunningRunPastItsDeadline_IsQueued_AndTheAttemptClosesItIncomplete()
     {
         var clock = AlignedClock();
         await using var world = await StartAsync(clock);
         var runId = world.RunId;
 
-        // A run whose events may still be arriving. It is past its deadline, but the reconcile refuses every state
-        // but `collecting` and only a finalize moves `running -> collecting`, so queueing it here would spend the
-        // run's single deadline key on an attempt that can only answer NotCollectable.
+        // A run whose events may still be arriving, past its deadline. The deadline is a verdict, not a wait: the scan
+        // names every decidable state, and the attempt closes the run incomplete with the producers that never
+        // reported — a run nobody can finish must not stay running for ever.
         await SetRunStateAsync(world, runId, "running");
         await PassCollectionDeadlineAsync(world, runId);
 
         await SweepAsync(world, clock);
 
         (await DeadlineRowsAsync(world, runId)).ShouldBe(
-            0,
-            customMessage: "the scan names collecting runs only: a running run is not collectable");
+            1,
+            customMessage: "the scan names the run past its deadline whatever decidable state it is in");
+
+        await DispatchAndReconcileAsync(world, expectedReconciles: 1);
+
         (await StateAsync(world, runId)).ShouldBe(
-            "running",
-            customMessage: "the sweep queues an attempt, it never transitions a run itself");
+            "incomplete",
+            customMessage: "the attempt closes the overdue run instead of leaving it running");
+        (await MissingAsync(world, runId)).ShouldNotBeEmpty(
+            customMessage: "a run closed without complete evidence names what was missing");
+        (await RevisionCountAsync(world)).ShouldBe(1, customMessage: "the forced verdict freezes one revision");
     }
 
 

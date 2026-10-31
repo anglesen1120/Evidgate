@@ -171,9 +171,10 @@ internal enum ReconcileDisposition
     RunNotFound,
 
     /// <summary>
-    /// The run cannot be compared by this trigger: it is terminal (<c>complete</c>, <c>canceled</c>), not yet finalized,
-    /// or finished <c>incomplete</c> while this trigger carries no late evidence or the run's late window is closed.
-    /// Nothing is compared, nothing changes.
+    /// The run cannot be compared by this trigger: it is terminal (<c>complete</c>, <c>canceled</c>), or <c>created</c>,
+    /// or <c>queued</c>/<c>running</c> with its collection deadline still ahead (a verdict there would close a run that
+    /// is still starting), or finished <c>incomplete</c> while this trigger carries no late evidence or the run's late
+    /// window is closed. Nothing is compared, nothing changes.
     /// </summary>
     NotCollectable,
 
@@ -200,16 +201,27 @@ internal enum ReconcileDisposition
     /// finished run has no forward edge left, and a revision, not a state, is what carries the new completeness.
     /// </summary>
     ComparedLate,
+
+    /// <summary>
+    /// The comparison ran on a <c>queued</c> or <c>running</c> run whose <c>collection_deadline_at</c> has passed: its
+    /// producers never started or never finalized, so no finalize will ever enqueue the reconcile that decides such a
+    /// run, and the deadline is the run's promise to the caller. The attempt closes it <c>incomplete</c> with the
+    /// reasons the comparison named — never <c>complete</c>, because missing evidence never reads as a pass.
+    /// <see cref="ReconcileOutcome.Comparison"/> holds the result; the finisher settles it as
+    /// <see cref="ReconcileSettlement.CloseOverdue"/>, which moves the run through the declared
+    /// <c>queued|running → incomplete</c> edge.
+    /// </summary>
+    ComparedOverdue,
 }
 
 /// <summary>The result of one reconcile attempt; the run state is never changed by T2.1/T2.2.</summary>
 /// <param name="Disposition">What happened.</param>
 /// <param name="Comparison">
-/// Set when <paramref name="Disposition"/> is <see cref="ReconcileDisposition.Compared"/> or
-/// <see cref="ReconcileDisposition.ComparedLate"/> — and also for <see cref="ReconcileDisposition.Pending"/>, whose
-/// comparison is the event evidence alone (its counts are the attempt's log line): a waiting attempt reads no plan
-/// coverage, because coverage cannot turn a wait into a verdict. A pending attempt finishes nothing: only the two
-/// compared dispositions reach the finisher.
+/// Set when <paramref name="Disposition"/> is <see cref="ReconcileDisposition.Compared"/>,
+/// <see cref="ReconcileDisposition.ComparedLate"/> or <see cref="ReconcileDisposition.ComparedOverdue"/> — and also
+/// for <see cref="ReconcileDisposition.Pending"/>, whose comparison is the event evidence alone (its counts are the
+/// attempt's log line): a waiting attempt reads no plan coverage, because coverage cannot turn a wait into a verdict.
+/// A pending attempt finishes nothing: only the compared dispositions reach the finisher.
 /// </param>
 internal sealed record ReconcileOutcome(ReconcileDisposition Disposition, ReconcileComparison? Comparison);
 
@@ -224,7 +236,11 @@ internal interface IRunReconciler
     /// that attempt answers <see cref="ReconcileDisposition.ComparedLate"/> and never waits, because its verdict is
     /// written and no finalize can close a shard any more. The window that evidence was admitted in is the ingest
     /// route's decision, already taken when it accepted the batch, so a late trigger is honoured whatever the clock says
-    /// when the queue reaches it. Every other trigger on a finished run answers
+    /// when the queue reaches it. A <c>queued</c> or <c>running</c> run is compared once
+    /// <c>collection_deadline_at</c> has passed (<see cref="ReconcileDisposition.ComparedOverdue"/>): its producers never
+    /// started or never finalized, so no finalize will enqueue the reconcile that closes it, and the deadline settles it
+    /// <c>incomplete</c>; before its deadline the same run stays <see cref="ReconcileDisposition.NotCollectable"/> —
+    /// it is not collecting, so there is no wait to hold. Every other trigger on a finished run answers
     /// <see cref="ReconcileDisposition.NotCollectable"/>: a redelivered or replayed finalize/deadline trigger carries no
     /// new evidence, so it must not append a revision. Deterministic for the same rows and the same clock reading: the
     /// comparison depends on the rows alone, and the disposition additionally on the deadline the lock statement
