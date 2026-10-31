@@ -38,9 +38,11 @@ From a clean checkout it does, in order:
    migration 0001 creates the application roles → superuser grants them `LOGIN` +
    password (01.4.1-T2.3; the role split mirrors production, so an RLS mistake
    fails locally first), then `Evidgate.Migrator seed-dev` writes the synthetic dev
-   tenant ([The dev tenant](#the-dev-tenant-seed-dev); `EVIDGATE_DB_INIT_SEED=0`
-   skips it). Under `--with-token` that seed runs after the grants instead, because
-   the token and the policy revision are written through the application role;
+   tenant and the dev project's sample case, suite and suite revision ([The dev
+   tenant](#the-dev-tenant-seed-dev); `EVIDGATE_DB_INIT_SEED=0` skips it). The seed
+   runs after those grants because it writes through the application role — the
+   catalog rows always, and under `--with-token` the ingest token and the sample
+   policy revision as well;
 4. creates the dev bucket and puts the `pending/` 24 h lifecycle rule on it (T18);
 5. installs the npm workspaces (`npm ci`) when `node_modules` is missing or older
    than `package-lock.json`, rebuilds `packages/sdk` with `tsc -b` (incremental, so
@@ -222,31 +224,72 @@ node packages/cli/dist/bin.js runs create --manifest-id <manifest_id> --manifest
 ```
 
 Add `--json` for `{manifest_id, manifest_hash}` and `{run_id, manifest_hash, state}`.
-`runs create` answers 201 with a `run_id` when the token, the project and the manifest
-line up. Two prerequisites are still outside this story, so a fresh dev stack does
-not reach that 201 yet: the Api and Worker exit 134 in `Development` until the DI
-scope fix lands (receiver S167), and the manifest must name a suite revision that
-exists in `dev-project` — the dev seed creates none, so `manifests upload` answers 422
-`unknown_suite_revision` until catalog data exists.
 
-Without `--with-token`, nothing here runs: the seed writes the tenant only, and a
-token has to come from `POST /v1/projects/{p}/ingest-tokens` once a session exists
-(02.3.x) or from the seeded CI binding with a GitHub OIDC token.
+`m.json` is a `manifest.v1` document and must name a suite revision that exists in
+`dev-project`. The seed creates exactly one, and prints the two ids a manifest
+needs (they are the database's, so they are stable per volume and change only on
+`--reset`):
+
+```text
+seed-dev: catalog suite dev-seed-smoke revision 1 sha256:<64 hex> (created)
+seed-dev: manifest inputs suite_revision_id=<uuid> case_revision_id=<uuid>
+```
+
+Read them from the output of the run that seeded the stack (`scripts/dev/up.sh`
+and `scripts/dev/db-init.sh` print the seed's stdout), or ask for them again at any
+time — a rerun writes nothing and repeats the same two lines with `(already
+present)`:
+
+```sh
+EVIDGATE_MIGRATOR__CONNECTIONSTRING='Host=127.0.0.1;Port=5432;Database=evidgate;Username=evidgate_owner;Password=<EVIDGATE_OWNER_PASSWORD>' \
+DOTNET_ENVIRONMENT=Development dotnet run --project src/Evidgate.Migrator -- seed-dev
+```
+
+Take the shape from the contract vector
+[`fixtures/contracts/vectors/manifest.v1/acc-01-golden.json`](../fixtures/contracts/vectors/manifest.v1/acc-01-golden.json)
+and change three things, because the dev project holds one case and one suite
+revision:
+
+- `suite_revision_id` → the `suite_revision_id` the seed printed;
+- every `case_revision_id` (in `planned_executions` and in
+  `matrix.case_revision_ids`) → the `case_revision_id` the seed printed, with
+  `planned_executions`, `matrix` and `shard_plan` trimmed to that one case the way
+  the vector repeats its entries;
+- `environment_revision_id` → `null`: the field is optional in V1, and the dev
+  project has no environment revision until 05.1.2 lands one.
+
+`runs create` answers 201 with a `run_id` when the token, the project and the
+manifest line up.
+
+Without `--with-token`, no token is seeded: the seed writes the tenant and the
+catalog suite only, and a token has to come from
+`POST /v1/projects/{p}/ingest-tokens` once a session exists (02.3.x) or from the
+seeded CI binding with a GitHub OIDC token.
 
 ## The dev tenant (`seed-dev`)
 
-`scripts/dev/db-init.sh` runs `Evidgate.Migrator seed-dev` after the migrations
+`scripts/dev/db-init.sh` runs `Evidgate.Migrator seed-dev` after the migrations and
+after the application-role grants, because the seed writes through that role
 (skip it with `EVIDGATE_DB_INIT_SEED=0`). It writes, idempotently and in one
 transaction as the owner role, a synthetic tenant: org `dev-org`, project
 `dev-project`, a dev user (`0198a000-0000-7000-8000-00000000d003`, no login exists
 yet) holding `tenant_admin` and `release_approver`, and one **active** CI binding for
 the synthetic repository id `9000000000001` (`evidgate-dev/sample`). It refuses, writing
-nothing, unless `DOTNET_ENVIRONMENT=Development` and the database host is local or a
-bare compose service name. The data is fully synthetic.
+nothing, unless `DOTNET_ENVIRONMENT=Development` and both database hosts are local or
+bare compose service names. The data is fully synthetic.
 
-Under `--with-token` the same seed runs after the application-role grants instead of
-before them, because it also mints the ingest token and the policy revision through
-the application role; `EVIDGATE_DB_INIT_SEED=0` skips it either way.
+The same run then writes the dev project's catalog sample, on the application role,
+through the Catalog module's own service and commands (never hand-written SQL on
+catalog tables): one case `dev seed smoke` and its case revision, one suite
+`dev-seed-smoke` and one **draft** suite revision holding that case, so
+`manifests upload` has a suite revision to name. Rerunning finds all four and adds
+nothing: the sample's content is fixed, so the ids and the revision hash stay the
+same, and the seed prints them again ([Smoke it with the
+CLI](#the-dev-ingest-token-seed-dev---with-token)).
+
+Under `--with-token` the same seed also mints the ingest token and the sample
+policy revision through the application role; `EVIDGATE_DB_INIT_SEED=0` skips it
+either way.
 
 ## Troubleshooting
 
