@@ -837,6 +837,57 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       true,
     );
   });
+  it('pins the suite revision read to the states the composition screen renders', () => {
+    // The screen reads one pinned revision and nothing else, so every state it can show is one of
+    // these documents: a draft matrix, the immutable published revision, a revision with no member,
+    // and the three refusals. The wire carries no warnings member and no case names, so a 2xx body
+    // that grew either would make the screen claim data the read never sends.
+    const names = [
+      'suite-revision',
+      'suite-revision-published',
+      'suite-revision-empty',
+      'suite-revision-not-found',
+      'suite-revision-forbidden',
+      'suite-revision-unavailable',
+    ];
+    expect(FIXTURE_ROUTES.find((route) => route.operationId === 'getSuiteRevision')).toEqual({
+      operationId: 'getSuiteRevision',
+      method: 'GET',
+      path: '/suite-revisions/{r}',
+    });
+    for (const name of names) {
+      const document = corpusDocument(name);
+      expect(document.operation_id).toBe('getSuiteRevision');
+      expect(
+        VALIDATOR.validateResponse('getSuiteRevision', document.status, document.body).errors,
+      ).toEqual([]);
+      if (document.status !== 200) {
+        continue;
+      }
+      expect(Object.keys(document.body as object).sort()).toEqual([
+        'created_at',
+        'edges',
+        'environment_requirements',
+        'id',
+        'members',
+        'retry_policy',
+        'revision_hash',
+        'revision_no',
+        'shard_strategy',
+        'status',
+        'suite_id',
+      ]);
+    }
+    expect(corpusDocument('suite-revision-not-found').status).toBe(404);
+    expect(corpusDocument('suite-revision-forbidden').status).toBe(403);
+    expect(corpusDocument('suite-revision-unavailable').headers['Retry-After']).toBeDefined();
+    const published = corpusDocument('suite-revision-published').body;
+    expect(isRecord(published) && published['status'] === 'published').toBe(true);
+    const draft = corpusDocument('suite-revision').body;
+    expect(isRecord(draft) && draft['status'] === 'draft').toBe(true);
+    const empty = corpusDocument('suite-revision-empty').body;
+    expect(isRecord(empty) && (empty['members'] as readonly unknown[]).length).toBe(0);
+  });
   for (const fixture of CORPUS) {
     it(`validates fixtures/web-api/${fixture.name} against contracts/openapi.yaml`, () => {
       const document = readDocument(fixture);

@@ -37,6 +37,10 @@
 // to its own route, so it needs no change on this address. The same seam rule applies: this file
 // is replaced in the `development`/`fixtures` configurations only, so the review address can never
 // expose a phase-later product route in production.
+//
+// Suite composition is the same shape: `suites` is a phase-G4 entry with a real product child
+// (`revisions/:revisionId`), so `/dev/suite-composition/orgs/:orgId/projects/:projectId/suites/
+// revisions/:revisionId` mounts it under the identical guard chain with only the phase gate omitted.
 
 import type { Routes } from '@angular/router';
 
@@ -151,6 +155,40 @@ export function devRoutes(): Routes {
                         // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement; real G2 detail, no product phase change.
                         import('../../features/runs/detail/run-detail.page').then(
                           (m) => m.RunDetailPage,
+                        ),
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      // `suites` is a phase-G4 entry, so its product deep link does not match in this build. This
+      // review address mounts the real composition screen under the same project scope and
+      // `suite:read` grant, and only omits the phase gate.
+      path: 'dev/suite-composition',
+      component: ShellComponent,
+      children: [
+        {
+          path: 'orgs/:orgId',
+          canMatch: [authGuard, orgScopeGuard],
+          children: [
+            {
+              path: 'projects/:projectId',
+              canMatch: [projectScopeGuard, permissionGuard('suite:read')],
+              children: [
+                {
+                  path: 'suites',
+                  children: [
+                    {
+                      path: 'revisions/:revisionId',
+                      loadComponent: () =>
+                        // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only file replacement, absent from the production core graph; mounts the real composition screen without changing its product phase.
+                        import('../../features/suites/composition/suite-composition.component').then(
+                          (m) => m.SuiteCompositionComponent,
                         ),
                     },
                   ],
