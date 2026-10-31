@@ -1,9 +1,6 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Migrator;
-using Npgsql;
 using Shouldly;
 using Xunit;
 
@@ -17,90 +14,170 @@ namespace Migrator.IntegrationTests;
 [Trait("Category", "Docker")]
 public sealed class SeedDevTokenTests
 {
-    private const string DevTokenLine = "EVIDGATE_DEV_TOKEN=";
+    private readonly SeedDevTokenHarness _harness;
 
-    private readonly PostgresMigratorFixture _fixture;
-
-    public SeedDevTokenTests(PostgresMigratorFixture fixture) => _fixture = fixture;
+    public SeedDevTokenTests(PostgresMigratorFixture fixture) => _harness = new SeedDevTokenHarness(fixture);
 
     [Fact]
     public async Task SeedDev_Token_PrintedOnce_NotLogged_AndStoredOnlyAsHmac()
     {
-        var (database, pepper) = await SeededDatabaseAsync();
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
 
-        var run = RunWithToken(database, pepper);
+        var run = _harness.RunWithToken(database, pepper);
 
         run.ExitCode.ShouldBe(MigratorExitCodes.Success, run.Error);
 
         // Exactly one token line, and it is a real token: the one-time secret never appears twice in the transcript.
-        CountOf(run.Output, DevTokenLine).ShouldBe(1);
-        var token = TokenOf(run.Output);
+        SeedDevTokenHarness.CountOf(run.Output, SeedDevTokenHarness.DevTokenLine).ShouldBe(1);
+        var token = SeedDevTokenHarness.TokenOf(run.Output);
         token.ShouldStartWith("egt_");
 
         // Nothing but the deliberate stdout line carries the secret — not the error writer, not a log.
         run.Error.ShouldBeEmpty();
         run.Output.ShouldContain(DevSeedToken.ShownOnceNote);
+        // The scopes line is printed from the minted row, so the print and the stored row cannot disagree.
+        run.Output.ShouldContain("(scopes: artifact:write, event:write, run:create)");
         run.Error.ShouldNotContain(token);
         run.Error.ShouldNotContain("egt_");
 
-        var (prefix, secret) = Split(token);
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token")).ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(database, "select name from public.ingest_token")).ShouldBe(DevSeed.TokenName);
-        (await _fixture.ScalarAsync<string>(database, "select prefix from public.ingest_token")).ShouldBe(prefix);
-        (await _fixture.ScalarAsync<string>(database, "select project_id::text from public.ingest_token")).ShouldBe(DevSeed.ProjectId.ToString("D"));
-        (await _fixture.ScalarAsync<string>(
+        var (prefix, secret) = SeedDevTokenHarness.Split(token);
+        (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token")).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<string>(database, "select name from public.ingest_token")).ShouldBe(DevSeed.TokenName);
+        (await _harness.Fixture.ScalarAsync<string>(database, "select prefix from public.ingest_token")).ShouldBe(prefix);
+        (await _harness.Fixture.ScalarAsync<string>(database, "select project_id::text from public.ingest_token")).ShouldBe(DevSeed.ProjectId.ToString("D"));
+        (await _harness.Fixture.ScalarAsync<string>(
             database,
             "select string_agg(scope, ',' order by scope) from public.ingest_token t, unnest(t.scopes) as scope"))
             .ShouldBe("artifact:write,event:write,run:create");
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token where expires_at is null and revoked_at is null")).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token where expires_at is null and revoked_at is null")).ShouldBe(1);
 
         // Only the HMAC is stored: token_hmac is exactly HMAC-SHA256(pepper, secret), and the secret half appears in no
         // stored text of the row.
-        var storedHmac = await _fixture.ScalarAsync<string>(database, "select encode(token_hmac, 'hex') from public.ingest_token");
-        storedHmac.ShouldBe(ExpectedHmac(pepper, secret));
-        (await _fixture.ScalarAsync<string>(
+        var storedHmac = await _harness.Fixture.ScalarAsync<string>(database, "select encode(token_hmac, 'hex') from public.ingest_token");
+        storedHmac.ShouldBe(SeedDevTokenHarness.ExpectedHmac(pepper, secret));
+        (await _harness.Fixture.ScalarAsync<string>(
             database,
             "select concat_ws('|', name, prefix, encode(token_hmac, 'hex'), scopes::text) from public.ingest_token"))
             .ShouldNotContain(secret);
     }
 
     [Fact]
+    public void RerunNote_IsTheDecidedRecoveryText()
+    {
+        // The exact instruction the owner settled on, command included: a rerun has no login to revoke through, so the
+        // reset is the only recovery the note may name.
+        DevSeedToken.RerunNote.ShouldBe(SeedDevTokenHarness.DecidedRecoveryText);
+        DevSeedToken.RerunNote.ShouldNotContain("revoke");
+        DevSeedToken.RerunNote.ShouldNotContain("DELETE");
+    }
+
+    [Fact]
     public async Task SeedDev_Token_Rerun_PrintsRecoveryAndMintsNothing()
     {
-        var (database, pepper) = await SeededDatabaseAsync();
-        RunWithToken(database, pepper).ExitCode.ShouldBe(MigratorExitCodes.Success);
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
+        _harness.RunWithToken(database, pepper).ExitCode.ShouldBe(MigratorExitCodes.Success);
 
-        var rerun = RunWithToken(database, pepper);
+        var rerun = _harness.RunWithToken(database, pepper);
 
         rerun.ExitCode.ShouldBe(MigratorExitCodes.Success, rerun.Error);
-        rerun.Output.ShouldContain(DevSeedToken.RerunNote);
-        rerun.Output.ShouldContain("scripts/dev/up.sh --reset");
-        CountOf(rerun.Output, DevTokenLine).ShouldBe(0);
+        rerun.Output.ShouldContain(SeedDevTokenHarness.DecidedRecoveryText);
+        SeedDevTokenHarness.CountOf(rerun.Output, SeedDevTokenHarness.DevTokenLine).ShouldBe(0);
         rerun.Error.ShouldBeEmpty();
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token")).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task SeedDev_Token_RevokedToken_RerunMintsANewOne()
+    {
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
+        var first = _harness.RunWithToken(database, pepper);
+        first.ExitCode.ShouldBe(MigratorExitCodes.Success, first.Error);
+        var revokedPrefix = SeedDevTokenHarness.Split(SeedDevTokenHarness.TokenOf(first.Output)).Prefix;
+
+        await using (var connection = await _harness.Fixture.OpenSuperuserAsync(database))
+        {
+            await PostgresMigratorFixture.ExecuteAsync(
+                connection,
+                "update public.ingest_token set revoked_at = now()");
+        }
+
+        var rerun = _harness.RunWithToken(database, pepper);
+
+        rerun.ExitCode.ShouldBe(MigratorExitCodes.Success, rerun.Error);
+        SeedDevTokenHarness.CountOf(rerun.Output, SeedDevTokenHarness.DevTokenLine).ShouldBe(1);
+        rerun.Output.ShouldNotContain(DevSeedToken.RerunNote);
+        (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token")).ShouldBe(2);
+        (await _harness.Fixture.ScalarAsync<long>(
+            database,
+            "select count(*) from public.ingest_token where revoked_at is null")).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<string>(
+            database,
+            "select prefix from public.ingest_token where revoked_at is null")).ShouldNotBe(revokedPrefix);
+    }
+
+    /// <summary>
+    /// Two first runs started together: the advisory-lock guard lets one mint and makes the other print the rerun note,
+    /// so the caller gets exactly one secret line and the project exactly one live token.
+    /// </summary>
+    [Fact]
+    public async Task SeedDev_Token_TwoConcurrentFirstRuns_MintExactlyOne()
+    {
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
+        var variables = _harness.Variables(database, pepper);
+
+        // Threads and a gate, not Task.Run: each run blocks inside the real command, so they need their own threads to
+        // overlap, and a task started elsewhere and awaited here is the pattern VSTHRD003 forbids.
+        var gate = new ManualResetEventSlim(false);
+        var results = new SeedDevTokenHarness.RunResult[2];
+        var threads = Enumerable.Range(0, 2)
+            .Select(index => new Thread(() =>
+            {
+                gate.Wait();
+                results[index] = SeedDevTokenHarness.Run(["seed-dev", "--with-token"], variables);
+            }))
+            .ToArray();
+
+        foreach (var thread in threads)
+        {
+            thread.Start();
+        }
+
+        gate.Set();
+        foreach (var thread in threads)
+        {
+            thread.Join();
+        }
+
+        results.ShouldAllBe(run => run.ExitCode == MigratorExitCodes.Success);
+        SeedDevTokenHarness.CountOf(results[0].Output + results[1].Output, SeedDevTokenHarness.DevTokenLine).ShouldBe(1);
+        results.Count(run => run.Output.Contains(DevSeedToken.RerunNote, StringComparison.Ordinal)).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token")).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<long>(
+            database,
+            "select count(*) from public.ingest_token where revoked_at is null")).ShouldBe(1);
     }
 
     [Fact]
     public async Task SeedDev_SamplePolicy_SameHashOnRerun()
     {
-        var (database, pepper) = await SeededDatabaseAsync();
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
 
-        var first = RunWithToken(database, pepper);
+        var first = _harness.RunWithToken(database, pepper);
         first.ExitCode.ShouldBe(MigratorExitCodes.Success, first.Error);
 
-        var (firstId, firstHash) = await PolicyRevisionAsync(database);
+        var (firstId, firstHash) = await _harness.PolicyRevisionAsync(database);
         first.Output.ShouldContain($"seed-dev: sample policy revision 1 {firstHash} (created)");
 
-        var rerun = RunWithToken(database, pepper);
+        var rerun = _harness.RunWithToken(database, pepper);
         rerun.ExitCode.ShouldBe(MigratorExitCodes.Success, rerun.Error);
 
-        var (rerunId, rerunHash) = await PolicyRevisionAsync(database);
+        var (rerunId, rerunHash) = await _harness.PolicyRevisionAsync(database);
 
         // One revision, same row, same content address: the replay path of the real command, not a second append.
         rerunHash.ShouldBe(firstHash);
         rerunId.ShouldBe(firstId);
         rerun.Output.ShouldContain($"seed-dev: sample policy revision 1 {firstHash} (already present)");
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.policy_revision")).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.policy_revision")).ShouldBe(1);
     }
 
     [Theory]
@@ -109,37 +186,37 @@ public sealed class SeedDevTokenTests
     [InlineData(null)]
     public async Task SeedDev_WithToken_OutsideDevelopment_Refuses_AndWritesNothing(string? environment)
     {
-        var (database, pepper) = await SeededDatabaseAsync();
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
 
-        var run = RunWithToken(database, pepper, environment);
+        var run = _harness.RunWithToken(database, pepper, environment);
 
         run.ExitCode.ShouldBe(MigratorExitCodes.InvalidInvocation);
         run.Error.ShouldContain("refused");
         run.Output.ShouldBeEmpty();
-        await AssertNothingWrittenAsync(database);
+        await _harness.AssertNothingWrittenAsync(database);
     }
 
     [Fact]
     public async Task SeedDev_WithToken_AgainstASharedHost_Refuses_AndWritesNothing()
     {
-        var (database, pepper) = await SeededDatabaseAsync();
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
         var remoteApp =
             "Host=db.internal.example.com;Port=5432;Database=evidgate;Username=evidgate_app;Password=x";
 
-        var run = RunWithToken(database, pepper, appConnectionString: remoteApp);
+        var run = _harness.RunWithToken(database, pepper, appConnectionString: remoteApp);
 
         run.ExitCode.ShouldBe(MigratorExitCodes.InvalidInvocation);
         run.Error.ShouldContain("application database host");
         run.Output.ShouldBeEmpty();
-        await AssertNothingWrittenAsync(database);
+        await _harness.AssertNothingWrittenAsync(database);
     }
 
     [Fact]
     public async Task SeedDev_WithToken_AgainstASharedOwnerHost_Refuses_AndWritesNothing()
     {
-        var (database, pepper) = await SeededDatabaseAsync();
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
 
-        var run = RunWithToken(
+        var run = _harness.RunWithToken(
             database,
             pepper,
             ownerConnectionString: "Host=db.prod.example.com;Port=5432;Database=evidgate;Username=evidgate_owner;Password=x");
@@ -147,34 +224,56 @@ public sealed class SeedDevTokenTests
         run.ExitCode.ShouldBe(MigratorExitCodes.InvalidInvocation);
         run.Error.ShouldContain("not local");
         run.Output.ShouldBeEmpty();
-        await AssertNothingWrittenAsync(database);
+        await _harness.AssertNothingWrittenAsync(database);
     }
 
     [Fact]
     public async Task SeedDev_WithToken_WithoutPepper_FailsClosed_AndWritesNothing()
     {
-        var (database, pepper) = await SeededDatabaseAsync();
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
 
-        var run = RunWithToken(database, pepper, omitPepper: true);
+        var run = _harness.RunWithToken(database, pepper, omitPepper: true);
 
         run.ExitCode.ShouldBe(MigratorExitCodes.InvalidInvocation);
         run.Error.ShouldContain(SecretNames.CiPepper);
         run.Error.ShouldContain("nothing was written");
         run.Output.ShouldBeEmpty();
-        await AssertNothingWrittenAsync(database);
+        await _harness.AssertNothingWrittenAsync(database);
+    }
+
+    /// <summary>A pepper that decodes to too few bytes, and one that is not base64 at all, are both refused up front.</summary>
+    public static TheoryData<string> UnusablePeppers => new()
+    {
+        { "not base64 at all" },
+        { Convert.ToBase64String(new byte[31]) },
+    };
+
+    [Theory]
+    [MemberData(nameof(UnusablePeppers))]
+    public async Task SeedDev_WithToken_UnusablePepper_Refuses_AndWritesNothing(string pepper)
+    {
+        var (database, _) = await _harness.SeededDatabaseAsync();
+
+        var run = _harness.RunWithToken(database, pepper);
+
+        run.ExitCode.ShouldBe(MigratorExitCodes.InvalidInvocation);
+        run.Error.ShouldContain("pepper", Case.Insensitive);
+        run.Error.ShouldContain("nothing was written");
+        run.Output.ShouldBeEmpty();
+        await _harness.AssertNothingWrittenAsync(database);
     }
 
     [Fact]
     public async Task SeedDev_WithToken_WithoutAppConnection_FailsClosed_AndWritesNothing()
     {
-        var (database, pepper) = await SeededDatabaseAsync();
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
 
-        var run = RunWithToken(database, pepper, appConnectionString: string.Empty);
+        var run = _harness.RunWithToken(database, pepper, appConnectionString: string.Empty);
 
         run.ExitCode.ShouldNotBe(MigratorExitCodes.Success);
         run.Error.ShouldContain(SecretNames.DatabaseConnectionString);
         run.Output.ShouldBeEmpty();
-        await AssertNothingWrittenAsync(database);
+        await _harness.AssertNothingWrittenAsync(database);
     }
 
     public static TheoryData<string[], string> InvalidCombinations => new()
@@ -182,7 +281,7 @@ public sealed class SeedDevTokenTests
         { ["--with-token"], "'--with-token' is only valid with seed-dev" },
         { ["--status", "--with-token"], "'--with-token' is only valid with seed-dev" },
         { ["seed-dev", "seed-dev"], "expected at most one argument" },
-        { ["seed-dev", "--with-token", "--status"], "expected at most one argument" },
+        { ["seed-dev", "--with-token", "--status"], "expected at most two arguments" },
     };
 
     [Theory]
@@ -192,7 +291,7 @@ public sealed class SeedDevTokenTests
         var output = new StringWriter(CultureInfo.InvariantCulture);
         var error = new StringWriter(CultureInfo.InvariantCulture);
 
-        var code = MigratorHost.Run(args, output, error, NoEnvironment());
+        var code = MigratorHost.Run(args, output, error, SeedDevTokenHarness.NoEnvironment());
 
         code.ShouldBe(MigratorExitCodes.InvalidInvocation);
         error.ToString().ShouldContain(expected);
@@ -205,113 +304,4 @@ public sealed class SeedDevTokenTests
         MigratorHost.Usage.ShouldContain("--with-token");
         MigratorHost.Usage.ShouldContain(SecretNames.CiPepper);
     }
-
-    // ------------------------------------------------------------------ helpers
-
-    private async Task<(string Database, string Pepper)> SeededDatabaseAsync()
-    {
-        var database = await MigratedDatabaseAsync();
-
-        return (database, Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-    }
-
-    /// <summary>
-    /// A fresh database carrying the repository's migrations, with the application roles able to log in. Every
-    /// connection string this class uses is unpooled: each seeded run opens its own app-role data source and creates
-    /// its own database, so pooled connections that stay idle for the pool's idle lifetime would hold the container's
-    /// remaining slots (53300) against the other classes in the collection.
-    /// </summary>
-    private async Task<string> MigratedDatabaseAsync()
-    {
-        var database = await _fixture.CreateDatabaseAsync();
-        MigratorHarness.Run(PostgresMigratorFixture.RepoMigrationsPath, Unpooled(_fixture.OwnerConnectionString(database)))
-            .ExitCode.ShouldBe(MigratorExitCodes.Success);
-        await _fixture.EnableApplicationLoginsAsync(database);
-
-        return database;
-    }
-
-    private RunResult RunWithToken(
-        string database,
-        string pepper,
-        string? environment = "Development",
-        string? appConnectionString = null,
-        bool omitPepper = false,
-        string? ownerConnectionString = null)
-    {
-        var variables = NoEnvironment();
-        variables[MigratorOptions.ConnectionStringVariable] =
-            ownerConnectionString ?? Unpooled(_fixture.OwnerConnectionString(database));
-        variables[DevSeed.EnvironmentVariable] = environment;
-        variables[SecretNames.DatabaseConnectionString] =
-            appConnectionString ?? Unpooled(_fixture.AppConnectionString(database));
-
-        if (!omitPepper)
-        {
-            variables[SecretNames.CiPepper] = pepper;
-        }
-
-        return Run(["seed-dev", "--with-token"], variables);
-    }
-
-    private static Dictionary<string, string?> NoEnvironment() => new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// The same connection string with pooling off: a connection is released the moment it is disposed, so this class
-    /// cannot leave idle sessions on the shared container that the other classes then fail to get (53300).
-    /// </summary>
-    private static string Unpooled(string connectionString) => new NpgsqlConnectionStringBuilder(connectionString)
-    {
-        Pooling = false,
-    }.ConnectionString;
-
-    private static RunResult Run(string[] args, IReadOnlyDictionary<string, string?> variables)
-    {
-        var output = new StringWriter(CultureInfo.InvariantCulture);
-        var error = new StringWriter(CultureInfo.InvariantCulture);
-
-        return new(MigratorHost.Run(args, output, error, variables), output.ToString(), error.ToString());
-    }
-
-    private async Task AssertNothingWrittenAsync(string database)
-    {
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.organization")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.project")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.policy_revision")).ShouldBe(0);
-    }
-
-    private async Task<(Guid Id, string Hash)> PolicyRevisionAsync(string database) => (
-        Guid.Parse(await _fixture.ScalarAsync<string>(database, "select id::text from public.policy_revision")),
-        await _fixture.ScalarAsync<string>(database, "select hash from public.policy_revision"));
-
-    private static string TokenOf(string output) => output
-        .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        .Single(line => line.StartsWith(DevTokenLine, StringComparison.Ordinal))[DevTokenLine.Length..];
-
-    private static (string Prefix, string Secret) Split(string token)
-    {
-        // The secret half is base64url, so it can itself contain '_': split into three, never on every underscore.
-        var parts = token.Split('_', 3);
-
-        return (parts[1], parts[2]);
-    }
-
-    private static string ExpectedHmac(string pepper, string secret) => Convert.ToHexStringLower(
-        HMACSHA256.HashData(Convert.FromBase64String(pepper), Encoding.UTF8.GetBytes(secret)));
-
-    private static int CountOf(string text, string value)
-    {
-        var count = 0;
-        for (var index = text.IndexOf(value, StringComparison.Ordinal);
-             index >= 0;
-             index = text.IndexOf(value, index + value.Length, StringComparison.Ordinal))
-        {
-            count++;
-        }
-
-        return count;
-    }
-
-    private sealed record RunResult(int ExitCode, string Output, string Error);
 }

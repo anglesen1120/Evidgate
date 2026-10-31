@@ -12,29 +12,27 @@ using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Policy.Application.Commands;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
 namespace Evidgate.Migrator;
 
 /// <summary>
-/// <c>Evidgate.Migrator seed-dev --with-token</c>: after the synthetic tenant exists, mints ONE dev ingest token and
-/// ONE sample policy revision for the dev project, through the Identity and Policy commands themselves — the same
-/// handlers, permission pipeline and tenant scope a request runs under, on the app-role data source. No credential or
-/// policy row is written by hand, so the seeded rows cannot drift from what the routes would produce.
+/// <c>seed-dev --with-token</c>: after the synthetic tenant exists, mints one dev ingest token and one sample policy
+/// revision through the Identity and Policy commands, under the same pipeline and tenant scope a request runs under.
 /// </summary>
 /// <remarks>
-/// The token's plaintext is printed to <c>stdout</c> exactly once, on its own <c>EVIDGATE_DEV_TOKEN=…</c> line, and
-/// reaches no logger, exception message, file or error writer: only the HMAC and the public prefix are stored. A rerun
-/// mints nothing and prints the recovery instruction instead, because a stored token's secret cannot be read again.
+/// The plaintext is printed once, on its own <c>EVIDGATE_DEV_TOKEN=…</c> line, and reaches no logger, exception
+/// message, file or error writer: only the HMAC and the public prefix are stored. A rerun prints the recovery
+/// instruction instead, because a stored token's secret cannot be read again.
 /// </remarks>
 internal static class DevSeedToken
 {
     /// <summary>The line a rerun prints instead of a secret, naming the one recovery that works without a login.</summary>
     internal static readonly string RerunNote =
-        $"seed-dev: a live token named {DevSeed.TokenName} already exists for this project and its secret cannot be shown again; " +
-        "revoke it (DELETE /v1/ingest-tokens/{id} as a tenant admin) and rerun, " +
-        "or mint a new one after resetting the dev database: scripts/dev/up.sh --reset";
+        $"a live '{DevSeed.TokenName}' ingest token already exists; its secret was shown once and cannot be shown again. " +
+        "To get a new one run: scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token";
 
     /// <summary>The one-time notice printed under the secret; the token itself is on the line above it.</summary>
     internal const string ShownOnceNote =
@@ -46,13 +44,12 @@ internal static class DevSeedToken
     /// </summary>
     private const string SamplePolicyBody = """{"flaky_budget":3,"required_suites":["smoke","regression"]}""";
 
-    private const string TokenScopes = "artifact:write, event:write, run:create";
-
     /// <summary>Applies seed part 2; returns the process exit code.</summary>
     /// <param name="options">Owner-role connection and paths (the tenant is written as the owner first).</param>
     /// <param name="environment">Environment snapshot; null reads the process environment.</param>
     /// <param name="output">Where progress goes, including the one-time secret.</param>
     /// <param name="error">Where a refusal or failure goes; never the secret.</param>
+    /// <param name="loggerProvider">An extra log sink, for tests that assert the secret reaches no logger.</param>
     [SuppressMessage(
         "Usage",
         "VSTHRD002:Avoid problematic synchronous waits",
@@ -61,7 +58,8 @@ internal static class DevSeedToken
         MigratorOptions options,
         IReadOnlyDictionary<string, string?>? environment,
         TextWriter output,
-        TextWriter error)
+        TextWriter error,
+        ILoggerProvider? loggerProvider = null)
     {
         if (ContractsDirectory(options.MigrationsPath) is not { } contractsDirectory)
         {
@@ -71,20 +69,25 @@ internal static class DevSeedToken
             return MigratorExitCodes.InvalidInvocation;
         }
 
+        // The minted secret is handed back here so a failure message that quotes it can be redacted.
+        var mintedSecret = new MintedSecret();
+
         try
         {
-            return RunAsync(environment, contractsDirectory, options, output, error).GetAwaiter().GetResult();
+            return RunAsync(environment, contractsDirectory, options, output, error, loggerProvider, mintedSecret)
+                .GetAwaiter()
+                .GetResult();
         }
         catch (OptionsValidationException exception)
         {
-            // Options validation names keys, never values (00 §5.7 S3), so its failures are safe to print as they are.
+            // Options validation names keys, never values, so its failures are safe to print as they are.
             error.WriteLine("E seed-dev --with-token failed: " + string.Join("; ", exception.Failures) + "; nothing was written");
 
             return MigratorExitCodes.InvalidInvocation;
         }
         catch (NpgsqlException exception)
         {
-            error.WriteLine("E seed-dev --with-token failed: " + Redacted(exception.Message, options, environment));
+            error.WriteLine("E seed-dev --with-token failed: " + Redacted(exception.Message, options, environment, mintedSecret.Value));
 
             return exception.IsTransient || exception.InnerException is System.Net.Sockets.SocketException
                 ? MigratorExitCodes.DatabaseUnavailable
@@ -93,7 +96,7 @@ internal static class DevSeedToken
         catch (Exception exception)
         {
             // The seed handles a secret: a message is printed only after the redactor has run over it.
-            error.WriteLine("E seed-dev --with-token failed: " + Redacted(exception.Message, options, environment));
+            error.WriteLine("E seed-dev --with-token failed: " + Redacted(exception.Message, options, environment, mintedSecret.Value));
 
             return MigratorExitCodes.MigrationFailed;
         }
@@ -109,9 +112,11 @@ internal static class DevSeedToken
         string contractsDirectory,
         MigratorOptions options,
         TextWriter output,
-        TextWriter error)
+        TextWriter error,
+        ILoggerProvider? loggerProvider,
+        MintedSecret mintedSecret)
     {
-        await using var provider = DevSeedServices.Compose(environment, contractsDirectory);
+        await using var provider = DevSeedServices.Compose(environment, contractsDirectory, loggerProvider);
 
         // Resolving the data source validates EVIDGATE__DATABASE__CONNECTIONSTRING and the evidgate_app role pin, so a
         // missing or wrong-role app connection fails closed here — before the owner-role tenant write below.
@@ -164,13 +169,13 @@ internal static class DevSeedToken
             return MigratorExitCodes.Success;
         }
 
-        return await MintTokenAsync(mediator, output, error).ConfigureAwait(false);
+        return await MintTokenAsync(mediator, output, error, mintedSecret).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Null when a current pepper is configured and usable, else the refusal text. The pepper is read the way the hosts
-    /// read it — through <see cref="ISecretProvider"/> and the module's own <see cref="CiSecrets"/> — so an absent value
-    /// is a refusal here instead of a 503 from the handler after the seed has already written the tenant.
+    /// False, with the refusal text, unless a current pepper is configured and usable. The pepper is read the way the
+    /// hosts read it — through <see cref="ISecretProvider"/> and the module's own <see cref="CiSecrets"/> — so an
+    /// unusable value is refused here instead of a 503 from the handler after the tenant has been written.
     /// </summary>
     private static bool PepperConfigured(IServiceProvider provider, out string refusal)
     {
@@ -182,6 +187,8 @@ internal static class DevSeedToken
             return false;
         }
 
+        // CiSecrets reports only whether the value decoded; a value that is too short fails the module's own options
+        // validator, which runs on this resolution and throws OptionsValidationException — refused before any write.
         if (!provider.GetRequiredService<CiSecrets>().CanHash)
         {
             refusal = $"E seed-dev --with-token refused: {SecretNames.CiPepper} is not usable ({CiSecrets.MinKeyBytes} bytes of base64 are required); nothing was written";
@@ -218,10 +225,14 @@ internal static class DevSeedToken
     }
 
     /// <summary>Mints the dev token and prints its secret once, on stdout; a failed mint writes nothing at all.</summary>
-    private static async Task<int> MintTokenAsync(IMediator mediator, TextWriter output, TextWriter error)
+    private static async Task<int> MintTokenAsync(
+        IMediator mediator,
+        TextWriter output,
+        TextWriter error,
+        MintedSecret mintedSecret)
     {
         // No expiry: a dev token that silently expired would break a long-lived local stack, and the rerun note is the
-        // recovery for a lost secret. Scopes stay the handler's default (all three), so the row matches its comment.
+        // recovery for a lost secret. Scopes stay the handler's default, so the row matches what is printed below.
         var minted = await mediator
             .Send(new CreateIngestTokenCommand(DevSeed.ProjectId, DevSeed.TokenName, Scopes: null, ExpiresAt: null))
             .ConfigureAwait(false);
@@ -233,9 +244,13 @@ internal static class DevSeedToken
             return MigratorExitCodes.MigrationFailed;
         }
 
+        var token = minted.Value.Token;
         await output.WriteLineAsync(string.Create(
             CultureInfo.InvariantCulture,
-            $"seed-dev: ingest token {DevSeed.TokenName} minted for project dev-project (scopes: {TokenScopes})"));
+            $"seed-dev: ingest token {token.Name} minted for project dev-project (scopes: {string.Join(", ", token.Scopes)})"));
+
+        // The secret is recorded before it is written: a failure while printing it must still be able to redact it.
+        mintedSecret.Value = minted.Value.Secret;
 
         // The only place the secret is ever written. Everything after this line must stay secret-free.
         await output.WriteLineAsync("EVIDGATE_DEV_TOKEN=" + minted.Value.Secret).ConfigureAwait(false);
@@ -276,20 +291,30 @@ internal static class DevSeedToken
     }
 
     /// <summary>
-    /// <paramref name="message"/> with both connection strings' passwords masked: a driver message can quote the value
-    /// it was given, and this path handles a credential, so nothing prints raw.
+    /// <paramref name="message"/> with every credential this path holds masked: both connection strings' passwords, the
+    /// pepper and the minted secret. A driver or writer message can quote the value it was given.
     /// </summary>
     private static string Redacted(
         string message,
         MigratorOptions options,
-        IReadOnlyDictionary<string, string?>? environment)
+        IReadOnlyDictionary<string, string?>? environment,
+        string? mintedSecret)
     {
         var values = environment ?? MigratorOptions.ProcessEnvironment();
         var app = values.TryGetValue(SecretNames.DatabaseConnectionString, out var connectionString) ? connectionString : null;
+        var pepper = values.TryGetValue(SecretNames.CiPepper, out var configuredPepper) ? configuredPepper : null;
 
-        return SecretRedactor.Redact(
-            SecretRedactor.Redact(message, SecretRedactor.PasswordOf(options.ConnectionString)),
-            SecretRedactor.PasswordOf(app ?? string.Empty));
+        var redacted = SecretRedactor.Redact(message, SecretRedactor.PasswordOf(options.ConnectionString));
+        redacted = SecretRedactor.Redact(redacted, SecretRedactor.PasswordOf(app ?? string.Empty));
+        redacted = SecretRedactor.Redact(redacted, pepper);
+
+        return SecretRedactor.Redact(redacted, mintedSecret);
+    }
+
+    /// <summary>Carries the minted secret back to the failure handler, so a message quoting it can be redacted.</summary>
+    private sealed class MintedSecret
+    {
+        internal string? Value { get; set; }
     }
 
     /// <summary>The repository's <c>contracts/</c> directory, or null when it does not sit next to <c>migrations/</c>.</summary>
@@ -314,9 +339,10 @@ internal static class DevSeedToken
     /// <remarks>
     /// Residual risk: the lock only orders runs of this command. A revoke that races the check-to-mint window, or any
     /// writer outside this path, can still leave a second live <c>dev-seed</c> token — the table has no unique key on
-    /// <c>(project_id, name)</c> — and <c>scripts/dev/up.sh --reset</c> is the way back.
+    /// <c>(project_id, name)</c> — and a reset (<c>scripts/dev/down.sh &amp;&amp; scripts/dev/up.sh --reset</c>) is the
+    /// way back.
     /// </remarks>
-    private sealed class SeedGuard : IAsyncDisposable
+    internal sealed class SeedGuard : IAsyncDisposable
     {
         private static readonly long Key = BinaryPrimitives.ReadInt64BigEndian(
             SHA256.HashData("evidgate.dev-seed.ingest-token"u8));
@@ -345,15 +371,35 @@ internal static class DevSeedToken
         {
             try
             {
-                // Released explicitly before the connection returns to the pool: a pooled session outlives the run, and
-                // its lock would otherwise outlive the process that took it.
+                // Released before the connection returns to the pool: a pooled session outlives the run, and its lock
+                // would otherwise outlive the process that took it.
                 await LockAsync(_connection, "select pg_advisory_unlock(@key)").ConfigureAwait(false);
+            }
+            catch (Exception exception) when (IsGone(exception))
+            {
+                // A broken or already-closed session has lost the lock, and the secret may be printed by now: this must
+                // not change the exit code of a successful run.
             }
             finally
             {
-                await _connection.DisposeAsync().ConfigureAwait(false);
+                try
+                {
+                    await _connection.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception exception) when (IsGone(exception))
+                {
+                    // Closing a session that is already gone has nothing left to fail; the process is exiting.
+                }
             }
         }
+
+        /// <summary>
+        /// The failures of touching a session that is no longer usable: the transport broke, or the connection was
+        /// already closed or disposed (which Npgsql reports through <see cref="InvalidOperationException"/>) before the
+        /// command reaches the server.
+        /// </summary>
+        private static bool IsGone(Exception exception) =>
+            exception is NpgsqlException or InvalidOperationException;
 
         private static async Task LockAsync(NpgsqlConnection connection, string sql)
         {

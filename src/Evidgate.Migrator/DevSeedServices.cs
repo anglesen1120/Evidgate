@@ -1,4 +1,3 @@
-using Evidgate.Migrator.Generated;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Pipeline;
@@ -7,41 +6,51 @@ using Evidgate.Modules.Policy;
 using Mediator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-// The generated mediator lives in its own namespace: test projects that see this assembly's internals generate their
-// own mediator, and two generated copies in one namespace collide.
+// The generated implementation type would go to the default "Mediator" namespace; a namespace of its own keeps this
+// assembly's copy distinct from another assembly's. The DI extension class is generated into
+// Microsoft.Extensions.DependencyInjection either way — which is why a project with its own mediator aliases this one.
 [assembly: MediatorOptions(Namespace = "Evidgate.Migrator.Generated")]
 
 namespace Evidgate.Migrator;
 
 /// <summary>
 /// The in-process container <c>seed-dev --with-token</c> drives the modules' commands through: the same registrations
-/// the Api and the Worker use, over the app-role data source, so the seed's token and policy are produced by the real
-/// handlers under the real pipeline (tenant scope, authorization, audit, outbox) rather than by a second copy of their
-/// logic.
+/// the Api and the Worker use, over the app-role data source, so the seed's token and policy come from the real
+/// handlers under the real pipeline rather than from a second copy of their logic.
 /// </summary>
 /// <remarks>
-/// One small method on purpose: the composition is the shared extensions the entry points call
-/// (<c>AddEvidgatePersistence</c>, <c>AddEvidgatePipeline</c>, the module registrations, <c>AddMediator</c>), in their
-/// order, so a change to any of them reaches the seed through the same seam. The contract schema set is registered
-/// from the repository's <c>contracts/</c> directory instead of the host-search overload, because a console tool has no
-/// <c>IHostEnvironment</c> to seed that search.
+/// The composition is the shared extensions the entry points call, in their order, so a change to any of them reaches
+/// the seed. The contract schema set is registered from the repository's <c>contracts/</c> directory because a console
+/// tool has no <c>IHostEnvironment</c> to seed the host-search overload.
 /// </remarks>
 internal static class DevSeedServices
 {
-    /// <summary>Builds the container; nothing connects until a service is resolved.</summary>
+    /// <summary>Builds the container; nothing connects and no schema compiles until a service is resolved.</summary>
     /// <param name="environment">Environment snapshot; null reads the process environment.</param>
     /// <param name="contractsDirectory">The repository's <c>contracts/</c> directory.</param>
+    /// <param name="loggerProvider">An extra log sink, for tests that assert what reaches a logger.</param>
     internal static ServiceProvider Compose(
         IReadOnlyDictionary<string, string?>? environment,
-        string contractsDirectory)
+        string contractsDirectory,
+        ILoggerProvider? loggerProvider = null)
     {
         var configuration = Configuration(environment);
 
         var services = new ServiceCollection();
-        services.AddLogging();
+        services.AddLogging(builder =>
+        {
+            if (loggerProvider is not null)
+            {
+                // Trace, so a test sink sees every level the seed could leak a secret at, not just Information and up.
+                builder.SetMinimumLevel(LogLevel.Trace).AddProvider(loggerProvider);
+            }
+        });
+
         services.AddEvidgatePersistence(configuration);
-        services.AddEvidgateContractValidation(contractsDirectory);
+        // Lazy on purpose: the set compiles every contract with Roslyn, and a refusal must not pay for that compile.
+        services.AddSingleton(_ => ContractSchemaSet.Load(contractsDirectory));
         services.AddMediator();
         services.AddEvidgatePipeline();
         services.AddPolicyModule();

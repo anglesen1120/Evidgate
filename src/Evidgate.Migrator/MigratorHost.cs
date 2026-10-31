@@ -4,7 +4,7 @@ using Evidgate.Modules.Identity.Ci;
 namespace Evidgate.Migrator;
 
 /// <summary>
-/// Command-line surface of the Migrator (01.4.1 §5): one process, one command.
+/// Command-line surface of the Migrator: one process, one command.
 /// Kept separate from <see cref="Program"/> so the argument/environment
 /// handling is testable without spawning a process.
 /// </summary>
@@ -114,7 +114,7 @@ public static class MigratorHost
         if (args.Length > 2)
         {
             command = null;
-            error = $"expected at most one argument, got {args.Length}";
+            error = $"expected at most two arguments, got {args.Length}";
             return false;
         }
 

@@ -4,17 +4,17 @@ using Npgsql;
 namespace Evidgate.Migrator;
 
 /// <summary>
-/// <c>Evidgate.Migrator seed-dev</c> (01.8.1-T3.1): the minimal synthetic tenant that makes a fresh local stack usable
-/// before login exists — one org, one project, a dev user with the <c>tenant_admin</c> and <c>release_approver</c> roles,
-/// and one active CI binding for the dev repository. It runs as the owner role in ONE transaction and is idempotent
-/// (fixed ids, <c>on conflict do nothing</c>), so running it twice leaves the same rows.
+/// <c>Evidgate.Migrator seed-dev</c>: the minimal synthetic tenant that makes a fresh local stack usable before login
+/// exists — one org, one project, a dev user with the <c>tenant_admin</c> and <c>release_approver</c> roles, and one
+/// active CI binding for the dev repository. It runs as the owner role in one transaction and is idempotent (fixed ids,
+/// <c>on conflict do nothing</c>), so running it twice leaves the same rows.
 /// </summary>
 /// <remarks>
 /// Refuses, writing nothing, unless <c>DOTNET_ENVIRONMENT</c> is <c>Development</c> and the database host is the local
 /// machine or a bare compose service name (no dots): a seed pointed at a shared database is the mistake this guard
-/// exists for. The data is fully synthetic (00 §11). <c>seed-dev --with-token</c> is seed part 2: after this tenant is
-/// written, one dev ingest token and one sample policy revision are minted through the modules' own commands on the
-/// app role (<see cref="DevSeedToken"/>), so no credential or policy row is ever composed by hand.
+/// exists for. The data is fully synthetic. <c>seed-dev --with-token</c> is seed part 2: after this tenant is written,
+/// one dev ingest token and one sample policy revision are minted through the modules' own commands on the app role
+/// (<see cref="DevSeedToken"/>), so no credential or policy row is ever composed by hand.
 /// </remarks>
 public static class DevSeed
 {
@@ -58,15 +58,15 @@ public static class DevSeed
         values (@project, @org, 'Dev Project', 'dev-project')
         on conflict (id) do nothing;
 
-        -- The account behind the dev membership: 0044's `membership_user_fk`
+        -- The account behind the dev membership: `membership_user_fk`
         -- (membership.user_id -> public."user") makes the membership's user_id name a real
         -- row, so the seed writes the account first, exactly as the login upsert does.
         insert into public."user" (id, email)
-        values (@user, 'dev@evidgate.local')
+        values (@user, @email)
         on conflict (id) do nothing;
 
         insert into public.membership (id, org_id, user_id, invited_email, status)
-        values (@membership, @org, @user, 'dev@evidgate.local', 'active')
+        values (@membership, @org, @user, @email, 'active')
         on conflict (id) do nothing;
 
         insert into public.membership_role (id, org_id, membership_id, role_id)
@@ -168,6 +168,7 @@ public static class DevSeed
             command.Parameters.AddWithValue("org", OrgId);
             command.Parameters.AddWithValue("project", ProjectId);
             command.Parameters.AddWithValue("user", UserId);
+            command.Parameters.AddWithValue("email", UserEmail);
             command.Parameters.AddWithValue("membership", MembershipId);
             command.Parameters.AddWithValue("binding", BindingId);
             command.Parameters.AddWithValue("repository", DevRepositoryId);
