@@ -1974,6 +1974,26 @@
       "note": "dev-stack only: password of the compose superuser, used by scripts/dev/db-init.sh for the bootstrap (roles + database) and never by Api, Worker or Migrator (00 §5.4.3)."
     },
     {
+      "key": "EVIDGATE_DEV_TOKEN",
+      "scope": "runtime",
+      "consumers": ["migrator"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "environment",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`Evidgate.Migrator seed-dev --with-token` prints the one-time dev ingest token on one stdout line named like this key; the developer exports it in their own shell for the CLI, its only reader (the CLI is outside this matrix's process list; the Migrator only emits the value). Never provided by an environment file, so no stack process receives it from the stack and no host reads it; a shell-exported copy is scrubbed by scripts/dev/lib.sh for non-stack children and ignored by the Migrator."
+    },
+    {
       "key": "EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS",
       "scope": "runtime",
       "consumers": ["migrator"],

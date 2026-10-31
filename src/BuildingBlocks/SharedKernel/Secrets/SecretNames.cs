@@ -56,6 +56,13 @@ public static class SecretNames
     /// <summary>Base64 current pepper behind the HMAC of an invite link's secret half (02.1.2-T2, T5).</summary>
     public const string InvitePepper = "EVIDGATE__INVITE__PEPPER";
 
+    /// <summary>
+    /// Name of the one stdout line <c>seed-dev --with-token</c> prints the dev ingest token on, and of the variable a
+    /// developer exports it as for the CLI. Spelled here so no source repeats it, but deliberately not in
+    /// <see cref="All"/>: no host resolves it through <see cref="ISecretProvider"/>; it is only ever printed.
+    /// </summary>
+    public const string DevIngestToken = "EVIDGATE_DEV_TOKEN";
+
     private static readonly string[] Names =
     [
         DatabaseConnectionString,

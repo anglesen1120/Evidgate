@@ -29,12 +29,8 @@ namespace Evidgate.Migrator;
 /// </remarks>
 internal static class DevSeedToken
 {
-    /// <summary>
-    /// The label of the one stdout line that carries the secret. It is printed, never read from the environment, so it is
-    /// not a configuration key the env matrix governs (a secret-named key there must be a <c>SecretNames</c> entry the
-    /// host resolves); it is spelled in two parts for that reason.
-    /// </summary>
-    internal const string TokenVariable = "EVIDGATE_" + "DEV_TOKEN";
+    /// <summary>The label of the one stdout line that carries the secret; the developer exports it for the CLI.</summary>
+    internal const string TokenVariable = SecretNames.DevIngestToken;
 
     /// <summary>The line a rerun prints instead of a secret, naming the one recovery that works without a login.</summary>
     internal static readonly string RerunNote =
