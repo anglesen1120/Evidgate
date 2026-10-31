@@ -17,7 +17,7 @@ export const maxMintAttempts = 3;
 /**
  * How long the presigned PUT may make NO body progress before it is aborted and retried.
  * The body of a multi-GB trace legitimately takes minutes, so the PUT has no per-request
- * cap (`sender.ts`'s 30 s applies to the two JSON calls); a connection that stops moving is
+ * cap (`senderLimits.ts`'s 30 s applies to the two JSON calls); a connection that stops moving is
  * caught by this idle timeout instead, which resets on every chunk.
  */
 export const putStallTimeoutMs = 60_000;
