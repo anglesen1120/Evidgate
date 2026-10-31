@@ -83,6 +83,29 @@ describe('gate --json', () => {
     });
   });
 
+  it('keeps the line parseable when a member carries a quoted Authorization member', async () => {
+    const env = await devEnv(dirs);
+    const stub = stubFetch(() =>
+      decided({ decision: 'PASS', mode: '{"Authorization":"Bearer abc.def"}' }),
+    );
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--json']), env, out, stub.fetchImpl);
+
+    expect(code).toBe(0);
+    const text = out.stdout.join('');
+    expect(text.split('\n')).toHaveLength(2);
+    expect(JSON.parse(text)).toStrictEqual({
+      decision: 'PASS',
+      completeness: null,
+      evaluation_id: null,
+      // The masked value absorbs the escaped quotes around it, so one `\"` goes with the
+      // secret; the member still parses as the same JSON string it did before.
+      mode: '{"Authorization":"[REDACTED]',
+      url: null,
+    });
+  });
+
   it('strips a query from a printed url exactly once', async () => {
     const env = await devEnv(dirs);
     const stub = stubFetch(() =>

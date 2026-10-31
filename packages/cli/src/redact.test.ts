@@ -30,6 +30,51 @@ describe('redact', () => {
     expect(redact('Authorization: Bearer abc.def.ghi')).toBe(`Authorization: ${redacted}`);
   });
 
+  it('masks an Authorization header assigned with an equals sign', () => {
+    expect(redact('Authorization=Bearer abc.def.ghi')).toBe(`Authorization=${redacted}`);
+    expect(redact('authorization = Bearer abc.def.ghi')).toBe(`authorization = ${redacted}`);
+  });
+
+  it('masks a JSON Authorization member and keeps the line parseable', () => {
+    const line = '{"Authorization":"Bearer abc.def.ghi","mode":"ci"}';
+
+    expect(redact(line)).toBe('{"Authorization":"[REDACTED]","mode":"ci"}');
+    // A reader of `gate --json` output parses the line, so the member must stay a string.
+    expect(JSON.parse(redact(line))).toStrictEqual({
+      Authorization: '[REDACTED]',
+      mode: 'ci',
+    });
+    expect(redact('{ "authorization" : "Bearer abc" }')).toBe('{ "authorization" : "[REDACTED]" }');
+  });
+
+  it('masks a JSON Authorization member whose value carries an escape', () => {
+    expect(redact('{"Authorization":"Bearer \\"abc\\""}')).toBe('{"Authorization":"[REDACTED]"}');
+  });
+
+  it('masks a JSON Authorization member whose closing quote was cut off', () => {
+    // A truncated message must not print the value just because its quote is missing.
+    expect(redact('{"Authorization":"Bearer abc')).toBe('{"Authorization":"[REDACTED]');
+  });
+
+  it('masks a JSON Authorization member inside an escaped JSON string', () => {
+    expect(redact('{\\"Authorization\\":\\"Bearer abc\\"}')).toBe(
+      '{\\"Authorization\\":\\"[REDACTED]',
+    );
+  });
+
+  it('stays linear on a megabyte of header-shaped text', () => {
+    const unclosed = `"Authorization":"${'a'.repeat(1_048_576)}`;
+    const names = 'authorization '.repeat(65_536);
+    const assigned = `Authorization=Bearer ${'c'.repeat(1_048_576)}`;
+    const started = performance.now();
+
+    expect(redact(unclosed)).toBe('"Authorization":"[REDACTED]');
+    expect(redact(names)).toBe(names);
+    expect(redact(assigned)).toBe(`Authorization=${redacted}`);
+    // Linear in the input: a backtracking shape would need seconds for these two megabytes.
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
   it('clears the registry', () => {
     registerSecret('secret');
     resetSecrets();
@@ -115,6 +160,25 @@ describe('redaction is idempotent', () => {
   it('leaves_an_already_redacted_header_alone', () => {
     const once = redact('Authorization: Bearer abc.def.ghi');
     expect(once).toBe(`Authorization: ${redacted}`);
+    expect(redact(once)).toBe(once);
+  });
+
+  it('leaves_an_already_redacted_assigned_header_alone', () => {
+    const once = redact('authorization = Bearer abc.def.ghi');
+    expect(once).toBe(`authorization = ${redacted}`);
+    expect(redact(once)).toBe(once);
+  });
+
+  it('leaves_an_already_redacted_json_member_alone', () => {
+    const once = redact('{"Authorization":"Bearer abc.def.ghi"}');
+    expect(once).toBe('{"Authorization":"[REDACTED]"}');
+    expect(redact(once)).toBe(once);
+    expect(JSON.parse(redact(once))).toStrictEqual({ Authorization: '[REDACTED]' });
+  });
+
+  it('leaves_an_already_redacted_unterminated_json_member_alone', () => {
+    const once = redact('{"Authorization":"Bearer abc');
+    expect(once).toBe('{"Authorization":"[REDACTED]');
     expect(redact(once)).toBe(once);
   });
 

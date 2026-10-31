@@ -136,9 +136,9 @@ function parseWait(raw: string | undefined): number {
 /**
  * One poll. A 401 is answered by minting a new token once and replaying this poll, because a
  * long wait can outlive the token it started with; the second 401 is the server's last word,
- * and a source that cannot mint a second credential never gets the replay. Both attempts are
- * bounded by the same absolute deadline, so a slow refresh cannot buy the replay a window that
- * overruns the wait.
+ * and a source that cannot mint a second credential never gets the replay. Both attempts and
+ * the refresh itself are bounded by the same absolute deadline, so a slow exchange cannot buy
+ * the replay a window that overruns the wait.
  */
 async function requestDecision(
   session: Session,
@@ -160,14 +160,22 @@ async function requestDecision(
   session.refreshed = true;
   // Best-effort purge: the server's answer is the one that must surface.
   await deleteCachedToken(request.config).catch(() => undefined);
-  const { token } = await getToken(request.config, request.deps).catch((error: unknown) => {
+  let token: string;
+  try {
+    ({ token } = await refreshedToken(request, deadlineAt, now));
+  } catch (error) {
     if (error instanceof ExchangeAuthError) {
       // The source itself was refused — a replayed single-use JWT is the usual cause — so
       // the 401 on the decision is still the answer that explains the failure.
       throw first.error;
     }
+    if (deadlineAt !== undefined && now() >= deadlineAt) {
+      // The wait ran out while the credential was being minted: whatever the transport
+      // reported, the deadline is why this poll has no answer.
+      throw refreshOutlivedWait();
+    }
     throw error;
-  });
+  }
   if (token === session.token) {
     // The purge failed and the cache handed back the token the server just refused.
     throw first.error;
@@ -178,15 +186,56 @@ async function requestDecision(
   if (deadlineAt !== undefined && refreshedAt >= deadlineAt) {
     // The refresh spent the wait: a replay would start after the deadline, so report the
     // deadline instead of the 401 that the refresh had already answered.
-    throw new CliError('the token refresh outlived the --wait deadline', {
-      code: 'request_failed',
-    });
+    throw refreshOutlivedWait();
   }
   const second = await attemptDecision(session, request, budgetMs(deadlineAt, refreshedAt));
   if (second.kind === 'unauthorized') {
     throw second.error;
   }
   return second;
+}
+
+/**
+ * Mints the token the replay needs, bounded by the poll's own deadline: a `--wait` may not be
+ * extended by an exchange whose first byte never arrives, so the wait itself ends the refresh.
+ * The abandoned exchange rejects into a race that has already settled, and its own budget is
+ * lowered by the same instant, so the request it opened is aborted rather than left running.
+ */
+async function refreshedToken(
+  request: DecisionRequest,
+  deadlineAt: number | undefined,
+  now: () => number,
+): Promise<{ readonly token: string }> {
+  const deps: GetTokenDeps =
+    deadlineAt === undefined ? request.deps : { ...request.deps, deadlineAt };
+  const exchange = getToken(request.config, deps);
+  if (deadlineAt === undefined) {
+    return exchange;
+  }
+  const remaining = deadlineAt - now();
+  if (remaining <= 0) {
+    exchange.catch(() => undefined);
+    throw refreshOutlivedWait();
+  }
+  let timer: NodeJS.Timeout | undefined;
+  // Executor form: `Promise.withResolvers` is ES2024 and this workspace targets ES2022.
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(refreshOutlivedWait());
+    }, remaining);
+  });
+  try {
+    return await Promise.race([exchange, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The failure a refresh that outlived the wait reports: the wait, not the 401, ended it. */
+function refreshOutlivedWait(): CliError {
+  return new CliError('the token refresh outlived the --wait deadline', {
+    code: 'request_failed',
+  });
 }
 
 /**
@@ -198,8 +247,9 @@ function budgetMs(deadlineAt: number | undefined, now: number): number | undefin
 }
 
 /**
- * One request, classified for the poll loop. A body the CLI cannot read is thrown, never
- * returned as retryable: a malformed answer is a contract violation, not a slow server.
+ * One request, classified for the poll loop. A body that breaks after its headers is a
+ * transport failure, so a poll may retry it; a body the CLI cannot size or parse is thrown
+ * instead, because a malformed answer is a contract violation, not a slow server.
  */
 async function attemptDecision(
   session: Session,
@@ -254,7 +304,27 @@ async function attemptDecision(
       ? { kind: 'transient', error: failure }
       : { kind: 'transient', error: failure, retryAfterMs: named };
   }
-  return { kind: 'body', outcome: parseDecisionText(await readDecisionText(response)) };
+  try {
+    return { kind: 'body', outcome: parseDecisionText(await readDecisionText(response)) };
+  } catch (error) {
+    // A stream that broke is retryable, so a wait that ends on one still reports the pending
+    // answer an earlier poll gave; an oversized or unparseable answer stays fatal.
+    if (error instanceof DecisionBodyStreamError) {
+      return { kind: 'transient', error };
+    }
+    throw error;
+  }
+}
+
+/**
+ * A decision body whose stream broke or was aborted after its headers arrived. The run
+ * answered nothing, so it is a transport failure and never a verdict.
+ */
+class DecisionBodyStreamError extends CliError {
+  constructor() {
+    super('the run decision body could not be read', { code: 'request_failed' });
+    this.name = 'DecisionBodyStreamError';
+  }
 }
 
 /**
@@ -275,10 +345,11 @@ async function readDecisionText(response: Response): Promise<string> {
   let bytes = 0;
   try {
     for (;;) {
-      const { done, value } = await reader.read();
-      if (done) {
+      const chunk = await readChunk(reader);
+      if (chunk.done) {
         break;
       }
+      const value = chunk.value;
       if (!(value instanceof Uint8Array)) {
         // A non-byte chunk (only an injected fetch can produce one) would leave the cap
         // unsized, so the body is refused rather than read without a bound.
@@ -297,9 +368,27 @@ async function readDecisionText(response: Response): Promise<string> {
     if (error instanceof CliError) {
       throw error;
     }
-    throw new CliError('the run decision body could not be read', { code: 'request_failed' });
+    throw new DecisionBodyStreamError();
   } finally {
     await reader.cancel().catch(() => undefined);
+  }
+}
+
+/** One chunk of a body; `value` is undefined on the read that ends the stream. */
+interface BodyChunk {
+  readonly done: boolean;
+  readonly value: Uint8Array | undefined;
+}
+
+/**
+ * One chunk. A stream that breaks, or one the request's own abort ends after the headers
+ * arrived, is reported as the transport failure it is, so the poll loop may retry it.
+ */
+async function readChunk(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<BodyChunk> {
+  try {
+    return await reader.read();
+  } catch {
+    throw new DecisionBodyStreamError();
   }
 }
 

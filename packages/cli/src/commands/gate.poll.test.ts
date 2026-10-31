@@ -68,6 +68,29 @@ function hangUntilAborted(
   signal.addEventListener('abort', abort);
 }
 
+/**
+ * A response body that delivers no chunk until the request's abort signal fires. The headers
+ * are already in, so the read — not the request — is what the deadline has to end.
+ */
+function stallingBody(signal: AbortSignal | undefined): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    pull: () =>
+      new Promise<never>((_resolve, reject) => {
+        const abort = (): void => {
+          reject(new DOMException('the operation was aborted', 'AbortError'));
+        };
+        if (signal === undefined) {
+          return;
+        }
+        if (signal.aborted) {
+          abort();
+          return;
+        }
+        signal.addEventListener('abort', abort, { once: true });
+      }),
+  });
+}
+
 describe('gate --wait', () => {
   const dirs = cacheDirs();
 
@@ -288,6 +311,177 @@ describe('gate --wait', () => {
     // lower bound; what matters is that the pending answer, not the abort, decides the exit.
     expect(requests).toBeGreaterThanOrEqual(2);
     expect(out.stderr.join('')).toBe(`evidgate: gate: run ${runId} is still pending after 1s\n`);
+  });
+
+  it('reports pending when the final poll is aborted while its body is read', async () => {
+    const env = await devEnv(dirs);
+    let requests = 0;
+    // The first poll answers pending; the poll at the deadline sends its headers and then
+    // stalls, so the deadline's 1 ms abort lands inside the body read, after the headers.
+    const fetchImpl: typeof fetch = (input, init) => {
+      requests += 1;
+      if (requests === 1) {
+        return Promise.resolve(decided({ decision: null }));
+      }
+      const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      return Promise.resolve(
+        new Response(stallingBody(signal), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    };
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--wait', '1s']), env, out, fetchImpl);
+
+    // The pending answer an earlier poll gave is where the wait ended: an abort is not an
+    // answer the run gave, so a body lost to it may not turn a pending run into a failure.
+    expect(code).toBe(2);
+    expect(requests).toBe(2);
+    expect(out.stdout.join('')).toBe('');
+    expect(out.stderr.join('')).toBe(`evidgate: gate: run ${runId} is still pending after 1s\n`);
+  });
+
+  it('does not let a hanging refresh overshoot the wait deadline', async () => {
+    const env = await ingestEnv(dirs);
+    let time = 0;
+    const clock = {
+      sleeps: [] as number[],
+      now: () => time,
+      sleep: (milliseconds: number) => {
+        clock.sleeps.push(milliseconds);
+        time += milliseconds;
+        return Promise.resolve();
+      },
+    };
+    const started = Date.now();
+    const paths: string[] = [];
+    let exchanges = 0;
+    let decisions = 0;
+    const fetchImpl: typeof fetch = (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      const path = new URL(request.url).pathname;
+      paths.push(path);
+      if (path === '/v1/ci/token') {
+        exchanges += 1;
+        // Only the deadline can end the second exchange: it never answers, and it ignores
+        // the abort signal, so a bound that relied on the transport would hang here.
+        if (exchanges > 1) {
+          return new Promise<Response>(() => undefined);
+        }
+        return Promise.resolve(jsonResponse(200, exchangeBody('egt-token-1')));
+      }
+      decisions += 1;
+      if (decisions === 1) {
+        return Promise.resolve(decided({ decision: null }));
+      }
+      // The 401 lands 900 ms into the 2 s wait, so the refresh has 100 ms to answer in.
+      time += 900;
+      return Promise.resolve(refusal(401, 'token_invalid'));
+    };
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--wait', '2s']), env, out, fetchImpl, {
+      clock,
+    });
+    const elapsed = Date.now() - started;
+
+    // Exit 3, never 2: a wait that ends on the credential is not a pending answer the run
+    // gave. The proof is the time: the refresh may wait only the 100 ms the wait has left,
+    // not the exchange's own budget, so this returns in about that 100 ms rather than
+    // hanging on a stub that never answers.
+    expect(code).toBe(3);
+    expect(out.stdout.join('')).toBe('');
+    expect(out.stderr.join('')).toContain(
+      'error request_failed: the token refresh outlived the --wait deadline',
+    );
+    expect(exchanges).toBe(2);
+    expect(decisions).toBe(2);
+    expect(paths).toStrictEqual([
+      '/v1/ci/token',
+      `/v1/runs/${runId}/decision`,
+      `/v1/runs/${runId}/decision`,
+      '/v1/ci/token',
+    ]);
+    expect(elapsed).toBeLessThan(750);
+  });
+
+  it('bounds a hanging Actions-ID token request by the wait deadline', async () => {
+    const env = await devEnv(dirs, {
+      ACTIONS_ID_TOKEN_REQUEST_URL: 'http://127.0.0.1:8080/id-token',
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'request-token-value',
+    });
+    let time = 0;
+    const clock = {
+      sleeps: [] as number[],
+      now: () => time,
+      sleep: (milliseconds: number) => {
+        clock.sleeps.push(milliseconds);
+        time += milliseconds;
+        return Promise.resolve();
+      },
+    };
+    const started = Date.now();
+    let idRequests = 0;
+    let exchanges = 0;
+    let decisions = 0;
+    let noteAborted: () => void = () => undefined;
+    // Resolves once the refresh's request is aborted: the signal the process waits on.
+    const aborted = new Promise<void>((resolve) => {
+      noteAborted = resolve;
+    });
+    const fetchImpl: typeof fetch = (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (path === '/id-token') {
+        idRequests += 1;
+        if (idRequests > 1) {
+          // The refresh's ID-token request never answers on its own: only the signal, which
+          // must carry the wait's deadline and not just the 30 s request timeout, ends it.
+          const signal = init?.signal ?? request.signal;
+          return new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                noteAborted();
+                reject(new DOMException('the operation was aborted', 'AbortError'));
+              },
+              { once: true },
+            );
+          });
+        }
+        return Promise.resolve(jsonResponse(200, { value: 'id-token-value' }));
+      }
+      if (path === '/v1/ci/token') {
+        exchanges += 1;
+        return Promise.resolve(jsonResponse(200, exchangeBody(`egt-token-${exchanges}`)));
+      }
+      decisions += 1;
+      if (decisions === 1) {
+        return Promise.resolve(decided({ decision: null }));
+      }
+      time += 900;
+      return Promise.resolve(refusal(401, 'token_invalid'));
+    };
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--wait', '2s']), env, out, fetchImpl, {
+      clock,
+    });
+    const elapsed = Date.now() - started;
+
+    // Exit 3 and nothing on stdout: the wait ended on the credential, never on a verdict.
+    expect(code).toBe(3);
+    expect(out.stdout.join('')).toBe('');
+    expect(idRequests).toBe(2);
+    expect(exchanges).toBe(1);
+    expect(decisions).toBe(2);
+    expect(elapsed).toBeLessThan(750);
+    // Aborted at the deadline rather than at the 30 s request timeout, so no socket outlives
+    // the command. Awaiting the abort itself keeps this deterministic; a missing deadline
+    // bound surfaces as this spec timing out, which is the failure it exists to catch.
+    await aborted;
   });
 
   it('exits 3 when no poll ever produced an answer', async () => {

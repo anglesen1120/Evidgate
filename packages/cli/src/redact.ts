@@ -18,11 +18,21 @@ const registeredSecrets = new Set<string>();
 let secretsByLength: readonly string[] = [];
 
 /**
- * The `Authorization:` header shape, name included. `redact` keeps the name (`$1`) because a
- * reader benefits from knowing what was masked; a caller writing a single-line format (JSON)
- * replaces the whole match instead, so the value cannot run to the end of that line.
+ * The `Authorization:` header shape, name included, and the `Authorization=` assignment that
+ * carries the same credential. `redact` keeps the name (`$1`) because a reader benefits from
+ * knowing what was masked; a caller writing a single-line format (JSON) replaces the whole
+ * match instead, so the value cannot run to the end of that line.
  */
-export const authorizationHeaderShape = /(authorization\s*:\s*)[^\r\n]*/gi;
+export const authorizationHeaderShape = /(authorization\s*[:=]\s*)[^\r\n]*/gi;
+
+/**
+ * The same header as a JSON member, `"Authorization":"Bearer …"`. The quotes around the value
+ * are matched so the replacement can keep the member parseable; an escape pair counts as a
+ * value character, the value stops at an unescaped quote or a line end, and a member whose
+ * quote was cut off (a truncated message) is masked to the line end rather than left readable.
+ */
+const authorizationJsonMemberShape =
+  /(\\?"authorization\\?"\s*:\s*\\?")(?:[^"\\\r\n]|\\.)*(\\?")?/gi;
 
 /**
  * An absolute http(s) URL. Only the characters that cannot appear in one end the match —
@@ -102,6 +112,10 @@ export function redact(text: string): string {
   // The text is split on the placeholder first, so a secret registered as a short fragment of
   // `[REDACTED]` cannot rewrite one and grow it on every pass.
   let output = text.split(redacted).map(replaceSecrets).join(redacted);
+  output = output.replace(
+    authorizationJsonMemberShape,
+    (_member: string, head: string, tail: string | undefined) => `${head}${redacted}${tail ?? ''}`,
+  );
   output = output.replace(authorizationHeaderShape, `$1${redacted}`);
   return output.replace(absoluteUrl, redactUrl);
 }
