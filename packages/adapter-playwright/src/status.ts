@@ -60,7 +60,7 @@ const LINE_BREAKS = /\r\n|[\n\r\u0085\u2028\u2029]/g;
 /**
  * SEC-1: control characters (lone ESC, C1 such as U+009B, NUL, BEL, VT, FF) and format
  * characters (BIDI overrides, zero-width marks) left after the ANSI strip — the
- * `sidecar.ts` UNCLEAN precedent. Removed, so a log viewer never sees a live escape.
+ * `sidecarRules.ts` UNCLEAN precedent. Removed, so a log viewer never sees a live escape.
  */
 const UNSAFE_CHARS = /[\p{Cc}\p{Cf}]/gu;
 
