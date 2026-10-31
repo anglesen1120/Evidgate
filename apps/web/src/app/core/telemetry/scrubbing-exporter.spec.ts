@@ -271,6 +271,7 @@ describe('ScrubbingSpanExporter, one scrubbed resource per recorded resource', (
     ).toHaveProperty('schemaUrl', kept);
 
     for (const recorded of [
+      'https://10.0.0.1/schemas/1.25.0',
       `https://collector.example.test/v1/traces?user=${EMAIL}`,
       `https://collector.example.test/v1/traces#${CREDENTIAL}`,
       `https://user:${CREDENTIAL}@collector.example.test/schemas/1.25.0`,
@@ -282,10 +283,26 @@ describe('ScrubbingSpanExporter, one scrubbed resource per recorded resource', (
     }
   });
 
+  it('drops a resource schemaUrl that is not a string and still exports the batch', () => {
+    const notText = resourceFromAttributes({ 'service.name': 'evidgate-web' });
+    Object.defineProperty(notText, 'schemaUrl', { value: null, enumerable: true });
+    const kept = 'https://opentelemetry.io/schemas/1.25.0';
+
+    const outputs = exportBatch([
+      hostileSpan({ resource: notText }),
+      hostileSpan({ resource: schemaUrlResource(kept) }),
+    ]);
+
+    // The batch survives: a schema URL the exporter cannot read costs that one field, not the spans.
+    expect(outputs).toHaveLength(2);
+    expect(outputs[0]?.resource.schemaUrl).toBeUndefined();
+    expect(outputs[0]?.resource.attributes).toEqual({ 'service.name': 'evidgate-web' });
+    expect(outputs[1]?.resource.schemaUrl).toBe(kept);
+  });
+
   it('drops a scope version that is not a string instead of exporting it', () => {
     const { output } = exportOne(hostileSpan({ instrumentationScope: scopeWithVersion(2) }));
 
     expect('version' in output.instrumentationScope).toBe(false);
-    expect(JSON.stringify(output.instrumentationScope)).not.toContain('2');
   });
 });

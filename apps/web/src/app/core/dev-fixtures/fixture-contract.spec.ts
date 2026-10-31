@@ -894,10 +894,14 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     const large = corpusDocument('suite-revision-large').body;
     const cells = (body: unknown): number => {
       if (!isRecord(body)) return 0;
-      const members = body['members'] as readonly Record<string, unknown>[];
+      const members: unknown = body['members'];
+      // A body whose `members` is not an array has no cell at all, so it reads as zero instead of
+      // being counted through a cast that would throw on the first `.map`.
+      if (!Array.isArray(members)) return 0;
+      const placed = members.filter(isRecord);
       return (
-        new Set(members.map((member) => member['case_revision_id'])).size *
-        new Set(members.map((member) => member['variant_hash'])).size
+        new Set(placed.map((member) => member['case_revision_id'])).size *
+        new Set(placed.map((member) => member['variant_hash'])).size
       );
     };
     expect(cells(large)).toBeGreaterThan(2500);

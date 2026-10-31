@@ -1,8 +1,8 @@
-// 09.1.1-T9.1 (plans/features/09-web-ui §10 T9.1): what actually leaves the page. The real OTLP
-// exporter, the real serializer and the production batch processor run unchanged; the only
-// substitution is the collector, a loopback socket in this process, so every assertion reads the
-// serialized request body a receiver would see. The second spec proves the flush that empties the
-// queue comes from a real `pagehide` on the production facade, not from the batch timer.
+// What actually leaves the page: the real OTLP exporter, the real serializer and the production
+// batch processor run unchanged, and the only substitution is the collector — a loopback socket in
+// this process — so every assertion reads the serialized request body a receiver would see. The
+// second spec proves the flush that empties the queue comes from a real `pagehide` on the
+// production facade, not from the batch timer.
 import { SpanKind } from '@opentelemetry/api';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';

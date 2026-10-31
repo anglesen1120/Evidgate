@@ -102,18 +102,21 @@ function scrubbedResource(resource: Resource, cache: ResourceCache): Resource {
 
 /**
  * A `schemaUrl` this app may export: `https`, a dotted lowercase host, and plain path segments.
- * It is the one exported value on a resource that no attribute rule sees, so a query string, a
- * fragment, a port or a userinfo — content, in other words — makes the whole value drop.
+ * The last label is alphabetic, so an IPv4 address — a collector's own address, which is content
+ * — cannot pass; a query string, a fragment, a port or a userinfo drop the whole value.
  */
 const RESOURCE_SCHEMA_URL =
-  /^https:\/\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\/[A-Za-z0-9._~-]+)*$/;
+  /^https:\/\/(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]+(?:\/[A-Za-z0-9._~-]+)*$/;
 
 /** A `schemaUrl` longer than this is not a schema identifier. */
 const MAX_SCHEMA_URL_LENGTH = 256;
 
 /** The recorded `schemaUrl` when it is one of ours, or `undefined` so the resource has none. */
-function resourceSchemaUrl(recorded: string | undefined): string | undefined {
-  if (recorded === undefined || recorded.length > MAX_SCHEMA_URL_LENGTH) {
+function resourceSchemaUrl(recorded: unknown): string | undefined {
+  // The SDK types `schemaUrl` as text, but a stale or hostile instrumentation can record anything
+  // there, and reading `.length` off that value throws instead of dropping one field — which would
+  // lose the whole batch. A non-string is content, so it leaves no schema URL at all.
+  if (typeof recorded !== 'string' || recorded.length > MAX_SCHEMA_URL_LENGTH) {
     return undefined;
   }
   return RESOURCE_SCHEMA_URL.test(recorded) ? recorded : undefined;

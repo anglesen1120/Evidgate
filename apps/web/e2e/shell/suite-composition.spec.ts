@@ -185,6 +185,9 @@ for (const locale of LOCALES) {
       await page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? ''),
     ).toBe('suite-members-more');
     await expect(more).toHaveAttribute('aria-disabled', 'true');
+    // The exhausted state is the one the load scan cannot reach: a disabled control, the full rows
+    // and the final count sentence, all after the press.
+    await expectNoA11yViolations(page, `suite composition flat exhausted ${locale}`);
   });
 
   test(`Enter and Space activate Show more in the real browser (${locale})`, async ({ page }) => {

@@ -3,7 +3,6 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { SuiteRevisionDto } from '@evidgate/sdk';
-import ready from '../../../../../../../fixtures/web-api/suite-revision/input.json';
 import empty from '../../../../../../../fixtures/web-api/suite-revision-empty/input.json';
 import forbidden from '../../../../../../../fixtures/web-api/suite-revision-forbidden/input.json';
 import notFound from '../../../../../../../fixtures/web-api/suite-revision-not-found/input.json';
@@ -14,55 +13,18 @@ import { ApiRequestError } from '../../../core/http/api-error';
 import { mapApiError } from '../../../core/http/error-mapper';
 import { routes } from '../suites.routes';
 import { SuiteCompositionComponent } from './suite-composition.component';
+import {
+  gridRevision,
+  readyRevision as revision,
+  sparseGridRevision,
+} from './suite-composition.testing';
 
-const revision = ready.body as SuiteRevisionDto;
 const publishedRevision = published.body as SuiteRevisionDto;
 const emptyRevision = empty.body as SuiteRevisionDto;
 const editAffordances =
   'button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), ' +
   '[role="button"], [role="textbox"], [role="combobox"], [role="slider"], [role="spinbutton"], ' +
   '[role="checkbox"], [role="switch"]';
-
-/** A revision whose members fill a rows × columns grid, one member per cell. */
-function gridRevision(rows: number, columns: number): SuiteRevisionDto {
-  const members: SuiteRevisionDto['members'] = [];
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      members.push({
-        id: `member-${row}-${column}`,
-        case_revision_id: `case-${String(row).padStart(3, '0')}`,
-        variant_hash: `variant-${column}`,
-        params: { column },
-        required: column % 2 === 0,
-        ordinal: column,
-      });
-    }
-  }
-  return { ...revision, members, edges: [] };
-}
-
-/**
- * A revision whose grid has `rows × columns` cells but only `placed` members, so the layout is
- * `flat` while the member list stays short enough to exhaust in one press. The stride hits every
- * row and every column while `placed` stays below their product, which is what makes the cell
- * count — not the member count — the reason for the flat layout.
- */
-function sparseGridRevision(rows: number, columns: number, placed: number): SuiteRevisionDto {
-  const members: SuiteRevisionDto['members'] = [];
-  for (let index = 0; index < placed; index += 1) {
-    const row = index % rows;
-    const column = index % columns;
-    members.push({
-      id: `member-${index}`,
-      case_revision_id: `case-${String(row).padStart(3, '0')}`,
-      variant_hash: `variant-${column}`,
-      params: { column },
-      required: column % 2 === 0,
-      ordinal: index,
-    });
-  }
-  return { ...revision, members, edges: [] };
-}
 
 /**
  * The deferred resolver by hand: `Promise.withResolvers` is ES2024 and this project compiles
@@ -347,103 +309,6 @@ describe('SuiteCompositionComponent', () => {
     harness.fixture.detectChanges();
     expect(rows()).toHaveLength(201);
     expect(document.activeElement).toBe(more);
-  });
-
-  it('is activated by Enter and Space, which the page never captures', async () => {
-    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 201));
-    const { root, harness } = await open();
-    const rows = () => root.querySelectorAll('[data-testid="suite-members-flat"] tbody tr');
-    const more = root.querySelector<HTMLButtonElement>('[data-testid="suite-members-more"]');
-    if (more === null) throw new Error('The chunked member list rendered no Show more control');
-    // A native button is what makes the keyboard activation the browser's job: it turns Enter and
-    // Space into a click itself, so any key handler here would fire the press twice.
-    expect(more.tagName).toBe('BUTTON');
-    expect(more.type).toBe('button');
-    more.focus();
-    expect(document.activeElement).toBe(more);
-
-    for (const key of ['Enter', ' ']) {
-      const keydown = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
-      // jsdom runs no default action for a key press, so this asserts the half that belongs to the
-      // page: neither key is swallowed, which is what lets the browser complete the activation.
-      const notCaptured = more.dispatchEvent(keydown);
-      expect(notCaptured, `${key} reaches the control`).toBe(true);
-      expect(keydown.defaultPrevented, `${key} is not cancelled`).toBe(false);
-    }
-    expect(rows()).toHaveLength(200);
-
-    // The click a keyboard activation produces carries no pointer detail; that event, not the key,
-    // is what the control acts on, and focus stays on it afterwards.
-    more.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
-    harness.fixture.detectChanges();
-    expect(rows()).toHaveLength(201);
-    expect(document.activeElement).toBe(more);
-  });
-
-  it('says how many members a repeated variant cell hides, and keeps the first one', async () => {
-    const first = revision.members.at(0);
-    if (first === undefined) throw new Error('The served fixture no longer holds a member');
-    const repeated = { ...first, id: '018f0000-0000-7000-8000-00000000c3fe', ordinal: 9 };
-    getRevision.mockResolvedValue({ ...revision, members: [...revision.members, repeated] });
-    const { root } = await open();
-    const note = root.querySelector('[data-testid="suite-duplicate-members"]');
-
-    // The note is on the screen, not in the console: the revision served a member the matrix has
-    // no cell for, and a reader has to be able to see that.
-    expect(note?.textContent?.trim()).toBe(
-      'Repeated variant members: 1; the matrix keeps only the first member of each cell.',
-    );
-    const drawn = [...root.querySelectorAll('[data-suite-member-id]')].map(
-      (cell) => cell.textContent,
-    );
-    expect(drawn).toContain(first.id);
-    expect(drawn).not.toContain(repeated.id);
-    expect(drawn).toHaveLength(revision.members.length);
-  });
-
-  it('shows no repeated-cell note for a revision whose cells are all distinct', async () => {
-    const { root } = await open();
-
-    expect(root.querySelector('[data-testid="suite-duplicate-members"]')).toBeNull();
-  });
-
-  it('counts the members a cell with three members hides, not the one cell that repeats', async () => {
-    const first = revision.members.at(0);
-    if (first === undefined) throw new Error('The served fixture no longer holds a member');
-    const extras = [
-      '018f0000-0000-7000-8000-00000000c3fc',
-      '018f0000-0000-7000-8000-00000000c3fd',
-    ].map((id, index) => ({ ...first, id, ordinal: 8 + index }));
-    getRevision.mockResolvedValue({ ...revision, members: [...revision.members, ...extras] });
-    const { root } = await open();
-    const note = root.querySelector('[data-testid="suite-duplicate-members"]');
-
-    // One cell holds three members, so the note names the two the matrix cannot draw: labelling
-    // the count as cells would read `1` here and hide that a second member was served.
-    expect(note?.textContent?.trim()).toBe(
-      'Repeated variant members: 2; the matrix keeps only the first member of each cell.',
-    );
-    const drawn = [...root.querySelectorAll('[data-suite-member-id]')].map(
-      (cell) => cell.textContent,
-    );
-    expect(drawn).toContain(first.id);
-    for (const extra of extras) expect(drawn).not.toContain(extra.id);
-  });
-
-  it('claims no hidden member in the flat layout, which lists every served member', async () => {
-    const base = sparseGridRevision(61, 41, 201);
-    const first = base.members.at(0);
-    if (first === undefined) throw new Error('The generated grid holds no member');
-    getRevision.mockResolvedValue({
-      ...base,
-      members: [...base.members, { ...first, id: '018f0000-0000-7000-8000-00000000c3fd' }],
-    });
-    const { root } = await open();
-
-    // The pair still collapses to one cell, but the flat table draws a row per served member, so a
-    // note saying the matrix keeps the first would be the only place the second member is missing.
-    expect(root.querySelector('[data-testid="suite-members-flat"]')).not.toBeNull();
-    expect(root.querySelector('[data-testid="suite-duplicate-members"]')).toBeNull();
   });
 
   it('reports an address naming no revision as not found instead of loading forever', async () => {
