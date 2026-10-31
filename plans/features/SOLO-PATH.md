@@ -25,6 +25,40 @@ Stories, in build order (remaining days): **01.8.1-T3 `seed-dev` bootstrap** (1.
 
 Calendar `[INFERENCE]`: ×1.4 buffer ≈ 110 days ≈ 22 weeks; with a 0.7 focus factor (review, interruptions, context switching) ≈ 158 days ≈ 31 weeks. The per-story days above are the story's remaining tasks; the 78.75 total is the dependency closure (it also pulls in done-adjacent tasks such as 02.1.1-T3 quota columns and 03.2.1-T5 diff API).
 
+### Pilot-0 — dogfood cut of Stages A + B
+
+Owner decision 2026-10-31 (D-PILOT0): deliver a dogfood Pilot-0 first, then continue the remaining features. Pilot-0 is a delivery-order cut through Stages A + B, not a replacement: the Stage A/B task lists, the 78.75 / 19.5 / 98.25 figures, all estimates, Milestone cells and plan rows stay as they are, and nothing is deleted from the area plans. Pilot-1 (the first external team) is the Stage B decision point below.
+
+**Demo result:** the Evidgate `apps/web` Playwright e2e run (`npm run e2e -w apps/web`) reports through `packages/adapter-playwright` and the CLI to the local dev stack with the seeded dev token (§5). The run gets PASS / FAIL / INCONCLUSIVE with completeness, `evidgate gate` exits with the decision, and the web shows the decision view and the evidence panel. A missing shard never yields PASS.
+
+**Critical path (backend, in order).** Dependencies are quoted from the plan rows; every dependency of these tasks is already merged on develop (STATUS §2), except that 01.8.1-T3 (a dependency of the side-lane task 01.8.1-T4) is partial: T3.1 landed, T3.2 open.
+
+|Step|Item|Plan row|Dependency cell|Size → days|
+|---|---|---|---|---|
+|1|CR-08 late events never reach a revision|`REVIEW-2026-10-29.md:34`|Must precede 07.5.1, 07.2.1|L → 2.0|
+|1|CR-09 `event.stale` never written|`REVIEW-2026-10-29.md:35`|Must precede 05.7.2, 07.2.1|M → 1.0|
+|1|CR-11 freeze counts `ready` raw reports|`REVIEW-2026-10-29.md:37`|Must precede 07.2.1|M → 1.0|
+|1|CR-10 remainder: carried rows "runs stuck in running/queued past collection_deadline_at (S152, CR-10)" and "collection-deadline outbox key not re-armed after dead-letter (S152, CR-10)" (CR-07 and the collecting-run sweep merged in #330)|`docs/status-carried.md` (cite by title)|none recorded|remainder not sized (CR-10 as a whole is M in `REVIEW-2026-10-29.md:36`; #330 landed part)|
+|2|07.2.1-T1 evaluator core|`07-policy-decisions.md:169`|05.3.2-T5, 06.5.1-T1|M → 1.0|
+|3|07.2.1-T2 completeness/outcome/decision + `reasons[]`|`07-policy-decisions.md:170`|07.2.1-T1|M → 1.0|
+|4|07.2.2-T1 evaluation task handler|`07-policy-decisions.md:175`|07.2.1-T2, 01.5.1-T2, 01.5.1-T3|M → 1.0|
+|4|07.2.2-T2 golden matrix M1–M18|`07-policy-decisions.md:176`|07.2.1-T2|M → 1.0|
+|5|07.2.2-T3 exceptions snapshot|`07-policy-decisions.md:177`|07.2.2-T1, 07.3.1-T1, 07.3.1-T2|S → 0.5|
+|6|07.5.2-T1 `GET /v1/runs/{r}/decision`|`07-policy-decisions.md:219`|07.2.2-T1, 01.3.1-T1, 02.2.1-T1|S → 0.5|
+
+**Side lanes** (start when their dependency is merged; they do not block the critical path until the demo):
+
+|Item|Plan row|Dependency cell|Size → days|
+|---|---|---|---|
+|01.8.1-T4 seed part 2 (dev ingest token, sample policy)|`01-foundation.md:238`|01.8.1-T3, 02.4.2-T1, 07.1.1-T1|S → 0.5|
+|07.6.1-T2 `evidgate gate`|`07-policy-decisions.md:238`|07.5.2-T1, 04.2.1-T1|M → 1.0|
+|09.3.1-T3 evidence panel|`09-web-ui.md:212`|05.3.2-T1, 06.5.1-T1|L → 2.0|
+|09.3.1-T5 decision view|`09-web-ui.md:214`|07.5.2-T1|M → 1.0|
+
+**Days (raw, plan sizes × AGENTS.md scale XS 0.25 · S 0.5 · M 1 · L 2 · XL 3).** Critical path: CR-08 2.0 + CR-09 1.0 + CR-11 1.0 (register sizes L, M, M) + 07.2.1-T1 1.0 + 07.2.1-T2 1.0 + 07.2.2-T1 1.0 + 07.2.2-T2 1.0 + 07.2.2-T3 0.5 + 07.5.2-T1 0.5 = 9.0 days (the CR-10 remainder is unsized and not counted; size it when scheduling). Side lanes: 0.5 + 1.0 + 2.0 + 1.0 = 4.5 days. Pilot-0 sized total 9.0 + 4.5 = 13.5 raw days. Calendar `[INFERENCE]`: ×1.4 buffer = 18.9 days; with the 0.7 focus factor ≈ 27 days; the e2e wiring through the adapter and CLI is not sized in the plans.
+
+**Deferred to Pilot-1 (external team):** 02.4.3-T2/T3 + 07.6.1-T1 GitHub App and check run; 07.5.1 late re-evaluation; 04.1.2 rate limit/epoch; 05.2.2-T3 fork PR; 03.2.1-T2..T4; 09.3.1-T6..T11; register rows CR-12..CR-16; and O3 hosting (before any real customer data). 02.4.1-T2..T4 (OIDC CI token) are already landed on develop (STATUS §2, a0c3a08), so no work remains there; Pilot-0 uses the seeded dev token instead of OIDC.
+
 ### Stage B — see it and gate on it (+19.5 raw days)
 
 Demo result: sign in, see the run list, run detail, evidence panel and decision; a GitHub check run carries the decision on the PR. Stories: 02.3.1 login (2.0) · 09.1.1 shell, session, shared state components (T1, T3, T4, T5, T7, T8, and the T2 integration spike they depend on) · 09.3.1 T1, T2, T3, T5 run list, detail, evidence, decision · 07.6.1 GitHub check run (02.4.3-T1/T2 GitHub App installation, now an explicit dependency of 07.6.1-T1) · 07.5.2 decision read API.
