@@ -422,6 +422,35 @@ describe('exchangeToken', () => {
     expect(cancelled).toBe(true);
   });
 
+  it('refuses to start an exchange whose deadline has passed', async () => {
+    // `attemptSignal` falls back to the plain per-request timeout once nothing is left, so a
+    // refresh that begins after its deadline must not open a socket at all: a hung one would
+    // keep the process alive long after the caller has decided its exit code.
+    const config = await oidcConfig();
+    const stub = stubFetch(() => jsonResponse(200, successBody()));
+
+    const error = await captureCliError(() =>
+      exchangeToken(config, { fetch: stub.fetchImpl, deadlineAt: 1_000, now: () => 2_000 }),
+    );
+
+    expect(error.code).toBe('request_failed');
+    expect(stub.calls).toHaveLength(0);
+  });
+
+  it('exchanges when the deadline has time left', async () => {
+    const config = await oidcConfig();
+    const stub = stubFetch(() => jsonResponse(200, successBody()));
+
+    const result = await exchangeToken(config, {
+      fetch: stub.fetchImpl,
+      deadlineAt: 5_000,
+      now: () => 2_000,
+    });
+
+    expect(result.token).toBe('egt_ci_token');
+    expect(stub.calls).toHaveLength(1);
+  });
+
   it('exchangeAndPurge purges the cache on 401', async () => {
     const config = await oidcConfig();
     await writeCachedToken(config, { token: 'stale-token', expiresAt: '2030-01-01T00:00:00Z' });
