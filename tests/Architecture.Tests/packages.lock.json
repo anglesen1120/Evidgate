@@ -86,108 +86,108 @@
       },
       "Corvus.Json.CodeGeneration": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "CGrS4x2W6esc9P2URukOmFEvUD4uw79kwS7ODdjdXtAVQ4bsOXvcc8Y6ls9fm2U0xrhJ+kRqd0YnaYwH3qYY+A==",
+        "resolved": "5.6.1",
+        "contentHash": "2qM0MgWmoEIjM1fZSOH3VFw3JvcRL5MpFARYXol/xpYSBGNh9blisf2i+HGFOZYOdewn0KzIaE/WGSZF5fZWUQ==",
         "dependencies": {
-          "Corvus.Json.JsonReference": "5.7.9"
+          "Corvus.Json.JsonReference": "5.6.1"
         }
       },
       "Corvus.Json.CodeGeneration.201909": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "G5rWeUtpBU68eyQQKgGxtasrva15grgHbUKg39sGII7a1v0SFB/MF51zuBzEe7JwryO6BoZZh9WFzF1ZlJMSRg==",
+        "resolved": "5.6.1",
+        "contentHash": "SWyt0C6uAG2I0UP4lM6Wtw+mTIxEm2r6qbn+zm0t/W8xkrzyZ32T8vSBBljDGrNnxisLHUgPBe4JuXKe21MGUg==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9"
+          "Corvus.Json.CodeGeneration": "5.6.1"
         }
       },
       "Corvus.Json.CodeGeneration.202012": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "FyIxS3MXeepkDatLSstne6WZT1Bf2gAXTN98S2GelcCSdESzvxWGIJQL+l/QXpatmmKD1i3i/y5M6652hCbB8g==",
+        "resolved": "5.6.1",
+        "contentHash": "MtJqHLkmvcsdd/Dgm2RC2rWhQy+SF2F/L4Uxm+kR4twZAH+18Tol7eMOz9EXwPa4Bo4XjihR9NhnVhZNnBkW2A==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9"
+          "Corvus.Json.CodeGeneration": "5.6.1"
         }
       },
       "Corvus.Json.CodeGeneration.4": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "SQ96ecFzi5a2O+6GGstH5e3b4BFcvvZn3Ryy4vaIN+Gar3T7gPzhUubwRkmki9I3GYMZlv9yRgdZ8qLzCHuFgw==",
+        "resolved": "5.6.1",
+        "contentHash": "T0QZIw3jENSJliD/Ap0rjwOzYrIJEoCq48wA1NlPDbMOprpdZyXZh6lOxx6q+MpvCVedg0u8ayFIIacR3QOKIg==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9"
+          "Corvus.Json.CodeGeneration": "5.6.1"
         }
       },
       "Corvus.Json.CodeGeneration.6": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "XimyHw42HNB3tT5BtiZLNutnyIkSAjMONObk1p/0D4Ax4zlGtVV9BYJ5P9+k8A5YzO7aaoqAVNUvzyk7+3cy2w==",
+        "resolved": "5.6.1",
+        "contentHash": "SB1KBqXdhvLUwlGK28jtFj+mUR5ctG/DCB2HLTr6ssKzxerupBKppabhqLMsDfG53qTs+lxpyyYvQThqZepwTQ==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9"
+          "Corvus.Json.CodeGeneration": "5.6.1"
         }
       },
       "Corvus.Json.CodeGeneration.7": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "E9elsKdidW08uiwqOVAFP8yUjrlBLpqYy1KyFcFAgs8VKxdfUOcRIlO/6VXCueoVQfO3AS5ssMTwcEjVvu0wWg==",
+        "resolved": "5.6.1",
+        "contentHash": "SbDBo9OCYoju1ytDZ9WQXGUScuPtTMRL5Qow7GwbJ08Is5FU27ekn8E0btB/CvgkWJOXvWup/qrfPB/SMFhKdw==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9"
+          "Corvus.Json.CodeGeneration": "5.6.1"
         }
       },
       "Corvus.Json.CodeGeneration.CorvusVocabulary": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "fPk7W87GoTTP7CGWj9+Bws9+lKOkKcGQL+oI9kItG1sVNAQhHqKq3LDi3BdcIgRXgf6bbwdEVQyZompikbNTEw==",
+        "resolved": "5.6.1",
+        "contentHash": "xmTOsHC9Mjo//XvXB1YGBfqMZQOZsO0yM1+nZpoLyd8f6H5vWvBSSm2FxtUU1NuOjf9Xw3z3BNtiRB6aP6XGyg==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9"
+          "Corvus.Json.CodeGeneration": "5.6.1"
         }
       },
       "Corvus.Json.CodeGeneration.CSharp": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "YGy+n6Tmi3hrQvdo72OkTq0jPgzG6e+pgJlZqOrjKJr/SMkyQpxgSOfntncw14g/RzJJKPsesOWAZH6zdhgAmw==",
+        "resolved": "5.6.1",
+        "contentHash": "BVBLkoV9tzRrL389qodxk+ITSs3KzNS6yfK3ll8cmldSLDO/mVYNJsLb6RQ/diJjxOO+xVsDGJDnqfgXJ1LF/Q==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9",
+          "Corvus.Json.CodeGeneration": "5.6.1",
           "Microsoft.CodeAnalysis.CSharp": "5.3.0"
         }
       },
       "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "jEwd+Ara1lYVOZTcsecbED+eNpdx/a52q9UVVvoYlWmdaWTI3htCC1OnM43OS5pKNVP3WYtpeLrJJ+g8RI2WBw==",
+        "resolved": "5.6.1",
+        "contentHash": "98+UcG6FIfNQzdh7wP45Yqr/k9s8JzlZoosZLtZHLCqZS6SiqgJGddHBUyz1gmusxc3CSWys5zbC8whBBfXu+Q==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9",
+          "Corvus.Json.CodeGeneration": "5.6.1",
           "Microsoft.Extensions.Http": "10.0.7"
         }
       },
       "Corvus.Json.CodeGeneration.OpenApi20": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "9UMRAxVVmrAjZHZVO3z15GUZ7fetZ2UHo8i06ZZA8IrnjYLAPwkkbQh19eUwJBoMfSkFejKefh/NI03GGT1fMw==",
+        "resolved": "5.6.1",
+        "contentHash": "g+CZ7hOEcSWQC3a8ohm3RmncrRa/lzofYhr1f72FVBd8RNhtUbNooNaPLJb7kHjLT20AZwS3klg7HsYFpLF8cg==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9"
+          "Corvus.Json.CodeGeneration": "5.6.1"
         }
       },
       "Corvus.Json.CodeGeneration.OpenApi30": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "hUFwRrbfdxyfLxRpRAcNc6lWvcwni8oqMVqP7fQWCCJ8kxx2KNPGBdYutMGqObVIo8OrNBFh2OARlusvPo4Daw==",
+        "resolved": "5.6.1",
+        "contentHash": "FBAuTm/R3TRuKbpogmVratg1a0o+tANM/CeTs5rnC6bZqalUisUYPdmgatB52b9TzyiSlj+1md3ZgSLdnZGyYw==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9"
+          "Corvus.Json.CodeGeneration": "5.6.1"
         }
       },
       "Corvus.Json.ExtendedTypes": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "v/Wcg8AtBl8omOeTF4CAjIR0egWLZ+PmdmnmYJEG6T9klzec6TcjHfQsIm20p5JKdxpiDlq3wZW9bXvld4WIaw==",
+        "resolved": "5.6.1",
+        "contentHash": "0I1jJAva6RNDMd8FI5MbvddF7YenbvmLtbpHEBIywKYCscRVP6lo42/0y49KUTVQv7BD3hJcayTdOX236yK7Ew==",
         "dependencies": {
-          "Corvus.Json.JsonReference": "5.7.9",
+          "Corvus.Json.JsonReference": "5.6.1",
           "Corvus.UriTemplates": "2.3.2",
           "NodaTime": "3.3.1"
         }
       },
       "Corvus.Json.JsonReference": {
         "type": "Transitive",
-        "resolved": "5.7.9",
-        "contentHash": "nTQrDJ/QUnhCbNw6FKA4fviPxow4Rrvzwy1v6fS7fOSHoqadZRNDsuEeZnzpiYV+IWbpR+/4tZ+wNXW2XZLENg==",
+        "resolved": "5.6.1",
+        "contentHash": "mRWP8gkrePcdUBC244E5WQdTqJRAIrptCALQber4cmBOAo9vLal78/bPlgVJQT5wFfEARR0/MEwyneVBxQgcRQ==",
         "dependencies": {
           "Corvus.HighPerformance": "1.0.4"
         }
@@ -894,7 +894,7 @@
       "evidgate.buildingblocks.contracts.validation": {
         "type": "Project",
         "dependencies": {
-          "Corvus.Json.Validator": "[5.7.9, )",
+          "Corvus.Json.Validator": "[5.6.1, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
         }
       },
@@ -1209,22 +1209,22 @@
       },
       "Corvus.Json.Validator": {
         "type": "CentralTransitive",
-        "requested": "[5.7.9, )",
-        "resolved": "5.7.9",
-        "contentHash": "HMrWuw2YUgSVFKRG1f3IfNYOn0zwTm86El/pYyI1SiRCKSuLZjNOmYdpn6RhGiV/pafPl+nEuup5HyoUZU8lUA==",
+        "requested": "[5.6.1, )",
+        "resolved": "5.6.1",
+        "contentHash": "oBtvuhNdbQ62qTye7q5U49GSCe3oxzcW68e7t6mhXYYKYLzVfH9dmcla8dh54apy7udTo94wETMPXA84roIbwA==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.7.9",
-          "Corvus.Json.CodeGeneration.201909": "5.7.9",
-          "Corvus.Json.CodeGeneration.202012": "5.7.9",
-          "Corvus.Json.CodeGeneration.4": "5.7.9",
-          "Corvus.Json.CodeGeneration.6": "5.7.9",
-          "Corvus.Json.CodeGeneration.7": "5.7.9",
-          "Corvus.Json.CodeGeneration.CSharp": "5.7.9",
-          "Corvus.Json.CodeGeneration.CorvusVocabulary": "5.7.9",
-          "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": "5.7.9",
-          "Corvus.Json.CodeGeneration.OpenApi20": "5.7.9",
-          "Corvus.Json.CodeGeneration.OpenApi30": "5.7.9",
-          "Corvus.Json.ExtendedTypes": "5.7.9",
+          "Corvus.Json.CodeGeneration": "5.6.1",
+          "Corvus.Json.CodeGeneration.201909": "5.6.1",
+          "Corvus.Json.CodeGeneration.202012": "5.6.1",
+          "Corvus.Json.CodeGeneration.4": "5.6.1",
+          "Corvus.Json.CodeGeneration.6": "5.6.1",
+          "Corvus.Json.CodeGeneration.7": "5.6.1",
+          "Corvus.Json.CodeGeneration.CSharp": "5.6.1",
+          "Corvus.Json.CodeGeneration.CorvusVocabulary": "5.6.1",
+          "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": "5.6.1",
+          "Corvus.Json.CodeGeneration.OpenApi20": "5.6.1",
+          "Corvus.Json.CodeGeneration.OpenApi30": "5.6.1",
+          "Corvus.Json.ExtendedTypes": "5.6.1",
           "Microsoft.CodeAnalysis.CSharp": "5.3.0",
           "Microsoft.Extensions.DependencyModel": "10.0.7"
         }
