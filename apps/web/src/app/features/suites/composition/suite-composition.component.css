@@ -1,0 +1,112 @@
+:host {
+  display: block;
+  min-width: 0;
+  color: var(--eg-text);
+  font-family: var(--eg-font-body);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+}
+h1 {
+  margin: 0 0 var(--eg-space-5);
+  font-family: var(--eg-font-display);
+  font-size: var(--eg-text-lg);
+  line-height: var(--eg-leading-lg);
+}
+h2 {
+  margin: 0 0 var(--eg-space-4);
+  font-size: var(--eg-text-md);
+  line-height: var(--eg-leading-md);
+}
+.panel {
+  min-width: 0;
+  margin-block-end: var(--eg-space-5);
+  padding: var(--eg-space-4);
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-surface);
+}
+.metadata {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--eg-rail-width)), 1fr));
+  gap: var(--eg-space-4);
+}
+dl {
+  margin: 0;
+}
+dl > div,
+dd {
+  min-width: 0;
+}
+dt {
+  margin-block-end: var(--eg-space-2);
+  color: var(--eg-text-muted);
+}
+dd {
+  margin: 0;
+}
+.hash {
+  grid-column: 1 / -1;
+}
+.identifier {
+  font-family: var(--eg-font-mono);
+}
+bdi,
+p,
+dt,
+dd,
+h1,
+h2 {
+  overflow-wrap: anywhere;
+}
+.notice {
+  margin-block: var(--eg-space-4) 0;
+  padding: var(--eg-space-3);
+  border-inline-start: var(--eg-border-width) solid var(--eg-border-control);
+  background: var(--eg-neutral-bg);
+}
+.matrix-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+caption {
+  text-align: start;
+  padding-block-end: var(--eg-space-4);
+  color: var(--eg-text-muted);
+}
+th,
+td {
+  min-width: var(--eg-rail-width);
+  max-width: var(--eg-rail-width);
+  padding: var(--eg-space-3);
+  border: var(--eg-border-width) solid var(--eg-border);
+  text-align: start;
+  vertical-align: top;
+}
+thead th {
+  background: var(--eg-surface-raised);
+}
+td dl > div + div {
+  margin-block-start: var(--eg-space-3);
+}
+th p {
+  margin-block-end: 0;
+}
+.parameters,
+.dependencies {
+  padding-inline-start: var(--eg-space-4);
+}
+.parameters {
+  font-weight: normal;
+}
+.dependencies li + li {
+  margin-block-start: var(--eg-space-4);
+}
+.matrix-scroll:focus-visible,
+h1:focus {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
