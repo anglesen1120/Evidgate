@@ -4,16 +4,12 @@
   "tools": {
     "nuget-license": {
       "version": "4.0.18",
-      "commands": [
-        "nuget-license"
-      ],
+      "commands": ["nuget-license"],
       "rollForward": false
     },
     "cyclonedx": {
       "version": "6.3.1",
-      "commands": [
-        "dotnet-CycloneDX"
-      ],
+      "commands": ["dotnet-CycloneDX"],
       "rollForward": false
     }
   }
