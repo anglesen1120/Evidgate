@@ -23,6 +23,7 @@ import { EmptyPatternComponent } from '../../../../shared/ui/states/empty-patter
 import { ErrorPatternComponent } from '../../../../shared/ui/states/error-pattern.component';
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { escapeFormatChars } from '../../list/ref-name-display';
+import { attemptAnchorId } from '../evidence/run-evidence-anchors';
 import { groupAttempts, paginateAttemptGroups } from './attempt-groups';
 import type { AttemptRow } from './attempt-summary';
 
@@ -54,6 +55,8 @@ export class AttemptsTableComponent {
     () => !(this.attempts() ?? []).some((attempt) => attempt.healingCandidate),
   );
   protected readonly display = escapeFormatChars;
+  /** Deep-link target identity (`#attempt-<execution_key>-<n>`), shared with the reason links. */
+  protected readonly attemptAnchorId = attemptAnchorId;
   protected readonly pages = computed(() =>
     paginateAttemptGroups(groupAttempts(this.attempts() ?? [])),
   );

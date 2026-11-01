@@ -3,6 +3,7 @@ import type { RunStateDto } from '@evidgate/sdk';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { EvidenceBadgeComponent } from '../../../shared/ui/verdict/evidence-badge.component';
+import type { Completeness } from '../../../shared/ui/verdict/verdict-values';
 import { escapeFormatChars } from '../list/ref-name-display';
 
 @Component({
@@ -14,6 +15,12 @@ import { escapeFormatChars } from '../list/ref-name-display';
 })
 export class RunHeaderComponent {
   readonly run = input.required<RunStateDto>();
+  /**
+   * Collection completeness of the newest frozen revision, when the revision list answered. The
+   * header badge describes the run's collection, never the revision the evidence region is pinned
+   * to.
+   */
+  readonly runCompleteness = input<Completeness | null>(null);
   protected readonly display = escapeFormatChars;
   protected readonly copy = {
     id: $localize`:@@runs.detail.id:Run id`,

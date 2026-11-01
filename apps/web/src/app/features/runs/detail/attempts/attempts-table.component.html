@@ -45,7 +45,11 @@
                 data-attempt-row
                 [attr.data-pre-healing]="attempt === group.preHealingFailure ? '' : null"
               >
-                <th scope="row">
+                <th
+                  scope="row"
+                  [id]="attemptAnchorId(attempt.executionKey, attempt.attemptNo)"
+                  tabindex="-1"
+                >
                   <bdi class="identifier">{{ display(attempt.executionKey) }}</bdi>
                   <span class="attempt-number">{{ copy.attempt }} {{ attempt.attemptNo }}</span>
                   @if (attempt === group.preHealingFailure) {

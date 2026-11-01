@@ -143,3 +143,13 @@ button:focus-visible,
 .attempts-status:empty {
   display: none;
 }
+
+/* Deep-link landing (`#attempt-<execution_key>-<n>`): the sticky shell header would cover the row
+   without the scroll margin, and the row header is focusable but never in the tab order. */
+th[id] {
+  scroll-margin-block-start: calc(2 * var(--eg-space-12));
+}
+th[id]:target {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: calc(-1 * var(--eg-focus-offset));
+}

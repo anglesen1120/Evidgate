@@ -37,6 +37,8 @@ class FakeRunsDataService {
   failure: Error | null = null;
   /** The page every call answers; `null` next cursor means the list ends. */
   page: RunPage = { items: [], next_cursor: null };
+  /** The value the decision read answers, served by the gateway untyped. */
+  decision: unknown = null;
 
   list(projectId: string, query: { cursor?: string; limit?: number; ref_name?: string }) {
     this.calls.push({ projectId, query });
@@ -45,6 +47,14 @@ class FakeRunsDataService {
     }
     return Promise.resolve(this.page);
   }
+
+  getDecision(runId: string): Promise<unknown> {
+    this.decisionCalls.push(runId);
+    if (this.failure !== null) return Promise.reject(this.failure);
+    return Promise.resolve(this.decision);
+  }
+
+  readonly decisionCalls: string[] = [];
 }
 
 describe('RunDataService (09.3.1-T1)', () => {
@@ -129,5 +139,40 @@ describe('RunDataService (09.3.1-T1)', () => {
     await expect(service.listRuns('p-1', { refName: 'bad ref' })).rejects.toBe(failure);
     const error: ApiError = failure.error;
     expect(error.code).toBe('request_invalid');
+  });
+
+  it('returns a served decision body once its shape is valid', async () => {
+    const body = {
+      status: 'pending',
+      decision: null,
+      evaluation_id: null,
+      evidence_revision: null,
+      completeness: null,
+      outcome: null,
+      missing: null,
+      reasons: null,
+      policy_hash: null,
+      manifest_hash: null,
+      evaluator_version: null,
+      mode: null,
+      url: null,
+    };
+    runs.decision = body;
+
+    await expect(service.getDecision('r-1')).resolves.toStrictEqual(body);
+    expect(runs.decisionCalls).toEqual(['r-1']);
+  });
+
+  it('answers null for a served value that is not a decision body', async () => {
+    runs.decision = { status: 'evaluated', decision: 'SKIPPED' };
+
+    await expect(service.getDecision('r-1')).resolves.toBeNull();
+  });
+
+  it('propagates a decision refusal verbatim', async () => {
+    const failure = typedFailure();
+    runs.failure = failure;
+
+    await expect(service.getDecision('r-1')).rejects.toBe(failure);
   });
 });
