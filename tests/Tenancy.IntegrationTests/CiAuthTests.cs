@@ -142,7 +142,7 @@ public sealed class CiAuthTests
         exchanged.Status.ShouldBe(HttpStatusCode.OK);
         exchanged.Id("project_id").ShouldBe(project);
         exchanged.Body.GetProperty("permission_set").EnumerateArray().Select(e => e.GetString()).Order()
-            .ShouldBe(["artifact:write", "event:write", "run:create"]);
+            .ShouldBe(["artifact:write", "decision:read", "event:write", "run:create"]);
         (await _fixture.ScalarAsync<string>(_database!, "select status from public.ci_binding")).ShouldBe("active");
         (await _fixture.ScalarAsync<bool>(_database!, "select binding_challenge_hash is null from public.ci_binding")).ShouldBeTrue();
 

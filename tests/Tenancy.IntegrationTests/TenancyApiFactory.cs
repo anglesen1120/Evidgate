@@ -117,8 +117,10 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     /// so membership, the project scope and the service claims all go through the
     /// production <c>TenantResolutionFilter</c> and the real evaluator.
     /// </summary>
-    public static TenancyApiFactory RealResolver(string appConnectionString) =>
-        new(appConnectionString, realEvaluator: true, realResolver: true);
+    public static TenancyApiFactory RealResolver(
+        string appConnectionString,
+        IReadOnlyDictionary<string, string?>? configuration = null) =>
+        new(appConnectionString, realEvaluator: true, realResolver: true) { _extraConfiguration = configuration };
 
     /// <summary>Headers for <see cref="RealResolver"/>: a user, optionally naming an org by header.</summary>
     public static Action<HttpRequestHeaders> Resolved(

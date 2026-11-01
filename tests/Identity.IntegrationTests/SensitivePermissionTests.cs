@@ -479,6 +479,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // The run's evidence-revision page: the seeded run has no revision, so the page is a clean 200 with
             // `items: []` — no secret, and the scan is not vacuous about the route.
             ["/v1/runs/{run_id}/evidence-revisions"] = $"/v1/runs/{seeded.RunId}/evidence-revisions",
+            // The run's decision: a pending body carries no verdict, hash or reason yet, so it is clean by construction
+            // and the scan still covers the route.
+            ["/v1/runs/{r}/decision"] = $"/v1/runs/{seeded.RunId}/decision",
         };
 
     /// <summary>

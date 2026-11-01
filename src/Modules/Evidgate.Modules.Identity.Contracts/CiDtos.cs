@@ -95,7 +95,7 @@ public sealed record IngestTokenListResponse(IReadOnlyList<IngestTokenView> Item
 
 /// <summary>Body of <c>POST /v1/projects/{p}/ingest-tokens</c>.</summary>
 /// <param name="Name">Label shown in the list.</param>
-/// <param name="Scopes">Subset of <c>event:write</c>, <c>artifact:write</c>, <c>run:create</c>; default all three.</param>
+/// <param name="Scopes">Subset of <c>event:write</c>, <c>artifact:write</c>, <c>run:create</c>, <c>decision:read</c>; default all four.</param>
 /// <param name="ExpiresAt">Optional hard expiry.</param>
 public sealed record CreateIngestTokenRequest(string Name, IReadOnlyList<string>? Scopes, DateTimeOffset? ExpiresAt);
 

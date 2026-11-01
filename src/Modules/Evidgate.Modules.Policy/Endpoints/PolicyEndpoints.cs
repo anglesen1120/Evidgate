@@ -67,6 +67,12 @@ public static class PolicyEndpoints
             .Produces<PolicyRevisionSummaryDto>(StatusCodes.Status200OK)
             .WithSummary("The project's newest policy revision; ETag is its id (F18)");
 
+        // The run's decision is a read of this module's evaluation row; the run itself is resolved through the
+        // Orchestrator contract, so the route addresses it by id alone like GET /v1/runs/{r}.
+        group.MapGet("/runs/{r}/decision", GetRunDecisionAsync)
+            .Produces<Decision>(StatusCodes.Status200OK)
+            .WithSummary("The run's newest live evaluation, or a pending body while it has none (07.5.2)");
+
         return group;
     }
 
@@ -192,6 +198,16 @@ public static class PolicyEndpoints
         // The same ETag GET /v1/policies/{id} issues: the head's own revision id.
         context.Response.Headers.ETag = $"\"{result.Value.Id}\"";
         return result;
+    }
+
+    private static async Task<Result<Decision>> GetRunDecisionAsync(
+        Guid r,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        // The 404 (unknown, other tenant or sibling project), the 403 permission refusal and the pending body are the
+        // handler's answers, not this edge's.
+        return await mediator.Send(new GetRunDecisionQuery(r), cancellationToken).ConfigureAwait(false);
     }
 
     private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
