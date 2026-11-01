@@ -65,6 +65,17 @@
         <app-outcome-pill [outcome]="decision.outcome" />
       </p>
 
+      @if (revisionMismatch(); as mismatch) {
+        <p class="decision-mismatch" data-decision-mismatch role="status">
+          <span class="decision-mismatch__text">{{
+            copy.revisionMismatch(mismatch.decisionRevision, mismatch.selectedRevision)
+          }}</span>
+          <button type="button" class="decision-mismatch__action" (click)="viewEvidence()">
+            {{ copy.viewEvidence }}
+          </button>
+        </p>
+      }
+
       <div class="decision-reasons">
         <h3 id="decision-reasons-title">{{ copy.reasons }}</h3>
         @if (decision.reasons.length === 0) {

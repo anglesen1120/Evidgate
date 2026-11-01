@@ -2895,6 +2895,14 @@
         <source>Live decision updated for evidence revision <x id="REVISION" equiv-text="${revision}"/></source>
         <target>Đã cập nhật quyết định chính thức cho phiên bản bằng chứng <x id="REVISION"/></target>
       </trans-unit>
+      <trans-unit id="runs.decision.revision-mismatch" datatype="html">
+        <source>This decision was evaluated at evidence revision <x id="DECISION" equiv-text="${decisionRevision}"/> while the selected evidence revision is <x id="SELECTED" equiv-text="${selectedRevision}"/>.</source>
+        <target>Quyết định này được đánh giá ở phiên bản bằng chứng <x id="DECISION"/> trong khi phiên bản bằng chứng đang chọn là <x id="SELECTED"/>.</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.view-evidence" datatype="html">
+        <source>View decision evidence</source>
+        <target>Xem bằng chứng của quyết định</target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

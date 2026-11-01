@@ -48,7 +48,11 @@ export class DecisionViewComponent {
   readonly updating = input(false);
   readonly error = input<ApiError | null>(null);
   readonly retryEligible = input(false);
+  /** The evidence revision the rest of the page is pinned to, `null` when nothing is pinned. */
+  readonly pinnedRevision = input<number | null>(null);
   readonly retry = output<void>();
+  /** Asks the page to pin evidence to the revision this decision was evaluated at. */
+  readonly viewDecisionEvidence = output<number>();
 
   protected readonly copy = {
     title: $localize`:@@runs.decision.title:Latest live decision`,
@@ -67,7 +71,15 @@ export class DecisionViewComponent {
     manifestHash: $localize`:@@runs.decision.manifest-hash:Manifest hash`,
     evaluatorVersion: $localize`:@@runs.decision.evaluator-version:Evaluator version`,
     mode: $localize`:@@runs.decision.mode:Evaluation mode`,
+    revisionMismatch: (decisionRevision: number, selectedRevision: number) =>
+      $localize`:@@runs.decision.revision-mismatch:This decision was evaluated at evidence revision ${decisionRevision}:DECISION: while the selected evidence revision is ${selectedRevision}:SELECTED:.`,
+    viewEvidence: $localize`:@@runs.decision.view-evidence:View decision evidence`,
   };
+
+  protected viewEvidence(): void {
+    const decision = this.evaluated();
+    if (decision !== null) this.viewDecisionEvidence.emit(decision.evidenceRevision);
+  }
 
   /**
    * The accepted body kept on screen while a refresh runs or fails. An access refusal never keeps
@@ -91,6 +103,18 @@ export class DecisionViewComponent {
   protected readonly failure = computed(() => this.body() === null && this.error() !== null);
   /** A refresh failed over an accepted body: the body stays, with a stale-read notice. */
   protected readonly stale = computed(() => this.body() !== null && this.error() !== null);
+  /**
+   * The decision was evaluated at a revision the page is no longer showing. Only a pinned view can
+   * disagree: with no pin the visitor is looking at the live decision, so there is nothing to
+   * reconcile and no notice to raise.
+   */
+  protected readonly revisionMismatch = computed(() => {
+    const decision = this.evaluated();
+    const pinned = this.pinnedRevision();
+    return decision !== null && pinned !== null && pinned !== decision.evidenceRevision
+      ? { decisionRevision: decision.evidenceRevision, selectedRevision: pinned }
+      : null;
+  });
   protected readonly pattern = computed(() => patternForError(this.error()));
   protected readonly retryAfter = computed(() => {
     const failure = this.error();

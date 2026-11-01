@@ -122,6 +122,41 @@
   word-break: break-all;
 }
 
+.decision-mismatch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--eg-space-3);
+  margin-block: var(--eg-space-3);
+  padding: var(--eg-space-3) var(--eg-space-4);
+  border-inline-start: var(--eg-border-width) solid var(--eg-warning-fg);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-warning-bg);
+  color: var(--eg-text);
+}
+
+.decision-mismatch__text {
+  flex: 1 1 24ch;
+  min-inline-size: 0;
+}
+
+.decision-mismatch__action {
+  flex: 0 0 auto;
+  min-block-size: var(--eg-control-touch);
+  padding-inline: var(--eg-space-3);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-md);
+  background: var(--eg-surface);
+  color: var(--eg-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.decision-mismatch__action:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+
 @media (min-width: 768px) {
   .decision-panel {
     padding: var(--eg-space-5);

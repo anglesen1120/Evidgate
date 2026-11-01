@@ -2801,6 +2801,8 @@
       <trans-unit id="runs.decision.evaluator-version" datatype="html"><source>Evaluator version</source></trans-unit>
       <trans-unit id="runs.decision.mode" datatype="html"><source>Evaluation mode</source></trans-unit>
       <trans-unit id="runs.decision.updated-announcement" datatype="html"><source>Live decision updated for evidence revision <x id="REVISION" equiv-text="${revision}"/></source></trans-unit>
+      <trans-unit id="runs.decision.revision-mismatch" datatype="html"><source>This decision was evaluated at evidence revision <x id="DECISION" equiv-text="${decisionRevision}"/> while the selected evidence revision is <x id="SELECTED" equiv-text="${selectedRevision}"/>.</source></trans-unit>
+      <trans-unit id="runs.decision.view-evidence" datatype="html"><source>View decision evidence</source></trans-unit>
     </body>
   </file>
 </xliff>

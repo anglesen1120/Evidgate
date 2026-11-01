@@ -49,6 +49,7 @@ describe('DecisionViewComponent', () => {
     updating?: boolean;
     error?: ApiError | null;
     retryEligible?: boolean;
+    pinnedRevision?: number | null;
   }) {
     const fixture = TestBed.createComponent(DecisionViewComponent);
     fixture.componentRef.setInput('decision', inputs.decision ?? null);
@@ -59,6 +60,9 @@ describe('DecisionViewComponent', () => {
     if (inputs.error !== undefined) fixture.componentRef.setInput('error', inputs.error);
     if (inputs.retryEligible !== undefined) {
       fixture.componentRef.setInput('retryEligible', inputs.retryEligible);
+    }
+    if (inputs.pinnedRevision !== undefined) {
+      fixture.componentRef.setInput('pinnedRevision', inputs.pinnedRevision);
     }
     fixture.detectChanges();
     return { fixture, root: fixture.nativeElement as HTMLElement };
@@ -219,6 +223,33 @@ describe('DecisionViewComponent', () => {
     expect(text(root, '[data-decision-announcement]')).toBe(
       'Live decision updated for evidence revision 5',
     );
+  });
+
+  it('keeps a pinned revision quiet while it matches the decision', () => {
+    const { fixture, root } = render({ decision: EVALUATED, pinnedRevision: 4 });
+    expect(root.querySelector('[data-decision-mismatch]')).toBeNull();
+    fixture.componentRef.setInput('pinnedRevision', null);
+    fixture.detectChanges();
+    expect(root.querySelector('[data-decision-mismatch]')).toBeNull();
+  });
+
+  it('raises a revision mismatch with an action that asks for the decision evidence', () => {
+    const { fixture, root } = render({ decision: EVALUATED, pinnedRevision: 3 });
+    const notice = root.querySelector('[data-decision-mismatch]')!;
+    expect(notice.textContent).toContain('evaluated at evidence revision 4');
+    expect(notice.textContent).toContain('selected evidence revision is 3');
+    const seen: number[] = [];
+    fixture.componentInstance.viewDecisionEvidence.subscribe((revision) => seen.push(revision));
+    (notice.querySelector('button') as HTMLButtonElement).click();
+    expect(seen).toEqual([4]);
+  });
+
+  it.each([
+    ['pending' as const, { kind: 'pending' } as const],
+    ['unavailable' as const, { kind: 'unavailable', cause: 'error' } as const],
+  ])('raises no revision mismatch while the decision is %s', (_name, decision) => {
+    const { root } = render({ decision, pinnedRevision: 99 });
+    expect(root.querySelector('[data-decision-mismatch]')).toBeNull();
   });
 
   it('escapes a served reason instead of rendering it as markup', () => {
