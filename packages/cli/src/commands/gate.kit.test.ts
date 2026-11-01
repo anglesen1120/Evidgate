@@ -10,20 +10,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 
+import { devStubFetch, devToken, exchangeBody, mintedToken } from './devExchange.testing.js';
+
 /** The run the gate asks about (openapi `RunId`, `format: uuid`). */
 export const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
-/** A valid `project_id`, as a token-exchange answer carries it. */
-export const projectId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 /** The project slug the command acts on. */
 export const project = 'proj-1';
-/** The `EVIDGATE_DEV_TOKEN` value: an ingest credential the exchange presents, never a bearer. */
-export const devToken = 'dev-token-value';
-/**
- * The `ci_producer` token the dev exchange mints: the bearer the command sends. It is
- * deliberately a different string from `devToken`, so a command that sent the dev token raw
- * would fail every `Bearer ${mintedToken}` assertion.
- */
-export const mintedToken = 'egt_minted_ci_token';
 
 export interface Captured {
   readonly io: Io;
@@ -142,36 +134,6 @@ export function refusal(
       retryable: extra.retryable ?? false,
     },
   });
-}
-
-/** The `/v1/ci/token` answer that hands out `token`. */
-export function exchangeBody(token: string): unknown {
-  return { token, expires_at: '2030-01-01T00:00:00Z', project_id: projectId, permission_set: [] };
-}
-
-/**
- * A `fetch` stub for the dev bearer, which is exchanged rather than sent raw: the
- * `POST /v1/ci/token` call is answered with `exchangeBody(mintedToken)` and `handler` sees only
- * the gate traffic, so `index` counts decision requests and `calls` stays the list of them.
- * The exchanges are recorded separately in `exchanges`.
- */
-export function devStubFetch(handler: (request: Request, index: number) => Response): {
-  readonly fetchImpl: typeof fetch;
-  readonly calls: StubCall[];
-  readonly exchanges: StubCall[];
-} {
-  const calls: StubCall[] = [];
-  const exchanges: StubCall[] = [];
-  const fetchImpl: typeof fetch = (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    if (request.method === 'POST' && new URL(request.url).pathname === '/v1/ci/token') {
-      exchanges.push({ request });
-      return Promise.resolve(jsonResponse(200, exchangeBody(mintedToken)));
-    }
-    calls.push({ request });
-    return Promise.resolve(handler(request, calls.length - 1));
-  };
-  return { fetchImpl, calls, exchanges };
 }
 
 /**

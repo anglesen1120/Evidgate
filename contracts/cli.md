@@ -68,6 +68,14 @@ after a `5xx`/`429`, while a `401` refresh that outlives the wait exits 3
 bounded retries, or whose decision body breaks or is aborted after its headers,
 is exit 3 even when an earlier poll answered `pending`; no such path may exit 0.
 
+A `401` on a poll is answered by one refresh per token: the refresh is spent until
+a replay with the refreshed token produces an accepted answer (a decision body,
+pending or decided). A replayed `5xx`/`429`/transport failure says nothing about
+the token and does not restore it, so a server alternating `401` and `503` mints
+once for the whole wait. Each accepted answer restores the refresh, so a `--wait`
+spanning several token lifetimes keeps going, while a `401` on the replay right
+after a refresh still exits 3 with no further refresh.
+
 The replay range is reserved, not defined: 04.9.1-T4 assigns one code each to a
 refused grant, an engine-pin mismatch, a timeout and a partial upload, and
 records them here. Until then no command emits 10–19.
@@ -346,13 +354,21 @@ server subcode changes the exit code.
   writer that replaces a registered value with `[REDACTED]`. `resolveConfig`
   registers them, and `main()` calls `resetSecrets()` then
   `registerEnvSecrets(env)` as its first statements, before any argument parsing.
-- `registerSecret(value)` also registers the trimmed, `encodeURIComponent`-,
-  JSON-string-escaped and control-character-escaped (`\uXXXX`, the form error
-  messages print) forms of the value when they differ and are non-empty; a
-  value shorter than 4 characters after trim is still registered (fail-safe).
-  `redact()` replaces longest-first, so a shorter secret cannot leave the tail
-  of a longer one in clear text. `getToken()` registers the token it returns and
-  `createApiClient(config, token)` registers `token`.
+- `registerSecret(value)` also registers the trimmed, JSON-string-escaped,
+  control-character-escaped (`\uXXXX`, the form error messages print) and
+  percent-encoded forms of the value when they differ and are non-empty. The
+  encoded form is matched per escape with either hex case, so `qa/a:b` covers
+  `qa%2Fa%3Ab` and `qa%2fa%3ab` alike; a separate lower-case spelling is not
+  needed and no longer registered. The value, the trimmed and the JSON form are
+  registered at any length (`x` is still a secret). Base64 forms (standard and
+  url-safe, padded and unpadded) are registered only when the form is at least
+  8 characters long, or when it carries a character outside `[A-Za-z0-9]`
+  (padding or the url-safe `-`/`_`): the unpadded encoding of a one-character
+  secret is two letters of ordinary text, and stripping `eA` from prose that
+  never held a secret is worse than leaving an encoded one-character secret in
+  place. `redact()` replaces longest-first, so a shorter secret cannot leave the
+  tail of a longer one in clear text. `getToken()` registers the token it
+  returns and `createApiClient(config, token)` registers `token`.
 - Consumer obligation: the registry is process-global and reset per `main()`.
   Any token minted at runtime must go through `registerSecret` before it can
   reach any writer, otherwise T78 rests on "never print it" alone. The
@@ -395,30 +411,44 @@ Commands:
   `--json --github-env` the `::add-mask::` line is always the first stdout line,
   before the JSON line, so a consumer that parses the last line still reads the
   JSON.
-- `evidgate auth logout` deletes the cache file for the resolved api_url +
-  project. An absent file is not an error.
+- `evidgate auth logout` deletes every cached entry for the resolved api_url +
+  project, whatever credential minted it, so it still works once the exchange
+  credential is unset. An absent cache is not an error.
 
 Cache:
 
 - Location: `EVIDGATE_CACHE_DIR` used as-is, else `%LOCALAPPDATA%\evidgate` on
   Windows, else `$XDG_CACHE_HOME/evidgate`, else `<home>/.cache/evidgate` (§3).
-- File name: `ci-token.<sha256 hex of api_url + "\n" + project>.json`.
-  `[DECISION]` the `\n` separator keeps the two fields unambiguous.
+- File name: `ci-token.<destination>.<binding>.json`, both 64-hex SHA-256
+  digests. `[DECISION]` destination = SHA-256 over a JSON array of a scheme
+  version (`v2`), api_url and project; binding = SHA-256 over
+  `[v2, source kind, credential value]`. A credential change selects a different
+  file, the credential itself is never written, and a purge can find every entry
+  of one destination by name alone without reading file contents. An OIDC source
+  binds the JWT, an ingest source the ingest token, a dev token the same value it
+  presents as ingest, and an actions-id-token source its request URL (its ID
+  token is fetched per run). Content stays exactly
+  `{"token":…,"expires_at":…}`. A file named by the previous destination-only
+  scheme is ignored on read and deleted by a purge.
 - Mode `0600` in a `0700` directory; the directory is `chmod 0700` when it is
   owned by the user, and a directory owned by another uid is refused
   (`token_cache_error`) on write and ignored on read. The write is atomic — a
   `0600` temp file in the same directory is renamed over the target, which
   replaces a symlink rather than following it; the cache file is opened with
-  `O_NOFOLLOW`. Content is exactly `{"token":…,"expires_at":…}`.
+  `O_NOFOLLOW`.
 - A file that is not a regular file, is group/world-readable or foreign-owned
   (POSIX), or does not parse is treated as absent — never trusted.
 - Reuse: a cached token is reused while `exp - now > 60 s`; within the margin it
   is re-exchanged and the cache rewritten (AC3). An entry whose expiry is more
   than 65 min ahead is treated as stale (`maxTokenLifetimeMs = 65 min`: server
   tokens live at most 60 min, +5 min skew).
-- Purge: a 401/403 from `/v1/ci/token` deletes the cache entry before the error
-  propagates (a delete failure is best-effort and never hides the server code);
-  `auth logout` deletes it explicitly (04.2.1 §8 retention).
+- Purge: a 401/403 from `/v1/ci/token` deletes the destination's cache entries
+  before the error propagates (a delete failure is best-effort and never hides
+  the server code); `auth logout` deletes every entry of the destination
+  explicitly (04.2.1 §8 retention).
+  A purge also removes a `.ci-token.<uuid>.tmp` file that a crashed write left in
+  `cache_dir` (only that exact name shape; it holds a whole token at `0600` and
+  its name carries no destination).
 - `[DECISION]` a cache write or delete failure is exit 3 `token_cache_error`
   whose message names the operation and never a token value.
 - `[note]` worst-case time to failure is bounded at ~150 s: 30 s for the
@@ -426,12 +456,15 @@ Cache:
   `Retry-After` + 30 s for the single retry.
 - `[DECISION]` concurrent invocations with a stale cache each exchange once; the
   atomic rename keeps the file consistent, so no lock is taken.
-- `[DECISION]` the cache is keyed by api URL + project only, so jobs of the same
-  OS user on the same runner share it for that project (the scope is identical).
-- A project-scoped command purges the cache entry when the server answers 401
-  (best-effort — a delete failure never hides the server code, which still
-  surfaces), so the next `getToken()` re-exchanges; a 403 keeps the entry, because
-  a scope refusal does not invalidate the token. First implemented by
+- `[DECISION]` the cache is keyed by api URL + project + source credential, so a
+  job whose credential changed exchanges instead of reusing a token minted from
+  the old one; jobs presenting the same credential still share its entry, so
+  jobs of the same OS user on the same runner still share it for that project
+  (the scope is identical).
+- A project-scoped command purges the destination's cache entries when the server
+  answers 401 (best-effort — a delete failure never hides the server code, which
+  still surfaces), so the next `getToken()` re-exchanges; a 403 keeps the entry,
+  because a scope refusal does not invalidate the token. First implemented by
   `manifests upload` (§8); `runs create` (04.2.2-T2, §9), `events send` and
   `runs finalize` (04.2.3-T1/T2, §11) applied the same rule — for the spool
   commands a 401 also aborts the drain without retrying a batch.
@@ -1350,7 +1383,34 @@ length-prefixed upload identity — every value the `upload-url` body is built f
   server message is passed through a URL rule: every `http(s)` URL with a query
   string loses the query (`…?[REDACTED]`), because a presigned URL IS a bearer
   credential and its signature travels there under whatever parameter name the
-  provider uses; `scheme://user:pw@host` loses its userinfo.
+  provider uses; userinfo (`user:pw@`) is removed from any authority — any
+  `scheme://`, a scheme-relative `//` and the percent-encoded spelling
+  (`https%3A%2F%2Fuser%3Apass%40host`, `%2f%2f`, `%3a`, `%40`). The scan is one
+  pass, never a rescan of a run it already consumed, so a megabyte of
+  `%2f%2f`-shaped hostile text costs the same per byte as clean text. What it
+  reads:
+
+  - The userinfo ends at the last `@` before the first `/`, so a password may
+    hold an `@`.
+  - Once the run has its `:`, only `/`, `\`, CR, LF and a tab end it: a `'`,
+    `"`, `?` or `#` is a password character (`postgres://svc:pa'ss@db/x`,
+    `pa#ss`, `pa?ss` are real passwords) until a `@` closes the userinfo.
+  - A raw space is a password character too (`user:one two three@host`), but
+    prose uses that shape, so a run holding a space is stripped only when the
+    text before the `:` holds no `.`, is not `localhost`, does not start a space
+    right after the `:` and is not a port followed by words. So
+    `Read https://docs.test: contact@example.com`,
+    `http://localhost:3000, foo@bar` and `https://host:8080 and user@mail` stay
+    readable. Residue: prose shaped `host:1 2 admin@corp.test` (a dotless name, a
+    digit, then words) is stripped, because it is indistinguishable from a
+    numeric password with a space.
+  - A run without a space must not read as a host and port either, so
+    `https://example.test:8080/users@corp.test` keeps its text.
+  - The run is capped at 4096 characters, far above any token or JWT, and the
+    bound keeps the scan linear.
+
+  The `http(s)` query-or-fragment rule is unchanged.
+
 - Server text that reaches a message is echoed only in a safe shape. A rejected
   `complete` names the artifact id and its `failure_code` when that is a plain
   token (`[A-Za-z0-9_.-]{1,64}`); any other value — an escape sequence, a newline

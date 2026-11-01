@@ -16,6 +16,8 @@ import { resolveConfig } from '../config.js';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 
+import { devStubFetch, devToken, exchangeBody, mintedToken } from './devExchange.testing.js';
+
 /** The project slug the command scopes the upload to. */
 const project = 'proj-1';
 /** A valid `manifest_id` (openapi `format: uuid`). */
@@ -75,56 +77,8 @@ function jsonResponse(
   });
 }
 
-/** The dev token both dev envs seed: an ingest credential, never a bearer. */
-const devToken = 'dev-token-value';
-/**
- * The `ci_producer` token the dev exchange mints: the bearer the upload sends. It is
- * deliberately a different string from `devToken`, so an upload that sent the dev token raw
- * would fail the `Bearer ${mintedToken}` assertion.
- */
-const mintedToken = 'egt_minted_ci_token';
 /** The exchange route a dev run posts to before its own request. */
 const exchangePath = '/v1/ci/token';
-
-/** The successful `/v1/ci/token` body (openapi `CiTokenResponse`). */
-function exchangeBody(token: string): unknown {
-  return {
-    token,
-    expires_at: '2030-01-01T00:00:00Z',
-    project_id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
-    permission_set: [],
-  };
-}
-
-interface DevStub {
-  readonly fetchImpl: typeof fetch;
-  /** The command's own requests; the dev token's exchange is never one of them. */
-  readonly calls: StubCall[];
-  /** The `POST /v1/ci/token` requests the run made, in order. */
-  readonly exchanges: StubCall[];
-}
-
-/**
- * A stub for a dev-token run. `EVIDGATE_DEV_TOKEN` is an ingest credential: `getToken`
- * exchanges it at `POST /v1/ci/token` and caches the result, so the command runs on the
- * returned `ci_producer` token. The stub answers that exchange with `mintedToken` and hands
- * every other request to `handler`.
- */
-function devStubFetch(handler: (request: Request) => Response | Promise<Response>): DevStub {
-  const calls: StubCall[] = [];
-  const exchanges: StubCall[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    const call: StubCall = { request, body: Buffer.from(await request.clone().arrayBuffer()) };
-    if (new URL(request.url).pathname === exchangePath) {
-      exchanges.push(call);
-      return jsonResponse(200, exchangeBody(mintedToken));
-    }
-    calls.push(call);
-    return handler(request);
-  };
-  return { fetchImpl, calls, exchanges };
-}
 
 describe('manifests upload', () => {
   const dirs: string[] = [];

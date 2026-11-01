@@ -254,7 +254,16 @@ module.exports = tseslint.config(
   {
     files: ['packages/**/*.{ts,tsx}'],
     // 01.6.1-T1.2 / 01.6.1-T5.1: the same spec/config exclusion as the apps/web block above.
-    ignores: ['**/*.test.ts', '**/*.spec.ts', '**/vitest.config.ts', '**/playwright.config.ts'],
+    // The fixture modules the specs share (`*.testing.ts`) are excluded from the emitting
+    // project too, so the project service cannot open them — the block below types them
+    // against the package's no-emit tsconfig.spec.json.
+    ignores: [
+      '**/*.test.ts',
+      '**/*.spec.ts',
+      '**/*.testing.ts',
+      '**/vitest.config.ts',
+      '**/playwright.config.ts',
+    ],
     extends: [tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
@@ -287,6 +296,10 @@ module.exports = tseslint.config(
       // 09.1.1-T4.4: and the suite's own non-spec module (`e2e/shell/support.ts`), which the
       // emitting app project does not include.
       'apps/web/e2e/**/*.ts',
+      // The fixture modules a package's specs share are not spec files either, so they need
+      // their own entry: each package's tsconfig.spec.json includes them and its emitting
+      // tsconfig.json excludes them.
+      'packages/*/src/**/*.testing.ts',
     ],
     extends: [tseslint.configs.recommendedTypeChecked, ...angularTsRecommended],
     // 09.1.1-T1: a spec may declare its own TestBed host component, so the inline templates

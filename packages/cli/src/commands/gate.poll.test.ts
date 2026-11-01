@@ -7,6 +7,7 @@ import { CliError } from '../errors.js';
 import { resetSecrets } from '../redact.js';
 import { perRequestTimeoutMs } from '../senderLimits.js';
 
+import { devStubFetch, exchangeBody } from './devExchange.testing.js';
 import type { GateOutcome } from './gateDecision.js';
 import { pollDecision } from './gatePoll.js';
 import {
@@ -14,8 +15,6 @@ import {
   capture,
   decided,
   devEnv,
-  devStubFetch,
-  exchangeBody,
   fakeClock,
   gateArgv,
   ingestEnv,

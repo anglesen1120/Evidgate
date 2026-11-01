@@ -284,3 +284,236 @@ describe('presigned URL redaction', () => {
     expect(redact(once)).toBe(once);
   });
 });
+
+// A URL credential travels in more spellings than the plain http one: a scheme-relative
+// reference, the percent-encoded form a query round-trip produces, a database URL, and a
+// password that kept a raw space. Each row keeps the host and the path readable.
+describe('URL credential spellings', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  const credentialRows = [
+    {
+      shape: 'a scheme-relative URL',
+      input: 'see //user:secret@store.test/path now',
+      expected: 'see //store.test/path now',
+    },
+    {
+      shape: 'a percent-encoded URL in upper case',
+      input: 'https%3A%2F%2Fuser%3Asecret%40store.test/object',
+      expected: 'https%3A%2F%2Fstore.test/object',
+    },
+    {
+      shape: 'a percent-encoded URL in lower case',
+      input: 'https%3a%2f%2fuser%3asecret%40store.test/object',
+      expected: 'https%3a%2f%2fstore.test/object',
+    },
+    {
+      shape: 'a percent-encoded scheme-relative reference',
+      input: '%2f%2fuser%3Asecret%40store.test/object',
+      expected: '%2f%2fstore.test/object',
+    },
+    {
+      shape: 'a postgres scheme',
+      input: 'connect postgres://user:secret@db.test:5432/app now',
+      expected: 'connect postgres://db.test:5432/app now',
+    },
+    {
+      shape: 'any other scheme',
+      input: 'redis://user:secret@cache.test/0',
+      expected: 'redis://cache.test/0',
+    },
+    {
+      shape: 'a raw space inside the password',
+      input: 'https://user:pa ss@store.test/object',
+      expected: 'https://store.test/object',
+    },
+    {
+      shape: 'a raw space inside the password of a signed URL',
+      input: 'https://user:pa ss@store.test/object?X-Amz-Signature=abc',
+      expected: 'https://store.test/object?[REDACTED]',
+    },
+    {
+      shape: 'several spaces inside the password',
+      input: 'https://user:one two three@store.test/object',
+      expected: 'https://store.test/object',
+    },
+    {
+      shape: 'a numeric password with a space',
+      input: 'https://user:123 456@store.test/object',
+      expected: 'https://store.test/object',
+    },
+    {
+      shape: 'a numeric password',
+      input: 'postgres://svc:123@db.test:5432/app',
+      expected: 'postgres://db.test:5432/app',
+    },
+    {
+      shape: 'a quote inside the password',
+      input: "postgres://svc:pa'ss@db.test:5432/app",
+      expected: 'postgres://db.test:5432/app',
+    },
+    {
+      shape: 'a fragment marker inside the password',
+      input: 'postgres://svc:pa#ss@db.test:5432/app',
+      expected: 'postgres://db.test:5432/app',
+    },
+    {
+      shape: 'a query marker inside the password',
+      input: 'postgres://svc:pa?ss@db.test:5432/app',
+      expected: 'postgres://db.test:5432/app',
+    },
+    {
+      shape: 'a double quote inside the password',
+      input: 'postgres://svc:pa"ss@db.test:5432/app',
+      expected: 'postgres://db.test:5432/app',
+    },
+    {
+      shape: 'a password that closes at the last `@`',
+      input: 'https://user:pa@ss@store.test/object',
+      expected: 'https://store.test/object',
+    },
+    {
+      shape: 'a userinfo longer than the old scan window',
+      input: `//user:${'x'.repeat(507)}@host/path`,
+      expected: '//host/path',
+    },
+    {
+      shape: 'a JWT longer than the old scan window',
+      input: `https://eyJ${'a'.repeat(597)}@store.test/object`,
+      expected: 'https://store.test/object',
+    },
+  ];
+
+  it.each(credentialRows)('strips the credential from $shape', ({ input, expected }) => {
+    expect(redact(input)).toBe(expected);
+  });
+
+  it.each(credentialRows)(
+    'strips the credential twice without changing the second result',
+    ({ input, expected }) => {
+      expect(redact(redact(input))).toBe(redact(expected));
+    },
+  );
+
+  // The scan runs over every line, so ordinary text must survive it unchanged.
+  const untouchedRows = [
+    { shape: 'a scheme-relative URL without userinfo', text: 'see //example.com/path' },
+    { shape: 'percent-encoded ordinary text', text: 'a%20b' },
+    { shape: 'an email address', text: 'write to user@host' },
+    { shape: 'a URL without userinfo', text: 'see https://docs.evidgate.dev/cli' },
+    { shape: 'prose that follows a host and port', text: 'https://host:8080 and user@mail' },
+    { shape: 'an authority that a line break ends', text: 'see //host\nuser:pw@mail' },
+    { shape: 'a base64 string that is not registered', text: 'cGFzc3dvcmQ=' },
+    {
+      shape: 'a dotted host that a colon and a space follow',
+      text: 'Read https://docs.test: contact@example.com',
+    },
+    { shape: 'a localhost port and the prose after it', text: 'http://localhost:3000, foo@bar' },
+    {
+      shape: 'a host, a port and a user-looking path',
+      text: 'see https://example.test:8080/users@corp.test now',
+    },
+  ];
+
+  it.each(untouchedRows)('keeps $shape intact', ({ text }) => {
+    expect(redact(text)).toBe(text);
+  });
+
+  it('stays linear on 200 KB of authority-shaped text', () => {
+    const credentialed = '//user:pa ss@host/path '.repeat(8_000);
+    const slashes = '//'.repeat(100_000);
+    const started = performance.now();
+
+    expect(redact(credentialed)).toBe('//host/path '.repeat(8_000));
+    expect(redact(slashes)).toBe(slashes);
+    // Linear in the input: a backtracking shape would need seconds for either string.
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  // A server message is untrusted input, so the scan must survive a megabyte of the shape that
+  // is worst for it: a match at every position. Each case redacts in one pass over the text,
+  // because a match advances past the run it consumed instead of rescanning it.
+  const hostileRows = [
+    { shape: 'percent-encoded authority starts', unit: '%2f%2f', stripped: '', repeats: 174_763 },
+    {
+      shape: 'a userinfo at every authority start',
+      unit: '//a@',
+      stripped: 'a@',
+      repeats: 262_144,
+    },
+    {
+      shape: 'a userinfo at every encoded authority start',
+      unit: '%2f%2fa@',
+      stripped: 'a@',
+      repeats: 116_509,
+    },
+  ];
+
+  it.each(hostileRows)(
+    'redacts a megabyte of $shape without a rescan',
+    ({ unit, stripped, repeats }) => {
+      const text = unit.repeat(repeats);
+      const expected = (stripped === '' ? unit : unit.replace(stripped, '')).repeat(repeats);
+      const started = performance.now();
+
+      expect(redact(text)).toBe(expected);
+      expect(performance.now() - started).toBeLessThan(200);
+    },
+  );
+});
+
+// A token is often echoed already encoded — in a header value or a URL parameter — so the
+// registry carries the percent-encoded and base64 spellings of every secret.
+describe('registered secret encodings', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  const encodedRows = [
+    { shape: 'standard base64', secret: 'evg_dev_token', encoded: 'ZXZnX2Rldl90b2tlbg==' },
+    {
+      shape: 'standard base64 without padding',
+      secret: 'evg_dev_token',
+      encoded: 'ZXZnX2Rldl90b2tlbg',
+    },
+    { shape: 'url-safe base64', secret: 'a?>b~', encoded: 'YT8-Yn4=' },
+    { shape: 'url-safe base64 without padding', secret: 'a?>b~', encoded: 'YT8-Yn4' },
+    {
+      shape: 'a percent encoding with lower-case escapes',
+      secret: 'a:b',
+      encoded: 'a%3ab',
+    },
+    // A caller that re-encodes a secret picks its own hex case, so the encoded spelling is
+    // matched per escape rather than as one literal.
+    {
+      shape: 'a percent encoding with mixed-case escapes',
+      secret: 'qa/a:b',
+      encoded: 'qa%2Fa%3ab',
+    },
+    {
+      shape: 'a percent encoding with the other mixed case',
+      secret: 'qa/a:b',
+      encoded: 'qa%2fa%3Ab',
+    },
+  ];
+
+  it.each(encodedRows)('replaces the $shape of a registered secret', ({ secret, encoded }) => {
+    registerSecret(secret);
+    expect(redact(`value ${encoded} here`)).toBe(`value ${redacted} here`);
+  });
+
+  it('replaces the padded base64 form without leaving its padding behind', () => {
+    registerSecret('evg_dev_token');
+    expect(redact('ZXZnX2Rldl90b2tlbg==')).toBe(redacted);
+  });
+
+  // A short secret still has a value form worth registering, but its encoding is a few letters
+  // of ordinary text; stripping that would rewrite output that never held the secret.
+  it('leaves a short derived form of a short secret unregistered', () => {
+    registerSecret('x');
+    expect(redact('hello eA')).toBe('hello eA');
+    expect(redact('value x here')).toBe(`value ${redacted} here`);
+  });
+});
