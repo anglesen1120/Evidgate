@@ -8,18 +8,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ExitCode } from '../exitCodes.js';
 import { resetSecrets } from '../redact.js';
 
+import { devStubFetch, devToken, exchangeBody, mintedToken } from './devExchange.testing.js';
 import { exitCodeForDecision, type GateDecisionValue } from './gateDecision.js';
 import {
   cacheDirs,
   capture,
   decided,
   devEnv,
-  devStubFetch,
-  devToken,
-  exchangeBody,
   gateArgv,
   invoke,
-  mintedToken,
   refusal,
   runId,
 } from './gate.kit.test.js';

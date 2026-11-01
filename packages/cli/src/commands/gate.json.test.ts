@@ -4,17 +4,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resetSecrets } from '../redact.js';
 
+import { devStubFetch } from './devExchange.testing.js';
 import type { GateDecisionValue } from './gateDecision.js';
-import {
-  cacheDirs,
-  capture,
-  decided,
-  devEnv,
-  devStubFetch,
-  gateArgv,
-  invoke,
-  runId,
-} from './gate.kit.test.js';
+import { cacheDirs, capture, decided, devEnv, gateArgv, invoke, runId } from './gate.kit.test.js';
 
 const keys = ['decision', 'completeness', 'evaluation_id', 'mode', 'url'];
 
