@@ -1,7 +1,9 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Pipeline;
+using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Identity;
+using Evidgate.Modules.Orchestrator;
 using Evidgate.Modules.Policy;
 using Mediator;
 using Microsoft.Extensions.Configuration;
@@ -14,9 +16,9 @@ using Microsoft.Extensions.Logging;
 namespace Evidgate.Migrator;
 
 /// <summary>
-/// The in-process container <c>seed-dev --with-token</c> drives the modules' commands through: the same registrations
-/// the Api and the Worker use, over the app-role data source, so the seed's token and policy come from the real
-/// handlers under the real pipeline rather than from a second copy of their logic.
+/// The in-process container <c>seed-dev</c> drives the modules' services and commands through: the same registrations
+/// the Api and the Worker use, over the app-role data source, so the seed's catalog rows, token and policy come from the
+/// real handlers under the real pipeline rather than from a second copy of their logic.
 /// </summary>
 /// <remarks>
 /// The composition is the shared extensions the entry points call, in their order, so a change to any of them reaches
@@ -55,8 +57,10 @@ internal static class DevSeedServices
             options.ServiceLifetime = ServiceLifetime.Scoped;
         });
         services.AddEvidgatePipeline();
+        services.AddCatalogModule();
         services.AddPolicyModule();
         services.AddIdentityModule(configuration);
+        services.AddOrchestratorModule();
 
         return services.BuildServiceProvider();
     }

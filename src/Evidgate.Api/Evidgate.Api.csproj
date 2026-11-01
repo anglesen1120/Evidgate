@@ -1,4 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <!-- The contract schema set code-generates and Roslyn-compiles its validators at runtime (Corvus
+         Json.Validator); without the compile assets in deps.json the first schema-validated request
+         answers 500 on a running host. The Migrator and tests/Contract.Tests set it for the same reason. -->
+    <PreserveCompilationContext>true</PreserveCompilationContext>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Mediator.Abstractions" />
     <PackageReference Include="Mediator.SourceGenerator" PrivateAssets="all" />
