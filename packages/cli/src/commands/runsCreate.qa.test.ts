@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 
+import { devExchangeAnswer, devToken, isDevExchange, mintedToken } from './devExchange.testing.js';
 import { deriveRunIdempotencyKey, type RunIdempotencyKeyInput } from './runsCreate.js';
 
 /** The project slug the command scopes the create to. */
@@ -99,38 +100,23 @@ function created(overrides: Record<string, unknown> = {}): Response {
 
 /** The `project_id` the exchange echoes back (openapi `format: uuid`). */
 const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
-/** The `EVIDGATE_DEV_TOKEN` the QA env seeds: an ingest credential, never a bearer. */
-const devToken = 'qa-dev-token';
-/**
- * The `ci_producer` token the dev exchange mints: the bearer the command sends. It is
- * deliberately a different string from `devToken`, so a command that sent the dev token raw
- * would fail the `Bearer ${mintedToken}` assertion.
- */
-const mintedToken = 'egt_minted_qa_ci_token';
 
 /**
- * The `/v1/ci/token` answer for the dev source: the dev token is exchanged like an ingest
- * credential, so the bearer is the token this body hands out. The answer is `mintedToken`, not
- * the dev token's value, and it expires 30 minutes out, inside the cache's 60 + 5 minute
- * freshness window.
+ * A stub whose handler answers the command's own request, never the token exchange. The minted
+ * token expires 30 minutes out, inside the cache's 60 + 5 minute freshness window, so a second
+ * invocation reuses the cached one instead of exchanging again.
  */
-function devTokenExchange(request: Request): Response | undefined {
-  return new URL(request.url).pathname === '/v1/ci/token'
-    ? jsonResponse(200, {
-        token: mintedToken,
-        expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
-        project_id: exchangeProjectId,
-        permission_set: [],
-      })
-    : undefined;
-}
-
-/** A stub whose handler answers the command's own request, never the token exchange. */
 function stubDevFetch(handler: (request: Request) => Response | Promise<Response>): {
   readonly fetchImpl: typeof fetch;
   readonly calls: StubCall[];
 } {
-  return stubFetch((request) => devTokenExchange(request) ?? handler(request));
+  return stubFetch(
+    (request) =>
+      devExchangeAnswer(request, {
+        projectId: exchangeProjectId,
+        expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      }) ?? handler(request),
+  );
 }
 
 /**
@@ -138,7 +124,7 @@ function stubDevFetch(handler: (request: Request) => Response | Promise<Response
  * index means the same thing it did before the dev source gained a token exchange.
  */
 function apiCalls(stub: { readonly calls: StubCall[] }): StubCall[] {
-  return stub.calls.filter((call) => new URL(call.request.url).pathname !== '/v1/ci/token');
+  return stub.calls.filter((call) => !isDevExchange(call.request));
 }
 
 /** A 00 §9.2 error envelope with the given code (and optional details). */

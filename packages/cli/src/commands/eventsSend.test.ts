@@ -23,6 +23,8 @@ import { resetSecrets, type Io } from '../redact.js';
 import { ProducerSpool, listProducers, maxSpoolLineBytes } from '../spool.js';
 import { writerLockFileName } from '../spoolLock.js';
 
+import { devToken, exchangeBody, isDevExchange, mintedToken } from './devExchange.testing.js';
+
 import type { ExchangeDeps } from '../auth/exchange.js';
 
 /** The run every case spools for (openapi `RunId`, `format: uuid`). */
@@ -31,17 +33,8 @@ const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
 const producer = 'pw-shard-0';
 /** A second producer, to prove the intake groups by the envelope's own `producer_id`. */
 const otherProducer = 'pw-shard-1';
-/** A dev token, assembled so no token-looking literal is stored (T78). */
-const devToken = ['dev', 'token', '0123456789'].join('-');
-/**
- * The `ci_producer` token the stub mints, assembled like `devToken`. It is deliberately a
- * different string, so a send that carried the dev token raw would fail the bearer checks.
- */
-const mintedToken = ['egt', 'minted', 'ci', 'token'].join('-');
 /** A loopback API URL, which the dev-token path requires. */
 const apiUrl = 'http://127.0.0.1:8080';
-/** The exchange route a dev run posts to before its first batch. */
-const exchangePath = '/v1/ci/token';
 /** The default run-directory cap, used by the specs that do not lower it. */
 const defaultMaxBytes = 268_435_456;
 
@@ -147,14 +140,9 @@ function stubFetch(handler: (call: StubCall) => Response | Promise<Response>): {
       key: request.headers.get('idempotency-key'),
       events,
     };
-    if (new URL(request.url).pathname === exchangePath) {
+    if (isDevExchange(request)) {
       exchanges.push(call);
-      return jsonResponse(200, {
-        token: mintedToken,
-        expires_at: '2030-01-01T00:00:00Z',
-        project_id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
-        permission_set: [],
-      });
+      return jsonResponse(200, exchangeBody(mintedToken));
     }
     calls.push(call);
     return handler(call);
