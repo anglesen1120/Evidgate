@@ -24,6 +24,9 @@
   "exclude": [],
   "include": [
     "src/**/*.spec.ts",
+    // The fixture module the exporter specs share; unlisted, its exports resolve to `error`
+    // types in the type-aware lint run.
+    "src/**/*.testing.ts",
     "playwright.config.ts",
     // 09.1.1-T4.4: the fixtures-config Playwright suite (the shell's real-browser gate). Named
     // explicitly because `**/playwright.config.ts` does not match `playwright.fixtures.config.ts`.

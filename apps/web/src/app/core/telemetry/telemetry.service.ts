@@ -20,12 +20,11 @@ import {
   NavigationSkipped,
   NavigationStart,
   Router,
-  type ActivatedRouteSnapshot,
   type Event as RouterEvent,
 } from '@angular/router';
 import type { Subscription } from 'rxjs';
 
-import { routeTemplate, UNKNOWN_ROUTE } from './route-template';
+import { routeTemplate, UNKNOWN_ROUTE, type RouteTreeNode } from './route-template';
 import { TELEMETRY_CONFIG, TELEMETRY_OPT_OUT } from './telemetry-config';
 import type { TelemetryConfig } from './telemetry-config';
 import type { TelemetryEventName } from './telemetry-names';
@@ -39,13 +38,13 @@ import type {
 } from './telemetry-sdk';
 
 /**
- * The route tree of a router that has not matched anything yet: `routeTemplate` reads it as `/`,
- * which is the same `/` an unmatched root reports.
+ * The route tree of a router that has not matched anything yet: `routeTemplate` reads it as the
+ * unknown-route placeholder, which is what an unmatched router state reports as well.
  */
-const EMPTY_ROUTE_ROOT = {
+const EMPTY_ROUTE_ROOT: RouteTreeNode = {
   routeConfig: null,
   firstChild: null,
-} as unknown as ActivatedRouteSnapshot;
+};
 
 /** The lazily imported chunk: exactly the SDK entry point's signature. */
 export type TelemetrySdkLoader = () => Promise<{ startTelemetrySdk: typeof startTelemetrySdk }>;
@@ -90,9 +89,10 @@ function originOf(value: string | null): string | null {
 /**
  * The members of a violation report the guard reads. Narrow on purpose: the browser sends a
  * `SecurityPolicyViolationEvent`, but a policed page can also see a plain event, and a missing
- * field must read as "not our block", never as a thrown error.
+ * field must read as "not our block", never as a thrown error. Exported as the contract the
+ * registered listener accepts, so a spec can call it with the fields a raised violation carries.
  */
-interface ViolationFields {
+export interface ViolationFields {
   readonly blockedURI?: string;
   readonly effectiveDirective?: string;
   readonly violatedDirective?: string;
@@ -231,16 +231,15 @@ export class TelemetryService {
    * origin switch export off, and the warning names the directive alone — the URI could carry a
    * token in its query.
    */
-  private readonly onSecurityPolicyViolation = (event: SecurityPolicyViolationEvent): void => {
-    const report: ViolationFields = event;
-    if (report.isTrusted !== true) {
+  private readonly onSecurityPolicyViolation = (event: ViolationFields): void => {
+    if (event.isTrusted !== true) {
       return;
     }
-    const directive = report.effectiveDirective ?? report.violatedDirective ?? '';
-    if (this.exportDisabled || report.disposition === 'report-only') {
+    const directive = event.effectiveDirective ?? event.violatedDirective ?? '';
+    if (this.exportDisabled || event.disposition === 'report-only') {
       return;
     }
-    if (!directive.startsWith('connect-src') || !this.blocksEndpoint(report.blockedURI ?? '')) {
+    if (!directive.startsWith('connect-src') || !this.blocksEndpoint(event.blockedURI ?? '')) {
       return;
     }
     this.exportDisabled = true;
@@ -413,7 +412,7 @@ export class TelemetryService {
   }
 
   /** The live route tree root, or an empty chain when the router has none yet. */
-  private routerStateRoot(): ActivatedRouteSnapshot {
+  private routerStateRoot(): RouteTreeNode {
     return this.router?.routerState.snapshot.root ?? EMPTY_ROUTE_ROOT;
   }
 

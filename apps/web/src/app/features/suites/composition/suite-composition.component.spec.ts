@@ -3,7 +3,6 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { SuiteRevisionDto } from '@evidgate/sdk';
-import ready from '../../../../../../../fixtures/web-api/suite-revision/input.json';
 import empty from '../../../../../../../fixtures/web-api/suite-revision-empty/input.json';
 import forbidden from '../../../../../../../fixtures/web-api/suite-revision-forbidden/input.json';
 import notFound from '../../../../../../../fixtures/web-api/suite-revision-not-found/input.json';
@@ -14,55 +13,18 @@ import { ApiRequestError } from '../../../core/http/api-error';
 import { mapApiError } from '../../../core/http/error-mapper';
 import { routes } from '../suites.routes';
 import { SuiteCompositionComponent } from './suite-composition.component';
+import {
+  gridRevision,
+  readyRevision as revision,
+  sparseGridRevision,
+} from './suite-composition.testing';
 
-const revision = ready.body as SuiteRevisionDto;
 const publishedRevision = published.body as SuiteRevisionDto;
 const emptyRevision = empty.body as SuiteRevisionDto;
 const editAffordances =
   'button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), ' +
   '[role="button"], [role="textbox"], [role="combobox"], [role="slider"], [role="spinbutton"], ' +
   '[role="checkbox"], [role="switch"]';
-
-/** A revision whose members fill a rows × columns grid, one member per cell. */
-function gridRevision(rows: number, columns: number): SuiteRevisionDto {
-  const members: SuiteRevisionDto['members'] = [];
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      members.push({
-        id: `member-${row}-${column}`,
-        case_revision_id: `case-${String(row).padStart(3, '0')}`,
-        variant_hash: `variant-${column}`,
-        params: { column },
-        required: column % 2 === 0,
-        ordinal: column,
-      });
-    }
-  }
-  return { ...revision, members, edges: [] };
-}
-
-/**
- * A revision whose grid has `rows × columns` cells but only `placed` members, so the layout is
- * `flat` while the member list stays short enough to exhaust in one press. The stride hits every
- * row and every column while `placed` stays below their product, which is what makes the cell
- * count — not the member count — the reason for the flat layout.
- */
-function sparseGridRevision(rows: number, columns: number, placed: number): SuiteRevisionDto {
-  const members: SuiteRevisionDto['members'] = [];
-  for (let index = 0; index < placed; index += 1) {
-    const row = index % rows;
-    const column = index % columns;
-    members.push({
-      id: `member-${index}`,
-      case_revision_id: `case-${String(row).padStart(3, '0')}`,
-      variant_hash: `variant-${column}`,
-      params: { column },
-      required: column % 2 === 0,
-      ordinal: index,
-    });
-  }
-  return { ...revision, members, edges: [] };
-}
 
 /**
  * The deferred resolver by hand: `Promise.withResolvers` is ES2024 and this project compiles

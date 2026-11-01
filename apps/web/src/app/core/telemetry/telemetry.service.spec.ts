@@ -15,7 +15,6 @@ import {
   NavigationSkipped,
   NavigationStart,
   Router,
-  type ActivatedRouteSnapshot,
   type Event as RouterEvent,
 } from '@angular/router';
 import { LOCALE_ID } from '@angular/core';
@@ -29,6 +28,7 @@ import {
 import { Observable, Subject } from 'rxjs';
 import type { Metric } from 'web-vitals';
 
+import { type RouteTreeNode } from './route-template';
 import { startTelemetrySdk } from './telemetry-sdk';
 import type {
   ApiCall,
@@ -42,22 +42,21 @@ import type {
 } from './telemetry-sdk';
 import { AUDIT_EXPORT_CAPPED_EVENT, type TelemetryEventName } from './telemetry-names';
 import { TELEMETRY_CONFIG, TELEMETRY_OPT_OUT, type TelemetryConfig } from './telemetry-config';
-import { TELEMETRY_SDK_LOADER, TelemetryService } from './telemetry.service';
+import { TELEMETRY_SDK_LOADER, TelemetryService, type ViolationFields } from './telemetry.service';
 
 /** A concrete id and query a navigation can carry but no span attribute may. */
 const RUN_UUID = '3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b';
 
 /** One node per route in the chain; `routeConfig.path` and `firstChild` are all that is read. */
-function snapshot(paths: readonly (string | null)[]): ActivatedRouteSnapshot {
+function snapshot(paths: readonly (string | null)[]): RouteTreeNode {
   const [path, ...rest] = paths;
   if (path === undefined) {
     throw new Error('snapshot needs at least one route');
   }
-  const node = {
+  return {
     routeConfig: path === null ? null : { path },
     firstChild: rest.length === 0 ? null : snapshot(rest),
   };
-  return node as unknown as ActivatedRouteSnapshot;
 }
 
 /**
@@ -311,27 +310,31 @@ function configFor(origin: string): TelemetryConfig {
   return { endpoint: `${origin}/v1/traces`, sampleRatio: 1 };
 }
 
-/**
- * Dispatches a `securitypolicyviolation` on the document. jsdom has no
- * `SecurityPolicyViolationEvent` constructor, so the fields are defined on a plain `Event` — the
- * same shape the browser sends, without the browser.
- */
 /** The listeners the facade registers on `document`, captured before it starts. */
 let documentListeners: MockInstance<Document['addEventListener']>;
 
+/** The `securitypolicyviolation` listener, narrowed out of `addEventListener`'s parameter union. */
+function isViolationListener(value: unknown): value is (event: ViolationFields) => void {
+  return typeof value === 'function';
+}
+
+/**
+ * Dispatches a `securitypolicyviolation` on the document. jsdom has no
+ * `SecurityPolicyViolationEvent` constructor, and it reports `isTrusted: false` for every event it
+ * can build, so the spec calls the listener the facade registered with the fields a raised
+ * violation carries.
+ */
 function dispatchCspViolation(
   blockedURI: string,
   directive: string = 'connect-src',
   disposition: string = 'enforce',
   trusted: boolean = true,
 ): void {
-  // jsdom reports `isTrusted: false` for every event and that own property cannot be redefined, so
-  // the spec calls the listener the facade registered, with the fields a raised violation carries.
   const registration = documentListeners.mock.calls.find(
     ([type]) => type === 'securitypolicyviolation',
   );
-  const handler = registration?.[1] as ((event: SecurityPolicyViolationEvent) => void) | undefined;
-  if (handler === undefined) {
+  const handler = registration?.[1];
+  if (!isViolationListener(handler)) {
     throw new Error('the facade registered no securitypolicyviolation listener');
   }
   handler({
@@ -340,7 +343,7 @@ function dispatchCspViolation(
     violatedDirective: directive,
     disposition,
     isTrusted: trusted,
-  } as unknown as SecurityPolicyViolationEvent);
+  });
 }
 
 /** A `traceparent` a server can continue, independent of any exporter. */
