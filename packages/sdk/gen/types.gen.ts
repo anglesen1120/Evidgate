@@ -320,15 +320,52 @@ export type RunRef = {
 };
 
 /**
- * Evaluation decision or `pending` (00 §8.5/§9.3); `decision` values are upper case (00 §7).
+ * Release decision body of `GET /releases/{id}/decision` (00 §8.5/§9.3). Not reconciled with the run body `Decision`; the release story owns its shape.
  */
-export type Decision = {
+export type ReleaseDecision = {
     /**
      * null while pending (00 §9.3); UPPER per 00 §7
      */
     decision?: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
     evaluation_revision?: string;
     reasons?: Array<string>;
+};
+
+/**
+ * Body of `GET /runs/{r}/decision`: one shape for an evaluated and a pending run. Every member is required; a pending run has `status: pending` and null in every other member except `url`. Evaluated members are copied from one immutable live `evaluation` row.
+ */
+export type Decision = unknown & {
+    /**
+     * `pending` when the run has no live evaluation row.
+     */
+    status: 'pending' | 'evaluated';
+    /**
+     * null while pending, never a default; UPPER per 00 §7
+     */
+    decision: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
+    evaluation_id: string | null;
+    /**
+     * `revision_no` of the frozen evidence revision that was evaluated.
+     */
+    evidence_revision: number | null;
+    completeness: 'complete' | 'incomplete' | null;
+    outcome: 'all_passed' | 'has_failures' | 'no_results' | null;
+    /**
+     * Null while pending, never `[]`; closed eight-code list.
+     */
+    missing: Array<'missing_shard' | 'count_mismatch' | 'artifact_missing' | 'build_mismatch' | 'unknown_status' | 'setup_error' | 'stale_epoch' | 'missing_result'> | null;
+    reasons: Array<string> | null;
+    policy_hash: string | null;
+    manifest_hash: string | null;
+    evaluator_version: string | null;
+    /**
+     * Only `live` rows are served; shadow rows never appear here.
+     */
+    mode: 'live' | null;
+    /**
+     * Run page URL; null when the deployment has no public base URL.
+     */
+    url: string | null;
 };
 
 /**
@@ -4742,7 +4779,7 @@ export type GetReleaseDecisionResponses = {
     /**
      * Release decision (07)
      */
-    200: Decision;
+    200: ReleaseDecision;
 };
 
 export type GetReleaseDecisionResponse = GetReleaseDecisionResponses[keyof GetReleaseDecisionResponses];
