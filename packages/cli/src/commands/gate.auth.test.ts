@@ -5,18 +5,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { writeCachedToken } from '../auth/tokenCache.js';
 import { resetSecrets } from '../redact.js';
 
+import { devToken, exchangeBody, mintedToken } from './devExchange.testing.js';
 import {
   cacheDirs,
   capture,
   decided,
   devEnv,
-  devToken,
-  exchangeBody,
   gateArgv,
   ingestEnv,
   invoke,
   jsonResponse,
-  mintedToken,
   oidcEnv,
   project,
   refusal,
@@ -125,7 +123,12 @@ describe('gate token refresh', () => {
     // A cached token proves the JWT the cache was minted from is not spent by this run, so
     // the refused token can be replaced by a fresh exchange.
     await writeCachedToken(
-      { apiUrl: 'https://api.evidgate.test', project, cacheDir: env.EVIDGATE_CACHE_DIR },
+      {
+        apiUrl: 'https://api.evidgate.test',
+        project,
+        cacheDir: env.EVIDGATE_CACHE_DIR,
+        oidcToken: env.EVIDGATE_OIDC_TOKEN,
+      },
       // Ten minutes ahead of the virtual clock the command runs on, so the entry reads fresh.
       { token: 'egt-cached', expiresAt: new Date(10 * 60_000).toISOString() },
     );

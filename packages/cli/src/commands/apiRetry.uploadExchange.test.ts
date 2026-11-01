@@ -15,14 +15,14 @@ import { CliError } from '../errors.js';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 
+import { devStubFetch, devToken, exchangeBody, mintedToken } from './devExchange.testing.js';
+
 /** The project slug both calls scope the request to. */
 const project = 'proj-1';
 /** A valid `manifest_id` (openapi `format: uuid`). */
 const manifestId = '9b2f4c1e-2a3b-4c5d-8e9f-0a1b2c3d4e5f';
 /** A valid `manifest_hash` (`sha256:` + 64 lowercase hex). */
 const manifestHash = `sha256:${'a'.repeat(64)}`;
-/** A valid `project_id` for the exchange (openapi `format: uuid`). */
-const projectId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 /** The manifest bytes the command uploads; the digest of these is the upload's key. */
 const manifestText = '{\n  "schema": "manifest.v1",\n  "n": 12345678901234567890\n}\n';
 
@@ -88,61 +88,6 @@ function refusal(status: number, code: string, headers: Record<string, string> =
     },
     headers,
   );
-}
-
-/** The successful exchange body (openapi `CiTokenResponse`), handing out the minted token. */
-function exchangedToken(): Response {
-  return jsonResponse(200, {
-    token: mintedToken,
-    expires_at: '2030-01-01T00:00:00Z',
-    project_id: projectId,
-    permission_set: [],
-  });
-}
-
-/** The dev token the M1 env seeds: an ingest credential, never a bearer. */
-const devToken = 'dev-token-value';
-/**
- * The `ci_producer` token the dev exchange mints. It is deliberately a different string from
- * `devToken`, so an upload that sent the dev token raw would fail the bearer assertions.
- */
-const mintedToken = 'egt_minted_ci_token';
-/** The exchange route a dev run posts to before its own request. */
-const exchangePath = '/v1/ci/token';
-
-interface DevStub {
-  readonly fetchImpl: typeof fetch;
-  /** The command's own requests; the dev token's exchange is never one of them. */
-  readonly calls: StubCall[];
-  /** The `POST /v1/ci/token` requests the run made, in order. */
-  readonly exchanges: StubCall[];
-}
-
-/**
- * A stub for a dev-token run. `EVIDGATE_DEV_TOKEN` is an ingest credential: `getToken`
- * exchanges it at `POST /v1/ci/token` and caches the result, so the upload runs on the
- * returned `ci_producer` token. The stub answers that exchange with `mintedToken` and hands
- * every other request to `handler`.
- */
-function devStubFetch(handler: (request: Request) => Response | Promise<Response>): DevStub {
-  const calls: StubCall[] = [];
-  const exchanges: StubCall[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    const call: StubCall = { request, body: Buffer.from(await request.clone().arrayBuffer()) };
-    if (new URL(request.url).pathname === exchangePath) {
-      exchanges.push(call);
-      return jsonResponse(200, {
-        token: mintedToken,
-        expires_at: '2030-01-01T00:00:00Z',
-        project_id: projectId,
-        permission_set: [],
-      });
-    }
-    calls.push(call);
-    return handler(request);
-  };
-  return { fetchImpl, calls, exchanges };
 }
 
 /** The wait seams: a sleep that records its argument and never blocks. */
@@ -345,7 +290,9 @@ describe('token exchange retries', () => {
     let attempt = 0;
     const stub = stubFetch(() => {
       attempt += 1;
-      return attempt === 1 ? refusal(503, 'unavailable', { 'retry-after': '1' }) : exchangedToken();
+      return attempt === 1
+        ? refusal(503, 'unavailable', { 'retry-after': '1' })
+        : jsonResponse(200, exchangeBody(mintedToken));
     });
     const fake = fakeDeps(stub.fetchImpl);
 
@@ -400,7 +347,7 @@ describe('token exchange retries', () => {
       attempt += 1;
       return attempt === 1
         ? refusal(429, 'rate_limited', { 'retry-after': '2' })
-        : exchangedToken();
+        : jsonResponse(200, exchangeBody(mintedToken));
     });
     const fake = fakeDeps(stub.fetchImpl);
 

@@ -13,6 +13,8 @@ import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 import { defaultSpoolMaxBytes, ProducerSpool } from '../spool.js';
 
+import { devStubFetch, devToken, mintedToken, type DevStubCall } from './devExchange.testing.js';
+
 /** The project slug both commands scope their request to. */
 const project = 'proj-1';
 /** A valid `manifest_id` (openapi `format: uuid`). */
@@ -40,11 +42,6 @@ function capture(): Captured {
     stdout,
     stderr,
   };
-}
-
-interface StubCall {
-  readonly request: Request;
-  readonly body: Buffer;
 }
 
 function jsonResponse(
@@ -77,53 +74,8 @@ function refusal(status: number, code: string, headers: Record<string, string> =
 }
 
 /** The recorded raw body of `call`, as text. */
-function bodyText(call: StubCall | undefined): string {
+function bodyText(call: DevStubCall | undefined): string {
   return call?.body.toString('utf8') ?? '';
-}
-
-/** The dev token both dev envs seed: an ingest credential, never a bearer. */
-const devToken = 'dev-token-value';
-/**
- * The `ci_producer` token the dev exchange mints. It is deliberately a different string from
- * `devToken`, so a command that sent the dev token raw would fail the bearer assertions.
- */
-const mintedToken = 'egt_minted_ci_token';
-/** The exchange route a dev run posts to before its own request. */
-const exchangePath = '/v1/ci/token';
-
-interface DevStub {
-  readonly fetchImpl: typeof fetch;
-  /** The command's own requests; the dev token's exchange is never one of them. */
-  readonly calls: StubCall[];
-  /** The `POST /v1/ci/token` requests the run made, in order. */
-  readonly exchanges: StubCall[];
-}
-
-/**
- * A stub for a dev-token run. `EVIDGATE_DEV_TOKEN` is an ingest credential: `getToken`
- * exchanges it at `POST /v1/ci/token` and caches the result, so the command runs on the
- * returned `ci_producer` token. The stub answers that exchange with `mintedToken` and hands
- * every other request to `handler`.
- */
-function devStubFetch(handler: (request: Request) => Response | Promise<Response>): DevStub {
-  const calls: StubCall[] = [];
-  const exchanges: StubCall[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    const call: StubCall = { request, body: Buffer.from(await request.clone().arrayBuffer()) };
-    if (new URL(request.url).pathname === exchangePath) {
-      exchanges.push(call);
-      return jsonResponse(200, {
-        token: mintedToken,
-        expires_at: '2030-01-01T00:00:00Z',
-        project_id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
-        permission_set: [],
-      });
-    }
-    calls.push(call);
-    return handler(request);
-  };
-  return { fetchImpl, calls, exchanges };
 }
 
 /** The wait seams: a sleep that records its argument and never blocks. */

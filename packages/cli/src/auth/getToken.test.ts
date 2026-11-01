@@ -10,7 +10,7 @@ import { redact, redacted, resetSecrets } from '../redact.js';
 
 import { ExchangeAuthError } from './exchange.js';
 import { getToken } from './getToken.js';
-import { readCachedToken, writeCachedToken } from './tokenCache.js';
+import { deleteCachedToken, readCachedToken, writeCachedToken } from './tokenCache.js';
 
 // 04.2.1-T1.2: `exchangeAndPurge` is mocked (the purge branch itself is covered in
 // exchange.test.ts); `ExchangeAuthError` is the real class, so getToken's propagation is
@@ -187,6 +187,55 @@ describe('getToken', () => {
     await writeCachedToken(config, { token: 'boundary-token', expiresAt: iso(60_000) });
     await getToken(config, deps);
     expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
+  });
+
+  // A credential replaced under the same api_url/project must not reuse the cached token: the
+  // entry is bound to the credential, so this run exchanges instead of trusting the old one.
+  it('forces a fresh exchange when the credential changes for the same destination', async () => {
+    const first = configFor({ EVIDGATE_OIDC_TOKEN: 'oidc-jwt-one' });
+    const refreshed = configFor({ EVIDGATE_OIDC_TOKEN: 'oidc-jwt-two' });
+    const deps = { now: () => now };
+    await writeCachedToken(first, {
+      token: 'old-credential-token',
+      expiresAt: iso(10 * 60_000),
+    });
+    exchangeMock.exchangeAndPurge.mockResolvedValue({
+      token: 'new-credential-token',
+      expiresAt: iso(20 * 60_000),
+      projectId,
+      source: 'oidc',
+    });
+
+    await expect(getToken(refreshed, deps)).resolves.toEqual({
+      token: 'new-credential-token',
+      source: 'oidc',
+      expiresAt: iso(20 * 60_000),
+    });
+    expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
+    // The old credential's entry is untouched: it is not this credential's entry to rewrite.
+    await expect(readCachedToken(first)).resolves.toEqual({
+      token: 'old-credential-token',
+      expiresAt: iso(10 * 60_000),
+    });
+  });
+
+  // The commands purge with the raw resolved config, while the dev token reached the cache as
+  // the ingest credential: both paths must resolve to the file the read wrote, or the 401
+  // recovery in `gate` and the uploads would replay the token the server just refused.
+  it('purges the dev entry from the raw config the commands pass back', async () => {
+    const config = configFor({ EVIDGATE_ENV: 'dev', EVIDGATE_DEV_TOKEN: 'dev-token-value' });
+    exchangeMock.exchangeAndPurge.mockResolvedValue({
+      token: 'ci-token',
+      expiresAt: iso(20 * 60_000),
+      projectId,
+      source: 'ingest',
+    });
+    await getToken(config, { now: () => now });
+
+    await deleteCachedToken(config);
+
+    await expect(readCachedToken(config)).resolves.toBeUndefined();
+    expect(await cacheEntries(cacheDir)).toEqual([]);
   });
 
   it('propagates an auth error from the exchange', async () => {

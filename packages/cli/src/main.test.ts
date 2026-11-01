@@ -189,6 +189,7 @@ describe('main', () => {
             apiUrl: 'https://api.evidgate.test',
             project: 'proj-1',
             cacheDir: ingestCacheDir,
+            ingestToken: 'egt_ingest_secret',
           }),
           'utf8',
         ),
