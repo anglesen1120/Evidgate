@@ -37,6 +37,19 @@ public sealed class DecisionContractTests
         {"status":"evaluated","decision":"INCONCLUSIVE","evaluation_id":"018f0000-0000-7000-8000-000000000124","evidence_revision":8,"completeness":"incomplete","outcome":"no_results","missing":["missing_shard","missing_result"],"reasons":[],"policy_hash":"sha256:1f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f1","manifest_hash":"sha256:2a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f802","evaluator_version":"evaluator-1.4.2","mode":"live","url":null}
         """;
 
+    /// <summary>The eight codes the closed <c>missing</c> list may carry, in the order the contract lists them.</summary>
+    private static readonly string[] MissingCodes =
+    [
+        "missing_shard",
+        "count_mismatch",
+        "artifact_missing",
+        "build_mismatch",
+        "unknown_status",
+        "setup_error",
+        "stale_epoch",
+        "missing_result",
+    ];
+
     private static readonly Lazy<OpenApiSpec> Spec = new(OpenApiSpec.Load);
 
     [Theory]
@@ -131,6 +144,26 @@ public sealed class DecisionContractTests
         var instance = With(EvaluatedCompleteDecision, decision => decision.Remove("manifest_hash"));
 
         ContractSchema.AssertInvalid(Spec.Value, SchemaName, instance, "an evaluated decision without the required 'manifest_hash'");
+    }
+
+    /// <summary>
+    /// The closed reason list the decision contract freezes: a gate reporting a code the contract does not declare, or
+    /// missing one it does, is a wire break, so the enum is asserted as an exact set rather than a subset.
+    /// </summary>
+    [Fact]
+    public void Decision_Missing_Items_Enum_Is_TheEightClosedCodes()
+    {
+        var missing = Spec.Value.Schema(SchemaName)["properties"]?["missing"] as JsonObject
+            ?? throw new InvalidOperationException($"components.schemas.{SchemaName} declares no 'missing' property");
+        var items = missing["items"] as JsonObject
+            ?? throw new InvalidOperationException("components.schemas.Decision.properties.missing declares no 'items'");
+        var declared = items["enum"] as JsonArray
+            ?? throw new InvalidOperationException("components.schemas.Decision.properties.missing.items declares no 'enum'");
+
+        var actual = declared.Select(code => code?.GetValue<string>()).Order(StringComparer.Ordinal);
+        var expected = MissingCodes.Order(StringComparer.Ordinal);
+
+        Assert.Equal(expected, actual);
     }
 
     /// <summary>The instance with one member changed, so each negative case differs from its positive control by that member alone.</summary>
