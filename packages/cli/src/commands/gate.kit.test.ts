@@ -10,7 +10,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 
-import { devStubFetch, devToken, exchangeBody, mintedToken } from './devExchange.testing.js';
+import { devStubFetch, devToken, mintedToken } from './devExchange.testing.js';
+
+export { withTokenExchange } from './devExchange.testing.js';
 
 /** The run the gate asks about (openapi `RunId`, `format: uuid`). */
 export const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
@@ -136,23 +138,6 @@ export function refusal(
   });
 }
 
-/**
- * Answers the dev exchange in front of a hand-written `fetch`, so the wrapped transport sees
- * only the requests the command itself sends. The default answer is `mintedToken`, never
- * `devToken`: an ingest credential is exchanged, not sent.
- */
-export function withTokenExchange(
-  fetchImpl: typeof fetch,
-  token: string = mintedToken,
-): typeof fetch {
-  return (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    return request.method === 'POST' && new URL(request.url).pathname === '/v1/ci/token'
-      ? Promise.resolve(jsonResponse(200, exchangeBody(token)))
-      : fetchImpl(input, init);
-  };
-}
-
 export function gateArgv(flags: ReadonlyArray<string>): string[] {
   return ['gate', ...flags];
 }
@@ -183,7 +168,8 @@ export function cacheDirs(): CacheDirs {
 
 /**
  * The dev token path: `EVIDGATE_DEV_TOKEN` is exchanged for a `ci_producer` token (the Api
- * accepts only exchanged ones), so `devStubFetch` answers that call and the answer is cached.
+ * accepts only exchanged ones), so `devStubFetch` answers that call; its far-future expiry is
+ * never fresh, so each invocation exchanges again instead of reusing a cache entry.
  */
 export async function devEnv(
   dirs: CacheDirs,

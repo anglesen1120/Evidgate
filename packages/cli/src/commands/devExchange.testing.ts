@@ -34,9 +34,72 @@ export interface DevStub {
   readonly exchanges: DevStubCall[];
 }
 
+/**
+ * The fixed expiry most exchange answers carry. It is deliberately beyond the cache's
+ * `maxTokenLifetimeMs`, so a spec that does not ask for a cacheable token sees every
+ * `getToken()` exchange instead of a cache hit.
+ */
+const uncacheableExpiresAt = '2030-01-01T00:00:00Z';
+
+/** The parts of the answer a spec may need to differ on; the rest are the common answer. */
+export interface ExchangeAnswer {
+  /** The bearer handed out; `mintedToken` unless a spec mints its own. */
+  readonly token?: string;
+  /** The `project_id` echoed back (openapi `format: uuid`). */
+  readonly projectId?: string;
+  /** ISO-8601 expiry; a token inside `maxTokenLifetimeMs` is cached and reused. */
+  readonly expiresAt?: string;
+  /** The `ci_producer` permission set the answer carries. */
+  readonly permissionSet?: ReadonlyArray<string>;
+}
+
 /** The `/v1/ci/token` answer that hands out `token` (openapi `CiTokenResponse`). */
-export function exchangeBody(token: string): unknown {
-  return { token, expires_at: '2030-01-01T00:00:00Z', project_id: projectId, permission_set: [] };
+export function exchangeBody(token: string, answer: Omit<ExchangeAnswer, 'token'> = {}): unknown {
+  return {
+    token,
+    expires_at: answer.expiresAt ?? uncacheableExpiresAt,
+    project_id: answer.projectId ?? projectId,
+    permission_set: answer.permissionSet ?? [],
+  };
+}
+
+/**
+ * Whether `request` is the dev exchange. A `Request` and a spec's own recorded call (any
+ * `{url, method}`) both qualify, so a stub that already built its own call object asks here
+ * instead of matching the route a second time.
+ */
+export function isDevExchange(request: { readonly url: string; readonly method: string }): boolean {
+  return request.method === 'POST' && new URL(request.url).pathname === exchangePath;
+}
+
+/** The exchange answer for `request`, or `undefined` when it is the command's own request. */
+export function devExchangeAnswer(
+  request: { readonly url: string; readonly method: string },
+  answer: ExchangeAnswer = {},
+): Response | undefined {
+  if (!isDevExchange(request)) {
+    return undefined;
+  }
+  return new Response(JSON.stringify(exchangeBody(answer.token ?? mintedToken, answer)), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+/**
+ * `fetchImpl` with the dev exchange answered in front of it, so the wrapped transport sees only
+ * the requests the command itself sends. The answer is `mintedToken` by default, never
+ * `devToken`: an ingest credential is exchanged, not sent.
+ */
+export function withTokenExchange(
+  fetchImpl: typeof fetch,
+  options: ExchangeAnswer = {},
+): typeof fetch {
+  return (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const exchange = devExchangeAnswer(request, options);
+    return exchange === undefined ? fetchImpl(input, init) : Promise.resolve(exchange);
+  };
 }
 
 /**
@@ -56,12 +119,10 @@ export function devStubFetch(
       request,
       body: Buffer.from(await request.clone().arrayBuffer()),
     };
-    if (request.method === 'POST' && new URL(request.url).pathname === exchangePath) {
+    const exchange = devExchangeAnswer(request, { token });
+    if (exchange !== undefined) {
       exchanges.push(call);
-      return new Response(JSON.stringify(exchangeBody(token)), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
+      return exchange;
     }
     calls.push(call);
     return handler(request, calls.length - 1);

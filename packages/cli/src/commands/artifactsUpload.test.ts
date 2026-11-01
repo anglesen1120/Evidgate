@@ -15,10 +15,8 @@ import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 import { journalFileName, type UploadIdentity } from '../uploadJournal.js';
 
-/** Assembled at runtime so no token-shaped literal is stored in the spec (T78). */
-const devToken = ['dev', 'artifact', 'token'].join('-');
-/** The `ci_producer` token the exchange hands out; it is the bearer, not the dev credential. */
-const ciToken = ['dev', 'artifact', 'ci', 'producer'].join('-');
+import { devToken, exchangeBody, isDevExchange, mintedToken } from './devExchange.testing.js';
+
 /** The `project_id` a token-exchange answer carries (openapi `format: uuid`). */
 const projectUuid = '5c8d9e0f-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
 const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
@@ -52,18 +50,6 @@ interface StubCall {
 type Responder = (call: StubCall) => Response | Promise<Response>;
 
 /**
- * The token-exchange answer. The dev credential is exchanged like an ingest token, so this is
- * the one success body the stub owes it; `token` is the bearer every artifact call carries.
- */
-function ciTokenBody(): Record<string, unknown> {
-  return {
-    token: ciToken,
-    expires_at: '2030-01-01T00:00:00Z',
-    project_id: projectUuid,
-  };
-}
-
-/**
  * A fetch stub that routes the calls of an upload and records them. A dev token is an ingest
  * credential now, so `POST /v1/ci/token` is answered here and kept in `exchanges`: `calls`
  * then holds exactly the artifact route's own requests, which is what each case asserts.
@@ -90,9 +76,9 @@ function stubFetch(respond: Responder): {
       headers: new Headers(request.headers),
       json: method === 'PUT' || body.length === 0 ? undefined : JSON.parse(body.toString('utf8')),
     };
-    if (method === 'POST' && new URL(request.url).pathname === '/v1/ci/token') {
+    if (isDevExchange(request)) {
       exchanges.push(call);
-      return jsonResponse(200, ciTokenBody());
+      return jsonResponse(200, exchangeBody(mintedToken, { projectId: projectUuid }));
     }
     calls.push(call);
     return respond(call);
@@ -213,7 +199,7 @@ describe('artifacts upload', () => {
     expect(store.exchanges[0]?.json).toEqual({ ingest_token: devToken });
     const uploadUrl = store.calls[0];
     expect(uploadUrl?.url).toBe('http://127.0.0.1:8080/v1/artifacts/upload-url');
-    expect(uploadUrl?.headers.get('authorization')).toBe(`Bearer ${ciToken}`);
+    expect(uploadUrl?.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     expect(uploadUrl?.json).toEqual({
       run_id: runId,
       producer_id: 'shard-1',
@@ -536,7 +522,7 @@ describe('artifacts upload', () => {
     expect(stderr.join('')).toContain('evidgate: error payload_too_large: ');
     expect(stderr.join('')).toContain('evidgate: request_id: req-413');
     expect(stderr.join('')).not.toContain(devToken);
-    expect(stderr.join('')).not.toContain(ciToken);
+    expect(stderr.join('')).not.toContain(mintedToken);
     expect(store.calls).toHaveLength(1);
     expect(store.exchanges).toHaveLength(1);
   });
@@ -639,7 +625,7 @@ describe('artifacts upload', () => {
     expect(stderr.join('')).toContain('run `evidgate auth login`');
     // Neither the dev credential nor the bearer it minted is ever printed.
     expect(stderr.join('')).not.toContain(devToken);
-    expect(stderr.join('')).not.toContain(ciToken);
+    expect(stderr.join('')).not.toContain(mintedToken);
     expect(store.calls).toHaveLength(1);
     expect(store.exchanges).toHaveLength(1);
     // The purge is best-effort and the server's error is the one that surfaced.
@@ -672,7 +658,7 @@ describe('artifacts upload', () => {
     expect(text).toContain('http://127.0.0.1:9/pending/x?[REDACTED]');
     // The refused credential and the token it minted stay off the wire too.
     expect(text).not.toContain(devToken);
-    expect(text).not.toContain(ciToken);
+    expect(text).not.toContain(mintedToken);
   });
 
   // §11.1 / §12: with EVIDGATE_SPOOL_DIR set the journal appears under the producer dir;
