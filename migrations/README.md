@@ -156,8 +156,12 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   re-created to name `queued` and `running` runs past `collection_deadline_at` beside `collecting` (same signature,
   definer posture and keyset cursor), with the partial index `run_overdue_idx` over those three states replacing
   `run_collecting_idx`, which it subsumes, so a run whose producers never started or never finalized is finally decided
-  `incomplete` instead of staying open forever (notes at the end of this file);
-  the next free number is `0059`; a gap means two branches invented the same sequence and neither history can be trusted.
+  `incomplete` instead of staying open forever (notes at the end of this file); and `0059` is the stored
+  evaluation — the Policy-owned `evaluation` table with its idempotency keys (one row per
+  `(org_id, run_id, evidence_revision, policy_revision_id, evaluator_version, mode)`, at most one `live` row
+  per frozen evidence revision), its closed token CHECKs, the composite tenant keys to `run` and
+  `policy_revision`, the immutability trigger and SELECT/INSERT-only app grant (notes at the end of this
+  file); the next free number is `0060`; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
@@ -899,3 +903,38 @@ through the real runner against a throwaway PostgreSQL 18 container.
   writes. `create or replace` and the repeatable `revoke`/`grant` are catalog writes on the function.
 - No down migration: restoring the collecting-only predicate would not roll back a behaviour, it would
   return the platform to a run past its deadline that nothing ever decides.
+
+## Notes on the stored evaluation (`0059`)
+
+- Why it exists: the evaluator's verdict has to survive the process that computed it, and the reconcile that
+  freezes evidence can be redelivered — so the same question arrives twice and must leave one row. The table
+  is the arbiter: the unique key `evaluation_result_key
+(org_id, run_id, evidence_revision, policy_revision_id, evaluator_version, mode)` makes a second identical
+  `INSERT` fail 23505, and the handler reads the winner back instead of writing a second verdict.
+- Why two keys: `shadow` is a second opinion about the same evidence, not a later state of the `live` row, so
+  the pair is legal while two `live` rows for one evidence revision are not. `evaluation_live_key` is a
+  partial unique index on `(org_id, run_id, evidence_revision) where mode = 'live'`; the wider key carries
+  `mode` as its last column. Neither is a candidate for an `UPDATE`: a rerun writes a new row.
+- Why every value is a CHECK: the columns store the evaluator's own wire tokens (`complete`/`incomplete`,
+  `all_passed`/`has_failures`/`no_results`, `PASS`/`FAIL`/`INCONCLUSIVE`, `live`/`shadow`), the closed
+  `missing[]` and `reasons[]` code sets and the `sha256:<64 hex>` shape of both content addresses, so a
+  stored row reads back into the contract without a mapping layer. A new token is a new migration. The
+  array checks are a `CASE` on `array_ndims` first, because `array_position` raises on a multi-dimensional
+  array and CHECK term order is not guaranteed.
+- Why the keys are composite: `(org_id, run_id)` and `(org_id, policy_revision_id)` reference
+  `run`/`policy_revision` on their `(org_id, id)` keys, so a row cannot name another tenant's run or policy
+  revision even if a bug let the policy pass (D3). No `ON DELETE`: a run with a stored verdict is erased
+  through the owner's one erasure path, never by a cascade that would delete the evidence of a decision.
+- Immutability: `evidgate_app` holds `SELECT, INSERT` only (the revoke precedes the grant because 0001's
+  default privileges would otherwise leave full DML in place), so an `UPDATE`/`DELETE` is refused 42501 by the
+  ACL; the `evaluation_immutable` trigger raises 23514 for every role, which is the backstop for the owner and
+  for any future grant. `evaluation_run_idx (org_id, run_id, created_at desc)` serves the newest-first read of
+  a run's evaluations, which the partial unique index cannot.
+- Row security: one `for all to evidgate_app` tenant policy plus the owner backfill policy, like 0025/0049.
+  `evaluation` carries `org_id` and is therefore not an entry in `contracts/rls-exceptions.txt`; no operator
+  policy, and the operator keeps `SELECT` only (D1); `evidgate_worker_sched` holds nothing.
+- Deployment and locks: additive for every existing reader, so migrate before the worker that writes rows.
+  Everything is a catalog write or a `create index` under the file's `set local lock_timeout = '5s'`; a busy
+  table fails the migration for a retry instead of stalling writes, and `if not exists` / `create or replace`
+  / `drop … if exists` make a re-run a no-op. No down migration: dropping the table would delete every stored
+  verdict, which no rollback restores.

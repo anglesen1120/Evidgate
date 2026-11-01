@@ -62,6 +62,7 @@ public sealed class RlsIsolationTests : HarnessTest
         "public.test_case",
         "public.manifest",
         "public.policy_revision",
+        "public.evaluation",
     ];
 
     /// <summary>

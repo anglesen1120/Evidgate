@@ -240,6 +240,8 @@ public sealed class HealingSwitchResolutionTests
 
             public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
+            public void AfterCommit(Action action) => action();
+
             public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }

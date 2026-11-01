@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Persistence.Audit;
+using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Orchestrator.Contracts;
@@ -27,18 +28,21 @@ internal sealed record LatestRevision(
     long EventWatermark,
     string? ArtifactSetHash);
 
+/// <summary>Reads the project and manifest together so the revision and its event describe the same run.</summary>
+internal sealed record RevisionSource(Guid ProjectId, string? ManifestHash);
+
 /// <summary>
-/// The second half of one reconcile attempt (05.3.2-T2.3/T2.4): after <see cref="IRunReconciler"/> has locked the run
+/// The second half of one reconcile attempt: after <see cref="IRunReconciler"/> has locked the run
 /// <c>FOR NO KEY UPDATE</c> and compared the evidence, the finisher freezes the artifact set, appends ONE
-/// <c>evidence_revision</c> row, moves the run's pointer to it and moves <c>collecting → complete|incomplete</c> through
-/// 05.3.1's guarded transition — all in the caller's ambient tenant transaction, which the consumer commits only when the
-/// whole attempt returns.
+/// <c>evidence_revision</c> row, moves the run's pointer to it, announces that revision in the outbox and moves
+/// <c>collecting → complete|incomplete</c> through the guarded run-state transition — all in the caller's ambient
+/// tenant transaction, which the consumer commits only when the whole attempt returns.
 /// <para>
 /// It never opens, commits or rolls back a transaction (00 §5.5 C3): the caller's rollback undoes the revision, the
-/// pointer move and the state change together, so a failed attempt leaves no half-written revision and a retry starts
-/// from the state it began in. Two settlements reach this type: the collection decision of a <c>collecting</c> run and
-/// the late revision of one already <c>incomplete</c>. Either way one run appends at most one revision per attempt and
-/// never rewrites one (00 §8.5 C6/AC9).
+/// pointer move, the outbox row and the state change together, so a failed attempt leaves no half-written revision and a
+/// retry starts from the state it began in. Two settlements reach this type: the collection decision of a
+/// <c>collecting</c> run and the late revision of one already <c>incomplete</c>. Either way one run appends at most one
+/// revision per attempt and never rewrites one (00 §8.5 C6/AC9).
 /// </para>
 /// </summary>
 internal interface IReconcileFinisher
@@ -98,7 +102,7 @@ internal enum ReconcileSettlement
 
 /// <summary>
 /// The Dapper implementation of <see cref="IReconcileFinisher"/>: resolve, freeze, compute, insert, move the pointer,
-/// and — for a collecting run — transition, in that order.
+/// announce the revision, and — for a collecting run — transition, in that order.
 /// <para>
 /// <b>Completeness</b> (00 §8.5, AC4): <c>complete</c> only when no reason was named, the run planned at least one shard
 /// and every planned shard closed. Missing evidence never reads as complete, and a run with zero planned shards is
@@ -126,12 +130,15 @@ internal enum ReconcileSettlement
 /// <param name="freeze">06.5.1's freeze call, which runs inside this transaction and never opens one of its own.</param>
 /// <param name="runStates">05.3.1's guarded transition; it runs after the pointer move, under the lock this transaction holds.</param>
 /// <param name="audit">
-/// The audit buffer of this attempt. 05.3.1's transition describes and records the <c>run.state_changed</c> edge, which
+/// The audit buffer of this attempt. The transition describes and records the <c>run.state_changed</c> edge, which
 /// needs an open unit; a task consumer has no pipeline unit (the tenant transaction is the consumer's, not a mediator
 /// pipeline's), so the finisher opens one and flushes it before it returns — the
 /// <see cref="Evidgate.Modules.Identity.MembershipBinder"/> / <c>IdentityAuditWriter</c> pattern of a component that
 /// audits its own write outside the pipeline. The flush runs in the consumer's transaction, so the audit row and the
 /// revision commit or roll back together.
+/// </param>
+/// <param name="outbox">
+/// Shares the revision's transaction so consumers cannot observe an event for a rolled-back revision.
 /// </param>
 internal sealed class ReconcileFinisher(
     ITenantDb db,
@@ -139,7 +146,8 @@ internal sealed class ReconcileFinisher(
     IRequiredArtifactResolver requirements,
     IEvidenceFreeze freeze,
     IRunStateTransition runStates,
-    IAuditTrail audit) : IReconcileFinisher
+    IAuditTrail audit,
+    IOutboxWriter outbox) : IReconcileFinisher
 {
     /// <summary>The 00 §8.5 completeness of a revision whose evidence is whole (0049's CHECK pins the vocabulary).</summary>
     internal const string Complete = "complete";
@@ -239,15 +247,16 @@ internal sealed class ReconcileFinisher(
             }
         }
 
-        // (f) The manifest hash the revision records, read tenant-first from the run's own manifest row.
-        var manifestHash = await db
-            .QuerySingleOrDefaultAsync<string>(
-                EvidenceRevisionSql.SelectManifestHash,
+        // (f) The manifest hash the revision records and the project the frozen event names, read from the run's own row
+        // and its manifest, tenant-first.
+        var source = await db
+            .QuerySingleOrDefaultAsync<RevisionSource>(
+                EvidenceRevisionSql.SelectRevisionSource,
                 parameters,
                 cancellationToken)
             .ConfigureAwait(false);
 
-        if (manifestHash is null)
+        if (source is not { ManifestHash: { } manifestHash })
         {
             throw new InvalidOperationException(
                 $"run {runId:D} has no manifest visible in this tenant: a revision cannot be recorded without its hash");
@@ -294,7 +303,19 @@ internal sealed class ReconcileFinisher(
                 $"run {runId:D} did not accept the evidence pointer in this tenant ({moved} row(s) updated)");
         }
 
-        // (h) The state edge, last: collecting -> complete|incomplete from a collection decision, queued|running ->
+        // (h) Same transaction as the revision it announces, so rollback leaves no event; keyed by revision,
+        // so a redelivered attempt cannot announce one revision twice.
+        await outbox.EnqueueAsync(
+                EvidenceRevisionFrozenContract.OutboxTaskType,
+                EvidenceRevisionFrozenContract.PayloadJson(
+                    orgId, source.ProjectId, runId, revisionId, revisionNo),
+                EvidenceRevisionFrozenContract.AggregateType,
+                revisionId,
+                EvidenceRevisionFrozenContract.IdempotencyKey(revisionId),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        // (i) The state edge, last: collecting -> complete|incomplete from a collection decision, queued|running ->
         // incomplete from a forced close, both through the guarded run-state transition (it re-takes the run row this
         // transaction already holds FOR NO KEY UPDATE, which is a no-op for the holder). An applied edge is credited to
         // the system actor, which is what a task consumer is, and its outbox row and audit row join this unit of work;
@@ -319,9 +340,9 @@ internal sealed class ReconcileFinisher(
             }
         }
 
-        // The audit row of that edge joins the same transaction: the consumer's commit makes the revision, the pointer and
-        // the audit entry durable together, and a failed attempt rolls all three back. A late attempt describes no edge,
-        // so its unit flushes nothing.
+        // The audit row of that edge joins the same transaction: the consumer's commit makes the revision, the pointer, the
+        // frozen event and the audit entry durable together, and a failed attempt rolls all four back. A late attempt
+        // describes no edge, so its unit flushes nothing.
         await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
 
         return new ReconcileFinalization(completeness, revisionId, revisionNo);

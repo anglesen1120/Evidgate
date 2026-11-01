@@ -341,4 +341,32 @@ public static class EvidgateTelemetry
             new KeyValuePair<string, object?>(PipelineMessageTag, message),
             new KeyValuePair<string, object?>("error", error));
     }
+
+    /// <summary>The decision-latency histogram's name (the frozen→decided latency the reliability SLI reads).</summary>
+    public const string EvaluationDecisionLatencyMetricName = "evidgate_evaluation_decision_latency_seconds";
+
+    private static readonly Histogram<double> EvaluationDecisionLatencies = Meter.CreateHistogram<double>(
+        EvaluationDecisionLatencyMetricName,
+        unit: "s",
+        description: "Seconds between a frozen evidence revision and the evaluation row that decided it. No labels: a run id or a decision token would be unbounded, and the SLI is read as a distribution.",
+        advice: new InstrumentAdvice<double>
+        {
+            HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60],
+        });
+
+    /// <summary>
+    /// Records how long a run's evidence waited between its freeze and its stored
+    /// decision. Called once per newly committed evaluation, from the scope's
+    /// <see cref="Persistence.Tenancy.ITenantScope.AfterCommit"/>: a conflicted
+    /// duplicate and a rolled-back attempt record nothing, so the histogram counts
+    /// decisions, not attempts.
+    /// </summary>
+    /// <param name="frozenToDecided">The row's <c>created_at</c> minus the revision's freeze; zero or more.</param>
+    public static void RecordEvaluationDecisionLatency(TimeSpan frozenToDecided)
+    {
+        // A negative span would mean the database stamped the decision before the evidence it read, so it is clamped
+        // rather than recorded: one clock-skew artefact must not drag the SLI.
+        var seconds = Math.Max(0, frozenToDecided.TotalSeconds);
+        EvaluationDecisionLatencies.Record(seconds);
+    }
 }

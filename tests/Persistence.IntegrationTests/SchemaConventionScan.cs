@@ -130,6 +130,10 @@ internal static class SchemaConventionScan
             "public.evidence_revision",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only frozen evidence sets (05.3.2-T5; migration 0049, feature plan 05.3.2 AC8/AC9, C6): a revision is written once when a run's evidence is frozen and is never rewritten — late evidence appends the next `revision_no` — so the app role holds SELECT + INSERT only (the revoked UPDATE/DELETE refuse the rest) and the row keeps created_at only: no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.evaluation",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "A stored verdict (migration 0059) is evidence, not state: the app role holds SELECT + INSERT only and the `evaluation_immutable` trigger refuses every UPDATE and DELETE, so the row keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs, closed token CHECKs and RLS are NOT exempt."),
     ];
 
     /// <summary>

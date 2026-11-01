@@ -15,6 +15,7 @@ internal sealed class TenantScope : ITenantScope
 {
     private NpgsqlConnection? _connection;
     private NpgsqlTransaction? _transaction;
+    private readonly List<Action> afterCommit = [];
     private ScopeState _state = ScopeState.Pending;
     private bool _disposed;
 
@@ -149,6 +150,29 @@ internal sealed class TenantScope : ITenantScope
 
         await _transaction!.CommitAsync(cancellationToken).ConfigureAwait(false);
         _state = ScopeState.Committed;
+
+        // Only durable work reaches a deferred action, and each runs at most once: the list is cleared before the
+        // first call, so an action that itself commits nothing cannot have it run a second time.
+        var deferred = afterCommit.ToArray();
+        afterCommit.Clear();
+        foreach (var action in deferred)
+        {
+            action();
+        }
+    }
+
+    /// <inheritdoc />
+    public void AfterCommit(Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        if (!IsActive)
+        {
+            throw new InvalidOperationException(
+                "The tenant scope is not open, so deferred work would never run: register it before the commit.");
+        }
+
+        afterCommit.Add(action);
     }
 
     /// <inheritdoc />
