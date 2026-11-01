@@ -181,6 +181,9 @@ MANIFEST_2="$(printf '%s' "$SUMMARY" | field manifest_2)"
 EXECUTION_KEY="$(printf '%s' "$SUMMARY" | field execution_key)"
 info "execution_key $EXECUTION_KEY (target env $TARGET_ENV)"
 
+INVOCATION_ID="$("$NODE" "$HELPER" invocation)" || die "cannot mint an invocation id"
+[ -n "$INVOCATION_ID" ] || die "cannot mint an invocation id"
+
 upload_manifest() {
   local file="$1" json
   json="$(evidgate manifests upload --file "$file" --json)"
@@ -203,6 +206,7 @@ MANIFEST_2_HASH="$MANIFEST_HASH"
 info "manifest_id $MANIFEST_2_ID manifest_hash $MANIFEST_2_HASH"
 
 ROWS=()
+RUN_IDS=()
 MISMATCHES=0
 
 # run_once <label> <config mode> <manifest id> <manifest hash> <shard> <wait> <expected exit> <expected decision>
@@ -213,9 +217,16 @@ run_once() {
   local output="$WORK/results-$label"
   local port=$((40000 + RANDOM % 20000))
   local run_id config gate_exit play_exit decision_json
+  # A, B and C upload the same manifests, so the CLI's derived run key would be identical
+  # and the server would replay A's stored 201 for B (contracts/cli.md §9: the
+  # Idempotency-Key is the arbiter). One invocation id plus the label keeps every run,
+  # including a later script invocation, distinct.
+  local run_key="pilot0-$label-$INVOCATION_ID"
 
-  run_id="$(evidgate runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash" --json | field run_id)"
+  run_id="$(evidgate runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash" \
+    --idempotency-key "$run_key" --json | field run_id)"
   [ -n "$run_id" ] || die "runs create for run $label printed no run_id"
+  RUN_IDS+=("$run_id")
   info "run $label: run_id $run_id"
 
   config="$("$NODE" "$HELPER" config --work "$WORK" --mode "$mode" --label "$label" \
@@ -281,6 +292,13 @@ run_once B red "$MANIFEST_1_ID" "$MANIFEST_1_HASH" 1 "$GATE_WAIT" 1 FAIL
 # Shard 2 of the two-shard manifest is never produced: no producer ever finalizes it, so
 # the run cannot complete and the gate stays INCONCLUSIVE/pending at its deadline.
 run_once C green "$MANIFEST_2_ID" "$MANIFEST_2_HASH" 1 "$GATE_WAIT_C" 2 "INCONCLUSIVE|null"
+
+# One run per label: a repeated id means `runs create` replayed a stored 201, which would
+# make B or C report A's decision.
+if [ "${RUN_IDS[0]}" = "${RUN_IDS[1]}" ] || [ "${RUN_IDS[0]}" = "${RUN_IDS[2]}" ] \
+  || [ "${RUN_IDS[1]}" = "${RUN_IDS[2]}" ]; then
+  die "runs create returned a repeated run id: ${RUN_IDS[*]}"
+fi
 
 printf '\nrun | gate exit | expected | decision | completeness | missing\n'
 for row in "${ROWS[@]}"; do

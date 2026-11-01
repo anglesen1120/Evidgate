@@ -11,7 +11,7 @@
 // built output, so the empty parameter set hashes once, the same way the server does
 // (fixtures/variant-hash/vectors.json, "empty-object"). The server still owns the real
 // key; this copy only tells the reporter which planned execution it is producing.
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -340,6 +340,10 @@ try {
     await decision(values);
   } else if (command === 'parse') {
     parse(values);
+  } else if (command === 'invocation') {
+    // One id per script invocation, so `runs create --idempotency-key` never replays an
+    // earlier run's 201 (contracts/cli.md §9: the key, not the body, is what replays).
+    process.stdout.write(`${randomUUID()}\n`);
   } else {
     fail(`unknown command ${String(command)}`);
   }
