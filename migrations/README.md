@@ -909,7 +909,7 @@ through the real runner against a throwaway PostgreSQL 18 container.
 - Why it exists: the evaluator's verdict has to survive the process that computed it, and the reconcile that
   freezes evidence can be redelivered — so the same question arrives twice and must leave one row. The table
   is the arbiter: the unique key `evaluation_result_key
-  (org_id, run_id, evidence_revision, policy_revision_id, evaluator_version, mode)` makes a second identical
+(org_id, run_id, evidence_revision, policy_revision_id, evaluator_version, mode)` makes a second identical
   `INSERT` fail 23505, and the handler reads the winner back instead of writing a second verdict.
 - Why two keys: `shadow` is a second opinion about the same evidence, not a later state of the `live` row, so
   the pair is legal while two `live` rows for one evidence revision are not. `evaluation_live_key` is a
