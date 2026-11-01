@@ -175,7 +175,8 @@ finalize` only (`resolveSpoolSettings`, memoised on first use): a malformed
   token (one code path, the token cache included); the returned `ci_producer`
   token is the bearer and `getToken()` returns `{ token, source: 'dev' }`. The
   Api never accepts the raw dev token on a CI route (D-S177-Q1, amends AC8's
-  earlier "no network call").
+  earlier "no network call"). A failed dev exchange uses the ingest error codes
+  and exit codes of this section.
 - `[DECISION]` The dev token is exchanged only when `EVIDGATE_ENV` is exactly
   `dev` (after trim and lower-casing) **and** the API URL host is loopback
   (`localhost`, `127.0.0.1`, `[::1]`). The reason: the dev token is a real
