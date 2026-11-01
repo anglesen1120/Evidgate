@@ -92,6 +92,11 @@ public sealed class EvidenceRevisionContractTests
             "a reason code outside the closed list");
         ContractSchema.Failures(PageDocument(spec), PageSchemaUri, Mutate(page, listing => listing.Remove("next_cursor")))
             .ShouldNotBeEmpty("a page without the required next_cursor must not validate");
+        ContractSchema.Failures(
+                PageDocument(spec),
+                PageSchemaUri,
+                Mutate(page, listing => listing["items"]![0]!.AsObject().Remove("missing")))
+            .ShouldNotBeEmpty("a page whose row lacks the required missing[] must not validate");
     }
 
     /// <summary>Asserts a page instance validates against the spec's two schemas, composed as one document.</summary>
