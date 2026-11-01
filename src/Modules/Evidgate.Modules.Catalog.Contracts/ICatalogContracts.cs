@@ -1,7 +1,7 @@
 namespace Evidgate.Modules.Catalog.Contracts;
 
 /// <summary>
-/// The catalog surface other modules call in-process (00 §5.5): run creation locks a suite revision and reads its
+/// The catalog surface other modules call in-process: run creation locks a suite revision and reads its
 /// isolation mode, the blocked-attempt resolver walks dependencies, and the evaluator reads the suite facts and the case
 /// behind each planned revision. Must run inside the caller's tenant transaction.
 /// </summary>

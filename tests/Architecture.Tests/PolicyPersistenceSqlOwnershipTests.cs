@@ -5,7 +5,7 @@ using Xunit;
 namespace Architecture.Tests;
 
 /// <summary>
-/// N4 on the Policy module's persistence: the run, its plan, the pinned suite, the frozen revision, its attempts and the
+/// The Policy module's persistence: the run, its plan, the pinned suite, the frozen revision, its attempts and the
 /// case behind each planned revision belong to other modules and are read through their <c>.Contracts</c>, so no SQL
 /// text under <c>Infrastructure/Persistence</c> may name a table Policy does not own. The rule runs on a synthetic
 /// cross-module read and on every real persistence file, so a reintroduced join fails instead of passing vacuously.
@@ -24,7 +24,7 @@ public class PolicyPersistenceSqlOwnershipTests
         "waiver",
     };
 
-    /// <summary>The persistence directory whose SQL text is this module's own; SQL lives nowhere else (N3).</summary>
+    /// <summary>The persistence directory whose SQL text is this module's own; SQL lives nowhere else.</summary>
     private static string PersistenceDirectory =>
         Path.Combine(SolutionLayout.RepoRoot, "src", "Modules", "Evidgate.Modules.Policy", "Infrastructure", "Persistence");
 

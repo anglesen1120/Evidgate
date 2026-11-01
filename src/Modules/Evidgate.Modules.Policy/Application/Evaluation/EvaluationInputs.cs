@@ -208,19 +208,16 @@ internal sealed class EvaluationInputReader(
         return
         [
             .. executions
-                .Where(execution =>
-                    statuses.ContainsKey(execution.ExecutionKey)
-                    && cases.TryGetValue(execution.CaseRevisionId, out _))
+                .Where(execution => statuses.ContainsKey(execution.ExecutionKey))
                 .OrderBy(execution => execution.ExecutionKey, StringComparer.Ordinal)
-                .Select(execution =>
-                {
-                    var identity = cases[execution.CaseRevisionId];
-                    return new ResultRow(
+                .Select(execution => cases.TryGetValue(execution.CaseRevisionId, out var identity)
+                    ? new ResultRow(
                         identity.CaseId,
                         identity.CaseKey,
                         statuses[execution.ExecutionKey],
-                        execution.Required);
-                }),
+                        execution.Required)
+                    : null)
+                .OfType<ResultRow>(),
         ];
     }
 

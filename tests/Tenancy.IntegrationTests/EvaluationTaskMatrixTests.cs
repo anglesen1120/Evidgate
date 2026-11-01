@@ -238,7 +238,7 @@ public sealed partial class EvaluationTaskTests
 
         if (matrix.ZeroPlan)
         {
-            await DropPlanAsync(world, runId);
+            manifestHash = await DropPlanAsync(world, runId);
         }
         else if (!matrix.NoAttempts)
         {
@@ -247,6 +247,13 @@ public sealed partial class EvaluationTaskTests
 
         var revisionId = await FreezeAsync(
             world, runId, manifestHash, matrix.RevisionCompleteness, matrix.RevisionMissing);
+
+        if (matrix.ZeroPlan)
+        {
+            // The dropped plan repointed the run, so the evidence must name the manifest the run now holds.
+            await AssertRevisionNamesRunManifestAsync(world, runId, revisionId);
+        }
+
         var seed = new Seed(world.Org, world.Project, runId, revisionId, policyId, policyHash, manifestHash);
 
         if (matrix.Replay)
@@ -338,9 +345,9 @@ public sealed partial class EvaluationTaskTests
     /// A run whose manifest planned no execution at all: the plan rows and their attempts go, and the run is locked to a
     /// second manifest of the same project and suite that declares zero executions. A manifest is append-only (a BEFORE
     /// UPDATE/DELETE trigger refuses every role), so the seed inserts the zero-count row and repoints the run instead of
-    /// editing the original.
+    /// editing the original. Answers the replacement's hash: the manifest hash the evidence freezes against.
     /// </summary>
-    private async Task DropPlanAsync(RunCreationTests.World world, Guid runId)
+    private async Task<string> DropPlanAsync(RunCreationTests.World world, Guid runId)
     {
         var zeroManifestId = Guid.CreateVersion7();
         var zeroManifestHash = "sha256:" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
@@ -371,6 +378,26 @@ public sealed partial class EvaluationTaskTests
         command.Parameters.AddWithValue("zero_manifest", zeroManifestId);
         command.Parameters.AddWithValue("zero_hash", zeroManifestHash);
         (await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken)).ShouldBeGreaterThan(0);
+        return zeroManifestHash;
+    }
+
+    /// <summary>The zero-plan repoint: the frozen revision must name the manifest the run holds.</summary>
+    private async Task AssertRevisionNamesRunManifestAsync(RunCreationTests.World world, Guid runId, Guid revisionId)
+    {
+        await using var connection = await OwnerAsync(world);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            select count(*)
+              from public.evidence_revision er
+              join public.run r on r.org_id = er.org_id and r.id = er.run_id
+              join public.manifest m on m.org_id = r.org_id and m.id = r.manifest_id
+             where er.org_id = @org_id and er.id = @revision_id and er.manifest_hash = m.manifest_hash
+            """;
+        command.Parameters.AddWithValue("org_id", world.Org);
+        command.Parameters.AddWithValue("revision_id", revisionId);
+        (await command.ExecuteScalarAsync(TestContext.Current.CancellationToken)).ShouldBe(
+            1L, "the revision must name the manifest the run is pinned to");
     }
 
     /// <summary>The revision that froze over the row's attempts, with the completeness the row's evidence carries.</summary>

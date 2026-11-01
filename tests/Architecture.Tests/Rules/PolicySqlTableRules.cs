@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace Architecture.Tests.Rules;
 
 /// <summary>
-/// N4: module data is private. A module's SQL reads and writes only its own tables, and another module's data is
+/// Module data is private. A module's SQL reads and writes only its own tables, and another module's data is
 /// reached through that module's <c>.Contracts</c>, never by naming its table here. The rule is pure — it takes the
 /// files to scan and the tables the caller owns — so the test proves it on synthetic cross-module reads and then runs
 /// the same function over every Policy persistence file, where the fix that split the evaluation reads landed.
@@ -12,7 +12,7 @@ public static class PolicySqlTableRules
 {
     /// <summary>A schema-qualified table name as the statements spell it (<c>public.evaluation</c>).</summary>
     /// <remarks>
-    /// Schema-qualified only, because D4 requires every statement to name its schema: a bare <c>from run</c> is a
+    /// Schema-qualified only, because every statement must name its schema: a bare <c>from run</c> is a
     /// different defect, and matching it here would flag unrelated text.
     /// </remarks>
     private static readonly Regex QualifiedTable = new(
