@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -120,23 +120,53 @@ describe('resolveDevToken', () => {
   });
 });
 
-// 04.2.1-T1.2 / AC8: the dev path never writes the token cache — the dev token is a
-// real ingest token and must not be persisted (04.2.1 §8 retention).
-describe('dev token cache (AC8)', () => {
+// The dev token is a seeded ingest credential — `getToken` exchanges it at
+// `POST /v1/ci/token` and caches only the returned `ci_producer` token, so the dev token itself
+// is never persisted and never printed.
+describe('dev token exchange', () => {
   beforeEach(() => {
     resetSecrets();
   });
 
-  it('dev_token_never_writes_the_cache', async () => {
+  it('exchanges the dev token and caches only the exchanged token', async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), 'evidgate-dev-'));
+    const exchangedToken = 'egt_ci_token_value';
+    const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+    const requests: Request[] = [];
+    const fetchImpl: typeof fetch = (input, init) => {
+      requests.push(input instanceof Request ? input : new Request(input, init));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            token: exchangedToken,
+            expires_at: expiresAt,
+            project_id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+            permission_set: [],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    };
     try {
       const config = resolveConfig({
         env: { ...baseEnv, EVIDGATE_ENV: 'dev', EVIDGATE_CACHE_DIR: cacheDir },
       });
 
-      await getToken(config);
+      const result = await getToken(config, { fetch: fetchImpl });
 
-      await expect(readdir(cacheDir)).resolves.toEqual([]);
+      // The source stays `dev`: the token names where the credential came from, not who signed it.
+      expect(result).toEqual({ token: exchangedToken, source: 'dev', expiresAt });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.url).toBe('http://127.0.0.1:8080/v1/ci/token');
+      expect(requests[0]?.method).toBe('POST');
+      // The dev credential is the body's `ingest_token`, so it never becomes a bearer header.
+      expect(requests[0]?.headers.get('authorization')).toBeNull();
+      expect(await requests[0]?.json()).toEqual({ ingest_token: 'dev-token-value' });
+      const files = await readdir(cacheDir);
+      expect(files).toHaveLength(1);
+      const cached = await readFile(join(cacheDir, files[0] ?? ''), 'utf8');
+      expect(JSON.parse(cached)).toEqual({ token: exchangedToken, expires_at: expiresAt });
+      expect(cached).not.toContain('dev-token-value');
     } finally {
       await rm(cacheDir, { recursive: true, force: true });
     }

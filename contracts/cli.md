@@ -170,13 +170,17 @@ finalize` only (`resolveSpoolSettings`, memoised on first use): a malformed
 → the `ACTIONS_ID_TOKEN_REQUEST_URL` + `ACTIONS_ID_TOKEN_REQUEST_TOKEN` pair →
 `EVIDGATE_INGEST_TOKEN` → `EVIDGATE_DEV_TOKEN`.
 
-- The dev path is used only when no OIDC or ingest source is set (AC8). It
-  returns `{ token, source: 'dev' }` as the bearer with no network call and no
-  file write (no cache).
-- `[DECISION]` The dev token is returned only when `EVIDGATE_ENV` is exactly
+- The dev path is used only when no OIDC or ingest source is set (AC8). After
+  the guard below it is exchanged at `POST /v1/ci/token` exactly like an ingest
+  token (one code path, the token cache included); the returned `ci_producer`
+  token is the bearer and `getToken()` returns `{ token, source: 'dev' }`. The
+  Api never accepts the raw dev token on a CI route (D-S177-Q1, amends AC8's
+  earlier "no network call"). A failed dev exchange uses the ingest error codes
+  and exit codes of this section.
+- `[DECISION]` The dev token is exchanged only when `EVIDGATE_ENV` is exactly
   `dev` (after trim and lower-casing) **and** the API URL host is loopback
   (`localhost`, `127.0.0.1`, `[::1]`). The reason: the dev token is a real
-  ingest token and the env label is self-declared, so the target must also be
+  ingest token (the seed mints it) and the env label is self-declared, so the target must also be
   local. The env check runs first: `staging` or `prod` exits 3 with
   `dev_token_refused` (`EVIDGATE_DEV_TOKEN is refused when EVIDGATE_ENV=<env>`);
   unset or any other value exits 3 with `dev_token_refused` and the hint
@@ -367,7 +371,7 @@ server subcode changes the exit code.
   `ok api_url=<u> project=<p> token_source=<dev|…>`; with `--json` it prints
   `{"ok":true,"api_url":…,"project":…,"token_source":…}`. It never prints a
   token. For an OIDC/actions-id-token/ingest source it runs the exchange and
-  fills the token cache (§7); the dev path stays offline. It takes no
+  fills the token cache (§7); the dev path runs the same exchange as an ingest source. It takes no
   positionals; an extra positional is a `usage` error. It exists so AC5 and AC8
   are exercisable on the binary.
 - `--help` / `-h` / `help` prints usage to stdout and exits 0; `--version`

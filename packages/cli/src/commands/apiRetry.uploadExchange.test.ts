@@ -90,14 +90,59 @@ function refusal(status: number, code: string, headers: Record<string, string> =
   );
 }
 
-/** The successful exchange body (openapi `CiTokenResponse`). */
+/** The successful exchange body (openapi `CiTokenResponse`), handing out the minted token. */
 function exchangedToken(): Response {
   return jsonResponse(200, {
-    token: 'egt_ci_token',
+    token: mintedToken,
     expires_at: '2030-01-01T00:00:00Z',
     project_id: projectId,
     permission_set: [],
   });
+}
+
+/** The dev token the M1 env seeds: an ingest credential, never a bearer. */
+const devToken = 'dev-token-value';
+/**
+ * The `ci_producer` token the dev exchange mints. It is deliberately a different string from
+ * `devToken`, so an upload that sent the dev token raw would fail the bearer assertions.
+ */
+const mintedToken = 'egt_minted_ci_token';
+/** The exchange route a dev run posts to before its own request. */
+const exchangePath = '/v1/ci/token';
+
+interface DevStub {
+  readonly fetchImpl: typeof fetch;
+  /** The command's own requests; the dev token's exchange is never one of them. */
+  readonly calls: StubCall[];
+  /** The `POST /v1/ci/token` requests the run made, in order. */
+  readonly exchanges: StubCall[];
+}
+
+/**
+ * A stub for a dev-token run. `EVIDGATE_DEV_TOKEN` is an ingest credential: `getToken`
+ * exchanges it at `POST /v1/ci/token` and caches the result, so the upload runs on the
+ * returned `ci_producer` token. The stub answers that exchange with `mintedToken` and hands
+ * every other request to `handler`.
+ */
+function devStubFetch(handler: (request: Request) => Response | Promise<Response>): DevStub {
+  const calls: StubCall[] = [];
+  const exchanges: StubCall[] = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const call: StubCall = { request, body: Buffer.from(await request.clone().arrayBuffer()) };
+    if (new URL(request.url).pathname === exchangePath) {
+      exchanges.push(call);
+      return jsonResponse(200, {
+        token: mintedToken,
+        expires_at: '2030-01-01T00:00:00Z',
+        project_id: projectId,
+        permission_set: [],
+      });
+    }
+    calls.push(call);
+    return handler(request);
+  };
+  return { fetchImpl, calls, exchanges };
 }
 
 /** The wait seams: a sleep that records its argument and never blocks. */
@@ -149,13 +194,16 @@ describe('manifests upload retries', () => {
     return path;
   }
 
-  /** The M1 dev path: no exchange, no cache, no network (04.2.1 AC8). */
+  /**
+   * The dev path: the token is a seeded ingest credential, so the upload
+   * is preceded by one `POST /v1/ci/token`, and the exchange's answer is the bearer.
+   */
   async function devEnv() {
     return {
       EVIDGATE_API_URL: 'http://127.0.0.1:8080',
       EVIDGATE_PROJECT: project,
       EVIDGATE_ENV: 'dev',
-      EVIDGATE_DEV_TOKEN: 'dev-token-value',
+      EVIDGATE_DEV_TOKEN: devToken,
       EVIDGATE_CACHE_DIR: await tempDir(),
     };
   }
@@ -164,7 +212,7 @@ describe('manifests upload retries', () => {
     const file = await manifestFile();
     const env = await devEnv();
     let attempt = 0;
-    const stub = stubFetch(() => {
+    const stub = devStubFetch(() => {
       attempt += 1;
       return attempt === 1
         ? refusal(503, 'unavailable', { 'retry-after': '1' })
@@ -177,9 +225,18 @@ describe('manifests upload retries', () => {
       main(['manifests', 'upload', '--file', file], env, out.io, fake.deps),
     ).resolves.toBe(0);
 
+    // The dev token is exchanged once, before the upload's own attempts.
+    expect(stub.exchanges).toHaveLength(1);
     expect(stub.calls).toHaveLength(2);
     expect(fake.sleeps).toEqual([1_000]);
     const [first, second] = stub.calls;
+    // The upload runs on the exchanged token: the raw dev token only travels in the exchange
+    // body, so a regression that sent it as the bearer fails here.
+    expect(stub.calls[0]?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
+    expect(stub.calls[1]?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
+    expect(JSON.parse(stub.exchanges[0]?.body.toString('utf8') ?? '')).toStrictEqual({
+      ingest_token: devToken,
+    });
     expect(second?.request.headers.get('idempotency-key')).toBe(
       first?.request.headers.get('idempotency-key'),
     );
@@ -192,7 +249,7 @@ describe('manifests upload retries', () => {
   it('a_422_is_not_retried', async () => {
     const file = await manifestFile();
     const env = await devEnv();
-    const stub = stubFetch(() => refusal(422, 'manifest_invalid'));
+    const stub = devStubFetch(() => refusal(422, 'manifest_invalid'));
     const fake = fakeDeps(stub.fetchImpl);
     const out = capture();
 
@@ -208,7 +265,7 @@ describe('manifests upload retries', () => {
   it('a_400_is_not_retried', async () => {
     const file = await manifestFile();
     const env = await devEnv();
-    const stub = stubFetch(() => refusal(400, 'bad_request'));
+    const stub = devStubFetch(() => refusal(400, 'bad_request'));
     const fake = fakeDeps(stub.fetchImpl);
     const out = capture();
 
@@ -225,7 +282,7 @@ describe('manifests upload retries', () => {
     const file = await manifestFile();
     const env = await devEnv();
     let attempt = 0;
-    const stub = stubFetch(() => {
+    const stub = devStubFetch(() => {
       attempt += 1;
       return attempt === 1
         ? refusal(429, 'rate_limited', { 'retry-after': '2' })
@@ -245,7 +302,7 @@ describe('manifests upload retries', () => {
   it('an_exhausted_budget_exits_non_zero_with_the_server_code', async () => {
     const file = await manifestFile();
     const env = await devEnv();
-    const stub = stubFetch(() => refusal(503, 'unavailable'));
+    const stub = devStubFetch(() => refusal(503, 'unavailable'));
     const fake = fakeDeps(stub.fetchImpl);
     const out = capture();
 
@@ -294,7 +351,7 @@ describe('token exchange retries', () => {
 
     const result = await exchangeToken(config, fake.deps);
 
-    expect(result.token).toBe('egt_ci_token');
+    expect(result.token).toBe(mintedToken);
     expect(stub.calls).toHaveLength(2);
     expect(fake.sleeps).toEqual([1_000]);
     const [first, second] = stub.calls;
@@ -349,7 +406,7 @@ describe('token exchange retries', () => {
 
     const result = await exchangeToken(config, fake.deps);
 
-    expect(result.token).toBe('egt_ci_token');
+    expect(result.token).toBe(mintedToken);
     expect(fake.sleeps).toEqual([2_000]);
     expect(stub.calls).toHaveLength(2);
   });

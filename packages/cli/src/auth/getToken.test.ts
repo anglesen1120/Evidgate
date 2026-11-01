@@ -41,7 +41,7 @@ async function cacheEntries(cacheDir: string): Promise<string[]> {
   }
 }
 
-// 04.2.1-T1.2 / AC3, AC8: the dev path never touches the cache or the network; an
+// The dev token is guarded, then exchanged like an ingest token; an
 // OIDC/ingest source reuses a fresh cached token, refreshes within the 60 s margin and
 // purges the entry on a 401/403.
 describe('getToken', () => {
@@ -67,25 +67,68 @@ describe('getToken', () => {
     await rm(cacheDir, { recursive: true, force: true });
   });
 
-  it('returns the dev token without an exchange, a fetch or a cache file (AC8)', async () => {
+  it('exchanges the dev token as an ingest credential and returns the ci_producer token', async () => {
     const config = configFor({ EVIDGATE_ENV: 'dev', EVIDGATE_DEV_TOKEN: 'dev-token-value' });
+    exchangeMock.exchangeAndPurge.mockResolvedValue({
+      token: 'ci-token',
+      expiresAt: iso(20 * 60_000),
+      projectId,
+      source: 'ingest',
+    });
 
-    const result = await getToken(config);
+    const result = await getToken(config, { now: () => now });
 
-    expect(result).toEqual({ token: 'dev-token-value', source: 'dev' });
+    expect(result).toEqual({ token: 'ci-token', source: 'dev', expiresAt: iso(20 * 60_000) });
+    expect(result.token).not.toBe('dev-token-value');
+    expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
+    const exchangeConfig = exchangeMock.exchangeAndPurge.mock.calls[0]?.[0] as ResolvedConfig;
+    expect(exchangeConfig.ingestToken).toBe('dev-token-value');
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['staging', 'http://127.0.0.1:8080'],
+    [undefined, 'http://127.0.0.1:8080'],
+    ['dev', 'https://api.example.com'],
+  ])('refuses the dev token before any exchange (env=%s, url=%s)', async (env, apiUrl) => {
+    const config = configFor({
+      EVIDGATE_ENV: env,
+      EVIDGATE_API_URL: apiUrl,
+      EVIDGATE_DEV_TOKEN: 'dev-token-value',
+    });
+
+    await expect(getToken(config, { now: () => now })).rejects.toMatchObject({
+      code: 'dev_token_refused',
+    });
     expect(exchangeMock.exchangeAndPurge).not.toHaveBeenCalled();
-    expect(await cacheEntries(cacheDir)).toEqual([]);
+  });
+
+  it('surfaces an exchange failure for the dev token without echoing it', async () => {
+    const config = configFor({ EVIDGATE_ENV: 'dev', EVIDGATE_DEV_TOKEN: 'dev-token-value' });
+    exchangeMock.exchangeAndPurge.mockRejectedValue(
+      new CliError('the ingest token was refused', { code: 'auth_failed' }),
+    );
+
+    const failure = await getToken(config, { now: () => now }).catch((e: unknown) => e);
+
+    expect(failure).toMatchObject({ code: 'auth_failed' });
+    expect(String((failure as Error).message)).not.toContain('dev-token-value');
   });
 
   it('registers the returned token for redaction (SEC6)', async () => {
     const config = configFor({ EVIDGATE_ENV: 'dev', EVIDGATE_DEV_TOKEN: 'dev-token-value' });
+    exchangeMock.exchangeAndPurge.mockResolvedValue({
+      token: 'ci-token',
+      expiresAt: iso(20 * 60_000),
+      projectId,
+      source: 'ingest',
+    });
     // Drop what `resolveConfig` registered, so only `getToken` can re-register it.
     resetSecrets();
 
-    await getToken(config);
+    await getToken(config, { now: () => now });
 
-    expect(redact('bearer dev-token-value')).toBe(`bearer ${redacted}`);
+    expect(redact('bearer ci-token')).toBe(`bearer ${redacted}`);
   });
 
   it('does not use the dev token when an OIDC source is set (AC8)', async () => {

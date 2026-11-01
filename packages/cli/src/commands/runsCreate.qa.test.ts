@@ -97,6 +97,50 @@ function created(overrides: Record<string, unknown> = {}): Response {
   return jsonResponse(201, { run_id: runId, state: 'queued', unverified_ref: false, ...overrides });
 }
 
+/** The `project_id` the exchange echoes back (openapi `format: uuid`). */
+const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
+/** The `EVIDGATE_DEV_TOKEN` the QA env seeds: an ingest credential, never a bearer. */
+const devToken = 'qa-dev-token';
+/**
+ * The `ci_producer` token the dev exchange mints: the bearer the command sends. It is
+ * deliberately a different string from `devToken`, so a command that sent the dev token raw
+ * would fail the `Bearer ${mintedToken}` assertion.
+ */
+const mintedToken = 'egt_minted_qa_ci_token';
+
+/**
+ * The `/v1/ci/token` answer for the dev source: the dev token is exchanged like an ingest
+ * credential, so the bearer is the token this body hands out. The answer is `mintedToken`, not
+ * the dev token's value, and it expires 30 minutes out, inside the cache's 60 + 5 minute
+ * freshness window.
+ */
+function devTokenExchange(request: Request): Response | undefined {
+  return new URL(request.url).pathname === '/v1/ci/token'
+    ? jsonResponse(200, {
+        token: mintedToken,
+        expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+        project_id: exchangeProjectId,
+        permission_set: [],
+      })
+    : undefined;
+}
+
+/** A stub whose handler answers the command's own request, never the token exchange. */
+function stubDevFetch(handler: (request: Request) => Response | Promise<Response>): {
+  readonly fetchImpl: typeof fetch;
+  readonly calls: StubCall[];
+} {
+  return stubFetch((request) => devTokenExchange(request) ?? handler(request));
+}
+
+/**
+ * The command's own requests: everything but the `/v1/ci/token` exchange, so a count or an
+ * index means the same thing it did before the dev source gained a token exchange.
+ */
+function apiCalls(stub: { readonly calls: StubCall[] }): StubCall[] {
+  return stub.calls.filter((call) => new URL(call.request.url).pathname !== '/v1/ci/token');
+}
+
 /** A 00 §9.2 error envelope with the given code (and optional details). */
 function envelope(status: number, code: string, message: string, details?: unknown): Response {
   return jsonResponse(status, {
@@ -136,7 +180,10 @@ describe('runs create — QA boundaries', () => {
     await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  /** The M1 dev path: no exchange, no cache, no token network round trip. */
+  /**
+   * The dev path: the dev token is exchanged at `/v1/ci/token` like an ingest credential,
+   * the returned producer token is the bearer, and it is cached.
+   */
   async function devEnv(): Promise<Record<string, string>> {
     const cacheDir = await mkdtemp(join(tmpdir(), 'evidgate-cli-qa-'));
     dirs.push(cacheDir);
@@ -144,7 +191,7 @@ describe('runs create — QA boundaries', () => {
       EVIDGATE_API_URL: 'http://127.0.0.1:8080',
       EVIDGATE_PROJECT: project,
       EVIDGATE_ENV: 'dev',
-      EVIDGATE_DEV_TOKEN: 'qa-dev-token',
+      EVIDGATE_DEV_TOKEN: devToken,
       EVIDGATE_CACHE_DIR: cacheDir,
     };
   }
@@ -177,11 +224,11 @@ describe('runs create — QA boundaries', () => {
       { ciRef: 'refs/pull/1/merge', ref: { kind: 'pull_request', name: '1/merge', pr_number: 1 } },
     ];
     for (const testCase of accepted) {
-      const stub = stubFetch(() => created());
+      const stub = stubDevFetch(() => created());
       await expect(
         invoke(createArgv(['--ci-ref', testCase.ciRef]), env, capture(), stub.fetchImpl),
       ).resolves.toBe(0);
-      expect(sentBody(stub.calls[0]).ref).toEqual(testCase.ref);
+      expect(sentBody(apiCalls(stub)[0]).ref).toEqual(testCase.ref);
     }
 
     const rejected = [
@@ -231,11 +278,11 @@ describe('runs create — QA boundaries', () => {
       },
     ];
     for (const testCase of accepted) {
-      const stub = stubFetch(() => created());
+      const stub = stubDevFetch(() => created());
       await expect(
         invoke(createArgv(['--ci-ref', testCase.ciRef]), env, capture(), stub.fetchImpl),
       ).resolves.toBe(0);
-      expect(sentBody(stub.calls[0]).ref).toEqual(testCase.ref);
+      expect(sentBody(apiCalls(stub)[0]).ref).toEqual(testCase.ref);
     }
 
     const rejected = [
@@ -261,14 +308,14 @@ describe('runs create — QA boundaries', () => {
     const env = await devEnv();
 
     for (const state of ['a'.repeat(32), 'queued', 'a_1']) {
-      const stub = stubFetch(() => created({ state }));
+      const stub = stubDevFetch(() => created({ state }));
       const out = capture();
       await expect(invoke(createArgv(), env, out, stub.fetchImpl)).resolves.toBe(0);
       expect(out.stdout.join('')).toContain(`state=${state}`);
     }
 
     for (const state of ['a'.repeat(33), '1queued', 'queued\u001b[31m']) {
-      const stub = stubFetch(() => created({ state }));
+      const stub = stubDevFetch(() => created({ state }));
       const out = capture();
       const attempt = invoke(createArgv(), env, out, stub.fetchImpl);
       await expect(attempt, `state length ${state.length}`).resolves.toBe(3);
@@ -293,11 +340,11 @@ describe('runs create — QA boundaries', () => {
       astral.repeat(128),
     ];
     for (const raw of accepted) {
-      const stub = stubFetch(() => created());
+      const stub = stubDevFetch(() => created());
       await expect(
         invoke(createArgv(['--release', raw]), env, capture(), stub.fetchImpl),
       ).resolves.toBe(0);
-      expect(sentBody(stub.calls[0]).release).toBe(raw.trim());
+      expect(sentBody(apiCalls(stub)[0]).release).toBe(raw.trim());
     }
 
     const rejected = ['r'.repeat(129), astral.repeat(129), '\t', ' \t '];
@@ -317,11 +364,11 @@ describe('runs create — QA boundaries', () => {
     const env = await devEnv();
 
     for (const key of ['~', '~'.repeat(128), 'A'.repeat(128), '!']) {
-      const stub = stubFetch(() => created());
+      const stub = stubDevFetch(() => created());
       await expect(
         invoke(createArgv(['--idempotency-key', key]), env, capture(), stub.fetchImpl),
       ).resolves.toBe(0);
-      expect(stub.calls[0]?.request.headers.get('idempotency-key')).toBe(key);
+      expect(apiCalls(stub)[0]?.request.headers.get('idempotency-key')).toBe(key);
     }
 
     for (const key of ['\u007f', ' '.repeat(8), 'kéy', '~'.repeat(129), '\u001f']) {
@@ -385,7 +432,7 @@ describe('runs create — QA boundaries', () => {
   it('manifest_id_letter_case_is_accepted_and_sent_verbatim', async () => {
     const env = await devEnv();
     const upper = manifestId.toUpperCase();
-    const stub = stubFetch(() => created());
+    const stub = stubDevFetch(() => created());
     await expect(
       invoke(
         runsCreateArgv(['--manifest-id', upper, '--manifest-hash', manifestHash]),
@@ -394,7 +441,7 @@ describe('runs create — QA boundaries', () => {
         stub.fetchImpl,
       ),
     ).resolves.toBe(0);
-    expect(sentBody(stub.calls[0]).manifest_id).toBe(upper);
+    expect(sentBody(apiCalls(stub)[0]).manifest_id).toBe(upper);
   });
 
   // contracts/cli.md §5: a detail whose `reason` is not a string makes the whole envelope
@@ -402,7 +449,7 @@ describe('runs create — QA boundaries', () => {
   // with the `HTTP <status>` message and no `detail:` lines.
   it('non_string_detail_reason_falls_back_fail_closed', async () => {
     const env = await devEnv();
-    const stub = stubFetch(() =>
+    const stub = stubDevFetch(() =>
       jsonResponse(422, {
         error: {
           code: 'manifest_invalid',
@@ -430,7 +477,7 @@ describe('runs create — QA boundaries', () => {
   it('json_keeps_stdout_empty_on_failure', async () => {
     const env = await devEnv();
 
-    const conflict = stubFetch(() =>
+    const conflict = stubDevFetch(() =>
       envelope(409, 'idempotency_conflict', 'the key was used with a different body'),
     );
     const conflictOut = capture();
@@ -512,21 +559,21 @@ describe('runs create — QA boundaries', () => {
   it('explicit_key_overrides_the_derived_key', async () => {
     const env = await devEnv();
     const derived = deriveRunIdempotencyKey({ manifestId, manifestHash });
-    const stub = stubFetch(() => created());
+    const stub = stubDevFetch(() => created());
     const argv = createArgv(['--idempotency-key', 'qa-explicit-key']);
     await expect(invoke(argv, env, capture(), stub.fetchImpl)).resolves.toBe(0);
 
-    const header = stub.calls[0]?.request.headers.get('idempotency-key');
+    const header = apiCalls(stub)[0]?.request.headers.get('idempotency-key');
     expect(header).toBe('qa-explicit-key');
     expect(header).not.toBe(derived);
-    expect(stub.calls).toHaveLength(1);
+    expect(apiCalls(stub)).toHaveLength(1);
   });
 
   // AC5 / openapi `CreateRunRequest` + `RunRefRequest` are closed shapes: the wire body
   // carries exactly the members the CLI owns, and the hash/policy/suite/env never travel.
   it('request_body_carries_only_documented_members', async () => {
     const env = await devEnv();
-    const stub = stubFetch(() => created());
+    const stub = stubDevFetch(() => created());
     const argv = createArgv([
       '--release',
       'rel/1.2',
@@ -537,7 +584,10 @@ describe('runs create — QA boundaries', () => {
     ]);
     await expect(invoke(argv, env, capture(), stub.fetchImpl)).resolves.toBe(0);
 
-    const call = stub.calls[0];
+    const call = apiCalls(stub)[0];
+    // The command runs on the exchanged token: the dev token only travels in the exchange
+    // body, so a regression that sent it as the bearer fails here.
+    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     expect(Object.keys(sentBody(call)).sort()).toEqual(['manifest_id', 'ref', 'release']);
     const raw = call?.body.toString('utf8') ?? '';
     for (const forbidden of [
@@ -568,7 +618,7 @@ describe('runs create — QA boundaries', () => {
   // exactly the documented members.
   it('created_body_extra_members_are_ignored_and_state_is_printed_verbatim', async () => {
     const env = await devEnv();
-    const stub = stubFetch(() =>
+    const stub = stubDevFetch(() =>
       created({ state: 'running', extra_field: 'x', nested: { a: 1 }, unverified_ref: true }),
     );
     const out = capture();
@@ -599,7 +649,7 @@ describe('runs create — QA boundaries', () => {
     ];
 
     for (const testCase of cases) {
-      const stub = stubFetch(() => envelope(testCase.status, testCase.code, 'refused'));
+      const stub = stubDevFetch(() => envelope(testCase.status, testCase.code, 'refused'));
       const out = capture();
       await expect(
         invoke(createArgv(['--idempotency-key', 'qa-code-key']), env, out, stub.fetchImpl),
@@ -613,7 +663,7 @@ describe('runs create — QA boundaries', () => {
 
     // A 422 with `details[]` becomes one `detail:` line per entry (each field redacted and
     // escaped), and nothing else of the body is echoed.
-    const detailsStub = stubFetch(() =>
+    const detailsStub = stubDevFetch(() =>
       envelope(422, 'manifest_invalid', 'the manifest did not resolve', [
         { index: 0, path: '/manifest_id', reason: 'invalid_value' },
       ]),
@@ -637,7 +687,7 @@ describe('runs create — QA boundaries', () => {
   // forge a stderr line or a GitHub `::` workflow command.
   it('hostile_server_text_is_escaped', async () => {
     const env = await devEnv();
-    const stub = stubFetch(() =>
+    const stub = stubDevFetch(() =>
       jsonResponse(409, {
         error: {
           code: 'idempotency_conflict',
