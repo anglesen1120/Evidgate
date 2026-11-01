@@ -37,13 +37,17 @@ internal static class EvaluationModeCode
 /// <param name="PolicyHash">The revision's content address, stored on the row.</param>
 /// <param name="ManifestHash">The manifest the evidence revision froze against, stored on the row.</param>
 /// <param name="FrozenAt">The revision's <c>created_at</c>: the start of the decision latency.</param>
+/// <param name="ProjectId">The run's project, whose waivers and quarantine entries the snapshot reads.</param>
+/// <param name="IsReplay">Whether the run is a replay, which forces the shadow slot.</param>
 internal sealed record LoadedEvaluationInputs(
     EvidenceRevisionInput Evidence,
     PolicyRevisionInput Policy,
     Guid PolicyRevisionId,
     string PolicyHash,
     string ManifestHash,
-    DateTimeOffset FrozenAt);
+    DateTimeOffset FrozenAt,
+    Guid ProjectId,
+    bool IsReplay);
 
 /// <summary>
 /// Builds <see cref="LoadedEvaluationInputs"/> from the run's own rows: four reads on the caller's tenant
@@ -61,8 +65,17 @@ internal sealed class EvaluationInputReader(ITenantDb db, ITenantScopeAccessor s
     /// <summary>The completeness token a revision must carry for its <c>missing[]</c> to speak for itself.</summary>
     private const string CompleteCompleteness = "complete";
 
+    /// <summary>The <c>run.purpose</c> of a replay, whose verdict may only ever be advice.</summary>
+    private const string ReplayPurpose = "replay";
+
     /// <summary>The planned executions, the pinned policy revision and the pinned suite's key.</summary>
-    private sealed record RunPlanRow(Guid? PolicyRevisionId, int PlannedCount, string SuiteKey, bool SuiteDeclaredEmpty);
+    private sealed record RunPlanRow(
+        Guid? PolicyRevisionId,
+        Guid ProjectId,
+        string Purpose,
+        int PlannedCount,
+        string SuiteKey,
+        bool SuiteDeclaredEmpty);
 
     /// <summary>The frozen revision's own verdict inputs and freeze stamp.</summary>
     private sealed record RevisionRow(
@@ -139,7 +152,9 @@ internal sealed class EvaluationInputReader(ITenantDb db, ITenantScopeAccessor s
             policy.Id,
             policy.Hash,
             revision.ManifestHash,
-            revision.FrozenAt);
+            revision.FrozenAt,
+            plan.ProjectId,
+            plan.Purpose == ReplayPurpose);
     }
 
     /// <summary>

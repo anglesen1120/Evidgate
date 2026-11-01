@@ -23,6 +23,8 @@ internal static class EvaluationSql
     /// </summary>
     internal const string LoadRun = """
         select r.policy_revision_id as "PolicyRevisionId",
+               r.project_id as "ProjectId",
+               r.purpose as "Purpose",
                m.planned_count as "PlannedCount",
                s.slug as "SuiteKey",
                not exists (
