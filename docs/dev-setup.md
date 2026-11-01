@@ -195,15 +195,15 @@ process inherits):
 export EVIDGATE_ENV=dev
 export EVIDGATE_API_URL=http://127.0.0.1:8080
 export EVIDGATE_PROJECT=0198a000-0000-7000-8000-00000000d002
-export EVIDGATE_INGEST_TOKEN='egt_...'   # the EVIDGATE_DEV_TOKEN line the seed printed
+export EVIDGATE_DEV_TOKEN='egt_...'   # the line the seed printed
 ```
 
-The seed prints `EVIDGATE_DEV_TOKEN=egt_...`; that value is an ingest token, and
-the CLI exchanges it at `POST /v1/ci/token` for a short-lived `ci_producer` token
-when it reads it from **`EVIDGATE_INGEST_TOKEN`**. The Api accepts only the minted
-`ci_producer` token on the CI routes: `EVIDGATE_DEV_TOKEN` is sent raw as a bearer,
-so `runs create` and `manifests upload` answer 401 with it. Keep the `DEV_TOKEN`
-wording only for what the seed prints, and never export that variable for the CLI.
+The seed prints `EVIDGATE_DEV_TOKEN=egt_...`; that value is an ingest token. With
+`EVIDGATE_ENV=dev` and a loopback `EVIDGATE_API_URL` the CLI exchanges it at
+`POST /v1/ci/token` for a short-lived `ci_producer` token, the same path as
+`EVIDGATE_INGEST_TOKEN`, which stays the CI variable. The Api accepts only the
+minted token on the CI routes and never the raw one; with any other
+`EVIDGATE_ENV` or a non-loopback URL the CLI refuses the dev token (exit 3).
 
 The exchange needs `EVIDGATE__CI__SIGNINGKEY` in `.env.dev` (see
 [Configuration](#configuration-envdev)); without it `/ci/token` answers 503
