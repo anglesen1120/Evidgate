@@ -50,7 +50,7 @@ public sealed partial class RunDecisionApiTests
     /// <summary>
     /// A credential scoped to a sibling project reads no decision and learns nothing — the handler's scope check answers
     /// the unknown-id body, never a project-scope error. The host grants every permission so this branch is reachable: a
-    /// real evaluator refuses <c>decision:read</c> to a service credential at the permission stage first.
+    /// real minted-token case (a CI token with <c>decision:read</c>) is in <c>RunDecisionCiTokenTests</c>.
     /// </summary>
     [Fact]
     public async Task SiblingProjectCredential_IsTheSame404BodyAsAnUnknownRun()
