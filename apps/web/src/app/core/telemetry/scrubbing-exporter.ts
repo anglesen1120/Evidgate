@@ -8,8 +8,10 @@
 // (allowlist + per-key rules), links are dropped, the status message is dropped (code kept), the
 // event list keeps only the names in `EVENT_NAMES`, the instrumentation scope is reduced to
 // `name` + `version` with the name pinned to `INSTRUMENTATION_NAME`, and the resource keeps only
-// `ALLOWED_RESOURCE_KEYS`. The input span is never mutated, so a test exporter or the SDK's own
-// bookkeeping still sees what was recorded; only the copy that crosses the network is redacted.
+// `ALLOWED_RESOURCE_KEYS` plus a `schemaUrl` that is a plain https URL. The input span is never
+// mutated, so a test exporter or the SDK's own bookkeeping still sees what was recorded; only the
+// copy that crosses the network is redacted, and one scrubbed resource is shared by every span
+// that carries the same resource object.
 //
 // Why this file imports `@opentelemetry/resources` at runtime (the only runtime OTel import
 // outside `telemetry-sdk.ts`): a filtered resource has to be a real `Resource` (the OTLP
@@ -33,19 +35,31 @@ import {
 /** The SDK's export callback, taken from the interface so `@opentelemetry/core` stays unimported. */
 type ExportResultCallback = Parameters<SpanExporter['export']>[1];
 
+/** One scrubbed copy per input resource, keyed by the resource object the span carries. */
+type ResourceCache = WeakMap<Resource, Resource>;
+
 /**
  * Wraps a real exporter with the scrubbing gate. `shutdown`/`forceFlush` go straight through:
- * the wrapper holds no buffers of its own, and the batch processor above it owns the queue.
+ * the wrapper owns no queue, and the batch processor above it owns the one that exists.
  */
 export class ScrubbingSpanExporter implements SpanExporter {
   private readonly inner: SpanExporter;
+  /**
+   * The scrubbed resource of every resource seen so far. The OTLP transformer groups a batch by
+   * resource *identity*, so a fresh copy per span would mint one `resourceSpans` entry per span.
+   * A `WeakMap` keeps this to one copy per provider resource without holding one alive.
+   */
+  private readonly resources: ResourceCache = new WeakMap();
 
   constructor(inner: SpanExporter) {
     this.inner = inner;
   }
 
   export(spans: ReadableSpan[], resultCallback: ExportResultCallback): void {
-    this.inner.export(spans.map(toScrubbedSpan), resultCallback);
+    this.inner.export(
+      spans.map((span) => toScrubbedSpan(span, this.resources)),
+      resultCallback,
+    );
   }
 
   shutdown(): Promise<void> {
@@ -66,15 +80,46 @@ function isSimpleValue(value: unknown): value is string | number | boolean {
 }
 
 /** The resource with only the allowlisted keys kept; the input resource is left alone. */
-function scrubbedResource(resource: Resource): Resource {
+function scrubbedResource(resource: Resource, cache: ResourceCache): Resource {
+  const cached = cache.get(resource);
+  if (cached !== undefined) {
+    return cached;
+  }
   const attributes: Attributes = {};
   for (const [key, value] of Object.entries(resource.attributes)) {
     if (ALLOWED_RESOURCE_KEYS.has(key) && isSimpleValue(value)) {
       attributes[key] = value;
     }
   }
-  const { schemaUrl } = resource;
-  return resourceFromAttributes(attributes, schemaUrl === undefined ? undefined : { schemaUrl });
+  const schemaUrl = resourceSchemaUrl(resource.schemaUrl);
+  const scrubbed = resourceFromAttributes(
+    attributes,
+    schemaUrl === undefined ? undefined : { schemaUrl },
+  );
+  cache.set(resource, scrubbed);
+  return scrubbed;
+}
+
+/**
+ * A `schemaUrl` this app may export: `https`, a dotted lowercase host, and plain path segments.
+ * The last label is alphabetic, so an IPv4 address — a collector's own address, which is content
+ * — cannot pass; a query string, a fragment, a port or a userinfo drop the whole value.
+ */
+const RESOURCE_SCHEMA_URL =
+  /^https:\/\/(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]+(?:\/[A-Za-z0-9._~-]+)*$/;
+
+/** A `schemaUrl` longer than this is not a schema identifier. */
+const MAX_SCHEMA_URL_LENGTH = 256;
+
+/** The recorded `schemaUrl` when it is one of ours, or `undefined` so the resource has none. */
+function resourceSchemaUrl(recorded: unknown): string | undefined {
+  // The SDK types `schemaUrl` as text, but a stale or hostile instrumentation can record anything
+  // there, and reading `.length` off that value throws instead of dropping one field — which would
+  // lose the whole batch. A non-string is content, so it leaves no schema URL at all.
+  if (typeof recorded !== 'string' || recorded.length > MAX_SCHEMA_URL_LENGTH) {
+    return undefined;
+  }
+  return RESOURCE_SCHEMA_URL.test(recorded) ? recorded : undefined;
 }
 
 /**
@@ -114,11 +159,16 @@ const SCOPE_VERSION = /^[0-9A-Za-z.+-]{1,32}$/;
  * scope is reduced to the one scope this app uses plus its own build version — a foreign scope's
  * name is content, and `schemaUrl` is a URL, so neither is exported.
  */
-function toScrubbedSpan(span: ReadableSpan): ReadableSpan {
+function toScrubbedSpan(span: ReadableSpan, resources: ResourceCache): ReadableSpan {
   const spanContext = span.spanContext();
   const { parentSpanContext, instrumentationScope } = span;
   const { version: recordedVersion } = instrumentationScope;
-  const scopeVersion = SCOPE_VERSION.test(recordedVersion ?? '') ? recordedVersion : undefined;
+  // `RegExp.test` stringifies its argument, so a scope that recorded a number or an object as its
+  // version would otherwise export that payload as a version the receiver trusts.
+  const scopeVersion =
+    typeof recordedVersion === 'string' && SCOPE_VERSION.test(recordedVersion)
+      ? recordedVersion
+      : undefined;
   return {
     name: SPAN_NAMES.has(span.name) ? span.name : UNKNOWN_SPAN_NAME,
     kind: span.kind,
@@ -131,7 +181,7 @@ function toScrubbedSpan(span: ReadableSpan): ReadableSpan {
     events: scrubbedEvents(span.events),
     duration: span.duration,
     ended: span.ended,
-    resource: scrubbedResource(span.resource),
+    resource: scrubbedResource(span.resource, resources),
     instrumentationScope: {
       name: INSTRUMENTATION_NAME,
       ...(scopeVersion === undefined ? {} : { version: scopeVersion }),

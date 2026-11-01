@@ -336,11 +336,17 @@ describe('TELEMETRY_CONFIG', () => {
 });
 
 /**
- * A document double whose only interesting member is `defaultView.navigator`: the token factory
- * reads the privacy signals off exactly that path, and nothing else of the document.
+ * A document whose only interesting member is `defaultView.navigator`: the token factory reads the
+ * privacy signals off exactly that path, and nothing else of the document. jsdom gives a created
+ * document no window at all, so the spec defines the one member the factory reads.
  */
 function documentWithPrivacySignals(signals: PrivacySignals): Document {
-  return { defaultView: { navigator: signals } } as unknown as Document;
+  const doc = document.implementation.createHTMLDocument('telemetry-privacy-signals');
+  Object.defineProperty(doc, 'defaultView', {
+    configurable: true,
+    value: { navigator: signals },
+  });
+  return doc;
 }
 
 describe('TELEMETRY_OPT_OUT', () => {

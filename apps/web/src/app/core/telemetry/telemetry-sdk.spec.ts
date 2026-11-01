@@ -132,7 +132,12 @@ function hostileErrorText(): string {
 
 /** A report of any source carrying hostile `message` text, as a stale caller would build it. */
 function hostileReport(source: ErrorSource, text: string): ErrorReport {
-  return { source, type: 'TypeError', message: text } as unknown as ErrorReport;
+  const stale: ErrorReport & { readonly message: string } = {
+    source,
+    type: 'TypeError',
+    message: text,
+  };
+  return stale;
 }
 
 /** The span names an exporter holds, for a failure message that says what did arrive. */
