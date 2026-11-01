@@ -13,6 +13,21 @@ is shared, not local to this folder.
 `evidence_revision` pins the viewed revision (positive integer server revision number). The
 fragment names one row inside the page and never changes the pin.
 
+The pin is resolved once per view:
+
+- an explicit `?evidence_revision=<n>` always wins and stays in the URL while revision pages load;
+- without one, the accepted live decision's evidence revision is used, else the newest frozen
+  revision;
+- a chosen pin is never replaced by a slower response. Selecting another revision, or activating
+  "View latest revision", rewrites the URL with replacement navigation, preserving unrelated query
+  parameters and the fragment, so Back/Forward restores the pin.
+
+The revision list is a separate read (`GET /v1/runs/{run_id}/evidence-revisions`, newest first):
+a failed page leaves the run, manifest, attempts and decision untouched, "Load older revisions"
+follows the cursor once, and a pin that no loaded page carries is only reported unavailable after
+the walk is exhausted. The header completeness badge describes the newest known revision; the
+Evidence panel describes the pinned one.
+
 ## Anchor shapes
 
 | Target            | DOM id                        | Example             |

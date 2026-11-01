@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { RunAttemptPage, RunStateDto } from '@evidgate/sdk';
+import type { EvidenceRevisionPage, RunAttemptPage, RunStateDto } from '@evidgate/sdk';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { RunDataService } from '../data/run-data.service';
 import { RunDetailStore } from './run-detail.store';
@@ -10,16 +10,21 @@ describe('RunDetailStore decision', () => {
   const get = vi.fn<(id: string) => Promise<RunStateDto>>();
   const listAttempts =
     vi.fn<(id: string, query?: { cursor?: string; limit?: number }) => Promise<RunAttemptPage>>();
+  const listEvidenceRevisions =
+    vi.fn<
+      (id: string, query?: { cursor?: string; limit?: number }) => Promise<EvidenceRevisionPage>
+    >();
   const getDecision = vi.fn<(id: string) => Promise<unknown>>();
   beforeEach(() => {
     get.mockReset();
     listAttempts.mockReset().mockResolvedValue({ items: [], next_cursor: null });
+    listEvidenceRevisions.mockReset().mockResolvedValue({ items: [], next_cursor: null });
     getDecision.mockReset().mockResolvedValue(pendingBody());
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         RunDetailStore,
-        { provide: RunsDataService, useValue: { get, listAttempts } },
+        { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },
         { provide: RunDataService, useValue: { getDecision } },
       ],
     });

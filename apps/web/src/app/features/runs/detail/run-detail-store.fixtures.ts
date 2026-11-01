@@ -1,4 +1,9 @@
-import type { RunAttemptPage, RunStateDto } from '@evidgate/sdk';
+import type {
+  EvidenceRevision,
+  EvidenceRevisionPage,
+  RunAttemptPage,
+  RunStateDto,
+} from '@evidgate/sdk';
 import page1 from '../../../../../../../fixtures/web-api/run-attempts-page-1/input.json';
 import page2 from '../../../../../../../fixtures/web-api/run-attempts-page-2/input.json';
 import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
@@ -77,4 +82,24 @@ export function deferred<T>() {
     reject = no;
   });
   return { promise, resolve, reject };
+}
+
+/** One frozen revision row, newest-field defaults overridden per test. */
+export function revision(overrides: Partial<EvidenceRevision> = {}): EvidenceRevision {
+  return {
+    revision_no: 3,
+    created_at: '2026-05-01T10:00:00Z',
+    completeness: 'incomplete',
+    missing: ['missing_shard'],
+    evaluation_id: null,
+    ...overrides,
+  };
+}
+
+/** One served revision page; `next_cursor` defaults to a complete walk. */
+export function revisionPage(
+  items: readonly EvidenceRevision[],
+  nextCursor: string | null = null,
+): EvidenceRevisionPage {
+  return { items: [...items], next_cursor: nextCursor };
 }

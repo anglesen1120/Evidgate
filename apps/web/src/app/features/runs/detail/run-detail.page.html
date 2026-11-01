@@ -9,19 +9,37 @@
   (retry)="reload()"
 >
   @if (store.run(); as run) {
-    <app-run-header [run]="run" />
+    <app-run-header [run]="run" [runCompleteness]="store.latestRevisionCompleteness()" />
     <app-manifest-panel [summary]="store.manifest()" />
     <div class="evidence-regions">
       @if (store.decision(); as decision) {
-        <app-evidence-panel [decision]="decision" [runCompleteness]="null" />
+        <app-evidence-panel
+          [decision]="decision"
+          [pinnedRevision]="store.pinnedRevision()"
+          [pinned]="store.selectedRevision()"
+          [revisions]="store.revisions()"
+          [revisionsStatus]="revisionsStatus()"
+          [revisionsError]="store.revisionsError()"
+          [revisionsHasMore]="store.hasMoreRevisions()"
+          [revisionsLoadingMore]="store.revisionsLoadingMore()"
+          [newerRevisionExists]="store.newerRevisionExists()"
+          [latestRevisionNo]="store.latestRevisionNo()"
+          [retryEligible]="revisionsRetryEligible()"
+          (selectRevision)="selectRevision($event)"
+          (loadOlder)="loadOlderRevisions()"
+          (viewLatest)="viewLatestRevision()"
+          (retry)="retryRevisions()"
+        />
       }
       <app-decision-view
         [decision]="store.decision()"
+        [pinnedRevision]="store.pinnedRevision()"
         [updating]="store.decisionStatus() === 'loading'"
         [shadowIgnored]="store.shadowIgnored()"
         [error]="store.decisionError()"
         [retryEligible]="decisionRetryEligible()"
         (retry)="retryDecision()"
+        (viewDecisionEvidence)="viewDecisionEvidence($event)"
       />
     </div>
     <app-attempts-table

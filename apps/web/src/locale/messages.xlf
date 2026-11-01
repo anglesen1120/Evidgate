@@ -2772,6 +2772,22 @@
       <trans-unit id="runs.evidence.missing-title" datatype="html"><source>Missing evidence reasons</source></trans-unit>
       <trans-unit id="runs.evidence.missing-unavailable" datatype="html"><source>Missing evidence reasons unavailable</source></trans-unit>
       <trans-unit id="runs.evidence.no-evaluation" datatype="html"><source>No live evaluation recorded for this revision</source></trans-unit>
+      <trans-unit id="runs.evidence.revision-label" datatype="html"><source>Evidence revision</source></trans-unit>
+      <trans-unit id="runs.evidence.revision-option" datatype="html"><source>Revision <x id="revision" equiv-text="revision.revision_no"/> · <x id="createdAt" equiv-text="createdAt"/> UTC</source></trans-unit>
+      <trans-unit id="runs.evidence.selected-revision" datatype="html"><source>Selected evidence revision: <x id="revision" equiv-text="revision"/></source></trans-unit>
+      <trans-unit id="runs.evidence.pin-help" datatype="html"><source>This view stays pinned to the selected evidence revision.</source></trans-unit>
+      <trans-unit id="runs.evidence.newer-title" datatype="html"><source>A newer revision exists</source></trans-unit>
+      <trans-unit id="runs.evidence.newer-description" datatype="html"><source>You are viewing revision <x id="selected" equiv-text="selected"/>. The newest revision is <x id="latest" equiv-text="latest"/>.</source></trans-unit>
+      <trans-unit id="runs.evidence.view-latest" datatype="html"><source>View latest revision</source></trans-unit>
+      <trans-unit id="runs.evidence.load-older" datatype="html"><source>Load older revisions</source></trans-unit>
+      <trans-unit id="runs.evidence.loading" datatype="html"><source>Loading evidence revisions</source></trans-unit>
+      <trans-unit id="runs.evidence.loading-older" datatype="html"><source>Loading older revisions</source></trans-unit>
+      <trans-unit id="runs.evidence.empty-title" datatype="html"><source>No frozen evidence revision yet</source></trans-unit>
+      <trans-unit id="runs.evidence.empty-description" datatype="html"><source>Collection may still be in progress. No evidence verdict is inferred.</source></trans-unit>
+      <trans-unit id="runs.evidence.selected-unavailable" datatype="html"><source>Selected revision unavailable</source></trans-unit>
+      <trans-unit id="runs.evidence.search-older" datatype="html"><source>This revision is not in the loaded pages. Load older revisions to look for it.</source></trans-unit>
+      <trans-unit id="runs.evidence.evaluation-reference" datatype="html"><source>Live evaluation reference</source></trans-unit>
+      <trans-unit id="runs.evidence.historical-details" datatype="html"><source>Historical decision details are not available from this reference.</source></trans-unit>
       <trans-unit id="runs.evidence.target-unavailable" datatype="html"><source>Target details unavailable</source></trans-unit>
       <trans-unit id="runs.evidence.invalid-body" datatype="html"><source>Evidence response unavailable: {code}</source></trans-unit>
       <trans-unit id="runs.evidence.producer-link" datatype="html"><source>View producer {shard}</source></trans-unit>

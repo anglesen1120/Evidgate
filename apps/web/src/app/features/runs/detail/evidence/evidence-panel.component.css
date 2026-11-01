@@ -51,6 +51,61 @@ p {
   min-width: 0;
 }
 
+/* The newer-revision banner: informational tone, one explicit action, never auto-dismissed. */
+.evidence-newer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--eg-space-2);
+  padding: var(--eg-space-3);
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-sm);
+  color: var(--eg-warning-fg);
+  background: var(--eg-warning-bg);
+}
+
+.evidence-newer-title {
+  font-weight: var(--eg-weight-semibold);
+}
+
+.evidence-newer-action {
+  align-self: flex-start;
+  min-height: var(--eg-control-touch);
+  padding: var(--eg-space-1) var(--eg-space-3);
+  border: var(--eg-border-width) solid var(--eg-border-control);
+  border-radius: var(--eg-radius-sm);
+  color: var(--eg-text);
+  background: var(--eg-surface);
+  font: inherit;
+  cursor: pointer;
+}
+
+.evidence-newer-action:hover {
+  background: var(--eg-surface-raised);
+}
+
+.evidence-newer-action:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+
+.evidence-selected,
+.evidence-note {
+  color: var(--eg-text-muted);
+}
+
+.evidence-empty-title {
+  font-weight: var(--eg-weight-semibold);
+}
+
+.evidence-evaluation h3 {
+  margin-bottom: var(--eg-space-2);
+}
+
+.identifier {
+  font-family: var(--eg-font-mono);
+  overflow-wrap: anywhere;
+}
+
 /* The panel keeps the shell's content width; wide copy wraps instead of forcing page scrolling. */
 @media (min-width: 1280px) {
   .evidence-panel {

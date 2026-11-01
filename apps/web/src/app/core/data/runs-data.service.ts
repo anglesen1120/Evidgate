@@ -12,9 +12,12 @@ import {
   createRun,
   getRun,
   getRunDecision,
+  listEvidenceRevisions,
   listRunAttempts,
   listRuns,
   type CreateRunRequest,
+  type EvidenceRevisionPage,
+  type ListEvidenceRevisionsData,
   type ListRunAttemptsData,
   type ListRunsData,
   type RunAttemptPage,
@@ -30,6 +33,8 @@ import { intentHeaders, type Intent } from '../http/intent';
 type RunListQuery = NonNullable<ListRunsData['query']>;
 
 type RunAttemptsQuery = NonNullable<ListRunAttemptsData['query']>;
+
+type RunEvidenceRevisionsQuery = NonNullable<ListEvidenceRevisionsData['query']>;
 
 @Injectable({ providedIn: 'root' })
 export class RunsDataService {
@@ -48,6 +53,22 @@ export class RunsDataService {
   /** One page of a run's attempts (`GET /v1/runs/{r}/attempts`, keyset `(execution_key, attempt_no)`). */
   listAttempts(runId: string, query: RunAttemptsQuery = {}): Promise<RunAttemptPage> {
     return this.gateway.call((client) => listRunAttempts({ client, path: { r: runId }, query }));
+  }
+
+  /**
+   * One page of a run's frozen evidence revisions
+   * (`GET /v1/runs/{run_id}/evidence-revisions`, keyset `revision_no` descending).
+   *
+   * The generated `EvidenceRevision`/`EvidenceRevisionPage` types are current, so the page is
+   * returned exactly as served: the store owns the cursor walk and never rewrites a revision.
+   */
+  listEvidenceRevisions(
+    runId: string,
+    query: RunEvidenceRevisionsQuery = {},
+  ): Promise<EvidenceRevisionPage> {
+    return this.gateway.call((client) =>
+      listEvidenceRevisions({ client, path: { run_id: runId }, query }),
+    );
   }
 
   /**

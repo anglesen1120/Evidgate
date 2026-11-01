@@ -2779,6 +2779,70 @@
         <source>No live evaluation recorded for this revision</source>
         <target>Chưa ghi nhận đánh giá chính thức cho phiên bản này</target>
       </trans-unit>
+      <trans-unit id="runs.evidence.revision-label" datatype="html">
+        <source>Evidence revision</source>
+        <target>Phiên bản bằng chứng</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.revision-option" datatype="html">
+        <source>Revision <x id="revision" equiv-text="revision.revision_no"/> · <x id="createdAt" equiv-text="createdAt"/> UTC</source>
+        <target>Phiên bản <x id="revision"/> · <x id="createdAt"/> UTC</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.selected-revision" datatype="html">
+        <source>Selected evidence revision: <x id="revision" equiv-text="revision"/></source>
+        <target>Phiên bản bằng chứng đang xem: <x id="revision"/></target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.pin-help" datatype="html">
+        <source>This view stays pinned to the selected evidence revision.</source>
+        <target>Chế độ xem giữ nguyên phiên bản bằng chứng đã chọn.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.newer-title" datatype="html">
+        <source>A newer revision exists</source>
+        <target>Đã có phiên bản mới hơn</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.newer-description" datatype="html">
+        <source>You are viewing revision <x id="selected" equiv-text="selected"/>. The newest revision is <x id="latest" equiv-text="latest"/>.</source>
+        <target>Bạn đang xem phiên bản <x id="selected"/>. Phiên bản mới nhất là <x id="latest"/>.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.view-latest" datatype="html">
+        <source>View latest revision</source>
+        <target>Xem phiên bản mới nhất</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.load-older" datatype="html">
+        <source>Load older revisions</source>
+        <target>Tải phiên bản cũ hơn</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.loading" datatype="html">
+        <source>Loading evidence revisions</source>
+        <target>Đang tải phiên bản bằng chứng</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.loading-older" datatype="html">
+        <source>Loading older revisions</source>
+        <target>Đang tải phiên bản cũ hơn</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.empty-title" datatype="html">
+        <source>No frozen evidence revision yet</source>
+        <target>Chưa có phiên bản bằng chứng đã chốt</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.empty-description" datatype="html">
+        <source>Collection may still be in progress. No evidence verdict is inferred.</source>
+        <target>Quá trình thu thập có thể vẫn đang diễn ra. Không suy diễn kết luận từ bằng chứng.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.selected-unavailable" datatype="html">
+        <source>Selected revision unavailable</source>
+        <target>Không có phiên bản đã chọn</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.search-older" datatype="html">
+        <source>This revision is not in the loaded pages. Load older revisions to look for it.</source>
+        <target>Phiên bản này chưa có trong các trang đã tải. Hãy tải phiên bản cũ hơn để tìm.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.evaluation-reference" datatype="html">
+        <source>Live evaluation reference</source>
+        <target>Mã tham chiếu đánh giá chính thức</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.historical-details" datatype="html">
+        <source>Historical decision details are not available from this reference.</source>
+        <target>Mã tham chiếu này không cung cấp chi tiết quyết định trước đây.</target>
+      </trans-unit>
       <trans-unit id="runs.evidence.target-unavailable" datatype="html">
         <source>Target details unavailable</source>
         <target>Không có thông tin về đích liên kết</target>

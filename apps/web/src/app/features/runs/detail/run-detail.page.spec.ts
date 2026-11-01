@@ -2,7 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import type { RunAttemptPage, RunStateDto } from '@evidgate/sdk';
+import type { EvidenceRevisionPage, RunAttemptPage, RunStateDto } from '@evidgate/sdk';
 import attemptsOk from '../../../../../../../fixtures/web-api/run-attempts/input.json';
 import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
 import formatted from '../../../../../../../fixtures/web-api/run-detail-ref-format/input.json';
@@ -55,16 +55,19 @@ function liveBody() {
 describe('RunDetailPage', () => {
   const get = vi.fn<(id: string) => Promise<RunStateDto>>();
   const listAttempts = vi.fn<(id: string, query?: object) => Promise<RunAttemptPage>>();
+  const listEvidenceRevisions =
+    vi.fn<(id: string, query?: object) => Promise<EvidenceRevisionPage>>();
   const getDecision = vi.fn<(id: string) => Promise<unknown>>();
   beforeEach(() => {
     get.mockReset().mockResolvedValue(run);
     listAttempts.mockReset().mockResolvedValue(attemptPage);
+    listEvidenceRevisions.mockReset().mockResolvedValue({ items: [], next_cursor: null });
     getDecision.mockReset().mockResolvedValue(pendingBody());
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: 'projects/:projectId/runs', children: routes }]),
-        { provide: RunsDataService, useValue: { get, listAttempts } },
+        { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },
         { provide: RunDataService, useValue: { getDecision } },
       ],
     });

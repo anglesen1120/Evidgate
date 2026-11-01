@@ -1,0 +1,31 @@
+<div class="revision-selector">
+  <label class="revision-label" for="evidence-revision-select">{{ copy.revisionLabel }}</label>
+  <select
+    id="evidence-revision-select"
+    class="revision-select"
+    data-evidence-revision-select
+    [attr.aria-describedby]="'evidence-pin-help'"
+    (change)="choose($event)"
+  >
+    @for (revision of revisions(); track revision.revision_no) {
+      <option
+        [value]="revision.revision_no"
+        [selected]="revision.revision_no === selectedRevision()"
+      >
+        {{ optionLabel(revision) }}
+      </option>
+    }
+  </select>
+  <p class="revision-help" id="evidence-pin-help">{{ copy.pinHelp }}</p>
+  @if (hasMore()) {
+    <button
+      class="revision-load-older"
+      type="button"
+      data-evidence-load-older
+      [disabled]="loadingMore()"
+      (click)="loadOlder.emit()"
+    >
+      {{ loadingMore() ? copy.loadingOlder : copy.loadOlder }}
+    </button>
+  }
+</div>
