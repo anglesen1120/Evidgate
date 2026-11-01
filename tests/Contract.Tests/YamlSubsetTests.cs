@@ -62,6 +62,25 @@ public sealed class YamlSubsetTests
     }
 
     /// <summary>
+    /// A flow mapping — the form the spec's page schemas use for <c>items: { $ref: … }</c> — parses, quoted values
+    /// and nested flow collections included, so a page schema can be read like any other.
+    /// </summary>
+    [Fact]
+    public void Parse_FlowMapping_Parses()
+    {
+        var node = YamlSubset.Parse(
+            "items: { $ref: '#/components/schemas/EvidenceRevision' }\n" +
+            "next_cursor: { type: [string, 'null'] }\n") as JsonObject;
+
+        node.ShouldNotBeNull();
+        node["items"]!["$ref"]!.GetValue<string>().ShouldBe("#/components/schemas/EvidenceRevision");
+        var types = node["next_cursor"]!["type"]!.AsArray();
+        types.Count.ShouldBe(2);
+        types[0]!.GetValue<string>().ShouldBe("string");
+        types[1]!.GetValue<string>().ShouldBe("null");
+    }
+
+    /// <summary>
     /// No false positives: sibling keys at every depth and a key repeated in a
     /// <em>different</em> mapping are all still legal — only a repeat inside the
     /// same mapping is refused.

@@ -11,9 +11,10 @@ namespace Contract.Tests;
 /// <remarks>
 /// The blocks are read with <see cref="YamlSubset"/>, the deliberately small YAML
 /// reader documented there. A member the reader cannot parse throws rather than
-/// returning a partial document, and path <em>items</em> are intentionally never
-/// parsed: several of the spec's path descriptions use folded block scalars, so
-/// only the path keys — which the suites diff — are extracted by indentation.
+/// returning a partial document; a schema's folded prose is dropped before the
+/// parse instead (<see cref="Schema"/>), and path <em>items</em> are intentionally
+/// never parsed: several of the spec's path descriptions use folded block scalars,
+/// so only the path keys — which the suites diff — are extracted by indentation.
 /// </remarks>
 internal sealed class OpenApiSpec
 {
@@ -79,7 +80,10 @@ internal sealed class OpenApiSpec
         return new OpenApiSpec(lines, version, pathKeys, starts);
     }
 
-    /// <summary>The named <c>components.schemas</c> entry as a JSON Schema, with <c>$schema</c>/<c>$id</c> injected.</summary>
+    /// <summary>
+    /// The named <c>components.schemas</c> entry as a JSON Schema, with <c>$schema</c>/<c>$id</c> injected. Folded
+    /// prose (<c>description: &gt;-</c>) is dropped first; <see cref="ShapeLines"/> says why and what stays.
+    /// </summary>
     /// <exception cref="KeyNotFoundException">The spec declares no such schema.</exception>
     public JsonObject Schema(string name)
     {
@@ -96,9 +100,8 @@ internal sealed class OpenApiSpec
 
         var end = SectionEnd(_lines, start + 1, 4);
         var text = new System.Text.StringBuilder();
-        for (var i = start + 1; i < end; i++)
+        foreach (var line in ShapeLines(start + 1, end))
         {
-            var line = _lines[i];
             text.Append(line.Length >= 4 ? line[4..] : line).Append('\n');
         }
 
@@ -111,6 +114,46 @@ internal sealed class OpenApiSpec
         schema["$id"] = $"urn:evidgate:contract-spec:{name}";
         _schemaCache[name] = schema;
         return schema;
+    }
+
+    /// <summary>
+    /// The lines of a schema entry without its prose: a <c>description:</c> written as a block scalar (<c>&gt;</c>,
+    /// <c>|</c>, with an optional chomping or indentation indicator) and its deeper-indented body are dropped, because
+    /// <see cref="YamlSubset"/> refuses block scalars by design and validation only needs the shape keywords. Only
+    /// such an entry is dropped, so prose written any other way still fails the reader loudly instead of silently
+    /// shrinking the schema.
+    /// </summary>
+    private IEnumerable<string> ShapeLines(int start, int end)
+    {
+        var index = start;
+        while (index < end)
+        {
+            var line = _lines[index++];
+            if (!IsBlockScalarEntry(line, out var indent))
+            {
+                yield return line;
+                continue;
+            }
+
+            while (index < end && (IsBlank(_lines[index]) || IndentOf(_lines[index]) > indent))
+            {
+                index++;
+            }
+        }
+    }
+
+    /// <summary>True for a <c>description:</c> mapping entry whose value is a block scalar; <paramref name="indent"/> is the entry's.</summary>
+    private static bool IsBlockScalarEntry(string line, out int indent)
+    {
+        indent = IndentOf(line);
+        const string Key = "description:";
+        if (!line.AsSpan(indent).StartsWith(Key, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var value = line[(indent + Key.Length)..].Trim();
+        return value.Length > 0 && value[0] is '>' or '|';
     }
 
     /// <summary>The value of a top-level <c>key: value</c> scalar, or null when the key is absent.</summary>

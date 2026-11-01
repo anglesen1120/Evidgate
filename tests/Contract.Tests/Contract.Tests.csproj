@@ -24,6 +24,9 @@
     <!-- 01.3.2-T3.1/T3.2: the response-vs-spec and served-document suites boot the
          real Api in process (Program → ApiHost), so this project needs the host. -->
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />
+    <!-- The evidence-revision wire DTOs are serialized from the module's own contract records, so the spec schema
+         is compared with the type the host serves rather than with a test-local copy of its shape. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- The anonymous JSON probe the response-vs-spec suite POSTs to: a bad body must still answer the 00 §9.2 envelope. -->

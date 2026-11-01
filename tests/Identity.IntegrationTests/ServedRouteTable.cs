@@ -713,6 +713,10 @@ internal static class RouteRequests
         // F52 (S143): the run's attempts page. The seeded run has no case_attempt row, so the recipe is a clean 200
         // with an empty page — the route needs no producer to be exercisable.
         Add("GET", "/v1/runs/{r}/attempts", ctx => new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}/attempts"));
+        // The run's evidence-revision page: the seeded run has no evidence_revision row, so the recipe is a clean 200
+        // with an empty page — the route needs no frozen revision to be exercisable.
+        Add("GET", "/v1/runs/{run_id}/evidence-revisions", ctx =>
+            new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}/evidence-revisions"));
 
         // 05.3.2-T1: the finalize route is the events route's twin — a resolved member session reaches the C2 pipeline's
         // `event:write` gate, which answers the matrix's 403, so the recipe uses a fresh run id and a shape-valid body:
