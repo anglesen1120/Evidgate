@@ -384,6 +384,21 @@ public sealed class TenantGucTests
             ("activated_by", Guid.CreateVersion7()));
         await scope.ExecuteAsync(
             """
+            insert into public.evaluation
+                (id, org_id, run_id, evidence_revision, policy_revision_id, policy_hash, manifest_hash,
+                 completeness, outcome, decision, evaluator_version, mode, exceptions_hash, exceptions_as_of)
+            values (@id, @org_id, @run_id, 1, @policy_revision_id, @hash, @manifest_hash, 'complete',
+                    'all_passed', 'PASS', '1.0.0', 'live', @exceptions_hash, now())
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("run_id", runId),
+            ("policy_revision_id", policyRevisionId),
+            ("hash", "sha256:" + new string('e', 64)),
+            ("manifest_hash", "sha256:" + new string('d', 64)),
+            ("exceptions_hash", "sha256:" + new string('f', 64)));
+        await scope.ExecuteAsync(
+            """
             insert into public.adapter_capability (id, org_id, name, protocol_major, protocol_minor, engine_family, engine_version, platforms, supports, mode)
             values (@id, @org_id, 'playwright', 1, 0, 'playwright', '1.63.0', '{linux-x64}', '{}', 'full')
             """,

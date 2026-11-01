@@ -14,6 +14,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Policy.Contracts\Evidgate.Modules.Policy.Contracts.csproj" />
+    <!-- The frozen-evidence event this module consumes: its task type constant and payload (declared by the module
+         that writes the outbox row, so the two sides cannot drift). -->
+    <ProjectReference Include="..\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
+    <!-- The pure evaluator: no framework dependency, so the verdict is computed without a database. -->
+    <ProjectReference Include="..\..\Evidgate.Evaluation\Evidgate.Evaluation.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />

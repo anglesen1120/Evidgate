@@ -39,12 +39,14 @@ internal static class EvidenceRevisionSql
         """;
 
     /// <summary>
-    /// The manifest hash the revision records: the hash of the manifest row the run was created from (<c>run.manifest_id</c>,
-    /// 0031), joined tenant-first exactly like <see cref="OrchestratorSql.ReadRunForFinalize"/> so a cross-tenant manifest
-    /// is never read. <c>0049</c> requires 1..200 characters and the create path stores the <c>sha256:&lt;hex&gt;</c> address.
+    /// What the revision records about its run, in one read: the manifest hash (the hash of the manifest row the run was
+    /// created from, <c>run.manifest_id</c>, 0031) and the project the run belongs to, which the frozen-event payload
+    /// names. The join runs tenant-first exactly like <see cref="OrchestratorSql.ReadRunForFinalize"/> so a cross-tenant
+    /// manifest is never read. <c>0049</c> requires 1..200 characters and the create path stores the
+    /// <c>sha256:&lt;hex&gt;</c> address.
     /// </summary>
-    internal const string SelectManifestHash = """
-        select m.manifest_hash as manifest_hash
+    internal const string SelectRevisionSource = """
+        select r.project_id as project_id, m.manifest_hash as manifest_hash
           from public.run r
           join public.manifest m on m.org_id = r.org_id and m.id = r.manifest_id
          where r.org_id = @org_id and r.id = @run_id
