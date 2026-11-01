@@ -139,6 +139,10 @@ internal sealed class TenantRowFactory
     // the composite FK under test is reached.
     private static long _sequence;
 
+    // A fresh evidence revision per generated evaluation row: its partial live key is (org_id, run_id,
+    // evidence_revision), and the corrupt row reuses the valid row's run.
+    private static int _evaluationRevision;
+
     private readonly TenantSchema _schema;
     private readonly TenantInsertExecutor _insert;
     private readonly Dictionary<(string Table, Guid Org), GeneratedRow> _created = [];
@@ -499,6 +503,22 @@ internal sealed class TenantRowFactory
             // trigger would answer 23514 before the composite FK under test is reached.
             ("public.evidence_revision", "completeness") => "complete",
             ("public.evidence_revision", "revision_no") => 1,
+            // evaluation (0059) closes completeness, outcome, decision and mode to the evaluator's wire
+            // tokens, and its two content addresses to the 00 §7 sha256 shape: the generic text candidate
+            // satisfies none of them. `missing`/`reasons` keep their '{}' default (a CHECK rejects the
+            // generic {"probe"} element), and the live key is satisfiable because every generated row gets
+            // a freshly created run and policy revision.
+            ("public.evaluation", "completeness") => "complete",
+            ("public.evaluation", "outcome") => "all_passed",
+            ("public.evaluation", "decision") => "PASS",
+            ("public.evaluation", "mode") => "live",
+            // A fresh frozen revision per generated row: evaluation's live key is
+            // (org_id, run_id, evidence_revision) where mode = 'live', and the corrupt row reuses the valid
+            // row's run, so a constant would collide on that index (23505) before the composite FK under test
+            // is reached.
+            ("public.evaluation", "evidence_revision") => Interlocked.Increment(ref _evaluationRevision),
+            ("public.evaluation", "policy_hash" or "exceptions_hash") =>
+                "sha256:" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
             // The LLM gateway tables (0054) close `purpose`, `status` and `period` in CHECKs the generic
             // text candidate cannot satisfy. `purpose` is deliberately the one value whose row needs NO
             // incident: `incident_id`/`candidate_id` are nullable and therefore left unset, so
