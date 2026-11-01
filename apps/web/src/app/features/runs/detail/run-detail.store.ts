@@ -3,6 +3,10 @@ import { patchState, signalStore, withComputed, withMethods, withState } from '@
 import type { RunAttemptSummary, RunStateDto } from '@evidgate/sdk';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError, isApiRequestError, type ApiError } from '../../../core/http/api-error';
+import { RunDataService } from '../data/run-data.service';
+import { toDecisionCandidate } from './decision/decision-mapper';
+import { refusesAccess } from './decision/decision-refusal';
+import type { DecisionViewModel } from './decision/decision-view-model';
 import { manifestFromRun, UNAVAILABLE_MANIFEST, type ManifestSummary } from './manifest-summary';
 import { toAttemptRow, type AttemptRow } from './attempts/attempt-summary';
 
@@ -11,11 +15,19 @@ export const ATTEMPTS_PAGE_LIMIT = 200;
 
 export type AttemptsStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type RunDetailStatus = 'idle' | 'loading' | 'ready' | 'not-found' | 'forbidden' | 'error';
+/** The decision read is its own region state: a failure there never becomes a run-page failure. */
+export type DecisionStatus = 'idle' | 'loading' | 'ready' | 'error';
 interface RunDetailState {
   run: RunStateDto | null;
   manifest: ManifestSummary;
   status: RunDetailStatus;
   loadError: ApiError | null;
+  /** `null` until the first decision answer lands: the region renders its loading state. */
+  decision: DecisionViewModel | null;
+  decisionStatus: DecisionStatus;
+  decisionError: ApiError | null;
+  /** A served `mode: shadow` body was refused; the notice outlives the read that produced it. */
+  shadowIgnored: boolean;
   /** `null` until the first attempts page lands: the table renders loading/error/unavailable. */
   attempts: AttemptRow[] | null;
   attemptsStatus: AttemptsStatus;
@@ -38,6 +50,9 @@ const UNRESOLVED_FAILURE: ApiError = {
 function toApiError(failure: unknown): ApiError {
   return isApiRequestError(failure) ? failure.error : UNRESOLVED_FAILURE;
 }
+
+/** The decision region with no acceptable live answer; its copy is neutral and carries no data. */
+const UNAVAILABLE: DecisionViewModel = { kind: 'unavailable', cause: 'error' };
 
 /**
  * The two ways a keyset walk reads itself into a loop: the server hands back the cursor it was
@@ -98,6 +113,10 @@ export const RunDetailStore = signalStore(
     manifest: UNAVAILABLE_MANIFEST,
     status: 'idle',
     loadError: null,
+    decision: null,
+    decisionStatus: 'idle',
+    decisionError: null,
+    shadowIgnored: false,
     attempts: null,
     attemptsStatus: 'idle',
     attemptsError: null,
@@ -107,10 +126,52 @@ export const RunDetailStore = signalStore(
   withComputed((store) => ({ hasMoreAttempts: computed(() => store.attemptsCursor() !== null) })),
   withMethods((store) => {
     const data = inject(RunsDataService);
+    // The decision read goes through the feature service, which validates the stale-typed body
+    // before any member is read (`RunDataService.getDecision`); the run and attempts stay on the
+    // reference service every other read uses.
+    const decisionData = inject(RunDataService);
     let generation = 0;
     let attemptsGeneration = 0;
+    let decisionGeneration = 0;
     /** `attempt_id`s already shown; only an accepted page updates it, `load()` clears it. */
     let loadedAttemptIds = new Set<string>();
+    /**
+     * One decision read. The live slot is replaced as one accepted body (never field by field), a
+     * refuted shadow candidate leaves it untouched, and a transient failure keeps whatever was
+     * accepted. An access refusal is not transient: it erases the accepted body, because its
+     * reasons and hashes would otherwise stay readable to a caller the server just refused.
+     */
+    async function readDecision(runId: string): Promise<void> {
+      const read = ++decisionGeneration;
+      patchState(store, { decisionStatus: 'loading', decisionError: null });
+      try {
+        const candidate = toDecisionCandidate(await decisionData.getDecision(runId));
+        if (read !== decisionGeneration) return;
+        if (candidate.kind === 'shadow') {
+          // A shadow row is never a live answer: keep the accepted live body, or state that no
+          // live decision exists, and disclose the refusal instead of inventing pending.
+          patchState(store, {
+            decision: store.decision() ?? { kind: 'unavailable', cause: 'shadow-ignored' },
+            decisionStatus: 'ready',
+            shadowIgnored: true,
+          });
+          return;
+        }
+        patchState(store, {
+          decision: candidate,
+          decisionStatus: 'ready',
+          shadowIgnored: false,
+        });
+      } catch (failure: unknown) {
+        if (read !== decisionGeneration) return;
+        const error = toApiError(failure);
+        patchState(store, {
+          decision: refusesAccess(error) ? UNAVAILABLE : (store.decision() ?? UNAVAILABLE),
+          decisionStatus: 'error',
+          decisionError: error,
+        });
+      }
+    }
     /** One read of the attempts keyset: the first page replaces, a later page appends. */
     async function readAttempts(runId: string, cursor: string | null): Promise<void> {
       const read = ++attemptsGeneration;
@@ -162,18 +223,27 @@ export const RunDetailStore = signalStore(
       async load(runId: string): Promise<void> {
         const read = ++generation;
         ++attemptsGeneration;
+        // A decision answer for the run this route just left must not land on the new one.
+        ++decisionGeneration;
         loadedAttemptIds = new Set<string>();
         patchState(store, {
           run: null,
           manifest: UNAVAILABLE_MANIFEST,
           status: 'loading',
           loadError: null,
+          decision: null,
+          decisionStatus: 'idle',
+          decisionError: null,
+          shadowIgnored: false,
           attempts: null,
           attemptsStatus: 'idle',
           attemptsError: null,
           attemptsCursor: null,
           attemptsLoadingMore: false,
         });
+        // The decision is read alongside the run rather than after it: its failure belongs to its
+        // own region, so it must not be able to hold the run header or the attempts back.
+        const decisionRead = readDecision(runId);
         try {
           const run = await data.get(runId);
           if (read !== generation) return;
@@ -194,6 +264,17 @@ export const RunDetailStore = signalStore(
             loadError: error,
           });
         }
+        await decisionRead;
+      },
+      /**
+       * Re-read only the decision, keeping the accepted body on screen while it is in flight.
+       *
+       * This is the refresh seam for the run-detail surface: the region's retry calls it, and a
+       * future `evaluation.created` poll signal calls the same method rather than a second read.
+       */
+      async refreshDecision(): Promise<void> {
+        const run = store.run();
+        if (run !== null) await readDecision(run.run_id);
       },
       /** Re-read the first attempts page after a failure; the run itself is not re-read. */
       async retryAttempts(): Promise<void> {

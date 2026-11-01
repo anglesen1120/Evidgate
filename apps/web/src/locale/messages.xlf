@@ -2768,6 +2768,39 @@
       <trans-unit id="suites.warnings.warnings-unavailable" datatype="html"><source>Warnings unavailable</source></trans-unit>
       <trans-unit id="suites.warnings.the-suite-revision-response-does-not-include-war" datatype="html"><source>The suite revision response does not include warning details.</source></trans-unit>
       <trans-unit id="suites.warnings.no-warnings-reported" datatype="html"><source>No warnings reported.</source></trans-unit>
+      <trans-unit id="runs.evidence.title" datatype="html"><source>Evidence</source></trans-unit>
+      <trans-unit id="runs.evidence.missing-title" datatype="html"><source>Missing evidence reasons</source></trans-unit>
+      <trans-unit id="runs.evidence.missing-unavailable" datatype="html"><source>Missing evidence reasons unavailable</source></trans-unit>
+      <trans-unit id="runs.evidence.no-evaluation" datatype="html"><source>No live evaluation recorded for this revision</source></trans-unit>
+      <trans-unit id="runs.evidence.target-unavailable" datatype="html"><source>Target details unavailable</source></trans-unit>
+      <trans-unit id="runs.evidence.invalid-body" datatype="html"><source>Evidence response unavailable: {code}</source></trans-unit>
+      <trans-unit id="runs.evidence.producer-link" datatype="html"><source>View producer {shard}</source></trans-unit>
+      <trans-unit id="runs.evidence.attempt-link" datatype="html"><source>View attempt {attempt} for {executionKey}</source></trans-unit>
+      <trans-unit id="runs.evidence.reason.missing-shard" datatype="html"><source>Shard evidence is missing.</source></trans-unit>
+      <trans-unit id="runs.evidence.reason.count-mismatch" datatype="html"><source>Collected and expected counts do not match.</source></trans-unit>
+      <trans-unit id="runs.evidence.reason.artifact-missing" datatype="html"><source>A required artifact is missing.</source></trans-unit>
+      <trans-unit id="runs.evidence.reason.build-mismatch" datatype="html"><source>The reported build does not match the manifest.</source></trans-unit>
+      <trans-unit id="runs.evidence.reason.unknown-status" datatype="html"><source>A reported result status is not recognized.</source></trans-unit>
+      <trans-unit id="runs.evidence.reason.setup-error" datatype="html"><source>Test setup reported an error.</source></trans-unit>
+      <trans-unit id="runs.evidence.reason.stale-epoch" datatype="html"><source>Evidence belongs to a stale producer epoch.</source></trans-unit>
+      <trans-unit id="runs.evidence.reason.missing-result" datatype="html"><source>An expected test result is missing.</source></trans-unit>
+      <trans-unit id="runs.decision.title" datatype="html"><source>Latest live decision</source></trans-unit>
+      <trans-unit id="runs.decision.loading" datatype="html"><source>Loading live decision</source></trans-unit>
+      <trans-unit id="runs.decision.updating" datatype="html"><source>Updating decision</source></trans-unit>
+      <trans-unit id="runs.decision.pending-description" datatype="html"><source>No live evaluation is available yet.</source></trans-unit>
+      <trans-unit id="runs.decision.unavailable" datatype="html"><source>Live decision unavailable</source></trans-unit>
+      <trans-unit id="runs.decision.refresh-failed" datatype="html"><source>Decision refresh failed. Previously loaded decision retained.</source></trans-unit>
+      <trans-unit id="runs.decision.shadow-ignored" datatype="html"><source>Shadow evaluation ignored</source></trans-unit>
+      <trans-unit id="runs.decision.shadow-description" datatype="html"><source>A shadow evaluation does not replace the live decision.</source></trans-unit>
+      <trans-unit id="runs.decision.reasons-title" datatype="html"><source>Decision reasons</source></trans-unit>
+      <trans-unit id="runs.decision.no-reasons" datatype="html"><source>No decision reasons reported</source></trans-unit>
+      <trans-unit id="runs.decision.status" datatype="html"><source>Evaluation status</source></trans-unit>
+      <trans-unit id="runs.decision.evidence-revision" datatype="html"><source>Decision evidence revision</source></trans-unit>
+      <trans-unit id="runs.decision.policy-hash" datatype="html"><source>Policy hash</source></trans-unit>
+      <trans-unit id="runs.decision.manifest-hash" datatype="html"><source>Manifest hash</source></trans-unit>
+      <trans-unit id="runs.decision.evaluator-version" datatype="html"><source>Evaluator version</source></trans-unit>
+      <trans-unit id="runs.decision.mode" datatype="html"><source>Evaluation mode</source></trans-unit>
+      <trans-unit id="runs.decision.updated-announcement" datatype="html"><source>Live decision updated for evidence revision <x id="REVISION" equiv-text="${revision}"/></source></trans-unit>
     </body>
   </file>
 </xliff>

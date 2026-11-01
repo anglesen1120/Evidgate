@@ -11,6 +11,19 @@
   @if (store.run(); as run) {
     <app-run-header [run]="run" />
     <app-manifest-panel [summary]="store.manifest()" />
+    <div class="evidence-regions">
+      @if (store.decision(); as decision) {
+        <app-evidence-panel [decision]="decision" [runCompleteness]="null" />
+      }
+      <app-decision-view
+        [decision]="store.decision()"
+        [updating]="store.decisionStatus() === 'loading'"
+        [shadowIgnored]="store.shadowIgnored()"
+        [error]="store.decisionError()"
+        [retryEligible]="decisionRetryEligible()"
+        (retry)="retryDecision()"
+      />
+    </div>
     <app-attempts-table
       [attempts]="store.attempts()"
       [status]="attemptsStatus()"

@@ -1,0 +1,17 @@
+<section class="evidence-panel" id="evidence-panel" aria-labelledby="evidence-title">
+  <h2 id="evidence-title">{{ copy.title }}</h2>
+  <p class="evidence-completeness" data-evidence-completeness>
+    <app-evidence-badge [completeness]="completeness()" />
+  </p>
+  @if (decision().kind === 'pending') {
+    <p class="evidence-state" data-evidence-state>{{ copy.noEvaluation }}</p>
+  }
+  <div class="evidence-missing" data-evidence-missing>
+    <h3 id="evidence-missing-title">{{ copy.missingTitle }}</h3>
+    @if (missing() !== null) {
+      <app-missing-reason-list [reasons]="reasons()" />
+    } @else {
+      <p class="evidence-missing-unavailable">{{ copy.missingUnavailable }}</p>
+    }
+  </div>
+</section>

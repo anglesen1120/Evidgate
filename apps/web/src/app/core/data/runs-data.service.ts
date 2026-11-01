@@ -11,6 +11,7 @@ import { inject, Injectable } from '@angular/core';
 import {
   createRun,
   getRun,
+  getRunDecision,
   listRunAttempts,
   listRuns,
   type CreateRunRequest,
@@ -47,6 +48,20 @@ export class RunsDataService {
   /** One page of a run's attempts (`GET /v1/runs/{r}/attempts`, keyset `(execution_key, attempt_no)`). */
   listAttempts(runId: string, query: RunAttemptsQuery = {}): Promise<RunAttemptPage> {
     return this.gateway.call((client) => listRunAttempts({ client, path: { r: runId }, query }));
+  }
+
+  /**
+   * The run's live decision body (`GET /v1/runs/{r}/decision`).
+   *
+   * Deliberately `unknown`: the generated `Decision` type this operation resolves is stale — it
+   * predates the reconciled body and carries no `status`, `missing`, `outcome`, hashes or `mode`.
+   * Typing it as `Decision` here would push wrong member names into the app, and asserting a
+   * hand-written shape onto it would skip validation, so the served value keeps no compile-time
+   * type at this seam. The feature's `readDecisionBody` validates it before anything reads a field,
+   * and the decision-route task's regenerated SDK type replaces both in one change.
+   */
+  getDecision(runId: string): Promise<unknown> {
+    return this.gateway.call((client) => getRunDecision({ client, path: { r: runId } }));
   }
 
   /**

@@ -1,5 +1,4 @@
-// 09.3.1-T1 (plan 09.3.1 §2 AC9, §4 runs row, §5 runs run-list row, §10 T1.1): the run list's
-// request half.
+// The runs feature's request half: the run list's page query and the run-detail decision read.
 //
 // The feature service holds no HTTP of its own. `core/data/runs-data.service.ts` already exposes
 // `list(projectId, query)` over the generated `listRuns` operation through `ApiGateway`, and
@@ -21,6 +20,7 @@ import { inject, Injectable } from '@angular/core';
 import type { RunPage } from '@evidgate/sdk';
 
 import { RunsDataService } from '../../../core/data/runs-data.service';
+import { readDecisionBody, type DecisionBody } from './decision-body';
 
 /** One request of the run list: the page position plus the one server-side filter. */
 export interface RunListQuery {
@@ -52,6 +52,18 @@ export class RunDataService {
    */
   listRuns(projectId: string, request: RunListQuery = {}): Promise<RunPage> {
     return this.runs.list(projectId, wireQuery(request));
+  }
+
+  /**
+   * The run's live decision body, validated: `null` when the served value is not a contract body.
+   *
+   * The gateway hands the value over untyped because the generated `Decision` type is stale (see
+   * `core/data/runs-data.service.ts#getDecision`). `readDecisionBody` is the one place that turns it
+   * into named members, so neither the store nor a component has to trust a wire value. A refusal
+   * still arrives as the gateway's typed `ApiRequestError`; only a 2xx body reaches the parser.
+   */
+  async getDecision(runId: string): Promise<DecisionBody | null> {
+    return readDecisionBody(await this.runs.getDecision(runId));
   }
 }
 

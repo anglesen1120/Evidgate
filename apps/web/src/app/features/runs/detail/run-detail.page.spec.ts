@@ -8,6 +8,7 @@ import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
 import formatted from '../../../../../../../fixtures/web-api/run-detail-ref-format/input.json';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
+import { RunDataService } from '../data/run-data.service';
 import { RunDetailPage } from './run-detail.page';
 import { routes } from '../runs.routes';
 
@@ -15,17 +16,56 @@ import { routes } from '../runs.routes';
 const run = ready.body as RunStateDto;
 const refRun = formatted.body as RunStateDto;
 const attemptPage = attemptsOk.body as RunAttemptPage;
+/** One pending body: `status` set, every evaluation-derived member null. */
+function pendingBody() {
+  return {
+    status: 'pending',
+    decision: null,
+    evaluation_id: null,
+    evidence_revision: null,
+    completeness: null,
+    outcome: null,
+    missing: null,
+    reasons: null,
+    policy_hash: null,
+    manifest_hash: null,
+    evaluator_version: null,
+    mode: null,
+    url: null,
+  };
+}
+/** One evaluated live body, member for member. */
+function liveBody() {
+  return {
+    ...pendingBody(),
+    status: 'evaluated',
+    decision: 'FAIL',
+    evaluation_id: 'evaluation-1',
+    evidence_revision: 4,
+    completeness: 'incomplete',
+    outcome: 'has_failures',
+    missing: ['missing_shard'],
+    reasons: ['critical_not_executed'],
+    policy_hash: 'sha256:policy',
+    manifest_hash: 'sha256:manifest',
+    evaluator_version: '1.4.0',
+    mode: 'live',
+  };
+}
 describe('RunDetailPage', () => {
   const get = vi.fn<(id: string) => Promise<RunStateDto>>();
   const listAttempts = vi.fn<(id: string, query?: object) => Promise<RunAttemptPage>>();
+  const getDecision = vi.fn<(id: string) => Promise<unknown>>();
   beforeEach(() => {
     get.mockReset().mockResolvedValue(run);
     listAttempts.mockReset().mockResolvedValue(attemptPage);
+    getDecision.mockReset().mockResolvedValue(pendingBody());
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: 'projects/:projectId/runs', children: routes }]),
         { provide: RunsDataService, useValue: { get, listAttempts } },
+        { provide: RunDataService, useValue: { getDecision } },
       ],
     });
   });
@@ -60,7 +100,8 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
       'Evidence status unavailable',
     );
-    expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
+    expect(root.querySelector('app-decision-chip')?.textContent).toContain('pending');
+    expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
   });
   it('renders the manifest panel verbatim from the run read', async () => {
@@ -204,5 +245,111 @@ describe('RunDetailPage', () => {
     resolveOld(run);
     await harness.fixture.whenStable();
     expect(harness.routeNativeElement?.querySelector('[data-run-version]')?.textContent).toBe('8');
+  });
+  it('renders the live decision from one served body beside the evidence panel', async () => {
+    getDecision.mockResolvedValue(liveBody());
+    const { root } = await open();
+    expect(getDecision).toHaveBeenCalledExactlyOnceWith(run.run_id);
+    const decision = root.querySelector('app-decision-view')!;
+    expect(decision.querySelector('app-decision-chip')?.textContent).toContain('FAIL');
+    expect(decision.querySelector('app-outcome-pill')?.textContent).toContain('Has failures');
+    expect(decision.querySelector('.decision-reason-list')?.textContent).toContain(
+      'critical_not_executed',
+    );
+    expect(decision.querySelector('[data-decision-revision] dd')?.textContent).toBe('4');
+    expect(decision.querySelector('[data-decision-policy] dd')?.textContent).toBe('sha256:policy');
+    expect(decision.querySelector('[data-decision-manifest] dd')?.textContent).toBe(
+      'sha256:manifest',
+    );
+    expect(decision.querySelector('[data-decision-evaluator] dd')?.textContent).toBe('1.4.0');
+    expect(decision.querySelector('[data-decision-mode] dd')?.textContent).toBe('live');
+
+    const evidence = root.querySelector('app-evidence-panel')!;
+    expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
+      'Evidence incomplete',
+    );
+    expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
+      'missing_shard',
+    );
+    // Reading order stays Evidence then Decision, whatever the grid does with the columns.
+    expect(evidence.compareDocumentPosition(decision)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  it('renders pending with the evidence panel saying no live evaluation exists', async () => {
+    const { root } = await open();
+    const evidence = root.querySelector('app-evidence-panel')!;
+    expect(evidence.textContent).toContain('No live evaluation recorded for this revision');
+    expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
+      'Evidence status unavailable',
+    );
+    expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
+      'Missing evidence reasons unavailable',
+    );
+    expect(root.querySelector('app-decision-chip')?.textContent).toContain('pending');
+    expect(root.querySelector('app-outcome-pill')).toBeNull();
+  });
+  it('a failed decision read keeps the run, manifest and attempts and retries only the decision', async () => {
+    getDecision
+      .mockRejectedValueOnce(
+        new ApiRequestError({
+          kind: 'unavailable',
+          status: 503,
+          code: 'unavailable',
+          message: 'Service unavailable.',
+          requestId: 'request-decision',
+          retryable: true,
+          details: [],
+          retryAfterSeconds: null,
+        }),
+      )
+      .mockResolvedValueOnce(liveBody());
+    const { harness, root } = await open();
+    expect(root.querySelector('app-run-header')).not.toBeNull();
+    expect(root.querySelector('app-manifest-panel')).not.toBeNull();
+    expect(root.querySelector('app-attempts-table')).not.toBeNull();
+    const decision = root.querySelector('app-decision-view')!;
+    expect(decision.querySelector('app-error-pattern')).not.toBeNull();
+    expect(decision.textContent).toContain('request-decision');
+    expect(decision.querySelector('app-evidence-panel')).toBeNull();
+
+    (decision.querySelector('app-error-pattern button') as HTMLButtonElement).click();
+    await harness.fixture.whenStable();
+    expect(getDecision).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(root.querySelector('app-decision-view app-decision-chip')?.textContent).toContain(
+      'FAIL',
+    );
+  });
+  it('a refused decision read discloses no decision copy in either region', async () => {
+    getDecision.mockRejectedValue(
+      new ApiRequestError({
+        kind: 'forbidden',
+        status: 403,
+        code: 'forbidden',
+        message: 'Not permitted.',
+        requestId: 'request-denied',
+        retryable: false,
+        details: [],
+        retryAfterSeconds: null,
+      }),
+    );
+    const { root } = await open();
+    const decision = root.querySelector('app-decision-view')!;
+    expect(decision.querySelector('app-forbidden-pattern')).not.toBeNull();
+    expect(decision.querySelector('[data-decision-policy]')).toBeNull();
+    expect(decision.querySelector('[data-decision-manifest]')).toBeNull();
+    expect(decision.textContent).not.toContain('sha256:policy');
+    expect(decision.textContent).not.toContain('critical_not_executed');
+
+    const evidence = root.querySelector('app-evidence-panel')!;
+    expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
+      'Evidence status unavailable',
+    );
+    expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
+      'Missing evidence reasons unavailable',
+    );
+    expect(evidence.querySelector('app-missing-reason-list')).toBeNull();
+    expect(evidence.textContent).not.toContain('missing_shard');
+    // The run itself is still readable: only the decision read was refused.
+    expect(root.querySelector('app-run-header')).not.toBeNull();
   });
 });

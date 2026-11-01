@@ -1,0 +1,59 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+/* Quiet workbench panel: the same surface/border pairing as the manifest and attempts panels. */
+.evidence-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--eg-space-5);
+  min-width: 0;
+  padding: var(--eg-space-5);
+  border: var(--eg-border-width) solid var(--eg-border);
+  border-radius: var(--eg-radius-md);
+  color: var(--eg-text);
+  background: var(--eg-surface);
+  font-family: var(--eg-font-body);
+  font-size: var(--eg-text-sm);
+  line-height: var(--eg-leading-sm);
+  overflow-wrap: anywhere;
+}
+
+h2 {
+  margin: 0;
+  font-size: var(--eg-text-md);
+  line-height: var(--eg-leading-md);
+}
+
+h3 {
+  margin: 0 0 var(--eg-space-3);
+  font-size: var(--eg-text-sm);
+  font-weight: var(--eg-weight-semibold);
+}
+
+p {
+  margin: 0;
+}
+
+.evidence-completeness {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-2);
+}
+
+.evidence-state,
+.evidence-missing-unavailable {
+  color: var(--eg-text-muted);
+}
+
+.evidence-missing {
+  min-width: 0;
+}
+
+/* The panel keeps the shell's content width; wide copy wraps instead of forcing page scrolling. */
+@media (min-width: 1280px) {
+  .evidence-panel {
+    padding: var(--eg-space-7);
+  }
+}

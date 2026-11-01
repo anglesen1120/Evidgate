@@ -2763,6 +2763,138 @@
       <trans-unit id="suites.warnings.warnings-unavailable" datatype="html"><source>Warnings unavailable</source><target>Cảnh báo không khả dụng</target></trans-unit>
       <trans-unit id="suites.warnings.the-suite-revision-response-does-not-include-war" datatype="html"><source>The suite revision response does not include warning details.</source><target>Phản hồi bản sửa đổi bộ kiểm thử không kèm chi tiết cảnh báo.</target></trans-unit>
       <trans-unit id="suites.warnings.no-warnings-reported" datatype="html"><source>No warnings reported.</source><target>Không có cảnh báo nào được báo cáo.</target></trans-unit>
+      <trans-unit id="runs.evidence.title" datatype="html">
+        <source>Evidence</source>
+        <target>Bằng chứng</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.missing-title" datatype="html">
+        <source>Missing evidence reasons</source>
+        <target>Lý do thiếu bằng chứng</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.missing-unavailable" datatype="html">
+        <source>Missing evidence reasons unavailable</source>
+        <target>Không có thông tin về lý do thiếu bằng chứng</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.no-evaluation" datatype="html">
+        <source>No live evaluation recorded for this revision</source>
+        <target>Chưa ghi nhận đánh giá chính thức cho phiên bản này</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.target-unavailable" datatype="html">
+        <source>Target details unavailable</source>
+        <target>Không có thông tin về đích liên kết</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.invalid-body" datatype="html">
+        <source>Evidence response unavailable: {code}</source>
+        <target>Không có phản hồi bằng chứng hợp lệ: {code}</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.producer-link" datatype="html">
+        <source>View producer {shard}</source>
+        <target>Xem producer {shard}</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.attempt-link" datatype="html">
+        <source>View attempt {attempt} for {executionKey}</source>
+        <target>Xem lần thử {attempt} của {executionKey}</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.reason.missing-shard" datatype="html">
+        <source>Shard evidence is missing.</source>
+        <target>Thiếu bằng chứng từ phân mảnh.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.reason.count-mismatch" datatype="html">
+        <source>Collected and expected counts do not match.</source>
+        <target>Số lượng đã thu thập không khớp với số lượng dự kiến.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.reason.artifact-missing" datatype="html">
+        <source>A required artifact is missing.</source>
+        <target>Thiếu tệp bằng chứng bắt buộc.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.reason.build-mismatch" datatype="html">
+        <source>The reported build does not match the manifest.</source>
+        <target>Bản dựng được báo cáo không khớp với bản kê khai.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.reason.unknown-status" datatype="html">
+        <source>A reported result status is not recognized.</source>
+        <target>Không nhận diện được trạng thái kết quả đã báo cáo.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.reason.setup-error" datatype="html">
+        <source>Test setup reported an error.</source>
+        <target>Quá trình thiết lập kiểm thử báo lỗi.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.reason.stale-epoch" datatype="html">
+        <source>Evidence belongs to a stale producer epoch.</source>
+        <target>Bằng chứng thuộc thế hệ producer đã cũ.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.reason.missing-result" datatype="html">
+        <source>An expected test result is missing.</source>
+        <target>Thiếu kết quả kiểm thử dự kiến.</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.title" datatype="html">
+        <source>Latest live decision</source>
+        <target>Quyết định chính thức mới nhất</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.loading" datatype="html">
+        <source>Loading live decision</source>
+        <target>Đang tải quyết định chính thức</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.updating" datatype="html">
+        <source>Updating decision</source>
+        <target>Đang cập nhật quyết định</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.pending-description" datatype="html">
+        <source>No live evaluation is available yet.</source>
+        <target>Chưa có đánh giá chính thức.</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.unavailable" datatype="html">
+        <source>Live decision unavailable</source>
+        <target>Không có quyết định chính thức</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.refresh-failed" datatype="html">
+        <source>Decision refresh failed. Previously loaded decision retained.</source>
+        <target>Không thể làm mới quyết định. Vẫn giữ quyết định đã tải trước đó.</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.shadow-ignored" datatype="html">
+        <source>Shadow evaluation ignored</source>
+        <target>Đã bỏ qua đánh giá shadow</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.shadow-description" datatype="html">
+        <source>A shadow evaluation does not replace the live decision.</source>
+        <target>Đánh giá shadow không thay thế quyết định chính thức.</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.reasons-title" datatype="html">
+        <source>Decision reasons</source>
+        <target>Lý do quyết định</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.no-reasons" datatype="html">
+        <source>No decision reasons reported</source>
+        <target>Không có lý do quyết định được báo cáo</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.status" datatype="html">
+        <source>Evaluation status</source>
+        <target>Trạng thái đánh giá</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.evidence-revision" datatype="html">
+        <source>Decision evidence revision</source>
+        <target>Phiên bản bằng chứng của quyết định</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.policy-hash" datatype="html">
+        <source>Policy hash</source>
+        <target>Mã băm chính sách</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.manifest-hash" datatype="html">
+        <source>Manifest hash</source>
+        <target>Mã băm bản kê khai</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.evaluator-version" datatype="html">
+        <source>Evaluator version</source>
+        <target>Phiên bản bộ đánh giá</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.mode" datatype="html">
+        <source>Evaluation mode</source>
+        <target>Chế độ đánh giá</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.updated-announcement" datatype="html">
+        <source>Live decision updated for evidence revision <x id="REVISION" equiv-text="${revision}"/></source>
+        <target>Đã cập nhật quyết định chính thức cho phiên bản bằng chứng <x id="REVISION"/></target>
+      </trans-unit>
     </body>
   </file>
 </xliff>

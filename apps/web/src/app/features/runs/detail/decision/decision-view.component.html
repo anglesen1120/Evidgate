@@ -1,0 +1,142 @@
+<section
+  class="decision-panel"
+  id="decision-panel"
+  aria-labelledby="decision-title"
+  [attr.aria-busy]="loading() || updating() ? 'true' : null"
+>
+  <h2 id="decision-title">{{ copy.title }}</h2>
+
+  @if (updating() && decision() !== null) {
+    <p class="decision-updating" role="status">{{ copy.updating }}</p>
+  }
+  @if (shadowIgnored()) {
+    <div class="decision-notice" role="status" data-decision-shadow>
+      <strong>{{ copy.shadowIgnoredTitle }}</strong>
+      <span>{{ copy.shadowIgnoredDescription }}</span>
+    </div>
+  }
+  @if (stale()) {
+    <p class="decision-notice" role="status" data-decision-stale>{{ copy.refreshFailed }}</p>
+  }
+  @if (announcement(); as announcement) {
+    <p class="decision-announcement" role="status" data-decision-announcement>{{ announcement }}</p>
+  }
+
+  @if (loading()) {
+    <app-loading-pattern [label]="copy.loading" />
+  } @else if (failure()) {
+    @switch (pattern()) {
+      @case ('forbidden') {
+        <app-forbidden-pattern />
+      }
+      @case ('not_found') {
+        <app-not-found-pattern />
+      }
+      @default {
+        @if (retryAfter(); as refusal) {
+          <app-retry-after
+            [kind]="refusal.kind === 'unavailable' ? 'unavailable' : 'rate_limited'"
+            [retryAfterSeconds]="refusal.retryAfterSeconds"
+            [retryEligible]="retryEligible()"
+            [code]="refusal.code"
+            [requestId]="refusal.requestId"
+            (retry)="requestRetry()"
+          />
+        } @else {
+          <app-error-pattern
+            [headingLevel]="3"
+            [error]="error()"
+            [retryDisabled]="!retryEligible()"
+            (retry)="requestRetry()"
+          />
+        }
+      }
+    }
+  } @else {
+    @if (pending()) {
+      <p class="decision-summary">
+        <app-decision-chip [decision]="'pending'" />
+      </p>
+      <p class="decision-description" data-decision-pending>{{ copy.pending }}</p>
+    }
+    @if (evaluated(); as decision) {
+      <p class="decision-summary" data-decision-summary>
+        <app-decision-chip [decision]="decision.decision" />
+        <app-outcome-pill [outcome]="decision.outcome" />
+      </p>
+
+      <div class="decision-reasons">
+        <h3 id="decision-reasons-title">{{ copy.reasons }}</h3>
+        @if (decision.reasons.length === 0) {
+          <p class="decision-description" data-decision-no-reasons>{{ copy.noReasons }}</p>
+        } @else {
+          <ol class="decision-reason-list" aria-labelledby="decision-reasons-title">
+            @for (reason of decision.reasons; track $index) {
+              <li>
+                <bdi>{{ reason }}</bdi>
+              </li>
+            }
+          </ol>
+        }
+      </div>
+
+      <dl class="decision-provenance" data-decision-provenance>
+        <div
+          class="decision-provenance__field decision-provenance__field--wide"
+          data-decision-revision
+        >
+          <dt>{{ copy.evidenceRevision }}</dt>
+          <dd>{{ decision.evidenceRevision }}</dd>
+        </div>
+        <div class="decision-provenance__field" data-decision-status>
+          <dt>{{ copy.status }}</dt>
+          <dd>
+            <code>{{ decision.kind }}</code>
+          </dd>
+        </div>
+        <div class="decision-provenance__field" data-decision-mode>
+          <dt>{{ copy.mode }}</dt>
+          <dd>
+            <code>{{ decision.mode }}</code>
+          </dd>
+        </div>
+        <div
+          class="decision-provenance__field decision-provenance__field--wide"
+          data-decision-policy
+        >
+          <dt>{{ copy.policyHash }}</dt>
+          <dd>
+            <code
+              ><bdi>{{ decision.policyHash }}</bdi></code
+            >
+          </dd>
+        </div>
+        <div
+          class="decision-provenance__field decision-provenance__field--wide"
+          data-decision-manifest
+        >
+          <dt>{{ copy.manifestHash }}</dt>
+          <dd>
+            <code
+              ><bdi>{{ decision.manifestHash }}</bdi></code
+            >
+          </dd>
+        </div>
+        <div
+          class="decision-provenance__field decision-provenance__field--wide"
+          data-decision-evaluator
+        >
+          <dt>{{ copy.evaluatorVersion }}</dt>
+          <dd>
+            <code
+              ><bdi>{{ decision.evaluatorVersion }}</bdi></code
+            >
+          </dd>
+        </div>
+      </dl>
+    }
+    @if (unavailable()) {
+      <p class="decision-description" data-decision-unavailable>{{ copy.unavailable }}</p>
+    }
+  }
+</section>
