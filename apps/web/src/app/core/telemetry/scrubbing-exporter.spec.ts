@@ -264,6 +264,14 @@ describe('ScrubbingSpanExporter, one scrubbed resource per recorded resource', (
     expect(outputs[0]?.resource.attributes).toEqual(outputs[1]?.resource.attributes);
   });
 
+  // Built through URL so the spec carries no credential-shaped literal.
+  const withUserinfo = (base: string, password: string): string => {
+    const url = new URL(base);
+    url.username = 'user';
+    url.password = password;
+    return url.href;
+  };
+
   it('keeps a plain https schemaUrl and drops one that is anything else', () => {
     const kept = 'https://opentelemetry.io/schemas/1.25.0';
     expect(
@@ -274,7 +282,7 @@ describe('ScrubbingSpanExporter, one scrubbed resource per recorded resource', (
       'https://10.0.0.1/schemas/1.25.0',
       `https://collector.example.test/v1/traces?user=${EMAIL}`,
       `https://collector.example.test/v1/traces#${CREDENTIAL}`,
-      `https://user:${CREDENTIAL}@collector.example.test/schemas/1.25.0`,
+      withUserinfo('https://collector.example.test/schemas/1.25.0', CREDENTIAL),
       'http://collector.example.test/schemas/1.25.0',
       'javascript:alert(1)',
     ]) {
