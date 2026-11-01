@@ -126,5 +126,36 @@ internal sealed class CatalogContracts(ITenantDb db) : ICatalogContracts
         return [.. rows];
     }
 
+    /// <inheritdoc />
+    public async ValueTask<EvaluationSuite?> GetEvaluationSuiteAsync(Guid orgId, Guid suiteRevisionId, CancellationToken cancellationToken) =>
+        await db.QuerySingleOrDefaultAsync<EvaluationSuite>(
+            EvaluationReadSql.LoadSuite,
+            new { org_id = orgId, suite_revision_id = suiteRevisionId },
+            cancellationToken).ConfigureAwait(false);
+
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyDictionary<Guid, EvaluationCaseIdentity>> GetEvaluationCasesAsync(
+        Guid orgId,
+        IReadOnlyCollection<Guid> caseRevisionIds,
+        CancellationToken cancellationToken)
+    {
+        if (caseRevisionIds.Count == 0)
+        {
+            return new Dictionary<Guid, EvaluationCaseIdentity>();
+        }
+
+        var json = System.Text.Json.JsonSerializer.Serialize(caseRevisionIds);
+        var rows = await db.QueryAsync<CaseIdentityRow>(
+            EvaluationReadSql.LoadCases,
+            new { org_id = orgId, ids = json },
+            cancellationToken).ConfigureAwait(false);
+
+        return rows.ToDictionary(
+            row => row.CaseRevisionId,
+            row => new EvaluationCaseIdentity(row.CaseId, row.CaseKey));
+    }
+
     private sealed record CaseRevisionRow(Guid CaseRevisionId, Guid CaseId);
+
+    private sealed record CaseIdentityRow(Guid CaseRevisionId, Guid CaseId, string CaseKey);
 }
