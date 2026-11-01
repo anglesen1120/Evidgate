@@ -22,16 +22,10 @@ namespace Evidgate.Modules.Policy.Application.Queries;
 internal sealed record GetRunDecisionQuery(Guid RunId) : IQuery<Result<Decision>>;
 
 /// <summary>
-/// Handler of <see cref="GetRunDecisionQuery"/>. The run's existence and project scope come from the Orchestrator
-/// contract rather than a join, so this module's only statement reads its own <c>evaluation</c> table: an unknown run,
-/// another tenant's run and — for a project-scoped credential — a sibling project's run take the one <c>404 not_found</c>
-/// of <c>GET /v1/runs/{r}</c>, so the answer is no existence oracle.
+/// Handler of <see cref="GetRunDecisionQuery"/>. The run and its project come from the Orchestrator contract rather than a
+/// join, so the only statement here reads this module's <c>evaluation</c> table; an unknown run, another tenant's run and a
+/// sibling project's run take one 404, so the answer is no existence oracle. The scope is read-only: nothing writes.
 /// </summary>
-/// <remarks>
-/// The request's tenant transaction is read-only for a query, so nothing here writes, locks or enqueues an outbox row;
-/// the decision body costs the plan read plus one indexed lookup on the live key, whatever the size of the row's
-/// reason arrays.
-/// </remarks>
 [Permission(Permissions.Decision.Read)]
 internal sealed class GetRunDecisionQueryHandler(
     ITenantDb db,
@@ -65,8 +59,8 @@ internal sealed class GetRunDecisionQueryHandler(
     }
 
     /// <summary>
-    /// The evaluated body: every member is copied from the one row the statement returned, so the response can never mix
-    /// two verdicts, and <c>mode</c> is the row's own <c>live</c> slot.
+    /// The evaluated body: every member is copied from the one row the statement returned, so a response can never mix two
+    /// verdicts, and <c>mode</c> is that row's own <c>live</c> slot.
     /// </summary>
     private static Decision Evaluated(RunDecisionRow row, string? url) =>
         new(
@@ -85,8 +79,8 @@ internal sealed class GetRunDecisionQueryHandler(
             url);
 
     /// <summary>
-    /// 404 <c>not_found</c>: no run with that id is visible to this tenant — one body for an unknown id, another
-    /// tenant's run and a sibling project's run, and the same text <c>GET /v1/runs/{r}</c> answers with.
+    /// 404 <c>not_found</c>: no run with that id is visible to this tenant — one body for an unknown id, another tenant's
+    /// run and a sibling project's run, matching what <c>GET /v1/runs/{r}</c> answers.
     /// </summary>
     private static Error RunNotFound => Error.NotFound("no run with that id is visible to this tenant");
 }

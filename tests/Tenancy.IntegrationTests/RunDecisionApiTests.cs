@@ -1,22 +1,23 @@
 // The route's whole surface through the real host: the newest live evaluation of the run, the pending body while it has
-// none, the shadow rows it must never serve, and the statement budget of the read.
+// none, the shadow rows it must never serve, and the statement set of the read.
 using System.Net;
 using System.Text.Json;
 using Shouldly;
 using Xunit;
+using static Tenancy.IntegrationTests.RegistryApi;
 
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// GET /v1/runs/{r}/decision through the real host: the run's newest <c>live</c> evaluation, or the pending body while
-/// the run has none. The stored rows are arranged by the case rather than by the evaluator, because this route reads
-/// what 07.2.2 wrote.
+/// GET /v1/runs/{r}/decision through the real host: the run's newest <c>live</c> evaluation, or the pending body while the
+/// run has none. The stored rows are arranged by the case rather than by the evaluator, because this route reads what the
+/// evaluation command wrote.
 /// </summary>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class RunDecisionApiTests
 {
-    /// <summary>The §5.1 members: the body always serializes every one of them.</summary>
+    /// <summary>The members of the body: it always serializes every one of them.</summary>
     private const int BodyMembers = 13;
 
     /// <summary>The two code lists the incomplete verdict of <see cref="TwoLiveEvaluations_ServeTheNewestRevision"/> copies.</summary>
@@ -26,12 +27,20 @@ public sealed partial class RunDecisionApiTests
     private static readonly string[] ExpectedReasons = ["setup_error"];
 
     /// <summary>
-    /// The evaluated body copies the one live row of the run: status, decision, the evaluation's id, its evidence
-    /// revision and every member of the verdict, with <c>mode</c> reporting the <c>live</c> slot it came from. The
-    /// shadow row of the same run sits at a higher revision, so serving it would be visible here.
+    /// The evaluated body copies the one live row of the run: status, decision, the evaluation's id, its evidence revision
+    /// and every member of the verdict, with <c>mode</c> reporting the <c>live</c> slot it came from. The shadow row of the
+    /// same run sits at a higher revision, so serving it would be visible here.
     /// </summary>
-    [Fact]
-    public async Task LiveEvaluation_ReturnsExactRow()
+    [Theory]
+    [InlineData("PASS", "complete", "all_passed", "", "")]
+    [InlineData("FAIL", "incomplete", "has_failures", "missing_shard", "critical_not_executed")]
+    [InlineData("INCONCLUSIVE", "incomplete", "no_results", "setup_error,missing_result", "setup_error")]
+    public async Task LiveEvaluation_CopiesEveryMemberOfTheRow(
+        string decision,
+        string completeness,
+        string outcome,
+        string missing,
+        string reasons)
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
@@ -48,24 +57,37 @@ public sealed partial class RunDecisionApiTests
                 Outcome: "has_failures",
                 Missing: ArrayLiteral(["missing_shard"]),
                 Reasons: ArrayLiteral(["critical_not_executed"])));
-        var live = await InsertEvaluationAsync(world, runId, policy, new Verdict(2, "live", "PASS"));
+        var live = await InsertEvaluationAsync(
+            world,
+            runId,
+            policy,
+            new Verdict(
+                EvidenceRevision: 2,
+                Mode: "live",
+                Decision: decision,
+                Completeness: completeness,
+                Outcome: outcome,
+                Missing: ArrayLiteral(Codes(missing)),
+                Reasons: ArrayLiteral(Codes(reasons))));
 
         var answer = await GetAsync(world, runId);
 
         answer.Status.ShouldBe(HttpStatusCode.OK);
-        answer.Body.EnumerateObject().Count().ShouldBe(BodyMembers, "every §5.1 member is always serialized");
+        answer.Body.EnumerateObject().Count().ShouldBe(BodyMembers, "every member of the body is always serialized");
         answer.Text("status").ShouldBe("evaluated");
-        answer.Text("decision").ShouldBe("PASS");
+        answer.Text("decision").ShouldBe(decision);
         answer.Id("evaluation_id").ShouldBe(live);
         answer.Body.GetProperty("evidence_revision").GetInt32().ShouldBe(2, "the live row is the one at revision 2");
-        answer.Text("completeness").ShouldBe("complete");
-        answer.Text("outcome").ShouldBe("all_passed");
+        answer.Text("completeness").ShouldBe(completeness);
+        answer.Text("outcome").ShouldBe(outcome);
         answer.Text("policy_hash").ShouldBe(PolicyHash);
         answer.Text("manifest_hash").ShouldBe(ManifestHash);
         answer.Text("evaluator_version").ShouldBe("1.0.0");
         answer.Text("mode").ShouldBe("live");
-        answer.Body.GetProperty("missing").GetArrayLength().ShouldBe(0);
-        answer.Body.GetProperty("reasons").GetArrayLength().ShouldBe(0);
+        answer.Body.GetProperty("missing").EnumerateArray().Select(code => code.GetString())
+            .ShouldBe(Codes(missing));
+        answer.Body.GetProperty("reasons").EnumerateArray().Select(code => code.GetString())
+            .ShouldBe(Codes(reasons));
         answer.Body.GetProperty("url").ValueKind.ShouldBe(JsonValueKind.Null, "no public base url is configured");
     }
 
@@ -108,9 +130,9 @@ public sealed partial class RunDecisionApiTests
     }
 
     /// <summary>
-    /// A run with no evaluation at all answers the pending body: <c>status</c> alone, every verdict member an explicit
-    /// JSON null. <c>missing</c> must be null and not <c>[]</c>, because an empty gap list would claim the evaluator
-    /// looked and found nothing, while the run has no verdict yet.
+    /// A run with no evaluation at all answers the pending body: <c>status</c> alone, every verdict member an explicit JSON
+    /// null. <c>missing</c> must be null and not <c>[]</c>, because an empty gap list would claim the evaluator looked and
+    /// found nothing while the run has no verdict yet.
     /// </summary>
     [Fact]
     public async Task NoEvaluation_ReturnsPending()
@@ -121,7 +143,7 @@ public sealed partial class RunDecisionApiTests
         var answer = await GetAsync(world, runId);
 
         answer.Status.ShouldBe(HttpStatusCode.OK);
-        answer.Body.EnumerateObject().Count().ShouldBe(BodyMembers, "every §5.1 member is always serialized");
+        answer.Body.EnumerateObject().Count().ShouldBe(BodyMembers, "every member of the body is always serialized");
         answer.Text("status").ShouldBe("pending");
 
         foreach (var member in new[]
@@ -169,28 +191,36 @@ public sealed partial class RunDecisionApiTests
     }
 
     /// <summary>
-    /// A service principal without <c>decision:read</c> is refused 403 <c>forbidden</c> before any row is read, and the
-    /// same run read as the org admin is the pending body — so the refusal is the permission and not the run.
+    /// A service credential without <c>decision:read</c> is refused 403 <c>forbidden</c> before any run is read, and the
+    /// answer is the same for an existing run, an unknown id and another tenant's run — while the org admin reads the run,
+    /// so the refusal is the permission and not the id.
     /// </summary>
     [Fact]
-    public async Task NoPermission_403()
+    public async Task NoPermission_403ForAnyRunId()
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
+        var otherUser = Guid.CreateVersion7();
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        await CreateProjectAsync(world.Client, otherUser, otherOrg, "rival-project");
+        var foreign = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, otherOrg, 1);
 
-        var denied = await GetAsync(
-            world,
-            runId,
-            TenancyApiFactory.Resolved(serviceOrg: world.Org, servicePermissions: ["run:create"]));
+        var denied = TenancyApiFactory.Resolved(serviceOrg: world.Org, servicePermissions: ["run:create"]);
 
-        denied.Status.ShouldBe(HttpStatusCode.Forbidden);
-        denied.ErrorCode.ShouldBe("forbidden");
+        foreach (var id in new[] { runId, Guid.CreateVersion7(), foreign.RunId })
+        {
+            var answer = await GetAsync(world, id, denied);
+
+            answer.Status.ShouldBe(HttpStatusCode.Forbidden);
+            answer.ErrorCode.ShouldBe("forbidden");
+        }
+
         (await GetAsync(world, runId)).Status.ShouldBe(HttpStatusCode.OK);
     }
 
     /// <summary>
-    /// A configured public base url turns the address into the project-relative run page, the link a UI shows for the
-    /// decision; it is the deployment's origin, not the request's.
+    /// A configured public base url turns the address into the run page, the link a UI shows for the decision; it is the
+    /// deployment's origin, not the request's.
     /// </summary>
     [Fact]
     public async Task ConfiguredPublicBaseUrl_CarriesTheRunPage()
@@ -212,11 +242,11 @@ public sealed partial class RunDecisionApiTests
     }
 
     /// <summary>
-    /// 500 reason codes are served by the same single <c>evaluation</c> statement as one: the read is bounded by the
-    /// row and never by its contents, so no verdict size can turn one request into a loop.
+    /// The read is the run's plan plus one row of its own <c>evaluation</c> table, whatever the verdict's size: 500 reason
+    /// codes cost the same statement set as one, and an extra fixed statement would show up here.
     /// </summary>
     [Fact]
-    public async Task LargeReasonsArray_OneStatement()
+    public async Task ReasonsArraySize_DoesNotChangeTheStatementSet()
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
@@ -240,26 +270,38 @@ public sealed partial class RunDecisionApiTests
                 Missing: ArrayLiteral(["missing_shard"]),
                 Reasons: ArrayLiteral(Enumerable.Repeat("expected_count_zero", 500))));
 
-        world.Api.Statements.Clear();
-        var first = await GetAsync(world, runId);
-        var smallStatements = world.Api.Statements.Snapshot();
+        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(world.Database));
+        using var client = api.CreateClient();
+        var caller = TenancyApiFactory.Caller(org: world.Org, project: world.Project, user: world.User);
 
-        world.Api.Statements.Clear();
-        var second = await GetAsync(world, largeRun);
-        var largeStatements = world.Api.Statements.Snapshot();
+        api.Statements.Clear();
+        var first = await GetAsync(client, runId, caller);
+        var smallStatements = WorkStatements(api.Statements.Snapshot());
+
+        api.Statements.Clear();
+        var second = await GetAsync(client, largeRun, caller);
+        var largeStatements = WorkStatements(api.Statements.Snapshot());
 
         first.Status.ShouldBe(HttpStatusCode.OK);
         first.Id("evaluation_id").ShouldBe(small);
         second.Status.ShouldBe(HttpStatusCode.OK);
         second.Id("evaluation_id").ShouldBe(large);
+        second.Text("decision").ShouldBe("FAIL");
         second.Body.GetProperty("reasons").GetArrayLength().ShouldBe(500);
 
-        EvaluationStatements(smallStatements).ShouldBe(1, "one statement serves the row");
-        EvaluationStatements(largeStatements).ShouldBe(1, "the size of reasons never adds a statement");
-        largeStatements.Count.ShouldBe(smallStatements.Count, "the read's statement count is constant");
+        smallStatements.Count.ShouldBe(2, Join(smallStatements));
+        smallStatements[0].ShouldContain("from public.run r");
+        smallStatements[1].ShouldContain("from public.evaluation e");
+        largeStatements.ShouldBe(smallStatements, "the size of reasons never changes the statement set");
     }
 
-    /// <summary>The captured statements that read the stored evaluation.</summary>
-    private static int EvaluationStatements(IReadOnlyList<string> statements) =>
-        statements.Count(statement => statement.Contains("from public.evaluation", StringComparison.OrdinalIgnoreCase));
+    /// <summary>The captured statements minus the tenant-scope setup, which every request emits.</summary>
+    private static List<string> WorkStatements(IReadOnlyList<string> statements) =>
+        [.. statements.Where(statement => !statement.Contains("set_config", StringComparison.Ordinal))];
+
+    /// <summary>The captured statements as one line, for a failure message.</summary>
+    private static string Join(IEnumerable<string> statements) => string.Join(" | ", statements);
+
+    /// <summary>The codes of an inline-data list, spelled as a comma-separated list.</summary>
+    private static string[] Codes(string codes) => codes.Split(',', StringSplitOptions.RemoveEmptyEntries);
 }

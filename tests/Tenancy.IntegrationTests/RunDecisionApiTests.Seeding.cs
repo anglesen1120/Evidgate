@@ -137,8 +137,12 @@ public sealed partial class RunDecisionApiTests
 
     /// <summary>The route's request, as the world's admin unless a case names another caller.</summary>
     private static Task<ApiAnswer> GetAsync(World world, Guid runId, Action<HttpRequestHeaders>? caller = null) =>
-        world.Client.SendAsync(
+        GetAsync(world.Client, runId, caller ?? world.Admin);
+
+    /// <summary>The route's request through a given host's client, with the caller's headers.</summary>
+    private static Task<ApiAnswer> GetAsync(HttpClient client, Guid runId, Action<HttpRequestHeaders> caller) =>
+        client.SendAsync(
             HttpMethod.Get,
             string.Create(CultureInfo.InvariantCulture, $"/v1/runs/{runId}/decision"),
-            caller ?? world.Admin);
+            caller);
 }
