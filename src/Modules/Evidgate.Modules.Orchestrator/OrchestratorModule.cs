@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Orchestrator.Application.Attempts;
+using Evidgate.Modules.Orchestrator.Application.Evaluation;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
@@ -24,6 +25,10 @@ internal static class OrchestratorModule
         // 06.1.2-T1: the read-only run-scope lookup upload-url needs (00 §5.5 C5: another module reaches the
         // Orchestrator only through its .Contracts project).
         services.TryAddScoped<IRunPlanReader, RunPlanReader>();
+
+        // The plan the Policy evaluator judges a run against: the run's pinned scope, the manifest's planned count and
+        // every planned execution, read over the ambient tenant scope through Orchestrator.Contracts only.
+        services.TryAddScoped<IOrchestratorEvaluationPlan, EvaluationPlanReader>();
 
         // 04.1.1-T1: the in-transaction run-scope lookup the atomic event-batch commit calls — the run row FOR SHARE
         // plus the planned-execution membership probe. Scoped like every other module service; it takes the ambient
