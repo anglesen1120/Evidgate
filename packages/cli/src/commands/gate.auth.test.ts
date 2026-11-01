@@ -11,6 +11,7 @@ import {
   capture,
   decided,
   devEnv,
+  evaluated,
   gateArgv,
   ingestEnv,
   invoke,
@@ -74,7 +75,7 @@ describe('gate token refresh', () => {
         return jsonResponse(200, exchangeBody(`egt-token-${exchanges}`));
       }
       return request.headers.get('authorization') === 'Bearer egt-token-2'
-        ? decided({ decision: 'PASS' })
+        ? decided(evaluated({ decision: 'PASS' }))
         : refusal(401, 'token_invalid');
     });
     const out = capture();
@@ -136,7 +137,7 @@ describe('gate token refresh', () => {
       request.url.endsWith('/v1/ci/token')
         ? jsonResponse(200, exchangeBody('egt-token-2'))
         : request.headers.get('authorization') === 'Bearer egt-token-2'
-          ? decided({ decision: 'PASS' })
+          ? decided(evaluated({ decision: 'PASS' }))
           : refusal(401, 'token_invalid'),
     );
     const out = capture();

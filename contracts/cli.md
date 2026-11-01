@@ -21,7 +21,8 @@ holds only the process-level contract.
 - 04.2.4-T2 adds `quickstart` (§10); 04.2.4-T1 adds `artifacts upload` (§12) with
   its journal, its allowed-directory guard and the presigned-URL redaction rule.
 - 04.9.1 adds `replay` and the replay exit codes 10–19 (04.9.1-T4).
-- 07.6.1 adds `gate`; 07.7.1 adds the advisory exit rule; 07.8.1 adds
+- 07.6.1 adds `gate` and §13 (the exit codes, the body it refuses and the
+  `--json` member order); 07.7.1 adds the advisory exit rule; 07.8.1 adds
   `gate --release --target`.
 - 03.5.1 records `evidgate init`.
 
@@ -267,7 +268,7 @@ position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 | `transport`                | 3    | the exchange request failed at the network layer, timed out (30 s) or was refused a redirect                                                                                                                                                                                            |
 | `exchange_failed`          | 3    | a non-2xx reply without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                                                                                          |
 | `oidc_request_failed`      | 3    | the `ACTIONS_ID_TOKEN_REQUEST_URL` fetch failed (non-2xx, or a body without `value`)                                                                                                                                                                                                    |
-| `token_cache_error`        | 3    | the token cache could not be written or deleted; the message names the operation, never a token value                                                                                                                                                                                   |
+| `token_cache_error`        | 3    | `auth logout` could not delete the token cache; the message names the operation, never a token value. A cache **write** that fails is not this code: it is one stderr warning and the command continues (§7)                                                                            |
 | `manifest_unreadable`      | 3    | the manifest file could not be read (missing, unreadable, not a regular file or empty); the message names the errno code, never the path or the content                                                                                                                                 |
 | `manifest_too_large`       | 3    | the manifest file is larger than the server's 256 KiB transport cap; refused locally, before any request                                                                                                                                                                                |
 | `request_failed`           | 3    | a non-2xx reply from a project-scoped command (`manifests upload`, `runs create`) without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                        |
@@ -432,8 +433,8 @@ Cache:
   scheme is ignored on read and deleted by a purge.
 - Mode `0600` in a `0700` directory; the directory is `chmod 0700` when it is
   owned by the user. A cache directory that is a symlink, is owned by another
-  uid or is group/world-writable (POSIX) is refused (`token_cache_error`) on
-  write and treated as no cache on read. The write is atomic — a
+  uid or is group/world-writable (POSIX) is never written into (the write warns
+  and gives up, §7) and is treated as no cache on read. The write is atomic — a
   `0600` temp file in the same directory is renamed over the target, which
   replaces a symlink rather than following it; the cache file is opened with
   `O_NOFOLLOW`. After a successful write, the destination's entries bound to
@@ -455,8 +456,18 @@ Cache:
   A purge also removes a `.ci-token.<uuid>.tmp` file that a crashed write left in
   `cache_dir` (only that exact name shape; it holds a whole token at `0600` and
   its name carries no destination).
-- `[DECISION]` a cache write or delete failure is exit 3 `token_cache_error`
-  whose message names the operation and never a token value.
+- `[DECISION]` (owner decision 2026-11-01 (chat), recorded by the coordinator)
+  a cache write that fails for any cause — an unwritable directory, a read-only
+  filesystem, or a directory refused as unsafe — prints ONE `evidgate: warning:`
+  line on stderr, keeps the exchanged token in memory for this invocation and
+  lets the command finish with its normal exit code. The line names the cache
+  directory and the errno code, never a token and never a path below
+  `cache_dir` (the entry name digests the destination and the credential). The
+  unsafe-directory guard still refuses the write, and an untrusted entry is
+  still ignored on read.
+- `[DECISION]` a cache delete failure is still exit 3 `token_cache_error` whose
+  message names the operation and never a token value (`auth logout` must not
+  silently leave a token on disk).
 - `[note]` worst-case time to failure is bounded at ~150 s: 30 s for the
   `ACTIONS_ID_TOKEN_REQUEST_URL` fetch + 30 s for the exchange + up to 60 s
   `Retry-After` + 30 s for the single retry.
@@ -1445,3 +1456,55 @@ set `complete_done`, so a re-run re-asks the server (a rejection is replayable)
 instead of answering `ready` from a record that cannot tell rejection from
 success; the hint tells the operator the row stays rejected and names the journal
 record to delete to start over (§12.5).
+
+## 13. Gate
+
+`evidgate gate --run <uuid> [--wait <n>[smh]] [--json]` (07.6.1) reads
+`GET /v1/runs/{r}/decision` and turns the body into the process exit code a CI
+step branches on. The response is the `Decision` schema of 00 §9.3 — one body for
+an evaluated run and for one with no live evaluation row — read through the
+generated SDK type, so the CLI never probes a member it cannot see:
+
+- `PASS` exits 0, `FAIL` exits 1, `INCONCLUSIVE` exits 2 and `status: pending`
+  (with `decision: null`) exits 2 after the wait ends; every other answer is exit
+  3 (§2). Only a literal `PASS` may exit 0.
+- The body is refused (exit 3 `request_failed`, no retry) when `status` is
+  missing or outside `pending`/`evaluated`, when `decision` is missing or neither
+  `null` nor one of the three upper-case verdicts, when `status: pending` carries
+  a decision, or when `status: evaluated` carries `decision: null`. A refused
+  status or decision value is server text and is never echoed; the message names
+  the member only. The check runs before the verdict is read, so a pending body
+  cannot read as a pass.
+- Three more shapes are refused the same way (exit 3, the value never echoed),
+  because each one promises something the body does not carry:
+  - a `missing` entry outside the closed eight codes of 00 §8.5 — `missing_shard`,
+    `count_mismatch`, `artifact_missing`, `build_mismatch`, `unknown_status`,
+    `setup_error`, `stale_epoch`, `missing_result`;
+  - `status: pending` with any evaluation-derived member non-null:
+    `evaluation_id`, `evidence_revision`, `completeness`, `outcome`, `missing`,
+    `reasons`, `policy_hash`, `manifest_hash`, `evaluator_version` or `mode`.
+    `url` is the only member a pending body may fill, and a falsey non-null value
+    counts: `missing: []`, `reasons: []`, `0`, `false` and `""` are all refusals;
+  - `status: evaluated` with a `mode` that is neither `live` nor `null`; only a
+    live evaluation row may be read as a verdict.
+- Human mode prints `gate: <DECISION> (run <run_id>)` and one indented reason
+  line per entry of `reasons`; `reasons: null` prints no reason line. A pending
+  or timed-out run explains itself on stderr (`§6` redaction, control-character
+  escaping, the 200-code-point and 50-line caps apply).
+- `--json` prints exactly one object line on stdout. The five keys the gate has
+  always printed come first, in their original order — `decision`,
+  `completeness`, `evaluation_id`, `mode`, `url` — then the members the widened
+  body adds: `status`, `evidence_revision`, `outcome`, `missing`, `reasons`,
+  `policy_hash`, `manifest_hash`, `evaluator_version`. Every value is printed as
+  the server sent it, except that a string member, and each entry of `missing`
+  and `reasons`, is redacted (§6) before it is encoded. A scalar member the
+  server does not send as its declared type prints `null`, never a derived
+  value — `evidence_revision` only when it is an integer, so a fractional or
+  numeric-string value prints `null` and is never rounded — and a `missing` or
+  `reasons` that is neither `null` nor a list of strings makes the body
+  unreadable (exit 3), like every other refused body.
+  `missing` stays `null` (never `[]`) and every evaluation-derived member is
+  `null` while `status` is `pending`. A consumer of the five-key line keeps
+  parsing it; the added keys are the only difference.
+- The release route (`GET /v1/releases/{id}/decision`, `ReleaseDecision`) keeps
+  its own shape and is not read by this command.

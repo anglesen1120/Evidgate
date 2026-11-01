@@ -15,8 +15,10 @@ import {
   capture,
   decided,
   devEnv,
+  evaluated,
   gateArgv,
   invoke,
+  pending,
   refusal,
   runId,
 } from './gate.kit.test.js';
@@ -56,7 +58,9 @@ describe('gate', () => {
   it('exits 0 only for PASS and prints the verdict with its reasons', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch(() =>
-      decided({ decision: 'PASS', reasons: ['all suites passed', 'flaky retry absorbed'] }),
+      decided(
+        evaluated({ decision: 'PASS', reasons: ['all suites passed', 'flaky retry absorbed'] }),
+      ),
     );
     const out = capture();
 
@@ -86,7 +90,9 @@ describe('gate', () => {
 
   it('exits 1 for FAIL', async () => {
     const env = await devEnv(dirs);
-    const stub = devStubFetch(() => decided({ decision: 'FAIL', reasons: ['suite web failed'] }));
+    const stub = devStubFetch(() =>
+      decided(evaluated({ decision: 'FAIL', reasons: ['suite web failed'] })),
+    );
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -99,7 +105,7 @@ describe('gate', () => {
   it('caps a server reason to one escaped line', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch(() =>
-      decided({ decision: 'FAIL', reasons: [`${'a'.repeat(300)}\nforged: line`] }),
+      decided(evaluated({ decision: 'FAIL', reasons: [`${'a'.repeat(300)}\nforged: line`] })),
     );
     const out = capture();
 
@@ -116,10 +122,12 @@ describe('gate', () => {
     // The token starts at code point 191, so a cap applied before redaction would print its
     // first ten characters; the redactor only matches the whole registered value.
     const stub = devStubFetch(() =>
-      decided({
-        decision: 'FAIL',
-        reasons: [`${'x'.repeat(190)}dev-token-value`],
-      }),
+      decided(
+        evaluated({
+          decision: 'FAIL',
+          reasons: [`${'x'.repeat(190)}dev-token-value`],
+        }),
+      ),
     );
     const out = capture();
 
@@ -136,7 +144,9 @@ describe('gate', () => {
   it('collapses reasons beyond the printed cap', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch(() =>
-      decided({ decision: 'FAIL', reasons: Array.from({ length: 60 }, (_, i) => `r${i}`) }),
+      decided(
+        evaluated({ decision: 'FAIL', reasons: Array.from({ length: 60 }, (_, i) => `r${i}`) }),
+      ),
     );
     const out = capture();
 
@@ -153,7 +163,7 @@ describe('gate', () => {
 
   it('exits 2 for INCONCLUSIVE', async () => {
     const env = await devEnv(dirs);
-    const stub = devStubFetch(() => decided({ decision: 'INCONCLUSIVE' }));
+    const stub = devStubFetch(() => decided(evaluated({ decision: 'INCONCLUSIVE' })));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -165,15 +175,20 @@ describe('gate', () => {
 
   describe('unreadable responses', () => {
     const cases: ReadonlyArray<readonly [string, () => Response]> = [
-      ['a lower-case decision', () => decided({ decision: 'pass' })],
-      ['an empty decision', () => decided({ decision: '' })],
-      ['an unknown decision', () => decided({ decision: 'MAYBE' })],
-      ['a numeric decision', () => decided({ decision: 5 })],
-      ['a missing decision member', () => decided({})],
+      ['a lower-case decision', () => decided(evaluated({ decision: 'pass' }))],
+      ['an empty decision', () => decided(evaluated({ decision: '' }))],
+      ['an unknown decision', () => decided(evaluated({ decision: 'MAYBE' }))],
+      ['a numeric decision', () => decided(evaluated({ decision: 5 }))],
+      ['a missing decision member', () => decided({ status: 'evaluated' })],
+      ['an evaluated body with a null decision', () => decided(evaluated())],
+      ['a pending body carrying a decision', () => decided(pending({ decision: 'PASS' }))],
+      ['a missing status member', () => decided({ decision: 'PASS' })],
+      ['an unknown status', () => decided(pending({ status: 'decided' }))],
+      ['a non-string status', () => decided(pending({ status: 5 }))],
       ['a null body', () => decided(null)],
       ['an array body', () => decided([])],
       ['a string body', () => decided('PASS')],
-      ['non-string reasons', () => decided({ decision: 'PASS', reasons: [1] })],
+      ['non-string reasons', () => decided(evaluated({ decision: 'PASS', reasons: [1] }))],
       [
         'invalid JSON',
         () =>
@@ -200,6 +215,32 @@ describe('gate', () => {
         expect(out.stdout.join('')).toBe('');
       });
     }
+  });
+
+  it('never echoes a refused status or decision value', async () => {
+    const env = await devEnv(dirs);
+    const stub = devStubFetch(() => decided(pending({ status: 'DECIDED', decision: 'MAYBE' })));
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
+
+    expect(code).toBe(3);
+    // Both values are server text and could forge a log line, so neither reaches stderr.
+    expect(out.stderr.join('')).not.toContain('DECIDED');
+    expect(out.stderr.join('')).not.toContain('MAYBE');
+    expect(out.stderr.join('')).toContain('the status was not pending or evaluated');
+  });
+
+  it('prints no reason lines when the evaluated body carries reasons null', async () => {
+    const env = await devEnv(dirs);
+    const stub = devStubFetch(() => decided(evaluated({ decision: 'FAIL', reasons: null })));
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
+
+    expect(code).toBe(1);
+    expect(out.stdout.join('')).toBe(`gate: FAIL (run ${runId})\n`);
+    expect(out.stderr.join('')).toBe('');
   });
 
   it('refuses an oversized decision body instead of reporting a verdict', async () => {

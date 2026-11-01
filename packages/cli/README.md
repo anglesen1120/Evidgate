@@ -120,17 +120,25 @@ Only a literal `PASS` exits 0:
 - `PASS` → 0;
 - `FAIL` → 1;
 - `INCONCLUSIVE` → 2;
-- `decision: null` (still pending) → 2, both without `--wait` and when the wait
-  runs out.
+- `status: pending` with `decision: null` → 2, both without `--wait` and when
+  the wait runs out.
 
 Everything else exits 3 with `evidgate: error <code>`: a transport failure, a
 decision body that breaks or is aborted after its headers, a `401` that a
 freshly minted token does not fix (one refresh per token, cleared only by an
 accepted answer), a `403` or `404`, a `5xx`/`429` that still fails after the
 bounded retries, a refused redirect, a decision body larger than 256 KiB, a
-body that is not JSON, a body that is not an object, a body without a
-`decision` member, and any `decision` value outside the four above (`"pass"`,
-`""`, a number).
+body that is not JSON, a body that is not an object, a body without a `status`
+member, a `status` outside `pending`/`evaluated`, a body without a `decision`
+member, any `decision` outside `PASS`/`FAIL`/`INCONCLUSIVE` (`"pass"`, `""`, a
+number), `status: pending` carrying a decision, `status: evaluated` with
+`decision: null`, a `missing` or `reasons` member that is neither `null` nor
+a list of strings, a `missing` entry outside the closed eight codes of 00 §8.5,
+`status: pending` with any evaluation member other than `url` filled (a falsey
+non-null value such as `missing: []`, `0`, `false` or `""` counts), and
+`status: evaluated` with a `mode` other than `live`. A body whose `status` and
+`decision` disagree is refused before the verdict is read, so a pending body can
+never exit 0.
 
 `--wait` takes the same grammar as `EVIDGATE_SEND_DEADLINE`: bare seconds or an
 `s`/`m`/`h` suffix, greater than zero and at most 24 hours; anything else exits 3
@@ -161,22 +169,35 @@ reason; a pending or timed-out run explains itself on stderr as
 `evidgate: gate: run <run_id> …`. Server text is
 redacted, control characters are escaped, each reason line is capped at 200
 characters, and at most 50 reasons are printed (the rest collapse into one
-`… (k more)` line), so one response cannot flood a CI log. `--json` prints
-exactly one object line on stdout, with these keys in this order:
+`… (k more)` line), so one response cannot flood a CI log. A `reasons: null`
+body prints the verdict line and no reason line.
+
+`--json` prints exactly one object line on stdout: the five keys the gate has
+always printed, in that order, then the members the widened `Decision` body adds,
+as the server sent them (redacted, and control or line-separator characters
+escaped, like every other printed value):
 
 ```json
 {
   "decision": "PASS",
-  "completeness": null,
-  "evaluation_id": null,
-  "mode": null,
-  "url": null
+  "completeness": "complete",
+  "evaluation_id": "0192f0e2-3f4a-7c8d-9e0f-1a2b3c4d5e6f",
+  "mode": "live",
+  "url": "https://evidgate.example/projects/p1/runs/r1",
+  "status": "evaluated",
+  "evidence_revision": 4,
+  "outcome": "all_passed",
+  "missing": null,
+  "reasons": ["all suites passed"],
+  "policy_hash": "sha256:…",
+  "manifest_hash": "sha256:…",
+  "evaluator_version": "1.2.3"
 }
 ```
 
-`completeness`, `evaluation_id`, `mode` and `url` are **fields pending contract**:
-`contracts/openapi.yaml` declares only `decision`, `evaluation_revision` and
-`reasons` today, so each of the four is printed when the response carries it as a
-string and is `null` otherwise. Nothing is derived from the API URL and no value is
-guessed. `decision` is `null` on a pending timeout. The run id must be a UUID; any
-other value exits 3 before a token exchange.
+`missing` is `null` (never `[]`) and every evaluation-derived member is `null`
+while `status` is `pending`; `status` is always one of `pending`/`evaluated`.
+`evidence_revision` prints only when the server sends an integer, so a fractional
+or numeric-string value prints `null` and is never rounded. Nothing is derived
+from the API URL and no value is guessed. The run id must be a UUID; any other
+value exits 3 before a token exchange.
