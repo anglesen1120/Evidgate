@@ -73,12 +73,8 @@ internal static class EvaluationSql
     /// the bound a retry of an older revision would read the attempts of a revision that came after it and decide from
     /// evidence the frozen row never saw.
     /// <para>
-    /// Residual, opened by review S176: both <c>created_at</c> columns default to <c>now()</c>, the transaction start
-    /// time, so this bound is not a commit-order cutoff. An attempt whose transaction began before the freeze and
-    /// inserted after it carries the smaller timestamp and is still read here, because <c>InsertAttempts</c> takes no
-    /// run lock to serialise it against the freeze. A deterministic cutoff needs an insert-order watermark frozen with
-    /// the revision (a database-assigned attempt sequence plus a column on <c>evidence_revision</c> to hold it); a
-    /// timestamp cannot express commit order, and this story owns no migration.
+    /// <c>created_at</c> is the transaction start time, not commit order, so the bound can differ from the attempts the
+    /// freeze counted at the edges; a deterministic cutoff needs an insert-order watermark stored with the revision.
     /// </para>
     /// </summary>
     internal const string LoadResults = """
