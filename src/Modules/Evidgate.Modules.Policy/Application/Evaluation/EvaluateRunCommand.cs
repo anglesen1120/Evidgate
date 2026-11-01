@@ -82,11 +82,11 @@ internal sealed class EvaluateRunCommandHandler(
     /// </summary>
     private const string EmptyExceptions = "[]";
 
-    /// <summary>The row the insert itself returned, when the key was free.</summary>
-    private sealed record InsertedRow(Guid Id, DateTimeOffset CreatedAt);
-
-    /// <summary>The winner's row, when this attempt lost the insert.</summary>
-    private sealed record StoredRow(
+    /// <summary>
+    /// One evaluation row: the values the insert sends, and the same shape the winner read-back returns, so one mapper
+    /// answers both paths.
+    /// </summary>
+    private sealed record Row(
         Guid Id,
         Guid RunId,
         int EvidenceRevision,
@@ -104,25 +104,51 @@ internal sealed class EvaluateRunCommandHandler(
         DateTimeOffset ExceptionsAsOf,
         DateTimeOffset CreatedAt);
 
+    /// <summary>The id and commit stamp the insert returned, when the key was free.</summary>
+    private sealed record InsertedRow(Guid Id, DateTimeOffset CreatedAt);
+
     /// <summary>Evaluates and stores, or returns the row that already holds this key.</summary>
     public async ValueTask<Result<EvaluationRecord>> Handle(
         EvaluateRunCommand command,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        Validate(command);
+
+        var loaded = await inputs.LoadAsync(command.RunId, command.EvidenceRevision, cancellationToken)
+            .ConfigureAwait(false);
+
+        var row = Decide(command, loaded);
+        var inserted = await InsertAsync(row, cancellationToken).ConfigureAwait(false);
+
+        if (inserted is null)
+        {
+            var winner = await ReadWinnerAsync(row, cancellationToken).ConfigureAwait(false);
+            return Result.Success(ToRecord(winner));
+        }
+
+        // The measurement describes a durable verdict, so it waits for the commit this handler does not own: a
+        // rolled-back attempt and the conflict-loser path record nothing, and a repeat task records nothing new.
+        scopes.Require().AfterCommit(() =>
+            EvidgateTelemetry.RecordEvaluationDecisionLatency(inserted.CreatedAt - loaded.FrozenAt));
+
+        return Result.Success(ToRecord(row with { CreatedAt = inserted.CreatedAt }));
+    }
+
+    /// <summary>Refuses a command that names no run, no frozen revision or a mode the table would refuse.</summary>
+    private static void Validate(EvaluateRunCommand command)
+    {
         if (command.RunId == Guid.Empty || command.EvidenceRevision < 1 || !Enum.IsDefined(command.Mode))
         {
             throw new InvalidOperationException(
                 $"the evaluation task names no run or no frozen revision (run {command.RunId:D}, "
                 + $"revision {command.EvidenceRevision.ToString(CultureInfo.InvariantCulture)}, mode {command.Mode})");
         }
+    }
 
-        var loaded = await inputs.LoadAsync(command.RunId, command.EvidenceRevision, cancellationToken)
-            .ConfigureAwait(false);
-
-        var mode = EvaluationModeCode.Of(command.Mode);
-        var orgId = scopes.Require().OrgId;
-
+    /// <summary>The row this attempt would store, computed once from the durable inputs and the captured snapshot.</summary>
+    private Row Decide(EvaluateRunCommand command, LoadedEvaluationInputs loaded)
+    {
         // Captured once per attempt, before the evaluator runs and never re-read: the row says which instant the
         // exception set was read at, so two attempts of one task cannot disagree about it.
         var exceptionsAsOf = time.GetUtcNow();
@@ -133,87 +159,91 @@ internal sealed class EvaluateRunCommandHandler(
             loaded.Policy,
             new ExceptionsSnapshotInput(exceptionsAsOf, [], []));
 
-        var inserted = await db.QuerySingleOrDefaultAsync<InsertedRow>(
+        return new Row(
+            Guid.CreateVersion7(),
+            command.RunId,
+            command.EvidenceRevision,
+            loaded.PolicyRevisionId,
+            loaded.PolicyHash,
+            loaded.ManifestHash,
+            EvaluationCodes.Code(result.Completeness),
+            [.. result.Missing.Select(EvaluationCodes.Code)],
+            EvaluationCodes.Code(result.Outcome),
+            EvaluationCodes.Code(result.Decision),
+            [.. result.Reasons.Select(EvaluationCodes.Code)],
+            IPolicyEvaluator.EvaluatorVersion,
+            EvaluationModeCode.Of(command.Mode),
+            exceptionsHash,
+            exceptionsAsOf,
+            default);
+    }
+
+    /// <summary>Inserts the row; null means a unique key already holds the answer to this question.</summary>
+    private async Task<InsertedRow?> InsertAsync(Row row, CancellationToken cancellationToken) =>
+        await db.QuerySingleOrDefaultAsync<InsertedRow>(
             EvaluationSql.Insert,
             new
             {
-                id = Guid.CreateVersion7(),
-                org_id = orgId,
-                run_id = command.RunId,
-                evidence_revision = command.EvidenceRevision,
-                policy_revision_id = loaded.PolicyRevisionId,
-                policy_hash = loaded.PolicyHash,
-                manifest_hash = loaded.ManifestHash,
-                completeness = EvaluationCodes.Code(result.Completeness),
-                missing = string.Join(EvaluationSql.ArraySeparator, result.Missing.Select(EvaluationCodes.Code)),
-                outcome = EvaluationCodes.Code(result.Outcome),
-                decision = EvaluationCodes.Code(result.Decision),
-                reasons = string.Join(EvaluationSql.ArraySeparator, result.Reasons.Select(EvaluationCodes.Code)),
-                evaluator_version = IPolicyEvaluator.EvaluatorVersion,
-                mode,
-                exceptions_hash = exceptionsHash,
-                exceptions_as_of = exceptionsAsOf,
+                id = row.Id,
+                org_id = scopes.Require().OrgId,
+                run_id = row.RunId,
+                evidence_revision = row.EvidenceRevision,
+                policy_revision_id = row.PolicyRevisionId,
+                policy_hash = row.PolicyHash,
+                manifest_hash = row.ManifestHash,
+                completeness = row.Completeness,
+                missing = string.Join(EvaluationSql.ArraySeparator, row.Missing),
+                outcome = row.Outcome,
+                decision = row.Decision,
+                reasons = string.Join(EvaluationSql.ArraySeparator, row.Reasons),
+                evaluator_version = row.EvaluatorVersion,
+                mode = row.Mode,
+                exceptions_hash = row.ExceptionsHash,
+                exceptions_as_of = row.ExceptionsAsOf,
                 array_separator = EvaluationSql.ArraySeparator,
             },
             cancellationToken).ConfigureAwait(false);
 
-        if (inserted is not null)
-        {
-            // The measurement describes a durable verdict, so it waits for the commit this handler does not own: a
-            // rolled-back attempt and the conflict-loser path record nothing, and a repeat task records nothing new.
-            scopes.Require().AfterCommit(() =>
-                EvidgateTelemetry.RecordEvaluationDecisionLatency(inserted.CreatedAt - loaded.FrozenAt));
-
-            return Result.Success(new EvaluationRecord(
-                inserted.Id,
-                command.RunId,
-                command.EvidenceRevision,
-                loaded.PolicyRevisionId,
-                loaded.PolicyHash,
-                loaded.ManifestHash,
-                EvaluationCodes.Code(result.Completeness),
-                result.Missing.Select(EvaluationCodes.Code).ToArray(),
-                EvaluationCodes.Code(result.Outcome),
-                EvaluationCodes.Code(result.Decision),
-                result.Reasons.Select(EvaluationCodes.Code).ToArray(),
-                IPolicyEvaluator.EvaluatorVersion,
-                mode,
-                exceptionsHash,
-                exceptionsAsOf,
-                inserted.CreatedAt));
-        }
-
-        var stored = await db.QuerySingleOrDefaultAsync<StoredRow>(
+    /// <summary>
+    /// The row the losing insert must answer with. A live verdict already stored under another policy revision or
+    /// evaluator version is not this attempt's row, so the empty read raises instead of inventing one.
+    /// </summary>
+    private async Task<Row> ReadWinnerAsync(Row row, CancellationToken cancellationToken) =>
+        await db.QuerySingleOrDefaultAsync<Row>(
             EvaluationSql.SelectExisting,
             new
             {
-                org_id = orgId,
-                run_id = command.RunId,
-                evidence_revision = command.EvidenceRevision,
-                policy_revision_id = loaded.PolicyRevisionId,
-                evaluator_version = IPolicyEvaluator.EvaluatorVersion,
-                mode,
+                org_id = scopes.Require().OrgId,
+                run_id = row.RunId,
+                evidence_revision = row.EvidenceRevision,
+                policy_revision_id = row.PolicyRevisionId,
+                evaluator_version = row.EvaluatorVersion,
+                mode = row.Mode,
             },
             cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException(
-                "the conflicting evaluation row could not be read back, so this attempt returns no verdict");
+                $"the conflicting evaluation row could not be read back, so this attempt returns no verdict: a live "
+                + $"evaluation of run {row.RunId:D} revision "
+                + $"{row.EvidenceRevision.ToString(CultureInfo.InvariantCulture)} already exists under a different "
+                + "policy revision or evaluator version");
 
-        return Result.Success(new EvaluationRecord(
-            stored.Id,
-            stored.RunId,
-            stored.EvidenceRevision,
-            stored.PolicyRevisionId,
-            stored.PolicyHash,
-            stored.ManifestHash,
-            stored.Completeness,
-            stored.Missing,
-            stored.Outcome,
-            stored.Decision,
-            stored.Reasons,
-            stored.EvaluatorVersion,
-            stored.Mode,
-            stored.ExceptionsHash,
-            stored.ExceptionsAsOf,
-            stored.CreatedAt));
-    }
+    /// <summary>The one mapper: the insert's own row and the winner read back become the same record.</summary>
+    private static EvaluationRecord ToRecord(Row row) =>
+        new(
+            row.Id,
+            row.RunId,
+            row.EvidenceRevision,
+            row.PolicyRevisionId,
+            row.PolicyHash,
+            row.ManifestHash,
+            row.Completeness,
+            row.Missing,
+            row.Outcome,
+            row.Decision,
+            row.Reasons,
+            row.EvaluatorVersion,
+            row.Mode,
+            row.ExceptionsHash,
+            row.ExceptionsAsOf,
+            row.CreatedAt);
 }

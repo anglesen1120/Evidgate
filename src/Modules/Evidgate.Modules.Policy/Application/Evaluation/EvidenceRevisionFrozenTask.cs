@@ -12,9 +12,9 @@ namespace Evidgate.Modules.Policy.Application.Evaluation;
 /// its own transaction, so this handler runs exactly for revisions that committed, and the task queue redelivers it
 /// at least once.
 /// <para>
-/// <b>The tenant comes from the task row.</b> The consumer opened a scope from <c>task.org_id</c>; the payload's
-/// <c>org_id</c> is metadata and is never read as an identity, so a payload naming another tenant cannot widen the
-/// scope.
+/// <b>The tenant comes from the task row, and the payload must agree with it.</b> The consumer opened a scope from
+/// <c>task.org_id</c>; a payload naming another org is a tampered or misrouted row, so it raises instead of being
+/// evaluated under either identity.
 /// </para>
 /// <para>
 /// <b>A redelivery is not a second verdict.</b> The command's insert is keyed on the six columns that describe the
@@ -43,6 +43,15 @@ internal sealed partial class EvidenceRevisionFrozenTaskHandler(
             // a handler that was invoked directly, because without the scope every read below runs unscoped.
             throw new InvalidOperationException(
                 "the frozen-evidence task ran without a tenant scope, so no run can be evaluated");
+        }
+
+        if (payload.OrgId != scope.OrgId)
+        {
+            // The scope's org is the only identity this handler may act under, so a payload that disagrees is a
+            // tampered or misrouted row: evaluating under either one would answer a question nobody asked.
+            throw new InvalidOperationException(
+                $"the frozen-evidence task names org {payload.OrgId:D} but its scope is org {scope.OrgId:D}, so no run "
+                + "can be evaluated");
         }
 
         if (payload.RunId == Guid.Empty || payload.EvidenceRevisionNo < 1)

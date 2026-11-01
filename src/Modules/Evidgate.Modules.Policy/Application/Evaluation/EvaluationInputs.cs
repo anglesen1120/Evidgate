@@ -51,17 +51,26 @@ internal sealed record LoadedEvaluationInputs(
 /// ids it names.
 /// </summary>
 /// <remarks>
-/// A run without a pinned policy revision, a revision number that does not exist and a policy revision that does not
-/// exist all raise: the evaluator would otherwise judge evidence against rules nobody pinned, and a retry cannot make
-/// a missing row appear, so the exception is what an operator sees in the dead-letter list.
+/// A run that pins no policy revision, a revision number that does not exist, a pinned policy revision that does not
+/// exist and a policy body this reader cannot parse all raise: the evaluator would otherwise judge evidence against
+/// rules nobody pinned, and a retry cannot make a missing row appear, so the exception is what an operator sees in the
+/// dead-letter list.
 /// </remarks>
 internal sealed class EvaluationInputReader(ITenantDb db, ITenantScopeAccessor scopes)
 {
+    /// <summary>The completeness token a revision must carry for its <c>missing[]</c> to speak for itself.</summary>
+    private const string CompleteCompleteness = "complete";
+
     /// <summary>The planned executions, the pinned policy revision and the pinned suite's key.</summary>
-    private sealed record RunPlanRow(Guid PolicyRevisionId, int PlannedCount, string SuiteKey, bool SuiteDeclaredEmpty);
+    private sealed record RunPlanRow(Guid? PolicyRevisionId, int PlannedCount, string SuiteKey, bool SuiteDeclaredEmpty);
 
     /// <summary>The frozen revision's own verdict inputs and freeze stamp.</summary>
-    private sealed record RevisionRow(int RevisionNo, string[] Missing, string ManifestHash, DateTimeOffset FrozenAt);
+    private sealed record RevisionRow(
+        int RevisionNo,
+        string Completeness,
+        string[] Missing,
+        string ManifestHash,
+        DateTimeOffset FrozenAt);
 
     /// <summary>A policy revision's id, content address and body.</summary>
     private sealed record PolicyRow(Guid Id, string Hash, string Body);
@@ -87,6 +96,10 @@ internal sealed class EvaluationInputReader(ITenantDb db, ITenantScopeAccessor s
             ?? throw new InvalidOperationException(
                 "the run has no manifest or pinned suite, so its evidence cannot be judged");
 
+        var policyRevisionId = plan.PolicyRevisionId
+            ?? throw new InvalidOperationException(
+                "run pins no policy revision, so there are no rules to judge its evidence against");
+
         var revision = await db.QuerySingleOrDefaultAsync<RevisionRow>(
             EvaluationSql.LoadRevision,
             new { org_id = orgId, run_id = runId, evidence_revision = evidenceRevision },
@@ -96,20 +109,21 @@ internal sealed class EvaluationInputReader(ITenantDb db, ITenantScopeAccessor s
 
         var policy = await db.QuerySingleOrDefaultAsync<PolicyRow>(
             EvaluationSql.LoadPolicy,
-            new { org_id = orgId, policy_revision_id = plan.PolicyRevisionId },
+            new { org_id = orgId, policy_revision_id = policyRevisionId },
             cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException(
-                "the run's pinned policy revision does not exist, so the verdict would name rules nobody stored");
+                $"the run's pinned policy revision {policyRevisionId:D} does not exist, so the verdict would name "
+                + "rules nobody stored");
 
         var results = await db.QueryAsync<ResultRow>(
             EvaluationSql.LoadResults,
-            new { org_id = orgId, run_id = runId },
+            new { org_id = orgId, run_id = runId, evidence_revision = evidenceRevision },
             cancellationToken).ConfigureAwait(false);
 
         var evidence = new EvidenceRevisionInput(
             plan.PlannedCount,
             plan.SuiteDeclaredEmpty,
-            revision.Missing.Select(MissingCode).ToArray(),
+            MissingCodesOf(revision),
             results
                 .Select(row => new CaseResultInput(
                     row.CaseId,
@@ -121,7 +135,7 @@ internal sealed class EvaluationInputReader(ITenantDb db, ITenantScopeAccessor s
 
         return new LoadedEvaluationInputs(
             evidence,
-            PolicyInput(policy.Body),
+            PolicyInput(policy.Body, policy.Id),
             policy.Id,
             policy.Hash,
             revision.ManifestHash,
@@ -129,24 +143,49 @@ internal sealed class EvaluationInputReader(ITenantDb db, ITenantScopeAccessor s
     }
 
     /// <summary>
-    /// The pinned revision's decision configuration, read from the body the schema already validated on write. A key
-    /// the policy omits means "nothing extra is required", which is why every list defaults to empty.
+    /// The revision's own missing codes. Anything short of <c>complete</c> that names no code is still not evidence the
+    /// evaluator may read as complete, so it is judged on <see cref="MissingReasonCode.MissingResult"/> — the one code
+    /// that says the evidence cannot account for what the run planned.
     /// </summary>
-    private static PolicyRevisionInput PolicyInput(string body)
+    private static MissingReasonCode[] MissingCodesOf(RevisionRow revision)
     {
-        using var document = JsonDocument.Parse(body);
-        var root = document.RootElement;
+        var codes = revision.Missing.Select(MissingCode).ToArray();
+        return revision.Completeness != CompleteCompleteness && codes.Length == 0
+            ? [MissingReasonCode.MissingResult]
+            : codes;
+    }
 
-        return new PolicyRevisionInput(
-            requiredCaseKeys: Strings(root, "required_cases"),
-            requiredSuiteKeys: Strings(root, "required_suites"),
-            criticalCaseIds: Guids(root, "critical_cases"),
-            allowedSkipCaseKeys: Strings(root, "allowed_skips"),
-            flakyBudget: root.TryGetProperty("flaky_budget", out var budget) ? budget.GetInt32() : 0,
-            requiredArtifactKinds: Strings(root, "required_artifacts"),
-            // The v1 body carries no empty-suite allowance, so the policy half of the allowance is always false here:
-            // a catalog-declared empty suite never passes until a policy revision can say it may.
-            emptySuiteAllowed: false);
+    /// <summary>
+    /// The pinned revision's decision configuration, read from the body the schema validated as an object on write. A key
+    /// the policy omits means "nothing extra is required", which is why every list defaults to empty. A body whose
+    /// values this reader cannot parse raises naming the revision, because the verdict would otherwise be decided
+    /// against a policy nobody can read back.
+    /// </summary>
+    private static PolicyRevisionInput PolicyInput(string body, Guid policyRevisionId)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+
+            return new PolicyRevisionInput(
+                requiredCaseKeys: Strings(root, "required_cases"),
+                requiredSuiteKeys: Strings(root, "required_suites"),
+                criticalCaseIds: Guids(root, "critical_cases"),
+                allowedSkipCaseKeys: Strings(root, "allowed_skips"),
+                flakyBudget: root.TryGetProperty("flaky_budget", out var budget) ? budget.GetInt32() : 0,
+                requiredArtifactKinds: Strings(root, "required_artifacts"),
+                // The v1 body carries no empty-suite allowance, so the policy half of the allowance is always false here:
+                // a catalog-declared empty suite never passes until a policy revision can say it may.
+                emptySuiteAllowed: false);
+        }
+        catch (Exception failure) when (
+            failure is JsonException or FormatException or InvalidOperationException or OverflowException)
+        {
+            throw new InvalidOperationException(
+                $"policy revision {policyRevisionId:D} carries a body this evaluator cannot read: {failure.Message}",
+                failure);
+        }
     }
 
     private static string[] Strings(JsonElement root, string name) =>

@@ -240,7 +240,9 @@ public sealed partial class EvaluationSchemaTests
     // ------------------------------------------------------------------ (d) the closed token sets
 
     /// <summary>
-    /// Every closed column refuses a token outside the evaluator's vocabulary and accepts the ones it writes.
+    /// Every closed column refuses a token outside the evaluator's vocabulary and accepts the ones it writes. A
+    /// case is kept off the migration's two cross-column invariants, so its refusal names the token constraint and
+    /// not the invariant that token happens to break as well.
     /// </summary>
     [Fact]
     public async Task Evaluation_ClosedTokenSets_AreEnforced()
@@ -251,7 +253,8 @@ public sealed partial class EvaluationSchemaTests
 
         var refusals = new (string Column, SpecChange Change, string Constraint)[]
         {
-            ("completeness", s => s with { Completeness = "partial" }, "evaluation_completeness_check"),
+            ("completeness", s => s with { Completeness = "partial", Decision = "INCONCLUSIVE" },
+                "evaluation_completeness_check"),
             ("outcome", s => s with { Outcome = "unknown" }, "evaluation_outcome_check"),
             ("decision", s => s with { Decision = "pass" }, "evaluation_decision_check"),
             ("mode", s => s with { Mode = "advisory" }, "evaluation_mode_check"),
@@ -260,7 +263,9 @@ public sealed partial class EvaluationSchemaTests
             ("manifest_hash", s => s with { ManifestHash = "" }, "evaluation_manifest_hash_check"),
             ("evaluator_version", s => s with { EvaluatorVersion = "" }, "evaluation_evaluator_version_check"),
             ("evidence_revision", s => s with { EvidenceRevision = 0 }, "evaluation_evidence_revision_check"),
-            ("missing", s => s with { Missing = ["not_a_reason"] }, "evaluation_missing_check"),
+            ("missing",
+                s => s with { Completeness = "incomplete", Missing = ["not_a_reason"], Decision = "INCONCLUSIVE" },
+                "evaluation_missing_check"),
             ("reasons", s => s with { Reasons = ["not_a_reason"] }, "evaluation_reasons_check"),
         };
 
@@ -288,7 +293,55 @@ public sealed partial class EvaluationSchemaTests
         })).ShouldBe(1);
     }
 
-    // ------------------------------------------------------------------ (e) tenant isolation
+    // ------------------------------------------------------------------ (e) the verdict's consistency
+
+    /// <summary>
+    /// A <c>complete</c> row that names a missing reason code is refused 23514 by the table itself, so a handler
+    /// that under-covered the evidence cannot store a complete verdict. The row is otherwise well formed: the
+    /// decision is not <c>PASS</c> and the code is in the closed set, so the refusal is this invariant.
+    /// </summary>
+    [Fact]
+    public async Task Evaluation_CompleteWithMissing_OwnerInsertIsRefused()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var spec = await BuildSpecAsync(world);
+
+        var error = await CaptureOwnerErrorAsync(
+            world,
+            InsertSql,
+            Parameters(spec with
+            {
+                Missing = ["missing_shard"],
+                Outcome = "no_results",
+                Decision = "INCONCLUSIVE",
+                Reasons = ["missing_shard"],
+            }));
+
+        error.SqlState.ShouldBe("23514");
+        error.ConstraintName.ShouldBe("evaluation_complete_has_no_missing_check");
+    }
+
+    /// <summary>
+    /// <c>decision = PASS</c> over an <c>incomplete</c> verdict with an empty <c>missing</c> is refused 23514: a
+    /// pass claims the evaluator saw everything, and the empty gap list keeps the completeness invariant out of
+    /// the way, so this refusal is the pass invariant alone.
+    /// </summary>
+    [Fact]
+    public async Task Evaluation_PassOverIncomplete_OwnerInsertIsRefused()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var spec = await BuildSpecAsync(world);
+
+        var error = await CaptureOwnerErrorAsync(
+            world,
+            InsertSql,
+            Parameters(spec with { Completeness = "incomplete" }));
+
+        error.SqlState.ShouldBe("23514");
+        error.ConstraintName.ShouldBe("evaluation_pass_requires_complete_check");
+    }
+
+    // ------------------------------------------------------------------ (f) tenant isolation
 
     /// <summary>
     /// FORCE RLS plus the composite tenant keys: another org cannot read the row, cannot write a row that

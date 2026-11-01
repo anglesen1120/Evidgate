@@ -18,7 +18,8 @@ internal static class EvaluationSql
 
     /// <summary>
     /// The run's pinned policy revision and the plan the evidence is judged against: how many executions it planned,
-    /// the pinned suite's key, and whether that suite revision declares no case at all.
+    /// the pinned suite's key, and whether that suite revision declares no case at all. The pin is nullable — a run may
+    /// carry none — and the reader refuses a null one instead of judging the evidence against nothing.
     /// </summary>
     internal const string LoadRun = """
         select r.policy_revision_id as "PolicyRevisionId",
@@ -37,9 +38,14 @@ internal static class EvaluationSql
            and r.id = @run_id
         """;
 
-    /// <summary>The frozen revision the evaluation reads: its number, its own verdict inputs and its freeze stamp.</summary>
+    /// <summary>
+    /// The frozen revision the evaluation reads: its number, its own completeness and verdict inputs and its freeze
+    /// stamp. The stamp bounds which attempts the results read may see, and <c>completeness</c> is the reconciler's own
+    /// answer — a reader that inferred it from <c>missing</c> alone would read an unexplained incomplete row as complete.
+    /// </summary>
     internal const string LoadRevision = """
         select er.revision_no as "RevisionNo",
+               er.completeness as "Completeness",
                er.missing as "Missing",
                er.manifest_hash as "ManifestHash",
                er.created_at as "FrozenAt"
@@ -60,10 +66,20 @@ internal static class EvaluationSql
         """;
 
     /// <summary>
-    /// One result per planned execution that has an attempt: the normalized status of the latest attempt and the
-    /// manifest's own required flag. An execution whose every attempt is missing is left out on purpose — the
-    /// evaluator derives <c>missing_result</c> from the planned count it was given, so a synthesised row here would
-    /// report a decision the evidence never made.
+    /// One result per planned execution that had an attempt when this revision froze: the normalized status of the
+    /// latest attempt the revision's own <c>created_at</c> admits, and the manifest's own required flag. An execution
+    /// whose every attempt is missing is left out on purpose — the evaluator derives <c>missing_result</c> from the
+    /// planned count it was given, so a synthesised row here would report a decision the evidence never made. Without
+    /// the bound a retry of an older revision would read the attempts of a revision that came after it and decide from
+    /// evidence the frozen row never saw.
+    /// <para>
+    /// Residual, opened by review S176: both <c>created_at</c> columns default to <c>now()</c>, the transaction start
+    /// time, so this bound is not a commit-order cutoff. An attempt whose transaction began before the freeze and
+    /// inserted after it carries the smaller timestamp and is still read here, because <c>InsertAttempts</c> takes no
+    /// run lock to serialise it against the freeze. A deterministic cutoff needs an insert-order watermark frozen with
+    /// the revision (a database-assigned attempt sequence plus a column on <c>evidence_revision</c> to hold it); a
+    /// timestamp cannot express commit order, and this story owns no migration.
+    /// </para>
     /// </summary>
     internal const string LoadResults = """
         select tr.case_id as "CaseId",
@@ -73,12 +89,16 @@ internal static class EvaluationSql
           from public.planned_execution pe
           join public.test_revision tr on tr.org_id = pe.org_id and tr.id = pe.case_revision_id
           join public.test_case tc on tc.org_id = tr.org_id and tc.id = tr.case_id
+          join public.evidence_revision er on er.org_id = pe.org_id
+                                          and er.run_id = pe.run_id
+                                          and er.revision_no = @evidence_revision
           join lateral (
             select a.normalized_status
               from public.case_attempt a
              where a.org_id = pe.org_id
                and a.run_id = pe.run_id
                and a.execution_key = pe.execution_key
+               and a.created_at <= er.created_at
              order by a.attempt_no desc
              limit 1) latest on true
          where pe.org_id = @org_id

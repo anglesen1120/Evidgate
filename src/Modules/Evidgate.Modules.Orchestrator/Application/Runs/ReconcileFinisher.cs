@@ -28,10 +28,7 @@ internal sealed record LatestRevision(
     long EventWatermark,
     string? ArtifactSetHash);
 
-/// <summary>
-/// What a frozen revision needs from its run in one read: the project the run belongs to (the frozen-event payload names
-/// it) and the manifest hash the revision records. A run with no visible manifest answers null, never a default hash.
-/// </summary>
+/// <summary>Reads the project and manifest together so the revision and its event describe the same run.</summary>
 internal sealed record RevisionSource(Guid ProjectId, string? ManifestHash);
 
 /// <summary>
@@ -141,9 +138,7 @@ internal enum ReconcileSettlement
 /// revision commit or roll back together.
 /// </param>
 /// <param name="outbox">
-/// The outbox of this attempt: one frozen-revision event per inserted revision, written on the same connection and
-/// transaction as the insert it announces (<see cref="EvidenceRevisionFrozenContract"/>), so a consumer outside this
-/// module learns the revision exists without reading this module's tables.
+/// Shares the revision's transaction so consumers cannot observe an event for a rolled-back revision.
 /// </param>
 internal sealed class ReconcileFinisher(
     ITenantDb db,
@@ -308,11 +303,8 @@ internal sealed class ReconcileFinisher(
                 $"run {runId:D} did not accept the evidence pointer in this tenant ({moved} row(s) updated)");
         }
 
-        // (h) The frozen event, right after the row it announces (00 §5.5 C7): another module learns that this revision
-        // exists without reading this module's tables, and because the row joins this unit of work a rolled-back attempt
-        // leaves no event behind. Every inserted revision emits — first freeze, forced close and late append alike — while
-        // an attempt the late guard answered with an already-recorded revision returned above, so a redelivery writes no
-        // second row for the same revision. The key names the revision id, and the id is allocated before the insert.
+        // (h) Same transaction as the revision it announces, so rollback leaves no event; keyed by revision,
+        // so a redelivered attempt cannot announce one revision twice.
         await outbox.EnqueueAsync(
                 EvidenceRevisionFrozenContract.OutboxTaskType,
                 EvidenceRevisionFrozenContract.PayloadJson(

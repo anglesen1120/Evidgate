@@ -23,7 +23,7 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class EvaluationTaskTests
+public sealed partial class EvaluationTaskTests
 {
     private readonly PostgresTenancyFixture _fixture;
 
@@ -87,7 +87,7 @@ public sealed class EvaluationTaskTests
         // answering with a verdict that was decided under the previous revision.
         var refusal = await Should.ThrowAsync<InvalidOperationException>(
             () => EvaluateAsync(world, seed, EvaluationMode.Live, TestContext.Current.CancellationToken));
-        refusal.Message.ShouldContain("could not be read back");
+        refusal.Message.ShouldContain("already exists under a different policy revision or evaluator version");
         (await CountAsync(world, seed)).ShouldBe(2, "the refused attempt stored nothing");
         (await CountAsync(world, seed, "where mode = 'live'")).ShouldBe(
             1,
@@ -129,12 +129,12 @@ public sealed class EvaluationTaskTests
     // ------------------------------------------------------------------ the task handler
 
     /// <summary>
-    /// The frozen-evidence task handler evaluates the run its payload names with the tenant of the scope it was given:
-    /// the stored row carries the pinned policy's hash and the revision's manifest hash, which only the durable reads can
-    /// supply. The queue's own claim is exercised by the reconciler tests; this case is the handler half.
+    /// The frozen-evidence task handler, called directly with a tenant scope, evaluates the run its payload names: the
+    /// stored row carries the pinned policy's hash and the revision's manifest hash, which only the durable reads can
+    /// supply. The queue's claim and dispatch are exercised by the reconciler tests.
     /// </summary>
     [Fact]
-    public async Task Evaluate_ClaimedTaskPayload_LoadsBothInputs()
+    public async Task Evaluate_HandlerCalledDirectlyWithScope_LoadsBothInputs()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var seed = await SeedAsync(world);
@@ -376,12 +376,14 @@ public sealed class EvaluationTaskTests
     }
 
     /// <summary>Seeds what only the owner may write, on top of the run the real creation path wrote.</summary>
+    /// <remarks>The attempts come before the revision, as in the real path: a revision freezes evidence that already
+    /// exists, and the results read is bounded by the revision's freeze stamp.</remarks>
     private async Task<Seed> SeedAsync(RunCreationTests.World world)
     {
         var (runId, manifestHash) = await CreateRunForSeedAsync(world);
         var (policyId, policyHash) = await PinPolicyAsync(world, runId);
-        var revisionId = await FreezeRevisionAsync(world, runId, manifestHash);
         await PassEveryPlannedExecutionAsync(world, runId);
+        var revisionId = await FreezeRevisionAsync(world, runId, manifestHash);
         return new Seed(world.Org, world.Project, runId, revisionId, policyId, policyHash, manifestHash);
     }
 

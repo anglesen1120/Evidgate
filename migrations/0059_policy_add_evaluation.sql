@@ -87,7 +87,14 @@ create table if not exists public.evaluation (
                         'flaky_budget_exceeded']::text[]
         and array_position(reasons, null) is null
       else false
-    end)
+    end),
+  -- Cross-column, so the closed tokens above are not enough: the evaluator reports `complete` only with an
+  -- empty `missing`, and `PASS` only over that pair. The CHECKs keep a handler bug from storing a verdict the
+  -- decision matrix cannot produce (0049 pins the same completeness shape).
+  constraint evaluation_complete_has_no_missing_check
+    check (completeness <> 'complete' or missing = '{}'),
+  constraint evaluation_pass_requires_complete_check
+    check (decision <> 'PASS' or (completeness = 'complete' and missing = '{}'))
 );
 
 -- One `live` verdict per frozen evidence revision: the decision endpoint reads the newest row of a run, and
@@ -136,6 +143,10 @@ create policy evaluation_app_tenant on public.evaluation
   for all to evidgate_app
   using (org_id = evidgate.current_org_id())
   with check (org_id = evidgate.current_org_id());
+
+-- Deliberately no `TO evidgate_operator` policy here: the base migration does not grant the operator
+-- standing read access. The operator reaches this table only through the grant-gated
+-- `evidgate.operator_grant_ok` policy; until that lands the SELECT grant below reads zero rows.
 
 -- `force row level security` binds the owner too, so the migration role needs its own permissive policy
 -- (0004/0005/0025/0049 precedent); the alternative, BYPASSRLS, is rejected by DECISIONS F5.
