@@ -4,7 +4,7 @@ using Evidgate.Evaluation;
 using Shouldly;
 using Xunit;
 
-/// <summary>The golden rows 00 §8.6 assigns to this story, each as one named theory case.</summary>
+/// <summary>The golden decision rows the contract assigns, each as one named theory case.</summary>
 public sealed class DecisionMatrixTests
 {
     public static TheoryData<string> RowNames => ["M1_All_Required_Cases_Passed", "M2_RequiredFailureWithMissingEvidence", "M3_MissingShard", "M4_BuildMismatch", "M5_UnknownStatus", "M6_SetupError", "M7_ExpectedCountZero", "M8_ExpectedCountZeroDeclaredEmptyAllowed", "M9_CriticalCaseSkipped", "M13_RequiredArtifactMissing", "M16_StaleEpochOnly"];
@@ -91,7 +91,7 @@ public sealed class DecisionMatrixTests
 
         "M8_ExpectedCountZeroDeclaredEmptyAllowed" => new(
             Scenarios.Evidence([], [], 0, suiteDeclaredEmpty: true),
-            Scenarios.Policy(emptySuiteAllowed: true),
+            Scenarios.Policy(requiredCaseKeys: [], emptySuiteAllowed: true),
             EvaluationCompleteness.Complete,
             EvaluationOutcome.NoResults,
             EvaluationDecision.Pass,
@@ -127,7 +127,7 @@ public sealed class DecisionMatrixTests
             [MissingReasonCode.StaleEpoch],
             [EvaluationReason.StaleEpochOnly]),
 
-        _ => throw new ArgumentOutOfRangeException(nameof(name), name, "not a matrix row of this story"),
+        _ => throw new ArgumentOutOfRangeException(nameof(name), name, "not a matrix row of this contract"),
     };
 
     private sealed record Row(

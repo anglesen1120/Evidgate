@@ -13,7 +13,7 @@ internal static class CoreEvaluation
     public static EvaluationResult Compute(EvidenceRevisionInput evidence, PolicyRevisionInput policy)
     {
         var scope = RequiredScope.Resolve(policy, evidence.Results);
-        var missing = EffectiveMissing(evidence, scope);
+        var missing = EffectiveMissing(evidence, policy, scope);
         var completeness = CompletenessOf(evidence, policy, missing);
         var outcome = OutcomeOf(scope, missing);
         var (decision, reasons) = Decide(evidence, policy, scope, missing, completeness);
@@ -22,24 +22,68 @@ internal static class CoreEvaluation
     }
 
     /// <summary>
-    /// The evidence's own codes, plus <c>missing_result</c> when the required scope is uncovered. The synthetic code is
-    /// only added when no reported code already explains the absence (a stale-epoch-only revision keeps just its code).
+    /// The evidence's own codes, normalized into the closed vocabulary and ordered by wire token, plus the synthetic
+    /// <c>missing_result</c> when nothing the evidence reports explains an absent required result. Malformed inputs
+    /// resolve to closed codes rather than throwing or passing silently: a code or a status outside the enums is
+    /// <c>unknown_status</c>, and a negative planned count is <c>missing_result</c> because it describes no execution
+    /// at all (a producer's status is what <c>unknown_status</c> covers, not the plan).
     /// </summary>
-    private static IReadOnlyList<MissingReasonCode> EffectiveMissing(EvidenceRevisionInput evidence, RequiredScope scope)
+    private static IReadOnlyList<MissingReasonCode> EffectiveMissing(
+        EvidenceRevisionInput evidence,
+        PolicyRevisionInput policy,
+        RequiredScope scope)
     {
-        var codes = new List<MissingReasonCode>(evidence.Missing);
+        var codes = new HashSet<MissingReasonCode>();
+        var malformed = false;
 
-        var uncovered = evidence.Results.Count == 0
-            ? codes.Count == 0
-            : scope.HasUncoveredRequiredItems;
-        if (evidence.ExpectedExecutionCount > 0 && uncovered)
+        foreach (var code in evidence.Missing)
+        {
+            if (Enum.IsDefined(code))
+            {
+                codes.Add(code);
+            }
+            else
+            {
+                malformed = true;
+            }
+        }
+
+        foreach (var result in evidence.Results)
+        {
+            malformed |= !Enum.IsDefined(result.Status);
+        }
+
+        if (malformed)
+        {
+            codes.Add(MissingReasonCode.UnknownStatus);
+        }
+
+        if (evidence.ExpectedExecutionCount < 0)
         {
             codes.Add(MissingReasonCode.MissingResult);
         }
 
-        codes.Sort();
-        return [.. codes.Distinct()];
+        if (codes.Count == 0 && ExpectedResultMissing(evidence, policy, scope))
+        {
+            codes.Add(MissingReasonCode.MissingResult);
+        }
+
+        return [.. codes.OrderBy(EvaluationCodes.Code, StringComparer.Ordinal)];
     }
+
+    /// <summary>
+    /// Whether the evidence owes a required result it never reported. The synthetic code is only added when no
+    /// reported code already explains the absence (a stale-epoch-only revision, or an expected-count-zero run, keeps
+    /// just its own code).
+    /// </summary>
+    private static bool ExpectedResultMissing(
+        EvidenceRevisionInput evidence,
+        PolicyRevisionInput policy,
+        RequiredScope scope) =>
+        !BlockedByEmptyRequiredScope(evidence, policy)
+        && (scope.HasUncoveredRequiredItems
+            || (evidence.ExpectedExecutionCount > 0
+                && (scope.ResultCount == 0 || evidence.Results.Count < evidence.ExpectedExecutionCount)));
 
     private static EvaluationCompleteness CompletenessOf(
         EvidenceRevisionInput evidence,
@@ -56,18 +100,14 @@ internal static class CoreEvaluation
 
     private static EvaluationOutcome OutcomeOf(RequiredScope scope, IReadOnlyList<MissingReasonCode> missing)
     {
-        if (scope.Results.Count == 0)
+        if (scope.ResultCount == 0)
         {
             return EvaluationOutcome.NoResults;
         }
 
-        if (scope.Results.Any(result => IsFailure(result.Status))
-            || missing.Contains(MissingReasonCode.SetupError))
-        {
-            return EvaluationOutcome.HasFailures;
-        }
-
-        return EvaluationOutcome.AllPassed;
+        return scope.HasFailure || missing.Contains(MissingReasonCode.SetupError)
+            ? EvaluationOutcome.HasFailures
+            : EvaluationOutcome.AllPassed;
     }
 
     private static (EvaluationDecision Decision, IReadOnlyList<EvaluationReason> Reasons) Decide(
@@ -79,7 +119,7 @@ internal static class CoreEvaluation
     {
         var reasons = MissingReasons(missing);
 
-        if (scope.Results.Any(result => IsFailure(result.Status)))
+        if (scope.HasFailure)
         {
             // A confirmed failure is the whole explanation: the codes behind an incomplete verdict stay in Missing.
             return (EvaluationDecision.Fail, [EvaluationReason.RequiredAssertionFailed]);
@@ -101,7 +141,7 @@ internal static class CoreEvaluation
             return (EvaluationDecision.Inconclusive, ReasonSet.Normalize(reasons));
         }
 
-        if (scope.Results.Any(result => result.Status is CaseStatus.Skipped or CaseStatus.Blocked))
+        if (scope.HasNotExecuted)
         {
             reasons.Add(EvaluationReason.CriticalNotExecuted);
             return (EvaluationDecision.Inconclusive, ReasonSet.Normalize(reasons));
@@ -116,9 +156,6 @@ internal static class CoreEvaluation
     private static bool BlockedByEmptyRequiredScope(EvidenceRevisionInput evidence, PolicyRevisionInput policy) =>
         evidence.ExpectedExecutionCount == 0
         && !(evidence.SuiteDeclaredEmpty && policy.EmptySuiteAllowed);
-
-    private static bool IsFailure(CaseStatus status) =>
-        status is CaseStatus.Failed or CaseStatus.TimedOut or CaseStatus.Error;
 
     /// <summary>One reason per missing code; <c>stale_epoch</c> yields a reason only when it is the sole code.</summary>
     private static List<EvaluationReason> MissingReasons(IReadOnlyList<MissingReasonCode> missing)

@@ -60,7 +60,7 @@ public sealed class PolicyEvaluatorTests
     {
         var result = new PolicyEvaluator().Evaluate(
             Scenarios.Evidence([], [], 0, suiteDeclaredEmpty: true),
-            Scenarios.Policy(emptySuiteAllowed: emptySuiteAllowed),
+            Scenarios.Policy(requiredCaseKeys: [], emptySuiteAllowed: emptySuiteAllowed),
             Scenarios.NoExceptions);
 
         result.Outcome.ShouldBe(EvaluationOutcome.NoResults);
@@ -233,6 +233,161 @@ public sealed class PolicyEvaluatorTests
         result.Outcome.ShouldBe(EvaluationOutcome.AllPassed);
         result.Decision.ShouldBe(EvaluationDecision.Pass);
         result.Reasons.ShouldBe([EvaluationReason.ScopeBuildPolicyPinned]);
+    }
+
+    [Fact]
+    public void Evaluate_FewerResultsThanPlannedWithoutMissingCode_ReportsMissingResult()
+    {
+        var result = new PolicyEvaluator().Evaluate(
+            Scenarios.Evidence([Scenarios.Result(CaseStatus.Passed)], [], expectedExecutionCount: 2),
+            Scenarios.Policy(),
+            Scenarios.NoExceptions);
+
+        result.Completeness.ShouldBe(EvaluationCompleteness.Incomplete);
+        result.Missing.ShouldBe([MissingReasonCode.MissingResult]);
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+        result.Reasons.ShouldBe([EvaluationReason.MissingResult]);
+    }
+
+    [Fact]
+    public void Evaluate_EmptyRequiredScopeWithPlannedExecutions_ReportsMissingResult()
+    {
+        var result = new PolicyEvaluator().Evaluate(
+            Scenarios.Evidence([Scenarios.Result(CaseStatus.Passed, required: false)]),
+            Scenarios.Policy(requiredCaseKeys: []),
+            Scenarios.NoExceptions);
+
+        result.Completeness.ShouldBe(EvaluationCompleteness.Incomplete);
+        result.Missing.ShouldBe([MissingReasonCode.MissingResult]);
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+    }
+
+    [Fact]
+    public void Evaluate_CriticalCaseWithoutAnyResult_NeverPasses()
+    {
+        var result = new PolicyEvaluator().Evaluate(
+            Scenarios.Evidence([Scenarios.Result(CaseStatus.Passed)]),
+            Scenarios.Policy(requiredCaseKeys: [], criticalCaseIds: [Scenarios.SearchCaseId]),
+            Scenarios.NoExceptions);
+
+        result.Completeness.ShouldBe(EvaluationCompleteness.Incomplete);
+        result.Missing.ShouldBe([MissingReasonCode.MissingResult]);
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+    }
+
+    [Fact]
+    public void Evaluate_MissingCodesFollowTheWireTokenOrder()
+    {
+        var result = new PolicyEvaluator().Evaluate(
+            Scenarios.Evidence(missing: [MissingReasonCode.MissingShard, MissingReasonCode.CountMismatch, MissingReasonCode.MissingShard]),
+            Scenarios.Policy(),
+            Scenarios.NoExceptions);
+
+        result.Missing.Select(EvaluationCodes.Code).ShouldBe(["count_mismatch", "missing_shard"]);
+        result.Reasons.Select(EvaluationCodes.Code).ShouldBe(["count_mismatch", "missing_shard"]);
+    }
+
+    [Fact]
+    public void Evaluate_MalformedMissingCode_ResolvesToUnknownStatus()
+    {
+        var result = new PolicyEvaluator().Evaluate(
+            Scenarios.Evidence(missing: [(MissingReasonCode)99]),
+            Scenarios.Policy(),
+            Scenarios.NoExceptions);
+
+        result.Missing.ShouldBe([MissingReasonCode.UnknownStatus]);
+        result.Completeness.ShouldBe(EvaluationCompleteness.Incomplete);
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+        result.Reasons.ShouldBe([EvaluationReason.UnknownStatus]);
+    }
+
+    [Fact]
+    public void Evaluate_MalformedCaseStatus_ResolvesToUnknownStatus()
+    {
+        var result = new PolicyEvaluator().Evaluate(
+            Scenarios.Evidence([Scenarios.Result((CaseStatus)42)]),
+            Scenarios.Policy(),
+            Scenarios.NoExceptions);
+
+        result.Missing.ShouldBe([MissingReasonCode.UnknownStatus]);
+        result.Completeness.ShouldBe(EvaluationCompleteness.Incomplete);
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+        result.Reasons.ShouldBe([EvaluationReason.UnknownStatus]);
+    }
+
+    [Fact]
+    public void Evaluate_NegativeExpectedCount_ReportsMissingResult()
+    {
+        var result = new PolicyEvaluator().Evaluate(
+            Scenarios.Evidence([], [], expectedExecutionCount: -1),
+            Scenarios.Policy(),
+            Scenarios.NoExceptions);
+
+        result.Missing.ShouldBe([MissingReasonCode.MissingResult]);
+        result.Completeness.ShouldBe(EvaluationCompleteness.Incomplete);
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+        result.Reasons.ShouldBe([EvaluationReason.MissingResult]);
+    }
+
+    [Fact]
+    public void Evaluate_EmptySuiteAllowance_DoesNotCoverARequiredCaseTheEvidenceNeverReported()
+    {
+        var result = new PolicyEvaluator().Evaluate(
+            Scenarios.Evidence([], [], 0, suiteDeclaredEmpty: true),
+            Scenarios.Policy(requiredCaseKeys: [Scenarios.CheckoutKey], emptySuiteAllowed: true),
+            Scenarios.NoExceptions);
+
+        result.Completeness.ShouldBe(EvaluationCompleteness.Incomplete);
+        result.Missing.ShouldBe([MissingReasonCode.MissingResult]);
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+        result.Reasons.ShouldBe([EvaluationReason.MissingResult]);
+    }
+
+    [Fact]
+    public void Evaluate_PolicyCollectionsChangedAfterConstruction_DoNotChangeTheVerdict()
+    {
+        var requiredCaseKeys = new List<string> { Scenarios.CheckoutKey };
+        var policy = Scenarios.Policy(requiredCaseKeys: requiredCaseKeys);
+        var evidence = Scenarios.Evidence();
+        var evaluator = new PolicyEvaluator();
+
+        var before = evaluator.Evaluate(evidence, policy, Scenarios.NoExceptions);
+        before.Decision.ShouldBe(EvaluationDecision.Pass);
+
+        requiredCaseKeys.Clear();
+        requiredCaseKeys.Add(Scenarios.SearchKey);
+        var after = evaluator.Evaluate(evidence, policy, Scenarios.NoExceptions);
+
+        Fingerprint(after).ShouldBe(Fingerprint(before));
+        after.Decision.ShouldBe(EvaluationDecision.Pass);
+    }
+
+    [Fact]
+    public void Evaluate_LargeResultSet_AllocatesNoPerResultScopeSet()
+    {
+        var results = new List<CaseResultInput>(50_000);
+        for (var index = 0; index < 50_000; index++)
+        {
+            results.Add(new CaseResultInput(
+                Scenarios.SearchCaseId,
+                $"case/{index}",
+                Scenarios.SmokeSuite,
+                CaseStatus.Passed,
+                Required: false));
+        }
+
+        var evidence = Scenarios.Evidence(results, [], expectedExecutionCount: 50_000);
+        var policy = Scenarios.Policy(requiredCaseKeys: [], criticalCaseIds: []);
+        var evaluator = new PolicyEvaluator();
+
+        evaluator.Evaluate(evidence, policy, Scenarios.NoExceptions);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var result = evaluator.Evaluate(evidence, policy, Scenarios.NoExceptions);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+        allocated.ShouldBeLessThan(256 * 1024);
     }
 
     internal static (EvidenceRevisionInput Evidence, PolicyRevisionInput Policy, ExceptionsSnapshotInput Snapshot) Inputs() => (
