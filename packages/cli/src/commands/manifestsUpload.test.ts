@@ -46,7 +46,11 @@ interface StubCall {
   readonly body: Buffer;
 }
 
-/** A `fetch` stub that records every request (URL, headers, raw body) and answers from `handler`. */
+/**
+ * A `fetch` stub that records every request (URL, headers, raw body) and answers from
+ * `handler`. It answers nothing by itself: a dev-token run needs `devStubFetch`, because
+ * `getToken` exchanges the dev token before the command's own request.
+ */
 function stubFetch(handler: (request: Request) => Response | Promise<Response>): {
   readonly fetchImpl: typeof fetch;
   readonly calls: StubCall[];
@@ -69,6 +73,57 @@ function jsonResponse(
     status,
     headers: { 'content-type': 'application/json', ...headers },
   });
+}
+
+/** The dev token both dev envs seed: an ingest credential, never a bearer. */
+const devToken = 'dev-token-value';
+/**
+ * The `ci_producer` token the dev exchange mints: the bearer the upload sends. It is
+ * deliberately a different string from `devToken`, so an upload that sent the dev token raw
+ * would fail the `Bearer ${mintedToken}` assertion.
+ */
+const mintedToken = 'egt_minted_ci_token';
+/** The exchange route a dev run posts to before its own request. */
+const exchangePath = '/v1/ci/token';
+
+/** The successful `/v1/ci/token` body (openapi `CiTokenResponse`). */
+function exchangeBody(token: string): unknown {
+  return {
+    token,
+    expires_at: '2030-01-01T00:00:00Z',
+    project_id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+    permission_set: [],
+  };
+}
+
+interface DevStub {
+  readonly fetchImpl: typeof fetch;
+  /** The command's own requests; the dev token's exchange is never one of them. */
+  readonly calls: StubCall[];
+  /** The `POST /v1/ci/token` requests the run made, in order. */
+  readonly exchanges: StubCall[];
+}
+
+/**
+ * A stub for a dev-token run. `EVIDGATE_DEV_TOKEN` is an ingest credential: `getToken`
+ * exchanges it at `POST /v1/ci/token` and caches the result, so the command runs on the
+ * returned `ci_producer` token. The stub answers that exchange with `mintedToken` and hands
+ * every other request to `handler`.
+ */
+function devStubFetch(handler: (request: Request) => Response | Promise<Response>): DevStub {
+  const calls: StubCall[] = [];
+  const exchanges: StubCall[] = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const call: StubCall = { request, body: Buffer.from(await request.clone().arrayBuffer()) };
+    if (new URL(request.url).pathname === exchangePath) {
+      exchanges.push(call);
+      return jsonResponse(200, exchangeBody(mintedToken));
+    }
+    calls.push(call);
+    return handler(request);
+  };
+  return { fetchImpl, calls, exchanges };
 }
 
 describe('manifests upload', () => {
@@ -95,14 +150,17 @@ describe('manifests upload', () => {
     return path;
   }
 
-  /** The M1 dev path: no exchange, no cache, no network (04.2.1 AC8). */
+  /**
+   * The dev path: the token is a seeded ingest credential, so every run exchanges it at
+   * `POST /v1/ci/token` (and caches the result) before the upload.
+   */
   async function devEnv(extra: Record<string, string> = {}) {
     const cacheDir = await tempDir();
     return {
       EVIDGATE_API_URL: 'http://127.0.0.1:8080',
       EVIDGATE_PROJECT: project,
       EVIDGATE_ENV: 'dev',
-      EVIDGATE_DEV_TOKEN: 'dev-token-value',
+      EVIDGATE_DEV_TOKEN: devToken,
       EVIDGATE_CACHE_DIR: cacheDir,
       ...extra,
     };
@@ -128,7 +186,7 @@ describe('manifests upload', () => {
       '{\n  "schema": "manifest.v1",\n  "n": 12345678901234567890,\n  "pad": "  x  "\n}\n';
     const file = await manifestFile(text);
     const env = await devEnv();
-    const { fetchImpl, calls } = stubFetch(() =>
+    const { fetchImpl, calls, exchanges } = devStubFetch(() =>
       jsonResponse(201, { manifest_id: manifestId, manifest_hash: manifestHash }),
     );
     const { io, stdout, stderr } = capture();
@@ -139,13 +197,20 @@ describe('manifests upload', () => {
 
     expect(stdout.join('')).toBe(`manifest_id=${manifestId} manifest_hash=${manifestHash}\n`);
     expect(stderr.join('')).toBe('');
+    // The dev token is exchanged once, before the upload that carries its bearer.
+    expect(exchanges).toHaveLength(1);
     expect(calls).toHaveLength(1);
     const call = calls[0];
     expect(call?.request.method).toBe('POST');
     // `createApiClient` puts the SDK's `/v1` server prefix on the base URL, so the
     // operation path is `<root>/v1/projects/{p}/manifests` (the env value carries no `/v1`).
     expect(new URL(call?.request.url ?? '').pathname).toBe(`/v1/projects/${project}/manifests`);
-    expect(call?.request.headers.get('authorization')).toBe('Bearer dev-token-value');
+    // The upload runs on the exchanged token: the dev token only travels in the exchange
+    // body, so a regression that sent it as the bearer fails here.
+    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
+    expect(JSON.parse(exchanges[0]?.body.toString('utf8') ?? '')).toStrictEqual({
+      ingest_token: devToken,
+    });
     expect(call?.request.headers.get('content-type')).toBe('application/json');
     // 00 §9.1: the route requires an `Idempotency-Key` (openapi `required: true`); the
     // file's own digest makes a retry of the same manifest replay the stored 201.
@@ -159,7 +224,7 @@ describe('manifests upload', () => {
   it('json_output', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(201, { manifest_id: manifestId, manifest_hash: manifestHash }),
     );
     const { io, stdout, stderr } = capture();
@@ -178,7 +243,7 @@ describe('manifests upload', () => {
   it('invalid_manifest_exit3', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(422, {
         error: {
           code: 'manifest_invalid',
@@ -218,7 +283,7 @@ describe('manifests upload', () => {
       path: `/p/${index}`,
       reason: 'r',
     }));
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(422, {
         error: {
           code: 'manifest_invalid',
@@ -245,7 +310,7 @@ describe('manifests upload', () => {
     // A path that embeds a newline and a `::` command is escaped, not split.
     const escapedEnv = await devEnv();
     const escapedFile = await manifestFile('{"schema":"manifest.v1"}');
-    const { fetchImpl: escapedFetch } = stubFetch(() =>
+    const { fetchImpl: escapedFetch } = devStubFetch(() =>
       jsonResponse(422, {
         error: {
           code: 'manifest_invalid',
@@ -278,7 +343,7 @@ describe('manifests upload', () => {
   it('oversize_no_request', async () => {
     const oversize = await manifestFile('a'.repeat(maxManifestBytes + 1));
     const env = await devEnv();
-    const { fetchImpl, calls } = stubFetch(() =>
+    const { fetchImpl, calls, exchanges } = devStubFetch(() =>
       jsonResponse(201, { manifest_id: manifestId, manifest_hash: manifestHash }),
     );
     const { io, stderr } = capture();
@@ -288,7 +353,9 @@ describe('manifests upload', () => {
     ).resolves.toBe(3);
 
     expect(stderr.join('')).toContain('evidgate: error manifest_too_large: ');
+    // The size check runs before the token, so the dev run makes no request at all.
     expect(calls).toHaveLength(0);
+    expect(exchanges).toHaveLength(0);
 
     // An ingest source would exchange a token first; the size check still wins.
     const ingest = await ingestEnv();
@@ -306,7 +373,7 @@ describe('manifests upload', () => {
 
     // Exactly the cap is accepted and sent.
     const boundary = await manifestFile(`{"pad":"${'a'.repeat(maxManifestBytes - 10)}"}`);
-    const boundaryStub = stubFetch(() =>
+    const boundaryStub = devStubFetch(() =>
       jsonResponse(201, { manifest_id: manifestId, manifest_hash: manifestHash }),
     );
     const boundaryCapture = capture();
@@ -316,6 +383,7 @@ describe('manifests upload', () => {
       }),
     ).resolves.toBe(0);
     expect(boundaryStub.calls).toHaveLength(1);
+    expect(boundaryStub.exchanges).toHaveLength(1);
   });
 
   // 04.2.2-T1.1 / §5: an unreadable input (missing, a directory, empty) exits 3 with no
@@ -327,7 +395,7 @@ describe('manifests upload', () => {
     const empty = await manifestFile('');
 
     for (const path of [missing, directory, empty]) {
-      const { fetchImpl, calls } = stubFetch(() =>
+      const { fetchImpl, calls } = devStubFetch(() =>
         jsonResponse(201, { manifest_id: manifestId, manifest_hash: manifestHash }),
       );
       const { io, stderr } = capture();
@@ -342,7 +410,7 @@ describe('manifests upload', () => {
   // 04.2.2-T1.1 / §5: a missing `--file` is a usage error before any request.
   it('missing_file_flag_exit3', async () => {
     const env = await devEnv();
-    const { fetchImpl, calls } = stubFetch(() =>
+    const { fetchImpl, calls } = devStubFetch(() =>
       jsonResponse(201, { manifest_id: manifestId, manifest_hash: manifestHash }),
     );
     const { io, stderr } = capture();
@@ -413,6 +481,9 @@ describe('manifests upload', () => {
       }),
     ).resolves.toBe(3);
     expect(forbiddenCapture.stderr.join('')).toContain('evidgate: error project_scope_mismatch: ');
+    // Again the upload is the only request (the cached token is fresh), so the cache it
+    // keeps proves the 403 was not treated as a dead token.
+    expect(forbiddenStub.calls).toHaveLength(1);
     await expect(readCachedToken(forbiddenConfig)).resolves.toEqual({
       token: 'egt_cached_token',
       expiresAt,
@@ -428,7 +499,7 @@ describe('manifests upload', () => {
       const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
       await writeCachedToken(config, { token: 'egt_cached_token', expiresAt });
       const file = await manifestFile('{"schema":"manifest.v1"}');
-      const { fetchImpl } = stubFetch(() =>
+      const { fetchImpl, calls } = stubFetch(() =>
         jsonResponse(401, {
           error: {
             code: 'token_revoked',
@@ -453,18 +524,22 @@ describe('manifests upload', () => {
       const text = stderr.join('');
       expect(text).toContain('evidgate: error token_revoked: ');
       expect(text).not.toContain('token_cache_error');
+      // The cached token is fresh, so the upload is the only request: its 401 is the one
+      // whose purge fails, and that failure must not replace the server's code.
+      expect(calls).toHaveLength(1);
     },
   );
 
-  // 04.2.2-T1.1 / T78: a server message that embeds the bearer is redacted.
+  // A server message that embeds the bearer or the dev credential is redacted; the two are
+  // different strings, so neither can hide behind a shared value.
   it('token_never_printed', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(500, {
         error: {
           code: 'server_error',
-          message: 'boom dev-token-value',
+          message: `boom ${devToken} ${mintedToken}`,
           request_id: 'req-1',
           retryable: true,
         },
@@ -478,7 +553,8 @@ describe('manifests upload', () => {
 
     const text = stderr.join('');
     expect(text).toContain('[REDACTED]');
-    expect(text).not.toContain('dev-token-value');
+    expect(text).not.toContain(devToken);
+    expect(text).not.toContain(mintedToken);
   });
 
   // 04.2.2-T1.1 / §5: a non-envelope non-2xx and a 2xx with an invalid body are both
@@ -487,7 +563,7 @@ describe('manifests upload', () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
 
-    const gatewayStub = stubFetch(
+    const gatewayStub = devStubFetch(
       () =>
         new Response('<html>bad gateway</html>', {
           status: 502,
@@ -505,7 +581,7 @@ describe('manifests upload', () => {
     expect(gatewayText).toContain('HTTP 502');
     expect(gatewayText).not.toContain('bad gateway');
 
-    const invalidStub = stubFetch(() =>
+    const invalidStub = devStubFetch(() =>
       jsonResponse(201, { manifest_id: manifestId, manifest_hash: 'nope' }),
     );
     const invalidCapture = capture();
@@ -523,8 +599,16 @@ describe('manifests upload', () => {
   it('transport_error_exit3', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const fetchImpl: typeof fetch = () =>
-      Promise.reject(new TypeError('fetch failed http://secret'));
+    // The exchange succeeds, so the transport failure under test is the upload's own.
+    const seen: string[] = [];
+    const fetchImpl: typeof fetch = (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const path = new URL(request.url).pathname;
+      seen.push(path);
+      return path === exchangePath
+        ? Promise.resolve(jsonResponse(200, exchangeBody(mintedToken)))
+        : Promise.reject(new TypeError('fetch failed http://secret'));
+    };
     const { io, stderr } = capture();
 
     await expect(
@@ -534,6 +618,13 @@ describe('manifests upload', () => {
     const text = stderr.join('');
     expect(text).toContain('evidgate: error transport: ');
     expect(text).not.toContain('http://secret');
+    // The exchange succeeded; every attempt after it is the upload, whose transport
+    // failure is retried before the command exits.
+    expect(seen[0]).toBe(exchangePath);
+    expect(seen.length).toBeGreaterThan(1);
+    for (const path of seen.slice(1)) {
+      expect(path).toBe(`/v1/projects/${project}/manifests`);
+    }
   });
 });
 
@@ -565,13 +656,17 @@ describe('manifests upload — boundaries', () => {
     return path;
   }
 
+  /**
+   * The dev path: the token is a seeded ingest credential, so every run exchanges it at
+   * `POST /v1/ci/token` (and caches the result) before the upload.
+   */
   async function devEnv(extra: Record<string, string> = {}) {
     const cacheDir = await tempDir();
     return {
       EVIDGATE_API_URL: 'http://127.0.0.1:8080',
       EVIDGATE_PROJECT: project,
       EVIDGATE_ENV: 'dev',
-      EVIDGATE_DEV_TOKEN: 'dev-token-value',
+      EVIDGATE_DEV_TOKEN: devToken,
       EVIDGATE_CACHE_DIR: cacheDir,
       ...extra,
     };
@@ -589,7 +684,7 @@ describe('manifests upload — boundaries', () => {
     const bytes = Buffer.from([0xff, 0xfe, 0x00, 0x01, 0x80, 0x7f, 0x0a]);
     const file = await manifestFile(bytes);
     const env = await devEnv();
-    const { fetchImpl, calls } = stubFetch(ok);
+    const { fetchImpl, calls } = devStubFetch(ok);
     const { io } = capture();
 
     await expect(
@@ -609,7 +704,7 @@ describe('manifests upload — boundaries', () => {
     const link = join(await tempDir(), 'link.json');
     await symlink(target, link);
     const env = await devEnv();
-    const { fetchImpl, calls } = stubFetch(ok);
+    const { fetchImpl, calls } = devStubFetch(ok);
     const { io } = capture();
 
     await expect(
@@ -620,7 +715,7 @@ describe('manifests upload — boundaries', () => {
 
   it.skipIf(process.platform === 'win32')('dev_zero_is_unreadable_with_zero_requests', async () => {
     const env = await devEnv();
-    const { fetchImpl, calls } = stubFetch(ok);
+    const { fetchImpl, calls } = devStubFetch(ok);
     const { io, stderr } = capture();
 
     await expect(
@@ -640,7 +735,7 @@ describe('manifests upload — boundaries', () => {
       const fifo = join(await tempDir(), 'manifest.fifo');
       execFileSync('mkfifo', [fifo]);
       const env = await devEnv();
-      const { fetchImpl, calls } = stubFetch(ok);
+      const { fetchImpl, calls } = devStubFetch(ok);
       const { io, stderr } = capture();
 
       const pending = main(['manifests', 'upload', '--file', fifo], env, io, {
@@ -667,7 +762,7 @@ describe('manifests upload — boundaries', () => {
 
   it('empty_file_flag_is_usage_with_zero_requests', async () => {
     const env = await devEnv();
-    const { fetchImpl, calls } = stubFetch(ok);
+    const { fetchImpl, calls } = devStubFetch(ok);
     const { io, stderr } = capture();
 
     await expect(
@@ -683,7 +778,7 @@ describe('manifests upload — boundaries', () => {
     const rel = relative(process.cwd(), file);
     expect(rel.startsWith('.')).toBe(true);
     const env = await devEnv();
-    const { fetchImpl, calls } = stubFetch(ok);
+    const { fetchImpl, calls } = devStubFetch(ok);
     const { io } = capture();
 
     await expect(
@@ -697,7 +792,7 @@ describe('manifests upload — boundaries', () => {
   it('details_skip_non_string_index_and_path', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(
         422,
         envelope('manifest_invalid', 'bad', {
@@ -724,7 +819,7 @@ describe('manifests upload — boundaries', () => {
   it('details_non_string_reason_drops_the_envelope', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(
         422,
         envelope('manifest_invalid', 'bad', {
@@ -749,7 +844,7 @@ describe('manifests upload — boundaries', () => {
   it('detail_fields_are_escaped_and_capped', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(
         422,
         envelope('manifest_invalid', 'msg\n::error::forged\u0007', {
@@ -779,7 +874,7 @@ describe('manifests upload — boundaries', () => {
   it('message_is_capped_at_200_chars', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(422, envelope('manifest_invalid', 'm'.repeat(500))),
     );
     const { io, stderr } = capture();
@@ -798,7 +893,9 @@ describe('manifests upload — boundaries', () => {
     // The dev token starts at code point 188, so the raw 200-code-point cut would fall
     // inside it. Redaction runs before the cap, so no prefix of the token can survive.
     const message = `${'x'.repeat(188)}dev-token-value${'y'.repeat(50)}`;
-    const { fetchImpl } = stubFetch(() => jsonResponse(422, envelope('manifest_invalid', message)));
+    const { fetchImpl } = devStubFetch(() =>
+      jsonResponse(422, envelope('manifest_invalid', message)),
+    );
     const { io, stderr } = capture();
 
     await expect(
@@ -817,7 +914,9 @@ describe('manifests upload — boundaries', () => {
     // The emoji is the 200th code point; a UTF-16 `slice(0, 200)` would keep only its
     // high surrogate, so the cap counts code points instead.
     const message = `${'a'.repeat(199)}\u{1F600}${'b'.repeat(10)}`;
-    const { fetchImpl } = stubFetch(() => jsonResponse(422, envelope('manifest_invalid', message)));
+    const { fetchImpl } = devStubFetch(() =>
+      jsonResponse(422, envelope('manifest_invalid', message)),
+    );
     const { io, stderr } = capture();
 
     await expect(
@@ -839,7 +938,7 @@ describe('manifests upload — boundaries', () => {
   it('unsafe_code_pattern_falls_back_to_request_failed', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() => jsonResponse(422, envelope('Bad Code!', 'bad')));
+    const { fetchImpl } = devStubFetch(() => jsonResponse(422, envelope('Bad Code!', 'bad')));
     const { io, stderr } = capture();
 
     await expect(
@@ -852,7 +951,7 @@ describe('manifests upload — boundaries', () => {
   it('request_id_control_chars_are_escaped', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(
         422,
         envelope('manifest_invalid', 'ok', { request_id: 'req\n::error::forged\u0007' }),
@@ -870,7 +969,7 @@ describe('manifests upload — boundaries', () => {
   it('request_id_is_capped_at_200_code_points', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(422, envelope('manifest_invalid', 'ok', { request_id: 'r'.repeat(5000) })),
     );
     const { io, stderr } = capture();
@@ -887,7 +986,7 @@ describe('manifests upload — boundaries', () => {
   it('x_request_id_header_is_the_fallback', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(500, { unexpected: true }, { 'x-request-id': 'header-req-9' }),
     );
     const { io, stderr } = capture();
@@ -906,7 +1005,7 @@ describe('manifests upload — boundaries', () => {
   it('server_413_code_is_echoed', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() =>
+    const { fetchImpl } = devStubFetch(() =>
       jsonResponse(413, envelope('payload_too_large', 'body too large')),
     );
     const { io, stderr } = capture();
@@ -922,7 +1021,14 @@ describe('manifests upload — boundaries', () => {
   // outgoing Request), so it needs a real 127.0.0.1 server: an injected `fetch` stub
   // that returns a 302 Response never performs the redirect.
   it('redirect_is_refused_as_transport', async () => {
-    const server = createServer((_request, response) => {
+    const served: string[] = [];
+    const server = createServer((request, response) => {
+      served.push(request.url ?? '');
+      if (request.url === exchangePath) {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify(exchangeBody(mintedToken)));
+        return;
+      }
       response.writeHead(302, { location: 'http://127.0.0.1:1/elsewhere' });
       response.end();
     });
@@ -939,6 +1045,13 @@ describe('manifests upload — boundaries', () => {
       const text = stderr.join('');
       expect(text).toContain('evidgate: error transport: the request failed\n');
       expect(text).not.toContain('127.0.0.1:1');
+      // The exchange was answered, so the refused 302 is the upload's own redirect; the
+      // redirect refusal is a transport failure and is retried like one.
+      expect(served[0]).toBe(exchangePath);
+      expect(served.length).toBeGreaterThan(1);
+      for (const path of served.slice(1)) {
+        expect(path).toBe(`/v1/projects/${project}/manifests`);
+      }
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
@@ -950,7 +1063,7 @@ describe('manifests upload — boundaries', () => {
     const secret = 'SUPER-SECRET-MANIFEST-BODY';
     const file = await manifestFile(`{"schema":"manifest.v1","note":"${secret}"}`);
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(ok);
+    const { fetchImpl } = devStubFetch(ok);
     const { io, stdout, stderr } = capture();
 
     await expect(
@@ -959,14 +1072,17 @@ describe('manifests upload — boundaries', () => {
 
     const text = stdout.join('') + stderr.join('');
     expect(text).not.toContain(secret);
-    expect(text).not.toContain('dev-token-value');
+    expect(text).not.toContain(devToken);
+    expect(text).not.toContain(mintedToken);
     expect(stderr.join('')).toContain('dev_token=[REDACTED]');
   });
 
   it('json_flag_keeps_errors_on_stderr', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
-    const { fetchImpl } = stubFetch(() => jsonResponse(422, envelope('manifest_invalid', 'bad')));
+    const { fetchImpl } = devStubFetch(() =>
+      jsonResponse(422, envelope('manifest_invalid', 'bad')),
+    );
     const { io, stdout, stderr } = capture();
 
     await expect(
@@ -987,7 +1103,11 @@ describe('manifests upload — boundaries', () => {
     };
     const config = resolveConfig({ env });
     const file = await manifestFile('{"schema":"manifest.v1"}');
-    const { fetchImpl } = stubFetch(() => jsonResponse(401, envelope('token_revoked', 'revoked')));
+    // A cold ingest source exchanges first, so this 401 arrives at `/v1/ci/token`; purging
+    // the entry that was never written must still not surface a cache error.
+    const { fetchImpl, calls } = stubFetch(() =>
+      jsonResponse(401, envelope('token_revoked', 'revoked')),
+    );
     const { io, stderr } = capture();
 
     await expect(
@@ -997,6 +1117,9 @@ describe('manifests upload — boundaries', () => {
     const text = stderr.join('');
     expect(text).toContain('evidgate: error token_revoked: revoked\n');
     expect(text).not.toContain('token_cache_error');
+    // One request, the refused exchange: no upload was attempted, and the purge of the
+    // absent entry stayed silent.
+    expect(calls).toHaveLength(1);
     await expect(readCachedToken(config)).resolves.toBeUndefined();
   });
 });

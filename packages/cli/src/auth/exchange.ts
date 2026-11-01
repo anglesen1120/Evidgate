@@ -17,7 +17,7 @@ import { serverErrorFromResponse, transportError } from '../serverError.js';
 
 import { deleteCachedToken } from './tokenCache.js';
 
-/** The credential the exchange presents; `dev` is never exchanged (contracts/cli.md §4). */
+/** The credential the exchange presents; a dev token reaches it as `ingest` (contracts/cli.md §4). */
 export type ExchangeSource = 'oidc' | 'actions-id-token' | 'ingest';
 
 export interface ExchangedToken {
@@ -66,7 +66,7 @@ const rfc3339Pattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\
 /** The `project_id` is a UUID (openapi `format: uuid`); a non-UUID is refused un-echoed (S1). */
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The `missing_config` entry for "no exchangeable source is set" (dev cannot be exchanged). */
+/** The `missing_config` entry for "no exchangeable source is set" (`getToken` maps a dev token to `ingest` first). */
 const exchangeSourceNames =
   `an exchange token source: ${envNames.oidcToken}, ` +
   `${envNames.actionsIdTokenRequestUrl} + ${envNames.actionsIdTokenRequestToken} or ` +

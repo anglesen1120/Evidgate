@@ -10,10 +10,11 @@ import {
   capture,
   decided,
   devEnv,
+  devStubFetch,
   gateArgv,
   invoke,
   runId,
-  stubFetch,
+  type StubCall,
 } from './gate.kit.test.js';
 
 describe('gate flags', () => {
@@ -27,12 +28,25 @@ describe('gate flags', () => {
     await dirs.reset();
   });
 
+  /**
+   * The dev surface's stub: a dev token is an ingest credential, so the run exchanges it
+   * before its first poll. `devStubFetch` answers that exchange and keeps `calls` to the
+   * polls, so a refusal that made no request is visible as an empty `calls` AND `exchanges`.
+   */
+  function passingStub(): {
+    readonly fetchImpl: typeof fetch;
+    readonly calls: StubCall[];
+    readonly exchanges: StubCall[];
+  } {
+    return devStubFetch(() => decided({ decision: 'PASS' }));
+  }
+
   const badWaits = ['0', '0s', '-5s', '1.5m', '1d', 'abc', '', '25h', '86401s'];
 
   for (const wait of badWaits) {
     it(`refuses --wait ${JSON.stringify(wait)} before any request`, async () => {
       const env = await devEnv(dirs);
-      const stub = stubFetch(() => decided({ decision: 'PASS' }));
+      const stub = passingStub();
       const out = capture();
 
       const { code } = await invoke(
@@ -44,13 +58,14 @@ describe('gate flags', () => {
 
       expect(code).toBe(3);
       expect(stub.calls).toHaveLength(0);
+      expect(stub.exchanges).toHaveLength(0);
       expect(out.stderr.join('')).toContain('--wait');
     });
   }
 
   it('accepts the 24h ceiling', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: 'PASS' }));
+    const stub = passingStub();
     const out = capture();
 
     const { code } = await invoke(
@@ -61,12 +76,16 @@ describe('gate flags', () => {
     );
 
     expect(code).toBe(0);
-    expect(stub.calls).toHaveLength(1);
+    // The exchange, then the one poll: a valid ceiling reaches both.
+    expect(stub.exchanges).toHaveLength(1);
+    expect(stub.calls.map((call) => new URL(call.request.url).pathname)).toStrictEqual([
+      `/v1/runs/${runId}/decision`,
+    ]);
   });
 
   it('accepts the documented suffixes', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: 'PASS' }));
+    const stub = passingStub();
     const out = capture();
 
     for (const wait of ['90', '90s', '2m', '1h']) {
@@ -78,12 +97,20 @@ describe('gate flags', () => {
       );
       expect(code).toBe(0);
     }
-    expect(stub.calls).toHaveLength(4);
+    // Each accepted spelling exchanges the dev credential once and asks once; the far-future
+    // `expires_at` is not a fresh credential on the virtual clock, so no cache is reused.
+    expect(stub.exchanges).toHaveLength(4);
+    expect(stub.calls.map((call) => new URL(call.request.url).pathname)).toStrictEqual([
+      `/v1/runs/${runId}/decision`,
+      `/v1/runs/${runId}/decision`,
+      `/v1/runs/${runId}/decision`,
+      `/v1/runs/${runId}/decision`,
+    ]);
   });
 
   it('refuses a repeated --wait', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: 'PASS' }));
+    const stub = passingStub();
     const out = capture();
 
     const { code } = await invoke(
@@ -95,24 +122,26 @@ describe('gate flags', () => {
 
     expect(code).toBe(3);
     expect(stub.calls).toHaveLength(0);
+    expect(stub.exchanges).toHaveLength(0);
     expect(out.stderr.join('')).toContain('may be given only once');
   });
 
   it('refuses a missing --run', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: 'PASS' }));
+    const stub = passingStub();
     const out = capture();
 
     const { code } = await invoke(gateArgv([]), env, out, stub.fetchImpl);
 
     expect(code).toBe(3);
     expect(stub.calls).toHaveLength(0);
+    expect(stub.exchanges).toHaveLength(0);
     expect(out.stderr.join('')).toContain('missing required flag --run');
   });
 
   it('refuses a run id that is not a UUID', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: 'PASS' }));
+    const stub = passingStub();
     const out = capture();
 
     const { code } = await invoke(
@@ -124,12 +153,13 @@ describe('gate flags', () => {
 
     expect(code).toBe(3);
     expect(stub.calls).toHaveLength(0);
+    expect(stub.exchanges).toHaveLength(0);
     expect(out.stderr.join('')).toContain('--run must be a UUID');
   });
 
   it('refuses a repeated --run', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: 'PASS' }));
+    const stub = passingStub();
     const out = capture();
 
     const { code } = await invoke(
@@ -141,6 +171,7 @@ describe('gate flags', () => {
 
     expect(code).toBe(3);
     expect(stub.calls).toHaveLength(0);
+    expect(stub.exchanges).toHaveLength(0);
     expect(out.stderr.join('')).toContain('may be given only once');
   });
 });

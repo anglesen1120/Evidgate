@@ -1,11 +1,11 @@
-// The dev-token path: returns `EVIDGATE_DEV_TOKEN` as the bearer with no exchange, no cache
-// and no file write, and refuses unless `EVIDGATE_ENV` is exactly `dev` AND the API URL is
+// The dev-token guard: returns `EVIDGATE_DEV_TOKEN` for the ingest exchange (`getToken`) and
+// refuses unless `EVIDGATE_ENV` is exactly `dev` AND the API URL is
 // loopback — fail-closed, because a dev token sent anywhere else is a leaked credential.
 import { isLoopbackApiUrl, type ResolvedConfig } from '../config.js';
 import { CliError } from '../errors.js';
 
 /**
- * Returns the dev token as the bearer, or throws `dev_token_refused`/`missing_config`.
+ * Returns the dev token for the ingest exchange, or throws `dev_token_refused`/`missing_config`.
  * `getToken` only calls this when the source is `dev` (so the token is set), but the
  * function is part of the package surface (`index.ts` re-exports it), so a direct
  * caller can still pass a config without one — the guard is reachable, not dead code.

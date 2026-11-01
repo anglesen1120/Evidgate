@@ -14,6 +14,7 @@ import {
   capture,
   decided,
   devEnv,
+  devStubFetch,
   exchangeBody,
   fakeClock,
   gateArgv,
@@ -24,6 +25,7 @@ import {
   runId,
   stubFetch,
   sum,
+  withTokenExchange,
 } from './gate.kit.test.js';
 
 const pending: GateOutcome = {
@@ -106,7 +108,7 @@ describe('gate --wait', () => {
 
   it('exits 2 for a pending run after a single poll when --wait is absent', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: null }));
+    const stub = devStubFetch(() => decided({ decision: null }));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -121,7 +123,7 @@ describe('gate --wait', () => {
 
   it('exits 2 when the run is still pending at the deadline, after a final poll', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: null }));
+    const stub = devStubFetch(() => decided({ decision: null }));
     const out = capture();
 
     const { code, clock } = await invoke(
@@ -145,7 +147,7 @@ describe('gate --wait', () => {
   it('counts a decision that arrives at the deadline', async () => {
     const env = await devEnv(dirs);
     const bodies = [{ decision: null }, { decision: null }, { decision: 'PASS' }];
-    const stub = stubFetch((_request, index) => decided(bodies[index] ?? bodies[2]));
+    const stub = devStubFetch((_request, index) => decided(bodies[index] ?? bodies[2]));
     const out = capture();
 
     const { code, clock } = await invoke(
@@ -165,7 +167,7 @@ describe('gate --wait', () => {
   it('polls to a PASS that arrives mid-wait and exits 0', async () => {
     const env = await devEnv(dirs);
     const bodies = [{ decision: null }, { decision: null }, { decision: 'PASS' }];
-    const stub = stubFetch((_request, index) => decided(bodies[index] ?? bodies[2]));
+    const stub = devStubFetch((_request, index) => decided(bodies[index] ?? bodies[2]));
     const out = capture();
 
     const { code, clock } = await invoke(
@@ -185,7 +187,7 @@ describe('gate --wait', () => {
   it('polls to a FAIL that arrives mid-wait and exits 1', async () => {
     const env = await devEnv(dirs);
     const bodies = [{ decision: null }, { decision: 'FAIL', reasons: ['suite api failed'] }];
-    const stub = stubFetch((_request, index) => decided(bodies[index] ?? bodies[1]));
+    const stub = devStubFetch((_request, index) => decided(bodies[index] ?? bodies[1]));
     const out = capture();
 
     const { code, clock } = await invoke(
@@ -295,15 +297,17 @@ describe('gate --wait', () => {
     let requests = 0;
     // The first poll answers pending; every later one hangs until the per-attempt budget
     // aborts it, which is what the deadline's 1 ms window does on a real network.
-    const fetchImpl: typeof fetch = (input, init) =>
-      new Promise<Response>((resolve, reject) => {
-        requests += 1;
-        if (requests === 1) {
-          resolve(decided({ decision: null }));
-          return;
-        }
-        hangUntilAborted(input, init, reject);
-      });
+    const fetchImpl = withTokenExchange(
+      (input, init) =>
+        new Promise<Response>((resolve, reject) => {
+          requests += 1;
+          if (requests === 1) {
+            resolve(decided({ decision: null }));
+            return;
+          }
+          hangUntilAborted(input, init, reject);
+        }),
+    );
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId, '--wait', '1s']), env, out, fetchImpl);
@@ -330,15 +334,17 @@ describe('gate --wait', () => {
       },
     };
     let requests = 0;
-    const fetchImpl: typeof fetch = (input, init) =>
-      new Promise<Response>((resolve, reject) => {
-        requests += 1;
-        if (requests === 1) {
-          resolve(decided({ decision: null }));
-          return;
-        }
-        hangUntilAborted(input, init, reject);
-      });
+    const fetchImpl = withTokenExchange(
+      (input, init) =>
+        new Promise<Response>((resolve, reject) => {
+          requests += 1;
+          if (requests === 1) {
+            resolve(decided({ decision: null }));
+            return;
+          }
+          hangUntilAborted(input, init, reject);
+        }),
+    );
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId, '--wait', '1s']), env, out, fetchImpl, {
@@ -376,7 +382,7 @@ describe('gate --wait', () => {
       return controller.signal;
     });
     let requests = 0;
-    const fetchImpl: typeof fetch = (input, init) => {
+    const fetchImpl = withTokenExchange((input, init) => {
       requests += 1;
       if (requests === 1) {
         return Promise.resolve(decided({ decision: null }));
@@ -385,7 +391,7 @@ describe('gate --wait', () => {
         requestTimers.pop()?.abort(new DOMException('the operation timed out', 'TimeoutError'));
         hangUntilAborted(input, init, reject);
       });
-    };
+    });
     const out = capture();
 
     try {
@@ -408,7 +414,7 @@ describe('gate --wait', () => {
     let requests = 0;
     // The first poll answers pending; the poll at the deadline sends its headers and then
     // stalls, so the deadline's 1 ms abort lands inside the body read, after the headers.
-    const fetchImpl: typeof fetch = (input, init) => {
+    const fetchImpl = withTokenExchange((input, init) => {
       requests += 1;
       if (requests === 1) {
         return Promise.resolve(decided({ decision: null }));
@@ -420,7 +426,7 @@ describe('gate --wait', () => {
           headers: { 'content-type': 'application/json' },
         }),
       );
-    };
+    });
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId, '--wait', '1s']), env, out, fetchImpl);
@@ -438,7 +444,7 @@ describe('gate --wait', () => {
   it('final poll 5xx after pending', async () => {
     const env = await devEnv(dirs);
     // The run answers pending once; every later poll is answered by a real 5xx.
-    const stub = stubFetch((_request, index) =>
+    const stub = devStubFetch((_request, index) =>
       index === 0 ? decided({ decision: null }) : refusal(503, 'internal', { retryable: true }),
     );
     const out = capture();
@@ -600,10 +606,12 @@ describe('gate --wait', () => {
 
   it('exits 3 when no poll ever produced an answer', async () => {
     const env = await devEnv(dirs);
-    const fetchImpl: typeof fetch = (input, init) =>
-      new Promise<Response>((_resolve, reject) => {
-        hangUntilAborted(input, init, reject);
-      });
+    const fetchImpl = withTokenExchange(
+      (input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          hangUntilAborted(input, init, reject);
+        }),
+    );
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId, '--wait', '1s']), env, out, fetchImpl);
@@ -614,7 +622,7 @@ describe('gate --wait', () => {
 
   it('exits 3 at the deadline when the server keeps answering 5xx', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => refusal(503, 'internal', { retryable: true }));
+    const stub = devStubFetch(() => refusal(503, 'internal', { retryable: true }));
     const out = capture();
 
     const { code, clock } = await invoke(
@@ -634,7 +642,7 @@ describe('gate --wait', () => {
 
   it('honours Retry-After on 429 and keeps polling', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch((_request, index) =>
+    const stub = devStubFetch((_request, index) =>
       index < 3 ? rateLimited('2') : decided({ decision: 'PASS' }),
     );
     const out = capture();
@@ -656,7 +664,7 @@ describe('gate --wait', () => {
 
   it('obeys a Retry-After longer than the poll cap', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch((_request, index) =>
+    const stub = devStubFetch((_request, index) =>
       index < 3 ? rateLimited('30') : decided({ decision: 'PASS' }),
     );
     const out = capture();
@@ -675,7 +683,7 @@ describe('gate --wait', () => {
 
   it('caps Retry-After at the callApi ceiling, not the poll cap', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch((_request, index) =>
+    const stub = devStubFetch((_request, index) =>
       index < 3 ? rateLimited('3600') : decided({ decision: 'PASS' }),
     );
     const out = capture();

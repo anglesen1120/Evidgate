@@ -36,6 +36,8 @@ const RUN_ID = 'run-e2e-attach';
 const PRODUCER_ID = 'pw-attach-0';
 /** Assembled at runtime so no token-shaped literal is stored in the spec (T78). */
 const devToken = ['evidgate', 'attach', 'e2e', 'dev'].join('-');
+/** The `ci_producer` token the dev token is exchanged for; the API calls carry this one. */
+const mintedToken = ['evidgate', 'attach', 'e2e', 'minted'].join('-');
 const EXECUTION_KEY = 'c3'.repeat(32);
 
 const TRACE_ARTIFACT = '66666666-6666-4666-8666-666666666666';
@@ -51,6 +53,7 @@ interface Store {
   mints: Array<{ kind: string; bearer: string | null }>;
   /** Authorization header of every presigned PUT (null when, as required, absent). */
   putAuth: Array<string | null>;
+  exchangeBodies: string[];
   /** Artifact ids that were committed. */
   completes: string[];
   /** The exact bytes the store received per artifact id. */
@@ -63,7 +66,13 @@ let cacheDir = '';
 let server: Server | undefined;
 let cliOutput = '';
 let runFailure: string | null = null;
-const store: Store = { mints: [], putAuth: [], completes: [], stored: new Map() };
+const store: Store = {
+  mints: [],
+  putAuth: [],
+  exchangeBodies: [],
+  completes: [],
+  stored: new Map(),
+};
 
 /** The mint body: the signed size and checksum are the true ones for the request's file. */
 function uploadUrlBody(input: {
@@ -111,6 +120,16 @@ beforeAll(async () => {
       const body = Buffer.concat(chunks);
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
       const authorization = request.headers.authorization ?? null;
+      if (request.method === 'POST' && url.pathname === '/v1/ci/token') {
+        store.exchangeBodies.push(body.toString('utf8'));
+        sendJson(response, 200, {
+          token: mintedToken,
+          expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+          project_id: '0198a000-0000-7000-8000-00000000d002',
+          permission_set: [],
+        });
+        return;
+      }
       if (request.method === 'POST' && url.pathname === '/v1/artifacts/upload-url') {
         const mint = JSON.parse(body.toString('utf8')) as {
           kind?: unknown;
@@ -298,7 +317,8 @@ describe('attachment upload e2e (real playwright test CLI)', () => {
 
     // The API calls carried the CI bearer; the presigned PUT never did (§8 S3).
     expect(store.mints.map((mint) => mint.kind).sort()).toEqual(['screenshot', 'trace']);
-    expect(store.mints.every((mint) => mint.bearer === `Bearer ${devToken}`)).toBe(true);
+    expect(store.mints.every((mint) => mint.bearer === `Bearer ${mintedToken}`)).toBe(true);
+    expect(store.exchangeBodies).toEqual([JSON.stringify({ ingest_token: devToken })]);
     expect(store.putAuth).toHaveLength(2);
     expect(store.putAuth.every((value) => value === null)).toBe(true);
     expect(store.completes.sort()).toEqual([SCREENSHOT_ARTIFACT, TRACE_ARTIFACT].sort());
@@ -306,6 +326,7 @@ describe('attachment upload e2e (real playwright test CLI)', () => {
     // Neither the token nor the presigned URL (or its signature) reached the spool.
     for (const text of spoolText()) {
       expect(text).not.toContain(devToken);
+      expect(text).not.toContain(mintedToken);
       expect(text).not.toContain('X-Amz-Signature');
       expect(text).not.toContain('/store/');
     }

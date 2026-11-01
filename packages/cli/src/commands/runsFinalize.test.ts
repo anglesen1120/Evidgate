@@ -3,7 +3,8 @@
 // 403 `producer_slot_taken` / 422 `unknown_producer` / 422 `manifest_invalid` surface
 // (exactly one request, code + `request_id` verbatim, T9), the refusals (`spool_missing`,
 // `unsent_events`), the purge / `--keep-spool` pair, the flag validation that runs before
-// any token work, the 401-only cache purge and the no-token-on-disk rule
+// any token work, the 401-only cache purge and the rule that the token lives only in the
+// cache — never in the spool or a stream
 // (04.2.3 §2, §5, §8, §9, §10; contracts/cli.md §5/§7/§11).
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -35,6 +36,12 @@ const shard = 1;
 const manifestHash = `sha256:${'a'.repeat(64)}`;
 /** The dev bearer the `EVIDGATE_DEV_TOKEN` path returns (never on disk, never printed). */
 const devToken = 'dev-token-value';
+/**
+ * The `ci_producer` token the dev exchange mints: the bearer the finalize sends. It is
+ * deliberately a different string from `devToken`, so a finalize that sent the dev token raw
+ * would fail the `Bearer ${mintedToken}` assertion.
+ */
+const mintedToken = 'egt_minted_ci_token';
 /** The namespace of the documented derived-key pre-image. */
 const keyVersion = 'evidgate.finalize-key.v1';
 
@@ -111,6 +118,43 @@ function refusal(status: number, code: string, requestId = 'req-3'): Response {
   return jsonResponse(status, {
     error: { code, message: 'the finalize was refused', request_id: requestId, retryable: false },
   });
+}
+
+/** The `project_id` the exchange echoes back (openapi `format: uuid`). */
+const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
+
+/**
+ * The `/v1/ci/token` answer for the dev source: the dev token is exchanged like an ingest
+ * credential, so the bearer the command sends is the token this body hands out. It mints
+ * `mintedToken`, a different string from the credential sent in, so an exchange that was
+ * skipped shows up as a `Bearer ${devToken}` mismatch, and expires 30 minutes out, inside the
+ * cache's 60 + 5 minute freshness window.
+ */
+function devTokenExchange(request: Request): Response | undefined {
+  return new URL(request.url).pathname === '/v1/ci/token'
+    ? jsonResponse(200, {
+        token: mintedToken,
+        expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+        project_id: exchangeProjectId,
+        permission_set: [],
+      })
+    : undefined;
+}
+
+/** A stub whose handler answers the command's own request, never the token exchange. */
+function stubDevFetch(handler: (request: Request) => Response | Promise<Response>): {
+  readonly fetchImpl: typeof fetch;
+  readonly calls: StubCall[];
+} {
+  return stubFetch((request) => devTokenExchange(request) ?? handler(request));
+}
+
+/**
+ * The command's own requests: everything but the `/v1/ci/token` exchange, so a count or an
+ * index means the same thing it did before the dev source gained a token exchange.
+ */
+function apiCalls(stub: { readonly calls: StubCall[] }): StubCall[] {
+  return stub.calls.filter((call) => new URL(call.request.url).pathname !== '/v1/ci/token');
 }
 
 /** The JSON body the stub recorded for `call`. */
@@ -209,7 +253,10 @@ describe('runs finalize', () => {
     return { spoolDir, producerDir: join(spoolDir, runId, producerId) };
   }
 
-  /** The M1 dev path: no exchange, no cache, no network (04.2.1 AC8). */
+  /**
+   * The dev path: the dev token is exchanged at `/v1/ci/token` like an ingest credential,
+   * the returned producer token is the bearer, and it is cached.
+   */
   async function devEnv(spoolDir: string, extra: Record<string, string> = {}) {
     const cacheDir = await tempDir();
     return {
@@ -241,7 +288,7 @@ describe('runs finalize', () => {
   it('finalizes_with_cursor_values', async () => {
     const { spoolDir } = await writeSpool({ spooled: 3, acked: 3 });
     const env = await devEnv(spoolDir);
-    const stub = stubFetch(() => accepted());
+    const stub = stubDevFetch(() => accepted());
     const out = capture();
 
     await expect(invoke(finalizeWith(), env, out, stub.fetchImpl)).resolves.toBe(0);
@@ -251,12 +298,13 @@ describe('runs finalize', () => {
         'last_sequence=3 count=3; reconcile accepted (asynchronous)\n',
     );
     expect(out.stderr.join('')).toBe('');
-    expect(stub.calls).toHaveLength(1);
-    const call = stub.calls[0];
+    const calls = apiCalls(stub);
+    expect(calls).toHaveLength(1);
+    const call = calls[0];
     expect(call?.request.method).toBe('POST');
     // `createApiClient` puts the SDK's `/v1` server prefix on the base URL.
     expect(new URL(call?.request.url ?? '').pathname).toBe(`/v1/runs/${runId}/finalize`);
-    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${devToken}`);
+    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     const key = call?.request.headers.get('idempotency-key') ?? '';
     expect(key).toMatch(/^[0-9a-f]{64}$/);
     expect(key).toBe(
@@ -290,7 +338,7 @@ describe('runs finalize', () => {
   it('json_prints_reconcile_accepted', async () => {
     const { spoolDir } = await writeSpool({ spooled: 2, acked: 2 });
     const env = await devEnv(spoolDir);
-    const stub = stubFetch(() => accepted());
+    const stub = stubDevFetch(() => accepted());
     const out = capture();
 
     await expect(invoke(finalizeWith(['--json']), env, out, stub.fetchImpl)).resolves.toBe(0);
@@ -306,7 +354,7 @@ describe('runs finalize', () => {
         state: 'reconcile_accepted',
       })}\n`,
     );
-    expect(stub.calls).toHaveLength(1);
+    expect(apiCalls(stub)).toHaveLength(1);
   });
 
   // AC6: the key is derived from the request values alone, so two separate invocations over
@@ -316,7 +364,7 @@ describe('runs finalize', () => {
     const keysOf = async (acked: number, hash = manifestHash): Promise<string> => {
       const { spoolDir } = await writeSpool({ spooled: acked, acked });
       const env = await devEnv(spoolDir);
-      const stub = stubFetch(() => accepted());
+      const stub = stubDevFetch(() => accepted());
       const out = capture();
       const argv = finalizeArgv([
         '--run',
@@ -329,8 +377,9 @@ describe('runs finalize', () => {
         hash,
       ]);
       await expect(invoke(argv, env, out, stub.fetchImpl)).resolves.toBe(0);
-      expect(stub.calls).toHaveLength(1);
-      return stub.calls[0]?.request.headers.get('idempotency-key') ?? '';
+      const calls = apiCalls(stub);
+      expect(calls).toHaveLength(1);
+      return calls[0]?.request.headers.get('idempotency-key') ?? '';
     };
 
     const first = await keysOf(2);
@@ -353,7 +402,7 @@ describe('runs finalize', () => {
     for (const { status, code } of cases) {
       const { spoolDir, producerDir } = await writeSpool({ spooled: 1, acked: 1 });
       const env = await devEnv(spoolDir);
-      const stub = stubFetch(() => refusal(status, code));
+      const stub = stubDevFetch(() => refusal(status, code));
       const out = capture();
 
       await expect(invoke(finalizeWith(), env, out, stub.fetchImpl)).resolves.toBe(3);
@@ -363,7 +412,7 @@ describe('runs finalize', () => {
       expect(text).toContain(`evidgate: error ${code}: `);
       expect(text).toContain('evidgate: request_id: req-3');
       // Exactly one request: a permanent refusal is never retried.
-      expect(stub.calls).toHaveLength(1);
+      expect(apiCalls(stub)).toHaveLength(1);
       // A refused finalize keeps every byte: the slot was not declared.
       expect(existsSync(producerDir)).toBe(true);
     }
@@ -409,7 +458,7 @@ describe('runs finalize', () => {
     const { spoolDir, producerDir } = await writeSpool({ spooled: 2, acked: 2 });
     expect(existsSync(producerDir)).toBe(true);
     const env = await devEnv(spoolDir);
-    const stub = stubFetch(() => accepted());
+    const stub = stubDevFetch(() => accepted());
     const out = capture();
 
     await expect(invoke(finalizeWith(), env, out, stub.fetchImpl)).resolves.toBe(0);
@@ -423,7 +472,7 @@ describe('runs finalize', () => {
   it('keep_spool_retains', async () => {
     const { spoolDir, producerDir } = await writeSpool({ spooled: 2, acked: 2 });
     const env = await devEnv(spoolDir);
-    const stub = stubFetch(() => accepted());
+    const stub = stubDevFetch(() => accepted());
 
     const first = capture();
     await expect(invoke(finalizeWith(['--keep-spool']), env, first, stub.fetchImpl)).resolves.toBe(
@@ -442,12 +491,13 @@ describe('runs finalize', () => {
     await expect(invoke(finalizeWith(['--keep-spool']), env, second, stub.fetchImpl)).resolves.toBe(
       0,
     );
-    expect(stub.calls).toHaveLength(2);
-    expect(stub.calls[1]?.request.headers.get('idempotency-key')).toBe(
-      stub.calls[0]?.request.headers.get('idempotency-key'),
+    const calls = apiCalls(stub);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.request.headers.get('idempotency-key')).toBe(
+      calls[0]?.request.headers.get('idempotency-key'),
     );
     // Identical cursor values, so the second request is byte-identical too.
-    expect(stub.calls[1]?.body.toString('utf8')).toBe(stub.calls[0]?.body.toString('utf8') ?? '');
+    expect(calls[1]?.body.toString('utf8')).toBe(calls[0]?.body.toString('utf8') ?? '');
   });
 
   // A purge that fails after a 202 is a stderr warning and still exits 0: the run IS
@@ -460,7 +510,7 @@ describe('runs finalize', () => {
     // away inside the stub (between the cursor read and the purge) makes `rm` fail with
     // EACCES on POSIX; win32 has no such mode and root bypasses it, so both skip.
     if (process.platform === 'win32' || process.getuid?.() === 0) return;
-    const stub = stubFetch(async () => {
+    const stub = stubDevFetch(async () => {
       await chmod(runDirectory, 0o500);
       return accepted();
     });
@@ -524,14 +574,15 @@ describe('runs finalize', () => {
     await writeFile(join(producerDir, writerLockFileName), writerLockText(exitedPid()), {
       mode: 0o600,
     });
-    const stub = stubFetch(() => accepted());
+    const stub = stubDevFetch(() => accepted());
     const out = capture();
 
     const code = await invoke(finalizeWith(), await devEnv(spoolDir), out, stub.fetchImpl);
 
     expect(code).toBe(0);
-    expect(stub.calls).toHaveLength(1);
-    expect(sentBody(stub.calls[0])).toMatchObject({
+    const calls = apiCalls(stub);
+    expect(calls).toHaveLength(1);
+    expect(sentBody(calls[0])).toMatchObject({
       producer_id: producerId,
       shard,
       last_sequence: 2,
@@ -544,7 +595,7 @@ describe('runs finalize', () => {
   it('keeps the spool when the reporter starts writing during the finalize request', async () => {
     const { spoolDir, producerDir } = await writeSpool({ spooled: 1, acked: 1 });
     // The reporter claims the producer between the cursor read and the purge.
-    const stub = stubFetch(async () => {
+    const stub = stubDevFetch(async () => {
       await writeFile(join(producerDir, writerLockFileName), writerLockText(process.pid), {
         mode: 0o600,
       });
@@ -730,7 +781,8 @@ describe('runs finalize', () => {
   it('transport_failure_keeps_spool', async () => {
     const { spoolDir, producerDir } = await writeSpool({ spooled: 1, acked: 1 });
     const env = await devEnv(spoolDir);
-    const stub = stubFetch(() => {
+    // The exchange answers, so the failure is the finalize's own transport error.
+    const stub = stubDevFetch(() => {
       throw new TypeError('network down');
     });
     const out = capture();
@@ -741,28 +793,51 @@ describe('runs finalize', () => {
     expect(out.stdout.join('')).toBe('');
     // A finalize is replay-safe (derived key, same body), so the transport failure is
     // retried up to the bounded attempt count before the command fails.
-    expect(stub.calls).toHaveLength(3);
+    expect(apiCalls(stub)).toHaveLength(3);
     expect(existsSync(producerDir)).toBe(true);
   });
 
-  // T78 / §8: the bearer never reaches the spool, the cache or the output.
-  it('token_never_written_or_printed', async () => {
+  // T78 / §8: the producer token reaches the cache and nothing else — not the spool, not a
+  // stream — and the dev credential it was exchanged from never leaves the environment.
+  it('exchanged_token_lives_only_in_the_cache', async () => {
     const { spoolDir, producerDir } = await writeSpool({ spooled: 2, acked: 2 });
     const env = await devEnv(spoolDir, { EVIDGATE_SPOOL_MAX_BYTES: '1048576' });
-    const stub = stubFetch(() => accepted());
+    const producerToken = 'egt_producer_token_for_finalize';
+    const stub = stubFetch((request) =>
+      new URL(request.url).pathname === '/v1/ci/token'
+        ? jsonResponse(200, {
+            token: producerToken,
+            expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+            project_id: exchangeProjectId,
+            permission_set: [],
+          })
+        : accepted(),
+    );
     const out = capture();
 
     await expect(invoke(finalizeWith(['--keep-spool']), env, out, stub.fetchImpl)).resolves.toBe(0);
 
+    // The exchanged token, not the dev credential, is the bearer.
+    expect(apiCalls(stub)[0]?.request.headers.get('authorization')).toBe(`Bearer ${producerToken}`);
     const everything = `${out.stdout.join('')}${out.stderr.join('')}`;
     expect(everything).not.toContain(devToken);
+    expect(everything).not.toContain(producerToken);
     for (const name of await readdir(producerDir)) {
       const content = await readFile(join(producerDir, name), 'utf8');
-      expect(content.includes(devToken), `token in ${name}`).toBe(false);
+      expect(content.includes(devToken), `dev token in ${name}`).toBe(false);
+      expect(content.includes(producerToken), `producer token in ${name}`).toBe(false);
     }
-    // The dev path writes no cache at all.
-    const cacheDir = String(env.EVIDGATE_CACHE_DIR);
-    expect(await readdir(cacheDir)).toEqual([]);
+    // The dev path now exchanges, so the cache holds exactly the exchanged token (and
+    // never the dev credential it was exchanged from).
+    const cached = await readCachedToken(resolveConfig({ env }));
+    expect(cached?.token).toBe(producerToken);
+    const cacheFiles = await readdir(String(env.EVIDGATE_CACHE_DIR));
+    expect(cacheFiles).toHaveLength(1);
+    const cacheText = await readFile(
+      join(String(env.EVIDGATE_CACHE_DIR), cacheFiles[0] ?? ''),
+      'utf8',
+    );
+    expect(cacheText).not.toContain(devToken);
   });
 });
 
