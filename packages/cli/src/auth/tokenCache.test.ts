@@ -267,7 +267,7 @@ describe('tokenCache', () => {
     expect((await stat(cacheDir)).mode & 0o777).toBe(0o700);
   });
 
-  it.skipIf(!posix)('reads as absent through a symlinked cache dir', async () => {
+  it.runIf(posix)('reads as absent through a symlinked cache dir', async () => {
     const config = cacheConfig(cacheDir);
     const realDir = join(root, 'real-dir');
     await mkdir(realDir, { mode: 0o700 });
@@ -277,7 +277,7 @@ describe('tokenCache', () => {
     await expect(readCachedToken(config)).resolves.toBeUndefined();
   });
 
-  it.skipIf(!posix)('refuses a symlinked cache dir given with a trailing slash', async () => {
+  it.runIf(posix)('refuses a symlinked cache dir given with a trailing slash', async () => {
     const realDir = join(root, 'real-dir');
     await mkdir(realDir, { mode: 0o700 });
     await symlink(realDir, cacheDir);
@@ -291,7 +291,7 @@ describe('tokenCache', () => {
     expect(await readdir(realDir)).toEqual([basename(tokenCachePath(config))]);
   });
 
-  it.skipIf(!posix)('reads as absent from a group/world-writable cache dir', async () => {
+  it.runIf(posix)('reads as absent from a group/world-writable cache dir', async () => {
     const config = cacheConfig(cacheDir);
     await mkdir(cacheDir, { mode: 0o700 });
     await writeFile(tokenCachePath(config), validBody, { mode: 0o600 });
@@ -303,7 +303,7 @@ describe('tokenCache', () => {
     await expect(readCachedToken(config)).resolves.toBeUndefined();
   });
 
-  it.skipIf(!posix)('refuses to write into a group/world-writable cache dir', async () => {
+  it.runIf(posix)('refuses to write into a group/world-writable cache dir', async () => {
     const config = cacheConfig(cacheDir);
     await mkdir(cacheDir, { mode: 0o700 });
     await chmod(cacheDir, 0o777);
@@ -335,7 +335,7 @@ describe('tokenCache', () => {
     );
   });
 
-  it.skipIf(!posix)('purges an orphan symlink without touching its target', async () => {
+  it.runIf(posix)('purges an orphan symlink without touching its target', async () => {
     const base = cacheConfig(cacheDir);
     const first = { ...base, ingestToken: 'ingest-one' };
     const rotated = { ...base, ingestToken: 'ingest-two' };
