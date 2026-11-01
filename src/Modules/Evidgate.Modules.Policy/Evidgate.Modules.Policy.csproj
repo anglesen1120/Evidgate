@@ -15,8 +15,13 @@
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Policy.Contracts\Evidgate.Modules.Policy.Contracts.csproj" />
     <!-- The frozen-evidence event this module consumes: its task type constant and payload (declared by the module
-         that writes the outbox row, so the two sides cannot drift). -->
+         that writes the outbox row, so the two sides cannot drift), and the run plan the evaluation judges evidence
+         against (module data is private, so the run's own tables are reached through this project). -->
     <ProjectReference Include="..\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
+    <!-- The pinned suite and the case behind each planned revision: Catalogue owns those tables. -->
+    <ProjectReference Include="..\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
+    <!-- The frozen revision and the attempt statuses its freeze stamp admits: Evidence owns those tables. -->
+    <ProjectReference Include="..\Evidgate.Modules.Evidence.Contracts\Evidgate.Modules.Evidence.Contracts.csproj" />
     <!-- The pure evaluator: no framework dependency, so the verdict is computed without a database. -->
     <ProjectReference Include="..\..\Evidgate.Evaluation\Evidgate.Evaluation.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
