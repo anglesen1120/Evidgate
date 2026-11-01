@@ -8,33 +8,26 @@ import { resetSecrets } from '../redact.js';
 import { perRequestTimeoutMs } from '../senderLimits.js';
 
 import { devStubFetch, exchangeBody } from './devExchange.testing.js';
-import type { GateOutcome } from './gateDecision.js';
 import { pollDecision } from './gatePoll.js';
 import {
   cacheDirs,
   capture,
   decided,
   devEnv,
+  evaluated,
   fakeClock,
   gateArgv,
   ingestEnv,
   invoke,
   jsonResponse,
+  pending,
+  pendingOutcome,
   refusal,
   runId,
   stubFetch,
   sum,
   withTokenExchange,
 } from './gate.kit.test.js';
-
-const pending: GateOutcome = {
-  decision: null,
-  completeness: null,
-  evaluationId: null,
-  mode: null,
-  url: null,
-  reasons: [],
-};
 
 function rateLimited(retryAfterSeconds: string): Response {
   return jsonResponse(
@@ -107,7 +100,7 @@ describe('gate --wait', () => {
 
   it('exits 2 for a pending run after a single poll when --wait is absent', async () => {
     const env = await devEnv(dirs);
-    const stub = devStubFetch(() => decided({ decision: null }));
+    const stub = devStubFetch(() => decided(pending()));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -122,7 +115,7 @@ describe('gate --wait', () => {
 
   it('exits 2 when the run is still pending at the deadline, after a final poll', async () => {
     const env = await devEnv(dirs);
-    const stub = devStubFetch(() => decided({ decision: null }));
+    const stub = devStubFetch(() => decided(pending()));
     const out = capture();
 
     const { code, clock } = await invoke(
@@ -145,7 +138,7 @@ describe('gate --wait', () => {
 
   it('counts a decision that arrives at the deadline', async () => {
     const env = await devEnv(dirs);
-    const bodies = [{ decision: null }, { decision: null }, { decision: 'PASS' }];
+    const bodies = [pending(), pending(), evaluated({ decision: 'PASS' })];
     const stub = devStubFetch((_request, index) => decided(bodies[index] ?? bodies[2]));
     const out = capture();
 
@@ -165,7 +158,7 @@ describe('gate --wait', () => {
 
   it('polls to a PASS that arrives mid-wait and exits 0', async () => {
     const env = await devEnv(dirs);
-    const bodies = [{ decision: null }, { decision: null }, { decision: 'PASS' }];
+    const bodies = [pending(), pending(), evaluated({ decision: 'PASS' })];
     const stub = devStubFetch((_request, index) => decided(bodies[index] ?? bodies[2]));
     const out = capture();
 
@@ -185,7 +178,7 @@ describe('gate --wait', () => {
 
   it('polls to a FAIL that arrives mid-wait and exits 1', async () => {
     const env = await devEnv(dirs);
-    const bodies = [{ decision: null }, { decision: 'FAIL', reasons: ['suite api failed'] }];
+    const bodies = [pending(), evaluated({ decision: 'FAIL', reasons: ['suite api failed'] })];
     const stub = devStubFetch((_request, index) => decided(bodies[index] ?? bodies[1]));
     const out = capture();
 
@@ -213,9 +206,11 @@ describe('gate --wait', () => {
       }
       decisions += 1;
       if (decisions === 1) {
-        return decided({ decision: null });
+        return decided(pending());
       }
-      return decisions === 2 ? refusal(401, 'token_invalid') : decided({ decision: 'PASS' });
+      return decisions === 2
+        ? refusal(401, 'token_invalid')
+        : decided(evaluated({ decision: 'PASS' }));
     });
     const out = capture();
 
@@ -265,7 +260,7 @@ describe('gate --wait', () => {
         return jsonResponse(200, exchangeBody(`egt-token-${exchanges}`));
       }
       decisions += 1;
-      return decisions === 1 ? decided({ decision: null }) : refusal(401, 'token_invalid');
+      return decisions === 1 ? decided(pending()) : refusal(401, 'token_invalid');
     });
     const out = capture();
 
@@ -301,7 +296,7 @@ describe('gate --wait', () => {
         new Promise<Response>((resolve, reject) => {
           requests += 1;
           if (requests === 1) {
-            resolve(decided({ decision: null }));
+            resolve(decided(pending()));
             return;
           }
           hangUntilAborted(input, init, reject);
@@ -338,7 +333,7 @@ describe('gate --wait', () => {
         new Promise<Response>((resolve, reject) => {
           requests += 1;
           if (requests === 1) {
-            resolve(decided({ decision: null }));
+            resolve(decided(pending()));
             return;
           }
           hangUntilAborted(input, init, reject);
@@ -384,7 +379,7 @@ describe('gate --wait', () => {
     const fetchImpl = withTokenExchange((input, init) => {
       requests += 1;
       if (requests === 1) {
-        return Promise.resolve(decided({ decision: null }));
+        return Promise.resolve(decided(pending()));
       }
       return new Promise<Response>((_resolve, reject) => {
         requestTimers.pop()?.abort(new DOMException('the operation timed out', 'TimeoutError'));
@@ -416,7 +411,7 @@ describe('gate --wait', () => {
     const fetchImpl = withTokenExchange((input, init) => {
       requests += 1;
       if (requests === 1) {
-        return Promise.resolve(decided({ decision: null }));
+        return Promise.resolve(decided(pending()));
       }
       const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
       return Promise.resolve(
@@ -444,7 +439,7 @@ describe('gate --wait', () => {
     const env = await devEnv(dirs);
     // The run answers pending once; every later poll is answered by a real 5xx.
     const stub = devStubFetch((_request, index) =>
-      index === 0 ? decided({ decision: null }) : refusal(503, 'internal', { retryable: true }),
+      index === 0 ? decided(pending()) : refusal(503, 'internal', { retryable: true }),
     );
     const out = capture();
 
@@ -493,7 +488,7 @@ describe('gate --wait', () => {
       }
       decisions += 1;
       if (decisions === 1) {
-        return Promise.resolve(decided({ decision: null }));
+        return Promise.resolve(decided(pending()));
       }
       // The 401 lands 900 ms into the 2 s wait, so the refresh has 100 ms to answer in.
       time += 900;
@@ -578,7 +573,7 @@ describe('gate --wait', () => {
       }
       decisions += 1;
       if (decisions === 1) {
-        return Promise.resolve(decided({ decision: null }));
+        return Promise.resolve(decided(pending()));
       }
       time += 900;
       return Promise.resolve(refusal(401, 'token_invalid'));
@@ -642,7 +637,7 @@ describe('gate --wait', () => {
   it('honours Retry-After on 429 and keeps polling', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch((_request, index) =>
-      index < 3 ? rateLimited('2') : decided({ decision: 'PASS' }),
+      index < 3 ? rateLimited('2') : decided(evaluated({ decision: 'PASS' })),
     );
     const out = capture();
 
@@ -664,7 +659,7 @@ describe('gate --wait', () => {
   it('obeys a Retry-After longer than the poll cap', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch((_request, index) =>
-      index < 3 ? rateLimited('30') : decided({ decision: 'PASS' }),
+      index < 3 ? rateLimited('30') : decided(evaluated({ decision: 'PASS' })),
     );
     const out = capture();
 
@@ -683,7 +678,7 @@ describe('gate --wait', () => {
   it('caps Retry-After at the callApi ceiling, not the poll cap', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch((_request, index) =>
-      index < 3 ? rateLimited('3600') : decided({ decision: 'PASS' }),
+      index < 3 ? rateLimited('3600') : decided(evaluated({ decision: 'PASS' })),
     );
     const out = capture();
 
@@ -707,7 +702,7 @@ describe('gate --wait', () => {
       deps: { now: clock.now, sleep: clock.sleep, random: () => 0.9 },
       next: () => {
         polls += 1;
-        return Promise.resolve({ kind: 'body', outcome: pending });
+        return Promise.resolve({ kind: 'body', outcome: pendingOutcome });
       },
     });
 
@@ -746,7 +741,7 @@ describe('gate --wait', () => {
           polls += 1;
           return Promise.resolve(
             polls === 1
-              ? { kind: 'body', outcome: pending }
+              ? { kind: 'body', outcome: pendingOutcome }
               : { kind: 'transient', error: failure },
           );
         },

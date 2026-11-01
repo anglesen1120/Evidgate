@@ -133,7 +133,7 @@ describe('command registry', () => {
   });
 
   // `gate` takes a single-word name and the two value options the ticket contract names; the
-  // help line must also say that the extra `--json` members are fields pending contract.
+  // help line names the command, and the widened decision body is read, not described there.
   it('resolves gate with its single-use options and lists it in the help text', () => {
     expect(resolveCommand(['gate'])).toMatchObject({
       command: commandRegistry['gate'],
@@ -155,7 +155,6 @@ describe('command registry', () => {
       multiple: true,
     });
     expect(usageText).toMatch(/\n {2}gate {2,}read a run decision/);
-    expect(usageText).toContain('fields pending contract');
   });
 
   // CR8 (S54): the spool surface is lazy, so only the two spool commands force it in their

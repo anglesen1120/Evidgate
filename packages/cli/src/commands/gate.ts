@@ -70,9 +70,7 @@ type DecisionAttempt = PollStep | { readonly kind: 'unauthorized'; readonly erro
 
 export const gateCommand: CommandDefinition = {
   name: 'gate',
-  summary:
-    'read a run decision as an exit code (--json completeness/evaluation_id/mode/url ' +
-    'are fields pending contract)',
+  summary: 'read a run decision as an exit code (--json prints the decision body)',
   requireToken: true,
   options: {
     // `multiple: true` is what makes a repetition observable: with the default `false`

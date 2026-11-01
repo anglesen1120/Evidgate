@@ -2413,7 +2413,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Decision'
+                $ref: '#/components/schemas/ReleaseDecision'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -8091,9 +8091,11 @@ components:
           enum: [push, pull_request, schedule, manual, dispatch, null]
         is_fork:
           type: boolean
-    Decision:
+    ReleaseDecision:
       type: object
-      description: Evaluation decision or `pending` (00 §8.5/§9.3); `decision` values are upper case (00 §7).
+      description: >-
+        Release decision body of `GET /releases/{id}/decision` (00 §8.5/§9.3). Not reconciled
+        with the run body `Decision`; the release story owns its shape.
       properties:
         decision:
           type: [string, 'null']
@@ -8105,6 +8107,110 @@ components:
           type: array
           items:
             type: string
+    Decision:
+      type: object
+      description: >-
+        Body of `GET /runs/{r}/decision`: one shape for an evaluated and a pending run. Every
+        member is required; a pending run has `status: pending` and null in every other member
+        except `url`. Evaluated members are copied from one immutable live `evaluation` row.
+      required:
+        - status
+        - decision
+        - evaluation_id
+        - evidence_revision
+        - completeness
+        - outcome
+        - missing
+        - reasons
+        - policy_hash
+        - manifest_hash
+        - evaluator_version
+        - mode
+        - url
+      properties:
+        status:
+          type: string
+          enum: [pending, evaluated]
+          description: '`pending` when the run has no live evaluation row.'
+        decision:
+          type: [string, 'null']
+          enum: [PASS, FAIL, INCONCLUSIVE, null]
+          description: null while pending, never a default; UPPER per 00 §7
+        evaluation_id:
+          type: [string, 'null']
+          format: uuid
+        evidence_revision:
+          type: [integer, 'null']
+          description: '`revision_no` of the frozen evidence revision that was evaluated.'
+        completeness:
+          type: [string, 'null']
+          enum: [complete, incomplete, null]
+        outcome:
+          type: [string, 'null']
+          enum: [all_passed, has_failures, no_results, null]
+        missing:
+          type: [array, 'null']
+          description: Null while pending, never `[]`; closed eight-code list.
+          items:
+            type: string
+            enum:
+              - missing_shard
+              - count_mismatch
+              - artifact_missing
+              - build_mismatch
+              - unknown_status
+              - setup_error
+              - stale_epoch
+              - missing_result
+        reasons:
+          type: [array, 'null']
+          items:
+            type: string
+        policy_hash:
+          type: [string, 'null']
+        manifest_hash:
+          type: [string, 'null']
+        evaluator_version:
+          type: [string, 'null']
+        mode:
+          type: [string, 'null']
+          enum: [live, null]
+          description: Only `live` rows are served; shadow rows never appear here.
+        url:
+          type: [string, 'null']
+          format: uri
+          description: Run page URL; null when the deployment has no public base URL.
+      allOf:
+        - if:
+            properties:
+              status:
+                const: pending
+          then:
+            properties:
+              decision: { type: 'null' }
+              evaluation_id: { type: 'null' }
+              evidence_revision: { type: 'null' }
+              completeness: { type: 'null' }
+              outcome: { type: 'null' }
+              missing: { type: 'null' }
+              reasons: { type: 'null' }
+              policy_hash: { type: 'null' }
+              manifest_hash: { type: 'null' }
+              evaluator_version: { type: 'null' }
+              mode: { type: 'null' }
+          else:
+            properties:
+              decision: { type: string }
+              evaluation_id: { type: string }
+              evidence_revision: { type: integer }
+              completeness: { type: string }
+              outcome: { type: string }
+              missing: { type: array, items: { type: string } }
+              reasons: { type: array, items: { type: string } }
+              policy_hash: { type: string }
+              manifest_hash: { type: string }
+              evaluator_version: { type: string }
+              mode: { type: string }
     EventBatch:
       type: object
       description: >-
