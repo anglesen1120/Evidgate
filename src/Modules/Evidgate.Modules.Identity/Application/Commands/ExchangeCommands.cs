@@ -16,10 +16,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Evidgate.Modules.Identity.Application.Commands;
 
-/// <summary>The permissions an exchange may mint: a GitHub token always gets the whole <c>ci_producer</c> set (AC6).</summary>
+/// <summary>
+/// The permissions an exchange may mint: a GitHub token always gets the whole <c>ci_producer</c> set (AC6), which
+/// includes the read of its own project's run decision so the gate command can use the same credential.
+/// </summary>
 internal static class CiProducerPermissions
 {
-    public static readonly IReadOnlyList<string> Set = [Permissions.Run.Create, Permissions.Event.Write, Permissions.Artifact.Write];
+    public static readonly IReadOnlyList<string> Set =
+        [Permissions.Artifact.Write, Permissions.Decision.Read, Permissions.Event.Write, Permissions.Run.Create];
 }
 
 /// <summary>

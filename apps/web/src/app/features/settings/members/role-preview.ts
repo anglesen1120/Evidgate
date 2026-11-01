@@ -214,7 +214,7 @@ export const BUILTIN_ROLE_GRANTS: ReadonlyMap<string, readonly string[]> = new M
       'webhook:write',
     ],
   ],
-  ['ci_producer', ['artifact:write', 'event:write', 'run:create']],
+  ['ci_producer', ['artifact:write', 'decision:read', 'event:write', 'run:create']],
   ['agent', ['artifact:write', 'event:write', 'job:claim', 'job:execute']],
   ['platform_operator', ['support:grant', 'support:read']],
   ['billing_operator', ['billing:read', 'billing:write']],

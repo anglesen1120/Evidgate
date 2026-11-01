@@ -167,8 +167,8 @@
       "code": "ci_producer",
       "name": "CI producer",
       "kind": "service",
-      "description": "Service identity minted per CI job for exactly one project: {run:create, event:write, artifact:write} (FR-02-7, AC4). It cannot approve, read other projects or change policy.",
-      "permissions": ["artifact:write", "event:write", "run:create"]
+      "description": "Service identity minted per CI job for exactly one project: {run:create, event:write, artifact:write, decision:read} (FR-02-7, AC4). It reads the decision of its own project's runs, so a CI gate can wait for one, and cannot approve, read another project or change policy.",
+      "permissions": ["artifact:write", "decision:read", "event:write", "run:create"]
     },
     {
       "code": "agent",

@@ -1010,7 +1010,7 @@ export type IngestTokenListResponse = {
 export type CreateIngestTokenRequest = {
     name: string;
     /**
-     * Subset of the permission codes `event:write`, `artifact:write` and `run:create`; default all three.
+     * Subset of the permission codes `event:write`, `artifact:write`, `run:create` and `decision:read`; default all four.
      */
     scopes?: Array<string> | null;
     expires_at?: string | null;
