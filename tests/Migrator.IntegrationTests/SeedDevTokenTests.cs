@@ -36,7 +36,7 @@ public sealed class SeedDevTokenTests
         run.Error.ShouldBeEmpty();
         run.Output.ShouldContain(DevSeedToken.ShownOnceNote);
         // The scopes line is printed from the minted row, so the print and the stored row cannot disagree.
-        run.Output.ShouldContain("(scopes: artifact:write, event:write, run:create)");
+        run.Output.ShouldContain("(scopes: artifact:write, decision:read, event:write, run:create)");
         run.Error.ShouldNotContain(token);
         run.Error.ShouldNotContain("egt_");
 
@@ -48,7 +48,7 @@ public sealed class SeedDevTokenTests
         (await _harness.Fixture.ScalarAsync<string>(
             database,
             "select string_agg(scope, ',' order by scope) from public.ingest_token t, unnest(t.scopes) as scope"))
-            .ShouldBe("artifact:write,event:write,run:create");
+            .ShouldBe("artifact:write,decision:read,event:write,run:create");
         (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token where expires_at is null and revoked_at is null")).ShouldBe(1);
 
         // Only the HMAC is stored: token_hmac is exactly HMAC-SHA256(pepper, secret), and the secret half appears in no

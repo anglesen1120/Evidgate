@@ -11,11 +11,10 @@
 -- test and the minted-set tests pin that trio together (`ServiceRoleCeiling_MatchesTheCatalogue`,
 -- `CiProducerScopeTests`).
 --
--- WHAT: two rows/objects change.
+-- WHAT: one grant row and one constraint change.
 --
---   * `role_permission` gains (`ci_producer`, `decision:read`), and `role.description` is refreshed to the
---     catalogue's own text so the seeded role and `contracts/permissions.json` keep saying the same thing
---     (`SeedMatrixTests.RolesMatchOverview` diffs the grants; the description is the file's own string).
+--   * `role_permission` gains (`ci_producer`, `decision:read`); `SeedMatrixTests.RolesMatchOverview` diffs the
+--     grants against `contracts/permissions.json`.
 --   * `ingest_token_scopes_check` widens from three codes to four. An ingest token's menu is the `ci_producer`
 --     set (02.4.2 §4): a token that could not carry `decision:read` would mint a producer token without it, so
 --     the constraint and `IngestTokenScopes.All` move together. Existing rows already satisfy the wider check,
@@ -36,18 +35,12 @@ declare
   grants jsonb := '[
     {"role_code": "ci_producer", "permission_code": "decision:read"}
   ]'::jsonb;
-  role_description constant text := 'Service identity minted per CI job for exactly one project: {run:create, event:write, artifact:write, decision:read} (FR-02-7, AC4). It reads the decision of its own project''s runs, so a CI gate can wait for one, and cannot approve, read another project or change policy.';
 begin
   insert into public.role_permission (id, org_id, role_id, permission_code)
   select uuidv7(), null, r.id, granted.permission_code
     from jsonb_to_recordset(grants) as granted(role_code text, permission_code text)
     join public.role r on r.org_id is null and r.code = granted.role_code
   on conflict (role_id, permission_code) do nothing;
-
-  -- Only when the text differs: the catalogue seed block is re-applied after every harness reset, and a no-op
-  -- UPDATE would bump `version`/`updated_at` through the shared trigger on each re-run.
-  update public.role set description = role_description
-   where org_id is null and code = 'ci_producer' and description is distinct from role_description;
 end
 $seed$;
 

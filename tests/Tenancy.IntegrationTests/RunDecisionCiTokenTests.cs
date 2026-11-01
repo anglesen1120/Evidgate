@@ -50,7 +50,8 @@ public sealed class RunDecisionCiTokenTests
         own.Text("decision").ShouldBe("PASS");
         own.Text("evaluation_id").ShouldBe(evaluationId.ToString("D"));
 
-        // The unknown-run body is the yardstick every out-of-scope answer has to match byte for byte.
+        // The unknown-run envelope is the yardstick every out-of-scope answer has to match character for character,
+        // apart from the per-request `request_id`.
         var unknown = await GetAsync(world.Client, Guid.CreateVersion7(), Bearer(token));
         unknown.Status.ShouldBe(HttpStatusCode.NotFound);
         unknown.ErrorCode.ShouldBe("not_found");
@@ -60,7 +61,7 @@ public sealed class RunDecisionCiTokenTests
         var siblingScope = await MintAsync(world.Client, world with { Project = siblingProject });
         var sibling = await GetAsync(world.Client, runId, Bearer(siblingScope));
         sibling.Status.ShouldBe(HttpStatusCode.NotFound);
-        sibling.Body.GetRawText().ShouldBe(unknown.Body.GetRawText(), "a sibling project's run is not an existence oracle");
+        ErrorEnvelope(sibling).ShouldBe(ErrorEnvelope(unknown), "a sibling project's run is not an existence oracle");
 
         // A foreign org's run, read with the first project's token.
         var foreignUser = Guid.CreateVersion7();
@@ -69,7 +70,7 @@ public sealed class RunDecisionCiTokenTests
         var foreign = (await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, foreignOrg, 1)).RunId;
         var crossOrg = await GetAsync(world.Client, foreign, Bearer(token));
         crossOrg.Status.ShouldBe(HttpStatusCode.NotFound);
-        crossOrg.Body.GetRawText().ShouldBe(unknown.Body.GetRawText(), "a foreign run is not an existence oracle");
+        ErrorEnvelope(crossOrg).ShouldBe(ErrorEnvelope(unknown), "a foreign run is not an existence oracle");
     }
 
     /// <summary>
@@ -246,5 +247,24 @@ public sealed class RunDecisionCiTokenTests
         Guid Project)
     {
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
+    }
+
+    /// <summary>
+    /// The whole error envelope as comparable text, with <c>request_id</c> normalised because it differs per request:
+    /// every other member — code, message, details and retryable — must match to the character. The same shape as the
+    /// normaliser in <c>RunDecisionApiTests.NotFound.cs</c>, which is private to its own partial class.
+    /// </summary>
+    private static string ErrorEnvelope(ApiAnswer answer)
+    {
+        var error = answer.Body.GetProperty("error");
+        var requestId = error.GetProperty("request_id").GetString();
+
+        return string.Join(
+            "\n",
+            "code=" + error.GetProperty("code").GetString(),
+            "message=" + error.GetProperty("message").GetString(),
+            "retryable=" + error.GetProperty("retryable").GetBoolean(),
+            "details=" + error.GetProperty("details").GetRawText(),
+            "request_id=" + (string.IsNullOrEmpty(requestId) ? "<absent>" : "<set>"));
     }
 }

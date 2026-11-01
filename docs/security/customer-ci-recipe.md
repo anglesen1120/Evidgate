@@ -95,7 +95,7 @@ For a CI that cannot present an OIDC token the binding accepts, a project admin 
 | Form `egt_<12-char prefix>_<base64url secret>`; the secret is 256 random bits from the system CSPRNG. | `src/Modules/Evidgate.Modules.Identity/Ci/IngestTokenFormat.cs:7-8,41-43` |
 | Storage: only the public prefix (unique platform-wide) and `HMAC-SHA256(pepper_vN, secret)` with its `pepper_version`; a database dump holds nothing usable. | `migrations/0018_identity_ingest_token.sql:3-6,18-20,33,36-37`; `IngestTokenCommands.cs:113-114` |
 | Exchange: prefix lookup pre-tenant, then the secret is verified with `CryptographicOperations.FixedTimeEquals`; a retired pepper version fails like an unknown token; revoked/expired tokens are 401 `token_revoked`/`token_expired`. | `CiTokenEndpoints.cs:156-181`; `ExchangeCommands.cs:215-229` |
-| Scope: the token belongs to one project (`project_id` foreign key) and carries a subset of `event:write`, `artifact:write`, `run:create`; the minted `ci_producer` carries only those scopes inside the service ceiling, for that one project. | `migrations/0018_identity_ingest_token.sql:16,34,39-40`; `ExchangeCommands.cs:231-238` |
+| Scope: the token belongs to one project (`project_id` foreign key) and carries a subset of `event:write`, `artifact:write`, `run:create`, `decision:read`; the minted `ci_producer` carries only those scopes inside the service ceiling, for that one project. | `migrations/0018_identity_ingest_token.sql:16,34,39-40`; `ExchangeCommands.cs:231-238` |
 
 How to provide it (00 §5.7 S3):
 

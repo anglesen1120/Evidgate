@@ -167,8 +167,8 @@ needs no dev-stack endpoint; to point the same assertions at the dev bucket, use
 mints one dev ingest token and one sample policy revision for the dev project, both
 through the real commands on the application role:
 
-- token `dev-seed`, bound to `dev-project`, scopes `artifact:write`, `event:write` and
-  `run:create`, no expiry (local only, gone with the volume);
+- token `dev-seed`, bound to `dev-project`, scopes `artifact:write`, `decision:read`,
+  `event:write` and `run:create`, no expiry (local only, gone with the volume);
 - one sample `policy-revision.v1` revision for `dev-project`, so the project has
   policy content to activate. `CreatePolicyRevisionCommand` appends a **draft**
   revision (activation is a separate command), and a run create falls back to the
