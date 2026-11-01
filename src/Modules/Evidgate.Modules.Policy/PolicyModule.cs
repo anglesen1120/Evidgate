@@ -1,6 +1,10 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Evaluation;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Policy.Application;
+using Evidgate.Modules.Policy.Application.Evaluation;
 using Evidgate.Modules.Policy.Application.Queries;
 using Evidgate.Modules.Policy.Contracts;
 using Evidgate.Modules.Policy.Infrastructure.Persistence;
@@ -46,6 +50,17 @@ internal static class PolicyModule
 
         // 07.3.1-T1: the waiver create validates `expires_at` against the server clock (00 §5.5 C2).
         services.TryAddSingleton(TimeProvider.System);
+
+        // The evaluator is pure and stateless, so one instance serves every attempt; it is registered here rather than
+        // in the evaluation library because only this module composes it.
+        services.TryAddSingleton<IPolicyEvaluator>(_ => new PolicyEvaluator());
+
+        // The run evaluation: the input reader and the command handler run inside the caller's tenant scope (the task
+        // consumer's), and the worker's frozen-evidence task dispatches the handler directly — a nested Mediator send
+        // would try to open a second tenant scope in one async flow.
+        services.TryAddScoped<EvaluationInputReader>();
+        services.TryAddScoped<EvaluateRunCommandHandler>();
+        services.AddTaskHandler<EvidenceRevisionFrozenPayload, EvidenceRevisionFrozenTaskHandler>();
 
         return services;
     }

@@ -51,4 +51,20 @@ public interface ITenantScope : IAsyncDisposable
     /// without this call rolls back.
     /// </summary>
     Task CommitAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registers work to run after <see cref="CommitAsync"/> succeeded — a metric for
+    /// committed work, never a write: the action runs outside the transaction, so its
+    /// statement would not be part of it.
+    /// </summary>
+    /// <param name="action">Runs once, after the commit; never when the scope rolls back or is disposed uncommitted.</param>
+    /// <remarks>
+    /// A handler cannot record "this row is durable" itself, because it does not own the
+    /// commit: the pipeline (<see cref="Pipeline.Behaviours.TenantTransactionBehaviour"/>)
+    /// and the task consumer commit after the handler returned. Registering the action
+    /// here is what keeps a measurement from counting an attempt whose row the next
+    /// failure rolled back.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The scope is not open, so nothing would ever run the action.</exception>
+    void AfterCommit(Action action);
 }

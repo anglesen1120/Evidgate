@@ -1069,6 +1069,12 @@
       "evidgate.buildingblocks.sharedkernel": {
         "type": "Project"
       },
+      "evidgate.evaluation": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )"
+        }
+      },
       "evidgate.migrator": {
         "type": "Project",
         "dependencies": {
@@ -1254,6 +1260,8 @@
           "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Evidgate.Evaluation": "[1.0.0, )",
+          "Evidgate.Modules.Orchestrator.Contracts": "[1.0.0, )",
           "Evidgate.Modules.Policy.Contracts": "[1.0.0, )",
           "Mediator.Abstractions": "[3.0.2, )",
           "Microsoft.EntityFrameworkCore": "[10.0.14, )",
