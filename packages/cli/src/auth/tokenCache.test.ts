@@ -277,6 +277,20 @@ describe('tokenCache', () => {
     await expect(readCachedToken(config)).resolves.toBeUndefined();
   });
 
+  it.skipIf(!posix)('refuses a symlinked cache dir given with a trailing slash', async () => {
+    const realDir = join(root, 'real-dir');
+    await mkdir(realDir, { mode: 0o700 });
+    await symlink(realDir, cacheDir);
+    const config = cacheConfig(`${cacheDir}/`);
+    await writeFile(join(realDir, basename(tokenCachePath(config))), validBody, { mode: 0o600 });
+
+    await expect(readCachedToken(config)).resolves.toBeUndefined();
+    await expect(
+      writeCachedToken(config, { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' }),
+    ).rejects.toMatchObject({ code: 'token_cache_error' });
+    expect(await readdir(realDir)).toEqual([basename(tokenCachePath(config))]);
+  });
+
   it.skipIf(!posix)('reads as absent from a group/world-writable cache dir', async () => {
     const config = cacheConfig(cacheDir);
     await mkdir(cacheDir, { mode: 0o700 });

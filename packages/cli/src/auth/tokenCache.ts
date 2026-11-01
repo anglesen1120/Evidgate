@@ -23,7 +23,7 @@ import {
   unlink,
   type FileHandle,
 } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { resolveTokenSource, type ResolvedConfig } from '../config.js';
 import { CliError } from '../errors.js';
@@ -192,30 +192,40 @@ function dirIsSafe(stats: Stats): boolean {
   return typeof process.getuid !== 'function' || stats.uid === process.getuid();
 }
 
+// `resolve` drops a trailing separator, which would otherwise make `lstat` follow a symlink.
 async function cacheDirTrusted(cacheDir: string): Promise<boolean> {
   if (process.platform === 'win32') {
     return true;
   }
-  return dirIsSafe(await lstat(cacheDir));
+  return dirIsSafe(await lstat(resolve(cacheDir)));
+}
+
+function isBoundEntry(destination: string, name: string): boolean {
+  const prefix = `ci-token.${destination}.`;
+  return name.startsWith(prefix) && boundNameSuffix.test(name.slice(prefix.length));
 }
 
 /**
  * After a successful write, drops this destination's entries minted under another credential.
  * Only names of the bound-file shape for this destination are considered, `rm` unlinks a
  * symlink without following it, and a failure never fails the write that just succeeded.
+ * Two jobs sharing one cache dir and destination under different credentials evict each
+ * other's entry; that costs an extra exchange, so give such jobs separate cache dirs.
  */
 async function purgeRotatedEntries(config: TokenCacheConfig, keep: string): Promise<void> {
-  const prefix = `ci-token.${destinationKey(config)}.`;
+  const destination = destinationKey(config);
+  let names: string[];
   try {
-    for (const name of await readdir(config.cacheDir)) {
-      const orphan = name.startsWith(prefix) && boundNameSuffix.test(name.slice(prefix.length));
-      const path = join(config.cacheDir, name);
-      if (orphan && path !== keep) {
-        await rm(path, { force: true });
-      }
-    }
+    names = await readdir(config.cacheDir);
   } catch {
-    // The fresh token is already in place; a stale sibling is removed by the next write or logout.
+    return;
+  }
+  for (const name of names) {
+    const path = join(config.cacheDir, name);
+    if (isBoundEntry(destination, name) && path !== keep) {
+      // The fresh token is already in place; a stale sibling goes on the next write or logout.
+      await rm(path, { force: true }).catch(() => undefined);
+    }
   }
 }
 
@@ -223,9 +233,9 @@ async function purgeRotatedEntries(config: TokenCacheConfig, keep: string): Prom
  * Writes the cache file atomically: a `0600` temp file in the same directory (opened
  * `wx`, then `chmod`ed so the umask cannot widen it) is renamed over the target, which
  * replaces a symlink rather than following it. The directory must be a real directory
- * owned by the current user; a symlink or foreign-owned directory is refused and a
- * loose mode is tightened to `0700`. Any failure is `token_cache_error` and the
- * temp file is removed best-effort; the message never carries a token value.
+ * owned by the current user and not group/world-writable, else the write is refused; a
+ * group/world-readable mode is tightened to `0700`. Any failure is `token_cache_error` and
+ * the temp file is removed best-effort; the message never carries a token value.
  */
 export async function writeCachedToken(
   config: TokenCacheConfig,
@@ -235,9 +245,9 @@ export async function writeCachedToken(
   const temp = join(config.cacheDir, `.ci-token.${randomUUID()}.tmp`);
   try {
     await mkdir(config.cacheDir, { recursive: true, mode: 0o700 });
-    // Refuse a symlinked or foreign-owned directory, and tighten a loose mode.
+    // Refuse a symlinked, foreign-owned or writable directory; tighten a readable one.
     if (process.platform !== 'win32') {
-      const dirStats = await lstat(config.cacheDir);
+      const dirStats = await lstat(resolve(config.cacheDir));
       if (!dirIsSafe(dirStats)) {
         throw new CliError('could not write the token cache', { code: 'token_cache_error' });
       }
@@ -268,7 +278,7 @@ export async function writeCachedToken(
  * and only the temp shape that writer mints is claimed; nothing is read to decide.
  */
 export async function deleteCachedToken(config: TokenCacheConfig): Promise<void> {
-  const prefix = `ci-token.${destinationKey(config)}.`;
+  const destination = destinationKey(config);
   try {
     const names = await readdir(config.cacheDir).catch((error: unknown) => {
       const missing =
@@ -279,8 +289,7 @@ export async function deleteCachedToken(config: TokenCacheConfig): Promise<void>
       throw error;
     });
     for (const name of names) {
-      const bound = name.startsWith(prefix) && boundNameSuffix.test(name.slice(prefix.length));
-      if (bound || staleTempName.test(name)) {
+      if (isBoundEntry(destination, name) || staleTempName.test(name)) {
         await rm(join(config.cacheDir, name), { force: true });
       }
     }

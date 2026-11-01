@@ -439,7 +439,9 @@ Cache:
   `O_NOFOLLOW`. After a successful write, the destination's entries bound to
   another credential are deleted (only the bound-name shape of that
   destination, in `cache_dir`, symlinks unlinked and never followed; a failure
-  there never fails the write).
+  there never fails the write). Jobs that share one `cache_dir` and destination
+  under different credentials evict each other's entry (one extra exchange), so
+  give them separate cache directories.
 - A file that is not a regular file, is group/world-readable or foreign-owned
   (POSIX), or does not parse is treated as absent — never trusted.
 - Reuse: a cached token is reused while `exp - now > 60 s`; within the margin it
