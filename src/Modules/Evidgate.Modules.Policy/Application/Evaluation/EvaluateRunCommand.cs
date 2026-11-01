@@ -69,19 +69,12 @@ internal sealed record EvaluationRecord(
 /// </remarks>
 internal sealed class EvaluateRunCommandHandler(
     EvaluationInputReader inputs,
+    ExceptionsSnapshotResolver exceptions,
     IPolicyEvaluator evaluator,
     ITenantDb db,
     ITenantScopeAccessor scopes,
     TimeProvider time)
 {
-    /// <summary>
-    /// The canonical JSON of "nothing was waived or quarantined": an empty array. Resolving the real active set, and
-    /// the instant it was read, belongs to the exceptions-snapshot task that depends on the waiver and quarantine
-    /// tables; until then the handler stores this explicit empty snapshot rather than a value that could be mistaken
-    /// for resolved data.
-    /// </summary>
-    private const string EmptyExceptions = "[]";
-
     /// <summary>
     /// One evaluation row: the values the insert sends, and the same shape the winner read-back returns, so one mapper
     /// answers both paths.
@@ -118,7 +111,7 @@ internal sealed class EvaluateRunCommandHandler(
         var loaded = await inputs.LoadAsync(command.RunId, command.EvidenceRevision, cancellationToken)
             .ConfigureAwait(false);
 
-        var row = Decide(command, loaded);
+        var row = await DecideAsync(command, loaded, cancellationToken).ConfigureAwait(false);
         var inserted = await InsertAsync(row, cancellationToken).ConfigureAwait(false);
 
         if (inserted is null)
@@ -146,18 +139,26 @@ internal sealed class EvaluateRunCommandHandler(
         }
     }
 
-    /// <summary>The row this attempt would store, computed once from the durable inputs and the captured snapshot.</summary>
-    private Row Decide(EvaluateRunCommand command, LoadedEvaluationInputs loaded)
+    /// <summary>
+    /// The row this attempt would store, computed once from the durable inputs and the captured snapshot. A replay run
+    /// stores a shadow row whatever slot the caller asked for: a replay is advice about old evidence and must never
+    /// occupy the slot of record.
+    /// </summary>
+    private async Task<Row> DecideAsync(
+        EvaluateRunCommand command,
+        LoadedEvaluationInputs loaded,
+        CancellationToken cancellationToken)
     {
         // Captured once per attempt, before the evaluator runs and never re-read: the row says which instant the
         // exception set was read at, so two attempts of one task cannot disagree about it.
         var exceptionsAsOf = time.GetUtcNow();
-        var exceptionsHash = CanonicalHash.Compute(EmptyExceptions);
+        var snapshot = await exceptions.ResolveAsync(loaded.ProjectId, exceptionsAsOf, cancellationToken)
+            .ConfigureAwait(false);
 
         var result = evaluator.Evaluate(
             loaded.Evidence,
             loaded.Policy,
-            new ExceptionsSnapshotInput(exceptionsAsOf, [], []));
+            new ExceptionsSnapshotInput(snapshot.AsOf, snapshot.WaiverIds, snapshot.QuarantineIds));
 
         return new Row(
             Guid.CreateVersion7(),
@@ -172,9 +173,9 @@ internal sealed class EvaluateRunCommandHandler(
             EvaluationCodes.Code(result.Decision),
             [.. result.Reasons.Select(EvaluationCodes.Code)],
             IPolicyEvaluator.EvaluatorVersion,
-            EvaluationModeCode.Of(command.Mode),
-            exceptionsHash,
-            exceptionsAsOf,
+            EvaluationModeCode.Of(loaded.IsReplay ? EvaluationMode.Shadow : command.Mode),
+            snapshot.Hash,
+            snapshot.AsOf,
             default);
     }
 
