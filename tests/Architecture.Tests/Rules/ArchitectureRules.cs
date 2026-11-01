@@ -439,6 +439,51 @@ public static class ArchitectureRules
         }
     }
 
+    /// <summary>Frameworks a pure decision function may never reach: I/O, a network client, a database driver.</summary>
+    public static readonly IReadOnlyList<string> ImpureAssemblyPrefixes =
+    [
+        "Npgsql",
+        "System.Net.Http",
+        "System.Data",
+        "System.IO.Pipelines",
+        "Microsoft.AspNetCore.Http",
+        "Microsoft.Extensions.Http",
+    ];
+
+    /// <summary>The names of the assemblies an assembly references directly.</summary>
+    public static IReadOnlyList<string> ReferencedAssemblyNames(Assembly assembly) =>
+        [.. assembly.GetReferencedAssemblies().Select(name => name.Name).OfType<string>()];
+
+    /// <summary>
+    /// The evaluator is a pure function (00 §5.5 C1, §5.7 P1/P3/P5): its assembly may reference a module's
+    /// <c>.Contracts</c> and the framework primitives, never a database driver, an HTTP stack, an Infrastructure
+    /// assembly or another module's implementation. Direct references are enough here: anything reached through
+    /// Evidence.Contracts is that assembly's own violation to report.
+    /// </summary>
+    public static IReadOnlyList<string> EvaluatorStaysPure(IEnumerable<string> referencedAssemblies)
+    {
+        var violations = new List<string>();
+
+        foreach (var name in referencedAssemblies.Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal))
+        {
+            if (ImpureAssemblyPrefixes.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                violations.Add($"Evidgate.Evaluation must not reference {name}");
+            }
+            else if (name.Contains(".Infrastructure", StringComparison.Ordinal))
+            {
+                violations.Add($"Evidgate.Evaluation must not reference infrastructure assembly {name}");
+            }
+            else if (name.StartsWith("Evidgate.Modules.", StringComparison.Ordinal)
+                && !name.EndsWith(".Contracts", StringComparison.Ordinal))
+            {
+                violations.Add($"Evidgate.Evaluation must reference module contracts only, not {name}");
+            }
+        }
+
+        return violations;
+    }
+
     private static IEnumerable<Type> Flatten(Type? type)
     {
         if (type is null)

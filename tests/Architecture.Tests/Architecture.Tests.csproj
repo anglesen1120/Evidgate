@@ -58,5 +58,6 @@
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Notifications.Contracts\Evidgate.Modules.Notifications.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring\Evidgate.Modules.Authoring.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring.Contracts\Evidgate.Modules.Authoring.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Evidgate.Evaluation\Evidgate.Evaluation.csproj" />
   </ItemGroup>
 </Project>

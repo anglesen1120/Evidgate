@@ -47,6 +47,10 @@
     <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.19.1-beta.1" />
     <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.20.1" />
   </ItemGroup>
+  <!-- RS0030 with a project-scoped BannedSymbols.txt; the evaluator needs it to prove it reads no clock or random. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
+  </ItemGroup>
   <!-- 01.2.1-T1: VSTHRD async analyzers on every project (severities in .editorconfig). MIT, registered in ADR-0002. -->
   <ItemGroup>
     <GlobalPackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" Version="18.12.1" PrivateAssets="all" />

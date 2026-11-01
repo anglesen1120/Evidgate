@@ -1,0 +1,10 @@
+T:System.Random;the evaluator is deterministic: no random source
+P:System.Random.Shared;the evaluator is deterministic: no random source
+P:System.DateTime.Now;the evaluator is deterministic: no wall clock
+P:System.DateTime.UtcNow;the evaluator is deterministic: no wall clock
+P:System.DateTime.Today;the evaluator is deterministic: no wall clock
+P:System.DateTimeOffset.Now;the evaluator is deterministic: no wall clock
+P:System.DateTimeOffset.UtcNow;the evaluator is deterministic: no wall clock
+M:System.Guid.NewGuid;the evaluator is deterministic: no freshly generated identifiers
+T:System.TimeProvider;the evaluator takes time as an input, never as a dependency
+P:System.TimeProvider.System;the evaluator takes time as an input, never as a dependency
