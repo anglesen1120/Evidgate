@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Policy.Application.Evaluation;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -118,8 +119,92 @@ public sealed partial class EvaluationTaskTests
         record.Mode.ShouldBe("live");
     }
 
+    /// <summary>A waiver of another project of the same org is not part of this run's snapshot.</summary>
+    [Fact]
+    public async Task Evaluate_WaiverOfAnotherProject_IsNotInTheSnapshot()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var seed = await SeedAsync(world);
+        var other = await InsertProjectAsync(world, seed);
+        await InsertWaiverAsync(world, seed, "approved", "now() + interval '1 hour'", other);
+        var own = await InsertWaiverAsync(world, seed, "approved", "now() + interval '1 hour'");
+
+        var record = await EvaluateAsync(world, seed, EvaluationMode.Live, TestContext.Current.CancellationToken);
+
+        record.ExceptionsHash.ShouldBe(ExceptionsSnapshotResolver.HashOf([own], []));
+    }
+
+    /// <summary>Two persisted evaluations of one unchanged exception set store the same hash.</summary>
+    [Fact]
+    public async Task Evaluate_IdenticalSetsOnTwoInvocations_StoreTheSameHash()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var seed = await SeedAsync(world);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await InsertWaiverAsync(world, seed, "approved", "now() + interval '1 hour'");
+        await InsertQuarantineAsync(world, seed, "active", "now() + interval '1 hour'");
+
+        var live = await EvaluateAsync(world, seed, EvaluationMode.Live, cancellationToken);
+        var shadow = await EvaluateAsync(world, seed, EvaluationMode.Shadow, cancellationToken);
+
+        live.Id.ShouldNotBe(shadow.Id);
+        shadow.ExceptionsHash.ShouldBe(live.ExceptionsHash);
+    }
+
+    /// <summary>The handler reads the clock once per attempt, and the instant it reads is the one the row stores.</summary>
+    [Fact]
+    public async Task Evaluate_ReadsTheClockOnceAndStoresThatInstant()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var seed = await SeedAsync(world);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var clock = new CountingClock(DateTimeOffset.UtcNow.AddMinutes(-5));
+
+        await using var scope = await OpenScopeAsync(world, seed, cancellationToken);
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var provider = services.ServiceProvider;
+        var handler = new EvaluateRunCommandHandler(
+            provider.GetRequiredService<EvaluationInputReader>(),
+            provider.GetRequiredService<ExceptionsSnapshotResolver>(),
+            provider.GetRequiredService<Evidgate.Evaluation.IPolicyEvaluator>(),
+            provider.GetRequiredService<ITenantDb>(),
+            provider.GetRequiredService<ITenantScopeAccessor>(),
+            clock);
+
+        var result = await handler.Handle(new EvaluateRunCommand(seed.RunId, 1, EvaluationMode.Live), cancellationToken);
+
+        clock.Reads.ShouldBe(1);
+        result.Value.ExceptionsAsOf.ShouldBe(clock.Instant);
+    }
+
+    private sealed class CountingClock(DateTimeOffset instant) : TimeProvider
+    {
+        public int Reads { get; private set; }
+
+        public DateTimeOffset Instant { get; } = instant;
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            Reads++;
+            return Instant;
+        }
+    }
+
+    private async Task<Guid> InsertProjectAsync(RunCreationTests.World world, Seed seed)
+    {
+        var id = Guid.CreateVersion7();
+        await using var connection = await OwnerAsync(world);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "insert into public.project (id, org_id, name, slug) values (@id, @org_id, 'other', 'other-project')";
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("org_id", seed.Org);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+        return id;
+    }
+
     private async Task<Guid> InsertWaiverAsync(
-        RunCreationTests.World world, Seed seed, string state, string expiresAtSql)
+        RunCreationTests.World world, Seed seed, string state, string expiresAtSql, Guid? projectId = null)
     {
         var id = Guid.CreateVersion7();
         await using var connection = await OwnerAsync(world);
@@ -132,7 +217,7 @@ public sealed partial class EvaluationTaskTests
             """;
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("org_id", seed.Org);
-        command.Parameters.AddWithValue("project_id", seed.Project);
+        command.Parameters.AddWithValue("project_id", projectId ?? seed.Project);
         command.Parameters.AddWithValue("target", Guid.CreateVersion7());
         command.Parameters.AddWithValue("requested_by", Guid.CreateVersion7());
         command.Parameters.AddWithValue("approver", Guid.CreateVersion7());
