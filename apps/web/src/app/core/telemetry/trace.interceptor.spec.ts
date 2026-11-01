@@ -12,16 +12,11 @@ import { DOCUMENT } from '@angular/common';
 import { HttpErrorResponse, HttpHeaders, HttpRequest } from '@angular/common/http';
 import type { HttpEvent, HttpHandlerFn } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import {
-  NavigationEnd,
-  NavigationStart,
-  Router,
-  type ActivatedRouteSnapshot,
-  type Event as RouterEvent,
-} from '@angular/router';
+import { NavigationEnd, NavigationStart, Router, type Event as RouterEvent } from '@angular/router';
 import { InMemorySpanExporter, type ReadableSpan } from '@opentelemetry/sdk-trace';
 import { Subject, firstValueFrom, of, throwError, type Observable } from 'rxjs';
 
+import { type RouteTreeNode } from './route-template';
 import { startTelemetrySdk } from './telemetry-sdk';
 import type { TelemetrySdkOptions } from './telemetry-sdk';
 import type { TelemetryConfig } from './telemetry-config';
@@ -38,16 +33,15 @@ const API_URL = `/v1/projects/${RUN_UUID}/runs`;
 const RESPONSE_EVENT_TYPE = 4;
 
 /** One node per route in the chain; `routeConfig.path` and `firstChild` are all that is read. */
-function snapshot(paths: readonly (string | null)[]): ActivatedRouteSnapshot {
+function snapshot(paths: readonly (string | null)[]): RouteTreeNode {
   const [path, ...rest] = paths;
   if (path === undefined) {
     throw new Error('snapshot needs at least one route');
   }
-  const node = {
+  return {
     routeConfig: path === null ? null : { path },
     firstChild: rest.length === 0 ? null : snapshot(rest),
   };
-  return node as unknown as ActivatedRouteSnapshot;
 }
 
 /** The two members `TelemetryService` reads off `Router`, and an event stream the spec drives. */
@@ -58,22 +52,25 @@ class RouterDouble {
 
 /**
  * The final response event of an exchange. `HttpResponse` is outside this directory's import
- * allow-list, and the interceptor recognises a response by its `status` + `body` pair, so the
- * double carries exactly the members it reads.
+ * allow-list, so the double spells out the members `HttpEvent`'s response member declares, and the
+ * interceptor reads its `status` + `body` pair.
  */
 function responseEvent(
   status: number,
   headers: HttpHeaders = new HttpHeaders(),
 ): HttpEvent<unknown> {
-  // The double carries only the members the interceptor reads, and this directory may import no
-  // constructible member of `HttpEvent`, so the cast is deliberate.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   return {
     type: RESPONSE_EVENT_TYPE,
     status,
+    statusText: '',
+    url: null,
+    ok: status >= 200 && status < 300,
     headers,
     body: null,
-  } as unknown as HttpEvent<unknown>;
+    clone: () => {
+      throw new Error('the interceptor never clones a response');
+    },
+  };
 }
 
 interface Harness {

@@ -1,8 +1,10 @@
 import type { SuiteEdgeDto, SuiteMemberDto } from '@evidgate/sdk';
 import draftDocument from '../../../../../../../fixtures/web-api/suite-revision/input.json';
 import emptyDocument from '../../../../../../../fixtures/web-api/suite-revision-empty/input.json';
+import largeDocument from '../../../../../../../fixtures/web-api/suite-revision-large/input.json';
 import {
   compositionView,
+  LIST_CHUNK,
   MATRIX_CELL_LIMIT,
   strategySummary,
   variantParameters,
@@ -13,6 +15,7 @@ import {
 // hand-typed echo of it.
 const draft: CompositionSource = draftDocument.body;
 const empty: CompositionSource = emptyDocument.body;
+const large: CompositionSource = largeDocument.body;
 
 /**
  * A served entry the assertion needs, or a failed test. The fixtures are the wire shape, so a
@@ -168,6 +171,85 @@ describe('member layout', () => {
       ordinal: 0,
     });
     expect(view.flatMembers.at(-1)?.memberId).toBe('member-59-59');
+  });
+
+  it('draws the large served revision flat, past the cell limit and past one list chunk', () => {
+    // `largeDocument.body` is typed as the SDK-derived source above, so a member renamed on the
+    // wire fails this spec at compile time; the assertions below are what the screen needs from it.
+    const view = compositionView(large);
+
+    expect(large.members.length).toBeGreaterThan(LIST_CHUNK);
+    expect(view.rows.length * view.columns.length).toBeGreaterThan(MATRIX_CELL_LIMIT);
+    expect(view.layout).toBe('flat');
+    expect(view.flatMembers).toHaveLength(large.members.length);
+    expect(view.duplicateMembers).toBe(0);
+  });
+});
+
+describe('repeated variant cells', () => {
+  it('keeps the first served member of a repeated cell and counts the members it displaces', () => {
+    const first = defined(draft.members[0], 'the first served member');
+    const second = {
+      ...first,
+      id: '018f0000-0000-7000-8000-00000000c3ff',
+      ordinal: 7,
+      required: false,
+    };
+    const view = compositionView({ ...draft, members: [first, second] });
+    const row = defined(view.rows[0], 'the only matrix row');
+
+    // A cell holds one member, so the pair collapses; the first is the one the cell keeps, because
+    // its parameters are also what the variant column header shows.
+    expect(row.byVariant.size).toBe(1);
+    expect(row.byVariant.get(first.variant_hash)?.id).toBe(first.id);
+    expect(view.duplicateMembers).toBe(1);
+    // `matrix` layout builds no flat rows at all, so the displaced member is only ever reported
+    // through the count here — which is exactly what the screen's note reads.
+    expect(view.flatMembers).toEqual([]);
+  });
+
+  it('lists every served member of a flat layout, including the ones the matrix cannot place', () => {
+    const base = grid(61, 41);
+    const first = defined(draft.members[0], 'the first served member');
+    const second = { ...first, id: '018f0000-0000-7000-8000-00000000c3fe', ordinal: 1 };
+    // 61 × 41 is past the cell limit, so the layout is flat and the served members, not the cells,
+    // are what the table lists.
+    const oversized = compositionView({ ...base, members: [...base.members, first, second] });
+
+    expect(oversized.layout).toBe('flat');
+    expect(oversized.duplicateMembers).toBe(1);
+    expect(oversized.flatMembers).toHaveLength(61 * 41 + 2);
+  });
+
+  it('counts every extra member of a cell, not the cell', () => {
+    const first = defined(draft.members[0], 'the first served member');
+    const extras = [1, 2].map((index) => ({
+      ...first,
+      id: `018f0000-0000-7000-8000-00000000c4${index}${index}`,
+      ordinal: index,
+    }));
+    const view = compositionView({ ...draft, members: [first, ...extras] });
+
+    expect(view.duplicateMembers).toBe(extras.length);
+  });
+
+  it('keeps the same variant hash under another case revision as its own cell', () => {
+    const first = defined(draft.members[0], 'the first served member');
+    const otherCase = {
+      ...first,
+      id: '018f0000-0000-7000-8000-00000000c4ff',
+      case_revision_id: '018f0000-0000-7000-8000-00000000c2ff',
+      ordinal: 1,
+    };
+    const view = compositionView({ ...draft, members: [first, otherCase] });
+
+    // A duplicate is per case revision: the same variant under two cases fills two cells of one
+    // column, which is the matrix working as intended.
+    expect(view.duplicateMembers).toBe(0);
+    expect(view.rows.map((row) => row.byVariant.get(first.variant_hash)?.id)).toEqual([
+      first.id,
+      otherCase.id,
+    ]);
   });
 });
 

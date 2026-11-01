@@ -1,0 +1,3209 @@
+{
+  "operation_id": "getSuiteRevision",
+  "variant": "large",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000c4ff"
+  },
+  "latency_ms": 0,
+  "body": {
+    "id": "018f0000-0000-7000-8000-00000000c401",
+    "suite_id": "018f0000-0000-7000-8000-00000000c400",
+    "revision_no": 5,
+    "revision_hash": "sha256:e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+    "status": "draft",
+    "shard_strategy": {
+      "kind": "count",
+      "count": 3,
+      "balance_by": "count"
+    },
+    "retry_policy": {
+      "max_retries": 2,
+      "only_on_status": ["failed", "timed_out"]
+    },
+    "environment_requirements": {
+      "base_urls": {
+        "web": "https://staging.example.com"
+      },
+      "data_isolation": "shared",
+      "secrets": ["API_TOKEN"]
+    },
+    "created_at": "2026-10-21T08:00:00Z",
+    "members": [
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1000",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1000",
+        "variant_hash": "sha256:048db954a63ac74d237094f27fd58d47669e146fd2276dcf267fbdd6e22f018b",
+        "params": {
+          "locale": "vi",
+          "viewport": 0
+        },
+        "required": true,
+        "ordinal": 0
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1001",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1001",
+        "variant_hash": "sha256:e21a72762524f043cea219222273117e128972ffbf67fe4db10eb51dbb65f2d8",
+        "params": {
+          "locale": "vi",
+          "viewport": 1
+        },
+        "required": false,
+        "ordinal": 1
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1002",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1002",
+        "variant_hash": "sha256:bcded0dc0871f93842ef2bd492ac78c2b7bb25b4a61b7371bd517f483518e16a",
+        "params": {
+          "locale": "vi",
+          "viewport": 2
+        },
+        "required": true,
+        "ordinal": 2
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1003",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1003",
+        "variant_hash": "sha256:5446f3188c4a1f3c32ea3bed2515e459bef88d38256231bac515597b0462c5ed",
+        "params": {
+          "locale": "vi",
+          "viewport": 3
+        },
+        "required": false,
+        "ordinal": 3
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1004",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1004",
+        "variant_hash": "sha256:8f02b25080c29818c7bd3ee862d60722e2b11c12f9e5258ce328481914dee7f3",
+        "params": {
+          "locale": "vi",
+          "viewport": 4
+        },
+        "required": true,
+        "ordinal": 4
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1005",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1005",
+        "variant_hash": "sha256:55e59806bf8082479e9c84ae821e05a722856747f306d10fc70b37cd67f4ddda",
+        "params": {
+          "locale": "vi",
+          "viewport": 5
+        },
+        "required": false,
+        "ordinal": 5
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1006",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1006",
+        "variant_hash": "sha256:0b8be49217fd2b41a98621f8b00cdc6dc49f9a1389fc50bba11e59b3d6b928f0",
+        "params": {
+          "locale": "vi",
+          "viewport": 6
+        },
+        "required": true,
+        "ordinal": 6
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1007",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1007",
+        "variant_hash": "sha256:4f09403e21687a5e94e812c4e1fcff80607695f1e27ddfa1d755bbbb55385139",
+        "params": {
+          "locale": "vi",
+          "viewport": 7
+        },
+        "required": false,
+        "ordinal": 7
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1008",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1008",
+        "variant_hash": "sha256:0bb5b94a6c72691559fd493b0b7d0d6a3149772dcb4d0681604754c7713fa358",
+        "params": {
+          "locale": "vi",
+          "viewport": 8
+        },
+        "required": true,
+        "ordinal": 8
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1009",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1009",
+        "variant_hash": "sha256:b29a4cfaf697c9fc9d97de1f1ea9308617f4fd49489bf34db8f291290cc6bae7",
+        "params": {
+          "locale": "vi",
+          "viewport": 9
+        },
+        "required": false,
+        "ordinal": 9
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d100a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100a",
+        "variant_hash": "sha256:abc8954eb01267d329379350346101ea28990bb2d7204fcf8a990d50d8559ff6",
+        "params": {
+          "locale": "vi",
+          "viewport": 10
+        },
+        "required": true,
+        "ordinal": 10
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d100b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100b",
+        "variant_hash": "sha256:69dc179a2ab9aafb3fae341b1a04d4a34d0120698cf89f996e88e8cd75e9ccd6",
+        "params": {
+          "locale": "vi",
+          "viewport": 11
+        },
+        "required": false,
+        "ordinal": 11
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d100c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100c",
+        "variant_hash": "sha256:12fe2753f8f3fb99241d83b15a6163a0b93a9873ebade36cfcb7fb5f9fa80cd2",
+        "params": {
+          "locale": "vi",
+          "viewport": 12
+        },
+        "required": true,
+        "ordinal": 12
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d100d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100d",
+        "variant_hash": "sha256:f5556c6f0ee1da7b61b11862a8e3d5b4b8307c2e3c791631a5d7eba90c487251",
+        "params": {
+          "locale": "vi",
+          "viewport": 13
+        },
+        "required": false,
+        "ordinal": 13
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d100e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100e",
+        "variant_hash": "sha256:c13736f5c74740b07d10f966797bb9c43d59b3c94dac88db4af644d652da4f7d",
+        "params": {
+          "locale": "vi",
+          "viewport": 14
+        },
+        "required": true,
+        "ordinal": 14
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d100f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100f",
+        "variant_hash": "sha256:c9b109b29474161fdab7b3d40b35abbb5b4e3163583f7c1cadb6c8df8fa5ab3d",
+        "params": {
+          "locale": "vi",
+          "viewport": 15
+        },
+        "required": false,
+        "ordinal": 15
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1010",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1010",
+        "variant_hash": "sha256:ebb6eba4165dca7341fb6c0bea3e471b0e0692cc4872e2dab49209a3a10b7755",
+        "params": {
+          "locale": "vi",
+          "viewport": 16
+        },
+        "required": true,
+        "ordinal": 16
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1011",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1011",
+        "variant_hash": "sha256:1b43953a1a22ffd554448fec6578eb110de3db8aa36185842a2f6e1422f83ed2",
+        "params": {
+          "locale": "vi",
+          "viewport": 17
+        },
+        "required": false,
+        "ordinal": 17
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1012",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1012",
+        "variant_hash": "sha256:a8fd6d6e1a88a6f8210d1927122bf6a88f0a35bc688d836f6b3adce9526d9149",
+        "params": {
+          "locale": "vi",
+          "viewport": 18
+        },
+        "required": true,
+        "ordinal": 18
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1013",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1013",
+        "variant_hash": "sha256:4c5d1b7ef88714a5222316288dd0bb20255421b3ade95e50c183746f75cebe7b",
+        "params": {
+          "locale": "vi",
+          "viewport": 19
+        },
+        "required": false,
+        "ordinal": 19
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1014",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1014",
+        "variant_hash": "sha256:b5f211a9ed2c35cfa1b6fb85a215d272207cf59a34949650c7ccd8c89ff96151",
+        "params": {
+          "locale": "vi",
+          "viewport": 20
+        },
+        "required": true,
+        "ordinal": 20
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1015",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1015",
+        "variant_hash": "sha256:3ee6b4e060e9b2c292ea0ea65db2ac5191e3aea6495ff8c40644f277c28640fc",
+        "params": {
+          "locale": "vi",
+          "viewport": 21
+        },
+        "required": false,
+        "ordinal": 21
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1016",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1016",
+        "variant_hash": "sha256:b7f1ab4b948536bbdc7c40eed63fe285c6b318fb18cf375751e5c52f1e6fdd2f",
+        "params": {
+          "locale": "vi",
+          "viewport": 22
+        },
+        "required": true,
+        "ordinal": 22
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1017",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1017",
+        "variant_hash": "sha256:ecb444c47d60bb622ba19f31769f6d6c6f8ba376fd24fb26090fdfc1706d8912",
+        "params": {
+          "locale": "vi",
+          "viewport": 23
+        },
+        "required": false,
+        "ordinal": 23
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1018",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1018",
+        "variant_hash": "sha256:e37b64f9adf659216e581d1462d02ec308731bcb2a933d7b8227fb5e03bdd60d",
+        "params": {
+          "locale": "vi",
+          "viewport": 24
+        },
+        "required": true,
+        "ordinal": 24
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1019",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1019",
+        "variant_hash": "sha256:faaf0f334a4d40c259ef0682ba6ed89c379516ce68c0f39f2484045d940eefd7",
+        "params": {
+          "locale": "vi",
+          "viewport": 25
+        },
+        "required": false,
+        "ordinal": 25
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d101a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101a",
+        "variant_hash": "sha256:e3352407594e0fd97154dfd335f827afb279bda76a2d84f9b723a35b3bb055b5",
+        "params": {
+          "locale": "vi",
+          "viewport": 26
+        },
+        "required": true,
+        "ordinal": 26
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d101b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101b",
+        "variant_hash": "sha256:8cedd3bdb1beb376673f88af262abe94111e1e238b008f7b9ba24d8d259c3e0c",
+        "params": {
+          "locale": "vi",
+          "viewport": 27
+        },
+        "required": false,
+        "ordinal": 27
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d101c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101c",
+        "variant_hash": "sha256:d92995154a9b20b873e7f2104c9e578bf92d589223fd6c7e8288010d35f804cc",
+        "params": {
+          "locale": "vi",
+          "viewport": 28
+        },
+        "required": true,
+        "ordinal": 28
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d101d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101d",
+        "variant_hash": "sha256:25044cf997e64e1413580ed028ccddec5c10cde90fbc5c3437ebe383b1db1b99",
+        "params": {
+          "locale": "vi",
+          "viewport": 29
+        },
+        "required": false,
+        "ordinal": 29
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d101e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101e",
+        "variant_hash": "sha256:3be48a110160b51ca8cd542b3446f4d040f13d59a043c483ca4d13fbb2ac17ea",
+        "params": {
+          "locale": "vi",
+          "viewport": 30
+        },
+        "required": true,
+        "ordinal": 30
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d101f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101f",
+        "variant_hash": "sha256:3202b9a1fbbac6f754f50d753e673752fbe3e500e64e07d34f8b433400eaea5d",
+        "params": {
+          "locale": "vi",
+          "viewport": 31
+        },
+        "required": false,
+        "ordinal": 31
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1020",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1020",
+        "variant_hash": "sha256:809c5e5abe84f52ca3575bc09a6ec72266928da0e80146517dfd6f3d986a82ab",
+        "params": {
+          "locale": "vi",
+          "viewport": 32
+        },
+        "required": true,
+        "ordinal": 32
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1021",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1021",
+        "variant_hash": "sha256:08192b09fe8521e5dfad33102f22e0b2bf6f69ad41853613291cfd132ca2030c",
+        "params": {
+          "locale": "vi",
+          "viewport": 33
+        },
+        "required": false,
+        "ordinal": 33
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1022",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1022",
+        "variant_hash": "sha256:ccfcada3e165672b73f7f1ae142fd2e3d12a325404d8f90a1c76a1294c3fd14d",
+        "params": {
+          "locale": "vi",
+          "viewport": 34
+        },
+        "required": true,
+        "ordinal": 34
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1023",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1023",
+        "variant_hash": "sha256:0fa18d610d121b51971b49d2e804586c326845c83fe5c286b3e9f9c5b81bb9c7",
+        "params": {
+          "locale": "vi",
+          "viewport": 35
+        },
+        "required": false,
+        "ordinal": 35
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1024",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1024",
+        "variant_hash": "sha256:85c38916995404ed0b681779d9b211eb119ff0f2ceed1a4156da34bd038c4ff8",
+        "params": {
+          "locale": "vi",
+          "viewport": 36
+        },
+        "required": true,
+        "ordinal": 36
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1025",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1025",
+        "variant_hash": "sha256:ccac0f647f5b9a140bf43f23a62fd24d3819ce0f53202a7ef763d7cf38a78a4d",
+        "params": {
+          "locale": "vi",
+          "viewport": 37
+        },
+        "required": false,
+        "ordinal": 37
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1026",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1026",
+        "variant_hash": "sha256:404e4da789b85514e8bea8473d5e56af95a9cbeaf08768b59e06292acdd8a663",
+        "params": {
+          "locale": "vi",
+          "viewport": 38
+        },
+        "required": true,
+        "ordinal": 38
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1027",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1027",
+        "variant_hash": "sha256:d1ce74a7788c88b066b435ec43634e6df54960a480b26b7d50d785c61b65bdf3",
+        "params": {
+          "locale": "vi",
+          "viewport": 39
+        },
+        "required": false,
+        "ordinal": 39
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1028",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1028",
+        "variant_hash": "sha256:6e386a15acbfb6532a40b7e0316096e6e3e1661539615794b03297a416e8e3c6",
+        "params": {
+          "locale": "vi",
+          "viewport": 40
+        },
+        "required": true,
+        "ordinal": 40
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1029",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1029",
+        "variant_hash": "sha256:fb06604a62663d683eb8ba7a8ae289009f5b81334d75cc76c2c64415d6fb601a",
+        "params": {
+          "locale": "vi",
+          "viewport": 41
+        },
+        "required": false,
+        "ordinal": 41
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d102a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102a",
+        "variant_hash": "sha256:1b1b3c40fc94b8a0549db07ef671bcb4933d63ffc0d45fe7939f8172b5020f61",
+        "params": {
+          "locale": "vi",
+          "viewport": 42
+        },
+        "required": true,
+        "ordinal": 42
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d102b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102b",
+        "variant_hash": "sha256:2cd3bdb060c23bb57ab1cb913eda873af170ad88ccaf39cef170ac765913932a",
+        "params": {
+          "locale": "vi",
+          "viewport": 43
+        },
+        "required": false,
+        "ordinal": 43
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d102c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102c",
+        "variant_hash": "sha256:17ea821390904f803fa877987fee34965f12988e0f1cf81ba5402cf7de1a1f83",
+        "params": {
+          "locale": "vi",
+          "viewport": 44
+        },
+        "required": true,
+        "ordinal": 44
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d102d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102d",
+        "variant_hash": "sha256:048db954a63ac74d237094f27fd58d47669e146fd2276dcf267fbdd6e22f018b",
+        "params": {
+          "locale": "vi",
+          "viewport": 0
+        },
+        "required": true,
+        "ordinal": 45
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d102e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102e",
+        "variant_hash": "sha256:e21a72762524f043cea219222273117e128972ffbf67fe4db10eb51dbb65f2d8",
+        "params": {
+          "locale": "vi",
+          "viewport": 1
+        },
+        "required": false,
+        "ordinal": 46
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d102f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102f",
+        "variant_hash": "sha256:bcded0dc0871f93842ef2bd492ac78c2b7bb25b4a61b7371bd517f483518e16a",
+        "params": {
+          "locale": "vi",
+          "viewport": 2
+        },
+        "required": true,
+        "ordinal": 47
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1030",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1030",
+        "variant_hash": "sha256:5446f3188c4a1f3c32ea3bed2515e459bef88d38256231bac515597b0462c5ed",
+        "params": {
+          "locale": "vi",
+          "viewport": 3
+        },
+        "required": false,
+        "ordinal": 48
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1031",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1031",
+        "variant_hash": "sha256:8f02b25080c29818c7bd3ee862d60722e2b11c12f9e5258ce328481914dee7f3",
+        "params": {
+          "locale": "vi",
+          "viewport": 4
+        },
+        "required": true,
+        "ordinal": 49
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1032",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1032",
+        "variant_hash": "sha256:55e59806bf8082479e9c84ae821e05a722856747f306d10fc70b37cd67f4ddda",
+        "params": {
+          "locale": "vi",
+          "viewport": 5
+        },
+        "required": false,
+        "ordinal": 50
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1033",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1033",
+        "variant_hash": "sha256:0b8be49217fd2b41a98621f8b00cdc6dc49f9a1389fc50bba11e59b3d6b928f0",
+        "params": {
+          "locale": "vi",
+          "viewport": 6
+        },
+        "required": true,
+        "ordinal": 51
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1034",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1034",
+        "variant_hash": "sha256:4f09403e21687a5e94e812c4e1fcff80607695f1e27ddfa1d755bbbb55385139",
+        "params": {
+          "locale": "vi",
+          "viewport": 7
+        },
+        "required": false,
+        "ordinal": 52
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1035",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1035",
+        "variant_hash": "sha256:0bb5b94a6c72691559fd493b0b7d0d6a3149772dcb4d0681604754c7713fa358",
+        "params": {
+          "locale": "vi",
+          "viewport": 8
+        },
+        "required": true,
+        "ordinal": 53
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1036",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1036",
+        "variant_hash": "sha256:b29a4cfaf697c9fc9d97de1f1ea9308617f4fd49489bf34db8f291290cc6bae7",
+        "params": {
+          "locale": "vi",
+          "viewport": 9
+        },
+        "required": false,
+        "ordinal": 54
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1037",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1037",
+        "variant_hash": "sha256:abc8954eb01267d329379350346101ea28990bb2d7204fcf8a990d50d8559ff6",
+        "params": {
+          "locale": "vi",
+          "viewport": 10
+        },
+        "required": true,
+        "ordinal": 55
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1038",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1038",
+        "variant_hash": "sha256:69dc179a2ab9aafb3fae341b1a04d4a34d0120698cf89f996e88e8cd75e9ccd6",
+        "params": {
+          "locale": "vi",
+          "viewport": 11
+        },
+        "required": false,
+        "ordinal": 56
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1039",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1039",
+        "variant_hash": "sha256:12fe2753f8f3fb99241d83b15a6163a0b93a9873ebade36cfcb7fb5f9fa80cd2",
+        "params": {
+          "locale": "vi",
+          "viewport": 12
+        },
+        "required": true,
+        "ordinal": 57
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d103a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103a",
+        "variant_hash": "sha256:f5556c6f0ee1da7b61b11862a8e3d5b4b8307c2e3c791631a5d7eba90c487251",
+        "params": {
+          "locale": "vi",
+          "viewport": 13
+        },
+        "required": false,
+        "ordinal": 58
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d103b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103b",
+        "variant_hash": "sha256:c13736f5c74740b07d10f966797bb9c43d59b3c94dac88db4af644d652da4f7d",
+        "params": {
+          "locale": "vi",
+          "viewport": 14
+        },
+        "required": true,
+        "ordinal": 59
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d103c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103c",
+        "variant_hash": "sha256:c9b109b29474161fdab7b3d40b35abbb5b4e3163583f7c1cadb6c8df8fa5ab3d",
+        "params": {
+          "locale": "vi",
+          "viewport": 15
+        },
+        "required": false,
+        "ordinal": 60
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d103d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103d",
+        "variant_hash": "sha256:ebb6eba4165dca7341fb6c0bea3e471b0e0692cc4872e2dab49209a3a10b7755",
+        "params": {
+          "locale": "vi",
+          "viewport": 16
+        },
+        "required": true,
+        "ordinal": 61
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d103e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103e",
+        "variant_hash": "sha256:1b43953a1a22ffd554448fec6578eb110de3db8aa36185842a2f6e1422f83ed2",
+        "params": {
+          "locale": "vi",
+          "viewport": 17
+        },
+        "required": false,
+        "ordinal": 62
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d103f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103f",
+        "variant_hash": "sha256:a8fd6d6e1a88a6f8210d1927122bf6a88f0a35bc688d836f6b3adce9526d9149",
+        "params": {
+          "locale": "vi",
+          "viewport": 18
+        },
+        "required": true,
+        "ordinal": 63
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1040",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1000",
+        "variant_hash": "sha256:4c5d1b7ef88714a5222316288dd0bb20255421b3ade95e50c183746f75cebe7b",
+        "params": {
+          "locale": "vi",
+          "viewport": 19
+        },
+        "required": false,
+        "ordinal": 64
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1041",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1001",
+        "variant_hash": "sha256:b5f211a9ed2c35cfa1b6fb85a215d272207cf59a34949650c7ccd8c89ff96151",
+        "params": {
+          "locale": "vi",
+          "viewport": 20
+        },
+        "required": true,
+        "ordinal": 65
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1042",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1002",
+        "variant_hash": "sha256:3ee6b4e060e9b2c292ea0ea65db2ac5191e3aea6495ff8c40644f277c28640fc",
+        "params": {
+          "locale": "vi",
+          "viewport": 21
+        },
+        "required": false,
+        "ordinal": 66
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1043",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1003",
+        "variant_hash": "sha256:b7f1ab4b948536bbdc7c40eed63fe285c6b318fb18cf375751e5c52f1e6fdd2f",
+        "params": {
+          "locale": "vi",
+          "viewport": 22
+        },
+        "required": true,
+        "ordinal": 67
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1044",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1004",
+        "variant_hash": "sha256:ecb444c47d60bb622ba19f31769f6d6c6f8ba376fd24fb26090fdfc1706d8912",
+        "params": {
+          "locale": "vi",
+          "viewport": 23
+        },
+        "required": false,
+        "ordinal": 68
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1045",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1005",
+        "variant_hash": "sha256:e37b64f9adf659216e581d1462d02ec308731bcb2a933d7b8227fb5e03bdd60d",
+        "params": {
+          "locale": "vi",
+          "viewport": 24
+        },
+        "required": true,
+        "ordinal": 69
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1046",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1006",
+        "variant_hash": "sha256:faaf0f334a4d40c259ef0682ba6ed89c379516ce68c0f39f2484045d940eefd7",
+        "params": {
+          "locale": "vi",
+          "viewport": 25
+        },
+        "required": false,
+        "ordinal": 70
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1047",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1007",
+        "variant_hash": "sha256:e3352407594e0fd97154dfd335f827afb279bda76a2d84f9b723a35b3bb055b5",
+        "params": {
+          "locale": "vi",
+          "viewport": 26
+        },
+        "required": true,
+        "ordinal": 71
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1048",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1008",
+        "variant_hash": "sha256:8cedd3bdb1beb376673f88af262abe94111e1e238b008f7b9ba24d8d259c3e0c",
+        "params": {
+          "locale": "vi",
+          "viewport": 27
+        },
+        "required": false,
+        "ordinal": 72
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1049",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1009",
+        "variant_hash": "sha256:d92995154a9b20b873e7f2104c9e578bf92d589223fd6c7e8288010d35f804cc",
+        "params": {
+          "locale": "vi",
+          "viewport": 28
+        },
+        "required": true,
+        "ordinal": 73
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d104a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100a",
+        "variant_hash": "sha256:25044cf997e64e1413580ed028ccddec5c10cde90fbc5c3437ebe383b1db1b99",
+        "params": {
+          "locale": "vi",
+          "viewport": 29
+        },
+        "required": false,
+        "ordinal": 74
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d104b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100b",
+        "variant_hash": "sha256:3be48a110160b51ca8cd542b3446f4d040f13d59a043c483ca4d13fbb2ac17ea",
+        "params": {
+          "locale": "vi",
+          "viewport": 30
+        },
+        "required": true,
+        "ordinal": 75
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d104c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100c",
+        "variant_hash": "sha256:3202b9a1fbbac6f754f50d753e673752fbe3e500e64e07d34f8b433400eaea5d",
+        "params": {
+          "locale": "vi",
+          "viewport": 31
+        },
+        "required": false,
+        "ordinal": 76
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d104d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100d",
+        "variant_hash": "sha256:809c5e5abe84f52ca3575bc09a6ec72266928da0e80146517dfd6f3d986a82ab",
+        "params": {
+          "locale": "vi",
+          "viewport": 32
+        },
+        "required": true,
+        "ordinal": 77
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d104e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100e",
+        "variant_hash": "sha256:08192b09fe8521e5dfad33102f22e0b2bf6f69ad41853613291cfd132ca2030c",
+        "params": {
+          "locale": "vi",
+          "viewport": 33
+        },
+        "required": false,
+        "ordinal": 78
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d104f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100f",
+        "variant_hash": "sha256:ccfcada3e165672b73f7f1ae142fd2e3d12a325404d8f90a1c76a1294c3fd14d",
+        "params": {
+          "locale": "vi",
+          "viewport": 34
+        },
+        "required": true,
+        "ordinal": 79
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1050",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1010",
+        "variant_hash": "sha256:0fa18d610d121b51971b49d2e804586c326845c83fe5c286b3e9f9c5b81bb9c7",
+        "params": {
+          "locale": "vi",
+          "viewport": 35
+        },
+        "required": false,
+        "ordinal": 80
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1051",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1011",
+        "variant_hash": "sha256:85c38916995404ed0b681779d9b211eb119ff0f2ceed1a4156da34bd038c4ff8",
+        "params": {
+          "locale": "vi",
+          "viewport": 36
+        },
+        "required": true,
+        "ordinal": 81
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1052",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1012",
+        "variant_hash": "sha256:ccac0f647f5b9a140bf43f23a62fd24d3819ce0f53202a7ef763d7cf38a78a4d",
+        "params": {
+          "locale": "vi",
+          "viewport": 37
+        },
+        "required": false,
+        "ordinal": 82
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1053",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1013",
+        "variant_hash": "sha256:404e4da789b85514e8bea8473d5e56af95a9cbeaf08768b59e06292acdd8a663",
+        "params": {
+          "locale": "vi",
+          "viewport": 38
+        },
+        "required": true,
+        "ordinal": 83
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1054",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1014",
+        "variant_hash": "sha256:d1ce74a7788c88b066b435ec43634e6df54960a480b26b7d50d785c61b65bdf3",
+        "params": {
+          "locale": "vi",
+          "viewport": 39
+        },
+        "required": false,
+        "ordinal": 84
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1055",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1015",
+        "variant_hash": "sha256:6e386a15acbfb6532a40b7e0316096e6e3e1661539615794b03297a416e8e3c6",
+        "params": {
+          "locale": "vi",
+          "viewport": 40
+        },
+        "required": true,
+        "ordinal": 85
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1056",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1016",
+        "variant_hash": "sha256:fb06604a62663d683eb8ba7a8ae289009f5b81334d75cc76c2c64415d6fb601a",
+        "params": {
+          "locale": "vi",
+          "viewport": 41
+        },
+        "required": false,
+        "ordinal": 86
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1057",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1017",
+        "variant_hash": "sha256:1b1b3c40fc94b8a0549db07ef671bcb4933d63ffc0d45fe7939f8172b5020f61",
+        "params": {
+          "locale": "vi",
+          "viewport": 42
+        },
+        "required": true,
+        "ordinal": 87
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1058",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1018",
+        "variant_hash": "sha256:2cd3bdb060c23bb57ab1cb913eda873af170ad88ccaf39cef170ac765913932a",
+        "params": {
+          "locale": "vi",
+          "viewport": 43
+        },
+        "required": false,
+        "ordinal": 88
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1059",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1019",
+        "variant_hash": "sha256:17ea821390904f803fa877987fee34965f12988e0f1cf81ba5402cf7de1a1f83",
+        "params": {
+          "locale": "vi",
+          "viewport": 44
+        },
+        "required": true,
+        "ordinal": 89
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d105a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101a",
+        "variant_hash": "sha256:048db954a63ac74d237094f27fd58d47669e146fd2276dcf267fbdd6e22f018b",
+        "params": {
+          "locale": "vi",
+          "viewport": 0
+        },
+        "required": true,
+        "ordinal": 90
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d105b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101b",
+        "variant_hash": "sha256:e21a72762524f043cea219222273117e128972ffbf67fe4db10eb51dbb65f2d8",
+        "params": {
+          "locale": "vi",
+          "viewport": 1
+        },
+        "required": false,
+        "ordinal": 91
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d105c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101c",
+        "variant_hash": "sha256:bcded0dc0871f93842ef2bd492ac78c2b7bb25b4a61b7371bd517f483518e16a",
+        "params": {
+          "locale": "vi",
+          "viewport": 2
+        },
+        "required": true,
+        "ordinal": 92
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d105d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101d",
+        "variant_hash": "sha256:5446f3188c4a1f3c32ea3bed2515e459bef88d38256231bac515597b0462c5ed",
+        "params": {
+          "locale": "vi",
+          "viewport": 3
+        },
+        "required": false,
+        "ordinal": 93
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d105e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101e",
+        "variant_hash": "sha256:8f02b25080c29818c7bd3ee862d60722e2b11c12f9e5258ce328481914dee7f3",
+        "params": {
+          "locale": "vi",
+          "viewport": 4
+        },
+        "required": true,
+        "ordinal": 94
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d105f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101f",
+        "variant_hash": "sha256:55e59806bf8082479e9c84ae821e05a722856747f306d10fc70b37cd67f4ddda",
+        "params": {
+          "locale": "vi",
+          "viewport": 5
+        },
+        "required": false,
+        "ordinal": 95
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1060",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1020",
+        "variant_hash": "sha256:0b8be49217fd2b41a98621f8b00cdc6dc49f9a1389fc50bba11e59b3d6b928f0",
+        "params": {
+          "locale": "vi",
+          "viewport": 6
+        },
+        "required": true,
+        "ordinal": 96
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1061",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1021",
+        "variant_hash": "sha256:4f09403e21687a5e94e812c4e1fcff80607695f1e27ddfa1d755bbbb55385139",
+        "params": {
+          "locale": "vi",
+          "viewport": 7
+        },
+        "required": false,
+        "ordinal": 97
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1062",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1022",
+        "variant_hash": "sha256:0bb5b94a6c72691559fd493b0b7d0d6a3149772dcb4d0681604754c7713fa358",
+        "params": {
+          "locale": "vi",
+          "viewport": 8
+        },
+        "required": true,
+        "ordinal": 98
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1063",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1023",
+        "variant_hash": "sha256:b29a4cfaf697c9fc9d97de1f1ea9308617f4fd49489bf34db8f291290cc6bae7",
+        "params": {
+          "locale": "vi",
+          "viewport": 9
+        },
+        "required": false,
+        "ordinal": 99
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1064",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1024",
+        "variant_hash": "sha256:abc8954eb01267d329379350346101ea28990bb2d7204fcf8a990d50d8559ff6",
+        "params": {
+          "locale": "vi",
+          "viewport": 10
+        },
+        "required": true,
+        "ordinal": 100
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1065",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1025",
+        "variant_hash": "sha256:69dc179a2ab9aafb3fae341b1a04d4a34d0120698cf89f996e88e8cd75e9ccd6",
+        "params": {
+          "locale": "vi",
+          "viewport": 11
+        },
+        "required": false,
+        "ordinal": 101
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1066",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1026",
+        "variant_hash": "sha256:12fe2753f8f3fb99241d83b15a6163a0b93a9873ebade36cfcb7fb5f9fa80cd2",
+        "params": {
+          "locale": "vi",
+          "viewport": 12
+        },
+        "required": true,
+        "ordinal": 102
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1067",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1027",
+        "variant_hash": "sha256:f5556c6f0ee1da7b61b11862a8e3d5b4b8307c2e3c791631a5d7eba90c487251",
+        "params": {
+          "locale": "vi",
+          "viewport": 13
+        },
+        "required": false,
+        "ordinal": 103
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1068",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1028",
+        "variant_hash": "sha256:c13736f5c74740b07d10f966797bb9c43d59b3c94dac88db4af644d652da4f7d",
+        "params": {
+          "locale": "vi",
+          "viewport": 14
+        },
+        "required": true,
+        "ordinal": 104
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1069",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1029",
+        "variant_hash": "sha256:c9b109b29474161fdab7b3d40b35abbb5b4e3163583f7c1cadb6c8df8fa5ab3d",
+        "params": {
+          "locale": "vi",
+          "viewport": 15
+        },
+        "required": false,
+        "ordinal": 105
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d106a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102a",
+        "variant_hash": "sha256:ebb6eba4165dca7341fb6c0bea3e471b0e0692cc4872e2dab49209a3a10b7755",
+        "params": {
+          "locale": "vi",
+          "viewport": 16
+        },
+        "required": true,
+        "ordinal": 106
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d106b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102b",
+        "variant_hash": "sha256:1b43953a1a22ffd554448fec6578eb110de3db8aa36185842a2f6e1422f83ed2",
+        "params": {
+          "locale": "vi",
+          "viewport": 17
+        },
+        "required": false,
+        "ordinal": 107
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d106c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102c",
+        "variant_hash": "sha256:a8fd6d6e1a88a6f8210d1927122bf6a88f0a35bc688d836f6b3adce9526d9149",
+        "params": {
+          "locale": "vi",
+          "viewport": 18
+        },
+        "required": true,
+        "ordinal": 108
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d106d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102d",
+        "variant_hash": "sha256:4c5d1b7ef88714a5222316288dd0bb20255421b3ade95e50c183746f75cebe7b",
+        "params": {
+          "locale": "vi",
+          "viewport": 19
+        },
+        "required": false,
+        "ordinal": 109
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d106e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102e",
+        "variant_hash": "sha256:b5f211a9ed2c35cfa1b6fb85a215d272207cf59a34949650c7ccd8c89ff96151",
+        "params": {
+          "locale": "vi",
+          "viewport": 20
+        },
+        "required": true,
+        "ordinal": 110
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d106f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102f",
+        "variant_hash": "sha256:3ee6b4e060e9b2c292ea0ea65db2ac5191e3aea6495ff8c40644f277c28640fc",
+        "params": {
+          "locale": "vi",
+          "viewport": 21
+        },
+        "required": false,
+        "ordinal": 111
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1070",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1030",
+        "variant_hash": "sha256:b7f1ab4b948536bbdc7c40eed63fe285c6b318fb18cf375751e5c52f1e6fdd2f",
+        "params": {
+          "locale": "vi",
+          "viewport": 22
+        },
+        "required": true,
+        "ordinal": 112
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1071",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1031",
+        "variant_hash": "sha256:ecb444c47d60bb622ba19f31769f6d6c6f8ba376fd24fb26090fdfc1706d8912",
+        "params": {
+          "locale": "vi",
+          "viewport": 23
+        },
+        "required": false,
+        "ordinal": 113
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1072",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1032",
+        "variant_hash": "sha256:e37b64f9adf659216e581d1462d02ec308731bcb2a933d7b8227fb5e03bdd60d",
+        "params": {
+          "locale": "vi",
+          "viewport": 24
+        },
+        "required": true,
+        "ordinal": 114
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1073",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1033",
+        "variant_hash": "sha256:faaf0f334a4d40c259ef0682ba6ed89c379516ce68c0f39f2484045d940eefd7",
+        "params": {
+          "locale": "vi",
+          "viewport": 25
+        },
+        "required": false,
+        "ordinal": 115
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1074",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1034",
+        "variant_hash": "sha256:e3352407594e0fd97154dfd335f827afb279bda76a2d84f9b723a35b3bb055b5",
+        "params": {
+          "locale": "vi",
+          "viewport": 26
+        },
+        "required": true,
+        "ordinal": 116
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1075",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1035",
+        "variant_hash": "sha256:8cedd3bdb1beb376673f88af262abe94111e1e238b008f7b9ba24d8d259c3e0c",
+        "params": {
+          "locale": "vi",
+          "viewport": 27
+        },
+        "required": false,
+        "ordinal": 117
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1076",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1036",
+        "variant_hash": "sha256:d92995154a9b20b873e7f2104c9e578bf92d589223fd6c7e8288010d35f804cc",
+        "params": {
+          "locale": "vi",
+          "viewport": 28
+        },
+        "required": true,
+        "ordinal": 118
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1077",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1037",
+        "variant_hash": "sha256:25044cf997e64e1413580ed028ccddec5c10cde90fbc5c3437ebe383b1db1b99",
+        "params": {
+          "locale": "vi",
+          "viewport": 29
+        },
+        "required": false,
+        "ordinal": 119
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1078",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1038",
+        "variant_hash": "sha256:3be48a110160b51ca8cd542b3446f4d040f13d59a043c483ca4d13fbb2ac17ea",
+        "params": {
+          "locale": "vi",
+          "viewport": 30
+        },
+        "required": true,
+        "ordinal": 120
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1079",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1039",
+        "variant_hash": "sha256:3202b9a1fbbac6f754f50d753e673752fbe3e500e64e07d34f8b433400eaea5d",
+        "params": {
+          "locale": "vi",
+          "viewport": 31
+        },
+        "required": false,
+        "ordinal": 121
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d107a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103a",
+        "variant_hash": "sha256:809c5e5abe84f52ca3575bc09a6ec72266928da0e80146517dfd6f3d986a82ab",
+        "params": {
+          "locale": "vi",
+          "viewport": 32
+        },
+        "required": true,
+        "ordinal": 122
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d107b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103b",
+        "variant_hash": "sha256:08192b09fe8521e5dfad33102f22e0b2bf6f69ad41853613291cfd132ca2030c",
+        "params": {
+          "locale": "vi",
+          "viewport": 33
+        },
+        "required": false,
+        "ordinal": 123
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d107c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103c",
+        "variant_hash": "sha256:ccfcada3e165672b73f7f1ae142fd2e3d12a325404d8f90a1c76a1294c3fd14d",
+        "params": {
+          "locale": "vi",
+          "viewport": 34
+        },
+        "required": true,
+        "ordinal": 124
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d107d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103d",
+        "variant_hash": "sha256:0fa18d610d121b51971b49d2e804586c326845c83fe5c286b3e9f9c5b81bb9c7",
+        "params": {
+          "locale": "vi",
+          "viewport": 35
+        },
+        "required": false,
+        "ordinal": 125
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d107e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103e",
+        "variant_hash": "sha256:85c38916995404ed0b681779d9b211eb119ff0f2ceed1a4156da34bd038c4ff8",
+        "params": {
+          "locale": "vi",
+          "viewport": 36
+        },
+        "required": true,
+        "ordinal": 126
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d107f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103f",
+        "variant_hash": "sha256:ccac0f647f5b9a140bf43f23a62fd24d3819ce0f53202a7ef763d7cf38a78a4d",
+        "params": {
+          "locale": "vi",
+          "viewport": 37
+        },
+        "required": false,
+        "ordinal": 127
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1080",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1000",
+        "variant_hash": "sha256:404e4da789b85514e8bea8473d5e56af95a9cbeaf08768b59e06292acdd8a663",
+        "params": {
+          "locale": "vi",
+          "viewport": 38
+        },
+        "required": true,
+        "ordinal": 128
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1081",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1001",
+        "variant_hash": "sha256:d1ce74a7788c88b066b435ec43634e6df54960a480b26b7d50d785c61b65bdf3",
+        "params": {
+          "locale": "vi",
+          "viewport": 39
+        },
+        "required": false,
+        "ordinal": 129
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1082",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1002",
+        "variant_hash": "sha256:6e386a15acbfb6532a40b7e0316096e6e3e1661539615794b03297a416e8e3c6",
+        "params": {
+          "locale": "vi",
+          "viewport": 40
+        },
+        "required": true,
+        "ordinal": 130
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1083",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1003",
+        "variant_hash": "sha256:fb06604a62663d683eb8ba7a8ae289009f5b81334d75cc76c2c64415d6fb601a",
+        "params": {
+          "locale": "vi",
+          "viewport": 41
+        },
+        "required": false,
+        "ordinal": 131
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1084",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1004",
+        "variant_hash": "sha256:1b1b3c40fc94b8a0549db07ef671bcb4933d63ffc0d45fe7939f8172b5020f61",
+        "params": {
+          "locale": "vi",
+          "viewport": 42
+        },
+        "required": true,
+        "ordinal": 132
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1085",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1005",
+        "variant_hash": "sha256:2cd3bdb060c23bb57ab1cb913eda873af170ad88ccaf39cef170ac765913932a",
+        "params": {
+          "locale": "vi",
+          "viewport": 43
+        },
+        "required": false,
+        "ordinal": 133
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1086",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1006",
+        "variant_hash": "sha256:17ea821390904f803fa877987fee34965f12988e0f1cf81ba5402cf7de1a1f83",
+        "params": {
+          "locale": "vi",
+          "viewport": 44
+        },
+        "required": true,
+        "ordinal": 134
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1087",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1007",
+        "variant_hash": "sha256:048db954a63ac74d237094f27fd58d47669e146fd2276dcf267fbdd6e22f018b",
+        "params": {
+          "locale": "vi",
+          "viewport": 0
+        },
+        "required": true,
+        "ordinal": 135
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1088",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1008",
+        "variant_hash": "sha256:e21a72762524f043cea219222273117e128972ffbf67fe4db10eb51dbb65f2d8",
+        "params": {
+          "locale": "vi",
+          "viewport": 1
+        },
+        "required": false,
+        "ordinal": 136
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1089",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1009",
+        "variant_hash": "sha256:bcded0dc0871f93842ef2bd492ac78c2b7bb25b4a61b7371bd517f483518e16a",
+        "params": {
+          "locale": "vi",
+          "viewport": 2
+        },
+        "required": true,
+        "ordinal": 137
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d108a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100a",
+        "variant_hash": "sha256:5446f3188c4a1f3c32ea3bed2515e459bef88d38256231bac515597b0462c5ed",
+        "params": {
+          "locale": "vi",
+          "viewport": 3
+        },
+        "required": false,
+        "ordinal": 138
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d108b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100b",
+        "variant_hash": "sha256:8f02b25080c29818c7bd3ee862d60722e2b11c12f9e5258ce328481914dee7f3",
+        "params": {
+          "locale": "vi",
+          "viewport": 4
+        },
+        "required": true,
+        "ordinal": 139
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d108c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100c",
+        "variant_hash": "sha256:55e59806bf8082479e9c84ae821e05a722856747f306d10fc70b37cd67f4ddda",
+        "params": {
+          "locale": "vi",
+          "viewport": 5
+        },
+        "required": false,
+        "ordinal": 140
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d108d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100d",
+        "variant_hash": "sha256:0b8be49217fd2b41a98621f8b00cdc6dc49f9a1389fc50bba11e59b3d6b928f0",
+        "params": {
+          "locale": "vi",
+          "viewport": 6
+        },
+        "required": true,
+        "ordinal": 141
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d108e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100e",
+        "variant_hash": "sha256:4f09403e21687a5e94e812c4e1fcff80607695f1e27ddfa1d755bbbb55385139",
+        "params": {
+          "locale": "vi",
+          "viewport": 7
+        },
+        "required": false,
+        "ordinal": 142
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d108f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100f",
+        "variant_hash": "sha256:0bb5b94a6c72691559fd493b0b7d0d6a3149772dcb4d0681604754c7713fa358",
+        "params": {
+          "locale": "vi",
+          "viewport": 8
+        },
+        "required": true,
+        "ordinal": 143
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1090",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1010",
+        "variant_hash": "sha256:b29a4cfaf697c9fc9d97de1f1ea9308617f4fd49489bf34db8f291290cc6bae7",
+        "params": {
+          "locale": "vi",
+          "viewport": 9
+        },
+        "required": false,
+        "ordinal": 144
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1091",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1011",
+        "variant_hash": "sha256:abc8954eb01267d329379350346101ea28990bb2d7204fcf8a990d50d8559ff6",
+        "params": {
+          "locale": "vi",
+          "viewport": 10
+        },
+        "required": true,
+        "ordinal": 145
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1092",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1012",
+        "variant_hash": "sha256:69dc179a2ab9aafb3fae341b1a04d4a34d0120698cf89f996e88e8cd75e9ccd6",
+        "params": {
+          "locale": "vi",
+          "viewport": 11
+        },
+        "required": false,
+        "ordinal": 146
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1093",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1013",
+        "variant_hash": "sha256:12fe2753f8f3fb99241d83b15a6163a0b93a9873ebade36cfcb7fb5f9fa80cd2",
+        "params": {
+          "locale": "vi",
+          "viewport": 12
+        },
+        "required": true,
+        "ordinal": 147
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1094",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1014",
+        "variant_hash": "sha256:f5556c6f0ee1da7b61b11862a8e3d5b4b8307c2e3c791631a5d7eba90c487251",
+        "params": {
+          "locale": "vi",
+          "viewport": 13
+        },
+        "required": false,
+        "ordinal": 148
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1095",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1015",
+        "variant_hash": "sha256:c13736f5c74740b07d10f966797bb9c43d59b3c94dac88db4af644d652da4f7d",
+        "params": {
+          "locale": "vi",
+          "viewport": 14
+        },
+        "required": true,
+        "ordinal": 149
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1096",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1016",
+        "variant_hash": "sha256:c9b109b29474161fdab7b3d40b35abbb5b4e3163583f7c1cadb6c8df8fa5ab3d",
+        "params": {
+          "locale": "vi",
+          "viewport": 15
+        },
+        "required": false,
+        "ordinal": 150
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1097",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1017",
+        "variant_hash": "sha256:ebb6eba4165dca7341fb6c0bea3e471b0e0692cc4872e2dab49209a3a10b7755",
+        "params": {
+          "locale": "vi",
+          "viewport": 16
+        },
+        "required": true,
+        "ordinal": 151
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1098",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1018",
+        "variant_hash": "sha256:1b43953a1a22ffd554448fec6578eb110de3db8aa36185842a2f6e1422f83ed2",
+        "params": {
+          "locale": "vi",
+          "viewport": 17
+        },
+        "required": false,
+        "ordinal": 152
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1099",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1019",
+        "variant_hash": "sha256:a8fd6d6e1a88a6f8210d1927122bf6a88f0a35bc688d836f6b3adce9526d9149",
+        "params": {
+          "locale": "vi",
+          "viewport": 18
+        },
+        "required": true,
+        "ordinal": 153
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d109a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101a",
+        "variant_hash": "sha256:4c5d1b7ef88714a5222316288dd0bb20255421b3ade95e50c183746f75cebe7b",
+        "params": {
+          "locale": "vi",
+          "viewport": 19
+        },
+        "required": false,
+        "ordinal": 154
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d109b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101b",
+        "variant_hash": "sha256:b5f211a9ed2c35cfa1b6fb85a215d272207cf59a34949650c7ccd8c89ff96151",
+        "params": {
+          "locale": "vi",
+          "viewport": 20
+        },
+        "required": true,
+        "ordinal": 155
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d109c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101c",
+        "variant_hash": "sha256:3ee6b4e060e9b2c292ea0ea65db2ac5191e3aea6495ff8c40644f277c28640fc",
+        "params": {
+          "locale": "vi",
+          "viewport": 21
+        },
+        "required": false,
+        "ordinal": 156
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d109d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101d",
+        "variant_hash": "sha256:b7f1ab4b948536bbdc7c40eed63fe285c6b318fb18cf375751e5c52f1e6fdd2f",
+        "params": {
+          "locale": "vi",
+          "viewport": 22
+        },
+        "required": true,
+        "ordinal": 157
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d109e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101e",
+        "variant_hash": "sha256:ecb444c47d60bb622ba19f31769f6d6c6f8ba376fd24fb26090fdfc1706d8912",
+        "params": {
+          "locale": "vi",
+          "viewport": 23
+        },
+        "required": false,
+        "ordinal": 158
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d109f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101f",
+        "variant_hash": "sha256:e37b64f9adf659216e581d1462d02ec308731bcb2a933d7b8227fb5e03bdd60d",
+        "params": {
+          "locale": "vi",
+          "viewport": 24
+        },
+        "required": true,
+        "ordinal": 159
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a0",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1020",
+        "variant_hash": "sha256:faaf0f334a4d40c259ef0682ba6ed89c379516ce68c0f39f2484045d940eefd7",
+        "params": {
+          "locale": "vi",
+          "viewport": 25
+        },
+        "required": false,
+        "ordinal": 160
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a1",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1021",
+        "variant_hash": "sha256:e3352407594e0fd97154dfd335f827afb279bda76a2d84f9b723a35b3bb055b5",
+        "params": {
+          "locale": "vi",
+          "viewport": 26
+        },
+        "required": true,
+        "ordinal": 161
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a2",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1022",
+        "variant_hash": "sha256:8cedd3bdb1beb376673f88af262abe94111e1e238b008f7b9ba24d8d259c3e0c",
+        "params": {
+          "locale": "vi",
+          "viewport": 27
+        },
+        "required": false,
+        "ordinal": 162
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a3",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1023",
+        "variant_hash": "sha256:d92995154a9b20b873e7f2104c9e578bf92d589223fd6c7e8288010d35f804cc",
+        "params": {
+          "locale": "vi",
+          "viewport": 28
+        },
+        "required": true,
+        "ordinal": 163
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a4",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1024",
+        "variant_hash": "sha256:25044cf997e64e1413580ed028ccddec5c10cde90fbc5c3437ebe383b1db1b99",
+        "params": {
+          "locale": "vi",
+          "viewport": 29
+        },
+        "required": false,
+        "ordinal": 164
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a5",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1025",
+        "variant_hash": "sha256:3be48a110160b51ca8cd542b3446f4d040f13d59a043c483ca4d13fbb2ac17ea",
+        "params": {
+          "locale": "vi",
+          "viewport": 30
+        },
+        "required": true,
+        "ordinal": 165
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a6",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1026",
+        "variant_hash": "sha256:3202b9a1fbbac6f754f50d753e673752fbe3e500e64e07d34f8b433400eaea5d",
+        "params": {
+          "locale": "vi",
+          "viewport": 31
+        },
+        "required": false,
+        "ordinal": 166
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a7",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1027",
+        "variant_hash": "sha256:809c5e5abe84f52ca3575bc09a6ec72266928da0e80146517dfd6f3d986a82ab",
+        "params": {
+          "locale": "vi",
+          "viewport": 32
+        },
+        "required": true,
+        "ordinal": 167
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a8",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1028",
+        "variant_hash": "sha256:08192b09fe8521e5dfad33102f22e0b2bf6f69ad41853613291cfd132ca2030c",
+        "params": {
+          "locale": "vi",
+          "viewport": 33
+        },
+        "required": false,
+        "ordinal": 168
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10a9",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1029",
+        "variant_hash": "sha256:ccfcada3e165672b73f7f1ae142fd2e3d12a325404d8f90a1c76a1294c3fd14d",
+        "params": {
+          "locale": "vi",
+          "viewport": 34
+        },
+        "required": true,
+        "ordinal": 169
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10aa",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102a",
+        "variant_hash": "sha256:0fa18d610d121b51971b49d2e804586c326845c83fe5c286b3e9f9c5b81bb9c7",
+        "params": {
+          "locale": "vi",
+          "viewport": 35
+        },
+        "required": false,
+        "ordinal": 170
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ab",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102b",
+        "variant_hash": "sha256:85c38916995404ed0b681779d9b211eb119ff0f2ceed1a4156da34bd038c4ff8",
+        "params": {
+          "locale": "vi",
+          "viewport": 36
+        },
+        "required": true,
+        "ordinal": 171
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ac",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102c",
+        "variant_hash": "sha256:ccac0f647f5b9a140bf43f23a62fd24d3819ce0f53202a7ef763d7cf38a78a4d",
+        "params": {
+          "locale": "vi",
+          "viewport": 37
+        },
+        "required": false,
+        "ordinal": 172
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ad",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102d",
+        "variant_hash": "sha256:404e4da789b85514e8bea8473d5e56af95a9cbeaf08768b59e06292acdd8a663",
+        "params": {
+          "locale": "vi",
+          "viewport": 38
+        },
+        "required": true,
+        "ordinal": 173
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ae",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102e",
+        "variant_hash": "sha256:d1ce74a7788c88b066b435ec43634e6df54960a480b26b7d50d785c61b65bdf3",
+        "params": {
+          "locale": "vi",
+          "viewport": 39
+        },
+        "required": false,
+        "ordinal": 174
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10af",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102f",
+        "variant_hash": "sha256:6e386a15acbfb6532a40b7e0316096e6e3e1661539615794b03297a416e8e3c6",
+        "params": {
+          "locale": "vi",
+          "viewport": 40
+        },
+        "required": true,
+        "ordinal": 175
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b0",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1030",
+        "variant_hash": "sha256:fb06604a62663d683eb8ba7a8ae289009f5b81334d75cc76c2c64415d6fb601a",
+        "params": {
+          "locale": "vi",
+          "viewport": 41
+        },
+        "required": false,
+        "ordinal": 176
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b1",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1031",
+        "variant_hash": "sha256:1b1b3c40fc94b8a0549db07ef671bcb4933d63ffc0d45fe7939f8172b5020f61",
+        "params": {
+          "locale": "vi",
+          "viewport": 42
+        },
+        "required": true,
+        "ordinal": 177
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b2",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1032",
+        "variant_hash": "sha256:2cd3bdb060c23bb57ab1cb913eda873af170ad88ccaf39cef170ac765913932a",
+        "params": {
+          "locale": "vi",
+          "viewport": 43
+        },
+        "required": false,
+        "ordinal": 178
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b3",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1033",
+        "variant_hash": "sha256:17ea821390904f803fa877987fee34965f12988e0f1cf81ba5402cf7de1a1f83",
+        "params": {
+          "locale": "vi",
+          "viewport": 44
+        },
+        "required": true,
+        "ordinal": 179
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b4",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1034",
+        "variant_hash": "sha256:048db954a63ac74d237094f27fd58d47669e146fd2276dcf267fbdd6e22f018b",
+        "params": {
+          "locale": "vi",
+          "viewport": 0
+        },
+        "required": true,
+        "ordinal": 180
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b5",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1035",
+        "variant_hash": "sha256:e21a72762524f043cea219222273117e128972ffbf67fe4db10eb51dbb65f2d8",
+        "params": {
+          "locale": "vi",
+          "viewport": 1
+        },
+        "required": false,
+        "ordinal": 181
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b6",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1036",
+        "variant_hash": "sha256:bcded0dc0871f93842ef2bd492ac78c2b7bb25b4a61b7371bd517f483518e16a",
+        "params": {
+          "locale": "vi",
+          "viewport": 2
+        },
+        "required": true,
+        "ordinal": 182
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b7",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1037",
+        "variant_hash": "sha256:5446f3188c4a1f3c32ea3bed2515e459bef88d38256231bac515597b0462c5ed",
+        "params": {
+          "locale": "vi",
+          "viewport": 3
+        },
+        "required": false,
+        "ordinal": 183
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b8",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1038",
+        "variant_hash": "sha256:8f02b25080c29818c7bd3ee862d60722e2b11c12f9e5258ce328481914dee7f3",
+        "params": {
+          "locale": "vi",
+          "viewport": 4
+        },
+        "required": true,
+        "ordinal": 184
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10b9",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1039",
+        "variant_hash": "sha256:55e59806bf8082479e9c84ae821e05a722856747f306d10fc70b37cd67f4ddda",
+        "params": {
+          "locale": "vi",
+          "viewport": 5
+        },
+        "required": false,
+        "ordinal": 185
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ba",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103a",
+        "variant_hash": "sha256:0b8be49217fd2b41a98621f8b00cdc6dc49f9a1389fc50bba11e59b3d6b928f0",
+        "params": {
+          "locale": "vi",
+          "viewport": 6
+        },
+        "required": true,
+        "ordinal": 186
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10bb",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103b",
+        "variant_hash": "sha256:4f09403e21687a5e94e812c4e1fcff80607695f1e27ddfa1d755bbbb55385139",
+        "params": {
+          "locale": "vi",
+          "viewport": 7
+        },
+        "required": false,
+        "ordinal": 187
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10bc",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103c",
+        "variant_hash": "sha256:0bb5b94a6c72691559fd493b0b7d0d6a3149772dcb4d0681604754c7713fa358",
+        "params": {
+          "locale": "vi",
+          "viewport": 8
+        },
+        "required": true,
+        "ordinal": 188
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10bd",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103d",
+        "variant_hash": "sha256:b29a4cfaf697c9fc9d97de1f1ea9308617f4fd49489bf34db8f291290cc6bae7",
+        "params": {
+          "locale": "vi",
+          "viewport": 9
+        },
+        "required": false,
+        "ordinal": 189
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10be",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103e",
+        "variant_hash": "sha256:abc8954eb01267d329379350346101ea28990bb2d7204fcf8a990d50d8559ff6",
+        "params": {
+          "locale": "vi",
+          "viewport": 10
+        },
+        "required": true,
+        "ordinal": 190
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10bf",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103f",
+        "variant_hash": "sha256:69dc179a2ab9aafb3fae341b1a04d4a34d0120698cf89f996e88e8cd75e9ccd6",
+        "params": {
+          "locale": "vi",
+          "viewport": 11
+        },
+        "required": false,
+        "ordinal": 191
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c0",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1000",
+        "variant_hash": "sha256:12fe2753f8f3fb99241d83b15a6163a0b93a9873ebade36cfcb7fb5f9fa80cd2",
+        "params": {
+          "locale": "vi",
+          "viewport": 12
+        },
+        "required": true,
+        "ordinal": 192
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c1",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1001",
+        "variant_hash": "sha256:f5556c6f0ee1da7b61b11862a8e3d5b4b8307c2e3c791631a5d7eba90c487251",
+        "params": {
+          "locale": "vi",
+          "viewport": 13
+        },
+        "required": false,
+        "ordinal": 193
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c2",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1002",
+        "variant_hash": "sha256:c13736f5c74740b07d10f966797bb9c43d59b3c94dac88db4af644d652da4f7d",
+        "params": {
+          "locale": "vi",
+          "viewport": 14
+        },
+        "required": true,
+        "ordinal": 194
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c3",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1003",
+        "variant_hash": "sha256:c9b109b29474161fdab7b3d40b35abbb5b4e3163583f7c1cadb6c8df8fa5ab3d",
+        "params": {
+          "locale": "vi",
+          "viewport": 15
+        },
+        "required": false,
+        "ordinal": 195
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c4",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1004",
+        "variant_hash": "sha256:ebb6eba4165dca7341fb6c0bea3e471b0e0692cc4872e2dab49209a3a10b7755",
+        "params": {
+          "locale": "vi",
+          "viewport": 16
+        },
+        "required": true,
+        "ordinal": 196
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c5",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1005",
+        "variant_hash": "sha256:1b43953a1a22ffd554448fec6578eb110de3db8aa36185842a2f6e1422f83ed2",
+        "params": {
+          "locale": "vi",
+          "viewport": 17
+        },
+        "required": false,
+        "ordinal": 197
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c6",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1006",
+        "variant_hash": "sha256:a8fd6d6e1a88a6f8210d1927122bf6a88f0a35bc688d836f6b3adce9526d9149",
+        "params": {
+          "locale": "vi",
+          "viewport": 18
+        },
+        "required": true,
+        "ordinal": 198
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c7",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1007",
+        "variant_hash": "sha256:4c5d1b7ef88714a5222316288dd0bb20255421b3ade95e50c183746f75cebe7b",
+        "params": {
+          "locale": "vi",
+          "viewport": 19
+        },
+        "required": false,
+        "ordinal": 199
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c8",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1008",
+        "variant_hash": "sha256:b5f211a9ed2c35cfa1b6fb85a215d272207cf59a34949650c7ccd8c89ff96151",
+        "params": {
+          "locale": "vi",
+          "viewport": 20
+        },
+        "required": true,
+        "ordinal": 200
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10c9",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1009",
+        "variant_hash": "sha256:3ee6b4e060e9b2c292ea0ea65db2ac5191e3aea6495ff8c40644f277c28640fc",
+        "params": {
+          "locale": "vi",
+          "viewport": 21
+        },
+        "required": false,
+        "ordinal": 201
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ca",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100a",
+        "variant_hash": "sha256:b7f1ab4b948536bbdc7c40eed63fe285c6b318fb18cf375751e5c52f1e6fdd2f",
+        "params": {
+          "locale": "vi",
+          "viewport": 22
+        },
+        "required": true,
+        "ordinal": 202
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10cb",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100b",
+        "variant_hash": "sha256:ecb444c47d60bb622ba19f31769f6d6c6f8ba376fd24fb26090fdfc1706d8912",
+        "params": {
+          "locale": "vi",
+          "viewport": 23
+        },
+        "required": false,
+        "ordinal": 203
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10cc",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100c",
+        "variant_hash": "sha256:e37b64f9adf659216e581d1462d02ec308731bcb2a933d7b8227fb5e03bdd60d",
+        "params": {
+          "locale": "vi",
+          "viewport": 24
+        },
+        "required": true,
+        "ordinal": 204
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10cd",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100d",
+        "variant_hash": "sha256:faaf0f334a4d40c259ef0682ba6ed89c379516ce68c0f39f2484045d940eefd7",
+        "params": {
+          "locale": "vi",
+          "viewport": 25
+        },
+        "required": false,
+        "ordinal": 205
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ce",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100e",
+        "variant_hash": "sha256:e3352407594e0fd97154dfd335f827afb279bda76a2d84f9b723a35b3bb055b5",
+        "params": {
+          "locale": "vi",
+          "viewport": 26
+        },
+        "required": true,
+        "ordinal": 206
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10cf",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100f",
+        "variant_hash": "sha256:8cedd3bdb1beb376673f88af262abe94111e1e238b008f7b9ba24d8d259c3e0c",
+        "params": {
+          "locale": "vi",
+          "viewport": 27
+        },
+        "required": false,
+        "ordinal": 207
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d0",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1010",
+        "variant_hash": "sha256:d92995154a9b20b873e7f2104c9e578bf92d589223fd6c7e8288010d35f804cc",
+        "params": {
+          "locale": "vi",
+          "viewport": 28
+        },
+        "required": true,
+        "ordinal": 208
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d1",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1011",
+        "variant_hash": "sha256:25044cf997e64e1413580ed028ccddec5c10cde90fbc5c3437ebe383b1db1b99",
+        "params": {
+          "locale": "vi",
+          "viewport": 29
+        },
+        "required": false,
+        "ordinal": 209
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d2",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1012",
+        "variant_hash": "sha256:3be48a110160b51ca8cd542b3446f4d040f13d59a043c483ca4d13fbb2ac17ea",
+        "params": {
+          "locale": "vi",
+          "viewport": 30
+        },
+        "required": true,
+        "ordinal": 210
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d3",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1013",
+        "variant_hash": "sha256:3202b9a1fbbac6f754f50d753e673752fbe3e500e64e07d34f8b433400eaea5d",
+        "params": {
+          "locale": "vi",
+          "viewport": 31
+        },
+        "required": false,
+        "ordinal": 211
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d4",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1014",
+        "variant_hash": "sha256:809c5e5abe84f52ca3575bc09a6ec72266928da0e80146517dfd6f3d986a82ab",
+        "params": {
+          "locale": "vi",
+          "viewport": 32
+        },
+        "required": true,
+        "ordinal": 212
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d5",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1015",
+        "variant_hash": "sha256:08192b09fe8521e5dfad33102f22e0b2bf6f69ad41853613291cfd132ca2030c",
+        "params": {
+          "locale": "vi",
+          "viewport": 33
+        },
+        "required": false,
+        "ordinal": 213
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d6",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1016",
+        "variant_hash": "sha256:ccfcada3e165672b73f7f1ae142fd2e3d12a325404d8f90a1c76a1294c3fd14d",
+        "params": {
+          "locale": "vi",
+          "viewport": 34
+        },
+        "required": true,
+        "ordinal": 214
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d7",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1017",
+        "variant_hash": "sha256:0fa18d610d121b51971b49d2e804586c326845c83fe5c286b3e9f9c5b81bb9c7",
+        "params": {
+          "locale": "vi",
+          "viewport": 35
+        },
+        "required": false,
+        "ordinal": 215
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d8",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1018",
+        "variant_hash": "sha256:85c38916995404ed0b681779d9b211eb119ff0f2ceed1a4156da34bd038c4ff8",
+        "params": {
+          "locale": "vi",
+          "viewport": 36
+        },
+        "required": true,
+        "ordinal": 216
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10d9",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1019",
+        "variant_hash": "sha256:ccac0f647f5b9a140bf43f23a62fd24d3819ce0f53202a7ef763d7cf38a78a4d",
+        "params": {
+          "locale": "vi",
+          "viewport": 37
+        },
+        "required": false,
+        "ordinal": 217
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10da",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101a",
+        "variant_hash": "sha256:404e4da789b85514e8bea8473d5e56af95a9cbeaf08768b59e06292acdd8a663",
+        "params": {
+          "locale": "vi",
+          "viewport": 38
+        },
+        "required": true,
+        "ordinal": 218
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10db",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101b",
+        "variant_hash": "sha256:d1ce74a7788c88b066b435ec43634e6df54960a480b26b7d50d785c61b65bdf3",
+        "params": {
+          "locale": "vi",
+          "viewport": 39
+        },
+        "required": false,
+        "ordinal": 219
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10dc",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101c",
+        "variant_hash": "sha256:6e386a15acbfb6532a40b7e0316096e6e3e1661539615794b03297a416e8e3c6",
+        "params": {
+          "locale": "vi",
+          "viewport": 40
+        },
+        "required": true,
+        "ordinal": 220
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10dd",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101d",
+        "variant_hash": "sha256:fb06604a62663d683eb8ba7a8ae289009f5b81334d75cc76c2c64415d6fb601a",
+        "params": {
+          "locale": "vi",
+          "viewport": 41
+        },
+        "required": false,
+        "ordinal": 221
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10de",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101e",
+        "variant_hash": "sha256:1b1b3c40fc94b8a0549db07ef671bcb4933d63ffc0d45fe7939f8172b5020f61",
+        "params": {
+          "locale": "vi",
+          "viewport": 42
+        },
+        "required": true,
+        "ordinal": 222
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10df",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101f",
+        "variant_hash": "sha256:2cd3bdb060c23bb57ab1cb913eda873af170ad88ccaf39cef170ac765913932a",
+        "params": {
+          "locale": "vi",
+          "viewport": 43
+        },
+        "required": false,
+        "ordinal": 223
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e0",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1020",
+        "variant_hash": "sha256:17ea821390904f803fa877987fee34965f12988e0f1cf81ba5402cf7de1a1f83",
+        "params": {
+          "locale": "vi",
+          "viewport": 44
+        },
+        "required": true,
+        "ordinal": 224
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e1",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1021",
+        "variant_hash": "sha256:048db954a63ac74d237094f27fd58d47669e146fd2276dcf267fbdd6e22f018b",
+        "params": {
+          "locale": "vi",
+          "viewport": 0
+        },
+        "required": true,
+        "ordinal": 225
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e2",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1022",
+        "variant_hash": "sha256:e21a72762524f043cea219222273117e128972ffbf67fe4db10eb51dbb65f2d8",
+        "params": {
+          "locale": "vi",
+          "viewport": 1
+        },
+        "required": false,
+        "ordinal": 226
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e3",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1023",
+        "variant_hash": "sha256:bcded0dc0871f93842ef2bd492ac78c2b7bb25b4a61b7371bd517f483518e16a",
+        "params": {
+          "locale": "vi",
+          "viewport": 2
+        },
+        "required": true,
+        "ordinal": 227
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e4",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1024",
+        "variant_hash": "sha256:5446f3188c4a1f3c32ea3bed2515e459bef88d38256231bac515597b0462c5ed",
+        "params": {
+          "locale": "vi",
+          "viewport": 3
+        },
+        "required": false,
+        "ordinal": 228
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e5",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1025",
+        "variant_hash": "sha256:8f02b25080c29818c7bd3ee862d60722e2b11c12f9e5258ce328481914dee7f3",
+        "params": {
+          "locale": "vi",
+          "viewport": 4
+        },
+        "required": true,
+        "ordinal": 229
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e6",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1026",
+        "variant_hash": "sha256:55e59806bf8082479e9c84ae821e05a722856747f306d10fc70b37cd67f4ddda",
+        "params": {
+          "locale": "vi",
+          "viewport": 5
+        },
+        "required": false,
+        "ordinal": 230
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e7",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1027",
+        "variant_hash": "sha256:0b8be49217fd2b41a98621f8b00cdc6dc49f9a1389fc50bba11e59b3d6b928f0",
+        "params": {
+          "locale": "vi",
+          "viewport": 6
+        },
+        "required": true,
+        "ordinal": 231
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e8",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1028",
+        "variant_hash": "sha256:4f09403e21687a5e94e812c4e1fcff80607695f1e27ddfa1d755bbbb55385139",
+        "params": {
+          "locale": "vi",
+          "viewport": 7
+        },
+        "required": false,
+        "ordinal": 232
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10e9",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1029",
+        "variant_hash": "sha256:0bb5b94a6c72691559fd493b0b7d0d6a3149772dcb4d0681604754c7713fa358",
+        "params": {
+          "locale": "vi",
+          "viewport": 8
+        },
+        "required": true,
+        "ordinal": 233
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ea",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102a",
+        "variant_hash": "sha256:b29a4cfaf697c9fc9d97de1f1ea9308617f4fd49489bf34db8f291290cc6bae7",
+        "params": {
+          "locale": "vi",
+          "viewport": 9
+        },
+        "required": false,
+        "ordinal": 234
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10eb",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102b",
+        "variant_hash": "sha256:abc8954eb01267d329379350346101ea28990bb2d7204fcf8a990d50d8559ff6",
+        "params": {
+          "locale": "vi",
+          "viewport": 10
+        },
+        "required": true,
+        "ordinal": 235
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ec",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102c",
+        "variant_hash": "sha256:69dc179a2ab9aafb3fae341b1a04d4a34d0120698cf89f996e88e8cd75e9ccd6",
+        "params": {
+          "locale": "vi",
+          "viewport": 11
+        },
+        "required": false,
+        "ordinal": 236
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ed",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102d",
+        "variant_hash": "sha256:12fe2753f8f3fb99241d83b15a6163a0b93a9873ebade36cfcb7fb5f9fa80cd2",
+        "params": {
+          "locale": "vi",
+          "viewport": 12
+        },
+        "required": true,
+        "ordinal": 237
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ee",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102e",
+        "variant_hash": "sha256:f5556c6f0ee1da7b61b11862a8e3d5b4b8307c2e3c791631a5d7eba90c487251",
+        "params": {
+          "locale": "vi",
+          "viewport": 13
+        },
+        "required": false,
+        "ordinal": 238
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ef",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c102f",
+        "variant_hash": "sha256:c13736f5c74740b07d10f966797bb9c43d59b3c94dac88db4af644d652da4f7d",
+        "params": {
+          "locale": "vi",
+          "viewport": 14
+        },
+        "required": true,
+        "ordinal": 239
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f0",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1030",
+        "variant_hash": "sha256:c9b109b29474161fdab7b3d40b35abbb5b4e3163583f7c1cadb6c8df8fa5ab3d",
+        "params": {
+          "locale": "vi",
+          "viewport": 15
+        },
+        "required": false,
+        "ordinal": 240
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f1",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1031",
+        "variant_hash": "sha256:ebb6eba4165dca7341fb6c0bea3e471b0e0692cc4872e2dab49209a3a10b7755",
+        "params": {
+          "locale": "vi",
+          "viewport": 16
+        },
+        "required": true,
+        "ordinal": 241
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f2",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1032",
+        "variant_hash": "sha256:1b43953a1a22ffd554448fec6578eb110de3db8aa36185842a2f6e1422f83ed2",
+        "params": {
+          "locale": "vi",
+          "viewport": 17
+        },
+        "required": false,
+        "ordinal": 242
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f3",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1033",
+        "variant_hash": "sha256:a8fd6d6e1a88a6f8210d1927122bf6a88f0a35bc688d836f6b3adce9526d9149",
+        "params": {
+          "locale": "vi",
+          "viewport": 18
+        },
+        "required": true,
+        "ordinal": 243
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f4",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1034",
+        "variant_hash": "sha256:4c5d1b7ef88714a5222316288dd0bb20255421b3ade95e50c183746f75cebe7b",
+        "params": {
+          "locale": "vi",
+          "viewport": 19
+        },
+        "required": false,
+        "ordinal": 244
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f5",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1035",
+        "variant_hash": "sha256:b5f211a9ed2c35cfa1b6fb85a215d272207cf59a34949650c7ccd8c89ff96151",
+        "params": {
+          "locale": "vi",
+          "viewport": 20
+        },
+        "required": true,
+        "ordinal": 245
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f6",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1036",
+        "variant_hash": "sha256:3ee6b4e060e9b2c292ea0ea65db2ac5191e3aea6495ff8c40644f277c28640fc",
+        "params": {
+          "locale": "vi",
+          "viewport": 21
+        },
+        "required": false,
+        "ordinal": 246
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f7",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1037",
+        "variant_hash": "sha256:b7f1ab4b948536bbdc7c40eed63fe285c6b318fb18cf375751e5c52f1e6fdd2f",
+        "params": {
+          "locale": "vi",
+          "viewport": 22
+        },
+        "required": true,
+        "ordinal": 247
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f8",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1038",
+        "variant_hash": "sha256:ecb444c47d60bb622ba19f31769f6d6c6f8ba376fd24fb26090fdfc1706d8912",
+        "params": {
+          "locale": "vi",
+          "viewport": 23
+        },
+        "required": false,
+        "ordinal": 248
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10f9",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1039",
+        "variant_hash": "sha256:e37b64f9adf659216e581d1462d02ec308731bcb2a933d7b8227fb5e03bdd60d",
+        "params": {
+          "locale": "vi",
+          "viewport": 24
+        },
+        "required": true,
+        "ordinal": 249
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10fa",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103a",
+        "variant_hash": "sha256:faaf0f334a4d40c259ef0682ba6ed89c379516ce68c0f39f2484045d940eefd7",
+        "params": {
+          "locale": "vi",
+          "viewport": 25
+        },
+        "required": false,
+        "ordinal": 250
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10fb",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103b",
+        "variant_hash": "sha256:e3352407594e0fd97154dfd335f827afb279bda76a2d84f9b723a35b3bb055b5",
+        "params": {
+          "locale": "vi",
+          "viewport": 26
+        },
+        "required": true,
+        "ordinal": 251
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10fc",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103c",
+        "variant_hash": "sha256:8cedd3bdb1beb376673f88af262abe94111e1e238b008f7b9ba24d8d259c3e0c",
+        "params": {
+          "locale": "vi",
+          "viewport": 27
+        },
+        "required": false,
+        "ordinal": 252
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10fd",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103d",
+        "variant_hash": "sha256:d92995154a9b20b873e7f2104c9e578bf92d589223fd6c7e8288010d35f804cc",
+        "params": {
+          "locale": "vi",
+          "viewport": 28
+        },
+        "required": true,
+        "ordinal": 253
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10fe",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103e",
+        "variant_hash": "sha256:25044cf997e64e1413580ed028ccddec5c10cde90fbc5c3437ebe383b1db1b99",
+        "params": {
+          "locale": "vi",
+          "viewport": 29
+        },
+        "required": false,
+        "ordinal": 254
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d10ff",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c103f",
+        "variant_hash": "sha256:3be48a110160b51ca8cd542b3446f4d040f13d59a043c483ca4d13fbb2ac17ea",
+        "params": {
+          "locale": "vi",
+          "viewport": 30
+        },
+        "required": true,
+        "ordinal": 255
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1100",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1000",
+        "variant_hash": "sha256:3202b9a1fbbac6f754f50d753e673752fbe3e500e64e07d34f8b433400eaea5d",
+        "params": {
+          "locale": "vi",
+          "viewport": 31
+        },
+        "required": false,
+        "ordinal": 256
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1101",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1001",
+        "variant_hash": "sha256:809c5e5abe84f52ca3575bc09a6ec72266928da0e80146517dfd6f3d986a82ab",
+        "params": {
+          "locale": "vi",
+          "viewport": 32
+        },
+        "required": true,
+        "ordinal": 257
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1102",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1002",
+        "variant_hash": "sha256:08192b09fe8521e5dfad33102f22e0b2bf6f69ad41853613291cfd132ca2030c",
+        "params": {
+          "locale": "vi",
+          "viewport": 33
+        },
+        "required": false,
+        "ordinal": 258
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1103",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1003",
+        "variant_hash": "sha256:ccfcada3e165672b73f7f1ae142fd2e3d12a325404d8f90a1c76a1294c3fd14d",
+        "params": {
+          "locale": "vi",
+          "viewport": 34
+        },
+        "required": true,
+        "ordinal": 259
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1104",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1004",
+        "variant_hash": "sha256:0fa18d610d121b51971b49d2e804586c326845c83fe5c286b3e9f9c5b81bb9c7",
+        "params": {
+          "locale": "vi",
+          "viewport": 35
+        },
+        "required": false,
+        "ordinal": 260
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1105",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1005",
+        "variant_hash": "sha256:85c38916995404ed0b681779d9b211eb119ff0f2ceed1a4156da34bd038c4ff8",
+        "params": {
+          "locale": "vi",
+          "viewport": 36
+        },
+        "required": true,
+        "ordinal": 261
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1106",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1006",
+        "variant_hash": "sha256:ccac0f647f5b9a140bf43f23a62fd24d3819ce0f53202a7ef763d7cf38a78a4d",
+        "params": {
+          "locale": "vi",
+          "viewport": 37
+        },
+        "required": false,
+        "ordinal": 262
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1107",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1007",
+        "variant_hash": "sha256:404e4da789b85514e8bea8473d5e56af95a9cbeaf08768b59e06292acdd8a663",
+        "params": {
+          "locale": "vi",
+          "viewport": 38
+        },
+        "required": true,
+        "ordinal": 263
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1108",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1008",
+        "variant_hash": "sha256:d1ce74a7788c88b066b435ec43634e6df54960a480b26b7d50d785c61b65bdf3",
+        "params": {
+          "locale": "vi",
+          "viewport": 39
+        },
+        "required": false,
+        "ordinal": 264
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1109",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1009",
+        "variant_hash": "sha256:6e386a15acbfb6532a40b7e0316096e6e3e1661539615794b03297a416e8e3c6",
+        "params": {
+          "locale": "vi",
+          "viewport": 40
+        },
+        "required": true,
+        "ordinal": 265
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d110a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100a",
+        "variant_hash": "sha256:fb06604a62663d683eb8ba7a8ae289009f5b81334d75cc76c2c64415d6fb601a",
+        "params": {
+          "locale": "vi",
+          "viewport": 41
+        },
+        "required": false,
+        "ordinal": 266
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d110b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100b",
+        "variant_hash": "sha256:1b1b3c40fc94b8a0549db07ef671bcb4933d63ffc0d45fe7939f8172b5020f61",
+        "params": {
+          "locale": "vi",
+          "viewport": 42
+        },
+        "required": true,
+        "ordinal": 267
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d110c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100c",
+        "variant_hash": "sha256:2cd3bdb060c23bb57ab1cb913eda873af170ad88ccaf39cef170ac765913932a",
+        "params": {
+          "locale": "vi",
+          "viewport": 43
+        },
+        "required": false,
+        "ordinal": 268
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d110d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100d",
+        "variant_hash": "sha256:17ea821390904f803fa877987fee34965f12988e0f1cf81ba5402cf7de1a1f83",
+        "params": {
+          "locale": "vi",
+          "viewport": 44
+        },
+        "required": true,
+        "ordinal": 269
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d110e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100e",
+        "variant_hash": "sha256:048db954a63ac74d237094f27fd58d47669e146fd2276dcf267fbdd6e22f018b",
+        "params": {
+          "locale": "vi",
+          "viewport": 0
+        },
+        "required": true,
+        "ordinal": 270
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d110f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c100f",
+        "variant_hash": "sha256:e21a72762524f043cea219222273117e128972ffbf67fe4db10eb51dbb65f2d8",
+        "params": {
+          "locale": "vi",
+          "viewport": 1
+        },
+        "required": false,
+        "ordinal": 271
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1110",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1010",
+        "variant_hash": "sha256:bcded0dc0871f93842ef2bd492ac78c2b7bb25b4a61b7371bd517f483518e16a",
+        "params": {
+          "locale": "vi",
+          "viewport": 2
+        },
+        "required": true,
+        "ordinal": 272
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1111",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1011",
+        "variant_hash": "sha256:5446f3188c4a1f3c32ea3bed2515e459bef88d38256231bac515597b0462c5ed",
+        "params": {
+          "locale": "vi",
+          "viewport": 3
+        },
+        "required": false,
+        "ordinal": 273
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1112",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1012",
+        "variant_hash": "sha256:8f02b25080c29818c7bd3ee862d60722e2b11c12f9e5258ce328481914dee7f3",
+        "params": {
+          "locale": "vi",
+          "viewport": 4
+        },
+        "required": true,
+        "ordinal": 274
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1113",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1013",
+        "variant_hash": "sha256:55e59806bf8082479e9c84ae821e05a722856747f306d10fc70b37cd67f4ddda",
+        "params": {
+          "locale": "vi",
+          "viewport": 5
+        },
+        "required": false,
+        "ordinal": 275
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1114",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1014",
+        "variant_hash": "sha256:0b8be49217fd2b41a98621f8b00cdc6dc49f9a1389fc50bba11e59b3d6b928f0",
+        "params": {
+          "locale": "vi",
+          "viewport": 6
+        },
+        "required": true,
+        "ordinal": 276
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1115",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1015",
+        "variant_hash": "sha256:4f09403e21687a5e94e812c4e1fcff80607695f1e27ddfa1d755bbbb55385139",
+        "params": {
+          "locale": "vi",
+          "viewport": 7
+        },
+        "required": false,
+        "ordinal": 277
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1116",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1016",
+        "variant_hash": "sha256:0bb5b94a6c72691559fd493b0b7d0d6a3149772dcb4d0681604754c7713fa358",
+        "params": {
+          "locale": "vi",
+          "viewport": 8
+        },
+        "required": true,
+        "ordinal": 278
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1117",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1017",
+        "variant_hash": "sha256:b29a4cfaf697c9fc9d97de1f1ea9308617f4fd49489bf34db8f291290cc6bae7",
+        "params": {
+          "locale": "vi",
+          "viewport": 9
+        },
+        "required": false,
+        "ordinal": 279
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1118",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1018",
+        "variant_hash": "sha256:abc8954eb01267d329379350346101ea28990bb2d7204fcf8a990d50d8559ff6",
+        "params": {
+          "locale": "vi",
+          "viewport": 10
+        },
+        "required": true,
+        "ordinal": 280
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d1119",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c1019",
+        "variant_hash": "sha256:69dc179a2ab9aafb3fae341b1a04d4a34d0120698cf89f996e88e8cd75e9ccd6",
+        "params": {
+          "locale": "vi",
+          "viewport": 11
+        },
+        "required": false,
+        "ordinal": 281
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d111a",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101a",
+        "variant_hash": "sha256:12fe2753f8f3fb99241d83b15a6163a0b93a9873ebade36cfcb7fb5f9fa80cd2",
+        "params": {
+          "locale": "vi",
+          "viewport": 12
+        },
+        "required": true,
+        "ordinal": 282
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d111b",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101b",
+        "variant_hash": "sha256:f5556c6f0ee1da7b61b11862a8e3d5b4b8307c2e3c791631a5d7eba90c487251",
+        "params": {
+          "locale": "vi",
+          "viewport": 13
+        },
+        "required": false,
+        "ordinal": 283
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d111c",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101c",
+        "variant_hash": "sha256:c13736f5c74740b07d10f966797bb9c43d59b3c94dac88db4af644d652da4f7d",
+        "params": {
+          "locale": "vi",
+          "viewport": 14
+        },
+        "required": true,
+        "ordinal": 284
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d111d",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101d",
+        "variant_hash": "sha256:c9b109b29474161fdab7b3d40b35abbb5b4e3163583f7c1cadb6c8df8fa5ab3d",
+        "params": {
+          "locale": "vi",
+          "viewport": 15
+        },
+        "required": false,
+        "ordinal": 285
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d111e",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101e",
+        "variant_hash": "sha256:ebb6eba4165dca7341fb6c0bea3e471b0e0692cc4872e2dab49209a3a10b7755",
+        "params": {
+          "locale": "vi",
+          "viewport": 16
+        },
+        "required": true,
+        "ordinal": 286
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000d111f",
+        "case_revision_id": "018f0000-0000-7000-8000-0000000c101f",
+        "variant_hash": "sha256:1b43953a1a22ffd554448fec6578eb110de3db8aa36185842a2f6e1422f83ed2",
+        "params": {
+          "locale": "vi",
+          "viewport": 17
+        },
+        "required": false,
+        "ordinal": 287
+      }
+    ],
+    "edges": [
+      {
+        "parent_member_id": "018f0000-0000-7000-8000-0000000d1001",
+        "child_member_id": "018f0000-0000-7000-8000-0000000d1000"
+      }
+    ]
+  }
+}

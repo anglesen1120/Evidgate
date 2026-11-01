@@ -3,24 +3,21 @@
 // `routeConfig.path` chain only. The fixtures below are activated-route trees with just the two
 // members the function reads — `routeConfig.path` and `firstChild` — so a test can also hand it
 // the parameter values and URL segments of a real navigation and prove they are ignored.
-import type { ActivatedRouteSnapshot } from '@angular/router';
-
-import { routeTemplate, UNKNOWN_ROUTE } from './route-template';
+import { routeTemplate, UNKNOWN_ROUTE, type RouteTreeNode } from './route-template';
 
 /**
  * One snapshot of the chain, outermost first: the path array becomes the activated-route tree.
  * `null` is a snapshot the router could not match, i.e. no `routeConfig` at all.
  */
-function snapshot(paths: readonly (string | null)[]): ActivatedRouteSnapshot {
+function snapshot(paths: readonly (string | null)[]): RouteTreeNode {
   const [path, ...rest] = paths;
   if (path === undefined) {
     throw new Error('snapshot needs at least one route');
   }
-  const node = {
+  return {
     routeConfig: path === null ? null : { path },
     firstChild: rest.length === 0 ? null : snapshot(rest),
   };
-  return node as unknown as ActivatedRouteSnapshot;
 }
 
 describe('routeTemplate', () => {
@@ -70,15 +67,24 @@ describe('routeTemplate', () => {
   });
 
   it('ignores parameter values and URL segments of the real navigation', () => {
-    const root = {
+    // A real snapshot node also carries the parameter values and URL segments a navigation
+    // matched; the tree type is widened here so the fixture can hand them over.
+    type SnapshotNode = RouteTreeNode & {
+      readonly params: Record<string, string>;
+      readonly url: readonly { readonly path: string }[];
+    };
+    const child: SnapshotNode = {
+      routeConfig: { path: 'projects/:projectId' },
+      params: { projectId: 'p-1' },
+      url: [{ path: 'p-1' }],
+      firstChild: null,
+    };
+    const root: SnapshotNode = {
       routeConfig: { path: '' },
-      firstChild: {
-        routeConfig: { path: 'projects/:projectId' },
-        params: { projectId: 'p-1' },
-        url: [{ path: 'p-1' }],
-        firstChild: null,
-      },
-    } as unknown as ActivatedRouteSnapshot;
+      params: {},
+      url: [],
+      firstChild: child,
+    };
 
     expect(routeTemplate(root)).toBe('/projects/:projectId');
   });

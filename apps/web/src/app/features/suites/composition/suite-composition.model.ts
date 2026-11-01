@@ -74,6 +74,14 @@ export interface SuiteCompositionView {
   readonly flatMembers: readonly FlatMemberRow[];
   readonly dependencies: readonly DependencyRow[];
   readonly strategy: StrategySummary;
+  /**
+   * Served members the matrix does not draw because their case revision already holds their variant
+   * hash — the second and later members of one cell, so a cell holding three members leaves two
+   * out. Counted instead of dropped silently: the wire served them, so a revision that repeats a
+   * cell says so on the screen. The flat table lists every served member, which is why only the
+   * matrix carries that note.
+   */
+  readonly duplicateMembers: number;
 }
 
 /**
@@ -95,17 +103,19 @@ export const LIST_CHUNK = 200;
 
 export function compositionView(revision: CompositionSource): SuiteCompositionView {
   const columns = variantColumns(revision.members);
-  const rows = compositionRows(revision.members);
-  const layout: MemberLayout = rows.length * columns.length > MATRIX_CELL_LIMIT ? 'flat' : 'matrix';
+  const grid = compositionRows(revision.members);
+  const layout: MemberLayout =
+    grid.rows.length * columns.length > MATRIX_CELL_LIMIT ? 'flat' : 'matrix';
   return {
     columns,
-    rows,
+    rows: grid.rows,
     layout,
     // The flat rows exist for the layout that renders them; building them in matrix layout would
     // allocate one object per member for a table the screen never shows.
     flatMembers: layout === 'flat' ? flatMemberRows(revision.members) : [],
     dependencies: revision.edges.map((edge) => dependencyRow(edge)),
     strategy: strategySummary(revision.shard_strategy),
+    duplicateMembers: grid.duplicateMembers,
   };
 }
 
@@ -124,17 +134,35 @@ function variantColumns(members: readonly SuiteMemberDto[]): readonly VariantCol
   return columns;
 }
 
-/** Rows sorted by case revision id, so a redraw of the same revision keeps its order. */
-function compositionRows(members: readonly SuiteMemberDto[]): readonly CompositionRow[] {
+/**
+ * Rows sorted by case revision id, so a redraw of the same revision keeps its order, plus the count
+ * of members the table cannot place.
+ *
+ * One cell holds one member, so a second member under a variant hash its case revision already
+ * holds has nowhere to go. The first one keeps the cell — it is the member whose parameters the
+ * variant column header already shows, so the cell and the header describe one member — and the
+ * rest are counted rather than dropped silently: a revision that repeats a cell is a composition
+ * the reader has to know about, and `duplicateMembers` is what lets the screen say so.
+ */
+function compositionRows(members: readonly SuiteMemberDto[]): {
+  readonly rows: readonly CompositionRow[];
+  readonly duplicateMembers: number;
+} {
   const byCase = new Map<string, Map<string, SuiteMemberDto>>();
+  let duplicateMembers = 0;
   for (const member of members) {
     const row = byCase.get(member.case_revision_id) ?? new Map<string, SuiteMemberDto>();
-    row.set(member.variant_hash, member);
     byCase.set(member.case_revision_id, row);
+    if (row.has(member.variant_hash)) {
+      duplicateMembers += 1;
+      continue;
+    }
+    row.set(member.variant_hash, member);
   }
-  return [...byCase.entries()]
+  const rows = [...byCase.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([caseRevisionId, byVariant]) => ({ caseRevisionId, byVariant }));
+  return { rows, duplicateMembers };
 }
 
 function dependencyRow(edge: SuiteEdgeDto): DependencyRow {

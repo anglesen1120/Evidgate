@@ -56,6 +56,8 @@ export class SuiteCompositionComponent {
     noMember: $localize`:@@suites.composition.no-member:No member`,
     variantParams: $localize`:@@suites.composition.variant-params:Variant parameters`,
     flatMatrixNote: $localize`:@@suites.composition.flat-matrix-note:This revision has more cells than a matrix can show, so its members are listed as a flat table.`,
+    duplicateMembers: (count: number) =>
+      $localize`:@@suites.composition.repeated-variant-cells:Repeated variant members: ${count}:count:; the matrix keeps only the first member of each cell.`,
     showMore: $localize`:@@suites.composition.show-more:Show more`,
     membersShown: (shown: number, total: number) =>
       $localize`:@@suites.composition.members-shown:Showing ${shown}:shown: of ${total}:total: members.`,
