@@ -17,6 +17,10 @@ import { journalFileName, type UploadIdentity } from '../uploadJournal.js';
 
 /** Assembled at runtime so no token-shaped literal is stored in the spec (T78). */
 const devToken = ['dev', 'artifact', 'token'].join('-');
+/** The `ci_producer` token the exchange hands out; it is the bearer, not the dev credential. */
+const ciToken = ['dev', 'artifact', 'ci', 'producer'].join('-');
+/** The `project_id` a token-exchange answer carries (openapi `format: uuid`). */
+const projectUuid = '5c8d9e0f-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
 const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
 const executionKey = 'b4'.repeat(32);
 const artifactId = '7d1f9a52-3c4e-4b6a-9f01-2b3c4d5e6f70';
@@ -47,12 +51,30 @@ interface StubCall {
 
 type Responder = (call: StubCall) => Response | Promise<Response>;
 
-/** A fetch stub that routes the three calls of an upload and records them. */
+/**
+ * The token-exchange answer. The dev credential is exchanged like an ingest token, so this is
+ * the one success body the stub owes it; `token` is the bearer every artifact call carries.
+ */
+function ciTokenBody(): Record<string, unknown> {
+  return {
+    token: ciToken,
+    expires_at: '2030-01-01T00:00:00Z',
+    project_id: projectUuid,
+  };
+}
+
+/**
+ * A fetch stub that routes the calls of an upload and records them. A dev token is an ingest
+ * credential now, so `POST /v1/ci/token` is answered here and kept in `exchanges`: `calls`
+ * then holds exactly the artifact route's own requests, which is what each case asserts.
+ */
 function stubFetch(respond: Responder): {
   readonly fetchImpl: typeof fetch;
   readonly calls: StubCall[];
+  readonly exchanges: StubCall[];
 } {
   const calls: StubCall[] = [];
+  const exchanges: StubCall[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const method = request.method.toUpperCase();
@@ -68,10 +90,14 @@ function stubFetch(respond: Responder): {
       headers: new Headers(request.headers),
       json: method === 'PUT' || body.length === 0 ? undefined : JSON.parse(body.toString('utf8')),
     };
+    if (method === 'POST' && new URL(request.url).pathname === '/v1/ci/token') {
+      exchanges.push(call);
+      return jsonResponse(200, ciTokenBody());
+    }
     calls.push(call);
     return respond(call);
   };
-  return { fetchImpl, calls };
+  return { fetchImpl, calls, exchanges };
 }
 
 function jsonResponse(
@@ -116,6 +142,8 @@ describe('artifacts upload', () => {
       EVIDGATE_PROJECT: project,
       EVIDGATE_ENV: 'dev',
       EVIDGATE_DEV_TOKEN: devToken,
+      // The exchange writes its `ci_producer` token cache, so it is kept in the temp root.
+      EVIDGATE_CACHE_DIR: root,
       ...extra,
     };
   }
@@ -177,8 +205,15 @@ describe('artifacts upload', () => {
 
     expect(stdout.join('')).toBe(`artifact_id=${artifactId} state=ready bytes=11 file=trace.zip\n`);
     expect(stderr.join('')).toBe('');
+    // The dev credential is an ingest token: one exchange at `/v1/ci/token` precedes the
+    // upload, it presents the dev token, and the artifact calls bear the minted token.
+    expect(store.exchanges.map((call) => call.url)).toStrictEqual([
+      'http://127.0.0.1:8080/v1/ci/token',
+    ]);
+    expect(store.exchanges[0]?.json).toEqual({ ingest_token: devToken });
     const uploadUrl = store.calls[0];
     expect(uploadUrl?.url).toBe('http://127.0.0.1:8080/v1/artifacts/upload-url');
+    expect(uploadUrl?.headers.get('authorization')).toBe(`Bearer ${ciToken}`);
     expect(uploadUrl?.json).toEqual({
       run_id: runId,
       producer_id: 'shard-1',
@@ -238,6 +273,7 @@ describe('artifacts upload', () => {
     ).resolves.toBe(3);
 
     expect(store.calls).toHaveLength(0);
+    expect(store.exchanges).toHaveLength(0);
     expect(stdout.join('')).toBe('');
     expect(stderr.join('')).toContain('evidgate: error upload_path_refused: ');
     expect(stderr.join('')).toContain('--dir');
@@ -274,6 +310,7 @@ describe('artifacts upload', () => {
     ).resolves.toBe(3);
 
     expect(store.calls).toHaveLength(0);
+    expect(store.exchanges).toHaveLength(0);
     expect(stderr.join('')).toContain('evidgate: error upload_too_large: ');
   });
 
@@ -308,6 +345,7 @@ describe('artifacts upload', () => {
     ).resolves.toBe(3);
 
     expect(store.calls).toHaveLength(0);
+    expect(store.exchanges).toHaveLength(0);
     expect(stderr.join('')).toContain('evidgate: error usage: ');
     expect(stderr.join('')).toContain(message);
     expect(stderr.join('')).toContain("run 'evidgate --help' for usage");
@@ -343,6 +381,7 @@ describe('artifacts upload', () => {
     ).resolves.toBe(3);
 
     expect(store.calls).toHaveLength(0);
+    expect(store.exchanges).toHaveLength(0);
     expect(stdout.join('')).toBe('');
     expect(stderr.join('')).toContain(
       'evidgate: error usage: --file must be a single, non-empty value',
@@ -376,6 +415,8 @@ describe('artifacts upload', () => {
         { fetch: store.fetchImpl },
       ),
     ).resolves.toBe(3);
+    expect(store.calls).toHaveLength(0);
+    expect(store.exchanges).toHaveLength(0);
     expect(stderr.join('')).toContain('--kind must be one of trace, video, screenshot');
   });
 
@@ -407,6 +448,7 @@ describe('artifacts upload', () => {
     ).resolves.toBe(3);
     expect(stderr.join('')).toContain('--media-type is required for --kind dom_snapshot');
     expect(store.calls).toHaveLength(0);
+    expect(store.exchanges).toHaveLength(0);
   });
 
   it('sends_the_given_media_type_and_attempt', async () => {
@@ -493,7 +535,10 @@ describe('artifacts upload', () => {
     expect(stdout.join('')).toBe('');
     expect(stderr.join('')).toContain('evidgate: error payload_too_large: ');
     expect(stderr.join('')).toContain('evidgate: request_id: req-413');
+    expect(stderr.join('')).not.toContain(devToken);
+    expect(stderr.join('')).not.toContain(ciToken);
     expect(store.calls).toHaveLength(1);
+    expect(store.exchanges).toHaveLength(1);
   });
 
   // AC4: an `upload-url` 422 (an unplanned `(execution_key, attempt_no)`, a disallowed
@@ -519,6 +564,7 @@ describe('artifacts upload', () => {
     expect(stderr.join('')).toContain('evidgate: error unknown_execution_key: ');
     expect(stderr.join('')).toContain('evidgate: request_id: req-422');
     expect(store.calls).toHaveLength(1);
+    expect(store.exchanges).toHaveLength(1);
     expect(store.calls[0]?.url.endsWith('/v1/artifacts/upload-url')).toBe(true);
   });
 
@@ -572,31 +618,30 @@ describe('artifacts upload', () => {
       token: 'cached-ci-token-value',
       expiresAt: '2099-01-01T00:00:00.000Z',
     });
-    const store = stubFetch((call) => {
-      // The exchange itself succeeds, so the cached token is the one the upload uses and
-      // the 401 comes from the artifact route (the case that must purge the cache).
-      if (call.url.endsWith('/v1/ci/token')) {
-        return jsonResponse(200, {
-          token: 'fresh-ci-token-value',
-          expires_at: '2099-01-01T00:00:00.000Z',
-          project_id: '5c8d9e0f-1a2b-4c3d-8e9f-0a1b2c3d4e5f',
-        });
-      }
-      return jsonResponse(401, {
+    // The seeded entry is far in the future, which the cache refuses as untrusted, so the
+    // stub's exchange mints the bearer and the 401 comes from the artifact route: that is
+    // the refusal that must purge the cache.
+    const store = stubFetch(() =>
+      jsonResponse(401, {
         error: {
           code: 'token_expired',
           message: 'the CI token expired',
           request_id: 'req-401',
           retryable: false,
         },
-      });
-    });
+      }),
+    );
     const { io, stderr } = capture();
 
     await expect(main(argv(file), env, io, { fetch: store.fetchImpl })).resolves.toBe(3);
 
     expect(stderr.join('')).toContain('evidgate: error token_expired: ');
     expect(stderr.join('')).toContain('run `evidgate auth login`');
+    // Neither the dev credential nor the bearer it minted is ever printed.
+    expect(stderr.join('')).not.toContain(devToken);
+    expect(stderr.join('')).not.toContain(ciToken);
+    expect(store.calls).toHaveLength(1);
+    expect(store.exchanges).toHaveLength(1);
     // The purge is best-effort and the server's error is the one that surfaced.
     await expect(readCachedToken(config)).resolves.toBeUndefined();
   });
@@ -625,6 +670,9 @@ describe('artifacts upload', () => {
     expect(text).not.toContain('secret-sig');
     expect(text).not.toContain('X-Amz-Signature');
     expect(text).toContain('http://127.0.0.1:9/pending/x?[REDACTED]');
+    // The refused credential and the token it minted stay off the wire too.
+    expect(text).not.toContain(devToken);
+    expect(text).not.toContain(ciToken);
   });
 
   // §11.1 / §12: with EVIDGATE_SPOOL_DIR set the journal appears under the producer dir;
@@ -682,6 +730,7 @@ describe('artifacts upload', () => {
     ).resolves.toBe(3);
 
     expect(store.calls).toHaveLength(0);
+    expect(store.exchanges).toHaveLength(0);
     expect(stderr.join('')).toContain('evidgate: error invalid_config: ');
     expect(stderr.join('')).toContain('EVIDGATE_UPLOAD_DEADLINE');
     expect(stderr.join('')).not.toContain('forever');

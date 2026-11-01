@@ -48,6 +48,8 @@ import { artifactKindMaxBytes, type ArtifactKind } from './uploadPaths.js';
 const devToken = ['ev', 'gate', 'attach', 'dev'].join('-');
 const ingestToken = ['ev', 'gate', 'attach', 'ingest'].join('-');
 const cachedBearer = ['ev', 'gate', 'attach', 'cached'].join('-');
+/** The `ci_producer` token the exchange mints; it is the bearer, not the dev credential. */
+const ciBearer = ['ev', 'gate', 'attach', 'ci'].join('-');
 const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
 const producerId = 'shard-2';
 const executionKey = 'b7'.repeat(32);
@@ -123,6 +125,25 @@ function json(status: number, body: unknown): Response {
     status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+/**
+ * The `/v1/ci/token` answer. A dev token is an ingest credential, so the default surface
+ * exchanges it before its first artifact call; the minted `ci_producer` token lives ten
+ * minutes, so the next upload (and the resumed shard) reuses the cache instead of asking.
+ */
+function ciTokenBody(): Record<string, unknown> {
+  return {
+    token: ciBearer,
+    expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+    project_id: runId,
+  };
+}
+
+/** Delegates to `respond`, answering the token exchange itself. */
+function afterExchange(respond: Responder): Responder {
+  return (call) =>
+    new URL(call.url).pathname === '/v1/ci/token' ? json(200, ciTokenBody()) : respond(call);
 }
 
 /** The `upload-url` 201 body: the signed size and checksum are the true ones for `bytes`. */
@@ -320,15 +341,18 @@ describe('createAttachmentUploader', () => {
     digest: { readonly sha256: string; readonly bytes: number },
     options: { readonly keepBody?: boolean } = {},
   ): Harness {
-    return harness((call) => {
-      if (call.method === 'PUT') {
-        return new Response(null, { status: 200 });
-      }
-      if (call.url.endsWith('/complete')) {
-        return json(200, readyBody(digest.bytes));
-      }
-      return json(201, uploadUrlBody(digest));
-    }, options);
+    return harness(
+      afterExchange((call) => {
+        if (call.method === 'PUT') {
+          return new Response(null, { status: 200 });
+        }
+        if (call.url.endsWith('/complete')) {
+          return json(200, readyBody(digest.bytes));
+        }
+        return json(201, uploadUrlBody(digest));
+      }),
+      options,
+    );
   }
 
   // The engine's `kindMaxBytes` surface is the guard's own table: a caller pre-screens
@@ -339,8 +363,8 @@ describe('createAttachmentUploader', () => {
     expect(uploader(store).kindMaxBytes.trace).toBe(capOf('trace'));
   });
 
-  // AC5: one attachment in, one artifact id out — upload-url, the presigned PUT and
-  // complete, in that order, with the API bearer never crossing to the store.
+  // AC5: one attachment in, one artifact id out — the token exchange, then upload-url, the
+  // presigned PUT and complete, in that order, with the API bearer never crossing to the store.
   it('uploads_one_attachment_and_returns_the_artifact_id', async () => {
     const { path, content } = await attachment('trace.zip');
     const digest = await digestOfFile(path);
@@ -349,13 +373,18 @@ describe('createAttachmentUploader', () => {
     const result = await uploader(store).upload(input(path));
 
     expect(result).toEqual({ artifactId, bytes: content.byteLength });
-    expect(store.calls.map((call) => call.method)).toEqual(['POST', 'PUT', 'POST']);
+    expect(store.calls.map((call) => call.method)).toEqual(['POST', 'POST', 'PUT', 'POST']);
 
-    const [mint, put, complete] = store.calls;
+    const [exchange, mint, put, complete] = store.calls;
+    // The dev credential is presented as an ingest token; the bearer is what it mints.
+    expect(exchange === undefined ? '(no call)' : new URL(exchange.url).pathname).toBe(
+      '/v1/ci/token',
+    );
+    expect(exchange?.json).toEqual({ ingest_token: devToken });
     expect(mint === undefined ? '(no call)' : new URL(mint.url).pathname).toBe(
       '/v1/artifacts/upload-url',
     );
-    expect(mint?.headers.get('authorization')).toBe(`Bearer ${devToken}`);
+    expect(mint?.headers.get('authorization')).toBe(`Bearer ${ciBearer}`);
     expect(mint?.json).toEqual({
       run_id: runId,
       producer_id: producerId,
@@ -378,7 +407,7 @@ describe('createAttachmentUploader', () => {
     expect(put?.chunks.length).toBeGreaterThan(0);
     expect(put?.chunks.every((size) => size <= 64 * 1024)).toBe(true);
     expect(complete?.url.endsWith(`/v1/artifacts/${artifactId}/complete`)).toBe(true);
-    expect(complete?.headers.get('authorization')).toBe(`Bearer ${devToken}`);
+    expect(complete?.headers.get('authorization')).toBe(`Bearer ${ciBearer}`);
   });
 
   // AC6: outside the allow-listed directories the guard refuses and NOTHING is requested —
@@ -422,7 +451,7 @@ describe('createAttachmentUploader', () => {
     );
 
     expect(result).toEqual({ artifactId, bytes: cap });
-    expect(store.calls.map((call) => call.method)).toEqual(['POST', 'PUT', 'POST']);
+    expect(store.calls.map((call) => call.method)).toEqual(['POST', 'POST', 'PUT', 'POST']);
   });
 
   it('refuses_a_file_one_byte_over_its_kind_cap_before_any_request', async () => {
@@ -581,21 +610,23 @@ describe('createAttachmentUploader', () => {
     expect(store.calls[0]?.url.endsWith('/v1/artifacts/upload-url')).toBe(true);
   });
 
-  // AC5 failure path: a 422 (unplanned attempt) is deterministic — one call, no PUT, no
-  // complete — and the descriptor the guard pinned is released on the way out.
+  // AC5 failure path: a 422 (unplanned attempt) is deterministic — the exchange, one
+  // upload-url, no PUT and no complete — and the descriptor the guard pinned is released.
   it.skipIf(process.platform === 'win32')(
     'closes_the_file_descriptor_when_the_upload_is_refused',
     async () => {
       const { path } = await attachment('trace.zip');
-      const store = harness(() =>
-        json(422, {
-          error: {
-            code: 'unplanned_attempt',
-            message: 'this attempt is not planned',
-            request_id: 'req-9',
-            retryable: false,
-          },
-        }),
+      const store = harness(
+        afterExchange(() =>
+          json(422, {
+            error: {
+              code: 'unplanned_attempt',
+              message: 'this attempt is not planned',
+              request_id: 'req-9',
+              retryable: false,
+            },
+          }),
+        ),
       );
       expect(await openDescriptors(path)).toBe(0);
 
@@ -604,7 +635,7 @@ describe('createAttachmentUploader', () => {
       expect(error).toBeInstanceOf(UploadFailedError);
       expect((error as UploadFailedError).status).toBe(422);
       expect((error as UploadFailedError).code).toBe('unplanned_attempt');
-      expect(store.calls.map((call) => call.method)).toEqual(['POST']);
+      expect(store.calls.map((call) => call.method)).toEqual(['POST', 'POST']);
       expect(await openDescriptors(path)).toBe(0);
     },
   );
@@ -635,7 +666,7 @@ describe('createAttachmentUploader', () => {
     const first = acceptingStore(await digestOfFile(path));
     const uploaded = await uploader(first, { env: spoolEnv }).upload(input(path));
     expect(uploaded).toEqual({ artifactId, bytes: content.byteLength });
-    expect(first.calls.map((call) => call.method)).toEqual(['POST', 'PUT', 'POST']);
+    expect(first.calls.map((call) => call.method)).toEqual(['POST', 'POST', 'PUT', 'POST']);
 
     const restarted = harness(() => {
       throw new Error('a resumed upload must not make a request');

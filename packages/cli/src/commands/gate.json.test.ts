@@ -10,10 +10,10 @@ import {
   capture,
   decided,
   devEnv,
+  devStubFetch,
   gateArgv,
   invoke,
   runId,
-  stubFetch,
 } from './gate.kit.test.js';
 
 const keys = ['decision', 'completeness', 'evaluation_id', 'mode', 'url'];
@@ -38,7 +38,7 @@ describe('gate --json', () => {
   for (const [decision, expected] of decisions) {
     it(`prints the five members in order for ${decision} and exits ${expected}`, async () => {
       const env = await devEnv(dirs);
-      const stub = stubFetch(() => decided({ decision }));
+      const stub = devStubFetch(() => decided({ decision }));
       const out = capture();
 
       const { code } = await invoke(gateArgv(['--run', runId, '--json']), env, out, stub.fetchImpl);
@@ -62,7 +62,7 @@ describe('gate --json', () => {
     const env = await devEnv(dirs);
     // `Authorization: …` is the writer's header rule; a member that reads like one must not
     // swallow the closing quotes or braces of the object.
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({ decision: 'PASS', mode: 'Authorization: x', url: 'https://api.example/r' }),
     );
     const out = capture();
@@ -85,7 +85,7 @@ describe('gate --json', () => {
 
   it('keeps the line parseable when a member carries a quoted Authorization member', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({ decision: 'PASS', mode: '{"Authorization":"Bearer abc.def"}' }),
     );
     const out = capture();
@@ -108,7 +108,7 @@ describe('gate --json', () => {
 
   it('strips a query from a printed url exactly once', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({
         decision: 'PASS',
         url: 'https://s3.example/x?X-Amz-Signature=abc&X-Amz-Expires=900',
@@ -128,7 +128,7 @@ describe('gate --json', () => {
 
   it('redacts a token inside a printed member without shortening it', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({ decision: 'PASS', url: `${'x'.repeat(190)}dev-token-value` }),
     );
     const out = capture();
@@ -144,7 +144,7 @@ describe('gate --json', () => {
 
   it('prints decision null for a pending timeout', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: null }));
+    const stub = devStubFetch(() => decided({ decision: null }));
     const out = capture();
 
     const { code } = await invoke(
@@ -169,7 +169,7 @@ describe('gate --json', () => {
 
   it('prints the optional members only when the server sends them as strings', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({
         decision: 'FAIL',
         completeness: 'complete',
@@ -196,7 +196,7 @@ describe('gate --json', () => {
 
   it('prints null for an optional member the server sends in another type', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({ decision: 'PASS', completeness: 3, evaluation_id: {}, mode: null, url: [] }),
     );
     const out = capture();

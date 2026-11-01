@@ -10,6 +10,7 @@ import {
   capture,
   decided,
   devEnv,
+  devToken,
   exchangeBody,
   gateArgv,
   ingestEnv,
@@ -33,19 +34,34 @@ describe('gate token refresh', () => {
     await dirs.reset();
   });
 
-  it('exits 3 when the refreshed token is the one just refused', async () => {
+  it('exits 3 when the refresh mints the token the server just refused', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => refusal(401, 'token_invalid'));
+    // A dev token is an ingest credential now, so the run exchanges it at `/v1/ci/token`
+    // first. The server keeps minting the same `ci_producer` token, and that token is the one
+    // the poll was refused with, so the replay would repeat the refusal and is skipped.
+    const stub = stubFetch((request) =>
+      request.url.endsWith('/v1/ci/token')
+        ? jsonResponse(200, exchangeBody(devToken))
+        : refusal(401, 'token_invalid'),
+    );
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
 
     expect(code).toBe(3);
-    // One refused poll and nothing else: the dev token is handed back unchanged, so the
-    // replay would repeat the refusal and is skipped.
+    // The first exchange, the refused poll, then the one refresh that hands the identical
+    // token back: no third request, because a replay of it would only be refused again.
     expect(stub.calls.map((call) => new URL(call.request.url).pathname)).toStrictEqual([
+      '/v1/ci/token',
       `/v1/runs/${runId}/decision`,
+      '/v1/ci/token',
     ]);
+    expect(stub.calls[1]?.request.headers.get('authorization')).toBe(`Bearer ${devToken}`);
+    // The dev credential is what the exchange presents, so a regression that sent it raw
+    // would break this body assertion even though the bearer value looks the same.
+    expect(await stub.calls[0]?.request.clone().json()).toStrictEqual({ ingest_token: devToken });
+    // The refusal is reported without either the credential or the minted token.
+    expect(out.stderr.join('')).not.toContain(devToken);
     expect(out.stderr.join('')).toContain('error token_invalid');
   });
 

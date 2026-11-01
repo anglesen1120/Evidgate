@@ -16,7 +16,10 @@ export const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
 export const projectId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 /** The project slug the command acts on. */
 export const project = 'proj-1';
-/** The dev bearer the `EVIDGATE_DEV_TOKEN` path returns (never on disk, never printed). */
+/**
+ * The `EVIDGATE_DEV_TOKEN` value and the bearer the dev exchange hands back: the token the
+ * command sends is the exchanged one, so the stub answers `POST /v1/ci/token` with it.
+ */
 export const devToken = 'dev-token-value';
 
 export interface Captured {
@@ -143,6 +146,44 @@ export function exchangeBody(token: string): unknown {
   return { token, expires_at: '2030-01-01T00:00:00Z', project_id: projectId, permission_set: [] };
 }
 
+/**
+ * A `fetch` stub for the dev bearer, which is exchanged rather than sent raw: the
+ * `POST /v1/ci/token` call is answered with `exchangeBody(devToken)` and `handler` sees only
+ * the gate traffic, so `index` counts decision requests and `calls` stays the list of them.
+ * The exchanges are recorded separately in `exchanges`.
+ */
+export function devStubFetch(handler: (request: Request, index: number) => Response): {
+  readonly fetchImpl: typeof fetch;
+  readonly calls: StubCall[];
+  readonly exchanges: StubCall[];
+} {
+  const calls: StubCall[] = [];
+  const exchanges: StubCall[] = [];
+  const fetchImpl: typeof fetch = (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    if (request.method === 'POST' && new URL(request.url).pathname === '/v1/ci/token') {
+      exchanges.push({ request });
+      return Promise.resolve(jsonResponse(200, exchangeBody(devToken)));
+    }
+    calls.push({ request });
+    return Promise.resolve(handler(request, calls.length - 1));
+  };
+  return { fetchImpl, calls, exchanges };
+}
+
+/**
+ * Answers the dev exchange in front of a hand-written `fetch`, so the wrapped transport sees
+ * only the requests the command itself sends.
+ */
+export function withTokenExchange(fetchImpl: typeof fetch, token: string = devToken): typeof fetch {
+  return (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    return request.method === 'POST' && new URL(request.url).pathname === '/v1/ci/token'
+      ? Promise.resolve(jsonResponse(200, exchangeBody(token)))
+      : fetchImpl(input, init);
+  };
+}
+
 export function gateArgv(flags: ReadonlyArray<string>): string[] {
   return ['gate', ...flags];
 }
@@ -171,7 +212,10 @@ export function cacheDirs(): CacheDirs {
   };
 }
 
-/** The dev token path: no exchange, no cache write, no network beyond the stub. */
+/**
+ * The dev token path: `EVIDGATE_DEV_TOKEN` is exchanged for a `ci_producer` token (the Api
+ * accepts only exchanged ones), so `devStubFetch` answers that call and the answer is cached.
+ */
 export async function devEnv(
   dirs: CacheDirs,
   extra: Record<string, string> = {},

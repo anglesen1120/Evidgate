@@ -74,13 +74,43 @@ interface RecordedCall {
   readonly eventIds: string[];
 }
 
-/** A `fetch` stub that records each request and answers from `handler` (never the network). */
+/** The `project_id` the exchange echoes back (openapi `format: uuid`). */
+const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
+
+/**
+ * The `/v1/ci/token` answer: the dev source exchanges its token like an ingest credential
+ * before any project call. `expires_at` is half an hour past the suite's virtual clock start
+ * (2026-01-01T00:00:00Z), so the entry reads fresh and no send re-exchanges mid-test.
+ */
+function devExchange(request: Request): Response | undefined {
+  return new URL(request.url).pathname === '/v1/ci/token'
+    ? new Response(
+        JSON.stringify({
+          token: devToken,
+          expires_at: '2026-01-01T00:30:00.000Z',
+          project_id: exchangeProjectId,
+          permission_set: [],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    : undefined;
+}
+
+/**
+ * A `fetch` stub that records each batch request and answers from `handler` (never the
+ * network). The token exchange is answered here and not recorded: `calls` stays the list of
+ * batch attempts the assertions count.
+ */
 function stubFetch(
   handler: (attempt: number, body: Buffer, eventIds: string[]) => Response | Promise<Response>,
 ): { readonly fetchImpl: typeof fetch; readonly calls: RecordedCall[] } {
   const calls: RecordedCall[] = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
+    const exchange = devExchange(request);
+    if (exchange !== undefined) {
+      return exchange;
+    }
     const wire = Buffer.from(await request.clone().arrayBuffer());
     // The batcher gzips a batch once compression pays; decode it before parsing, as eventsSend.test does.
     const body = request.headers.get('content-encoding') === 'gzip' ? gunzipSync(wire) : wire;
@@ -142,6 +172,9 @@ function baseEnv(spoolDir: string): Record<string, string> {
     EVIDGATE_ENV: 'dev',
     EVIDGATE_DEV_TOKEN: devToken,
     EVIDGATE_SPOOL_DIR: spoolDir,
+    // The dev source exchanges and caches a producer token, so the cache stays in the
+    // per-test temporary directory instead of the developer's real cache.
+    EVIDGATE_CACHE_DIR: join(spoolDir, 'cache'),
   };
 }
 

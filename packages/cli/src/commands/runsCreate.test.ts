@@ -98,6 +98,42 @@ function created(overrides: Record<string, unknown> = {}): Response {
   return jsonResponse(201, { run_id: runId, state: 'queued', unverified_ref: false, ...overrides });
 }
 
+/** The `project_id` the exchange echoes back (openapi `format: uuid`). */
+const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
+
+/**
+ * The `/v1/ci/token` answer for the dev source: the dev token is exchanged like an ingest
+ * credential, so the bearer the command sends is the token this body hands out. It repeats
+ * the dev token's value so the `Bearer dev-token-value` assertions keep their meaning, and
+ * expires 30 minutes out, inside the cache's 60 + 5 minute freshness window.
+ */
+function devTokenExchange(request: Request): Response | undefined {
+  return new URL(request.url).pathname === '/v1/ci/token'
+    ? jsonResponse(200, {
+        token: 'dev-token-value',
+        expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+        project_id: exchangeProjectId,
+        permission_set: [],
+      })
+    : undefined;
+}
+
+/** A stub whose handler answers the command's own request, never the token exchange. */
+function stubDevFetch(handler: (request: Request) => Response | Promise<Response>): {
+  readonly fetchImpl: typeof fetch;
+  readonly calls: StubCall[];
+} {
+  return stubFetch((request) => devTokenExchange(request) ?? handler(request));
+}
+
+/**
+ * The command's own requests: everything but the `/v1/ci/token` exchange, so a count or an
+ * index means the same thing it did before the dev source gained a token exchange.
+ */
+function apiCalls(stub: { readonly calls: StubCall[] }): StubCall[] {
+  return stub.calls.filter((call) => new URL(call.request.url).pathname !== '/v1/ci/token');
+}
+
 /** The JSON body the stub recorded for `call`. */
 function sentBody(call: StubCall | undefined): Record<string, unknown> {
   return JSON.parse(call?.body.toString('utf8') ?? '') as Record<string, unknown>;
@@ -130,7 +166,11 @@ describe('runs create', () => {
     return dir;
   }
 
-  /** The M1 dev path: no exchange, no cache, no network (04.2.1 AC8). */
+  /**
+   * The dev path: the dev token is exchanged at `/v1/ci/token` like an ingest credential,
+   * the returned producer token is the bearer, and it is cached (04.2.1 AC8 predates that
+   * exchange; the Api accepts only exchanged tokens).
+   */
   async function devEnv(extra: Record<string, string> = {}) {
     const cacheDir = await tempDir();
     return {
@@ -159,7 +199,7 @@ describe('runs create', () => {
   // `manifest_id`, and `run_id`/`manifest_hash`/`state` are printed.
   it('prints_run_id', async () => {
     const env = await devEnv();
-    const stub = stubFetch(() => created({ unverified_ref: true }));
+    const stub = stubDevFetch(() => created({ unverified_ref: true }));
     const out = capture();
 
     const argv = createArgv(['--idempotency-key', 'explicit-key-1']);
@@ -169,8 +209,9 @@ describe('runs create', () => {
       `run_id=${runId} manifest_hash=${manifestHash} state=queued\n`,
     );
     expect(out.stderr.join('')).toBe('');
-    expect(stub.calls).toHaveLength(1);
-    const call = stub.calls[0];
+    const calls = apiCalls(stub);
+    expect(calls).toHaveLength(1);
+    const call = calls[0];
     expect(call?.request.method).toBe('POST');
     // `createApiClient` puts the SDK's `/v1` server prefix on the base URL, so the
     // operation path is `<root>/v1/projects/{p}/runs` (the env value carries no `/v1`).
@@ -187,7 +228,7 @@ describe('runs create', () => {
   // identical request, the stub replays the stored 201, and both print that same run.
   it('idempotent_replay', async () => {
     const env = await devEnv();
-    const stub = stubFetch(() => created());
+    const stub = stubDevFetch(() => created());
     const argv = createArgv(['--idempotency-key', 'replay-key-1']);
     const first = capture();
     const second = capture();
@@ -199,11 +240,13 @@ describe('runs create', () => {
     expect(first.stdout.join('')).toBe(line);
     expect(first.stdout.join('')).toBe(second.stdout.join(''));
     expect(first.stderr.join('')).toBe('');
-    expect(stub.calls).toHaveLength(2);
-    expect(stub.calls[1]?.request.headers.get('idempotency-key')).toBe('replay-key-1');
+    // One exchange (the second invocation reuses the cached token), then two creates.
+    const calls = apiCalls(stub);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.request.headers.get('idempotency-key')).toBe('replay-key-1');
     // The second request is byte-identical, so the server replays instead of conflicting.
-    expect(sentBody(stub.calls[1])).toEqual(sentBody(stub.calls[0]));
-    expect(stub.calls[1]?.body.toString('utf8')).toBe(stub.calls[0]?.body.toString('utf8') ?? '');
+    expect(sentBody(calls[1])).toEqual(sentBody(calls[0]));
+    expect(calls[1]?.body.toString('utf8')).toBe(calls[0]?.body.toString('utf8') ?? '');
   });
 
   // 04.2.2-T2.1 / AC3 + T11: the same key with a different body is 409
@@ -292,14 +335,16 @@ describe('runs create', () => {
     // The same derivation reaches the wire: one key per body, and the identical key in a
     // second, separate invocation (no `--idempotency-key` is passed at all).
     const env = await devEnv();
-    const stub = stubFetch(() => created());
+    const stub = stubDevFetch(() => created());
     await expect(invoke(createArgv(), env, capture(), stub.fetchImpl)).resolves.toBe(0);
     await expect(invoke(createArgv(), env, capture(), stub.fetchImpl)).resolves.toBe(0);
     const flagged = createArgv(['--release', 'rel-1', '--ci-ref', 'refs/heads/main']);
     await expect(invoke(flagged, env, capture(), stub.fetchImpl)).resolves.toBe(0);
-    expect(stub.calls[0]?.request.headers.get('idempotency-key')).toBe(key);
-    expect(stub.calls[1]?.request.headers.get('idempotency-key')).toBe(key);
-    expect(stub.calls[2]?.request.headers.get('idempotency-key')).toBe(withOptionals);
+    const calls = apiCalls(stub);
+    expect(calls).toHaveLength(3);
+    expect(calls[0]?.request.headers.get('idempotency-key')).toBe(key);
+    expect(calls[1]?.request.headers.get('idempotency-key')).toBe(key);
+    expect(calls[2]?.request.headers.get('idempotency-key')).toBe(withOptionals);
   });
 
   // 04.2.2-T2.1 / AC5: `--release` and every `--ci-ref` form map to the documented body
@@ -317,14 +362,14 @@ describe('runs create', () => {
     ];
 
     for (const testCase of cases) {
-      const stub = stubFetch(() => created({ unverified_ref: true }));
+      const stub = stubDevFetch(() => created({ unverified_ref: true }));
       const out = capture();
       const flags = ['--release', 'rel-1', '--ci-ref', testCase.ciRef, '--idempotency-key', 'k'];
       await expect(invoke(createArgv(flags), env, out, stub.fetchImpl)).resolves.toBe(0);
       expect(out.stderr.join('')).toBe('');
       // Only the members the CLI owns: no head_sha/base_sha/trigger_event, and no policy,
       // suite or environment (the server pins those, D-S47-Q1).
-      expect(sentBody(stub.calls[0])).toEqual({
+      expect(sentBody(apiCalls(stub)[0])).toEqual({
         manifest_id: manifestId,
         release: 'rel-1',
         ref: testCase.ref,
@@ -332,13 +377,13 @@ describe('runs create', () => {
     }
 
     // `--release` is trimmed before it is sent (and before it feeds the key).
-    const trimStub = stubFetch(() => created());
+    const trimStub = stubDevFetch(() => created());
     const trimArgv = createArgv(['--release', '  rel-1  ', '--idempotency-key', 'k']);
     await expect(invoke(trimArgv, env, capture(), trimStub.fetchImpl)).resolves.toBe(0);
-    expect(sentBody(trimStub.calls[0])).toEqual({ manifest_id: manifestId, release: 'rel-1' });
+    expect(sentBody(apiCalls(trimStub)[0])).toEqual({ manifest_id: manifestId, release: 'rel-1' });
 
     // `--json`: one line, three members in the documented order, and nothing else.
-    const jsonStub = stubFetch(() => created());
+    const jsonStub = stubDevFetch(() => created());
     const jsonOut = capture();
     await expect(invoke(createArgv(['--json']), env, jsonOut, jsonStub.fetchImpl)).resolves.toBe(0);
     const expected = `{"run_id":"${runId}","manifest_hash":"${manifestHash}","state":"queued"}`;
@@ -547,7 +592,7 @@ describe('runs create', () => {
   it('malformed_body_request_failed', async () => {
     const env = await devEnv();
 
-    const badId = stubFetch(() => created({ run_id: 'not-a-uuid' }));
+    const badId = stubDevFetch(() => created({ run_id: 'not-a-uuid' }));
     const badIdOut = capture();
     await expect(invoke(createArgv(), env, badIdOut, badId.fetchImpl)).resolves.toBe(3);
     const badIdText = badIdOut.stderr.join('');
@@ -555,7 +600,7 @@ describe('runs create', () => {
     expect(badIdText).not.toContain('not-a-uuid');
     expect(badIdOut.stdout.join('')).toBe('');
 
-    const badState = stubFetch(() => created({ state: '' }));
+    const badState = stubDevFetch(() => created({ state: '' }));
     const badStateOut = capture();
     await expect(invoke(createArgv(), env, badStateOut, badState.fetchImpl)).resolves.toBe(3);
     expect(badStateOut.stderr.join('')).toContain('evidgate: error request_failed: ');
@@ -573,7 +618,7 @@ describe('runs create', () => {
       '_queued',
       'a'.repeat(33),
     ]) {
-      const stub = stubFetch(() => created({ state }));
+      const stub = stubDevFetch(() => created({ state }));
       const out = capture();
       await expect(invoke(createArgv(), env, out, stub.fetchImpl)).resolves.toBe(3);
       const text = out.stderr.join('');
@@ -585,7 +630,7 @@ describe('runs create', () => {
     }
 
     // A gateway page that is not the 00 §9.2 envelope keeps the CLI's fallback code.
-    const gateway = stubFetch(
+    const gateway = stubDevFetch(
       () =>
         new Response('<html>bad gateway</html>', {
           status: 502,
@@ -603,10 +648,13 @@ describe('runs create', () => {
   // 04.2.2-T2.1 / §5: a transport failure is `transport` and never echoes the URL.
   it('transport_error_exit3', async () => {
     const env = await devEnv();
-    const failing: typeof fetch = () => Promise.reject(new TypeError('fetch failed http://x'));
+    // The exchange answers, so the failure is the create's own transport error.
+    const failing = stubDevFetch(() => {
+      throw new TypeError('fetch failed http://x');
+    });
     const out = capture();
 
-    await expect(invoke(createArgv(), env, out, failing)).resolves.toBe(3);
+    await expect(invoke(createArgv(), env, out, failing.fetchImpl)).resolves.toBe(3);
 
     const text = out.stderr.join('');
     expect(text).toContain('evidgate: error transport: ');
@@ -619,7 +667,7 @@ describe('runs create', () => {
   it('verbose_no_secrets', async () => {
     const env = await devEnv();
     const derivedKey = deriveRunIdempotencyKey({ manifestId, manifestHash });
-    const stub = stubFetch(() => created());
+    const stub = stubDevFetch(() => created());
     const out = capture();
 
     const argv = createArgv(['--verbose']);
@@ -631,7 +679,7 @@ describe('runs create', () => {
     expect(text).toContain(`project=${project}`);
     expect(text).not.toContain('dev-token-value');
     // The key did travel (the header is set) but never reaches either stream.
-    expect(stub.calls[0]?.request.headers.get('idempotency-key')).toBe(derivedKey);
+    expect(apiCalls(stub)[0]?.request.headers.get('idempotency-key')).toBe(derivedKey);
     expect(text).not.toContain(derivedKey);
     expect(out.stdout.join('')).not.toContain(derivedKey);
     expect(out.stdout.join('')).toBe(

@@ -14,11 +14,13 @@ import {
   capture,
   decided,
   devEnv,
+  devStubFetch,
+  devToken,
+  exchangeBody,
   gateArgv,
   invoke,
   refusal,
   runId,
-  stubFetch,
 } from './gate.kit.test.js';
 
 describe('gate', () => {
@@ -55,7 +57,7 @@ describe('gate', () => {
 
   it('exits 0 only for PASS and prints the verdict with its reasons', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({ decision: 'PASS', reasons: ['all suites passed', 'flaky retry absorbed'] }),
     );
     const out = capture();
@@ -74,11 +76,19 @@ describe('gate', () => {
     expect(new URL(call?.request.url ?? '').pathname).toBe(`/v1/runs/${runId}/decision`);
     expect(call?.request.headers.get('authorization')).toBe('Bearer dev-token-value');
     expect(new URL(call?.request.url ?? '').search).toBe('');
+    // The dev token is not sent raw: one exchange mints the bearer the poll carries.
+    expect(stub.exchanges).toHaveLength(1);
+    const exchange = stub.exchanges[0];
+    expect(exchange?.request.method).toBe('POST');
+    expect(new URL(exchange?.request.url ?? '').pathname).toBe('/v1/ci/token');
+    expect(JSON.parse((await exchange?.request.text()) ?? '{}')).toStrictEqual({
+      ingest_token: devToken,
+    });
   });
 
   it('exits 1 for FAIL', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: 'FAIL', reasons: ['suite web failed'] }));
+    const stub = devStubFetch(() => decided({ decision: 'FAIL', reasons: ['suite web failed'] }));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -90,7 +100,7 @@ describe('gate', () => {
 
   it('caps a server reason to one escaped line', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({ decision: 'FAIL', reasons: [`${'a'.repeat(300)}\nforged: line`] }),
     );
     const out = capture();
@@ -107,7 +117,7 @@ describe('gate', () => {
     const env = await devEnv(dirs);
     // The token starts at code point 191, so a cap applied before redaction would print its
     // first ten characters; the redactor only matches the whole registered value.
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({
         decision: 'FAIL',
         reasons: [`${'x'.repeat(190)}dev-token-value`],
@@ -127,7 +137,7 @@ describe('gate', () => {
 
   it('collapses reasons beyond the printed cap', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       decided({ decision: 'FAIL', reasons: Array.from({ length: 60 }, (_, i) => `r${i}`) }),
     );
     const out = capture();
@@ -145,7 +155,7 @@ describe('gate', () => {
 
   it('exits 2 for INCONCLUSIVE', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => decided({ decision: 'INCONCLUSIVE' }));
+    const stub = devStubFetch(() => decided({ decision: 'INCONCLUSIVE' }));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -180,7 +190,7 @@ describe('gate', () => {
     for (const [label, respond] of cases) {
       it(`exits 3 for ${label}`, async () => {
         const env = await devEnv(dirs);
-        const stub = stubFetch(respond);
+        const stub = devStubFetch(respond);
         const out = capture();
 
         const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -196,7 +206,7 @@ describe('gate', () => {
 
   it('refuses an oversized decision body instead of reporting a verdict', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(
+    const stub = devStubFetch(
       () =>
         new Response(
           new ReadableStream({
@@ -221,7 +231,7 @@ describe('gate', () => {
 
   it('exits 3 when the body stream fails after its headers', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(
+    const stub = devStubFetch(
       () =>
         new Response(
           new ReadableStream({
@@ -246,7 +256,7 @@ describe('gate', () => {
 
   it('exits 3 on a transport failure after the bounded retries', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => {
+    const stub = devStubFetch(() => {
       throw new TypeError('fetch failed');
     });
     const out = capture();
@@ -262,7 +272,7 @@ describe('gate', () => {
   it('does not replay a refused redirect', async () => {
     const env = await devEnv(dirs);
     // The shape Node's fetch rejects `redirect: 'error'` with; the target was never contacted.
-    const stub = stubFetch(() => {
+    const stub = devStubFetch(() => {
       throw new TypeError('fetch failed', { cause: new Error('unexpected redirect') });
     });
     const out = capture();
@@ -280,7 +290,15 @@ describe('gate', () => {
   it('treats a real refused redirect as final', async () => {
     const requests: string[] = [];
     const server = createServer((request, response) => {
-      requests.push(request.url ?? '');
+      const path = request.url ?? '';
+      requests.push(path);
+      // The dev bearer arrives exchanged, so the token call is answered and the decision
+      // request is the one that is redirected.
+      if (path === '/v1/ci/token') {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify(exchangeBody(devToken)));
+        return;
+      }
       response.writeHead(302, { location: 'https://elsewhere.test/decision' });
       response.end();
     });
@@ -298,7 +316,7 @@ describe('gate', () => {
       expect(code).toBe(3);
       // Node's own rejection shape is what the classification has to catch, so a real 302
       // proves the replay never happens.
-      expect(requests).toHaveLength(1);
+      expect(requests).toStrictEqual(['/v1/ci/token', `/v1/runs/${runId}/decision`]);
       expect(out.stderr.join('')).toContain('redirect, which is refused');
     } finally {
       await new Promise<void>((resolve) => {
@@ -332,7 +350,7 @@ describe('gate', () => {
         },
       });
     };
-    const stub = stubFetch(
+    const stub = devStubFetch(
       () =>
         new Response(stream(), {
           status: 500,
@@ -354,7 +372,7 @@ describe('gate', () => {
 
   it('exits 3 on 403 without retrying', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => refusal(403, 'forbidden'));
+    const stub = devStubFetch(() => refusal(403, 'forbidden'));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -366,7 +384,7 @@ describe('gate', () => {
 
   it('exits 3 on 404 without retrying', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => refusal(404, 'not_found'));
+    const stub = devStubFetch(() => refusal(404, 'not_found'));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -378,7 +396,7 @@ describe('gate', () => {
 
   it('exits 3 on a persistent 5xx after the bounded retries', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => refusal(500, 'internal', { retryable: true }));
+    const stub = devStubFetch(() => refusal(500, 'internal', { retryable: true }));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -390,7 +408,7 @@ describe('gate', () => {
 
   it('exits 3 on a 5xx the envelope marks not retryable, without retrying', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() => refusal(503, 'internal'));
+    const stub = devStubFetch(() => refusal(503, 'internal'));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
@@ -402,7 +420,7 @@ describe('gate', () => {
 
   it('never prints the bearer token, even when the server echoes it', async () => {
     const env = await devEnv(dirs);
-    const stub = stubFetch(() =>
+    const stub = devStubFetch(() =>
       refusal(422, 'request_failed', { message: 'credential dev-token-value was rejected' }),
     );
     const out = capture();

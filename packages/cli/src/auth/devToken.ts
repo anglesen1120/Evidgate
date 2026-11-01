@@ -1,5 +1,5 @@
-// The dev-token path: returns `EVIDGATE_DEV_TOKEN` as the bearer with no exchange, no cache
-// and no file write, and refuses unless `EVIDGATE_ENV` is exactly `dev` AND the API URL is
+// The dev-token guard: returns `EVIDGATE_DEV_TOKEN` for the ingest exchange (`getToken`), with no cache
+// of its own, and refuses unless `EVIDGATE_ENV` is exactly `dev` AND the API URL is
 // loopback — fail-closed, because a dev token sent anywhere else is a leaked credential.
 import { isLoopbackApiUrl, type ResolvedConfig } from '../config.js';
 import { CliError } from '../errors.js';
