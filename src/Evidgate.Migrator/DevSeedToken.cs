@@ -4,8 +4,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
-using Evidgate.BuildingBlocks.Pipeline.Authorization;
-using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Identity.Application.Commands;
 using Evidgate.Modules.Identity.Ci;
@@ -47,12 +45,13 @@ internal static class DevSeedToken
     /// </summary>
     private const string SamplePolicyBody = """{"flaky_budget":3,"required_suites":["smoke","regression"]}""";
 
-    /// <summary>Applies seed part 2; returns the process exit code.</summary>
+    /// <summary>Applies the seed; <paramref name="withToken"/> adds the ingest token and the sample policy revision.</summary>
     /// <param name="options">Owner-role connection and paths (the tenant is written as the owner first).</param>
     /// <param name="environment">Environment snapshot; null reads the process environment.</param>
     /// <param name="output">Where progress goes, including the one-time secret.</param>
     /// <param name="error">Where a refusal or failure goes; never the secret.</param>
     /// <param name="loggerProvider">An extra log sink, for tests that assert the secret reaches no logger.</param>
+    /// <param name="withToken">Also mint the dev ingest token and the sample policy revision; the catalog sample is written either way.</param>
     [SuppressMessage(
         "Usage",
         "VSTHRD002:Avoid problematic synchronous waits",
@@ -62,12 +61,14 @@ internal static class DevSeedToken
         IReadOnlyDictionary<string, string?>? environment,
         TextWriter output,
         TextWriter error,
-        ILoggerProvider? loggerProvider = null)
+        ILoggerProvider? loggerProvider = null,
+        bool withToken = true)
     {
-        if (ContractsDirectory(options.MigrationsPath) is not { } contractsDirectory)
+        var label = withToken ? "seed-dev --with-token" : "seed-dev";
+        if (DevSeedRun.ContractsDirectory(options.MigrationsPath) is not { } contractsDirectory)
         {
             error.WriteLine(
-                $"E seed-dev --with-token refused: contracts/schemas was not found next to '{options.MigrationsPath}'; nothing was written");
+                $"E {label} refused: contracts/schemas was not found next to '{options.MigrationsPath}'; nothing was written");
 
             return MigratorExitCodes.InvalidInvocation;
         }
@@ -77,20 +78,20 @@ internal static class DevSeedToken
 
         try
         {
-            return RunAsync(environment, contractsDirectory, options, output, error, loggerProvider, mintedSecret)
+            return RunAsync(environment, contractsDirectory, options, output, error, loggerProvider, mintedSecret, withToken)
                 .GetAwaiter()
                 .GetResult();
         }
         catch (OptionsValidationException exception)
         {
             // Options validation names keys, never values, so its failures are safe to print as they are.
-            error.WriteLine("E seed-dev --with-token failed: " + string.Join("; ", exception.Failures) + "; nothing was written");
+            error.WriteLine($"E {label} failed: " + string.Join("; ", exception.Failures) + "; nothing was written");
 
             return MigratorExitCodes.InvalidInvocation;
         }
         catch (NpgsqlException exception)
         {
-            error.WriteLine("E seed-dev --with-token failed: " + Redacted(exception.Message, options, environment, mintedSecret.Value));
+            error.WriteLine($"E {label} failed: " + Redacted(exception.Message, options, environment, mintedSecret.Value));
 
             return exception.IsTransient || exception.InnerException is System.Net.Sockets.SocketException
                 ? MigratorExitCodes.DatabaseUnavailable
@@ -99,76 +100,58 @@ internal static class DevSeedToken
         catch (Exception exception)
         {
             // The seed handles a secret: a message is printed only after the redactor has run over it.
-            error.WriteLine("E seed-dev --with-token failed: " + Redacted(exception.Message, options, environment, mintedSecret.Value));
+            error.WriteLine($"E {label} failed: " + Redacted(exception.Message, options, environment, mintedSecret.Value));
 
             return MigratorExitCodes.MigrationFailed;
         }
     }
 
     /// <summary>
-    /// The only path that composes the modules: refuses (writing nothing) unless the app-role data source and a usable
-    /// pepper are both configured, writes the tenant as the owner role, then mints the policy and the token under one
-    /// advisory-lock guard so two concurrent first runs cannot both mint.
+    /// The mode-specific work, inside the shared prologue: with <paramref name="withToken"/> the pepper is refused
+    /// (writing nothing) before the tenant is written, and the policy and the mint then run under the seed's
+    /// advisory-lock guard, so two concurrent first runs cannot both mint.
     /// </summary>
-    private static async Task<int> RunAsync(
+    private static Task<int> RunAsync(
         IReadOnlyDictionary<string, string?>? environment,
         string contractsDirectory,
         MigratorOptions options,
         TextWriter output,
         TextWriter error,
         ILoggerProvider? loggerProvider,
+        MintedSecret mintedSecret,
+        bool withToken) =>
+        DevSeedRun.RunModulesAsync(
+            options,
+            environment,
+            contractsDirectory,
+            preflight: withToken
+                ? provider => Task.FromResult(PepperConfigured(provider, out var refusal) ? null : refusal)
+                : null,
+            commands: withToken
+                ? (mediator, services) => WriteTokenAsync(mediator, services, output, error, mintedSecret)
+                : null,
+            loggerProvider: loggerProvider,
+            output: output,
+            error: error);
+
+    /// <summary>
+    /// The policy is part of every run, not of the first one: an existing token skips only the mint, so a stack whose
+    /// policy revision was never seeded (or was seeded by a run that predates it) still ends up with one.
+    /// </summary>
+    private static async Task<int> WriteTokenAsync(
+        IMediator mediator,
+        IServiceProvider services,
+        TextWriter output,
+        TextWriter error,
         MintedSecret mintedSecret)
     {
-        await using var provider = DevSeedServices.Compose(environment, contractsDirectory, loggerProvider);
-
-        // Resolving the data source validates the application connection string and the evidgate_app role pin, so a
-        // missing or wrong-role app connection fails closed here — before the owner-role tenant write below.
-        var dataSource = provider.GetRequiredService<NpgsqlDataSource>();
-        var appHost = new NpgsqlConnectionStringBuilder(dataSource.ConnectionString).Host;
-        if (!DevSeed.IsLocalHost(appHost))
-        {
-            await error.WriteLineAsync($"E seed-dev refused: the application database host '{appHost}' is not local or a compose service name; nothing was written");
-
-            return MigratorExitCodes.InvalidInvocation;
-        }
-
-        if (!PepperConfigured(provider, out var pepperRefusal))
-        {
-            await error.WriteLineAsync(pepperRefusal).ConfigureAwait(false);
-
-            return MigratorExitCodes.InvalidInvocation;
-        }
-
-        // The lock comes first so two first runs cannot race the tenant insert either.
-        await using var guard = await SeedGuard.AcquireAsync(dataSource).ConfigureAwait(false);
-
-        // The dev user's membership is what the permission evaluator reads, so the tenant is always written first —
-        // idempotently, exactly as the plain seed does.
-        var seeded = DevSeed.WriteTenant(options, output, error);
-        if (seeded != MigratorExitCodes.Success)
-        {
-            return seeded;
-        }
-
-        // The synthetic caller exists only here: inside the guard, after the refusals, for the two commands below.
-        using var tenantContext = provider.GetRequiredService<IRequestTenantContextSetter>()
-            .Publish(DevSeed.OrgId, DevSeed.ProjectId);
-        using var caller = provider.GetRequiredService<IRequestPrincipalSetter>()
-            .Publish(RequestPrincipal.Member(DevSeed.UserId, DevSeed.UserEmail));
-
-        // Handlers and pipeline behaviours are scoped (as in the hosts), so the mediator comes from a scope.
-        await using var scope = provider.CreateAsyncScope();
-        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-
-        // The policy is part of every run, not of the first one: an existing token skips only the mint, so a stack whose
-        // policy revision was never seeded (or was seeded by a run that predates it) still ends up with one.
         var policy = await WriteSamplePolicyAsync(mediator, output, error).ConfigureAwait(false);
         if (policy != MigratorExitCodes.Success)
         {
             return policy;
         }
 
-        if (await FindLiveTokenAsync(provider).ConfigureAwait(false) is not null)
+        if (await FindLiveTokenAsync(services).ConfigureAwait(false) is not null)
         {
             await output.WriteLineAsync(RerunNote).ConfigureAwait(false);
 
@@ -323,24 +306,11 @@ internal static class DevSeedToken
         internal string? Value { get; set; }
     }
 
-    /// <summary>The repository's <c>contracts/</c> directory, or null when it does not sit next to <c>migrations/</c>.</summary>
-    private static string? ContractsDirectory(string migrationsPath)
-    {
-        var root = Path.GetDirectoryName(migrationsPath);
-        if (string.IsNullOrEmpty(root))
-        {
-            return null;
-        }
-
-        var contracts = Path.Combine(root, "contracts");
-
-        return Directory.Exists(Path.Combine(contracts, "schemas")) ? contracts : null;
-    }
-
     /// <summary>
-    /// A session-level PostgreSQL advisory lock on a dedicated app-role connection: the lookup and the mint are one
-    /// critical section, so a second concurrent first run blocks, then sees the token and mints nothing. Advisory locks
-    /// are per database and released with the session, so a crashed run leaves no stale lock behind.
+    /// A session-level PostgreSQL advisory lock on a dedicated app-role connection: one seed at a time, so the tenant write,
+    /// the catalog rows and the token mint are one critical section and a second concurrent first run blocks, then finds
+    /// everything already there. Advisory locks are per database and released with the session, so a crashed run leaves
+    /// no stale lock behind.
     /// </summary>
     /// <remarks>
     /// Residual risk: the lock only orders runs of this command. A revoke that races the check-to-mint window, or any

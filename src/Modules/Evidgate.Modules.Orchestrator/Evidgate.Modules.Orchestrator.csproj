@@ -29,6 +29,7 @@
   <!-- 01.1.2-T2.1: internal implementation, opened to the two composition roots and the tests. -->
   <ItemGroup>
     <InternalsVisibleTo Include="Evidgate.Api" />
+    <InternalsVisibleTo Include="Evidgate.Migrator" />
     <InternalsVisibleTo Include="Evidgate.Worker" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
     <InternalsVisibleTo Include="Tenancy.IntegrationTests" />

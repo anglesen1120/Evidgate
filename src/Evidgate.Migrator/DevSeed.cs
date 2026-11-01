@@ -12,9 +12,12 @@ namespace Evidgate.Migrator;
 /// <remarks>
 /// Refuses, writing nothing, unless <c>DOTNET_ENVIRONMENT</c> is <c>Development</c> and the database host is the local
 /// machine or a bare compose service name (no dots): a seed pointed at a shared database is the mistake this guard
-/// exists for. The data is fully synthetic. <c>seed-dev --with-token</c> is seed part 2: after this tenant is written,
-/// one dev ingest token and one sample policy revision are minted through the modules' own commands on the app role
-/// (<see cref="DevSeedToken"/>), so no credential or policy row is ever composed by hand.
+/// exists for. The data is fully synthetic. After the tenant, one catalog suite with one case is written through the
+/// Catalog module's own service and commands on the app role (<see cref="DevSeedCatalog"/>), so a manifest has a suite
+/// revision to name, and one environment revision through the Orchestrator command (<see cref="DevSeedEnvironment"/>), so
+/// a run has an <c>environment_revision_id</c>; <c>seed-dev --with-token</c> then also mints one dev ingest token and one
+/// sample policy revision the same way (<see cref="DevSeedToken"/>), so no credential, policy, catalog or environment row
+/// is ever composed by hand.
 /// </remarks>
 public static class DevSeed
 {
@@ -84,10 +87,10 @@ public static class DevSeed
         on conflict (id) do nothing;
         """;
 
-    /// <summary>Applies seed part 1; returns the process exit code.</summary>
+    /// <summary>Applies the tenant and the catalog seed; returns the process exit code.</summary>
     /// <param name="options">Owner-role connection and paths.</param>
     /// <param name="environment">Environment overrides (tests); null reads the process environment.</param>
-    /// <param name="output">Where progress goes.</param>
+    /// <param name="output">Where progress goes, including the ids a manifest needs.</param>
     /// <param name="error">Where a refusal or failure goes.</param>
     public static int Run(
         MigratorOptions options,
@@ -96,7 +99,7 @@ public static class DevSeed
         TextWriter error) =>
         Run(options, environment, output, error, withToken: false);
 
-    /// <summary>Applies seed part 1 and, with <paramref name="withToken"/>, also part 2 (the ingest token and the sample policy).</summary>
+    /// <summary>Applies the tenant and the catalog seed and, with <paramref name="withToken"/>, also the ingest token and the sample policy.</summary>
     /// <param name="options">Owner-role connection and paths.</param>
     /// <param name="environment">Environment overrides (tests); null reads the process environment.</param>
     /// <param name="output">Where progress goes; the one-time token secret goes here and nowhere else.</param>
@@ -120,9 +123,7 @@ public static class DevSeed
             return refusal;
         }
 
-        return withToken
-            ? DevSeedToken.Run(options, environment, output, error)
-            : WriteTenant(options, output, error);
+        return DevSeedToken.Run(options, environment, output, error, withToken: withToken);
     }
 
     /// <summary>Null when the seed may run; else the exit code, after the refusal is written and nothing else was done.</summary>

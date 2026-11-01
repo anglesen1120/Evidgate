@@ -17,12 +17,15 @@
 # usage: scripts/dev/db-init.sh [--with-token] [--help]
 #
 #   --with-token  after the role grants, run `Evidgate.Migrator seed-dev
-#                 --with-token`: the dev tenant plus one dev ingest token and one
-#                 sample policy revision, minted through the real commands on the
-#                 app role. A minted secret reaches this script's stdout only,
-#                 once: never captured, tee'd, exported or logged, and a rerun
-#                 that finds a live token prints no secret. Requires
-#                 EVIDGATE__CI__PEPPER in the environment.
+#                 --with-token`: the dev tenant and the dev catalog suite plus one
+#                 dev ingest token and one sample policy revision, minted through
+#                 the real commands on the app role. A minted secret reaches this
+#                 script's stdout only, once: never captured, tee'd, exported or
+#                 logged, and a rerun that finds a live token prints no secret.
+#                 Requires EVIDGATE__CI__PEPPER in the environment.
+#
+# The plain run also seeds through the app role (the catalog suite is written by
+# the Catalog module), so both modes run after the grants.
 #
 # required environment:
 #   EVIDGATE_OWNER_PASSWORD       password for the migration role
@@ -194,17 +197,6 @@ fi
 EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
   dotnet run --project "$ROOT/src/Evidgate.Migrator"
 
-# 2b. The synthetic dev tenant (01.8.1-T3.1): org, project, dev user with its roles and a
-#     CI binding. Idempotent; the command itself refuses anything but a local Development
-#     database, and `--no-seed` skips it. Under --with-token it runs in step 3b instead,
-#     because that invocation also mints through the app role, which needs the LOGIN
-#     granted in step 3.
-if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ] && [ "$with_token" = false ]; then
-  printf 'db-init: seeding the dev tenant (seed-dev)\n'
-  DOTNET_ENVIRONMENT=Development EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
-    dotnet run --project "$ROOT/src/Evidgate.Migrator" -- seed-dev
-fi
-
 # 3. Credentials for the application roles created by migration 0001: LOGIN +
 #    password are granted here, by the superuser bootstrap, never in a migration
 #    (00 §5.7 S3).
@@ -218,21 +210,34 @@ alter role evidgate_operator login password :'operator_password';
 alter role evidgate_worker_sched login password :'worker_sched_password';
 SQL
 
-# 3b. The token seed: the tenant, one ingest token and one sample revision, minted
-#     through the real commands on the app role so it follows the grants above.
-#     A minted secret reaches this script's stdout once and nowhere else.
-if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ] && [ "$with_token" = true ]; then
-  printf 'db-init: seeding the dev tenant and the dev ingest token (seed-dev --with-token)\n'
+# 3b. The dev seed: the synthetic tenant, the dev project's sample case, suite
+#     and suite revision (written by the Catalog module, so a manifest has a suite
+#     revision to name), and with --with-token one ingest token and one sample
+#     policy revision. Both paths write through the application role, so both
+#     follow the grants above. A minted secret reaches this script's stdout once
+#     and nowhere else.
+if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ]; then
   app_connection_string="Host=$DB_HOST;Port=$DB_PORT;Database=$DB_NAME;Username=evidgate_app;Password=$(dsn_quote "$EVIDGATE_APP_PASSWORD")"
+  if [ "$with_token" = true ]; then
+    printf 'db-init: seeding the dev tenant, the dev catalog suite, the ingest token and the policy (seed-dev --with-token)\n'
+    seed_args=(seed-dev --with-token)
+    pepper="${EVIDGATE__CI__PEPPER:-}"
+  else
+    printf 'db-init: seeding the dev tenant and the dev catalog suite (seed-dev)\n'
+    seed_args=(seed-dev)
+    pepper=""
+  fi
   DOTNET_ENVIRONMENT=Development \
     EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
     EVIDGATE__DATABASE__CONNECTIONSTRING="$app_connection_string" \
-    EVIDGATE__CI__PEPPER="${EVIDGATE__CI__PEPPER:-}" \
-    dotnet run --project "$ROOT/src/Evidgate.Migrator" -- seed-dev --with-token
-  # The note must hold on a rerun too, and it cannot tell which case happened
-  # without capturing the seed's stdout, the one thing this path must not do.
-  printf 'db-init: if a line EVIDGATE_DEV_TOKEN=... was printed above, its secret is shown once and stored nowhere: export it in your shell (docs/dev-setup.md).\n'
-  printf "db-init: if none was printed, a live 'dev-seed' ingest token already exists; its secret was shown once and cannot be shown again. To get a new one run: scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token\n"
+    EVIDGATE__CI__PEPPER="$pepper" \
+    dotnet run --project "$ROOT/src/Evidgate.Migrator" -- "${seed_args[@]}"
+  if [ "$with_token" = true ]; then
+    # The note must hold on a rerun too, and it cannot tell which case happened
+    # without capturing the seed's stdout, the one thing this path must not do.
+    printf 'db-init: if a line EVIDGATE_DEV_TOKEN=... was printed above, its secret is shown once and stored nowhere: export it in your shell (docs/dev-setup.md).\n'
+    printf "db-init: if none was printed, a live 'dev-seed' ingest token already exists; its secret was shown once and cannot be shown again. To get a new one run: scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token\n"
+  fi
 fi
 
 cat <<EOF
