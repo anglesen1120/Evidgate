@@ -21,7 +21,8 @@ holds only the process-level contract.
 - 04.2.4-T2 adds `quickstart` (§10); 04.2.4-T1 adds `artifacts upload` (§12) with
   its journal, its allowed-directory guard and the presigned-URL redaction rule.
 - 04.9.1 adds `replay` and the replay exit codes 10–19 (04.9.1-T4).
-- 07.6.1 adds `gate`; 07.7.1 adds the advisory exit rule; 07.8.1 adds
+- 07.6.1 adds `gate` and §13 (the exit codes, the body it refuses and the
+  `--json` member order); 07.7.1 adds the advisory exit rule; 07.8.1 adds
   `gate --release --target`.
 - 03.5.1 records `evidgate init`.
 
@@ -1445,3 +1446,41 @@ set `complete_done`, so a re-run re-asks the server (a rejection is replayable)
 instead of answering `ready` from a record that cannot tell rejection from
 success; the hint tells the operator the row stays rejected and names the journal
 record to delete to start over (§12.5).
+
+## 13. Gate
+
+`evidgate gate --run <uuid> [--wait <n>[smh]] [--json]` (07.6.1) reads
+`GET /v1/runs/{r}/decision` and turns the body into the process exit code a CI
+step branches on. The response is the `Decision` schema of 00 §9.3 — one body for
+an evaluated run and for one with no live evaluation row — read through the
+generated SDK type, so the CLI never probes a member it cannot see:
+
+- `PASS` exits 0, `FAIL` exits 1, `INCONCLUSIVE` exits 2 and `status: pending`
+  (with `decision: null`) exits 2 after the wait ends; every other answer is exit
+  3 (§2). Only a literal `PASS` may exit 0.
+- The body is refused (exit 3 `request_failed`, no retry) when `status` is
+  missing or outside `pending`/`evaluated`, when `decision` is missing or neither
+  `null` nor one of the three upper-case verdicts, when `status: pending` carries
+  a decision, or when `status: evaluated` carries `decision: null`. A refused
+  status or decision value is server text and is never echoed; the message names
+  the member only. The check runs before the verdict is read, so a pending body
+  cannot read as a pass.
+- Human mode prints `gate: <DECISION> (run <run_id>)` and one indented reason
+  line per entry of `reasons`; `reasons: null` prints no reason line. A pending
+  or timed-out run explains itself on stderr (`§6` redaction, control-character
+  escaping, the 200-code-point and 50-line caps apply).
+- `--json` prints exactly one object line on stdout. The five keys the gate has
+  always printed come first, in their original order — `decision`,
+  `completeness`, `evaluation_id`, `mode`, `url` — then the members the widened
+  body adds: `status`, `evidence_revision`, `outcome`, `missing`, `reasons`,
+  `policy_hash`, `manifest_hash`, `evaluator_version`. Every value is printed as
+  the server sent it, except that a string member, and each entry of `missing`
+  and `reasons`, is redacted (§6) before it is encoded. A scalar member the
+  server does not send as its declared type prints `null`, never a derived
+  value; a `missing` or `reasons` that is neither `null` nor a list of strings
+  makes the body unreadable (exit 3), like every other refused body.
+  `missing` stays `null` (never `[]`) and every evaluation-derived member is
+  `null` while `status` is `pending`. A consumer of the five-key line keeps
+  parsing it; the added keys are the only difference.
+- The release route (`GET /v1/releases/{id}/decision`, `ReleaseDecision`) keeps
+  its own shape and is not read by this command.

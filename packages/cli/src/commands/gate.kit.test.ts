@@ -11,6 +11,7 @@ import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 
 import { devStubFetch, devToken, mintedToken } from './devExchange.testing.js';
+import type { GateOutcome } from './gateDecision.js';
 
 export { withTokenExchange } from './devExchange.testing.js';
 
@@ -117,6 +118,54 @@ export function jsonResponse(
 /** A 200 with the given decision body. */
 export function decided(body: unknown): Response {
   return jsonResponse(200, body);
+}
+
+/**
+ * A `Decision` body for a run with no live evaluation: `status: pending` and every
+ * evaluation member `null`, `missing` included (never `[]`).
+ */
+export function pending(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    status: 'pending',
+    decision: null,
+    evaluation_id: null,
+    evidence_revision: null,
+    completeness: null,
+    outcome: null,
+    missing: null,
+    reasons: null,
+    policy_hash: null,
+    manifest_hash: null,
+    evaluator_version: null,
+    mode: null,
+    url: null,
+    ...overrides,
+  };
+}
+
+/**
+ * An evaluated `Decision` body; `overrides` carries the verdict and members under test. The
+ * schema narrows `missing` to an array here, so the default is `[]`, never the pending `null`.
+ */
+/** A parsed pending decision: every evaluation member `null`, the shape `status: pending` gives. */
+export const pendingOutcome: GateOutcome = {
+  status: 'pending',
+  decision: null,
+  completeness: null,
+  evaluationId: null,
+  evidenceRevision: null,
+  outcome: null,
+  missing: null,
+  reasons: null,
+  policyHash: null,
+  manifestHash: null,
+  evaluatorVersion: null,
+  mode: null,
+  url: null,
+};
+
+export function evaluated(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return pending({ status: 'evaluated', missing: [], ...overrides });
 }
 
 /**
@@ -251,7 +300,7 @@ describe('dev token exchange', () => {
 
   it('hands the command the minted token, never the dev credential', async () => {
     const env = await devEnv(dirs);
-    const stub = devStubFetch(() => decided({ decision: 'PASS' }));
+    const stub = devStubFetch(() => decided(evaluated({ decision: 'PASS' })));
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);

@@ -10,10 +10,12 @@ import {
   cacheDirs,
   capture,
   decided,
+  evaluated,
   gateArgv,
   ingestEnv,
   invoke,
   jsonResponse,
+  pending,
   refusal,
   runId,
   stubFetch,
@@ -69,13 +71,13 @@ describe('gate --wait across token lifetimes', () => {
     const stub = tokenStub((authorization) => {
       const bearer = authorization ?? '';
       if (bearer === 'Bearer egt-token-4') {
-        return decided({ decision: 'PASS' });
+        return decided(evaluated({ decision: 'PASS' }));
       }
       const polls = (used.get(bearer) ?? 0) + 1;
       used.set(bearer, polls);
       return bearer === 'Bearer egt-token-1' || polls > 1
         ? refusal(401, 'token_invalid')
-        : decided({ decision: null });
+        : decided(pending());
     });
     const out = capture();
 

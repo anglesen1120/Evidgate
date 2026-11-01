@@ -52,6 +52,40 @@ const runSummary = {
 /** A minimal valid `RunPage` body for `GET /v1/projects/{p}/runs` (200). */
 const runPage = { items: [runSummary], next_cursor: null };
 
+/** One evaluated `Decision` body for `GET /v1/runs/{r}/decision` (200). */
+const evaluatedDecision = {
+  status: 'evaluated',
+  decision: 'PASS',
+  evaluation_id: '0192f0e2-3f4a-7c8d-9e0f-1a2b3c4d5e6f',
+  evidence_revision: 4,
+  completeness: 'complete',
+  outcome: 'all_passed',
+  missing: [],
+  reasons: ['all suites passed'],
+  policy_hash: `sha256:${'a'.repeat(64)}`,
+  manifest_hash: `sha256:${'b'.repeat(64)}`,
+  evaluator_version: '1.2.3',
+  mode: 'live',
+  url: 'https://evidgate.test/projects/p1/runs/r1',
+};
+
+/** The same route while the run has no live evaluation: every member present, evaluation null. */
+const pendingDecision = {
+  ...evaluatedDecision,
+  status: 'pending',
+  decision: null,
+  evaluation_id: null,
+  evidence_revision: null,
+  completeness: null,
+  outcome: null,
+  missing: null,
+  reasons: null,
+  policy_hash: null,
+  manifest_hash: null,
+  evaluator_version: null,
+  mode: null,
+};
+
 /** The same row with `run_id` omitted — a required-member failure one level down. */
 const runSummaryWithoutId = {
   state: 'queued',
@@ -199,6 +233,24 @@ describe('openapi response validator: declared responses', () => {
     expect(validator.validateResponse('listRuns', 418, runPage).errors).toEqual([
       { index: null, path: '', reason: 'undeclared_status' },
     ]);
+  });
+
+  it('accepts an evaluated and a pending run decision body', () => {
+    expect(validator.validateResponse('getRunDecision', 200, evaluatedDecision).errors).toEqual([]);
+    expect(validator.validateResponse('getRunDecision', 200, pendingDecision).errors).toEqual([]);
+  });
+
+  it('refuses the superseded run decision body', () => {
+    const superseded = { decision: 'PASS', evaluation_revision: 'rev-1', reasons: [] };
+
+    expect(validator.validateResponse('getRunDecision', 200, superseded).errors).not.toEqual([]);
+  });
+
+  it('refuses a pending run decision body that carries a decision', () => {
+    expect(
+      validator.validateResponse('getRunDecision', 200, { ...pendingDecision, decision: 'PASS' })
+        .errors,
+    ).not.toEqual([]);
   });
 
   it('accepts the 00 §9.2 envelope against the shared Forbidden response schema', () => {

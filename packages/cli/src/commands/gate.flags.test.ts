@@ -11,6 +11,7 @@ import {
   capture,
   decided,
   devEnv,
+  evaluated,
   gateArgv,
   invoke,
   runId,
@@ -38,7 +39,7 @@ describe('gate flags', () => {
     readonly calls: StubCall[];
     readonly exchanges: StubCall[];
   } {
-    return devStubFetch(() => decided({ decision: 'PASS' }));
+    return devStubFetch(() => decided(evaluated({ decision: 'PASS' })));
   }
 
   const badWaits = ['0', '0s', '-5s', '1.5m', '1d', 'abc', '', '25h', '86401s'];

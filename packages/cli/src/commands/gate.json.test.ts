@@ -1,14 +1,39 @@
-// The `--json` line: exactly five members in a fixed order, one parseable object line, and
-// redaction that neither hides the decision nor breaks the line.
+// The `--json` line: the five verdict keys in their original order, then the members the
+// widened `Decision` body adds, one parseable object line, and redaction that neither hides
+// the decision nor breaks the line.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resetSecrets } from '../redact.js';
 
 import { devStubFetch } from './devExchange.testing.js';
 import type { GateDecisionValue } from './gateDecision.js';
-import { cacheDirs, capture, decided, devEnv, gateArgv, invoke, runId } from './gate.kit.test.js';
+import {
+  cacheDirs,
+  capture,
+  decided,
+  devEnv,
+  evaluated,
+  gateArgv,
+  invoke,
+  pending,
+  runId,
+} from './gate.kit.test.js';
 
-const keys = ['decision', 'completeness', 'evaluation_id', 'mode', 'url'];
+const keys = [
+  'decision',
+  'completeness',
+  'evaluation_id',
+  'mode',
+  'url',
+  'status',
+  'evidence_revision',
+  'outcome',
+  'missing',
+  'reasons',
+  'policy_hash',
+  'manifest_hash',
+  'evaluator_version',
+];
 
 describe('gate --json', () => {
   const dirs = cacheDirs();
@@ -28,9 +53,9 @@ describe('gate --json', () => {
   ];
 
   for (const [decision, expected] of decisions) {
-    it(`prints the five members in order for ${decision} and exits ${expected}`, async () => {
+    it(`prints the members in order for ${decision} and exits ${expected}`, async () => {
       const env = await devEnv(dirs);
-      const stub = devStubFetch(() => decided({ decision }));
+      const stub = devStubFetch(() => decided(evaluated({ decision })));
       const out = capture();
 
       const { code } = await invoke(gateArgv(['--run', runId, '--json']), env, out, stub.fetchImpl);
@@ -46,16 +71,112 @@ describe('gate --json', () => {
         evaluation_id: null,
         mode: null,
         url: null,
+        status: 'evaluated',
+        evidence_revision: null,
+        outcome: null,
+        missing: [],
+        reasons: null,
+        policy_hash: null,
+        manifest_hash: null,
+        evaluator_version: null,
       });
     });
   }
+
+  it('prints a pending body with every evaluation member null, missing included', async () => {
+    const env = await devEnv(dirs);
+    const stub = devStubFetch(() => decided(pending()));
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--json']), env, out, stub.fetchImpl);
+
+    expect(code).toBe(2);
+    const parsed = JSON.parse(out.stdout.join('')) as Record<string, unknown>;
+    expect(Object.keys(parsed)).toStrictEqual(keys);
+    expect(parsed).toStrictEqual({
+      decision: null,
+      completeness: null,
+      evaluation_id: null,
+      mode: null,
+      url: null,
+      status: 'pending',
+      evidence_revision: null,
+      outcome: null,
+      missing: null,
+      reasons: null,
+      policy_hash: null,
+      manifest_hash: null,
+      evaluator_version: null,
+    });
+  });
+
+  it('passes every widened member through as the server sent it', async () => {
+    const env = await devEnv(dirs);
+    const stub = devStubFetch(() =>
+      decided(
+        evaluated({
+          decision: 'FAIL',
+          evaluation_id: '0192f0e2-3f4a-7c8d-9e0f-1a2b3c4d5e6f',
+          evidence_revision: 7,
+          completeness: 'complete',
+          outcome: 'has_failures',
+          missing: ['missing_shard', 'count_mismatch'],
+          reasons: ['suite api failed'],
+          policy_hash: `sha256:${'a'.repeat(64)}`,
+          manifest_hash: `sha256:${'b'.repeat(64)}`,
+          evaluator_version: '1.2.3',
+          mode: 'live',
+          url: 'https://evidgate.test/projects/p1/runs/r1',
+        }),
+      ),
+    );
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--json']), env, out, stub.fetchImpl);
+
+    expect(code).toBe(1);
+    const parsed = JSON.parse(out.stdout.join('')) as Record<string, unknown>;
+    expect(Object.keys(parsed)).toStrictEqual(keys);
+    expect(parsed).toStrictEqual({
+      decision: 'FAIL',
+      completeness: 'complete',
+      evaluation_id: '0192f0e2-3f4a-7c8d-9e0f-1a2b3c4d5e6f',
+      mode: 'live',
+      url: 'https://evidgate.test/projects/p1/runs/r1',
+      status: 'evaluated',
+      evidence_revision: 7,
+      outcome: 'has_failures',
+      missing: ['missing_shard', 'count_mismatch'],
+      reasons: ['suite api failed'],
+      policy_hash: `sha256:${'a'.repeat(64)}`,
+      manifest_hash: `sha256:${'b'.repeat(64)}`,
+      evaluator_version: '1.2.3',
+    });
+  });
+
+  it('redacts a token inside a list member without dropping the member', async () => {
+    const env = await devEnv(dirs);
+    const stub = devStubFetch(() =>
+      decided(evaluated({ decision: 'FAIL', reasons: ['bearer dev-token-value was rejected'] })),
+    );
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--json']), env, out, stub.fetchImpl);
+
+    expect(code).toBe(1);
+    const text = out.stdout.join('');
+    expect(text).not.toContain('dev-token-value');
+    expect(JSON.parse(text)).toMatchObject({ reasons: ['bearer [REDACTED] was rejected'] });
+  });
 
   it('keeps the line parseable when a member looks like a header', async () => {
     const env = await devEnv(dirs);
     // `Authorization: …` is the writer's header rule; a member that reads like one must not
     // swallow the closing quotes or braces of the object.
     const stub = devStubFetch(() =>
-      decided({ decision: 'PASS', mode: 'Authorization: x', url: 'https://api.example/r' }),
+      decided(
+        evaluated({ decision: 'PASS', mode: 'Authorization: x', url: 'https://api.example/r' }),
+      ),
     );
     const out = capture();
 
@@ -72,13 +193,21 @@ describe('gate --json', () => {
       evaluation_id: null,
       mode: '[REDACTED]',
       url: 'https://api.example/r',
+      status: 'evaluated',
+      evidence_revision: null,
+      outcome: null,
+      missing: [],
+      reasons: null,
+      policy_hash: null,
+      manifest_hash: null,
+      evaluator_version: null,
     });
   });
 
   it('keeps the line parseable when a member carries a quoted Authorization member', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch(() =>
-      decided({ decision: 'PASS', mode: '{"Authorization":"Bearer abc.def"}' }),
+      decided(evaluated({ decision: 'PASS', mode: '{"Authorization":"Bearer abc.def"}' })),
     );
     const out = capture();
 
@@ -95,16 +224,26 @@ describe('gate --json', () => {
       // secret; the member still parses as the same JSON string it did before.
       mode: '{"Authorization":"[REDACTED]',
       url: null,
+      status: 'evaluated',
+      evidence_revision: null,
+      outcome: null,
+      missing: [],
+      reasons: null,
+      policy_hash: null,
+      manifest_hash: null,
+      evaluator_version: null,
     });
   });
 
   it('strips a query from a printed url exactly once', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch(() =>
-      decided({
-        decision: 'PASS',
-        url: 'https://s3.example/x?X-Amz-Signature=abc&X-Amz-Expires=900',
-      }),
+      decided(
+        evaluated({
+          decision: 'PASS',
+          url: 'https://s3.example/x?X-Amz-Signature=abc&X-Amz-Expires=900',
+        }),
+      ),
     );
     const out = capture();
 
@@ -121,7 +260,7 @@ describe('gate --json', () => {
   it('redacts a token inside a printed member without shortening it', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch(() =>
-      decided({ decision: 'PASS', url: `${'x'.repeat(190)}dev-token-value` }),
+      decided(evaluated({ decision: 'PASS', url: `${'x'.repeat(190)}dev-token-value` })),
     );
     const out = capture();
 
@@ -136,7 +275,7 @@ describe('gate --json', () => {
 
   it('prints decision null for a pending timeout', async () => {
     const env = await devEnv(dirs);
-    const stub = devStubFetch(() => decided({ decision: null }));
+    const stub = devStubFetch(() => decided(pending()));
     const out = capture();
 
     const { code } = await invoke(
@@ -149,27 +288,23 @@ describe('gate --json', () => {
     expect(code).toBe(2);
     const parsed = JSON.parse(out.stdout.join('')) as Record<string, unknown>;
     expect(Object.keys(parsed)).toStrictEqual(keys);
-    expect(parsed).toStrictEqual({
-      decision: null,
-      completeness: null,
-      evaluation_id: null,
-      mode: null,
-      url: null,
-    });
+    expect(parsed).toMatchObject({ decision: null, status: 'pending', missing: null });
     expect(out.stderr.join('')).toBe(`evidgate: gate: run ${runId} is still pending after 2s\n`);
   });
 
   it('prints the optional members only when the server sends them as strings', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch(() =>
-      decided({
-        decision: 'FAIL',
-        completeness: 'complete',
-        evaluation_id: 'eval-1',
-        mode: 'strict',
-        url: 'https://evidgate.test/runs/1',
-        mode_unused: 5,
-      }),
+      decided(
+        evaluated({
+          decision: 'FAIL',
+          completeness: 'complete',
+          evaluation_id: 'eval-1',
+          mode: 'strict',
+          url: 'https://evidgate.test/runs/1',
+          mode_unused: 5,
+        }),
+      ),
     );
     const out = capture();
 
@@ -183,13 +318,31 @@ describe('gate --json', () => {
       evaluation_id: 'eval-1',
       mode: 'strict',
       url: 'https://evidgate.test/runs/1',
+      status: 'evaluated',
+      evidence_revision: null,
+      outcome: null,
+      missing: [],
+      reasons: null,
+      policy_hash: null,
+      manifest_hash: null,
+      evaluator_version: null,
     });
   });
 
   it('prints null for an optional member the server sends in another type', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch(() =>
-      decided({ decision: 'PASS', completeness: 3, evaluation_id: {}, mode: null, url: [] }),
+      decided(
+        evaluated({
+          decision: 'PASS',
+          completeness: 3,
+          evaluation_id: {},
+          mode: null,
+          url: [],
+          evidence_revision: 'seven',
+          policy_hash: 7,
+        }),
+      ),
     );
     const out = capture();
 
@@ -202,6 +355,14 @@ describe('gate --json', () => {
       evaluation_id: null,
       mode: null,
       url: null,
+      status: 'evaluated',
+      evidence_revision: null,
+      outcome: null,
+      missing: [],
+      reasons: null,
+      policy_hash: null,
+      manifest_hash: null,
+      evaluator_version: null,
     });
   });
 });
