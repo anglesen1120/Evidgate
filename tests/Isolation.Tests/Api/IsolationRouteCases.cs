@@ -713,6 +713,11 @@ public static class IsolationRouteCases
         // URL matches a served route.
         ObjectCase("GET", "/v1/runs/{run_id}/evidence-revisions", p => [("run", p.RunId)], id =>
             new(HttpMethod.Get, $"/v1/runs/{id}/evidence-revisions"), ownControl: true),
+        // The run's decision is the same read shape: the run is addressed by id alone and resolved under RLS, so
+        // another org's run is the 404 not_found of GET /v1/runs/{r} (never a 403 leaking existence). The own-project
+        // control answers 200 with the pending body because the world stores no evaluation.
+        ObjectCase("GET", "/v1/runs/{r}/decision", p => [("run", p.RunId)], id =>
+            new(HttpMethod.Get, $"/v1/runs/{id}/decision"), ownControl: true),
         // 05.2.2-T2: the project-scoped run list. As a list, its positive control is the full-pagination walk
         // (Lists); the extra probes pin the ref_name filter, which must not widen tenancy.
         ProjectCase("GET", "/v1/projects/{p}/runs", p => new(HttpMethod.Get, $"/v1/projects/{p}/runs"), list: true,

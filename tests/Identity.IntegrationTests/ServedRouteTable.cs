@@ -717,6 +717,9 @@ internal static class RouteRequests
         // with an empty page — the route needs no frozen revision to be exercisable.
         Add("GET", "/v1/runs/{run_id}/evidence-revisions", ctx =>
             new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}/evidence-revisions"));
+        // The run's decision: the seeded run has no evaluation row, so the recipe is the pending body — clean 200, and
+        // the route needs no verdict to be exercisable.
+        Add("GET", "/v1/runs/{r}/decision", ctx => new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}/decision"));
 
         // 05.3.2-T1: the finalize route is the events route's twin — a resolved member session reaches the C2 pipeline's
         // `event:write` gate, which answers the matrix's 403, so the recipe uses a fresh run id and a shape-valid body:

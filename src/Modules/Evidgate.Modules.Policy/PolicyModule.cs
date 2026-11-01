@@ -52,6 +52,12 @@ internal static class PolicyModule
         // 07.3.1-T1: the waiver create validates `expires_at` against the server clock (00 §5.5 C2).
         services.TryAddSingleton(TimeProvider.System);
 
+        // The decision body's run-page link is built from the deployment's browser-facing base URL, the same key the
+        // login routes redirect with; absent is valid, and the route then serves no link.
+        services.AddOptions<RunDecisionOptions>()
+            .BindConfiguration(RunDecisionOptions.SectionName)
+            .ValidateOnStart();
+
         // The evaluator is pure and stateless, so one instance serves every attempt; it is registered here rather than
         // in the evaluation library because only this module composes it.
         services.TryAddSingleton<IPolicyEvaluator>(_ => new PolicyEvaluator());
