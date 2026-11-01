@@ -75,8 +75,14 @@ function jsonResponse(
   });
 }
 
-/** The dev token both dev envs seed; the exchange hands the same value back as the bearer. */
+/** The dev token both dev envs seed: an ingest credential, never a bearer. */
 const devToken = 'dev-token-value';
+/**
+ * The `ci_producer` token the dev exchange mints: the bearer the upload sends. It is
+ * deliberately a different string from `devToken`, so an upload that sent the dev token raw
+ * would fail the `Bearer ${mintedToken}` assertion.
+ */
+const mintedToken = 'egt_minted_ci_token';
 /** The exchange route a dev run posts to before its own request. */
 const exchangePath = '/v1/ci/token';
 
@@ -101,7 +107,7 @@ interface DevStub {
 /**
  * A stub for a dev-token run. `EVIDGATE_DEV_TOKEN` is an ingest credential: `getToken`
  * exchanges it at `POST /v1/ci/token` and caches the result, so the command runs on the
- * returned `ci_producer` token. The stub answers that exchange with `devToken` and hands
+ * returned `ci_producer` token. The stub answers that exchange with `mintedToken` and hands
  * every other request to `handler`.
  */
 function devStubFetch(handler: (request: Request) => Response | Promise<Response>): DevStub {
@@ -112,7 +118,7 @@ function devStubFetch(handler: (request: Request) => Response | Promise<Response
     const call: StubCall = { request, body: Buffer.from(await request.clone().arrayBuffer()) };
     if (new URL(request.url).pathname === exchangePath) {
       exchanges.push(call);
-      return jsonResponse(200, exchangeBody(devToken));
+      return jsonResponse(200, exchangeBody(mintedToken));
     }
     calls.push(call);
     return handler(request);
@@ -199,7 +205,12 @@ describe('manifests upload', () => {
     // `createApiClient` puts the SDK's `/v1` server prefix on the base URL, so the
     // operation path is `<root>/v1/projects/{p}/manifests` (the env value carries no `/v1`).
     expect(new URL(call?.request.url ?? '').pathname).toBe(`/v1/projects/${project}/manifests`);
-    expect(call?.request.headers.get('authorization')).toBe('Bearer dev-token-value');
+    // The upload runs on the exchanged token: the dev token only travels in the exchange
+    // body, so a regression that sent it as the bearer fails here.
+    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
+    expect(JSON.parse(exchanges[0]?.body.toString('utf8') ?? '')).toStrictEqual({
+      ingest_token: devToken,
+    });
     expect(call?.request.headers.get('content-type')).toBe('application/json');
     // 00 §9.1: the route requires an `Idempotency-Key` (openapi `required: true`); the
     // file's own digest makes a retry of the same manifest replay the stored 201.
@@ -519,7 +530,8 @@ describe('manifests upload', () => {
     },
   );
 
-  // 04.2.2-T1.1 / T78: a server message that embeds the bearer is redacted.
+  // A server message that embeds the bearer or the dev credential is redacted; the two are
+  // different strings, so neither can hide behind a shared value.
   it('token_never_printed', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();
@@ -527,7 +539,7 @@ describe('manifests upload', () => {
       jsonResponse(500, {
         error: {
           code: 'server_error',
-          message: 'boom dev-token-value',
+          message: `boom ${devToken} ${mintedToken}`,
           request_id: 'req-1',
           retryable: true,
         },
@@ -541,7 +553,8 @@ describe('manifests upload', () => {
 
     const text = stderr.join('');
     expect(text).toContain('[REDACTED]');
-    expect(text).not.toContain('dev-token-value');
+    expect(text).not.toContain(devToken);
+    expect(text).not.toContain(mintedToken);
   });
 
   // 04.2.2-T1.1 / §5: a non-envelope non-2xx and a 2xx with an invalid body are both
@@ -593,7 +606,7 @@ describe('manifests upload', () => {
       const path = new URL(request.url).pathname;
       seen.push(path);
       return path === exchangePath
-        ? Promise.resolve(jsonResponse(200, exchangeBody(devToken)))
+        ? Promise.resolve(jsonResponse(200, exchangeBody(mintedToken)))
         : Promise.reject(new TypeError('fetch failed http://secret'));
     };
     const { io, stderr } = capture();
@@ -1013,7 +1026,7 @@ describe('manifests upload — boundaries', () => {
       served.push(request.url ?? '');
       if (request.url === exchangePath) {
         response.writeHead(200, { 'content-type': 'application/json' });
-        response.end(JSON.stringify(exchangeBody(devToken)));
+        response.end(JSON.stringify(exchangeBody(mintedToken)));
         return;
       }
       response.writeHead(302, { location: 'http://127.0.0.1:1/elsewhere' });
@@ -1059,7 +1072,8 @@ describe('manifests upload — boundaries', () => {
 
     const text = stdout.join('') + stderr.join('');
     expect(text).not.toContain(secret);
-    expect(text).not.toContain('dev-token-value');
+    expect(text).not.toContain(devToken);
+    expect(text).not.toContain(mintedToken);
     expect(stderr.join('')).toContain('dev_token=[REDACTED]');
   });
 

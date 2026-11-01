@@ -81,8 +81,13 @@ function bodyText(call: StubCall | undefined): string {
   return call?.body.toString('utf8') ?? '';
 }
 
-/** The dev token both dev envs seed; the exchange hands the same value back as the bearer. */
+/** The dev token both dev envs seed: an ingest credential, never a bearer. */
 const devToken = 'dev-token-value';
+/**
+ * The `ci_producer` token the dev exchange mints. It is deliberately a different string from
+ * `devToken`, so a command that sent the dev token raw would fail the bearer assertions.
+ */
+const mintedToken = 'egt_minted_ci_token';
 /** The exchange route a dev run posts to before its own request. */
 const exchangePath = '/v1/ci/token';
 
@@ -97,7 +102,7 @@ interface DevStub {
 /**
  * A stub for a dev-token run. `EVIDGATE_DEV_TOKEN` is an ingest credential: `getToken`
  * exchanges it at `POST /v1/ci/token` and caches the result, so the command runs on the
- * returned `ci_producer` token. The stub answers that exchange with `devToken` and hands
+ * returned `ci_producer` token. The stub answers that exchange with `mintedToken` and hands
  * every other request to `handler`.
  */
 function devStubFetch(handler: (request: Request) => Response | Promise<Response>): DevStub {
@@ -109,7 +114,7 @@ function devStubFetch(handler: (request: Request) => Response | Promise<Response
     if (new URL(request.url).pathname === exchangePath) {
       exchanges.push(call);
       return jsonResponse(200, {
-        token: devToken,
+        token: mintedToken,
         expires_at: '2030-01-01T00:00:00Z',
         project_id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
         permission_set: [],
@@ -201,6 +206,10 @@ describe('runs create retries', () => {
     expect(stub.calls).toHaveLength(2);
     expect(fake.sleeps).toEqual([1_000]);
     const [first, second] = stub.calls;
+    // The command runs on the exchanged token: the raw dev token only ever travels in the
+    // exchange body, so a regression that sent it as the bearer fails here.
+    expect(stub.calls[0]?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
+    expect(JSON.parse(bodyText(stub.exchanges[0]))).toStrictEqual({ ingest_token: devToken });
     expect(second?.request.headers.get('idempotency-key')).toBe('retry-key-1');
     expect(second?.request.headers.get('idempotency-key')).toBe(
       first?.request.headers.get('idempotency-key'),
@@ -341,6 +350,7 @@ describe('runs finalize retries', () => {
     expect(stub.calls).toHaveLength(2);
     expect(fake.sleeps).toEqual([1_000]);
     const [first, second] = stub.calls;
+    expect(second?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     expect(second?.request.headers.get('idempotency-key')).toBe(
       first?.request.headers.get('idempotency-key'),
     );

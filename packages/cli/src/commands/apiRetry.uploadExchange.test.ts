@@ -90,18 +90,23 @@ function refusal(status: number, code: string, headers: Record<string, string> =
   );
 }
 
-/** The successful exchange body (openapi `CiTokenResponse`). */
+/** The successful exchange body (openapi `CiTokenResponse`), handing out the minted token. */
 function exchangedToken(): Response {
   return jsonResponse(200, {
-    token: 'egt_ci_token',
+    token: mintedToken,
     expires_at: '2030-01-01T00:00:00Z',
     project_id: projectId,
     permission_set: [],
   });
 }
 
-/** The dev token the M1 env seeds; the exchange hands the same value back as the bearer. */
+/** The dev token the M1 env seeds: an ingest credential, never a bearer. */
 const devToken = 'dev-token-value';
+/**
+ * The `ci_producer` token the dev exchange mints. It is deliberately a different string from
+ * `devToken`, so an upload that sent the dev token raw would fail the bearer assertions.
+ */
+const mintedToken = 'egt_minted_ci_token';
 /** The exchange route a dev run posts to before its own request. */
 const exchangePath = '/v1/ci/token';
 
@@ -116,7 +121,7 @@ interface DevStub {
 /**
  * A stub for a dev-token run. `EVIDGATE_DEV_TOKEN` is an ingest credential: `getToken`
  * exchanges it at `POST /v1/ci/token` and caches the result, so the upload runs on the
- * returned `ci_producer` token. The stub answers that exchange with `devToken` and hands
+ * returned `ci_producer` token. The stub answers that exchange with `mintedToken` and hands
  * every other request to `handler`.
  */
 function devStubFetch(handler: (request: Request) => Response | Promise<Response>): DevStub {
@@ -128,7 +133,7 @@ function devStubFetch(handler: (request: Request) => Response | Promise<Response
     if (new URL(request.url).pathname === exchangePath) {
       exchanges.push(call);
       return jsonResponse(200, {
-        token: devToken,
+        token: mintedToken,
         expires_at: '2030-01-01T00:00:00Z',
         project_id: projectId,
         permission_set: [],
@@ -190,7 +195,7 @@ describe('manifests upload retries', () => {
   }
 
   /**
-   * The M1 dev path (04.2.1 AC8): the token is a seeded ingest credential, so the upload
+   * The dev path: the token is a seeded ingest credential, so the upload
    * is preceded by one `POST /v1/ci/token`, and the exchange's answer is the bearer.
    */
   async function devEnv() {
@@ -225,6 +230,13 @@ describe('manifests upload retries', () => {
     expect(stub.calls).toHaveLength(2);
     expect(fake.sleeps).toEqual([1_000]);
     const [first, second] = stub.calls;
+    // The upload runs on the exchanged token: the raw dev token only travels in the exchange
+    // body, so a regression that sent it as the bearer fails here.
+    expect(stub.calls[0]?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
+    expect(stub.calls[1]?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
+    expect(JSON.parse(stub.exchanges[0]?.body.toString('utf8') ?? '')).toStrictEqual({
+      ingest_token: devToken,
+    });
     expect(second?.request.headers.get('idempotency-key')).toBe(
       first?.request.headers.get('idempotency-key'),
     );
@@ -339,7 +351,7 @@ describe('token exchange retries', () => {
 
     const result = await exchangeToken(config, fake.deps);
 
-    expect(result.token).toBe('egt_ci_token');
+    expect(result.token).toBe(mintedToken);
     expect(stub.calls).toHaveLength(2);
     expect(fake.sleeps).toEqual([1_000]);
     const [first, second] = stub.calls;
@@ -394,7 +406,7 @@ describe('token exchange retries', () => {
 
     const result = await exchangeToken(config, fake.deps);
 
-    expect(result.token).toBe('egt_ci_token');
+    expect(result.token).toBe(mintedToken);
     expect(fake.sleeps).toEqual([2_000]);
     expect(stub.calls).toHaveLength(2);
   });

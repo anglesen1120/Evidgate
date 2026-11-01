@@ -16,6 +16,7 @@ import {
   ingestEnv,
   invoke,
   jsonResponse,
+  mintedToken,
   oidcEnv,
   project,
   refusal,
@@ -41,7 +42,7 @@ describe('gate token refresh', () => {
     // the poll was refused with, so the replay would repeat the refusal and is skipped.
     const stub = stubFetch((request) =>
       request.url.endsWith('/v1/ci/token')
-        ? jsonResponse(200, exchangeBody(devToken))
+        ? jsonResponse(200, exchangeBody(mintedToken))
         : refusal(401, 'token_invalid'),
     );
     const out = capture();
@@ -56,12 +57,13 @@ describe('gate token refresh', () => {
       `/v1/runs/${runId}/decision`,
       '/v1/ci/token',
     ]);
-    expect(stub.calls[1]?.request.headers.get('authorization')).toBe(`Bearer ${devToken}`);
+    expect(stub.calls[1]?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     // The dev credential is what the exchange presents, so a regression that sent it raw
-    // would break this body assertion even though the bearer value looks the same.
+    // would break this body assertion even though both checks above stayed green.
     expect(await stub.calls[0]?.request.clone().json()).toStrictEqual({ ingest_token: devToken });
     // The refusal is reported without either the credential or the minted token.
     expect(out.stderr.join('')).not.toContain(devToken);
+    expect(out.stderr.join('')).not.toContain(mintedToken);
     expect(out.stderr.join('')).toContain('error token_invalid');
   });
 

@@ -36,6 +36,12 @@ const shard = 1;
 const manifestHash = `sha256:${'a'.repeat(64)}`;
 /** The dev bearer the `EVIDGATE_DEV_TOKEN` path returns (never on disk, never printed). */
 const devToken = 'dev-token-value';
+/**
+ * The `ci_producer` token the dev exchange mints: the bearer the finalize sends. It is
+ * deliberately a different string from `devToken`, so a finalize that sent the dev token raw
+ * would fail the `Bearer ${mintedToken}` assertion.
+ */
+const mintedToken = 'egt_minted_ci_token';
 /** The namespace of the documented derived-key pre-image. */
 const keyVersion = 'evidgate.finalize-key.v1';
 
@@ -119,14 +125,15 @@ const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
 
 /**
  * The `/v1/ci/token` answer for the dev source: the dev token is exchanged like an ingest
- * credential, so the bearer the command sends is the token this body hands out. It repeats
- * the dev token's value so the `Bearer ${devToken}` assertion keeps its meaning, and
- * expires 30 minutes out, inside the cache's 60 + 5 minute freshness window.
+ * credential, so the bearer the command sends is the token this body hands out. It mints
+ * `mintedToken`, a different string from the credential sent in, so an exchange that was
+ * skipped shows up as a `Bearer ${devToken}` mismatch, and expires 30 minutes out, inside the
+ * cache's 60 + 5 minute freshness window.
  */
 function devTokenExchange(request: Request): Response | undefined {
   return new URL(request.url).pathname === '/v1/ci/token'
     ? jsonResponse(200, {
-        token: devToken,
+        token: mintedToken,
         expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
         project_id: exchangeProjectId,
         permission_set: [],
@@ -297,7 +304,7 @@ describe('runs finalize', () => {
     expect(call?.request.method).toBe('POST');
     // `createApiClient` puts the SDK's `/v1` server prefix on the base URL.
     expect(new URL(call?.request.url ?? '').pathname).toBe(`/v1/runs/${runId}/finalize`);
-    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${devToken}`);
+    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     const key = call?.request.headers.get('idempotency-key') ?? '';
     expect(key).toMatch(/^[0-9a-f]{64}$/);
     expect(key).toBe(

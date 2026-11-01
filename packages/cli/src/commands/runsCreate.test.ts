@@ -100,17 +100,25 @@ function created(overrides: Record<string, unknown> = {}): Response {
 
 /** The `project_id` the exchange echoes back (openapi `format: uuid`). */
 const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
+/** The `EVIDGATE_DEV_TOKEN` value: an ingest credential the exchange presents, never a bearer. */
+const devToken = 'dev-token-value';
+/**
+ * The `ci_producer` token the dev exchange mints: the bearer the command sends. It is
+ * deliberately a different string from `devToken`, so a command that sent the dev token raw
+ * would fail the `Bearer ${mintedToken}` assertion.
+ */
+const mintedToken = 'egt_minted_ci_token';
 
 /**
  * The `/v1/ci/token` answer for the dev source: the dev token is exchanged like an ingest
- * credential, so the bearer the command sends is the token this body hands out. It repeats
- * the dev token's value so the `Bearer dev-token-value` assertions keep their meaning, and
- * expires 30 minutes out, inside the cache's 60 + 5 minute freshness window.
+ * credential, so the bearer the command sends is the token this body hands out. The answer is
+ * `mintedToken`, not the dev token's value, and it expires 30 minutes out, inside the cache's
+ * 60 + 5 minute freshness window.
  */
 function devTokenExchange(request: Request): Response | undefined {
   return new URL(request.url).pathname === '/v1/ci/token'
     ? jsonResponse(200, {
-        token: 'dev-token-value',
+        token: mintedToken,
         expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
         project_id: exchangeProjectId,
         permission_set: [],
@@ -168,8 +176,8 @@ describe('runs create', () => {
 
   /**
    * The dev path: the dev token is exchanged at `/v1/ci/token` like an ingest credential,
-   * the returned producer token is the bearer, and it is cached (04.2.1 AC8 predates that
-   * exchange; the Api accepts only exchanged tokens).
+   * the returned producer token is the bearer, and it is cached (the Api accepts only
+   * exchanged tokens).
    */
   async function devEnv(extra: Record<string, string> = {}) {
     const cacheDir = await tempDir();
@@ -177,7 +185,7 @@ describe('runs create', () => {
       EVIDGATE_API_URL: 'http://127.0.0.1:8080',
       EVIDGATE_PROJECT: project,
       EVIDGATE_ENV: 'dev',
-      EVIDGATE_DEV_TOKEN: 'dev-token-value',
+      EVIDGATE_DEV_TOKEN: devToken,
       EVIDGATE_CACHE_DIR: cacheDir,
       ...extra,
     };
@@ -216,7 +224,9 @@ describe('runs create', () => {
     // `createApiClient` puts the SDK's `/v1` server prefix on the base URL, so the
     // operation path is `<root>/v1/projects/{p}/runs` (the env value carries no `/v1`).
     expect(new URL(call?.request.url ?? '').pathname).toBe(`/v1/projects/${project}/runs`);
-    expect(call?.request.headers.get('authorization')).toBe('Bearer dev-token-value');
+    // The command runs on the exchanged token: the dev token only travels in the exchange
+    // body, so a regression that sent it as the bearer fails here.
+    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     expect(call?.request.headers.get('content-type')).toBe('application/json');
     // 00 §9.1: the route requires an `Idempotency-Key`; an explicit one is sent verbatim.
     expect(call?.request.headers.get('idempotency-key')).toBe('explicit-key-1');
@@ -677,7 +687,8 @@ describe('runs create', () => {
     expect(text).toContain('evidgate: resolved config');
     expect(text).toContain('dev_token=[REDACTED]');
     expect(text).toContain(`project=${project}`);
-    expect(text).not.toContain('dev-token-value');
+    expect(text).not.toContain(devToken);
+    expect(text).not.toContain(mintedToken);
     // The key did travel (the header is set) but never reaches either stream.
     expect(apiCalls(stub)[0]?.request.headers.get('idempotency-key')).toBe(derivedKey);
     expect(text).not.toContain(derivedKey);

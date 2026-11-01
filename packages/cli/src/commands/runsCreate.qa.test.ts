@@ -99,17 +99,25 @@ function created(overrides: Record<string, unknown> = {}): Response {
 
 /** The `project_id` the exchange echoes back (openapi `format: uuid`). */
 const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
+/** The `EVIDGATE_DEV_TOKEN` the QA env seeds: an ingest credential, never a bearer. */
+const devToken = 'qa-dev-token';
+/**
+ * The `ci_producer` token the dev exchange mints: the bearer the command sends. It is
+ * deliberately a different string from `devToken`, so a command that sent the dev token raw
+ * would fail the `Bearer ${mintedToken}` assertion.
+ */
+const mintedToken = 'egt_minted_qa_ci_token';
 
 /**
  * The `/v1/ci/token` answer for the dev source: the dev token is exchanged like an ingest
- * credential, so the bearer is the token this body hands out. It repeats the dev token's
- * value so a `Bearer qa-dev-token` assertion keeps its meaning, and expires 30 minutes out,
- * inside the cache's 60 + 5 minute freshness window.
+ * credential, so the bearer is the token this body hands out. The answer is `mintedToken`, not
+ * the dev token's value, and it expires 30 minutes out, inside the cache's 60 + 5 minute
+ * freshness window.
  */
 function devTokenExchange(request: Request): Response | undefined {
   return new URL(request.url).pathname === '/v1/ci/token'
     ? jsonResponse(200, {
-        token: 'qa-dev-token',
+        token: mintedToken,
         expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
         project_id: exchangeProjectId,
         permission_set: [],
@@ -183,7 +191,7 @@ describe('runs create — QA boundaries', () => {
       EVIDGATE_API_URL: 'http://127.0.0.1:8080',
       EVIDGATE_PROJECT: project,
       EVIDGATE_ENV: 'dev',
-      EVIDGATE_DEV_TOKEN: 'qa-dev-token',
+      EVIDGATE_DEV_TOKEN: devToken,
       EVIDGATE_CACHE_DIR: cacheDir,
     };
   }
@@ -577,6 +585,9 @@ describe('runs create — QA boundaries', () => {
     await expect(invoke(argv, env, capture(), stub.fetchImpl)).resolves.toBe(0);
 
     const call = apiCalls(stub)[0];
+    // The command runs on the exchanged token: the dev token only travels in the exchange
+    // body, so a regression that sent it as the bearer fails here.
+    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     expect(Object.keys(sentBody(call)).sort()).toEqual(['manifest_id', 'ref', 'release']);
     const raw = call?.body.toString('utf8') ?? '';
     for (const forbidden of [

@@ -33,6 +33,11 @@ const producer = 'pw-shard-0';
 const otherProducer = 'pw-shard-1';
 /** A dev token, assembled so no token-looking literal is stored (T78). */
 const devToken = ['dev', 'token', '0123456789'].join('-');
+/**
+ * The `ci_producer` token the stub mints, assembled like `devToken`. It is deliberately a
+ * different string, so a send that carried the dev token raw would fail the bearer checks.
+ */
+const mintedToken = ['egt', 'minted', 'ci', 'token'].join('-');
 /** A loopback API URL, which the dev-token path requires. */
 const apiUrl = 'http://127.0.0.1:8080';
 /** The exchange route a dev run posts to before its first batch. */
@@ -111,7 +116,7 @@ interface StubCall {
 /**
  * A `fetch` stub that parses each body and answers from `handler` (never the network).
  * `EVIDGATE_DEV_TOKEN` is an ingest credential, so a run exchanges it at `POST /v1/ci/token`
- * before its first batch: the stub answers that call itself, handing `devToken` back, and
+ * before its first batch: the stub answers that call itself, handing `mintedToken` back, and
  * keeps it in `exchanges`, so `calls` holds only the send's own requests.
  */
 function stubFetch(handler: (call: StubCall) => Response | Promise<Response>): {
@@ -145,7 +150,7 @@ function stubFetch(handler: (call: StubCall) => Response | Promise<Response>): {
     if (new URL(request.url).pathname === exchangePath) {
       exchanges.push(call);
       return jsonResponse(200, {
-        token: devToken,
+        token: mintedToken,
         expires_at: '2030-01-01T00:00:00Z',
         project_id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
         permission_set: [],
@@ -355,6 +360,15 @@ describe('events send', () => {
     // One exchange for the dev token, then one batch per producer.
     expect(stub.exchanges).toHaveLength(1);
     expect(stub.calls).toHaveLength(2);
+    // Every batch carries the minted bearer: the raw dev token only travels in the exchange
+    // body, so a regression that sent it as the bearer fails here.
+    expect(stub.calls.map((call) => call.request.headers.get('authorization'))).toStrictEqual([
+      `Bearer ${mintedToken}`,
+      `Bearer ${mintedToken}`,
+    ]);
+    expect(JSON.parse(stub.exchanges[0]?.body.toString('utf8') ?? '')).toStrictEqual({
+      ingest_token: devToken,
+    });
     // One line per producer, in the sorted order `listProducers` returns.
     expect(out.stdout.join('')).toBe(
       `evidgate: sent run=${runId} producer=${producer} batches=1 accepted=2 duplicate=0\n` +
@@ -377,8 +391,10 @@ describe('events send', () => {
     expect(files.length).toBeGreaterThan(0);
     for (const path of files) {
       expect(await readFile(path, 'utf8')).not.toContain(devToken);
+      expect(await readFile(path, 'utf8')).not.toContain(mintedToken);
     }
     expect(out.stdout.join('')).not.toContain(devToken);
+    expect(out.stdout.join('')).not.toContain(mintedToken);
     expect((await stat(join(spoolDir, runId, producer, 'cursor.json'))).mode & 0o777).toBe(0o600);
     expect((await stat(join(spoolDir, runId, producer))).mode & 0o777).toBe(0o700);
   });

@@ -19,6 +19,7 @@ import {
   exchangeBody,
   gateArgv,
   invoke,
+  mintedToken,
   refusal,
   runId,
 } from './gate.kit.test.js';
@@ -74,7 +75,7 @@ describe('gate', () => {
     expect(call?.request.method).toBe('GET');
     // `createApiClient` puts the SDK's `/v1` server prefix on the base URL.
     expect(new URL(call?.request.url ?? '').pathname).toBe(`/v1/runs/${runId}/decision`);
-    expect(call?.request.headers.get('authorization')).toBe('Bearer dev-token-value');
+    expect(call?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     expect(new URL(call?.request.url ?? '').search).toBe('');
     // The dev token is not sent raw: one exchange mints the bearer the poll carries.
     expect(stub.exchanges).toHaveLength(1);
@@ -296,7 +297,7 @@ describe('gate', () => {
       // request is the one that is redirected.
       if (path === '/v1/ci/token') {
         response.writeHead(200, { 'content-type': 'application/json' });
-        response.end(JSON.stringify(exchangeBody(devToken)));
+        response.end(JSON.stringify(exchangeBody(mintedToken)));
         return;
       }
       response.writeHead(302, { location: 'https://elsewhere.test/decision' });

@@ -5,10 +5,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../main.js';
-import type { Io } from '../redact.js';
+import { resetSecrets, type Io } from '../redact.js';
 
 /** The run the gate asks about (openapi `RunId`, `format: uuid`). */
 export const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
@@ -16,11 +16,14 @@ export const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
 export const projectId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 /** The project slug the command acts on. */
 export const project = 'proj-1';
-/**
- * The `EVIDGATE_DEV_TOKEN` value and the bearer the dev exchange hands back: the token the
- * command sends is the exchanged one, so the stub answers `POST /v1/ci/token` with it.
- */
+/** The `EVIDGATE_DEV_TOKEN` value: an ingest credential the exchange presents, never a bearer. */
 export const devToken = 'dev-token-value';
+/**
+ * The `ci_producer` token the dev exchange mints: the bearer the command sends. It is
+ * deliberately a different string from `devToken`, so a command that sent the dev token raw
+ * would fail every `Bearer ${mintedToken}` assertion.
+ */
+export const mintedToken = 'egt_minted_ci_token';
 
 export interface Captured {
   readonly io: Io;
@@ -148,7 +151,7 @@ export function exchangeBody(token: string): unknown {
 
 /**
  * A `fetch` stub for the dev bearer, which is exchanged rather than sent raw: the
- * `POST /v1/ci/token` call is answered with `exchangeBody(devToken)` and `handler` sees only
+ * `POST /v1/ci/token` call is answered with `exchangeBody(mintedToken)` and `handler` sees only
  * the gate traffic, so `index` counts decision requests and `calls` stays the list of them.
  * The exchanges are recorded separately in `exchanges`.
  */
@@ -163,7 +166,7 @@ export function devStubFetch(handler: (request: Request, index: number) => Respo
     const request = input instanceof Request ? input : new Request(input, init);
     if (request.method === 'POST' && new URL(request.url).pathname === '/v1/ci/token') {
       exchanges.push({ request });
-      return Promise.resolve(jsonResponse(200, exchangeBody(devToken)));
+      return Promise.resolve(jsonResponse(200, exchangeBody(mintedToken)));
     }
     calls.push({ request });
     return Promise.resolve(handler(request, calls.length - 1));
@@ -173,9 +176,13 @@ export function devStubFetch(handler: (request: Request, index: number) => Respo
 
 /**
  * Answers the dev exchange in front of a hand-written `fetch`, so the wrapped transport sees
- * only the requests the command itself sends.
+ * only the requests the command itself sends. The default answer is `mintedToken`, never
+ * `devToken`: an ingest credential is exchanged, not sent.
  */
-export function withTokenExchange(fetchImpl: typeof fetch, token: string = devToken): typeof fetch {
+export function withTokenExchange(
+  fetchImpl: typeof fetch,
+  token: string = mintedToken,
+): typeof fetch {
   return (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
     return request.method === 'POST' && new URL(request.url).pathname === '/v1/ci/token'
@@ -278,5 +285,37 @@ describe('fake clock', () => {
     await clock.sleep(0);
     expect(clock.sleeps).toStrictEqual([0]);
     expect(clock.now()).toBe(0);
+  });
+});
+
+// The seam every dev-token spec relies on: `devStubFetch` answers the exchange with
+// `mintedToken` and the command's own request carries that bearer, not the dev credential.
+describe('dev token exchange', () => {
+  const dirs = cacheDirs();
+
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  afterEach(async () => {
+    await dirs.reset();
+  });
+
+  it('hands the command the minted token, never the dev credential', async () => {
+    const env = await devEnv(dirs);
+    const stub = devStubFetch(() => decided({ decision: 'PASS' }));
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId]), env, out, stub.fetchImpl);
+
+    expect(code).toBe(0);
+    expect(stub.exchanges).toHaveLength(1);
+    const exchange = stub.exchanges[0];
+    expect(JSON.parse((await exchange?.request.clone().text()) ?? '{}')).toStrictEqual({
+      ingest_token: devToken,
+    });
+    expect(stub.calls[0]?.request.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
+    expect(out.stdout.join('')).not.toContain(devToken);
+    expect(out.stdout.join('')).not.toContain(mintedToken);
   });
 });

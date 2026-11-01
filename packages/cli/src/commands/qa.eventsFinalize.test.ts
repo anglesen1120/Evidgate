@@ -18,6 +18,12 @@ import { ProducerSpool } from '../spool.js';
 const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
 const producer = 'pw-shard-0';
 const devToken = ['dev', 'token', '0123456789'].join('-');
+/**
+ * The `ci_producer` token the dev exchange mints: the bearer every batch carries. It is
+ * deliberately a different string from `devToken`, so a send that posted the dev credential
+ * raw would fail the `Bearer ${mintedToken}` assertion.
+ */
+const mintedToken = 'egt_minted_ci_token';
 const apiUrl = 'http://127.0.0.1:8080';
 const maxBytes = 268_435_456;
 const manifestHash = `sha256:${'a'.repeat(64)}`;
@@ -70,6 +76,7 @@ function virtualClock(): {
 
 interface RecordedCall {
   readonly key: string | null;
+  readonly authorization: string | null;
   readonly body: Buffer;
   readonly eventIds: string[];
 }
@@ -79,14 +86,15 @@ const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
 
 /**
  * The `/v1/ci/token` answer: the dev source exchanges its token like an ingest credential
- * before any project call. `expires_at` is half an hour past the suite's virtual clock start
+ * before any project call, and the answer mints `mintedToken`, not the credential that was
+ * sent in. `expires_at` is half an hour past the suite's virtual clock start
  * (2026-01-01T00:00:00Z), so the entry reads fresh and no send re-exchanges mid-test.
  */
 function devExchange(request: Request): Response | undefined {
   return new URL(request.url).pathname === '/v1/ci/token'
     ? new Response(
         JSON.stringify({
-          token: devToken,
+          token: mintedToken,
           expires_at: '2026-01-01T00:30:00.000Z',
           project_id: exchangeProjectId,
           permission_set: [],
@@ -116,7 +124,12 @@ function stubFetch(
     const body = request.headers.get('content-encoding') === 'gzip' ? gunzipSync(wire) : wire;
     const parsed = JSON.parse(body.toString('utf8')) as { events?: Array<{ event_id?: unknown }> };
     const eventIds = (parsed.events ?? []).map((event) => String(event.event_id));
-    calls.push({ key: request.headers.get('idempotency-key'), body: wire, eventIds });
+    calls.push({
+      key: request.headers.get('idempotency-key'),
+      authorization: request.headers.get('authorization'),
+      body: wire,
+      eventIds,
+    });
     return handler(calls.length, body, eventIds);
   };
   return { fetchImpl, calls };
@@ -283,6 +296,9 @@ describe('QA S54: live spool.lock and dropped ack at command level', () => {
     expect(second?.key).toBe(first?.key);
     expect(second?.body.equals(first?.body ?? Buffer.alloc(0))).toBe(true);
     expect(second?.eventIds).toHaveLength(5);
+    // Both attempts bear the exchanged `ci_producer` token, never the raw dev credential.
+    expect(first?.authorization).toBe(`Bearer ${mintedToken}`);
+    expect(second?.authorization).toBe(`Bearer ${mintedToken}`);
     // The final tally is the server's answer to the replay: nothing counted twice.
     expect(out.stdout.join('')).toContain('accepted=0 duplicate=5');
     const spool = await ProducerSpool.open({ spoolDir, runId, producerId: producer, maxBytes });
