@@ -13,10 +13,10 @@ namespace Contract.Tests;
 /// <list type="bullet">
 /// <item>block mappings (<c>key:</c> + indented child, or <c>key: value</c>)</item>
 /// <item>block sequences (<c>- item</c>, including <c>- key: value</c> item mappings)</item>
-/// <item>flow sequences (<c>[a, b]</c>)</item>
+/// <item>flow sequences (<c>[a, b]</c>) and flow mappings (<c>{a: 1, b: [x]}</c>)</item>
 /// <item>plain, single- and double-quoted scalars, booleans, integers, floats, null</item>
 /// </list>
-/// Anything else — anchors, aliases, tags, flow mappings, block scalars
+/// Anything else — anchors, aliases, tags, block scalars
 /// (<c>|</c>/<c>&gt;</c>), multi-line plain scalars, a duplicate key in one mapping
 /// (YAML forbids it) — throws
 /// <see cref="NotSupportedException"/> instead of being guessed at, so a spec edit
@@ -215,6 +215,7 @@ internal sealed class YamlSubset
             case '[':
                 return ParseFlowSequence(value, lineNumber);
             case '{':
+                return ParseFlowMapping(value, lineNumber);
             case '|':
             case '>':
             case '&':
@@ -244,7 +245,7 @@ internal sealed class YamlSubset
 
     private JsonArray ParseFlowSequence(string value, int lineNumber)
     {
-        var close = ClosingBracket(value, lineNumber);
+        var close = ClosingDelimiter(value, '[', ']', lineNumber);
         if (StripComment(value[(close + 1)..], lineNumber).Trim().Length != 0)
         {
             throw new NotSupportedException($"line {lineNumber}: trailing text after a flow sequence: '{value}'");
@@ -265,8 +266,41 @@ internal sealed class YamlSubset
         return array;
     }
 
-    /// <summary>Index of the ']' matching the opening '[' of <paramref name="value"/>, skipping quoted text.</summary>
-    private static int ClosingBracket(string value, int lineNumber)
+    /// <summary>
+    /// Parses a flow mapping (<c>{ $ref: '#/components/schemas/X' }</c>, the form the spec's page schemas use for
+    /// their item reference). Each entry is read with the block-mapping syntax, so a nested flow collection works.
+    /// </summary>
+    private JsonObject ParseFlowMapping(string value, int lineNumber)
+    {
+        var close = ClosingDelimiter(value, '{', '}', lineNumber);
+        if (StripComment(value[(close + 1)..], lineNumber).Trim().Length != 0)
+        {
+            throw new NotSupportedException($"line {lineNumber}: trailing text after a flow mapping: '{value}'");
+        }
+
+        var mapping = new JsonObject();
+        var inner = value[1..close].Trim();
+        if (inner.Length == 0)
+        {
+            return mapping;
+        }
+
+        foreach (var part in SplitTopLevel(inner, lineNumber))
+        {
+            var (key, rest) = SplitEntry(part.Trim(), lineNumber);
+            if (rest.Length == 0)
+            {
+                throw new NotSupportedException($"line {lineNumber}: flow mapping entry without a value: '{part.Trim()}'");
+            }
+
+            AddMember(mapping, key, ParseScalar(rest, lineNumber), lineNumber);
+        }
+
+        return mapping;
+    }
+
+    /// <summary>Index of the delimiter closing the flow collection <paramref name="value"/> starts with, skipping quoted text.</summary>
+    private static int ClosingDelimiter(string value, char open, char close, int lineNumber)
     {
         var depth = 0;
         for (var i = 0; i < value.Length; i++)
@@ -278,17 +312,17 @@ internal sealed class YamlSubset
                 continue;
             }
 
-            if (c == '[')
+            if (c == open)
             {
                 depth++;
             }
-            else if (c == ']' && --depth == 0)
+            else if (c == close && --depth == 0)
             {
                 return i;
             }
         }
 
-        throw new NotSupportedException($"line {lineNumber}: unterminated flow sequence '{value}'");
+        throw new NotSupportedException($"line {lineNumber}: unterminated flow collection '{value}'");
     }
 
     /// <summary>Index of the closing quote of the quoted scalar starting at <paramref name="start"/>.</summary>

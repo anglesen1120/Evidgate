@@ -23,7 +23,7 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class ListEvidenceRevisionsTests
+public sealed partial class ListEvidenceRevisionsTests
 {
     private const string PolicyHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -441,7 +441,7 @@ public sealed class ListEvidenceRevisionsTests
                 values
                   (@id, @org_id, @run_id, @evidence_revision, @policy_revision_id, @policy_hash, @manifest_hash,
                    @completeness, case when @complete then array[]::text[] else array['artifact_missing']::text[] end,
-                   @outcome, @decision, @reasons, @evaluator_version, @mode, @exceptions_hash, now())
+                   @outcome, @decision, @reasons::text[], @evaluator_version, @mode, @exceptions_hash, now())
                 """,
                 ("id", id),
                 ("org_id", world.Org),
