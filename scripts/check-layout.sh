@@ -135,6 +135,7 @@ src/BuildingBlocks/Persistence/Evidgate.BuildingBlocks.Persistence.csproj
 src/BuildingBlocks/Pipeline/Evidgate.BuildingBlocks.Pipeline.csproj
 src/BuildingBlocks/SharedKernel/Evidgate.BuildingBlocks.SharedKernel.csproj
 src/Evidgate.Api/Evidgate.Api.csproj
+src/Evidgate.Evaluation/Evidgate.Evaluation.csproj
 src/Evidgate.Migrator/Evidgate.Migrator.csproj
 src/Evidgate.Parser/Evidgate.Parser.csproj
 src/Evidgate.Worker/Evidgate.Worker.csproj
@@ -165,6 +166,7 @@ src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj
 tests/Architecture.Tests/Architecture.Tests.csproj
 tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj
 tests/Contract.Tests/Contract.Tests.csproj
+tests/Evaluation.UnitTests/Evaluation.UnitTests.csproj
 tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj
 tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj
 tests/Identity.IntegrationTests/Identity.IntegrationTests.csproj

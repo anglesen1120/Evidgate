@@ -1,41 +1,43 @@
+using Evidgate.Modules.Evidence.Contracts;
+
 namespace Evidgate.Modules.Evidence.Domain;
 
 /// <summary>
-/// The closed list of <c>artifact.kind</c> (00 §7, 06.1.1 §4): the CHECK constraint of migration 0028 and this type
-/// carry the same vocabulary, so a kind the database would refuse never reaches a statement (00 §5.5 C6).
+/// The closed list of <c>artifact.kind</c>: the CHECK constraint of migration 0028 and this type carry the same
+/// vocabulary, so a kind the database would refuse never reaches a statement. The list itself is the contract's
+/// <see cref="ArtifactKinds"/>, because callers outside this module resolve requirements against it too.
 /// </summary>
 internal static class ArtifactKind
 {
     /// <summary>A Playwright trace archive.</summary>
-    public const string Trace = "trace";
+    public const string Trace = ArtifactKinds.Trace;
 
     /// <summary>A recorded video of the attempt.</summary>
-    public const string Video = "video";
+    public const string Video = ArtifactKinds.Video;
 
     /// <summary>A screenshot of the page or app under test.</summary>
-    public const string Screenshot = "screenshot";
+    public const string Screenshot = ArtifactKinds.Screenshot;
 
     /// <summary>A raw runner report.</summary>
-    public const string RawReport = "raw_report";
+    public const string RawReport = ArtifactKinds.RawReport;
 
     /// <summary>A serialised DOM snapshot.</summary>
-    public const string DomSnapshot = "dom_snapshot";
+    public const string DomSnapshot = ArtifactKinds.DomSnapshot;
 
     /// <summary>An accessibility snapshot.</summary>
-    public const string A11ySnapshot = "a11y_snapshot";
+    public const string A11ySnapshot = ArtifactKinds.A11ySnapshot;
 
     /// <summary>A patch of the code under test.</summary>
-    public const string Patch = "patch";
+    public const string Patch = ArtifactKinds.Patch;
 
     /// <summary>A UI hierarchy dump.</summary>
-    public const string UiHierarchy = "ui_hierarchy";
+    public const string UiHierarchy = ArtifactKinds.UiHierarchy;
 
-    /// <summary>The eight kinds of the 00 §7 contract, in contract order.</summary>
-    public static readonly IReadOnlyList<string> All =
-        [Trace, Video, Screenshot, RawReport, DomSnapshot, A11ySnapshot, Patch, UiHierarchy];
+    /// <summary>The eight kinds of the contract, in contract order.</summary>
+    public static readonly IReadOnlyList<string> All = ArtifactKinds.All;
 
     /// <summary>True when <paramref name="kind"/> is one of the eight contract kinds.</summary>
-    public static bool IsKnown(string? kind) => kind is not null && All.Contains(kind, StringComparer.Ordinal);
+    public static bool IsKnown(string? kind) => ArtifactKinds.IsKnown(kind);
 
     /// <summary>The kind, or an <see cref="ArgumentOutOfRangeException"/> when it is outside the closed list (C6).</summary>
     public static string Ensure(string kind) =>

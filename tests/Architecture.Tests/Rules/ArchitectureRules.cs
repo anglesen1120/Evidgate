@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 
 namespace Architecture.Tests.Rules;
@@ -436,6 +437,359 @@ public static class ArchitectureRules
             {
                 yield return t;
             }
+        }
+    }
+
+    /// <summary>Frameworks a pure decision function may never reach: I/O, a network client, a database driver.</summary>
+    public static readonly IReadOnlyList<string> ImpureAssemblyPrefixes =
+    [
+        "Npgsql",
+        "System.Net.Http",
+        "System.Data",
+        "System.IO.Pipelines",
+        "Microsoft.AspNetCore.Http",
+        "Microsoft.Extensions.Http",
+    ];
+
+    /// <summary>The names of the assemblies an assembly references directly.</summary>
+    public static IReadOnlyList<string> ReferencedAssemblyNames(Assembly assembly) =>
+        [.. assembly.GetReferencedAssemblies().Select(name => name.Name).OfType<string>()];
+
+    /// <summary>
+    /// The assembly graph the evaluation reaches: every name it can get to through the reference graph, plus the
+    /// references that could not be resolved, which leave its purity unproven.
+    /// </summary>
+    /// <param name="Reachable">Every assembly name reachable from the root, sorted ordinally.</param>
+    /// <param name="Unresolved">References that could not be loaded, so their own references are unknown.</param>
+    public sealed record AssemblyClosure(
+        IReadOnlyList<string> Reachable,
+        IReadOnlyList<string> Unresolved);
+
+    /// <summary>
+    /// Every assembly name the evaluation can reach from <paramref name="assembly"/> through the reference graph, not
+    /// only its direct references. An assembly carries no assembly reference for a type it never names, so a bridge
+    /// through a <c>.Contracts</c> project is invisible to a direct-reference check; the closure sees it.
+    /// </summary>
+    /// <remarks>
+    /// The walk expands every assembly the solution ships, wherever it was loaded from, and stops only at the .NET
+    /// shared framework: the framework's own references (it reaches an HTTP stack and a pipe library internally) say
+    /// nothing about this solution's purity, while the solution's own references always do. A reference that cannot be
+    /// resolved is reported instead of being trusted, so an unknown edge fails the guard rather than passing it.
+    /// </remarks>
+    public static AssemblyClosure ReachableAssemblyNames(Assembly assembly)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+
+        var runtimeDirectory = RuntimeEnvironment.GetRuntimeDirectory();
+        var cache = new Dictionary<string, Assembly?>(StringComparer.Ordinal);
+        var root = assembly.GetName().Name
+            ?? throw new ArgumentException("assembly has no simple name", nameof(assembly));
+
+        return ReachableAssemblyNames(
+            root,
+            name => Load(name) is { } loaded
+                && !StopsAtSharedFramework(loaded.Location, runtimeDirectory)
+                ? [.. loaded.GetReferencedAssemblies().Select(reference => reference.Name).OfType<string>()]
+                : [],
+            name => Load(name) is not null);
+
+        Assembly? Load(string name)
+        {
+            if (!cache.TryGetValue(name, out var known))
+            {
+                known = TryLoad(name);
+                cache[name] = known;
+            }
+
+            return known;
+        }
+    }
+
+    /// <summary>
+    /// True when the walk must not expand an assembly loaded from <paramref name="location"/>: it belongs to the
+    /// .NET shared framework, so its references are the framework's own graph. A solution assembly keeps the walk
+    /// going whatever directory it was loaded from.
+    /// </summary>
+    public static bool StopsAtSharedFramework(string location, string runtimeDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(location);
+        ArgumentNullException.ThrowIfNull(runtimeDirectory);
+
+        return location.Length == 0
+            || (runtimeDirectory.Length > 0
+                && location.StartsWith(runtimeDirectory, StringComparison.Ordinal));
+    }
+
+    /// <summary>The reachable closure of <paramref name="root"/> over an explicit reference graph.</summary>
+    /// <param name="root">The assembly the walk starts from.</param>
+    /// <param name="referencedAssemblies">
+    /// The references of one assembly. Return no names for an assembly whose own references stop the walk.
+    /// </param>
+    public static IReadOnlyList<string> ReachableAssemblyNames(
+        string root,
+        Func<string, IReadOnlyList<string>> referencedAssemblies) =>
+        ReachableAssemblyNames(root, referencedAssemblies, _ => true).Reachable;
+
+    /// <summary>
+    /// The reachable closure of <paramref name="root"/> over an explicit reference graph, recording every name the
+    /// caller cannot resolve. An unresolved name stays in the closure, so the guard reports it, and is never expanded.
+    /// </summary>
+    /// <param name="root">The assembly the walk starts from.</param>
+    /// <param name="referencedAssemblies">The references of one assembly.</param>
+    /// <param name="resolvable">Whether the caller can load the assembly, and so read its own references.</param>
+    public static AssemblyClosure ReachableAssemblyNames(
+        string root,
+        Func<string, IReadOnlyList<string>> referencedAssemblies,
+        Func<string, bool> resolvable)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(referencedAssemblies);
+        ArgumentNullException.ThrowIfNull(resolvable);
+
+        var unresolved = new List<string>();
+
+        var reachable = ReachableAssemblyNamesCore(root, name =>
+        {
+            if (resolvable(name))
+            {
+                return referencedAssemblies(name);
+            }
+
+            unresolved.Add(name);
+            return [];
+        });
+
+        return new AssemblyClosure(reachable, [.. unresolved.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)]);
+    }
+
+    private static IReadOnlyList<string> ReachableAssemblyNamesCore(
+        string root,
+        Func<string, IReadOnlyList<string>> referencedAssemblies)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal) { root };
+        var queue = new Queue<string>();
+        queue.Enqueue(root);
+
+        while (queue.Count > 0)
+        {
+            foreach (var reference in referencedAssemblies(queue.Dequeue()))
+            {
+                if (visited.Add(reference))
+                {
+                    queue.Enqueue(reference);
+                }
+            }
+        }
+
+        return [.. visited.Order(StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// The evaluator is a pure function: its assembly may reach a module's <c>.Contracts</c> and the framework
+    /// primitives, never a database driver, an HTTP stack, an Infrastructure assembly or another module's
+    /// implementation. It is applied to the reachable closure, so a reference that arrives through a contracts
+    /// assembly is still a violation.
+    /// </summary>
+    public static IReadOnlyList<string> EvaluatorStaysPure(IEnumerable<string> referencedAssemblies)
+    {
+        ArgumentNullException.ThrowIfNull(referencedAssemblies);
+
+        var violations = new List<string>();
+
+        foreach (var name in referencedAssemblies.Distinct(StringComparer.Ordinal).OrderBy(name => name, StringComparer.Ordinal))
+        {
+            if (ImpureAssemblyPrefixes.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                violations.Add($"Evidgate.Evaluation must not reach {name}");
+            }
+            else if (name.Contains(".Infrastructure", StringComparison.Ordinal))
+            {
+                violations.Add($"Evidgate.Evaluation must not reach infrastructure assembly {name}");
+            }
+            else if (name.StartsWith("Evidgate.Modules.", StringComparison.Ordinal)
+                && !name.EndsWith(".Contracts", StringComparison.Ordinal))
+            {
+                violations.Add($"Evidgate.Evaluation must reference module contracts only, not {name}");
+            }
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// The evaluator reaches nothing impure, and every reachable reference is known: a reference the walk could not
+    /// resolve is a violation too, because an unknown edge cannot be proven pure.
+    /// </summary>
+    public static IReadOnlyList<string> EvaluatorStaysPure(AssemblyClosure closure)
+    {
+        ArgumentNullException.ThrowIfNull(closure);
+
+        return
+        [
+            .. EvaluatorStaysPure(closure.Reachable)
+                .Concat(closure.Unresolved.Select(name =>
+                    $"Evidgate.Evaluation reaches {name}, which could not be resolved, so its purity is unproven"))
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
+    /// <summary>Source files that disable the banned-API diagnostic instead of respecting it.</summary>
+    /// <param name="sources">One entry per file: the path to report and its text.</param>
+    public static IReadOnlyList<string> BannedApiSuppressions(IReadOnlyDictionary<string, string> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+
+        return
+        [
+            .. sources
+                .Where(entry => Disables(entry.Value, "RS0030"))
+                .Select(entry => $"{entry.Key} disables the banned-API diagnostic RS0030")
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
+    /// <summary>
+    /// The static fields of <paramref name="types"/> a caller can change: not a constant held by an immutable slot,
+    /// or a constant-free static holding an array or a mutable collection. Shared state like that is what makes a
+    /// repeated evaluation differ from the first one. Compiler-generated closure holders only cache stateless
+    /// delegates, which no caller can change, so they are skipped.
+    /// </summary>
+    public static IReadOnlyList<string> StaticMutableFields(IEnumerable<Type> types)
+    {
+        ArgumentNullException.ThrowIfNull(types);
+
+        var violations = new List<string>();
+
+        foreach (var type in Enumerate(types).OrderBy(t => t.FullName, StringComparer.Ordinal))
+        {
+            // The compiler marks its closure, lambda and iterator holders this way, and those only cache stateless
+            // delegates. A hand-applied attribute on a normally named type must not buy the same exemption.
+            if (type.Name.Contains("<>", StringComparison.Ordinal)
+                && type.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), inherit: false))
+            {
+                continue;
+            }
+
+            var fields = type
+                .GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+                .OrderBy(field => field.Name, StringComparer.Ordinal);
+
+            foreach (var field in fields)
+            {
+                if (field.IsLiteral)
+                {
+                    continue;
+                }
+
+                if (!field.IsInitOnly || IsMutableCollection(field.FieldType))
+                {
+                    violations.Add($"{type.FullName}.{field.Name} is a static mutable field");
+                }
+            }
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// True when the text disables the given diagnostic: a <c>#pragma warning disable</c> whose diagnostic list names
+    /// it, or a suppression attribute whose identifier names it, with or without the optional title after a colon.
+    /// </summary>
+    public static bool Disables(string text, string diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(diagnostic);
+
+        return DisablesByPragma(text, diagnostic) || DisablesByAttribute(text, diagnostic);
+    }
+
+    /// <summary>Every <c>#pragma warning disable</c> line, split into its diagnostic entries.</summary>
+    private static bool DisablesByPragma(string text, string diagnostic)
+    {
+        for (var index = text.IndexOf('#');
+             index >= 0;
+             index = text.IndexOf('#', index + 1))
+        {
+            var lineEnd = text.IndexOf('\n', index);
+            var line = lineEnd < 0 ? text[index..] : text[index..lineEnd];
+            var lineComment = line.IndexOf("//", StringComparison.Ordinal);
+            var blockComment = line.IndexOf("/*", StringComparison.Ordinal);
+            var cut = lineComment < 0 ? blockComment : blockComment < 0 ? lineComment : Math.Min(lineComment, blockComment);
+            if (cut >= 0)
+            {
+                line = line[..cut];
+            }
+
+            var entries = line.Split([' ', '\t', '\r', ','], StringSplitOptions.RemoveEmptyEntries);
+
+            var pragma = Array.FindIndex(entries, entry => entry.TrimStart('#') == "pragma");
+            if (pragma < 0
+                || entries.Length < pragma + 3
+                || entries[pragma + 1] != "warning"
+                || entries[pragma + 2] != "disable")
+            {
+                continue;
+            }
+
+            var listed = entries.Skip(pragma + 3).ToArray();
+
+            // A directive with no diagnostic list disables every warning, so it disables this one too.
+            if (listed.Length == 0 || listed.Contains(diagnostic, StringComparer.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool DisablesByAttribute(string text, string diagnostic) =>
+        text.Contains("SuppressMessage", StringComparison.Ordinal)
+        && (text.Contains($"\"{diagnostic}\"", StringComparison.Ordinal)
+            || text.Contains($"\"{diagnostic}:", StringComparison.Ordinal));
+
+    /// <summary>True for an array or one of the mutable generic collections the framework ships.</summary>
+    private static bool IsMutableCollection(Type type)
+    {
+        if (type.IsArray)
+        {
+            return true;
+        }
+
+        if (!type.IsGenericType)
+        {
+            return false;
+        }
+
+        var definition = type.GetGenericTypeDefinition();
+
+        return definition == typeof(List<>)
+            || definition == typeof(Dictionary<,>)
+            || definition == typeof(HashSet<>)
+            || definition == typeof(SortedSet<>)
+            || definition == typeof(SortedDictionary<,>)
+            || definition == typeof(LinkedList<>)
+            || definition == typeof(Queue<>)
+            || definition == typeof(Stack<>);
+    }
+
+    private static Assembly? TryLoad(string name)
+    {
+        try
+        {
+            return Assembly.Load(new AssemblyName(name));
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (FileLoadException)
+        {
+            return null;
+        }
+        catch (BadImageFormatException)
+        {
+            return null;
         }
     }
 

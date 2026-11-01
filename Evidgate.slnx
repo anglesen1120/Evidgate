@@ -3,6 +3,7 @@
     <Platform Name="Any CPU" />
   </Configurations>
   <Project Path="src/Evidgate.Api/Evidgate.Api.csproj" />
+  <Project Path="src/Evidgate.Evaluation/Evidgate.Evaluation.csproj" />
   <Project Path="src/Evidgate.Migrator/Evidgate.Migrator.csproj" />
   <Project Path="src/Evidgate.Parser/Evidgate.Parser.csproj" />
   <Project Path="src/Evidgate.Worker/Evidgate.Worker.csproj" />
@@ -40,6 +41,7 @@
   <Project Path="tests/Architecture.Tests/Architecture.Tests.csproj" />
   <Project Path="tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj" />
   <Project Path="tests/Contract.Tests/Contract.Tests.csproj" />
+  <Project Path="tests/Evaluation.UnitTests/Evaluation.UnitTests.csproj" />
   <Project Path="tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj" />
   <Project Path="tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj" />
   <Project Path="tests/Identity.IntegrationTests/Identity.IntegrationTests.csproj" />

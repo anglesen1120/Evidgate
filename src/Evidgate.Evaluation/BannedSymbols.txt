@@ -1,0 +1,44 @@
+T:System.Random;the evaluator is deterministic: no random source
+P:System.Random.Shared;the evaluator is deterministic: no random source
+P:System.DateTime.Now;the evaluator is deterministic: no wall clock
+P:System.DateTime.UtcNow;the evaluator is deterministic: no wall clock
+P:System.DateTime.Today;the evaluator is deterministic: no wall clock
+P:System.DateTimeOffset.Now;the evaluator is deterministic: no wall clock
+P:System.DateTimeOffset.UtcNow;the evaluator is deterministic: no wall clock
+M:System.Guid.NewGuid;the evaluator is deterministic: no freshly generated identifiers
+M:System.Guid.CreateVersion7;the evaluator is deterministic: no freshly generated identifiers
+M:System.Guid.CreateVersion7(System.DateTimeOffset);the evaluator is deterministic: no freshly generated identifiers
+T:System.TimeProvider;the evaluator takes time as an input, never as a dependency
+P:System.TimeProvider.System;the evaluator takes time as an input, never as a dependency
+T:System.Security.Cryptography.RandomNumberGenerator;the evaluator is deterministic: no random source
+M:System.Security.Cryptography.RandomNumberGenerator.Create;the evaluator is deterministic: no random source
+M:System.Security.Cryptography.RandomNumberGenerator.Create(System.String);the evaluator is deterministic: no random source
+M:System.Security.Cryptography.RandomNumberGenerator.GetBytes(System.Int32);the evaluator is deterministic: no random source
+M:System.Security.Cryptography.RandomNumberGenerator.GetInt32(System.Int32);the evaluator is deterministic: no random source
+M:System.Security.Cryptography.RandomNumberGenerator.GetInt32(System.Int32,System.Int32);the evaluator is deterministic: no random source
+P:System.Environment.TickCount;the evaluator is deterministic: no wall clock
+P:System.Environment.TickCount64;the evaluator is deterministic: no wall clock
+M:System.Environment.GetEnvironmentVariable(System.String);the evaluator reads no ambient state
+M:System.Environment.GetEnvironmentVariable(System.String,System.EnvironmentVariableTarget);the evaluator reads no ambient state
+T:System.Diagnostics.Stopwatch;the evaluator measures nothing: time is an input
+M:System.Diagnostics.Stopwatch.StartNew;the evaluator measures nothing: time is an input
+M:System.Diagnostics.Stopwatch.GetTimestamp;the evaluator measures nothing: time is an input
+M:System.Diagnostics.Stopwatch.GetElapsedTime(System.Int64);the evaluator measures nothing: time is an input
+M:System.Diagnostics.Stopwatch.GetElapsedTime(System.Int64,System.Int64);the evaluator measures nothing: time is an input
+T:System.Diagnostics.Process;the evaluator starts no process
+M:System.Diagnostics.Process.Start;the evaluator starts no process
+T:System.IO.File;the evaluator does no file access
+T:System.IO.Directory;the evaluator does no file access
+T:System.IO.FileStream;the evaluator does no file access
+T:System.IO.FileInfo;the evaluator does no file access
+T:System.IO.DirectoryInfo;the evaluator does no file access
+M:System.IO.Path.GetTempPath;the evaluator keeps no temporary files
+M:System.IO.Path.GetTempFileName;the evaluator keeps no temporary files
+M:System.IO.Path.GetRandomFileName;the evaluator keeps no temporary files
+M:System.Threading.Tasks.Task.Delay(System.Int32);the evaluator waits for nothing
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan);the evaluator waits for nothing
+M:System.Threading.Tasks.Task.Delay(System.Int32,System.Threading.CancellationToken);the evaluator waits for nothing
+M:System.Threading.Tasks.Task.Delay(System.TimeSpan,System.Threading.CancellationToken);the evaluator waits for nothing
+M:System.Threading.Thread.Sleep(System.Int32);the evaluator waits for nothing
+M:System.Threading.Thread.Sleep(System.TimeSpan);the evaluator waits for nothing
+T:System.Console;the evaluator writes no output

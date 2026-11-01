@@ -1,0 +1,4 @@
+[*.cs]
+# The banned-API list of this project is a correctness guard, not a suggestion: a clock read, a random source or a
+# freshly generated identifier would make the evaluation non-reproducible.
+dotnet_diagnostic.RS0030.severity = error

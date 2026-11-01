@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Evidgate.Evaluation</RootNamespace>
+  </PropertyGroup>
+  <!-- The artifact kind vocabulary is the contract's closed list; the evaluator must not keep a second copy. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Modules\Evidgate.Modules.Evidence.Contracts\Evidgate.Modules.Evidence.Contracts.csproj" />
+  </ItemGroup>
+  <!-- A pure decision function must not read a clock, generate randomness or open a connection. RS0030 is scoped to
+       this project by BannedSymbols.txt; the architecture test proves the assembly's reference graph stays I/O free. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="BannedSymbols.txt" />
+  </ItemGroup>
+</Project>

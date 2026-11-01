@@ -945,6 +945,12 @@
       "evidgate.buildingblocks.sharedkernel": {
         "type": "Project"
       },
+      "evidgate.evaluation": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )"
+        }
+      },
       "evidgate.migrator": {
         "type": "Project",
         "dependencies": {
