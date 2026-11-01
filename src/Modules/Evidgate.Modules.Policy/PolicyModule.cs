@@ -60,6 +60,7 @@ internal static class PolicyModule
         // consumer's), and the worker's frozen-evidence task dispatches the handler directly — a nested Mediator send
         // would try to open a second tenant scope in one async flow.
         services.TryAddScoped<EvaluationInputReader>();
+        services.TryAddScoped<ExceptionsSnapshotResolver>();
         services.TryAddScoped<EvaluateRunCommandHandler>();
         services.AddTaskHandler<EvidenceRevisionFrozenPayload, EvidenceRevisionFrozenTaskHandler>();
 
