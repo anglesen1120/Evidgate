@@ -8205,8 +8205,8 @@ components:
               evidence_revision: { type: integer }
               completeness: { type: string }
               outcome: { type: string }
-              missing: { type: array }
-              reasons: { type: array }
+              missing: { type: array, items: { type: string } }
+              reasons: { type: array, items: { type: string } }
               policy_hash: { type: string }
               manifest_hash: { type: string }
               evaluator_version: { type: string }
