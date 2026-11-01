@@ -285,7 +285,7 @@ describe('presigned URL redaction', () => {
   });
 });
 
-// A URL credential travels in more spellings than `https://user:pass@`: a scheme-relative
+// A URL credential travels in more spellings than the plain http one: a scheme-relative
 // reference, the percent-encoded form a query round-trip produces, a database URL, and a
 // password that kept a raw space. Each row keeps the host and the path readable.
 describe('URL credential spellings', () => {
