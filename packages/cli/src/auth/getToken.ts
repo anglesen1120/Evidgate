@@ -1,6 +1,7 @@
 // The single token entry point every command uses. An OIDC / actions-id-token / ingest / dev
-// source reuses the cached `ci_producer` token while it is fresh (`exp - now > 60 s`), otherwise exchanges at `POST /v1/ci/token`
-// and rewrites the cache; a 401/403 purges the entry so the next run re-authenticates.
+// source reuses the cached `ci_producer` token while it is fresh (`exp - now > 60 s`),
+// otherwise exchanges at `POST /v1/ci/token` and rewrites the cache; a 401/403 purges the
+// entry so the next run re-authenticates.
 import {
   resolveTokenSource,
   tokenSourceNames,

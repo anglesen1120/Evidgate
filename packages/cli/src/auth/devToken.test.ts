@@ -120,10 +120,10 @@ describe('resolveDevToken', () => {
   });
 });
 
-// AC8: the dev token is a seeded ingest credential — `getToken` exchanges it at
+// The dev token is a seeded ingest credential — `getToken` exchanges it at
 // `POST /v1/ci/token` and caches only the returned `ci_producer` token, so the dev token itself
-// is never persisted (04.2.1 §8 retention) and never printed.
-describe('dev token exchange (AC8)', () => {
+// is never persisted and never printed.
+describe('dev token exchange', () => {
   beforeEach(() => {
     resetSecrets();
   });

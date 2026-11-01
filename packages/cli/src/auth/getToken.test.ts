@@ -41,7 +41,7 @@ async function cacheEntries(cacheDir: string): Promise<string[]> {
   }
 }
 
-// 04.2.1-T1.2 / AC3, AC8: the dev token is guarded, then exchanged like an ingest token; an
+// The dev token is guarded, then exchanged like an ingest token; an
 // OIDC/ingest source reuses a fresh cached token, refreshes within the 60 s margin and
 // purges the entry on a 401/403.
 describe('getToken', () => {
