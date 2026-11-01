@@ -56,32 +56,47 @@ const urlTrailingPunctuation: Record<string, true> = {
   "'": true,
   '"': true,
 };
-/**
- * `scheme://userinfo@host` — userinfo is a credential pair, never printed. The run is greedy
- * up to the last `@` before the path, because the password itself may contain one.
- */
-const urlUserInfo = /^(https?:\/\/)[^/?#]*@/i;
 
 /**
- * Registers a secret value and the forms it can take in an error message: the value
- * itself, its trimmed, percent-encoded, JSON-escaped and control-character-escaped forms.
- * The escaped form matters because the message is escaped before the redacting writer sees
- * it, so a value containing a `Cc`/`Cf` character would otherwise no longer match. Empty
- * forms are skipped; a value shorter than four characters is still registered (fail-safe).
+ * The `//` that opens a URL authority, plain or percent-encoded (`%2f%2f`). Credentials are
+ * stripped relative to this pair, so every scheme (`postgres:`, a `%3a` spelling, or none at
+ * all) is covered by one rule instead of one rule per scheme.
+ */
+const authorityStart = /(?:\/\/|%2f%2f)/gi;
+/** Where an authority ends: the path, the query, the fragment or the wrapping text. */
+const authorityStops: Record<string, true> = {
+  '/': true,
+  '?': true,
+  '#': true,
+  '"': true,
+  "'": true,
+  '<': true,
+  '>': true,
+  '`': true,
+  '\\': true,
+  '\n': true,
+  '\r': true,
+  '\t': true,
+};
+/** A host and its port, which is never userinfo: an `@` after one belongs to the prose. */
+const hostPortShape = /^[A-Za-z0-9._-]+:\d+$/;
+/** A percent escape inside an authority, decoded so `%3a` and `:` are one case. */
+const percentEscapeShape = /^[0-9a-f]{2}$/i;
+/** A real userinfo is short; the cap keeps the scan linear on a hostile line. */
+const maxAuthorityLength = 512;
+
+/**
+ * Registers a secret value and the forms it can take in an error message: the value itself,
+ * its trimmed, percent-encoded (either hex case), JSON-escaped, control-character-escaped and
+ * base64 spellings. The escaped form matters because the message is escaped before the
+ * redacting writer sees it. Empty forms are skipped; a short value is still registered.
  */
 export function registerSecret(value: string | undefined): void {
   if (value === undefined || value.length === 0) {
     return;
   }
   let added = false;
-  const jsonEscaped = JSON.stringify(value).slice(1, -1);
-  for (const form of [
-    value,
-    value.trim(),
-    encodeURIComponent(value),
-    jsonEscaped,
-    escapeControlCharacters(value),
-  ]) {
+  for (const form of secretForms(value)) {
     if (form.length > 0 && !registeredSecrets.has(form)) {
       registeredSecrets.add(form);
       added = true;
@@ -92,6 +107,40 @@ export function registerSecret(value: string | undefined): void {
   }
 }
 
+/** Every spelling of one secret that a message can carry. */
+function secretForms(value: string): string[] {
+  const trimmed = value.trim();
+  const encoded = encodeURIComponent(value);
+  const forms = [
+    value,
+    trimmed,
+    encoded,
+    encoded.replace(/%[0-9a-f]{2}/gi, (escape) => escape.toLowerCase()),
+    JSON.stringify(value).slice(1, -1),
+    escapeControlCharacters(value),
+    ...base64Forms(value),
+  ];
+  if (trimmed !== value) {
+    forms.push(...base64Forms(trimmed));
+  }
+  return forms;
+}
+
+/**
+ * The base64 spellings of a secret: the standard and the url-safe alphabet, padded and
+ * unpadded. Only the whole value can be encoded exactly — matching a secret at an unknown
+ * offset inside a larger blob needs bytes the CLI does not have, so it is not attempted.
+ */
+function base64Forms(value: string): string[] {
+  const standard = Buffer.from(value, 'utf8').toString('base64');
+  const urlSafe = standard.replace(/\+/g, '-').replace(/\//g, '_');
+  const forms = [standard, standard.replace(/=+$/, '')];
+  if (urlSafe !== standard) {
+    forms.push(urlSafe, urlSafe.replace(/=+$/, ''));
+  }
+  return forms;
+}
+
 /** Clears the registry — `main` calls it at entry, specs between cases. */
 export function resetSecrets(): void {
   registeredSecrets.clear();
@@ -100,13 +149,9 @@ export function resetSecrets(): void {
 
 /**
  * Replaces every registered secret and any `Authorization` header value, then strips URL
- * credentials: userinfo is removed, and an http(s) URL loses its whole query and its whole
- * fragment, because a presigned URL IS a bearer credential whose signature travels in it (an
- * OAuth fragment flow carries the token in the same way). Naming the parameters to strip
- * would leak the ones a provider names differently, so the rule is positional. Only an
- * absolute http(s) URL is recognised; a scheme-relative or percent-encoded one is not text
- * this command produces, and widening the rule would start masking unrelated words.
- * Rewriting an already-redacted URL is a no-op, so the writer's second pass cannot grow it.
+ * credentials: userinfo goes from every `scheme://`, `//` and percent-encoded spelling, and an
+ * http(s) URL loses its query and fragment because a presigned URL is a bearer credential.
+ * A second pass over already-redacted text changes nothing.
  */
 export function redact(text: string): string {
   // The text is split on the placeholder first, so a secret registered as a short fragment of
@@ -117,7 +162,7 @@ export function redact(text: string): string {
     (_member: string, head: string, tail: string | undefined) => `${head}${redacted}${tail ?? ''}`,
   );
   output = output.replace(authorizationHeaderShape, `$1${redacted}`);
-  return output.replace(absoluteUrl, redactUrl);
+  return stripUrlCredentials(output).replace(absoluteUrl, redactUrl);
 }
 
 /** Replaces every registered secret in text that carries no placeholder yet. */
@@ -130,26 +175,25 @@ function replaceSecrets(text: string): string {
 }
 
 /**
- * Redacts one matched URL: the userinfo goes, and so does everything after the first `?` or
- * `#`. Punctuation that belongs to the surrounding text — a closing bracket from wrapping
- * text, or the backslash of a JSON escape — stays outside the placeholder, and an
- * already-redacted URL is returned unchanged, so a second pass cannot grow it.
+ * Redacts one matched URL: everything from the first `?` or `#` on goes, because a presigned
+ * URL is a bearer credential whose signature travels in it (an OAuth fragment flow carries a
+ * token the same way). Punctuation that belongs to the surrounding text — a closing bracket
+ * from wrapping text, or the backslash of a JSON escape — stays outside the placeholder.
  */
 function redactUrl(raw: string): string {
-  const withoutUserInfo = raw.replace(urlUserInfo, '$1');
-  const start = credentialStart(withoutUserInfo);
+  const start = credentialStart(raw);
   if (start === -1) {
-    return withoutUserInfo;
+    return raw;
   }
-  const tail = withoutUserInfo.slice(start + 1);
+  const tail = raw.slice(start + 1);
   if (tail.length === 0) {
-    return withoutUserInfo;
+    return raw;
   }
   const end = credentialEnd(tail);
   if (tail.slice(0, end) === redacted) {
-    return withoutUserInfo;
+    return raw;
   }
-  return `${withoutUserInfo.slice(0, start + 1)}${redacted}${tail.slice(end)}`;
+  return `${raw.slice(0, start + 1)}${redacted}${tail.slice(end)}`;
 }
 
 /** Where the credential inside a URL tail ends: trailing punctuation and escapes stay out. */
@@ -177,6 +221,76 @@ function credentialStart(url: string): number {
     return Math.max(query, fragment);
   }
   return Math.min(query, fragment);
+}
+
+/** One character of a URL authority, decoded when it is written as a percent escape. */
+interface AuthorityChar {
+  readonly char: string;
+  readonly width: number;
+}
+
+/**
+ * Strips the userinfo of every authority in text: `user:pass@` and its percent-encoded
+ * spelling. The scan keys on the `//` alone, so a scheme, a space inside the password and an
+ * `@` inside it need no pattern of their own.
+ */
+function stripUrlCredentials(text: string): string {
+  let output = '';
+  let copied = 0;
+  for (const match of text.matchAll(authorityStart)) {
+    const start = match.index + match[0].length;
+    const end = userInfoEnd(text, start);
+    if (end === -1) {
+      continue;
+    }
+    output += text.slice(copied, start);
+    copied = end;
+  }
+  return copied === 0 ? text : output + text.slice(copied);
+}
+
+/**
+ * Where the userinfo of one authority ends, or `-1` when the run holds none. `@` is taken
+ * greedily because a password may hold one; a space is allowed only after the credential
+ * colon and only once, so prose that follows a URL is not swallowed with it.
+ */
+function userInfoEnd(text: string, start: number): number {
+  const limit = Math.min(text.length, start + maxAuthorityLength);
+  let index = start;
+  let colon = false;
+  let spaced = false;
+  let terminator = -1;
+  while (index < limit) {
+    const read = readAuthorityChar(text, index);
+    if (read === undefined) {
+      break;
+    }
+    const { char, width } = read;
+    if (char === '@') {
+      terminator = index + width;
+    } else if (char === ':') {
+      colon = true;
+    } else if (char === ' ') {
+      if (terminator !== -1 || spaced || !colon || hostPortShape.test(text.slice(start, index))) {
+        break;
+      }
+      spaced = true;
+    }
+    index += width;
+  }
+  return terminator;
+}
+
+/** Reads one character of an authority, or `undefined` where the authority ends. */
+function readAuthorityChar(text: string, index: number): AuthorityChar | undefined {
+  if (text[index] === '%') {
+    const hex = text.slice(index + 1, index + 3);
+    if (percentEscapeShape.test(hex)) {
+      return { char: String.fromCharCode(Number.parseInt(hex, 16)), width: 3 };
+    }
+  }
+  const char = text[index] as string;
+  return authorityStops[char] === true ? undefined : { char, width: 1 };
 }
 
 /** Wraps an `Io` so every write is redacted. */

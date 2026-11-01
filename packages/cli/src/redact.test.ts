@@ -284,3 +284,126 @@ describe('presigned URL redaction', () => {
     expect(redact(once)).toBe(once);
   });
 });
+
+// A URL credential travels in more spellings than `https://user:pass@`: a scheme-relative
+// reference, the percent-encoded form a query round-trip produces, a database URL, and a
+// password that kept a raw space. Each row keeps the host and the path readable.
+describe('URL credential spellings', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  const credentialRows = [
+    {
+      shape: 'a scheme-relative URL',
+      input: 'see //user:secret@store.test/path now',
+      expected: 'see //store.test/path now',
+    },
+    {
+      shape: 'a percent-encoded URL in upper case',
+      input: 'https%3A%2F%2Fuser%3Asecret%40store.test/object',
+      expected: 'https%3A%2F%2Fstore.test/object',
+    },
+    {
+      shape: 'a percent-encoded URL in lower case',
+      input: 'https%3a%2f%2fuser%3asecret%40store.test/object',
+      expected: 'https%3a%2f%2fstore.test/object',
+    },
+    {
+      shape: 'a percent-encoded scheme-relative reference',
+      input: '%2f%2fuser%3Asecret%40store.test/object',
+      expected: '%2f%2fstore.test/object',
+    },
+    {
+      shape: 'a postgres scheme',
+      input: 'connect postgres://user:secret@db.test:5432/app now',
+      expected: 'connect postgres://db.test:5432/app now',
+    },
+    {
+      shape: 'any other scheme',
+      input: 'redis://user:secret@cache.test/0',
+      expected: 'redis://cache.test/0',
+    },
+    {
+      shape: 'a raw space inside the password',
+      input: 'https://user:pa ss@store.test/object',
+      expected: 'https://store.test/object',
+    },
+    {
+      shape: 'a raw space inside the password of a signed URL',
+      input: 'https://user:pa ss@store.test/object?X-Amz-Signature=abc',
+      expected: 'https://store.test/object?[REDACTED]',
+    },
+  ];
+
+  it.each(credentialRows)('strips the credential from $shape', ({ input, expected }) => {
+    expect(redact(input)).toBe(expected);
+  });
+
+  it.each(credentialRows)(
+    'strips the credential twice without changing the second result',
+    ({ input, expected }) => {
+      expect(redact(redact(input))).toBe(redact(expected));
+    },
+  );
+
+  // The scan runs over every line, so ordinary text must survive it unchanged.
+  const untouchedRows = [
+    { shape: 'a scheme-relative URL without userinfo', text: 'see //example.com/path' },
+    { shape: 'percent-encoded ordinary text', text: 'a%20b' },
+    { shape: 'an email address', text: 'write to user@host' },
+    { shape: 'a URL without userinfo', text: 'see https://docs.evidgate.dev/cli' },
+    { shape: 'prose that follows a host and port', text: 'https://host:8080 and user@mail' },
+    { shape: 'an authority that a line break ends', text: 'see //host\nuser:pw@mail' },
+    { shape: 'a base64 string that is not registered', text: 'cGFzc3dvcmQ=' },
+  ];
+
+  it.each(untouchedRows)('keeps $shape intact', ({ text }) => {
+    expect(redact(text)).toBe(text);
+  });
+
+  it('stays linear on 200 KB of authority-shaped text', () => {
+    const credentialed = '//user:pa ss@host/path '.repeat(8_000);
+    const slashes = '//'.repeat(100_000);
+    const started = performance.now();
+
+    expect(redact(credentialed)).toBe('//host/path '.repeat(8_000));
+    expect(redact(slashes)).toBe(slashes);
+    // Linear in the input: a backtracking shape would need seconds for either string.
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+});
+
+// A token is often echoed already encoded — in a header value or a URL parameter — so the
+// registry carries the base64 and the lowercase-escape spellings of every secret.
+describe('registered secret encodings', () => {
+  beforeEach(() => {
+    resetSecrets();
+  });
+
+  const encodedRows = [
+    { shape: 'standard base64', secret: 'evg_dev_token', encoded: 'ZXZnX2Rldl90b2tlbg==' },
+    {
+      shape: 'standard base64 without padding',
+      secret: 'evg_dev_token',
+      encoded: 'ZXZnX2Rldl90b2tlbg',
+    },
+    { shape: 'url-safe base64', secret: 'a?>b~', encoded: 'YT8-Yn4=' },
+    { shape: 'url-safe base64 without padding', secret: 'a?>b~', encoded: 'YT8-Yn4' },
+    {
+      shape: 'a percent encoding with lower-case escapes',
+      secret: 'a:b',
+      encoded: 'a%3ab',
+    },
+  ];
+
+  it.each(encodedRows)('replaces the $shape of a registered secret', ({ secret, encoded }) => {
+    registerSecret(secret);
+    expect(redact(`value ${encoded} here`)).toBe(`value ${redacted} here`);
+  });
+
+  it('replaces the padded base64 form without leaving its padding behind', () => {
+    registerSecret('evg_dev_token');
+    expect(redact('ZXZnX2Rldl90b2tlbg==')).toBe(redacted);
+  });
+});
