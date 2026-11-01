@@ -31,7 +31,30 @@ public interface IPolicyContracts
     /// <param name="policyRevisionId">The revision whose required artifact kinds the caller needs.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     ValueTask<IReadOnlyList<string>> GetRequiredArtifactKindsAsync(Guid policyRevisionId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Answers which of a run's evidence revisions already have a stored <c>live</c> evaluation: one read-only
+    /// statement over the ambient tenant scope, matched on the caller's org on top of RLS, taking no lock and writing
+    /// nothing. Only <c>mode = 'live'</c> rows are returned — a <c>shadow</c> row is a second opinion about the same
+    /// evidence and is never the verdict a run reports, so it is never named here. A revision with no stored live
+    /// evaluation is simply absent from the answer, the same "nothing there" shape as the other members.
+    /// </summary>
+    /// <param name="runId">The run whose revisions the caller is reading; a foreign or unknown run answers nothing.</param>
+    /// <param name="evidenceRevisions">The <c>evidence_revision.revision_no</c> values to look up, at most one page.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyList<LiveEvaluation>> GetLiveEvaluationsAsync(
+        Guid runId,
+        IReadOnlyList<int> evidenceRevisions,
+        CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// The <c>evaluation</c> row a frozen evidence revision was judged with (<c>0059</c>), as a reader of the revisions
+/// needs it: the revision it evaluated and the stored verdict's id.
+/// </summary>
+/// <param name="EvidenceRevision">The <c>evaluation.evidence_revision</c> this verdict belongs to.</param>
+/// <param name="EvaluationId">The <c>evaluation.id</c> of that revision's <c>live</c> row.</param>
+public sealed record LiveEvaluation(int EvidenceRevision, Guid EvaluationId);
 
 /// <summary>
 /// The active policy revision of a project, as run creation needs it (05.2.1 plan §10 T1 hand-over; ruling T93).

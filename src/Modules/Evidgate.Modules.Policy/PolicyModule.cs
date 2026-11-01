@@ -39,6 +39,7 @@ internal static class PolicyModule
         services.TryAddScoped<PolicyActivationStore>();
         services.TryAddScoped<GetActivePolicyQuery>();
         services.TryAddScoped<GetRequiredArtifactKindsQuery>();
+        services.TryAddScoped<GetLiveEvaluationsQuery>();
         services.TryAddScoped<IPolicyContracts, PolicyContracts>();
 
         // 07.1.1-T3: the policy routes validate their bodies against the contract schema set, which is compiled on
