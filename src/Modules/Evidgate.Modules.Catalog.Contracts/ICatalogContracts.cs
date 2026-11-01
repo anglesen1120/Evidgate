@@ -1,8 +1,9 @@
 namespace Evidgate.Modules.Catalog.Contracts;
 
 /// <summary>
-/// The catalog surface other modules call in-process (00 §5.5): run creation (05.1.1) locks a suite revision and reads its
-/// isolation mode (05.7.3-T4). Must run inside the caller's tenant transaction.
+/// The catalog surface other modules call in-process: run creation locks a suite revision and reads its
+/// isolation mode, the blocked-attempt resolver walks dependencies, and the evaluator reads the suite facts and the case
+/// behind each planned revision. Must run inside the caller's tenant transaction.
 /// </summary>
 public interface ICatalogContracts
 {
@@ -68,4 +69,24 @@ public interface ICatalogContracts
     /// <param name="variantHash">The failed member's variant hash.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     ValueTask<IReadOnlyList<DependantMember>> GetDependantsAsync(Guid suiteRevisionId, Guid caseRevisionId, string variantHash, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The suite facts an evaluation of one run reads: the slug of the suite that owns
+    /// <paramref name="suiteRevisionId"/> and whether that revision declares no member at all. One statement; null when
+    /// the revision is unknown or of another tenant.
+    /// </summary>
+    /// <param name="orgId">The caller's trusted tenant id, so the read is tenant-exact beyond row level security.</param>
+    /// <param name="suiteRevisionId">The suite revision the run pinned.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<EvaluationSuite?> GetEvaluationSuiteAsync(Guid orgId, Guid suiteRevisionId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The case each of <paramref name="caseRevisionIds"/> belongs to, with its display name: one bounded
+    /// statement however many ids. Ids that are unknown or of another tenant are simply absent from the answer, and an
+    /// empty batch makes no round trip.
+    /// </summary>
+    /// <param name="orgId">The caller's trusted tenant id, so the read is tenant-exact beyond row level security.</param>
+    /// <param name="caseRevisionIds">The revisions the run's planned executions name.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyDictionary<Guid, EvaluationCaseIdentity>> GetEvaluationCasesAsync(Guid orgId, IReadOnlyCollection<Guid> caseRevisionIds, CancellationToken cancellationToken);
 }

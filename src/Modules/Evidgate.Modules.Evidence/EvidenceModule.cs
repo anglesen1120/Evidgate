@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Application.Freeze;
+using Evidgate.Modules.Evidence.Application.Evaluation;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
@@ -73,6 +74,10 @@ internal static class EvidenceModule
         // hash. Scoped like every other module service; it takes the ambient scope through ITenantDb and never opens
         // a connection or a transaction of its own (00 §5.5 C3/C7).
         services.TryAddScoped<IEvidenceFreeze, EvidenceFreeze>();
+
+        // The read side of a frozen revision for the evaluator: the revision row and the latest attempt each execution
+        // key had when it froze. Scoped like every other module service and bound to the ambient tenant scope.
+        services.TryAddScoped<IFrozenEvidence, FrozenEvidence>();
 
         // 06.3.6-T1.3: the out-of-process parse runner is deliberately NOT registered here. It spawns processes, so
         // only the Worker composes it, through ParseRunnerServiceCollectionExtensions.AddParseRunner (06.3.6 review:

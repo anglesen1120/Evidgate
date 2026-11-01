@@ -86,28 +86,7 @@ public sealed partial class EvaluationTaskTests
         inside.AsOf.ShouldBe(expiresAt.AddSeconds(-1));
     }
 
-    /// <summary>
-    /// A replay run stores a shadow verdict even when the caller asks for the live slot, never occupies the live slot,
-    /// and a second replay evaluation lands on the same unique key and returns the same row.
-    /// </summary>
-    [Fact]
-    public async Task Evaluate_ReplayRun_StoresShadowOnlyAndSecondCallReturnsSameRow()
-    {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
-        var seed = await SeedAsync(world);
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await MarkReplayAsync(world, seed);
-
-        var first = await EvaluateAsync(world, seed, EvaluationMode.Live, cancellationToken);
-        var second = await EvaluateAsync(world, seed, EvaluationMode.Live, cancellationToken);
-
-        first.Mode.ShouldBe("shadow");
-        second.Id.ShouldBe(first.Id);
-        (await StoredRowAsync(world, seed, EvaluationMode.Live)).ShouldBeNull("a replay never writes the live row");
-        (await CountAsync(world, seed)).ShouldBe(1);
-    }
-
-    /// <summary>The control for the replay case: the same run as a regular run stores the live row it was asked for.</summary>
+    /// <summary>The control for the replay row: the same run as a regular run stores the live row it was asked for.</summary>
     [Fact]
     public async Task Evaluate_RegularRun_StillStoresLiveRow()
     {

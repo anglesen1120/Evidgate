@@ -272,6 +272,9 @@
           "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )"
         }
       },
+      "evidgate.modules.catalog.contracts": {
+        "type": "Project"
+      },
       "evidgate.modules.evidence.contracts": {
         "type": "Project",
         "dependencies": {
