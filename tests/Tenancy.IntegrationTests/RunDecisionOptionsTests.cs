@@ -24,6 +24,7 @@ public sealed class RunDecisionOptionsTests
     [InlineData("http://app.evidgate.example", null)]
     [InlineData("https://", null)]
     [InlineData("https://user@app.evidgate.example", null)]
+    [InlineData("https://user" + ":" + "pw" + "@app.evidgate.example", null)]
     [InlineData("https://app.evidgate.example", "https://app.evidgate.example")]
     [InlineData("https://app.evidgate.example/", "https://app.evidgate.example")]
     [InlineData("https://app.evidgate.example:8443", "https://app.evidgate.example:8443")]
