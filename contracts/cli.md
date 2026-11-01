@@ -1475,6 +1475,18 @@ generated SDK type, so the CLI never probes a member it cannot see:
   status or decision value is server text and is never echoed; the message names
   the member only. The check runs before the verdict is read, so a pending body
   cannot read as a pass.
+- Three more shapes are refused the same way (exit 3, the value never echoed),
+  because each one promises something the body does not carry:
+  - a `missing` entry outside the closed eight codes of 00 §8.5 — `missing_shard`,
+    `count_mismatch`, `artifact_missing`, `build_mismatch`, `unknown_status`,
+    `setup_error`, `stale_epoch`, `missing_result`;
+  - `status: pending` with any evaluation-derived member non-null:
+    `evaluation_id`, `evidence_revision`, `completeness`, `outcome`, `missing`,
+    `reasons`, `policy_hash`, `manifest_hash`, `evaluator_version` or `mode`.
+    `url` is the only member a pending body may fill, and a falsey non-null value
+    counts: `missing: []`, `reasons: []`, `0`, `false` and `""` are all refusals;
+  - `status: evaluated` with a `mode` that is neither `live` nor `null`; only a
+    live evaluation row may be read as a verdict.
 - Human mode prints `gate: <DECISION> (run <run_id>)` and one indented reason
   line per entry of `reasons`; `reasons: null` prints no reason line. A pending
   or timed-out run explains itself on stderr (`§6` redaction, control-character
@@ -1487,8 +1499,10 @@ generated SDK type, so the CLI never probes a member it cannot see:
   the server sent it, except that a string member, and each entry of `missing`
   and `reasons`, is redacted (§6) before it is encoded. A scalar member the
   server does not send as its declared type prints `null`, never a derived
-  value; a `missing` or `reasons` that is neither `null` nor a list of strings
-  makes the body unreadable (exit 3), like every other refused body.
+  value — `evidence_revision` only when it is an integer, so a fractional or
+  numeric-string value prints `null` and is never rounded — and a `missing` or
+  `reasons` that is neither `null` nor a list of strings makes the body
+  unreadable (exit 3), like every other refused body.
   `missing` stays `null` (never `[]`) and every evaluation-derived member is
   `null` while `status` is `pending`. A consumer of the five-key line keeps
   parsing it; the added keys are the only difference.

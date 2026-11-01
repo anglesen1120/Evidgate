@@ -192,7 +192,9 @@ describe('gate --json', () => {
     // U+E0001 is a format character outside the BMP, so it must be two UTF-16 escapes:
     // JSON has no `\u{…}` form, and a five-digit `\u` would leave a literal digit behind.
     const tagged = `gate\u{e0001}: PASS`;
-    const stub = devStubFetch(() => decided(evaluated({ decision: 'PASS', mode: tagged })));
+    const stub = devStubFetch(() =>
+      decided(evaluated({ decision: 'PASS', evaluator_version: tagged })),
+    );
     const out = capture();
 
     const { code } = await invoke(gateArgv(['--run', runId, '--json']), env, out, stub.fetchImpl);
@@ -202,7 +204,7 @@ describe('gate --json', () => {
     expect(text).not.toContain('\u{e0001}');
     expect(text).toContain('\\udb40\\udc01');
     expect(text.split('\n')).toHaveLength(2);
-    expect(JSON.parse(text)).toMatchObject({ mode: tagged });
+    expect(JSON.parse(text)).toMatchObject({ evaluator_version: tagged });
   });
 
   it('keeps the line parseable when a member looks like a header', async () => {
@@ -211,7 +213,11 @@ describe('gate --json', () => {
     // swallow the closing quotes or braces of the object.
     const stub = devStubFetch(() =>
       decided(
-        evaluated({ decision: 'PASS', mode: 'Authorization: x', url: 'https://api.example/r' }),
+        evaluated({
+          decision: 'PASS',
+          evaluator_version: 'Authorization: x',
+          url: 'https://api.example/r',
+        }),
       ),
     );
     const out = capture();
@@ -227,7 +233,7 @@ describe('gate --json', () => {
       decision: 'PASS',
       completeness: null,
       evaluation_id: null,
-      mode: '[REDACTED]',
+      mode: null,
       url: 'https://api.example/r',
       status: 'evaluated',
       evidence_revision: null,
@@ -236,14 +242,19 @@ describe('gate --json', () => {
       reasons: null,
       policy_hash: null,
       manifest_hash: null,
-      evaluator_version: null,
+      evaluator_version: '[REDACTED]',
     });
   });
 
   it('keeps the line parseable when a member carries a quoted Authorization member', async () => {
     const env = await devEnv(dirs);
     const stub = devStubFetch(() =>
-      decided(evaluated({ decision: 'PASS', mode: '{"Authorization":"Bearer abc.def"}' })),
+      decided(
+        evaluated({
+          decision: 'PASS',
+          evaluator_version: '{"Authorization":"Bearer abc.def"}',
+        }),
+      ),
     );
     const out = capture();
 
@@ -258,7 +269,7 @@ describe('gate --json', () => {
       evaluation_id: null,
       // The masked value absorbs the escaped quotes around it, so one `\"` goes with the
       // secret; the member still parses as the same JSON string it did before.
-      mode: '{"Authorization":"[REDACTED]',
+      mode: null,
       url: null,
       status: 'evaluated',
       evidence_revision: null,
@@ -267,7 +278,7 @@ describe('gate --json', () => {
       reasons: null,
       policy_hash: null,
       manifest_hash: null,
-      evaluator_version: null,
+      evaluator_version: '{"Authorization":"[REDACTED]',
     });
   });
 
@@ -336,7 +347,7 @@ describe('gate --json', () => {
           decision: 'FAIL',
           completeness: 'complete',
           evaluation_id: 'eval-1',
-          mode: 'strict',
+          mode: 'live',
           url: 'https://evidgate.test/runs/1',
           mode_unused: 5,
         }),
@@ -352,7 +363,7 @@ describe('gate --json', () => {
       decision: 'FAIL',
       completeness: 'complete',
       evaluation_id: 'eval-1',
-      mode: 'strict',
+      mode: 'live',
       url: 'https://evidgate.test/runs/1',
       status: 'evaluated',
       evidence_revision: null,

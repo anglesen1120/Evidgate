@@ -132,9 +132,13 @@ body that is not JSON, a body that is not an object, a body without a `status`
 member, a `status` outside `pending`/`evaluated`, a body without a `decision`
 member, any `decision` outside `PASS`/`FAIL`/`INCONCLUSIVE` (`"pass"`, `""`, a
 number), `status: pending` carrying a decision, `status: evaluated` with
-`decision: null`, and a `missing` or `reasons` member that is neither `null` nor
-a list of strings. A body whose `status` and `decision` disagree is refused
-before the verdict is read, so a pending body can never exit 0.
+`decision: null`, a `missing` or `reasons` member that is neither `null` nor
+a list of strings, a `missing` entry outside the closed eight codes of 00 §8.5,
+`status: pending` with any evaluation member other than `url` filled (a falsey
+non-null value such as `missing: []`, `0`, `false` or `""` counts), and
+`status: evaluated` with a `mode` other than `live`. A body whose `status` and
+`decision` disagree is refused before the verdict is read, so a pending body can
+never exit 0.
 
 `--wait` takes the same grammar as `EVIDGATE_SEND_DEADLINE`: bare seconds or an
 `s`/`m`/`h` suffix, greater than zero and at most 24 hours; anything else exits 3
@@ -193,5 +197,7 @@ escaped, like every other printed value):
 
 `missing` is `null` (never `[]`) and every evaluation-derived member is `null`
 while `status` is `pending`; `status` is always one of `pending`/`evaluated`.
-Nothing is derived from the API URL and no value is guessed. The run id must be a
-UUID; any other value exits 3 before a token exchange.
+`evidence_revision` prints only when the server sends an integer, so a fractional
+or numeric-string value prints `null` and is never rounded. Nothing is derived
+from the API URL and no value is guessed. The run id must be a UUID; any other
+value exits 3 before a token exchange.

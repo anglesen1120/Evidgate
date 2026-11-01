@@ -1,6 +1,8 @@
 // The gate verdict: what one `Decision` body means for the process exit code, and the two
 // output forms. Only a literal `PASS` may exit 0, and a body whose `status` and `decision`
-// disagree, or that this module cannot read, is a request error.
+// disagree, whose closed members leave their set, or that this module cannot read, is a
+// request error: a pending body fills no evaluation member, `mode` is `live` or null, and each
+// `missing` entry is one of the eight codes.
 import type { Decision } from '@evidgate/sdk';
 
 import { CliError } from '../errors.js';
@@ -40,6 +42,35 @@ const decisionValues: readonly GateDecisionValue[] = ['PASS', 'FAIL', 'INCONCLUS
 function isDecisionValue(value: unknown): value is GateDecisionValue {
   return decisionValues.some((candidate) => candidate === value);
 }
+
+/** The closed `missing[]` list of 00 §8.5; a code outside it makes the body unreadable. */
+const missingCodes: readonly string[] = [
+  'missing_shard',
+  'count_mismatch',
+  'artifact_missing',
+  'build_mismatch',
+  'unknown_status',
+  'setup_error',
+  'stale_epoch',
+  'missing_result',
+];
+
+/**
+ * The members copied from the evaluation row. A pending body carries none of them, so a body
+ * that fills one is not the shape `status: pending` promises; `url` is the only exception.
+ */
+const evaluationMembers = [
+  'evaluation_id',
+  'evidence_revision',
+  'completeness',
+  'outcome',
+  'missing',
+  'reasons',
+  'policy_hash',
+  'manifest_hash',
+  'evaluator_version',
+  'mode',
+] as const;
 
 function invalidBody(reason: string): CliError {
   return new CliError(`the run decision response was not valid: ${reason}`, {
@@ -88,21 +119,37 @@ export function parseDecisionBody(parsed: unknown): GateOutcome {
   if (status === 'evaluated' && raw === null) {
     throw invalidBody('an evaluated body carried no decision');
   }
+  if (status === 'pending') {
+    refuseEvaluationMembers(record);
+  }
   return {
     status,
     decision: raw,
     completeness: optionalString(record, 'completeness'),
     evaluationId: optionalString(record, 'evaluation_id'),
-    evidenceRevision: optionalNumber(record, 'evidence_revision'),
+    evidenceRevision: optionalInteger(record, 'evidence_revision'),
     outcome: optionalString(record, 'outcome'),
-    missing: stringListOrNull(record, 'missing'),
+    missing: missingOf(record),
     reasons: stringListOrNull(record, 'reasons'),
     policyHash: optionalString(record, 'policy_hash'),
     manifestHash: optionalString(record, 'manifest_hash'),
     evaluatorVersion: optionalString(record, 'evaluator_version'),
-    mode: optionalString(record, 'mode'),
+    mode: modeOf(record),
     url: optionalString(record, 'url'),
   };
+}
+
+/**
+ * A pending body fills no evaluation member: one that does is not the shape `status: pending`
+ * promises, and printing it would show an evaluation the run does not have. `url` may be set.
+ */
+function refuseEvaluationMembers(record: Record<string, unknown>): void {
+  for (const member of evaluationMembers) {
+    const value = record[member];
+    if (value !== undefined && value !== null) {
+      throw invalidBody(`a pending body carried a ${member}`);
+    }
+  }
 }
 
 /** A required member whose value is never echoed; only the refusal names the member. */
@@ -123,10 +170,39 @@ function optionalString(record: Record<string, unknown>, member: string): string
   return typeof value === 'string' ? value : null;
 }
 
-/** An optional count: only a finite number is printed, every other shape is `null`. */
-function optionalNumber(record: Record<string, unknown>, member: string): number | null {
+/** An optional integer: a fractional number or any other shape is `null`, never a rounded value. */
+function optionalInteger(record: Record<string, unknown>, member: string): number | null {
   const value = record[member];
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+/** `missing[]` is the closed eight-code list; a foreign code is server text and is not echoed. */
+function missingOf(record: Record<string, unknown>): readonly string[] | null {
+  const entries = stringListOrNull(record, 'missing');
+  if (entries === null) {
+    return null;
+  }
+  for (const entry of entries) {
+    if (!missingCodes.includes(entry)) {
+      throw invalidBody('the missing list carried a code outside the closed eight');
+    }
+  }
+  return entries;
+}
+
+/**
+ * `mode` is a closed member, not free text: only a `live` row may be read as a verdict. The
+ * value itself is never echoed, and a pending body never reaches here with one (refused above).
+ */
+function modeOf(record: Record<string, unknown>): string | null {
+  const value = record['mode'];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (value !== 'live') {
+    throw invalidBody('the mode was not live');
+  }
+  return value;
 }
 
 /** A nullable list of strings: `null`/absent stays `null`, any other shape is refused. */
