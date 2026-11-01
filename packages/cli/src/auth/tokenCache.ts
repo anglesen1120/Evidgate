@@ -6,11 +6,12 @@
 // a credential can still find every entry for the project. The credential itself never leaves
 // memory. The read path distrusts an untrusted file — a foreign owner, a group/world-readable
 // mode, a non-regular file or unparseable content reads as absent, never as an error — and
-// opens it `O_NOFOLLOW`; the write path refuses a symlinked or foreign-owned cache directory.
+// opens it `O_NOFOLLOW`; both paths refuse a symlinked, foreign-owned or group/world-writable
+// cache directory, and a write drops the destination's entries bound to another credential.
 // Those owner, mode and `O_NOFOLLOW` guards are POSIX only; on win32 only a regular-file check
 // applies.
 import { createHash, randomUUID } from 'node:crypto';
-import { constants } from 'node:fs';
+import { constants, type Stats } from 'node:fs';
 import {
   chmod,
   lstat,
@@ -145,12 +146,8 @@ export async function readCachedToken(config: TokenCacheConfig): Promise<CachedT
   const path = tokenCachePath(config);
   let handle: FileHandle | undefined;
   try {
-    // A cache directory owned by another user is not trusted.
-    if (process.platform !== 'win32' && typeof process.getuid === 'function') {
-      const dirStats = await lstat(config.cacheDir);
-      if (dirStats.uid !== process.getuid()) {
-        return undefined;
-      }
+    if (!(await cacheDirTrusted(config.cacheDir))) {
+      return undefined;
     }
     // win32 has no `O_NOFOLLOW`, so reject a symlink with `lstat` before opening.
     if (process.platform === 'win32') {
@@ -187,6 +184,41 @@ export async function readCachedToken(config: TokenCacheConfig): Promise<CachedT
   }
 }
 
+/** A real directory, owned by this user and not group/world-writable; POSIX only. */
+function dirIsSafe(stats: Stats): boolean {
+  if (!stats.isDirectory() || (stats.mode & 0o022) !== 0) {
+    return false;
+  }
+  return typeof process.getuid !== 'function' || stats.uid === process.getuid();
+}
+
+async function cacheDirTrusted(cacheDir: string): Promise<boolean> {
+  if (process.platform === 'win32') {
+    return true;
+  }
+  return dirIsSafe(await lstat(cacheDir));
+}
+
+/**
+ * After a successful write, drops this destination's entries minted under another credential.
+ * Only names of the bound-file shape for this destination are considered, `rm` unlinks a
+ * symlink without following it, and a failure never fails the write that just succeeded.
+ */
+async function purgeRotatedEntries(config: TokenCacheConfig, keep: string): Promise<void> {
+  const prefix = `ci-token.${destinationKey(config)}.`;
+  try {
+    for (const name of await readdir(config.cacheDir)) {
+      const orphan = name.startsWith(prefix) && boundNameSuffix.test(name.slice(prefix.length));
+      const path = join(config.cacheDir, name);
+      if (orphan && path !== keep) {
+        await rm(path, { force: true });
+      }
+    }
+  } catch {
+    // The fresh token is already in place; a stale sibling is removed by the next write or logout.
+  }
+}
+
 /**
  * Writes the cache file atomically: a `0600` temp file in the same directory (opened
  * `wx`, then `chmod`ed so the umask cannot widen it) is renamed over the target, which
@@ -206,10 +238,7 @@ export async function writeCachedToken(
     // Refuse a symlinked or foreign-owned directory, and tighten a loose mode.
     if (process.platform !== 'win32') {
       const dirStats = await lstat(config.cacheDir);
-      if (
-        !dirStats.isDirectory() ||
-        (typeof process.getuid === 'function' && dirStats.uid !== process.getuid())
-      ) {
+      if (!dirIsSafe(dirStats)) {
         throw new CliError('could not write the token cache', { code: 'token_cache_error' });
       }
       if ((dirStats.mode & 0o077) !== 0) {
@@ -224,6 +253,7 @@ export async function writeCachedToken(
       await handle.close();
     }
     await rename(temp, path);
+    await purgeRotatedEntries(config, path);
   } catch {
     await unlink(temp).catch(() => undefined);
     throw new CliError('could not write the token cache', { code: 'token_cache_error' });

@@ -212,10 +212,11 @@ describe('getToken', () => {
       expiresAt: iso(20 * 60_000),
     });
     expect(exchangeMock.exchangeAndPurge).toHaveBeenCalledTimes(1);
-    // The old credential's entry is untouched: it is not this credential's entry to rewrite.
-    await expect(readCachedToken(first)).resolves.toEqual({
-      token: 'old-credential-token',
-      expiresAt: iso(10 * 60_000),
+    // The replaced credential's entry is an orphan the new write drops.
+    await expect(readCachedToken(first)).resolves.toBeUndefined();
+    await expect(readCachedToken(refreshed)).resolves.toEqual({
+      token: 'new-credential-token',
+      expiresAt: iso(20 * 60_000),
     });
   });
 
