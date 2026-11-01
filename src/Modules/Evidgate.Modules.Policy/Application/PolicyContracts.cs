@@ -10,7 +10,10 @@ namespace Evidgate.Modules.Policy.Application;
 /// "nothing there" (a null read is "no active policy", an empty list is "no required artifact kind",
 /// owner decision Q1) instead of surfacing an error.
 /// </summary>
-internal sealed class PolicyContracts(GetActivePolicyQuery query, GetRequiredArtifactKindsQuery requiredArtifactKinds) : IPolicyContracts
+internal sealed class PolicyContracts(
+    GetActivePolicyQuery query,
+    GetRequiredArtifactKindsQuery requiredArtifactKinds,
+    GetLiveEvaluationsQuery liveEvaluations) : IPolicyContracts
 {
     /// <summary>Resolves the revision a new run pins, or null when the project has no active policy.</summary>
     /// <param name="projectId">The project the run is created in.</param>
@@ -26,4 +29,14 @@ internal sealed class PolicyContracts(GetActivePolicyQuery query, GetRequiredArt
     /// <param name="cancellationToken">Cancellation.</param>
     public ValueTask<IReadOnlyList<string>> GetRequiredArtifactKindsAsync(Guid policyRevisionId, CancellationToken cancellationToken) =>
         requiredArtifactKinds.GetAsync(policyRevisionId, cancellationToken);
+
+    /// <summary>Answers which of the named revisions of one run already have a stored live evaluation.</summary>
+    /// <param name="runId">The run the revisions belong to.</param>
+    /// <param name="evidenceRevisions">The revision numbers to look up.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    public ValueTask<IReadOnlyList<LiveEvaluation>> GetLiveEvaluationsAsync(
+        Guid runId,
+        IReadOnlyList<int> evidenceRevisions,
+        CancellationToken cancellationToken) =>
+        liveEvaluations.GetAsync(runId, evidenceRevisions, cancellationToken);
 }

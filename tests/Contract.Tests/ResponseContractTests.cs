@@ -1,8 +1,6 @@
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using Corvus.Json;
-using Corvus.Json.Validator;
 using Xunit;
 
 namespace Contract.Tests;
@@ -99,10 +97,10 @@ public sealed class ResponseContractTests
     {
         var spec = OpenApiSpec.Load();
 
-        AssertValid(spec, "ErrorEnvelope", PerItemErrorEnvelope, "00 §9.2's per-item example (index present)");
-        AssertValid(spec, "ErrorEnvelope", DocumentLevelErrorEnvelope, "a document-level error (index absent)");
-        AssertInvalid(spec, "ErrorEnvelope", EnvelopeMissingRequiredMembers, "an envelope missing message/request_id/retryable");
-        AssertInvalid(spec, "ErrorEnvelope", EnvelopeDetailMissingReason, "a details[] row without reason");
+        ContractSchema.AssertValid(spec, "ErrorEnvelope", PerItemErrorEnvelope, "00 §9.2's per-item example (index present)");
+        ContractSchema.AssertValid(spec, "ErrorEnvelope", DocumentLevelErrorEnvelope, "a document-level error (index absent)");
+        ContractSchema.AssertInvalid(spec, "ErrorEnvelope", EnvelopeMissingRequiredMembers, "an envelope missing message/request_id/retryable");
+        ContractSchema.AssertInvalid(spec, "ErrorEnvelope", EnvelopeDetailMissingReason, "a details[] row without reason");
     }
 
     [Fact]
@@ -110,10 +108,10 @@ public sealed class ResponseContractTests
     {
         var spec = OpenApiSpec.Load();
 
-        AssertValid(spec, "CursorList", EmptyCursorPage, "00 §9.1's empty last page");
-        AssertValid(spec, "CursorList", PopulatedCursorPage, "a page with an item and an opaque cursor");
-        AssertInvalid(spec, "CursorList", CursorPageMissingNextCursor, "a page without next_cursor");
-        AssertInvalid(spec, "CursorList", CursorPageWithNumericCursor, "a page whose next_cursor is not a string");
+        ContractSchema.AssertValid(spec, "CursorList", EmptyCursorPage, "00 §9.1's empty last page");
+        ContractSchema.AssertValid(spec, "CursorList", PopulatedCursorPage, "a page with an item and an opaque cursor");
+        ContractSchema.AssertInvalid(spec, "CursorList", CursorPageMissingNextCursor, "a page without next_cursor");
+        ContractSchema.AssertInvalid(spec, "CursorList", CursorPageWithNumericCursor, "a page whose next_cursor is not a string");
     }
 
     /// <summary>
@@ -132,7 +130,7 @@ public sealed class ResponseContractTests
         Assert.True(response.Headers.Contains("X-Request-Id"), "every response carries the 00 §9.1 X-Request-Id header");
 
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        AssertValid(spec, "ErrorEnvelope", body, $"the {expectedStatus} response body");
+        ContractSchema.AssertValid(spec, "ErrorEnvelope", body, $"the {expectedStatus} response body");
 
         var document = JsonDocument.Parse(body);
         var error = document.RootElement.GetProperty("error");
@@ -141,38 +139,5 @@ public sealed class ResponseContractTests
         Assert.False(error.GetProperty("retryable").GetBoolean(), "a client error is not retryable unchanged");
         Assert.Equal(JsonValueKind.Array, error.GetProperty("details").ValueKind);
         return document;
-    }
-
-    private static void AssertValid(OpenApiSpec spec, string schemaName, string instanceJson, string label)
-    {
-        var failures = Validate(spec, schemaName, instanceJson);
-        Assert.True(
-            failures.Length == 0,
-            $"{label} must validate against components.schemas.{schemaName}: {string.Join(" | ", failures)}");
-    }
-
-    private static void AssertInvalid(OpenApiSpec spec, string schemaName, string instanceJson, string label)
-    {
-        var failures = Validate(spec, schemaName, instanceJson);
-        Assert.True(
-            failures.Length > 0,
-            $"{label} must NOT validate against components.schemas.{schemaName}, or the valid cases above prove nothing");
-    }
-
-    /// <summary>Validates an instance against a spec <c>components.schemas</c> entry via Corvus; returns the failure rows.</summary>
-    private static string[] Validate(OpenApiSpec spec, string schemaName, string instanceJson)
-    {
-        var schema = JsonSchema.FromText(
-            spec.Schema(schemaName).ToJsonString(),
-            $"urn:evidgate:contract-spec:{schemaName}",
-            new JsonSchema.Options(allowFileSystemAndHttpResolution: false, alwaysAssertFormat: true));
-
-        using var instance = JsonDocument.Parse(instanceJson);
-        return
-        [
-            .. schema.Validate(instance.RootElement, ValidationLevel.Detailed).Results
-                .Where(result => !result.Valid)
-                .Select(result => $"{(result.Location is { } location ? location.Item3.ToString() : string.Empty)} {result.Message}".Trim()),
-        ];
     }
 }

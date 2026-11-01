@@ -1229,6 +1229,65 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /runs/{run_id}/evidence-revisions:
+    get:
+      operationId: listEvidenceRevisions
+      tags: [runs]
+      summary: Cursor list of a run's evidence revisions (newest first)
+      description: >-
+        Cursor list (00 §9.1) of one run's rows of `evidence_revision` (0049),
+        newest first (`revision_no` descending). The table is append-only: a
+        late-evidence re-freeze adds the next `revision_no` and never rewrites
+        an existing row, so an older revision keeps the `completeness` and
+        `missing[]` it was frozen with (00 §8.1). Items carry the row's own
+        `revision_no`, `created_at`, `completeness` (`complete`/`incomplete`,
+        00 §8.5), `missing[]` verbatim from the row (the closed 00 §8.5 reason
+        list; a `complete` row is always empty) and `evaluation_id` — the id of
+        the `evaluation` row (0059) evaluated from this revision whose `mode` is
+        `live`, or `null` while none exists; a `shadow` evaluation is never
+        served. The opaque `cursor` is not signed and is bound to the caller's
+        own run and tenant by the query; a cursor this endpoint did not issue is
+        422 `request_invalid` (`details[].path` = `cursor`), as is an integer
+        `limit` outside 1–200 (`limit`) — `-1` and `0` take that answer, not the
+        malformed one. A `limit` that is not the canonical spelling of an
+        integer (`abc`, `1.5`, ` 5`, `+5`, `01`), an undecodable or truncated
+        query string are 400 `request_invalid` before the handler runs, so a
+        client can tell "not this number" from "this number is refused". An
+        unknown run, another tenant's run
+        and, for a project-scoped credential, a sibling project's run are the
+        one 404 `not_found` body of `GET /v1/runs/{r}` — no existence oracle
+        (00 §5.4); a run with no evidence revision answers 200 with
+        `items: []`.
+      x-permission: run:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/EvidenceRevisionRunId'
+        - $ref: '#/components/parameters/RunEvidenceRevisionCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of the run's evidence revisions, newest first
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceRevisionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /runs/{r}/cancel:
     post:
       operationId: cancelRun
@@ -6898,6 +6957,18 @@ components:
         endpoint did not issue is 422 `request_invalid`.
       schema:
         type: string
+    RunEvidenceRevisionCursor:
+      name: cursor
+      in: query
+      required: false
+      description: >-
+        Opaque cursor from `next_cursor` of
+        `GET /v1/runs/{run_id}/evidence-revisions`; ordering `revision_no`
+        descending (00 §9.1; a run's `revision_no` is unique, so the key is the
+        revision number alone). A value this endpoint did not issue is 422
+        `request_invalid`.
+      schema:
+        type: string
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -6964,6 +7035,16 @@ components:
       name: r
       in: path
       required: true
+      schema:
+        type: string
+        format: uuid
+    EvidenceRevisionRunId:
+      name: run_id
+      in: path
+      required: true
+      description: >-
+        The run's id, spelled out where the route's decision names `run_id`;
+        the older run routes take the same id as `{r}` (`RunId`).
       schema:
         type: string
         format: uuid
@@ -7815,6 +7896,70 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/RunAttemptSummary' }
+        next_cursor: { type: [string, 'null'] }
+    EvidenceRevision:
+      type: object
+      additionalProperties: false
+      description: >-
+        One row of `GET /v1/runs/{r}/evidence-revisions`, read from
+        `evidence_revision` (0049). The table is append-only — a late-evidence
+        re-freeze inserts the next `revision_no` instead of rewriting a row — so
+        every item is the verdict that revision was frozen with (00 §8.1), and
+        `missing[]` is shown verbatim rather than summarised.
+      required: [revision_no, created_at, completeness, missing, evaluation_id]
+      properties:
+        revision_no:
+          type: integer
+          minimum: 1
+          description: >-
+            `evidence_revision.revision_no`, 1-based and gap-free per run;
+            highest is the newest revision.
+        created_at:
+          type: string
+          format: date-time
+          description: '`evidence_revision.created_at`, when that revision was frozen.'
+        completeness:
+          type: string
+          enum: [complete, incomplete]
+          description: >-
+            `evidence_revision.completeness` (00 §8.5). `incomplete` at the
+            collection deadline is never a PASS (00 §8.6).
+        missing:
+          type: array
+          description: >-
+            `evidence_revision.missing` verbatim: the closed 00 §8.5 reason list
+            (`missing_shard`, `count_mismatch`, `artifact_missing`,
+            `build_mismatch`, `unknown_status`, `setup_error`, `stale_epoch`,
+            `missing_result`). Empty exactly when `completeness` is `complete`.
+          items:
+            type: string
+            enum:
+              - missing_shard
+              - count_mismatch
+              - artifact_missing
+              - build_mismatch
+              - unknown_status
+              - setup_error
+              - stale_epoch
+              - missing_result
+        evaluation_id:
+          type: [string, 'null']
+          format: uuid
+          description: >-
+            The `evaluation.id` (0059) evaluated from this revision with `mode`
+            = `live`, or `null` while the revision has no stored live
+            evaluation. A `shadow` evaluation is never served: it is not the
+            verdict the run reports.
+    EvidenceRevisionPage:
+      type: object
+      description: >-
+        00 §9.1 cursor page of `EvidenceRevision`, keyset-ordered on
+        `revision_no` descending (newest revision first).
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/EvidenceRevision' }
         next_cursor: { type: [string, 'null'] }
     CreateRunRequest:
       type: object

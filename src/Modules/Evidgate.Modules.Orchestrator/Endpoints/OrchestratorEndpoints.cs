@@ -82,6 +82,10 @@ public static class OrchestratorEndpoints
             .Produces<RunAttemptPage>(StatusCodes.Status200OK)
             .WithSummary("Cursor list of a run's attempts: raw and normalised status, retry chain, ready artifacts (F52)");
 
+        group.MapGet("/runs/{run_id}/evidence-revisions", ListEvidenceRevisionsAsync)
+            .Produces<EvidenceRevisionPage>(StatusCodes.Status200OK)
+            .WithSummary("Cursor list of a run's evidence revisions, newest first, with their live evaluation id (05.3.2)");
+
         // The route answers 202 only, but the framework infers a 200 from the bodiless Result the delegate returns
         // (the shared-kernel type, whose Error/SuccessValue members would then appear as contract schemas the spec does
         // not declare — ServedDocumentTests' invariant). Declaring the status with no type pins that slot to "no body",
@@ -269,6 +273,72 @@ public static class OrchestratorEndpoints
         return await mediator.Send(
             new ListRunAttemptsQuery(r, Blank(context.Request.Query["cursor"]), limit),
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>GET /v1/runs/{run_id}/evidence-revisions</c>: the run's <c>evidence_revision</c> rows, newest first. The
+    /// delegate binds the 00 §9.1 query parameters and owns the one validation split the route documents: a
+    /// <c>limit</c> that is not the canonical spelling of an integer (<c>abc</c>, <c>1.5</c>, <c> 5</c>, <c>+5</c>,
+    /// <c>01</c>) is not a page size at all, so it is <c>400 request_invalid</c> here (the request itself is
+    /// malformed, 00 §9.2), while an integer outside 1–200 — <c>-1</c> and <c>0</c> included — and a cursor this
+    /// endpoint did not issue are the list convention's <c>422 request_invalid</c> with
+    /// <c>details[].path</c> = <c>limit</c> / <c>cursor</c>. An unknown query parameter is ignored, as on every other
+    /// list.
+    /// </summary>
+    private static async Task<Result<EvidenceRevisionPage>> ListEvidenceRevisionsAsync(
+        Guid run_id,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (EvidenceRevisionLimitError(context.Request.Query["limit"], out var limit) is { } error)
+        {
+            return Result.Failure<EvidenceRevisionPage>(error);
+        }
+
+        return await mediator.Send(
+            new ListEvidenceRevisionsQuery(run_id, Blank(context.Request.Query["cursor"]), limit),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The evidence-revisions page size: absent or blank keeps the default. A value that is not the canonical decimal
+    /// spelling of an integer (letters, a fraction, padding, whitespace, a <c>+</c> sign) is the route's 400 —
+    /// malformed, so the client can tell "not this number" from "this number is refused" — while a canonical integer
+    /// outside 1–200, a negative one included, is the list 422 with <c>details[].path</c> = <c>limit</c>. Separate from
+    /// <see cref="LimitError"/> because no other list distinguishes the two, and widening them all is not this route's
+    /// change.
+    /// </summary>
+    private static Error? EvidenceRevisionLimitError(string? raw, out int limit)
+    {
+        limit = DefaultLimit;
+
+        if (string.IsNullOrEmpty(raw))
+        {
+            return null;
+        }
+
+        // A sign is allowed so that `-1` reads as the integer it is and takes the range answer below, not the
+        // malformed one; the canonical spelling check then refuses `+5` and `01`, whose integer value alone would
+        // otherwise pass — the cursor codec applies the same rule in the handler.
+        if (!int.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
+            || !string.Equals(parsed.ToString(CultureInfo.InvariantCulture), raw, StringComparison.Ordinal))
+        {
+            return Error.BadRequest(
+                "limit must be a canonical integer (00 §9.1); the request is malformed",
+                [new ErrorDetail("limit", "malformed")]);
+        }
+
+        if (parsed < 1 || parsed > MaxLimit)
+        {
+            return Error.Invalid(
+                string.Create(CultureInfo.InvariantCulture, $"limit must be an integer between 1 and {MaxLimit} (00 §9.1)"),
+                [new ErrorDetail("limit", "out_of_range")]);
+        }
+
+        limit = parsed;
+
+        return null;
     }
 
     /// <summary>

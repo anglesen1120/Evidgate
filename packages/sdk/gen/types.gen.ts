@@ -215,6 +215,40 @@ export type RunAttemptPage = {
     next_cursor: string | null;
 };
 
+/**
+ * One row of `GET /v1/runs/{r}/evidence-revisions`, read from `evidence_revision` (0049). The table is append-only — a late-evidence re-freeze inserts the next `revision_no` instead of rewriting a row — so every item is the verdict that revision was frozen with (00 §8.1), and `missing[]` is shown verbatim rather than summarised.
+ */
+export type EvidenceRevision = {
+    /**
+     * `evidence_revision.revision_no`, 1-based and gap-free per run; highest is the newest revision.
+     */
+    revision_no: number;
+    /**
+     * `evidence_revision.created_at`, when that revision was frozen.
+     */
+    created_at: string;
+    /**
+     * `evidence_revision.completeness` (00 §8.5). `incomplete` at the collection deadline is never a PASS (00 §8.6).
+     */
+    completeness: 'complete' | 'incomplete';
+    /**
+     * `evidence_revision.missing` verbatim: the closed 00 §8.5 reason list (`missing_shard`, `count_mismatch`, `artifact_missing`, `build_mismatch`, `unknown_status`, `setup_error`, `stale_epoch`, `missing_result`). Empty exactly when `completeness` is `complete`.
+     */
+    missing: Array<'missing_shard' | 'count_mismatch' | 'artifact_missing' | 'build_mismatch' | 'unknown_status' | 'setup_error' | 'stale_epoch' | 'missing_result'>;
+    /**
+     * The `evaluation.id` (0059) evaluated from this revision with `mode` = `live`, or `null` while the revision has no stored live evaluation. A `shadow` evaluation is never served: it is not the verdict the run reports.
+     */
+    evaluation_id: string | null;
+};
+
+/**
+ * 00 §9.1 cursor page of `EvidenceRevision`, keyset-ordered on `revision_no` descending (newest revision first).
+ */
+export type EvidenceRevisionPage = {
+    items: Array<EvidenceRevision>;
+    next_cursor: string | null;
+};
+
 export type CreateRunRequest = {
     manifest_id: string;
     /**
@@ -2405,6 +2439,11 @@ export type RunParentRunId = string;
 export type RunAttemptCursor = string;
 
 /**
+ * Opaque cursor from `next_cursor` of `GET /v1/runs/{run_id}/evidence-revisions`; ordering `revision_no` descending (00 §9.1; a run's `revision_no` is unique, so the key is the revision number alone). A value this endpoint did not issue is 422 `request_invalid`.
+ */
+export type RunEvidenceRevisionCursor = string;
+
+/**
  * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
  */
 export type IdempotencyKey = string;
@@ -2433,6 +2472,11 @@ export type RoleId = string;
 export type ProjectId = string;
 
 export type RunId = string;
+
+/**
+ * The run's id, spelled out where the route's decision names `run_id`; the older run routes take the same id as `{r}` (`RunId`).
+ */
+export type EvidenceRevisionRunId = string;
 
 export type ReportId = string;
 
@@ -3439,6 +3483,66 @@ export type ListRunAttemptsResponses = {
 };
 
 export type ListRunAttemptsResponse = ListRunAttemptsResponses[keyof ListRunAttemptsResponses];
+
+export type ListEvidenceRevisionsData = {
+    body?: never;
+    path: {
+        /**
+         * The run's id, spelled out where the route's decision names `run_id`; the older run routes take the same id as `{r}` (`RunId`).
+         */
+        run_id: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor` of `GET /v1/runs/{run_id}/evidence-revisions`; ordering `revision_no` descending (00 §9.1; a run's `revision_no` is unique, so the key is the revision number alone). A value this endpoint did not issue is 422 `request_invalid`.
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/runs/{run_id}/evidence-revisions';
+};
+
+export type ListEvidenceRevisionsErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListEvidenceRevisionsError = ListEvidenceRevisionsErrors[keyof ListEvidenceRevisionsErrors];
+
+export type ListEvidenceRevisionsResponses = {
+    /**
+     * Page of the run's evidence revisions, newest first
+     */
+    200: EvidenceRevisionPage;
+};
+
+export type ListEvidenceRevisionsResponse = ListEvidenceRevisionsResponses[keyof ListEvidenceRevisionsResponses];
 
 export type CancelRunData = {
     body?: never;
