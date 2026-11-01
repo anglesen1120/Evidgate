@@ -38,6 +38,12 @@ import {
   type AttachmentUploaderOptions,
 } from './attachmentUpload.js';
 import { readCachedToken, writeCachedToken } from './auth/tokenCache.js';
+import {
+  devExchangeAnswer,
+  devToken,
+  exchangeBody,
+  mintedToken,
+} from './commands/devExchange.testing.js';
 import { resolveConfig } from './config.js';
 import { CliError } from './errors.js';
 import { resetSecrets } from './redact.js';
@@ -45,11 +51,8 @@ import { UploadFailedError } from './upload.js';
 import { artifactKindMaxBytes, type ArtifactKind } from './uploadPaths.js';
 
 /** Assembled at runtime so no token-shaped literal is stored in the spec (T78). */
-const devToken = ['ev', 'gate', 'attach', 'dev'].join('-');
 const ingestToken = ['ev', 'gate', 'attach', 'ingest'].join('-');
 const cachedBearer = ['ev', 'gate', 'attach', 'cached'].join('-');
-/** The `ci_producer` token the exchange mints; it is the bearer, not the dev credential. */
-const ciBearer = ['ev', 'gate', 'attach', 'ci'].join('-');
 const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
 const producerId = 'shard-2';
 const executionKey = 'b7'.repeat(32);
@@ -128,22 +131,16 @@ function json(status: number, body: unknown): Response {
 }
 
 /**
- * The `/v1/ci/token` answer. A dev token is an ingest credential, so the default surface
- * exchanges it before its first artifact call; the minted `ci_producer` token lives ten
- * minutes, so the next upload (and the resumed shard) reuses the cache instead of asking.
+ * Delegates to `respond`, answering the token exchange itself. A dev token is an ingest
+ * credential, so the default surface exchanges it before its first artifact call; the minted
+ * `ci_producer` token lives ten minutes, so the next upload (and the resumed shard) reuses the
+ * cache instead of asking.
  */
-function ciTokenBody(): Record<string, unknown> {
-  return {
-    token: ciBearer,
-    expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
-    project_id: runId,
-  };
-}
-
-/** Delegates to `respond`, answering the token exchange itself. */
 function afterExchange(respond: Responder): Responder {
-  return (call) =>
-    new URL(call.url).pathname === '/v1/ci/token' ? json(200, ciTokenBody()) : respond(call);
+  return (call) => {
+    const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+    return devExchangeAnswer(call, { projectId: runId, expiresAt }) ?? respond(call);
+  };
 }
 
 /** The `upload-url` 201 body: the signed size and checksum are the true ones for `bytes`. */
@@ -384,7 +381,7 @@ describe('createAttachmentUploader', () => {
     expect(mint === undefined ? '(no call)' : new URL(mint.url).pathname).toBe(
       '/v1/artifacts/upload-url',
     );
-    expect(mint?.headers.get('authorization')).toBe(`Bearer ${ciBearer}`);
+    expect(mint?.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
     expect(mint?.json).toEqual({
       run_id: runId,
       producer_id: producerId,
@@ -407,7 +404,7 @@ describe('createAttachmentUploader', () => {
     expect(put?.chunks.length).toBeGreaterThan(0);
     expect(put?.chunks.every((size) => size <= 64 * 1024)).toBe(true);
     expect(complete?.url.endsWith(`/v1/artifacts/${artifactId}/complete`)).toBe(true);
-    expect(complete?.headers.get('authorization')).toBe(`Bearer ${ciBearer}`);
+    expect(complete?.headers.get('authorization')).toBe(`Bearer ${mintedToken}`);
   });
 
   // AC6: outside the allow-listed directories the guard refuses and NOTHING is requested —
@@ -508,11 +505,13 @@ describe('createAttachmentUploader', () => {
       // deadline firing after the digest and before any artifact exists.
       const store = harness(() => {
         controller.abort();
-        return json(200, {
-          token: cachedBearer,
-          expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
-          project_id: runId,
-        });
+        return json(
+          200,
+          exchangeBody(cachedBearer, {
+            projectId: runId,
+            expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+          }),
+        );
       });
 
       const error = await rejection(

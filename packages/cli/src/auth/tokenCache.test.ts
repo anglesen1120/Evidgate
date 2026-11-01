@@ -13,7 +13,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -30,7 +30,7 @@ import {
   type TokenCacheConfig,
 } from './tokenCache.js';
 
-// The mode/owner checks are POSIX-only (04.2.1 §8 T5); on win32 they are skipped.
+// The mode/owner checks are POSIX-only; on win32 they are skipped.
 const posix = process.platform !== 'win32';
 
 const validBody = '{"token":"egt_secret","expires_at":"2030-01-01T00:00:00.000Z"}';
@@ -49,8 +49,8 @@ function legacyCachePath(config: TokenCacheConfig): string {
   return join(config.cacheDir, `ci-token.${key}.json`);
 }
 
-// 04.2.1-T1.2 / AC3 / §8 T5: the `0600` cache file — atomic write, keyed by api_url, project
-// and the source credential, and every untrusted file (wrong mode, symlink, corrupt) ignored.
+// The `0600` cache file: atomic write, keyed by api_url, project and the source credential,
+// and every untrusted file (wrong mode, symlink, corrupt) or cache dir ignored.
 describe('tokenCache', () => {
   let root: string;
   let cacheDir: string;
@@ -265,6 +265,89 @@ describe('tokenCache', () => {
     await writeCachedToken(config, { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' });
 
     expect((await stat(cacheDir)).mode & 0o777).toBe(0o700);
+  });
+
+  it.runIf(posix)('reads as absent through a symlinked cache dir', async () => {
+    const config = cacheConfig(cacheDir);
+    const realDir = join(root, 'real-dir');
+    await mkdir(realDir, { mode: 0o700 });
+    await writeFile(join(realDir, basename(tokenCachePath(config))), validBody, { mode: 0o600 });
+    await symlink(realDir, cacheDir);
+
+    await expect(readCachedToken(config)).resolves.toBeUndefined();
+  });
+
+  it.runIf(posix)('refuses a symlinked cache dir given with a trailing slash', async () => {
+    const realDir = join(root, 'real-dir');
+    await mkdir(realDir, { mode: 0o700 });
+    await symlink(realDir, cacheDir);
+    const config = cacheConfig(`${cacheDir}/`);
+    await writeFile(join(realDir, basename(tokenCachePath(config))), validBody, { mode: 0o600 });
+
+    await expect(readCachedToken(config)).resolves.toBeUndefined();
+    await expect(
+      writeCachedToken(config, { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' }),
+    ).rejects.toMatchObject({ code: 'token_cache_error' });
+    expect(await readdir(realDir)).toEqual([basename(tokenCachePath(config))]);
+  });
+
+  it.runIf(posix)('reads as absent from a group/world-writable cache dir', async () => {
+    const config = cacheConfig(cacheDir);
+    await mkdir(cacheDir, { mode: 0o700 });
+    await writeFile(tokenCachePath(config), validBody, { mode: 0o600 });
+    await expect(readCachedToken(config)).resolves.toMatchObject({ token: 'egt_secret' });
+
+    await chmod(cacheDir, 0o770);
+    await expect(readCachedToken(config)).resolves.toBeUndefined();
+    await chmod(cacheDir, 0o702);
+    await expect(readCachedToken(config)).resolves.toBeUndefined();
+  });
+
+  it.runIf(posix)('refuses to write into a group/world-writable cache dir', async () => {
+    const config = cacheConfig(cacheDir);
+    await mkdir(cacheDir, { mode: 0o700 });
+    await chmod(cacheDir, 0o777);
+
+    await expect(
+      writeCachedToken(config, { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' }),
+    ).rejects.toMatchObject({ code: 'token_cache_error' });
+    expect(await readdir(cacheDir)).toEqual([]);
+  });
+
+  it('purges entries of the destination minted under another credential after a write', async () => {
+    const base = cacheConfig(cacheDir);
+    const first = { ...base, ingestToken: 'ingest-one' };
+    const rotated = { ...base, ingestToken: 'ingest-two' };
+    const otherProject = { ...base, project: 'proj-2', ingestToken: 'ingest-one' };
+    const body = { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' };
+    await writeCachedToken(first, body);
+    await writeCachedToken(otherProject, body);
+    await writeFile(join(cacheDir, 'notes.txt'), 'keep', { mode: 0o600 });
+
+    await writeCachedToken(rotated, body);
+
+    expect((await readdir(cacheDir)).sort()).toEqual(
+      [
+        basename(tokenCachePath(rotated)),
+        basename(tokenCachePath(otherProject)),
+        'notes.txt',
+      ].sort(),
+    );
+  });
+
+  it.runIf(posix)('purges an orphan symlink without touching its target', async () => {
+    const base = cacheConfig(cacheDir);
+    const first = { ...base, ingestToken: 'ingest-one' };
+    const rotated = { ...base, ingestToken: 'ingest-two' };
+    const target = join(root, 'outside.json');
+    await writeFile(target, 'untouched', { mode: 0o600 });
+    await mkdir(cacheDir, { mode: 0o700 });
+    await symlink(target, tokenCachePath(first));
+
+    await writeCachedToken(rotated, { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' });
+
+    await expect(lstat(tokenCachePath(first))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(target, 'utf8')).toBe('untouched');
   });
 
   // C5b: a failed write is `token_cache_error` and leaves no temp file behind.
