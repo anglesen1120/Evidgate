@@ -9200,10 +9200,10 @@ components:
         scopes:
           type: [array, 'null']
           minItems: 1
-          maxItems: 3
+          maxItems: 4
           items:
             type: string
-          description: Subset of the permission codes `event:write`, `artifact:write` and `run:create`; default all three.
+          description: Subset of the permission codes `event:write`, `artifact:write`, `run:create` and `decision:read`; default all four.
         expires_at:
           type: [string, 'null']
           format: date-time

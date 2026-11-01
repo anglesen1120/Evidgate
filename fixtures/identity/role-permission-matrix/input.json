@@ -173,6 +173,7 @@
           "source": "00 §2:56 + 02 FR-02-7:22",
           "basis": "explicit"
         },
+        { "permission": "decision:read", "source": "00 §2:56 + 07.6.1:102", "basis": "explicit" },
         { "permission": "event:write", "source": "00 §2:56 + 02 FR-02-7:22", "basis": "explicit" },
         { "permission": "run:create", "source": "00 §2:56 + 02 FR-02-7:22", "basis": "explicit" }
       ]

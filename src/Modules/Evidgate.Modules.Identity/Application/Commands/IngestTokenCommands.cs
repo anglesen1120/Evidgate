@@ -19,10 +19,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Evidgate.Modules.Identity.Application.Commands;
 
-/// <summary>The scopes an ingest token may carry; the default is all three (02.4.2 §4).</summary>
+/// <summary>
+/// The scopes an ingest token may carry; the default is all four (02.4.2 §4). They are the <c>ci_producer</c> set, so an
+/// exchange from an ingest token can read the decision of its own project's runs.
+/// </summary>
 internal static class IngestTokenScopes
 {
-    public static readonly IReadOnlyList<string> All = [Permissions.Artifact.Write, Permissions.Event.Write, Permissions.Run.Create];
+    public static readonly IReadOnlyList<string> All =
+        [Permissions.Artifact.Write, Permissions.Decision.Read, Permissions.Event.Write, Permissions.Run.Create];
 }
 
 /// <summary>
@@ -46,7 +50,7 @@ internal sealed class CreateIngestTokenCommandValidator : AbstractValidator<Crea
             .WithErrorCode("invalid");
         When(command => command.Scopes is not null, () =>
             RuleFor(command => command.Scopes)
-                .Must(scopes => scopes is { Count: > 0 and <= 3 }
+                .Must(scopes => scopes is { Count: > 0 } && scopes.Count <= IngestTokenScopes.All.Count
                     && scopes.All(scope => IngestTokenScopes.All.Contains(scope))
                     && scopes.Distinct().Count() == scopes.Count)
                 .WithErrorCode("invalid"));

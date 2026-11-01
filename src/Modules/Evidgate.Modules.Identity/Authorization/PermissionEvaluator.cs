@@ -156,6 +156,7 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
     internal static readonly IReadOnlySet<string> ServiceRoleCeiling = new HashSet<string>(StringComparer.Ordinal)
     {
         Permissions.Artifact.Write,
+        Permissions.Decision.Read,
         Permissions.Event.Write,
         Permissions.Run.Create,
         Permissions.Job.Claim,
