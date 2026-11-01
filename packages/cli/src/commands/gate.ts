@@ -53,10 +53,14 @@ interface DecisionRequest {
   readonly fetchImpl: typeof fetch;
 }
 
-/** The bearer one `--wait` started with; a long wait may outlive it, so it is refreshed once. */
+/**
+ * The bearer the current poll uses. A `--wait` can outlive several tokens, so each expiry is
+ * answered by one refresh; the flag is what bounds that to one per expiry rather than a loop.
+ */
 interface Session {
   client: Client;
   token: string;
+  /** A refresh was minted for `token` and no accepted answer has cleared it yet. */
   refreshed: boolean;
 }
 
@@ -135,11 +139,11 @@ function parseWait(raw: string | undefined): number {
 }
 
 /**
- * One poll. A 401 is answered by minting a new token once and replaying this poll, because a
- * long wait can outlive the token it started with; the second 401 is the server's last word,
- * and a source that cannot mint a second credential never gets the replay. Both attempts and
- * the refresh itself are bounded by the same absolute deadline, so a slow exchange cannot buy
- * the replay a window that overruns the wait.
+ * One poll. A 401 is answered by minting a new token and replaying this poll, because a wait
+ * can outlive more than one token. The refresh is spent once per expiry: a 401 on the replay
+ * itself is the server's last word, and a source that cannot mint again never gets the replay.
+ * Attempts and the refresh share the one deadline, so a slow exchange cannot grant the replay
+ * a window that overruns the wait.
  */
 async function requestDecision(
   session: Session,
@@ -193,6 +197,10 @@ async function requestDecision(
   if (second.kind === 'unauthorized') {
     throw second.error;
   }
+  // The refreshed token was accepted, so this expiry is settled: clearing the flag lets a
+  // later 401 within the same wait mint again. The bound is one refresh per expiry, not per
+  // invocation, because a wait can span more than one token lifetime.
+  session.refreshed = false;
   return second;
 }
 
@@ -298,8 +306,9 @@ async function attemptDecision(
 }
 
 /**
- * One non-2xx answer: a refused redirect and a permanent 4xx are fatal, a 401 may be
- * refreshed once, and only the answers `callApi` itself calls transient may be polled again.
+ * One non-2xx answer: a refused redirect and a permanent 4xx are fatal, a 401 may spend the
+ * one refresh the current token is allowed, and only the answers `callApi` itself calls
+ * transient may be polled again.
  */
 function failedDecision(response: Response, sdkError: unknown, now: () => number): DecisionAttempt {
   if (response.status === refusedRedirectStatus) {
