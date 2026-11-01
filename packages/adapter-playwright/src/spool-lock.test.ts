@@ -29,6 +29,8 @@ import {
   WRITER_LOCK_FILE,
   type SpoolWriterOptions,
 } from './spool.js';
+import { acquireWriterLock, WRITER_LOCK_FILE_MODE } from './writerLock.js';
+import { lockRecord } from './writerLockRecord.js';
 
 const isWindows = process.platform === 'win32';
 const tempDirs: string[] = [];
@@ -215,6 +217,44 @@ describe('spool single-writer lock', () => {
     const writer = new SpoolWriter(writerOptions(spool));
     expect(readWriterLock(dir)?.pid).toBe(process.pid);
     writer.close();
+  });
+
+  it('puts the moved lock back and reports it when it stopped matching', () => {
+    const spool = tempSpool();
+    const dir = join(spool, 'run-1', 'pw-0');
+    mkdirSync(dir, { recursive: true });
+    const path = lockPath(spool);
+    const successor = lockRecord(7777, 'live-successor');
+    writeFileSync(path, lockRecord(CRASHED_PID, 'crashed'), { mode: WRITER_LOCK_FILE_MODE });
+    // The liveness probe runs after the record was read and before the rename, so replacing
+    // the lock there is a writer that swapped it inside the takeover window: what the rename
+    // moves is then not the record we observed as stale, and must not be destroyed.
+    const alive = (pid: number): boolean => {
+      if (pid === CRASHED_PID) writeFileSync(path, successor, { mode: WRITER_LOCK_FILE_MODE });
+      return pid !== CRASHED_PID;
+    };
+
+    let error: unknown;
+    try {
+      // One attempt only: a `retry` outcome would end in a pid-less refusal, so the reported
+      // holder proves the arm answered `held` instead of leaving the slot to a fresh link.
+      acquireWriterLock(dir, {
+        pid: 5555,
+        isProcessAlive: alive,
+        probeDelayMs: 0,
+        maxTakeoverAttempts: 1,
+      });
+    } catch (thrown) {
+      error = thrown;
+    }
+
+    // The displaced record owns the path again and the refusal names it, rather than the
+    // takeover consuming a lock it never observed.
+    expect(error).toBeInstanceOf(EvidgateSpoolWriterLockedError);
+    const locked = error as EvidgateSpoolWriterLockedError;
+    expect(locked.holderPid).toBe(7777);
+    expect(readFileSync(path, 'utf8')).toBe(successor);
+    expect(readdirSync(dir)).toEqual([WRITER_LOCK_FILE]);
   });
 
   it('does not serialise writers of different producers of the same run', () => {
