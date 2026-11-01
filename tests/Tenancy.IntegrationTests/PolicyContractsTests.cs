@@ -373,4 +373,158 @@ public sealed class PolicyContractsTests
         // The owning tenant reads it, so the empty list is the tenant boundary and not a missing row.
         (await ReadKindsAsync(other, theirs)).ShouldBe(TraceOnly, ignoreOrder: false);
     }
+
+    // ------------------------------------------------------------------ the live evaluation of a revision
+
+    [Fact]
+    public async Task LiveEvaluations_AreReturnedForTheNamedRevisionsOnly()
+    {
+        await using var world = await StartAsync();
+        var (revision, hash) = await CreateRevisionAsync(world, """{"flaky_budget":3}""");
+        var (runId, first, second) = await SeedRunAndRevisionsAsync(world);
+        var live = await InsertEvaluationAsync(world, runId, revision, hash, first, "live", "PASS");
+
+        var found = await ReadLiveAsync(world, runId, [first, second]);
+
+        // The one evaluated revision answers with its own verdict; the other is simply absent.
+        found.ShouldHaveSingleItem();
+        found[0].EvidenceRevision.ShouldBe(first);
+        found[0].EvaluationId.ShouldBe(live);
+    }
+
+    /// <summary>
+    /// A <c>shadow</c> row is a second opinion about the same evidence, so it is never named: the live row is the
+    /// answer even when a shadow row for the same revision exists, and a shadow-only revision is absent.
+    /// </summary>
+    [Fact]
+    public async Task LiveEvaluations_NeverNameAShadowRow()
+    {
+        await using var world = await StartAsync();
+        var (revision, hash) = await CreateRevisionAsync(world, """{"flaky_budget":3}""");
+        var (runId, first, second) = await SeedRunAndRevisionsAsync(world);
+        var live = await InsertEvaluationAsync(world, runId, revision, hash, first, "live", "PASS");
+        await InsertEvaluationAsync(world, runId, revision, hash, first, "shadow", "FAIL");
+        await InsertEvaluationAsync(world, runId, revision, hash, second, "shadow", "FAIL");
+
+        var found = await ReadLiveAsync(world, runId, [first, second]);
+
+        found.ShouldHaveSingleItem();
+        found[0].EvaluationId.ShouldBe(live, "the live verdict is the run's decision, never the shadow one");
+    }
+
+    /// <summary>The read is bound to its run and to the caller's tenant: another run's verdict and another org's are invisible.</summary>
+    [Fact]
+    public async Task LiveEvaluations_AreEmptyForAnotherRunsOrAnotherTenantsRevision()
+    {
+        await using var world = await StartAsync();
+        var (revision, hash) = await CreateRevisionAsync(world, """{"flaky_budget":3}""");
+        var (runId, first, _) = await SeedRunAndRevisionsAsync(world);
+        await InsertEvaluationAsync(world, runId, revision, hash, first, "live", "PASS");
+
+        // The same revision numbers asked about another run answer nothing.
+        var otherRun = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, world.Org, 1);
+        (await ReadLiveAsync(world, otherRun.RunId, [first])).ShouldBeEmpty();
+
+        // And so does another tenant asking about the real run.
+        var otherOrg = await CreateOrgAsync(world.Client, world.User, "other");
+        var otherProject = await CreateProjectAsync(world.Client, world.User, otherOrg, "checkout");
+        (await ReadLiveAsync(world with { Org = otherOrg, Project = otherProject }, runId, [first])).ShouldBeEmpty();
+        // The owning tenant still reads it, so the empty answer is the boundary and not a broken read.
+        (await ReadLiveAsync(world, runId, [first])).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task LiveEvaluations_AreEmpty_WithoutNamedRevisions()
+    {
+        await using var world = await StartAsync();
+
+        (await ReadLiveAsync(world, Guid.CreateVersion7(), [])).ShouldBeEmpty();
+    }
+
+    /// <summary>Reads the live evaluations of a run's revisions through the module's registered contracts surface.</summary>
+    private static async Task<IReadOnlyList<LiveEvaluation>> ReadLiveAsync(
+        World world,
+        Guid runId,
+        IReadOnlyList<int> revisions)
+    {
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
+        await using var scope = await scopes.BeginAsync(world.Org, null, false, TestContext.Current.CancellationToken);
+        var contracts = services.ServiceProvider.GetRequiredService<IPolicyContracts>();
+
+        var found = await contracts.GetLiveEvaluationsAsync(runId, revisions, TestContext.Current.CancellationToken);
+        await scope.CommitAsync(TestContext.Current.CancellationToken);
+
+        return found;
+    }
+
+    /// <summary>A run of the world's org plus two frozen revisions of it, written as the app role.</summary>
+    private async Task<(Guid RunId, int First, int Second)> SeedRunAndRevisionsAsync(World world)
+    {
+        var run = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, world.Org, 1);
+
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            foreach (var revisionNo in (int[])[1, 2])
+            {
+                await scope.ExecuteAsync(
+                    """
+                    insert into public.evidence_revision
+                      (id, org_id, run_id, revision_no, completeness, event_watermark, manifest_hash)
+                    values (@id, @org_id, @run_id, @revision_no, 'complete', 0, @manifest_hash)
+                    """,
+                    ("id", Guid.CreateVersion7()),
+                    ("org_id", world.Org),
+                    ("run_id", run.RunId),
+                    ("revision_no", revisionNo),
+                    ("manifest_hash", "sha256:" + new string('c', 64)));
+            }
+
+            await scope.CommitAsync();
+        }
+
+        return (run.RunId, 1, 2);
+    }
+
+    /// <summary>One immutable <c>evaluation</c> row of the run's given revision, as the app role.</summary>
+    private async Task<Guid> InsertEvaluationAsync(
+        World world,
+        Guid runId,
+        Guid policyRevisionId,
+        string policyHash,
+        int evidenceRevision,
+        string mode,
+        string decision)
+    {
+        var id = Guid.CreateVersion7();
+        var complete = string.Equals(decision, "PASS", StringComparison.Ordinal);
+
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            await scope.ExecuteAsync(
+                """
+                insert into public.evaluation
+                  (id, org_id, run_id, evidence_revision, policy_revision_id, policy_hash, manifest_hash, completeness,
+                   missing, outcome, decision, reasons, evaluator_version, mode, exceptions_hash, exceptions_as_of)
+                values
+                  (@id, @org_id, @run_id, @evidence_revision, @policy_revision_id, @policy_hash, @manifest_hash,
+                   @completeness, array[]::text[], @outcome, @decision, array[]::text[], 'v1', @mode, @exceptions_hash, now())
+                """,
+                ("id", id),
+                ("org_id", world.Org),
+                ("run_id", runId),
+                ("evidence_revision", evidenceRevision),
+                ("policy_revision_id", policyRevisionId),
+                ("policy_hash", policyHash),
+                ("manifest_hash", "sha256:" + new string('c', 64)),
+                ("completeness", complete ? "complete" : "incomplete"),
+                ("outcome", complete ? "all_passed" : "has_failures"),
+                ("decision", decision),
+                ("mode", mode),
+                ("exceptions_hash", "sha256:" + new string('d', 64)));
+            await scope.CommitAsync();
+        }
+
+        return id;
+    }
 }

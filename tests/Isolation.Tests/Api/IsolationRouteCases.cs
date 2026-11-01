@@ -706,6 +706,13 @@ public static class IsolationRouteCases
         // served route.
         ObjectCase("GET", "/v1/runs/{r}/attempts", p => [("run", p.RunId)], id =>
             new(HttpMethod.Get, $"/v1/runs/{id}/attempts"), ownControl: true),
+        // The run's evidence-revision page is the same read shape: the run is addressed by id alone, so another org's
+        // run is the 404 not_found of GET /v1/runs/{r} (never a 403), and a project-scoped/service credential is
+        // refused 403 by the permission stage because run:read is outside the service-role ceiling. The own-project
+        // control answers 200 with an empty page because the world freezes no revision, which also proves the probe
+        // URL matches a served route.
+        ObjectCase("GET", "/v1/runs/{run_id}/evidence-revisions", p => [("run", p.RunId)], id =>
+            new(HttpMethod.Get, $"/v1/runs/{id}/evidence-revisions"), ownControl: true),
         // 05.2.2-T2: the project-scoped run list. As a list, its positive control is the full-pagination walk
         // (Lists); the extra probes pin the ref_name filter, which must not widen tenancy.
         ProjectCase("GET", "/v1/projects/{p}/runs", p => new(HttpMethod.Get, $"/v1/projects/{p}/runs"), list: true,

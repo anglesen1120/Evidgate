@@ -1,8 +1,5 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using Corvus.Json;
-using Corvus.Json.Validator;
 using Xunit;
 
 namespace Contract.Tests;
@@ -164,26 +161,11 @@ public sealed class PermissionCatalogueTests
     }
 
     /// <summary>Validates an instance against the catalogue schema; returns one row per failure.</summary>
-    private static string[] Validate(string instanceJson)
-    {
-        const string CanonicalUri = "urn:evidgate:contract:permissions-schema:v1";
-        var schemaJson = File.ReadAllText(
-            Path.Combine(ContractPaths.ContractsDirectory, "permissions.schema.json"));
-
-        var schema = JsonSchema.FromText(
-            schemaJson,
-            CanonicalUri,
-            new JsonSchema.Options(allowFileSystemAndHttpResolution: false, alwaysAssertFormat: true));
-
-        using var instance = JsonDocument.Parse(instanceJson);
-
-        return
-        [
-            .. schema.Validate(instance.RootElement, ValidationLevel.Detailed).Results
-                .Where(result => !result.Valid)
-                .Select(result => $"{(result.Location is { } location ? location.Item3.ToString() : string.Empty)} {result.Message}".Trim()),
-        ];
-    }
+    private static string[] Validate(string instanceJson) =>
+        ContractSchema.Failures(
+            File.ReadAllText(Path.Combine(ContractPaths.ContractsDirectory, "permissions.schema.json")),
+            "urn:evidgate:contract:permissions-schema:v1",
+            instanceJson);
 
     /// <summary>The repository's catalogue file, verbatim.</summary>
     private static string CatalogueJson() =>
