@@ -168,8 +168,8 @@ export function exitCodeForDecision(decision: GateDecisionValue | null): ExitCod
  * The `--json` line: the five keys the gate has always printed, in that order, then the
  * members the widened `Decision` body adds, so a consumer of the old line keeps parsing it.
  * Each value is printed as the server sent it, apart from redaction: a string member is
- * redacted, then encoded, and the format and line characters `JSON.stringify` leaves raw are
- * escaped, so no member can break the line or override its rendering.
+ * redacted, then encoded, and the control, format and separator characters `JSON.stringify`
+ * leaves raw are escaped, so no member can break the line or override its rendering.
  */
 export function jsonLine(outcome: GateOutcome): string {
   const line = JSON.stringify({
@@ -187,10 +187,23 @@ export function jsonLine(outcome: GateOutcome): string {
     manifest_hash: redactMember(outcome.manifestHash),
     evaluator_version: redactMember(outcome.evaluatorVersion),
   });
-  return `${line.replace(
-    /[\p{Cf}\p{Zl}\p{Zp}]/gu,
-    (character) => `\\u${(character.codePointAt(0) ?? 0).toString(16).padStart(4, '0')}`,
-  )}\n`;
+  return `${escapeJsonControls(line)}\n`;
+}
+
+/**
+ * Escapes the controls `JSON.stringify` leaves raw (C1 controls such as NEL, format
+ * characters, separators) so a member cannot inject a line break some log consumers render.
+ * Each UTF-16 unit gets its own `\uXXXX`: JSON has no `\u{…}` form, and an astral character
+ * becomes its surrogate pair.
+ */
+function escapeJsonControls(line: string): string {
+  return line.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, (character) => {
+    let escaped = '';
+    for (let index = 0; index < character.length; index += 1) {
+      escaped += `\\u${character.charCodeAt(index).toString(16).padStart(4, '0')}`;
+    }
+    return escaped;
+  });
 }
 
 /** `gate: <DECISION> (run <id>)` — the one line a human reads in a CI log. */

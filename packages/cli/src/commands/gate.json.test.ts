@@ -169,6 +169,42 @@ describe('gate --json', () => {
     expect(JSON.parse(text)).toMatchObject({ reasons: ['bearer [REDACTED] was rejected'] });
   });
 
+  it('escapes a C1 control that a log consumer could render as a line break', async () => {
+    const env = await devEnv(dirs);
+    const stub = devStubFetch(() =>
+      decided(evaluated({ decision: 'FAIL', reasons: ['api failed\u0085forged: gate: PASS'] })),
+    );
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--json']), env, out, stub.fetchImpl);
+
+    expect(code).toBe(1);
+    const text = out.stdout.join('');
+    // One line: the raw NEL is encoded as a JSON escape, not emitted as a separator.
+    expect(text.split('\n')).toHaveLength(2);
+    expect(text).not.toContain('\u0085');
+    expect(text).toContain('\\u0085');
+    expect(JSON.parse(text)).toMatchObject({ reasons: ['api failed\u0085forged: gate: PASS'] });
+  });
+
+  it('round-trips an astral format character through a valid JSON escape', async () => {
+    const env = await devEnv(dirs);
+    // U+E0001 is a format character outside the BMP, so it must be two UTF-16 escapes:
+    // JSON has no `\u{…}` form, and a five-digit `\u` would leave a literal digit behind.
+    const tagged = `gate\u{e0001}: PASS`;
+    const stub = devStubFetch(() => decided(evaluated({ decision: 'PASS', mode: tagged })));
+    const out = capture();
+
+    const { code } = await invoke(gateArgv(['--run', runId, '--json']), env, out, stub.fetchImpl);
+
+    expect(code).toBe(0);
+    const text = out.stdout.join('');
+    expect(text).not.toContain('\u{e0001}');
+    expect(text).toContain('\\udb40\\udc01');
+    expect(text.split('\n')).toHaveLength(2);
+    expect(JSON.parse(text)).toMatchObject({ mode: tagged });
+  });
+
   it('keeps the line parseable when a member looks like a header', async () => {
     const env = await devEnv(dirs);
     // `Authorization: …` is the writer's header rule; a member that reads like one must not
