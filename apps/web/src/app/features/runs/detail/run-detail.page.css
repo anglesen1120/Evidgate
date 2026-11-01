@@ -31,3 +31,21 @@ a:focus-visible {
   outline: var(--eg-focus-width) solid var(--eg-focus);
   outline-offset: var(--eg-focus-offset);
 }
+/* Evidence and Decision read side by side from the desktop breakpoint; the DOM order stays
+   Evidence then Decision at every width, so keyboard and reading order never depend on the grid. */
+.evidence-regions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--eg-space-6);
+  margin-block-end: var(--eg-space-6);
+  min-inline-size: 0;
+}
+.evidence-regions > * {
+  min-inline-size: 0;
+}
+@media (min-width: 1280px) {
+  .evidence-regions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--eg-space-7);
+  }
+}

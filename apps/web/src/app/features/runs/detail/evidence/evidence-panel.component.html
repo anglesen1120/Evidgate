@@ -1,0 +1,113 @@
+<section
+  class="evidence-panel"
+  id="evidence-panel"
+  aria-labelledby="evidence-title"
+  [attr.aria-busy]="busy() ? 'true' : null"
+>
+  <h2 id="evidence-title" tabindex="-1">{{ copy.title }}</h2>
+  <!-- The live region exists from the first paint; only a real revision update fills it. -->
+  <p class="visually-hidden" role="status" data-evidence-announcement>{{ announcement() }}</p>
+
+  @if (revisionsStatus() === 'loading') {
+    <app-loading-pattern [label]="copy.loading" />
+  } @else if (revisionsStatus() === 'error') {
+    <app-error-pattern
+      [error]="revisionsError()"
+      [retryDisabled]="!retryEligible()"
+      [headingLevel]="3"
+      (retry)="retry.emit()"
+    />
+  } @else if (continuationFailure() && revisionsError(); as failure) {
+    <!-- A follow-up page failed: the loaded rows stay, and the failure is announced with its wait. -->
+    @if (retryAfter(); as refusal) {
+      <app-retry-after
+        [kind]="refusal.kind === 'unavailable' ? 'unavailable' : 'rate_limited'"
+        [retryAfterSeconds]="refusal.retryAfterSeconds"
+        [retryEligible]="retryEligible()"
+        [code]="refusal.code"
+        [requestId]="refusal.requestId"
+        (retry)="retry.emit()"
+      />
+    } @else {
+      <app-error-pattern
+        [error]="failure"
+        [retryDisabled]="!retryEligible()"
+        [headingLevel]="3"
+        (retry)="retry.emit()"
+      />
+    }
+  }
+
+  @if (showSelector()) {
+    <app-evidence-revision-selector
+      [revisions]="revisions() ?? []"
+      [selectedRevision]="pinnedRevision()"
+      [hasMore]="revisionsHasMore()"
+      [loadingMore]="revisionsLoadingMore()"
+      (selectRevision)="selectRevision.emit($event)"
+      (loadOlder)="loadOlder.emit()"
+    />
+  }
+
+  @if (noFrozenRevision()) {
+    <div class="evidence-empty" data-evidence-empty>
+      <p class="evidence-empty-title">{{ copy.emptyTitle }}</p>
+      <p>{{ copy.emptyDescription }}</p>
+    </div>
+  }
+
+  @if (searchOlder()) {
+    <p class="evidence-note" data-evidence-search-older>{{ copy.searchOlder }}</p>
+  }
+  @if (pinUnavailable()) {
+    <p class="evidence-note" data-evidence-selected-unavailable>{{ copy.selectedUnavailable }}</p>
+  }
+
+  @if (newerRevisionExists()) {
+    <div class="evidence-newer" data-evidence-newer>
+      <p class="evidence-newer-title">{{ copy.newerTitle }}</p>
+      <p>{{ newerDescription() }}</p>
+      <button class="evidence-newer-action" type="button" (click)="viewLatest.emit()">
+        {{ copy.viewLatest }}
+      </button>
+    </div>
+  }
+
+  @if (pinnedRevision(); as revision) {
+    <p class="evidence-selected" data-evidence-selected>{{ selectedLabel(revision) }}</p>
+  }
+
+  <p class="evidence-completeness" data-evidence-completeness>
+    <app-evidence-badge [completeness]="completeness()" />
+  </p>
+
+  @if (decision()?.kind === 'pending' && pinned() === null) {
+    <p class="evidence-state" data-evidence-state>{{ copy.noEvaluation }}</p>
+  }
+
+  <div class="evidence-missing" data-evidence-missing>
+    <h3 id="evidence-missing-title">{{ copy.missingTitle }}</h3>
+    @if (missing() !== null) {
+      <app-missing-reason-list [reasons]="reasons()" />
+    } @else {
+      <p class="evidence-missing-unavailable">{{ copy.missingUnavailable }}</p>
+    }
+  </div>
+
+  @if (pinned(); as revision) {
+    <div class="evidence-evaluation" data-evidence-evaluation>
+      <h3>{{ copy.evaluationReference }}</h3>
+      <p>
+        @if (revision.evaluation_id; as evaluationId) {
+          <bdi class="identifier">{{ evaluationId }}</bdi>
+        } @else {
+          {{ copy.noEvaluation }}
+        }
+      </p>
+    </div>
+  }
+
+  @if (historical()) {
+    <p class="evidence-note" data-evidence-historical>{{ copy.historicalDetails }}</p>
+  }
+</section>

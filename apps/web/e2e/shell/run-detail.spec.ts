@@ -17,13 +17,24 @@ import {
 
 const RUN = readyFixture.body;
 const GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
-function path(locale: ShellLocale, variant = 'detail-ready', id = RUN.run_id, attempts = 'ok') {
+function path(
+  locale: ShellLocale,
+  variant = 'detail-ready',
+  id = RUN.run_id,
+  attempts = 'ok',
+  revisions = 'ok',
+) {
   return withVariants(
     localePath(
       locale,
       `/dev/run-detail/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/runs/${id}`,
     ),
-    [GRANT, `?fixture.variant.getRun=${variant}`, `?fixture.variant.listRunAttempts=${attempts}`],
+    [
+      GRANT,
+      `?fixture.variant.getRun=${variant}`,
+      `?fixture.variant.listRunAttempts=${attempts}`,
+      `?fixture.variant.listEvidenceRevisions=${revisions}`,
+    ],
   );
 }
 async function ready(page: Page) {
@@ -62,9 +73,13 @@ for (const locale of LOCALES) {
       page.locator('app-attempts-table [data-attempts-healing-unavailable] app-status-pill'),
     ).toHaveText(locale === 'vi' ? 'Chưa có trạng thái' : 'Status unavailable');
     await expect(page.locator('app-run-detail-page h1')).toHaveCount(1);
-    await expect(
-      page.locator('app-run-detail-page app-decision-chip, app-run-detail-page app-outcome-pill'),
-    ).toHaveCount(0);
+    // The default decision fixture is a served `pending` body: its chip is the pending one and no
+    // verdict chip or outcome pill exists.
+    await expect(page.locator('app-run-detail-page app-decision-chip [data-tone]')).toHaveAttribute(
+      'data-tone',
+      'pending',
+    );
+    await expect(page.locator('app-run-detail-page app-outcome-pill')).toHaveCount(0);
     expect(await page.locator('app-run-detail-page').textContent()).not.toContain('PASS');
     await page.reload();
     await ready(page);
@@ -140,11 +155,13 @@ for (const locale of LOCALES) {
     expect(await page.locator('[data-run-ref]').textContent()).not.toContain('\u202e');
     await expect(page.locator('[data-run-unverified]')).toBeVisible();
     await expect(page.locator('app-run-detail-page script')).toHaveCount(0);
-    await page.goto(path(locale, 'detail-null-evidence'));
+    await page.goto(path(locale, 'detail-null-evidence', RUN.run_id, 'ok', 'empty'));
     await ready(page);
     await expect(page.locator('[data-run-evidence-revision]')).toHaveText(
       locale === 'vi' ? 'Chưa ghi nhận' : 'None recorded',
     );
+    // A run with no current evidence revision has no frozen revision page either.
+    await expect(page.locator('#evidence-panel [data-evidence-empty]')).toBeVisible();
     expect(await page.locator('app-run-detail-page').textContent()).not.toContain('PASS');
   });
   test(`list row navigation and browser back preserve filters (${locale})`, async ({ page }) => {

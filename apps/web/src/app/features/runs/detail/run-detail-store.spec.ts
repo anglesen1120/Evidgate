@@ -1,52 +1,32 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { RunAttemptPage, RunStateDto } from '@evidgate/sdk';
-import page1 from '../../../../../../../fixtures/web-api/run-attempts-page-1/input.json';
-import page2 from '../../../../../../../fixtures/web-api/run-attempts-page-2/input.json';
-import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
+import type { EvidenceRevisionPage, RunAttemptPage, RunStateDto } from '@evidgate/sdk';
 import { RunsDataService } from '../../../core/data/runs-data.service';
-import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
+import { RunDataService } from '../data/run-data.service';
 import { manifestFromRun, UNAVAILABLE_MANIFEST } from './manifest-summary';
 import { ATTEMPTS_PAGE_LIMIT, RunDetailStore } from './run-detail.store';
+import { first, pendingBody, refused, run, second, deferred } from './run-detail-store.fixtures';
 
-// The fixture-contract spec validates this body against getRun's RunStateDto schema.
-const run = ready.body as RunStateDto;
-const first = page1.body as RunAttemptPage;
-const second = page2.body as RunAttemptPage;
-function refused(kind: 'not_found' | 'forbidden'): ApiRequestError {
-  const error: ApiError = {
-    kind,
-    status: kind === 'not_found' ? 404 : 403,
-    code: kind,
-    message: 'Resource unavailable.',
-    requestId: 'request-detail',
-    retryable: false,
-    details: [],
-    retryAfterSeconds: null,
-  };
-  return new ApiRequestError(error);
-}
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
-  return { promise, resolve, reject };
-}
 describe('RunDetailStore', () => {
   const get = vi.fn<(id: string) => Promise<RunStateDto>>();
   const listAttempts =
     vi.fn<(id: string, query?: { cursor?: string; limit?: number }) => Promise<RunAttemptPage>>();
+  const listEvidenceRevisions =
+    vi.fn<
+      (id: string, query?: { cursor?: string; limit?: number }) => Promise<EvidenceRevisionPage>
+    >();
+  const getDecision = vi.fn<(id: string) => Promise<unknown>>();
   beforeEach(() => {
     get.mockReset();
     listAttempts.mockReset().mockResolvedValue({ items: [], next_cursor: null });
+    listEvidenceRevisions.mockReset().mockResolvedValue({ items: [], next_cursor: null });
+    getDecision.mockReset().mockResolvedValue(pendingBody());
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         RunDetailStore,
-        { provide: RunsDataService, useValue: { get, listAttempts } },
+        { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },
+        { provide: RunDataService, useValue: { getDecision } },
       ],
     });
   });

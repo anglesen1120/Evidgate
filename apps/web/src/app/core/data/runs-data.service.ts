@@ -11,9 +11,13 @@ import { inject, Injectable } from '@angular/core';
 import {
   createRun,
   getRun,
+  getRunDecision,
+  listEvidenceRevisions,
   listRunAttempts,
   listRuns,
   type CreateRunRequest,
+  type EvidenceRevisionPage,
+  type ListEvidenceRevisionsData,
   type ListRunAttemptsData,
   type ListRunsData,
   type RunAttemptPage,
@@ -29,6 +33,8 @@ import { intentHeaders, type Intent } from '../http/intent';
 type RunListQuery = NonNullable<ListRunsData['query']>;
 
 type RunAttemptsQuery = NonNullable<ListRunAttemptsData['query']>;
+
+type RunEvidenceRevisionsQuery = NonNullable<ListEvidenceRevisionsData['query']>;
 
 @Injectable({ providedIn: 'root' })
 export class RunsDataService {
@@ -47,6 +53,36 @@ export class RunsDataService {
   /** One page of a run's attempts (`GET /v1/runs/{r}/attempts`, keyset `(execution_key, attempt_no)`). */
   listAttempts(runId: string, query: RunAttemptsQuery = {}): Promise<RunAttemptPage> {
     return this.gateway.call((client) => listRunAttempts({ client, path: { r: runId }, query }));
+  }
+
+  /**
+   * One page of a run's frozen evidence revisions
+   * (`GET /v1/runs/{run_id}/evidence-revisions`, keyset `revision_no` descending).
+   *
+   * The generated `EvidenceRevision`/`EvidenceRevisionPage` types are current, so the page is
+   * returned exactly as served: the store owns the cursor walk and never rewrites a revision.
+   */
+  listEvidenceRevisions(
+    runId: string,
+    query: RunEvidenceRevisionsQuery = {},
+  ): Promise<EvidenceRevisionPage> {
+    return this.gateway.call((client) =>
+      listEvidenceRevisions({ client, path: { run_id: runId }, query }),
+    );
+  }
+
+  /**
+   * The run's live decision body (`GET /v1/runs/{r}/decision`).
+   *
+   * Deliberately `unknown`: the generated `Decision` type this operation resolves is stale — it
+   * predates the reconciled body and carries no `status`, `missing`, `outcome`, hashes or `mode`.
+   * Typing it as `Decision` here would push wrong member names into the app, and asserting a
+   * hand-written shape onto it would skip validation, so the served value keeps no compile-time
+   * type at this seam. The feature's `readDecisionBody` validates it before anything reads a field,
+   * and the decision-route task's regenerated SDK type replaces both in one change.
+   */
+  getDecision(runId: string): Promise<unknown> {
+    return this.gateway.call((client) => getRunDecision({ client, path: { r: runId } }));
   }
 
   /**
