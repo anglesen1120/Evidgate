@@ -1,7 +1,6 @@
-// The stale-lock takeover is the only place where a contender removes a lock it did not
-// create, so these specs interleave real contenders over real files in a temporary
-// directory. A contender is parked at a hook and released by the spec — never by a timer —
-// so the interleaving is the same on every machine.
+// Stale-lock takeover is the only path that removes a lock it did not create, so these
+// specs interleave real contenders over real files, each parked at a hook and released by
+// the spec rather than by a timer.
 import { randomUUID } from 'node:crypto';
 import { link, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -22,12 +21,10 @@ import {
   spoolLockFileMode,
   SpoolLockedError,
   takeoverLockFileName,
+  type SpoolLockHooks,
 } from './spoolLockTypes.js';
 
-/**
- * A rendezvous the spec opens by hand. `Promise.withResolvers` is ES2024 and the workspace
- * targets ES2022, so the executor form is the only option here.
- */
+/** A rendezvous the spec opens by hand; `Promise.withResolvers` is ES2024, the workspace ES2022. */
 function deferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
   let open: () => void = () => undefined;
   const promise = new Promise<void>((settle) => {
@@ -36,6 +33,55 @@ function deferred(): { readonly promise: Promise<void>; readonly resolve: () => 
     };
   });
   return { promise, resolve: open };
+}
+
+interface ContenderOptions {
+  readonly hooks?: SpoolLockHooks;
+  readonly hold?: boolean;
+}
+
+interface ContenderHandle {
+  readonly done: Promise<string>;
+  readonly failure: Promise<unknown>;
+  readonly running: Promise<void>;
+  release: () => void;
+}
+
+/**
+ * Launches contenders over one directory with a shared liveness probe and overlap counter.
+ * A `hold` contender parks inside its callback until `release`, so another contender can
+ * interleave; hooks park it before or after the quarantine rename.
+ */
+function contenderRace(directory: string, alivePids: readonly number[]) {
+  const probe = (pid: number): boolean => alivePids.includes(pid);
+  const stats = { peak: 0 };
+  let inFlight = 0;
+  const start = (pid: number, options: ContenderOptions = {}): ContenderHandle => {
+    const running = deferred();
+    const released = deferred();
+    const done = withSpoolLock(
+      directory,
+      async () => {
+        inFlight += 1;
+        stats.peak = Math.max(stats.peak, inFlight);
+        running.resolve();
+        try {
+          if (options.hold === true) await released.promise;
+          return `pid-${pid}`;
+        } finally {
+          inFlight -= 1;
+        }
+      },
+      {
+        pid,
+        now: () => fixedNow,
+        isProcessAlive: probe,
+        ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
+      },
+    );
+    return { done, failure: failureOf(done), running: running.promise, release: released.resolve };
+  };
+  return { start, stats };
 }
 
 describe('withSpoolLock — stale takeover', () => {
@@ -58,118 +104,60 @@ describe('withSpoolLock — stale takeover', () => {
 
   it('refuses a contender that outran the takeover window instead of moving the winner', async () => {
     await writeFile(lockPath, lockText(deadPid), { mode: spoolLockFileMode });
+    // Every contender is alive to the others; only the planted lock names a dead pid.
+    const race = contenderRace(directory, [1111, 2222, 3333]);
     const aParked = deferred();
     const releaseA = deferred();
     const aQuarantined = deferred();
     const releaseQuarantine = deferred();
-    const bRunning = deferred();
-    const releaseB = deferred();
-    const cRunning = deferred();
-    const releaseC = deferred();
-    // Every contender is alive to the others; only the planted lock names a dead pid.
-    const alivePids = [1111, 2222, 3333];
-    const probe = (pid: number): boolean => alivePids.includes(pid);
-    let inFlight = 0;
-    let maxInFlight = 0;
-    const enter = (): void => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-    };
-    const leave = (): void => {
-      inFlight -= 1;
-    };
-
     // A observes the dead lock and parks before it may touch the path.
-    const a = withSpoolLock(
-      directory,
-      () => {
-        enter();
-        try {
-          return Promise.resolve('a');
-        } finally {
-          leave();
-        }
-      },
-      {
-        pid: 1111,
-        now: () => fixedNow,
-        isProcessAlive: probe,
-        hooks: {
-          beforeTakeover: async () => {
-            aParked.resolve();
-            await releaseA.promise;
-          },
-          afterQuarantine: async () => {
-            aQuarantined.resolve();
-            await releaseQuarantine.promise;
-          },
+    const a = race.start(1111, {
+      hooks: {
+        beforeTakeover: async () => {
+          aParked.resolve();
+          await releaseA.promise;
+        },
+        afterQuarantine: async () => {
+          aQuarantined.resolve();
+          await releaseQuarantine.promise;
         },
       },
-    );
-    const aFailure = failureOf(a);
+    });
     await aParked.promise;
 
     // B takes over the dead lock, links its own and parks inside the callback.
-    const b = withSpoolLock(
-      directory,
-      async () => {
-        enter();
-        bRunning.resolve();
-        try {
-          await releaseB.promise;
-          return 'b';
-        } finally {
-          leave();
-        }
-      },
-      { pid: 2222, now: () => fixedNow, isProcessAlive: probe },
-    );
-    await bRunning.promise;
+    const b = race.start(2222, { hold: true });
+    await b.running;
 
     releaseA.resolve();
     // Either A is refused at once, or it parked after a rename it should never have done.
     const aPhase = await Promise.race([
-      aFailure.then(() => 'refused' as const),
+      a.failure.then(() => 'refused' as const),
       aQuarantined.promise.then(() => 'quarantined' as const),
     ]);
-
-    const c = withSpoolLock(
-      directory,
-      async () => {
-        enter();
-        cRunning.resolve();
-        try {
-          await releaseC.promise;
-          return 'c';
-        } finally {
-          leave();
-        }
-      },
-      { pid: 3333, now: () => fixedNow, isProcessAlive: probe },
-    );
+    const c = race.start(3333, { hold: true });
     const cPhase = await Promise.race([
-      c.then(
+      c.done.then(
         () => 'entered' as const,
         () => 'refused' as const,
       ),
-      cRunning.promise.then(() => 'entered' as const),
+      c.running.then(() => 'entered' as const),
     ]);
 
     try {
       expect(cPhase).toBe('refused');
       expect(aPhase).toBe('refused');
-      const locked = expectError(await aFailure, SpoolLockedError);
-      expect(locked.code).toBe('spool_locked');
-      expect(locked.holderPid).toBe(2222);
+      const locked = expectError(await a.failure, SpoolLockedError);
+      expect(locked).toMatchObject({ code: 'spool_locked', holderPid: 2222 });
       // B's lock was never moved: the path still names B and nothing is quarantined.
       expect(await readFile(lockPath, 'utf8')).toBe(lockText(2222));
       expect(await readdir(directory)).toEqual([spoolLockFileName]);
-      expect(maxInFlight).toBe(1);
+      expect(race.stats.peak).toBe(1);
     } finally {
-      releaseB.resolve();
+      b.release();
       releaseQuarantine.resolve();
-      releaseC.resolve();
-      await Promise.allSettled([a, b, c]);
+      c.release();
+      await Promise.allSettled([a.done, b.done, c.done]);
     }
     expect(await readdir(directory)).toEqual([]);
   });
@@ -178,116 +166,58 @@ describe('withSpoolLock — stale takeover', () => {
     // The observed lock records nothing (an empty file a crash left behind), so it is only a
     // name: the entry is released while we read it, and a live successor takes the path.
     await writeFile(lockPath, '', { mode: spoolLockFileMode });
+    const race = contenderRace(directory, [1111, 2222, 3333]);
     const entryRead = deferred();
     const releaseA = deferred();
     const aQuarantined = deferred();
     const releaseQuarantine = deferred();
-    const bRunning = deferred();
-    const releaseB = deferred();
-    const cRunning = deferred();
-    const releaseC = deferred();
-    const alivePids = [1111, 2222, 3333];
-    const probe = (pid: number): boolean => alivePids.includes(pid);
-    let inFlight = 0;
-    let maxInFlight = 0;
-    const enter = (): void => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-    };
-    const leave = (): void => {
-      inFlight -= 1;
-    };
-
-    const a = withSpoolLock(
-      directory,
-      () => {
-        enter();
-        try {
-          return Promise.resolve('a');
-        } finally {
-          leave();
-        }
-      },
-      {
-        pid: 1111,
-        now: () => fixedNow,
-        isProcessAlive: probe,
-        hooks: {
-          afterEntryRead: async () => {
-            entryRead.resolve();
-            await releaseA.promise;
-          },
-          afterQuarantine: async () => {
-            aQuarantined.resolve();
-            await releaseQuarantine.promise;
-          },
+    const a = race.start(1111, {
+      hooks: {
+        afterEntryRead: async () => {
+          entryRead.resolve();
+          await releaseA.promise;
+        },
+        afterQuarantine: async () => {
+          aQuarantined.resolve();
+          await releaseQuarantine.promise;
         },
       },
-    );
-    const aFailure = failureOf(a);
+    });
     await entryRead.promise;
 
-    // The empty entry is released and B links its own lock into the freed name. A hard link
-    // keeps the released inode alive, so B's lock cannot land on its number and the re-stat
-    // below differs from the observed entry on every filesystem.
+    // A hard link keeps the released inode alive, so B's lock cannot reuse its number and
+    // the re-stat below differs from the observed entry on every filesystem.
     const releasedEntry = join(root, 'released-empty-entry');
     await link(lockPath, releasedEntry);
     await rm(lockPath);
-    const b = withSpoolLock(
-      directory,
-      async () => {
-        enter();
-        bRunning.resolve();
-        try {
-          await releaseB.promise;
-          return 'b';
-        } finally {
-          leave();
-        }
-      },
-      { pid: 2222, now: () => fixedNow, isProcessAlive: probe },
-    );
-    await bRunning.promise;
+    const b = race.start(2222, { hold: true });
+    await b.running;
 
     releaseA.resolve();
     const aPhase = await Promise.race([
-      aFailure.then(() => 'refused' as const),
+      a.failure.then(() => 'refused' as const),
       aQuarantined.promise.then(() => 'quarantined' as const),
     ]);
-    const c = withSpoolLock(
-      directory,
-      async () => {
-        enter();
-        cRunning.resolve();
-        try {
-          await releaseC.promise;
-          return 'c';
-        } finally {
-          leave();
-        }
-      },
-      { pid: 3333, now: () => fixedNow, isProcessAlive: probe },
-    );
+    const c = race.start(3333, { hold: true });
     const cPhase = await Promise.race([
-      c.then(
+      c.done.then(
         () => 'entered' as const,
         () => 'refused' as const,
       ),
-      cRunning.promise.then(() => 'entered' as const),
+      c.running.then(() => 'entered' as const),
     ]);
-
     try {
       expect(cPhase).toBe('refused');
       expect(aPhase).toBe('refused');
-      expect(expectError(await aFailure, SpoolLockedError).holderPid).toBe(2222);
+      expect(expectError(await a.failure, SpoolLockedError).holderPid).toBe(2222);
       expect(await readFile(lockPath, 'utf8')).toBe(lockText(2222));
       expect(await readdir(directory)).toEqual([spoolLockFileName]);
-      expect(maxInFlight).toBe(1);
+      expect(race.stats.peak).toBe(1);
     } finally {
-      releaseB.resolve();
+      b.release();
       releaseQuarantine.resolve();
-      releaseC.resolve();
-      await Promise.allSettled([a, b, c]);
+      c.release();
+      await Promise.allSettled([a.done, b.done, c.done]);
     }
     expect(await readdir(directory)).toEqual([]);
   });
@@ -384,62 +314,37 @@ describe('withSpoolLock — stale takeover', () => {
     // fast one published its live mutex; deleting that by name would seat both as takers.
     await writeFile(lockPath, lockText(deadPid), { mode: spoolLockFileMode });
     await writeFile(mutexPath, lockText(4444), { mode: spoolLockFileMode });
+    // Every contender is alive to the others; the planted lock and mutex name dead pids.
+    const race = contenderRace(directory, [1111, 2222]);
     const reclaimParked = deferred();
     const releaseReclaim = deferred();
     const quarantined = deferred();
     const releaseQuarantine = deferred();
-    // Every contender is alive to the others; the planted lock and mutex name dead pids.
-    const alivePids = [1111, 2222];
-    const probe = (pid: number): boolean => alivePids.includes(pid);
-    // Which contenders got as far as holding the lock: exactly one may ever appear here.
-    const holders: string[] = [];
-
-    const delayed = withSpoolLock(
-      directory,
-      () => {
-        holders.push('delayed');
-        return Promise.resolve('delayed');
-      },
-      {
-        pid: 1111,
-        now: () => fixedNow,
-        isProcessAlive: probe,
-        hooks: {
-          beforeDeadMutexReclaim: async () => {
-            reclaimParked.resolve();
-            await releaseReclaim.promise;
-          },
+    const delayed = race.start(1111, {
+      hooks: {
+        beforeDeadMutexReclaim: async () => {
+          reclaimParked.resolve();
+          await releaseReclaim.promise;
         },
       },
-    );
-    const delayedFailure = failureOf(delayed);
+    });
     await reclaimParked.promise;
 
     // The fast contender reclaims that mutex, takes it, quarantines the stale lock and then
     // holds the mutex while the delayed breaker resumes.
-    const fast = withSpoolLock(
-      directory,
-      () => {
-        holders.push('fast');
-        return Promise.resolve('fast');
-      },
-      {
-        pid: 2222,
-        now: () => fixedNow,
-        isProcessAlive: probe,
-        hooks: {
-          afterQuarantine: async () => {
-            quarantined.resolve();
-            await releaseQuarantine.promise;
-          },
+    const fast = race.start(2222, {
+      hooks: {
+        afterQuarantine: async () => {
+          quarantined.resolve();
+          await releaseQuarantine.promise;
         },
       },
-    );
+    });
     await quarantined.promise;
 
     releaseReclaim.resolve();
     try {
-      const locked = expectError(await delayedFailure, SpoolLockedError);
+      const locked = expectError(await delayed.failure, SpoolLockedError);
       expect(locked.code).toBe('spool_locked');
       // The refused breaker names the taker in the mutex it moved, and that mutex is back.
       expect(locked.holderPid).toBe(2222);
@@ -447,9 +352,9 @@ describe('withSpoolLock — stale takeover', () => {
     } finally {
       releaseQuarantine.resolve();
     }
-    expect(await fast).toBe('fast');
+    expect(await fast.done).toBe('pid-2222');
     // One holder, and it is the contender whose live mutex the delayed breaker found.
-    expect(holders).toEqual(['fast']);
+    expect(race.stats.peak).toBe(1);
     expect(await readdir(directory)).toEqual([]);
   });
 });

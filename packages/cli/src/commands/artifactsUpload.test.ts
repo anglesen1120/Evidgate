@@ -313,6 +313,43 @@ describe('artifacts upload', () => {
     expect(stderr.join('')).toContain("run 'evidgate --help' for usage");
   });
 
+  // The shared flag helper refuses an empty required value, so `--file ''` fails as a usage
+  // error before any request rather than reaching the path guard (or `--run ''` the UUID
+  // check), which are the wrong errors for a flag that is present but empty.
+  it('refuses_an_empty_required_value_before_any_request', async () => {
+    const store = stubFetch(happyStore());
+    const { io, stdout, stderr } = capture();
+
+    await expect(
+      main(
+        [
+          'artifacts',
+          'upload',
+          '--run',
+          runId,
+          '--file',
+          '',
+          '--kind',
+          'trace',
+          '--execution-key',
+          executionKey,
+          '--dir',
+          root,
+        ],
+        devEnv(),
+        io,
+        { fetch: store.fetchImpl },
+      ),
+    ).resolves.toBe(3);
+
+    expect(store.calls).toHaveLength(0);
+    expect(stdout.join('')).toBe('');
+    expect(stderr.join('')).toContain(
+      'evidgate: error usage: --file must be a single, non-empty value',
+    );
+    expect(stderr.join('')).toContain("run 'evidgate --help' for usage");
+  });
+
   it('refuses_an_unknown_kind', async () => {
     const file = await evidence();
     const store = stubFetch(happyStore());

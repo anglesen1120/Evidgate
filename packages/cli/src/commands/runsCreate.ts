@@ -31,7 +31,9 @@ import { CliError } from '../errors.js';
 import { ExitCode } from '../exitCodes.js';
 import { serverErrorFromResponse, transportError } from '../serverError.js';
 
-import type { CommandDefinition, ParsedValues } from './index.js';
+import { flagValue, requiredFlag } from './eventsSendArgs.js';
+
+import type { CommandDefinition } from './index.js';
 
 /**
  * The usage-error hint `main.ts` attaches to its parse-level usage errors (`helpHint`
@@ -219,45 +221,6 @@ function usageError(message: string): CliError {
  */
 function codePointLength(value: string): number {
   return [...value].length;
-}
-
-/**
- * The single value of one option, or `undefined` when it was absent. Every option is
- * declared `multiple: true`, so `parseArgs` reports a repetition as an array instead of
- * silently keeping the last value; two or more entries (or a non-string entry) are a
- * `usage` error that names the flag and never its value.
- */
-function flagValue(values: ParsedValues, flag: string): string | undefined {
-  const value = values[flag];
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (!Array.isArray(value)) {
-    throw usageError(`--${flag} must be a single value`);
-  }
-  if (value.length !== 1) {
-    throw usageError(`--${flag} may be given only once`);
-  }
-  const [only] = value;
-  if (typeof only !== 'string') {
-    throw usageError(`--${flag} must be a single value`);
-  }
-  return only;
-}
-
-/** A required string option; absent is a `usage` error, a repetition is refused. */
-function requiredFlag(values: ParsedValues, flag: string): string {
-  const value = flagValue(values, flag);
-  if (value === undefined) {
-    throw usageError(`missing required flag --${flag}`);
-  }
-  if (value.length === 0) {
-    throw usageError(`--${flag} must be a single, non-empty value`);
-  }
-  return value;
 }
 
 /**

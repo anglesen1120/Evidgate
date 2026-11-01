@@ -124,11 +124,12 @@ Only a literal `PASS` exits 0:
   runs out.
 
 Everything else exits 3 with `evidgate: error <code>`: a transport failure, a
-`401` that a freshly minted token does not fix (one refresh is attempted), a
-`403` or `404`, a `5xx`/`429` that still fails after the bounded retries, a
-refused redirect, a decision body larger than 256 KiB, a body that is not JSON, a
-body that is not an object, a body without a `decision` member, and any
-`decision` value outside the four above (`"pass"`, `""`, a number).
+decision body that breaks or is aborted after its headers, a `401` that a
+freshly minted token does not fix (one refresh is attempted), a `403` or `404`,
+a `5xx`/`429` that still fails after the bounded retries, a refused redirect, a
+decision body larger than 256 KiB, a body that is not JSON, a body that is not
+an object, a body without a `decision` member, and any `decision` value outside
+the four above (`"pass"`, `""`, a number).
 
 `--wait` takes the same grammar as `EVIDGATE_SEND_DEADLINE`: bare seconds or an
 `s`/`m`/`h` suffix, greater than zero and at most 24 hours; anything else exits 3
@@ -146,8 +147,13 @@ command exits 3 — never 0. A token refresh keeps the same deadline, so a slow
 refresh cannot buy the replay a fresh window. The last poll is the exception: it
 starts on the deadline with the 1 ms minimum budget, so a decision that is already
 waiting there still counts. When that last request is instead cut off before it
-answers, the abort is not a verdict: a run that answered pending earlier exits 2,
-and only a run that never answered at all exits 3.
+answers, the abort is not a verdict and a run that answered pending earlier exits 2.
+Which timer ended the request decides that, not a clock reading: it stays
+exit 2 when an earlier attempt in the same poll was retried after a `5xx`/`429`,
+while a `401` refresh that outlives the wait is exit 3 `request_failed`.
+Every other way a wait can end after a pending answer exits 3, never 2: a final
+poll the server answers `5xx`/`429` past the bounded retries, a decision body that
+breaks or is aborted after its headers, and a token refresh that outlives the wait.
 
 Human mode prints `gate: <DECISION> (run <run_id>)` and one `  - <reason>` line per
 reason; a pending or timed-out run explains itself on stderr as
