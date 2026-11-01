@@ -8,6 +8,9 @@
 // mode, a non-regular file or unparseable content reads as absent, never as an error — and
 // opens it `O_NOFOLLOW`; both paths refuse a symlinked, foreign-owned or group/world-writable
 // cache directory, and a write drops the destination's entries bound to another credential.
+// A write that cannot complete — an unwritable directory or filesystem, or a directory refused
+// as unsafe — warns once through the installed writer and leaves the token in memory; it never
+// fails the command, because the cache only saves an exchange (contracts/cli.md §7).
 // Those owner, mode and `O_NOFOLLOW` guards are POSIX only; on win32 only a regular-file check
 // applies.
 import { createHash, randomUUID } from 'node:crypto';
@@ -26,7 +29,7 @@ import {
 import { join, resolve } from 'node:path';
 
 import { resolveTokenSource, type ResolvedConfig } from '../config.js';
-import { CliError } from '../errors.js';
+import { CliError, escapeControlCharacters } from '../errors.js';
 import { registerSecret } from '../redact.js';
 
 /** Refresh the token when it expires within this margin, so a request that starts now does
@@ -230,12 +233,48 @@ async function purgeRotatedEntries(config: TokenCacheConfig, keep: string): Prom
 }
 
 /**
+ * The writer a failed write warns to, and the once-per-invocation flag with it. `main` installs
+ * the redacting stderr writer at entry (and the install clears the flag), so a failed write
+ * reaches the operator once and can never carry a token; a spec installs its own collector and
+ * clears it after the case. A direct caller that installs nothing warns nowhere.
+ */
+let warnWriter: ((text: string) => void) | undefined;
+let warned = false;
+
+export function setCacheWarningWriter(write: ((text: string) => void) | undefined): void {
+  warnWriter = write;
+  warned = false;
+}
+
+/** The errno code of a failed filesystem call, or the generic phrase when it carries none. */
+function failureReason(error: unknown): string {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+  return typeof code === 'string' && code.length > 0 ? code : 'write failed';
+}
+
+/**
+ * One warning, never a token and never a path below the cache directory: the entry's digest
+ * names and the token itself are what must not reach a log.
+ */
+function warnCacheUnwritable(cacheDir: string, reason: string): void {
+  if (warnWriter === undefined || warned) {
+    return;
+  }
+  warned = true;
+  warnWriter(
+    `evidgate: warning: could not write the token cache in ${escapeControlCharacters(cacheDir)} ` +
+      `(${reason}); this run keeps its token in memory\n`,
+  );
+}
+
+/**
  * Writes the cache file atomically: a `0600` temp file in the same directory (opened
  * `wx`, then `chmod`ed so the umask cannot widen it) is renamed over the target, which
  * replaces a symlink rather than following it. The directory must be a real directory
- * owned by the current user and not group/world-writable, else the write is refused; a
- * group/world-readable mode is tightened to `0700`. Any failure is `token_cache_error` and
- * the temp file is removed best-effort; the message never carries a token value.
+ * owned by the current user and not group/world-writable, else nothing is written at all;
+ * a group/world-readable mode is tightened to `0700`. Any failure warns once and returns,
+ * so the caller keeps the token it already holds.
  */
 export async function writeCachedToken(
   config: TokenCacheConfig,
@@ -249,7 +288,8 @@ export async function writeCachedToken(
     if (process.platform !== 'win32') {
       const dirStats = await lstat(resolve(config.cacheDir));
       if (!dirIsSafe(dirStats)) {
-        throw new CliError('could not write the token cache', { code: 'token_cache_error' });
+        warnCacheUnwritable(config.cacheDir, 'unsafe directory');
+        return;
       }
       if ((dirStats.mode & 0o077) !== 0) {
         await chmod(config.cacheDir, 0o700);
@@ -264,9 +304,9 @@ export async function writeCachedToken(
     }
     await rename(temp, path);
     await purgeRotatedEntries(config, path);
-  } catch {
+  } catch (error) {
     await unlink(temp).catch(() => undefined);
-    throw new CliError('could not write the token cache', { code: 'token_cache_error' });
+    warnCacheUnwritable(config.cacheDir, failureReason(error));
   }
 }
 

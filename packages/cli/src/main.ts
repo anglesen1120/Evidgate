@@ -6,6 +6,7 @@
 import { parseArgs, type ParseArgsOptionsConfig } from 'node:util';
 
 import type { ExchangeDeps } from './auth/exchange.js';
+import { setCacheWarningWriter } from './auth/tokenCache.js';
 import {
   resolveCommand,
   usageText,
@@ -57,6 +58,9 @@ export async function main(
   resetSecrets();
   registerEnvSecrets(env);
   const output = createRedactingIo(io);
+  // A token cache that cannot be written is a warning, not a failure: it reaches this same
+  // redacting writer once per invocation (contracts/cli.md §7).
+  setCacheWarningWriter((line) => output.stderr(line));
   // The mask line must reach the runner verbatim, so it is written to the RAW stdout.
   // `redact(value) !== value` is true only for a registered secret, and the CR/LF guard
   // keeps a value from forging a second workflow command.

@@ -268,7 +268,7 @@ position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 | `transport`                | 3    | the exchange request failed at the network layer, timed out (30 s) or was refused a redirect                                                                                                                                                                                            |
 | `exchange_failed`          | 3    | a non-2xx reply without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                                                                                          |
 | `oidc_request_failed`      | 3    | the `ACTIONS_ID_TOKEN_REQUEST_URL` fetch failed (non-2xx, or a body without `value`)                                                                                                                                                                                                    |
-| `token_cache_error`        | 3    | the token cache could not be written or deleted; the message names the operation, never a token value                                                                                                                                                                                   |
+| `token_cache_error`        | 3    | `auth logout` could not delete the token cache; the message names the operation, never a token value. A cache **write** that fails is not this code: it is one stderr warning and the command continues (§7)                                                                            |
 | `manifest_unreadable`      | 3    | the manifest file could not be read (missing, unreadable, not a regular file or empty); the message names the errno code, never the path or the content                                                                                                                                 |
 | `manifest_too_large`       | 3    | the manifest file is larger than the server's 256 KiB transport cap; refused locally, before any request                                                                                                                                                                                |
 | `request_failed`           | 3    | a non-2xx reply from a project-scoped command (`manifests upload`, `runs create`) without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                        |
@@ -433,8 +433,8 @@ Cache:
   scheme is ignored on read and deleted by a purge.
 - Mode `0600` in a `0700` directory; the directory is `chmod 0700` when it is
   owned by the user. A cache directory that is a symlink, is owned by another
-  uid or is group/world-writable (POSIX) is refused (`token_cache_error`) on
-  write and treated as no cache on read. The write is atomic — a
+  uid or is group/world-writable (POSIX) is never written into (the write warns
+  and gives up, §7) and is treated as no cache on read. The write is atomic — a
   `0600` temp file in the same directory is renamed over the target, which
   replaces a symlink rather than following it; the cache file is opened with
   `O_NOFOLLOW`. After a successful write, the destination's entries bound to
@@ -456,8 +456,18 @@ Cache:
   A purge also removes a `.ci-token.<uuid>.tmp` file that a crashed write left in
   `cache_dir` (only that exact name shape; it holds a whole token at `0600` and
   its name carries no destination).
-- `[DECISION]` a cache write or delete failure is exit 3 `token_cache_error`
-  whose message names the operation and never a token value.
+- `[DECISION]` (owner decision 2026-11-01 (chat), recorded by the coordinator)
+  a cache write that fails for any cause — an unwritable directory, a read-only
+  filesystem, or a directory refused as unsafe — prints ONE `evidgate: warning:`
+  line on stderr, keeps the exchanged token in memory for this invocation and
+  lets the command finish with its normal exit code. The line names the cache
+  directory and the errno code, never a token and never a path below
+  `cache_dir` (the entry name digests the destination and the credential). The
+  unsafe-directory guard still refuses the write, and an untrusted entry is
+  still ignored on read.
+- `[DECISION]` a cache delete failure is still exit 3 `token_cache_error` whose
+  message names the operation and never a token value (`auth logout` must not
+  silently leave a token on disk).
 - `[note]` worst-case time to failure is bounded at ~150 s: 30 s for the
   `ACTIONS_ID_TOKEN_REQUEST_URL` fetch + 30 s for the exchange + up to 60 s
   `Retry-After` + 30 s for the single retry.
