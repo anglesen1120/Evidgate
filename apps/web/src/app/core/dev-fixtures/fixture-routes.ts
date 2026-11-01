@@ -168,6 +168,16 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   },
   // 09.3.1-T2: detail states are selected explicitly by variant, not inferred from the run id.
   { operationId: 'getRun', method: 'GET', path: '/runs/{r}' },
+  // The run-detail decision read: its state is selected by variant (`ok` is the pending body),
+  // never inferred from the run id, the same way `getRun`'s is.
+  { operationId: 'getRunDecision', method: 'GET', path: '/runs/{r}/decision' },
+  // The evidence revision list. It is not cursor-keyed — the `ok` page ends the walk
+  // (`next_cursor: null`) — so no request value can select a different document.
+  {
+    operationId: 'listEvidenceRevisions',
+    method: 'GET',
+    path: '/runs/{run_id}/evidence-revisions',
+  },
   // 09.3.1-T4: the attempts keyset walk; `run-attempts-page-2` declares page 1's cursor.
   {
     operationId: 'listRunAttempts',

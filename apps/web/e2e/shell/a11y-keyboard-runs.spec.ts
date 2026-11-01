@@ -109,15 +109,20 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(back).toBeFocused();
   expect((await back.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
-  // The manifest panel's copy button follows "Back to runs", then the attempts table's scroll region
-  // (a named stop); the default attempts page (seven rows, no further cursor) has no pager or
-  // load-more button, so one more Tab after the region leaves the document.
+  // The manifest panel's copy button follows "Back to runs", then the evidence panel's revision
+  // picker (the page is pinned to a frozen revision, so it is a real stop of the walk), then the
+  // attempts table's scroll region (a named stop); the default attempts page (seven rows, no
+  // further cursor) has no pager or load-more button, so one more Tab after the region leaves the
+  // document.
   await page.keyboard.press('Tab');
   const copy = page.getByRole('button', { name: 'Copy full manifest hash' });
   await expect(copy).toBeFocused();
   expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
   await expect(page.locator('app-attempts-table button')).toHaveCount(0);
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('combobox', { name: 'Evidence revision' })).toBeFocused();
 
   await page.keyboard.press('Tab');
   await expect(page.getByRole('region', { name: 'Attempts table' })).toBeFocused();

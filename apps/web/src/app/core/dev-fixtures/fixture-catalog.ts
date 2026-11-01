@@ -152,6 +152,9 @@ import suiteRevisionNotFound from '../../../../../../fixtures/web-api/suite-revi
 import suiteRevisionPublished from '../../../../../../fixtures/web-api/suite-revision-published/input.json';
 import suiteRevisionUnavailable from '../../../../../../fixtures/web-api/suite-revision-unavailable/input.json';
 
+import { DECISION_DOCUMENTS } from './decision-fixtures';
+import { EVIDENCE_REVISION_DOCUMENTS } from './evidence-revision-fixtures';
+
 /**
  * One fixture document, exactly as `fixtures/web-api/<name>/input.json` stores it.
  *
@@ -799,11 +802,40 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
     cursor: 'attempts-cursor-after-checkout-2',
   },
   { name: 'run-attempts-unavailable', document: runAttemptsUnavailable },
+  { name: 'run-decision', document: DECISION_DOCUMENTS['run-decision'] },
+  {
+    name: 'run-decision-evaluated-fail-missing-shard',
+    document: DECISION_DOCUMENTS['run-decision-evaluated-fail-missing-shard'],
+  },
+  {
+    name: 'run-decision-evaluated-pass',
+    document: DECISION_DOCUMENTS['run-decision-evaluated-pass'],
+  },
+  {
+    name: 'run-decision-shadow-refused',
+    document: DECISION_DOCUMENTS['run-decision-shadow-refused'],
+  },
+  {
+    name: 'run-decision-unavailable',
+    document: DECISION_DOCUMENTS['run-decision-unavailable'],
+  },
   { name: 'run-detail', document: runDetail },
   { name: 'run-detail-forbidden', document: runDetailForbidden },
   { name: 'run-detail-not-found', document: runDetailNotFound },
   { name: 'run-detail-null-evidence', document: runDetailNullEvidence },
   { name: 'run-detail-ref-format', document: runDetailRefFormat },
+  {
+    name: 'run-evidence-revisions',
+    document: EVIDENCE_REVISION_DOCUMENTS['run-evidence-revisions'],
+  },
+  {
+    name: 'run-evidence-revisions-empty',
+    document: EVIDENCE_REVISION_DOCUMENTS['run-evidence-revisions-empty'],
+  },
+  {
+    name: 'run-evidence-revisions-unavailable',
+    document: EVIDENCE_REVISION_DOCUMENTS['run-evidence-revisions-unavailable'],
+  },
   { name: 'run-list', document: runList },
   { name: 'run-list-250', document: runList250 },
   { name: 'run-list-empty', document: runListEmpty },
