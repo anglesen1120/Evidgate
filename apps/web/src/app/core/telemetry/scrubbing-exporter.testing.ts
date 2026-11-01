@@ -64,7 +64,7 @@ function spanFields(): Omit<ReadableSpan, 'parentSpanContext'> {
       'http.route': `/v1/projects/${RUN_ID}/runs`,
       'http.url': `https://acme.example.test/v1/runs?token=${CREDENTIAL}`,
       'user.email': EMAIL,
-      // No attribute carries message text any more (D-S69-Q2): a span that still presents one
+      // No attribute carries message text any more: a span that still presents one
       // must leave without it.
       'error.message': `boom "${EMAIL}" for ${CREDENTIAL}`,
     },
