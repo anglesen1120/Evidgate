@@ -319,5 +319,12 @@ describe('auth login / auth logout', () => {
     const json = capture();
     await expect(main(['auth', 'logout', '--json'], env, json.io)).resolves.toBe(0);
     expect(json.stdout.join('')).toBe('{"ok":true}\n');
+
+    // The source may be gone by the time an operator logs out: the purge is scoped to the
+    // destination in the file name, not to the credential that seeded the entry.
+    const seeded = resolveConfig({ env: { ...env, EVIDGATE_INGEST_TOKEN: 'egt_ingest_secret' } });
+    await writeCachedToken(seeded, { token: 'egt_ci_token', expiresAt: '2030-01-01T00:00:00Z' });
+    await expect(main(['auth', 'logout'], env, capture().io)).resolves.toBe(0);
+    await expect(readCachedToken(seeded)).resolves.toBeUndefined();
   });
 });
