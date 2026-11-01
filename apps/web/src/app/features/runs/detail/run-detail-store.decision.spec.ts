@@ -55,6 +55,7 @@ describe('RunDetailStore decision', () => {
     expect(store.decision()).toEqual({
       kind: 'evaluated',
       decision: 'FAIL',
+      evaluationId: 'evaluation-1',
       evidenceRevision: 4,
       completeness: 'incomplete',
       outcome: 'has_failures',

@@ -260,6 +260,18 @@ for (const locale of LOCALES) {
     expect(pinnedRevision(page)).toBe(String(OLDEST_REVISION.revision_no));
   });
 
+  test(`a fragment lands on the attempt row and focuses it (${locale})`, async ({ page }) => {
+    // The fixture's first attempt: its row id is the documented anchor shape.
+    const anchor = 'attempt-4da7edd402de84998aaa51a9d5f3a67f44219ebd3f25424664882f8b722953e3-1';
+    await page.goto(`${detailPath(locale)}#${anchor}`);
+    await ready(page);
+
+    const target = page.locator(`#${anchor}`);
+    await expect(target).toBeVisible();
+    await expect(target).toBeInViewport();
+    await expect(target).toBeFocused();
+  });
+
   test(`a run with no frozen revision says so and infers no verdict (${locale})`, async ({
     page,
   }) => {

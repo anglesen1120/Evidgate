@@ -2,6 +2,7 @@ import { formatDate } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   input,
   LOCALE_ID,
@@ -37,6 +38,25 @@ export class EvidenceRevisionSelectorComponent {
     loadOlder: $localize`:@@runs.evidence.load-older:Load older revisions`,
     loadingOlder: $localize`:@@runs.evidence.loading-older:Loading older revisions`,
   };
+
+  /** The pin as the control's own value, so the control never shows a revision it is not pinned to. */
+  protected readonly selectedValue = computed(() => {
+    const pinned = this.selectedRevision();
+    return pinned === null ? null : String(pinned);
+  });
+
+  /** The pin is not on a loaded page: a disabled placeholder stands in for it, never another row. */
+  protected readonly pinnedMissing = computed(() => {
+    const pinned = this.selectedRevision();
+    return pinned !== null && !this.revisions().some((row) => row.revision_no === pinned);
+  });
+
+  protected readonly notLoadedLabel = computed(() => {
+    const pinned = this.selectedRevision();
+    return pinned === null
+      ? ''
+      : $localize`:@@runs.evidence.revision-not-loaded:Revision ${pinned}:revision: (not loaded)`;
+  });
 
   /** `Revision {revision} · {createdAt} UTC`: the number is the key, the time is context. */
   protected optionLabel(revision: EvidenceRevision): string {

@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { MISSING_CODES, type DecisionViewModel } from '../decision/decision-view-model';
 import { EvidencePanelComponent } from './evidence-panel.component';
 import { missingReasonEntries, type ConfirmedMissingTarget } from './missing-reasons';
@@ -36,6 +37,7 @@ function evaluated(overrides: Partial<Omit<EvaluatedDecision, 'kind'>> = {}): Ev
   return {
     kind: 'evaluated',
     decision: 'FAIL',
+    evaluationId: 'evaluation-4',
     evidenceRevision: 4,
     completeness: 'incomplete',
     outcome: 'has_failures',
@@ -150,7 +152,7 @@ describe('MissingReasonList rendering', () => {
   beforeEach(() =>
     TestBed.configureTestingModule({
       imports: [EvidencePanelComponent],
-      providers: [provideZonelessChangeDetection()],
+      providers: [provideZonelessChangeDetection(), provideRouter([])],
     }),
   );
   afterEach(() => TestBed.resetTestingModule());
@@ -187,9 +189,11 @@ describe('MissingReasonList rendering', () => {
       'missing_result',
     ]);
     const links = [...root.querySelectorAll<HTMLAnchorElement>('.reason-link')];
+    // The panel qualifies the fragment with the current route path, so the link is copyable and
+    // openable in a new tab instead of resolving against `<base href="/">`.
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '#producer-shard-3',
-      '#attempt-exec_42-2',
+      '/#producer-shard-3',
+      '/#attempt-exec_42-2',
     ]);
     expect(links.map((link) => link.textContent?.trim())).toEqual([
       'View producer shard-3',

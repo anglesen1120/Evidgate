@@ -8,6 +8,7 @@ import { DecisionViewComponent } from './decision-view.component';
 const EVALUATED: DecisionViewModel = {
   kind: 'evaluated',
   decision: 'FAIL',
+  evaluationId: '018f0000-0000-7000-8000-0000000e0002',
   evidenceRevision: 4,
   completeness: 'incomplete',
   outcome: 'has_failures',
@@ -88,6 +89,14 @@ describe('DecisionViewComponent', () => {
       Array.from(root.querySelectorAll('.decision-reason-list li')).map((it) => it.textContent),
     ).toEqual(['critical_not_executed', 'expected_count_zero', 'critical_not_executed']);
     expect(text(root, '[data-decision-revision] dd')).toBe('4');
+    expect(text(root, '[data-decision-evaluation-id] dt')).toBe('Evaluation ID');
+    expect(text(root, '[data-decision-evaluation-id] dd')).toBe(
+      '018f0000-0000-7000-8000-0000000e0002',
+    );
+    expect(
+      root.querySelector('[data-decision-evaluation-id] dd bdi')?.textContent?.trim(),
+      'the evaluation id must be isolated from the surrounding direction',
+    ).toBe('018f0000-0000-7000-8000-0000000e0002');
     expect(text(root, '[data-decision-policy] dd')).toBe('sha256:policy-hash');
     expect(text(root, '[data-decision-manifest] dd')).toBe('sha256:manifest-hash');
     expect(text(root, '[data-decision-evaluator] dd')).toBe('1.4.0');

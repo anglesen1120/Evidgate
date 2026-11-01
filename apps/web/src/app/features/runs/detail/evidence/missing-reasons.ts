@@ -14,7 +14,7 @@ export type ConfirmedMissingTarget = {
   readonly target: EvidenceTarget;
 };
 
-/** Which identity a literal may name, per the closed vocabulary of 00 §8.5. */
+/** Which identity a literal may name, per the closed missing-code vocabulary. */
 type TargetKind = EvidenceTarget['kind'] | 'none';
 
 const TARGET_KIND: Record<MissingCode, TargetKind> = {
@@ -108,7 +108,7 @@ export function missingReasonEntries(
       text:
         targets.length > 0 || kind === 'none'
           ? explanation(code)
-          : `${explanation(code)} ${$localize`:@@runs.evidence.target-unavailable:Target details unavailable`}`,
+          : $localize`:@@runs.evidence.target-unavailable:${explanation(code)}:EXPLANATION: Target details unavailable`,
     });
     for (const target of targets) entries.push(targetEntry(target));
   }

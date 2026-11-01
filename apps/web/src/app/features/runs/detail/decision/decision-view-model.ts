@@ -16,6 +16,7 @@ export type DecisionViewModel =
   | {
       readonly kind: 'evaluated';
       readonly decision: 'PASS' | 'FAIL' | 'INCONCLUSIVE';
+      readonly evaluationId: string;
       readonly evidenceRevision: number;
       readonly completeness: 'complete' | 'incomplete';
       readonly outcome: 'all_passed' | 'has_failures' | 'no_results';

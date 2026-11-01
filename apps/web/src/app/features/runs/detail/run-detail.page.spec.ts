@@ -10,6 +10,7 @@ import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { RunDataService } from '../data/run-data.service';
 import { RunDetailPage } from './run-detail.page';
+import { revision, revisionPage, deferred } from './run-detail-store.fixtures';
 import { routes } from '../runs.routes';
 
 // Both bodies are validated against the current RunStateDto by fixture-contract.spec.ts.
@@ -73,11 +74,22 @@ describe('RunDetailPage', () => {
     });
   });
   afterEach(() => TestBed.resetTestingModule());
-  async function open(id = run.run_id) {
+  async function open(id = run.run_id, fragment = '', query = '') {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl(`/projects/project-1/runs/${id}`, RunDetailPage);
-    await harness.fixture.whenStable();
+    await harness.navigateByUrl(
+      `/projects/project-1/runs/${id}${query}${fragment === '' ? '' : `#${fragment}`}`,
+      RunDetailPage,
+    );
+    await settle(harness);
     return { harness, root: harness.routeNativeElement! };
+  }
+  /** One macrotask after the stable fixture drains the pin write-back and the render handoffs. */
+  async function settle(harness: RouterTestingHarness): Promise<void> {
+    await harness.fixture.whenStable();
+    const tick = deferred<void>();
+    setTimeout(tick.resolve, 0);
+    await tick.promise;
+    await harness.fixture.whenStable();
   }
   it('loads a lazy deep link with its own heading and verbatim header values, no derived verdict', async () => {
     const { root } = await open();
@@ -354,5 +366,83 @@ describe('RunDetailPage', () => {
     expect(evidence.textContent).not.toContain('missing_shard');
     // The run itself is still readable: only the decision read was refused.
     expect(root.querySelector('app-run-header')).not.toBeNull();
+  });
+  it('renders the evidence region while the decision read has not answered', async () => {
+    const decision = deferred<unknown>();
+    getDecision.mockReturnValue(decision.promise);
+    listEvidenceRevisions.mockResolvedValue(revisionPage([revision({ revision_no: 4 })]));
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl(`/projects/project-1/runs/${run.run_id}`, RunDetailPage);
+    await harness.fixture.whenStable();
+    const root = harness.routeNativeElement!;
+    const evidence = root.querySelector('app-evidence-panel');
+    expect(evidence).not.toBeNull();
+    expect(evidence?.querySelector('#evidence-title')?.textContent?.trim()).toBe('Evidence');
+    // No decision answer yet: the region shows its own neutral state, never a verdict.
+    expect(evidence?.querySelector('[data-evidence-completeness]')?.textContent).toContain(
+      'Evidence status unavailable',
+    );
+    expect(root.textContent).not.toContain('PASS');
+    decision.resolve(pendingBody());
+    await settle(harness);
+    expect(harness.routeNativeElement?.querySelector('app-decision-chip')?.textContent).toContain(
+      'pending',
+    );
+  });
+  it('lands on the attempt fragment once the rows render, without paging on its own', async () => {
+    const scrollIntoView = vi.fn();
+    const original = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    try {
+      const target = attemptPage.items[0]!;
+      const anchor = `attempt-${encodeURIComponent(target.execution_key)}-${target.attempt_no}`;
+      const { root } = await open(run.run_id, anchor);
+      const row = root.querySelector<HTMLElement>(`[id="${anchor}"]`);
+      expect(row).not.toBeNull();
+      expect(document.activeElement).toBe(row);
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      // The target was on the first page: the landing never reads another page by itself.
+      expect(listAttempts).toHaveBeenCalledTimes(1);
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+      else Object.defineProperty(Element.prototype, 'scrollIntoView', original);
+    }
+  });
+  it('leaves an unresolvable fragment alone instead of paginating or moving focus', async () => {
+    const { root } = await open(run.run_id, 'attempt-not-on-a-loaded-page-1');
+    expect(root.querySelector('app-attempts-table')).not.toBeNull();
+    expect(document.activeElement).toBe(document.body);
+    expect(listAttempts).toHaveBeenCalledTimes(1);
+  });
+  it('moves focus to the evidence heading when "View latest revision" removes its control', async () => {
+    listEvidenceRevisions.mockResolvedValue(
+      revisionPage([revision({ revision_no: 4 }), revision({ revision_no: 3 })]),
+    );
+    getDecision.mockResolvedValue(liveBody());
+    const { harness, root } = await open(run.run_id, '', '?evidence_revision=3');
+    const banner = root.querySelector('[data-evidence-newer]');
+    expect(banner).not.toBeNull();
+    (banner?.querySelector('button') as HTMLButtonElement).focus();
+    (banner?.querySelector('button') as HTMLButtonElement).click();
+    await settle(harness);
+    expect(root.querySelector('[data-evidence-newer]')).toBeNull();
+    expect(document.activeElement?.id).toBe('evidence-title');
+  });
+  it('moves focus to the evidence heading when the decision mismatch action disappears', async () => {
+    listEvidenceRevisions.mockResolvedValue(
+      revisionPage([revision({ revision_no: 4 }), revision({ revision_no: 3 })]),
+    );
+    getDecision.mockResolvedValue(liveBody());
+    const { harness, root } = await open(run.run_id, '', '?evidence_revision=3');
+    const action = root.querySelector<HTMLButtonElement>('[data-decision-mismatch] button');
+    expect(action).not.toBeNull();
+    action!.focus();
+    action!.click();
+    await settle(harness);
+    expect(root.querySelector('[data-decision-mismatch]')).toBeNull();
+    expect(document.activeElement?.id).toBe('evidence-title');
   });
 });

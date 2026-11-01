@@ -1,4 +1,4 @@
-import { readDecisionBody } from '../../data/decision-body';
+import { readDecisionBody, type DecisionBody } from '../../data/decision-body';
 import { toDecisionCandidate } from './decision-mapper';
 
 /**
@@ -61,6 +61,7 @@ describe('decision body and view mapper', () => {
     expect(map(body)).toEqual({
       kind: 'evaluated',
       decision: 'FAIL',
+      evaluationId: '6f1d0f43-6dd4-4f43-9d7a-2f5a6f3f1a2b',
       evidenceRevision: 4,
       completeness: 'incomplete',
       outcome: 'has_failures',
@@ -106,18 +107,65 @@ describe('decision body and view mapper', () => {
     ['mode is null', { mode: null }],
     ['decision is null', { decision: null }],
     ['evaluation_id is null', { evaluation_id: null }],
+    ['evaluation_id is empty', { evaluation_id: '' }],
+    ['evaluation_id is whitespace only', { evaluation_id: '  ' }],
+    ['evaluation_id is longer than an identifier', { evaluation_id: 'e'.repeat(513) }],
     ['policy_hash is empty', { policy_hash: '' }],
+    ['policy_hash is whitespace only', { policy_hash: '   ' }],
     ['manifest_hash is absent', { manifest_hash: undefined }],
+    ['policy_hash is longer than a digest', { policy_hash: 'p'.repeat(513) }],
+    ['manifest_hash is longer than a digest', { manifest_hash: 'm'.repeat(513) }],
+    ['evaluator_version is longer than a version', { evaluator_version: 'v'.repeat(513) }],
+    [
+      'completeness is incomplete with an empty missing list',
+      { completeness: 'incomplete', missing: [] },
+    ],
+    [
+      'completeness is complete with a non-empty missing list',
+      { completeness: 'complete', missing: ['missing_shard'] },
+    ],
   ])('refuses an evaluated body whose %s', (_name, override) => {
     expect(map({ ...evaluated(), ...override })).toEqual(CONTRACT_INVALID);
   });
 
-  it.each([0, -1, 3.5, '4', 'three'])(
+  it.each([0, -1, 3.5, 2 ** 53, '4', 'three'])(
     'refuses the evidence revision %s without coercing it',
     (revision) => {
       expect(map(evaluated({ evidence_revision: revision }))).toEqual(CONTRACT_INVALID);
     },
   );
+
+  it('accepts the largest safe revision and the longest accepted provenance string', () => {
+    expect(
+      map(
+        evaluated({
+          evidence_revision: Number.MAX_SAFE_INTEGER,
+          policy_hash: 'p'.repeat(512),
+          manifest_hash: 'm'.repeat(512),
+          evaluator_version: 'v'.repeat(512),
+        }),
+      ),
+    ).toMatchObject({ kind: 'evaluated', evidenceRevision: Number.MAX_SAFE_INTEGER });
+  });
+
+  it('refuses a body the wire parser cannot vouch for once it reaches the mapper', () => {
+    const body = readDecisionBody(evaluated()) as DecisionBody;
+    expect(body).not.toBeNull();
+    expect(toDecisionCandidate({ ...body, evidence_revision: 2 ** 53 })).toEqual(CONTRACT_INVALID);
+    expect(toDecisionCandidate({ ...body, evaluation_id: '' })).toEqual(CONTRACT_INVALID);
+    expect(toDecisionCandidate({ ...body, evaluation_id: '  ' })).toEqual(CONTRACT_INVALID);
+    expect(toDecisionCandidate({ ...body, evaluation_id: 'e'.repeat(513) })).toEqual(
+      CONTRACT_INVALID,
+    );
+    expect(toDecisionCandidate({ ...body, policy_hash: ' '.repeat(3) })).toEqual(CONTRACT_INVALID);
+    expect(toDecisionCandidate({ ...body, policy_hash: 'p'.repeat(513) })).toEqual(
+      CONTRACT_INVALID,
+    );
+    expect(toDecisionCandidate({ ...body, completeness: 'incomplete', missing: [] })).toEqual(
+      CONTRACT_INVALID,
+    );
+    expect(toDecisionCandidate({ ...body, completeness: 'complete' })).toEqual(CONTRACT_INVALID);
+  });
 
   it('refuses a pending body that carries an evaluation-derived member', () => {
     expect(map(pending({ decision: 'PASS' }))).toEqual(CONTRACT_INVALID);

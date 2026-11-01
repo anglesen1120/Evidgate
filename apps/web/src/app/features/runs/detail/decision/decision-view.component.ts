@@ -67,6 +67,7 @@ export class DecisionViewComponent {
     noReasons: $localize`:@@runs.decision.no-reasons:No decision reasons reported`,
     status: $localize`:@@runs.decision.status:Evaluation status`,
     evidenceRevision: $localize`:@@runs.decision.evidence-revision:Decision evidence revision`,
+    evaluationId: $localize`:@@runs.decision.evaluation-id:Evaluation ID`,
     policyHash: $localize`:@@runs.decision.policy-hash:Policy hash`,
     manifestHash: $localize`:@@runs.decision.manifest-hash:Manifest hash`,
     evaluatorVersion: $localize`:@@runs.decision.evaluator-version:Evaluator version`,

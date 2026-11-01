@@ -200,6 +200,24 @@ describe('RunDetailStore revisions', () => {
     expect(subject.pinnedRevision()).toBe(pinned);
   });
 
+  it('ignores a pin that is not a canonical decimal, however it was produced', async () => {
+    listEvidenceRevisions.mockResolvedValue(revisionPage([revision({ revision_no: 4 })]));
+    const subject = store();
+    await subject.load(run.run_id);
+    const pinned = subject.pinnedRevision();
+    // A number has no spelling: `1e3` and `0x10` are 1000 and 16 here, so the range and the
+    // integer check are what a typed call site can refuse. The string forms are refused by
+    // `parsePinnedRevision` before they reach this store.
+    for (const invalid of [1e21, 1.5, 1_000_000_000, 0, -2]) {
+      subject.applyUrlPin(invalid);
+      subject.pinRevision(invalid);
+      expect(subject.pinnedRevision()).toBe(pinned);
+    }
+    // The canonical maximum is still a pin.
+    subject.applyUrlPin(999_999_999);
+    expect(subject.pinnedRevision()).toBe(999_999_999);
+  });
+
   it('replaces the revision region on a route change instead of keeping the old rows', async () => {
     listEvidenceRevisions.mockResolvedValueOnce(
       revisionPage([revision({ revision_no: 7, evaluation_id: 'evaluation-7' })]),

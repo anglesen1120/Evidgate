@@ -40,6 +40,20 @@ const OUTCOMES: Record<string, true> = {
 };
 const MODES: Record<string, true> = { live: true, shadow: true };
 
+/**
+ * The longest provenance identifier the surface renders as one line. A hash or version longer than
+ * this is not a digest the contract can carry, so it is a malformed body rather than a long value.
+ */
+export const MAX_PROVENANCE_LENGTH = 512;
+
+/** Provenance and identity members: a short digest, version or id string, never a document. */
+const BOUNDED_MEMBERS = [
+  'evaluation_id',
+  'policy_hash',
+  'manifest_hash',
+  'evaluator_version',
+] as const;
+
 /** Every member is required: a receiver must see the member, even when it is null. */
 const MEMBERS = [
   'status',
@@ -60,10 +74,12 @@ const MEMBERS = [
 /**
  * The body when the served value has the contract's shape and value types, otherwise `null`.
  *
- * Shape only: whether the members agree with each other (a pending body carrying a decision, an
- * evaluated body with a null member) is the mapper's question, because the answer is a presentation
- * state (`unavailable('contract')`), not a different wire type. Values are never coerced — a numeric
- * string in `evidence_revision` is a malformed body, not a revision.
+ * Shape and value bounds only: whether the members agree with each other (a pending body carrying a
+ * decision, an evaluated body with a null member) is the mapper's question, because the answer is a
+ * presentation state (`unavailable('contract')`), not a different wire type. Values are never
+ * coerced — a numeric string in `evidence_revision` is a malformed body, not a revision — and a
+ * revision below `1`, a blank hash or a hash-shaped string past `MAX_PROVENANCE_LENGTH` is
+ * malformed for the same reason.
  */
 export function readDecisionBody(value: unknown): DecisionBody | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
@@ -75,7 +91,12 @@ export function readDecisionBody(value: unknown): DecisionBody | null {
   if (body['outcome'] !== null && !allows(OUTCOMES, body['outcome'])) return null;
   if (body['mode'] !== null && !allows(MODES, body['mode'])) return null;
   const revision = body['evidence_revision'];
-  if (revision !== null && !Number.isInteger(revision)) return null;
+  if (
+    revision !== null &&
+    (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1)
+  ) {
+    return null;
+  }
   for (const member of [
     'evaluation_id',
     'policy_hash',
@@ -84,7 +105,16 @@ export function readDecisionBody(value: unknown): DecisionBody | null {
     'url',
   ]) {
     const memberValue = body[member];
-    if (memberValue !== null && typeof memberValue !== 'string') return null;
+    if (memberValue === null) continue;
+    if (typeof memberValue !== 'string') return null;
+    if (
+      BOUNDED_MEMBERS.some((bounded) => bounded === member) &&
+      (memberValue.length === 0 ||
+        memberValue.length > MAX_PROVENANCE_LENGTH ||
+        memberValue.trim().length === 0)
+    ) {
+      return null;
+    }
   }
   if (!isStringList(body['missing']) || !isStringList(body['reasons'])) return null;
   return value as DecisionBody;

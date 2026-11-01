@@ -9,6 +9,7 @@ import { refusesAccess } from './decision/decision-refusal';
 import type { DecisionViewModel } from './decision/decision-view-model';
 import { manifestFromRun, UNAVAILABLE_MANIFEST, type ManifestSummary } from './manifest-summary';
 import { toAttemptRow, type AttemptRow } from './attempts/attempt-summary';
+import { isCanonicalRevisionNo } from './revision-pin';
 import {
   newestRevision,
   REVISIONS_CURSOR_REPEATED,
@@ -306,7 +307,9 @@ export const RunDetailStore = signalStore(
     }
     /** A pin chosen by the visitor or by an explicit action: the URL records it next. */
     function pinTo(revision: number): void {
-      if (!Number.isInteger(revision) || revision < 1) return;
+      // The same canonical form the URL parser accepts: a number that is not a canonical decimal
+      // (`1e21`, a float, `0`) never becomes a pin, whichever call site produced it.
+      if (!isCanonicalRevisionNo(revision)) return;
       explicitPin = revision;
       pinSource = 'url';
       patchState(store, { pinnedRevision: revision });
@@ -451,7 +454,7 @@ export const RunDetailStore = signalStore(
        * first-load default once, and a pin already chosen is never replaced by a slower response.
        */
       applyUrlPin(revision: number | null): void {
-        if (typeof revision === 'number' && Number.isInteger(revision) && revision > 0) {
+        if (isCanonicalRevisionNo(revision)) {
           if (pinSource === 'url' && explicitPin === revision) return;
           pinTo(revision);
           return;

@@ -1,18 +1,18 @@
-// The run detail's decision corpus (09.3.1-T5), served by the dev backend from `FIXTURE_CATALOG`
-// instead of a `fixtures/web-api/<name>/input.json` directory until 07.5.2-T1 reconciles the
-// `Decision` schema: `contracts/openapi.yaml` still declares `reasons` as a non-nullable array, so a
-// `pending` body — which needs every evaluation-derived member `null`, `reasons` included — cannot
-// live in the corpus without either failing the 09.1.1-T12.2 contract check or dropping that rule.
-// 07.5.2-T1 moves these documents back into `fixtures/web-api/` once the schema carries the 07.5.2
-// §5.1 body; nothing else about them changes.
+// The run detail's decision corpus, served by the dev backend from `FIXTURE_CATALOG` instead of a
+// `fixtures/web-api/<name>/input.json` directory until the reconciled `Decision` schema lands:
+// `contracts/openapi.yaml` still declares `reasons` as a non-nullable array, so a `pending` body —
+// which needs every evaluation-derived member `null`, `reasons` included — cannot live in the
+// corpus without either failing the fixture contract check or dropping that rule. The
+// reconciliation moves these documents back into `fixtures/web-api/` once the schema carries the
+// reconciled body; nothing else about them changes.
 //
-// Each body is typed by `features/runs/data/decision-body.ts` (the web-local 07.5.2 §5.1 body, which
-// the stale SDK `Decision` cannot express), so a renamed member or a widened enum fails here at
-// compile time rather than at the first fixture-backed screen.
+// Each body is typed by `features/runs/data/decision-body.ts` (the web-local body, which the stale
+// SDK `Decision` cannot express), so a renamed member or a widened enum fails here at compile time
+// rather than at the first fixture-backed screen.
 // eslint-disable-next-line evidgate/no-feature-cross-import -- dev-only fixture corpus, absent from every production bundle (the `fixtures` build configuration is its only importer); the body type it must satisfy is the web-local decision declaration.
 import type { DecisionBody } from '../../features/runs/data/decision-body';
 
-/** `pending`: `status` alone, every evaluation-derived member `null` (00 §9.3). */
+/** `pending`: `status` alone, every evaluation-derived member `null`. */
 export const PENDING_DECISION_BODY = {
   status: 'pending',
   decision: null,
@@ -65,7 +65,7 @@ export const PASSED_DECISION_BODY = {
 
 /**
  * The off-contract body the endpoint filters out: a `mode: shadow` PASS. The receiver must refuse
- * it, so the corpus serves one rather than assuming the server never does (T5.2).
+ * it, so the corpus serves one rather than assuming the server never does.
  */
 export const SHADOW_DECISION_BODY = {
   status: 'evaluated',
@@ -83,7 +83,7 @@ export const SHADOW_DECISION_BODY = {
   url: '/v1/runs/018f0000-0000-7000-8000-000000000071/decision?mode=shadow',
 } satisfies DecisionBody;
 
-/** The `503` answer: the shared 00 §9.2 envelope with the `Retry-After` the region renders. */
+/** The `503` answer: the shared error envelope with the `Retry-After` the region renders. */
 export const DECISION_UNAVAILABLE_DOCUMENT = {
   operation_id: 'getRunDecision',
   variant: 'unavailable',

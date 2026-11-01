@@ -1,8 +1,7 @@
-// The run detail's evidence revision corpus (09.3.1-T3.2), served by the dev backend from
-// `FIXTURE_CATALOG` instead of a `fixtures/web-api/<name>/input.json` directory until 07.5.2-T1
-// reconciles the decision reads: the pages are the same three-elements-newest-first list a server
-// would answer, and they move back into the corpus with the decision documents of
-// `./decision-fixtures.ts`.
+// The run detail's evidence revision corpus, served by the dev backend from `FIXTURE_CATALOG`
+// instead of a `fixtures/web-api/<name>/input.json` directory until the decision reads are
+// reconciled: the pages are the same three-elements-newest-first list a server would answer, and
+// they move back into the corpus with the decision documents of `./decision-fixtures.ts`.
 //
 // Every page is typed by the generated SDK `EvidenceRevisionPage`, so the corpus cannot drift from
 // `GET /v1/runs/{run_id}/evidence-revisions`: the row members, their nullability (`evaluation_id`)
@@ -11,7 +10,7 @@ import type { EvidenceRevisionPage } from '@evidgate/sdk';
 
 /**
  * Three frozen revisions, newest first: `3` complete with no live evaluation yet, `2` incomplete
- * with the missing-shard reason (never a PASS, 00 §8.6), `1` complete and evaluated.
+ * with the missing-shard reason (never a PASS), `1` complete and evaluated.
  */
 export const EVIDENCE_REVISIONS_PAGE = {
   items: [

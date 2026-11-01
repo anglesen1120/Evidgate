@@ -144,6 +144,17 @@
             >
           </dd>
         </div>
+        <div
+          class="decision-provenance__field decision-provenance__field--wide"
+          data-decision-evaluation-id
+        >
+          <dt>{{ copy.evaluationId }}</dt>
+          <dd>
+            <code
+              ><bdi>{{ decision.evaluationId }}</bdi></code
+            >
+          </dd>
+        </div>
       </dl>
     }
     @if (unavailable()) {

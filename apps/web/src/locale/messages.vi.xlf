@@ -2844,20 +2844,20 @@
         <target>Mã tham chiếu này không cung cấp chi tiết quyết định trước đây.</target>
       </trans-unit>
       <trans-unit id="runs.evidence.target-unavailable" datatype="html">
-        <source>Target details unavailable</source>
-        <target>Không có thông tin về đích liên kết</target>
+        <source><x id="EXPLANATION" equiv-text="${explanation(code)}"/> Target details unavailable</source>
+        <target><x id="EXPLANATION"/> Không có thông tin về đích liên kết</target>
       </trans-unit>
       <trans-unit id="runs.evidence.invalid-body" datatype="html">
-        <source>Evidence response unavailable: {code}</source>
-        <target>Không có phản hồi bằng chứng hợp lệ: {code}</target>
+        <source>Evidence response unavailable: <x id="CODE" equiv-text="${diagnostic}"/></source>
+        <target>Không có phản hồi bằng chứng hợp lệ: <x id="CODE"/></target>
       </trans-unit>
       <trans-unit id="runs.evidence.producer-link" datatype="html">
-        <source>View producer {shard}</source>
-        <target>Xem producer {shard}</target>
+        <source>View producer <x id="SHARD" equiv-text="${shard}"/></source>
+        <target>Xem producer <x id="SHARD"/></target>
       </trans-unit>
       <trans-unit id="runs.evidence.attempt-link" datatype="html">
-        <source>View attempt {attempt} for {executionKey}</source>
-        <target>Xem lần thử {attempt} của {executionKey}</target>
+        <source>View attempt <x id="ATTEMPT" equiv-text="${target.attemptNo}"/> for <x id="EXECUTION_KEY" equiv-text="${executionKey}"/></source>
+        <target>Xem lần thử <x id="ATTEMPT"/> của <x id="EXECUTION_KEY"/></target>
       </trans-unit>
       <trans-unit id="runs.evidence.reason.missing-shard" datatype="html">
         <source>Shard evidence is missing.</source>
@@ -2890,6 +2890,18 @@
       <trans-unit id="runs.evidence.reason.missing-result" datatype="html">
         <source>An expected test result is missing.</source>
         <target>Thiếu kết quả kiểm thử dự kiến.</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.revision-not-loaded" datatype="html">
+        <source>Revision <x id="revision" equiv-text="${pinned}"/> (not loaded)</source>
+        <target>Phiên bản <x id="revision"/> (chưa tải)</target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.announcement-selected" datatype="html">
+        <source>Viewing evidence revision <x id="SELECTED" equiv-text="${state.selected}"/></source>
+        <target>Đang xem phiên bản bằng chứng <x id="SELECTED"/></target>
+      </trans-unit>
+      <trans-unit id="runs.evidence.announcement-newer" datatype="html">
+        <source>Viewing evidence revision <x id="SELECTED" equiv-text="${state.selected}"/>. Newer revision <x id="NEWER" equiv-text="${state.newer}"/> is available.</source>
+        <target>Đang xem phiên bản bằng chứng <x id="SELECTED"/>. Đã có phiên bản mới hơn <x id="NEWER"/>.</target>
       </trans-unit>
       <trans-unit id="runs.decision.title" datatype="html">
         <source>Latest live decision</source>
@@ -2954,6 +2966,10 @@
       <trans-unit id="runs.decision.mode" datatype="html">
         <source>Evaluation mode</source>
         <target>Chế độ đánh giá</target>
+      </trans-unit>
+      <trans-unit id="runs.decision.evaluation-id" datatype="html">
+        <source>Evaluation ID</source>
+        <target>Mã đánh giá</target>
       </trans-unit>
       <trans-unit id="runs.decision.updated-announcement" datatype="html">
         <source>Live decision updated for evidence revision <x id="REVISION" equiv-text="${revision}"/></source>

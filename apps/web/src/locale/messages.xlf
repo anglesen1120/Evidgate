@@ -2788,10 +2788,10 @@
       <trans-unit id="runs.evidence.search-older" datatype="html"><source>This revision is not in the loaded pages. Load older revisions to look for it.</source></trans-unit>
       <trans-unit id="runs.evidence.evaluation-reference" datatype="html"><source>Live evaluation reference</source></trans-unit>
       <trans-unit id="runs.evidence.historical-details" datatype="html"><source>Historical decision details are not available from this reference.</source></trans-unit>
-      <trans-unit id="runs.evidence.target-unavailable" datatype="html"><source>Target details unavailable</source></trans-unit>
-      <trans-unit id="runs.evidence.invalid-body" datatype="html"><source>Evidence response unavailable: {code}</source></trans-unit>
-      <trans-unit id="runs.evidence.producer-link" datatype="html"><source>View producer {shard}</source></trans-unit>
-      <trans-unit id="runs.evidence.attempt-link" datatype="html"><source>View attempt {attempt} for {executionKey}</source></trans-unit>
+      <trans-unit id="runs.evidence.target-unavailable" datatype="html"><source><x id="EXPLANATION" equiv-text="${explanation(code)}"/> Target details unavailable</source></trans-unit>
+      <trans-unit id="runs.evidence.invalid-body" datatype="html"><source>Evidence response unavailable: <x id="CODE" equiv-text="${diagnostic}"/></source></trans-unit>
+      <trans-unit id="runs.evidence.producer-link" datatype="html"><source>View producer <x id="SHARD" equiv-text="${shard}"/></source></trans-unit>
+      <trans-unit id="runs.evidence.attempt-link" datatype="html"><source>View attempt <x id="ATTEMPT" equiv-text="${target.attemptNo}"/> for <x id="EXECUTION_KEY" equiv-text="${executionKey}"/></source></trans-unit>
       <trans-unit id="runs.evidence.reason.missing-shard" datatype="html"><source>Shard evidence is missing.</source></trans-unit>
       <trans-unit id="runs.evidence.reason.count-mismatch" datatype="html"><source>Collected and expected counts do not match.</source></trans-unit>
       <trans-unit id="runs.evidence.reason.artifact-missing" datatype="html"><source>A required artifact is missing.</source></trans-unit>
@@ -2800,6 +2800,9 @@
       <trans-unit id="runs.evidence.reason.setup-error" datatype="html"><source>Test setup reported an error.</source></trans-unit>
       <trans-unit id="runs.evidence.reason.stale-epoch" datatype="html"><source>Evidence belongs to a stale producer epoch.</source></trans-unit>
       <trans-unit id="runs.evidence.reason.missing-result" datatype="html"><source>An expected test result is missing.</source></trans-unit>
+      <trans-unit id="runs.evidence.revision-not-loaded" datatype="html"><source>Revision <x id="revision" equiv-text="${pinned}"/> (not loaded)</source></trans-unit>
+      <trans-unit id="runs.evidence.announcement-selected" datatype="html"><source>Viewing evidence revision <x id="SELECTED" equiv-text="${state.selected}"/></source></trans-unit>
+      <trans-unit id="runs.evidence.announcement-newer" datatype="html"><source>Viewing evidence revision <x id="SELECTED" equiv-text="${state.selected}"/>. Newer revision <x id="NEWER" equiv-text="${state.newer}"/> is available.</source></trans-unit>
       <trans-unit id="runs.decision.title" datatype="html"><source>Latest live decision</source></trans-unit>
       <trans-unit id="runs.decision.loading" datatype="html"><source>Loading live decision</source></trans-unit>
       <trans-unit id="runs.decision.updating" datatype="html"><source>Updating decision</source></trans-unit>
@@ -2816,6 +2819,7 @@
       <trans-unit id="runs.decision.manifest-hash" datatype="html"><source>Manifest hash</source></trans-unit>
       <trans-unit id="runs.decision.evaluator-version" datatype="html"><source>Evaluator version</source></trans-unit>
       <trans-unit id="runs.decision.mode" datatype="html"><source>Evaluation mode</source></trans-unit>
+      <trans-unit id="runs.decision.evaluation-id" datatype="html"><source>Evaluation ID</source></trans-unit>
       <trans-unit id="runs.decision.updated-announcement" datatype="html"><source>Live decision updated for evidence revision <x id="REVISION" equiv-text="${revision}"/></source></trans-unit>
       <trans-unit id="runs.decision.revision-mismatch" datatype="html"><source>This decision was evaluated at evidence revision <x id="DECISION" equiv-text="${decisionRevision}"/> while the selected evidence revision is <x id="SELECTED" equiv-text="${selectedRevision}"/>.</source></trans-unit>
       <trans-unit id="runs.decision.view-evidence" datatype="html"><source>View decision evidence</source></trans-unit>

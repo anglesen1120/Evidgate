@@ -5,8 +5,13 @@
     class="revision-select"
     data-evidence-revision-select
     [attr.aria-describedby]="'evidence-pin-help'"
+    [value]="selectedValue()"
     (change)="choose($event)"
   >
+    @if (pinnedMissing()) {
+      <!-- The pin is not on a loaded page: it still names itself, never the row that follows it. -->
+      <option [value]="selectedValue()" [selected]="true" disabled>{{ notLoadedLabel() }}</option>
+    }
     @for (revision of revisions(); track revision.revision_no) {
       <option
         [value]="revision.revision_no"

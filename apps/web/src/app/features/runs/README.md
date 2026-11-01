@@ -51,12 +51,21 @@ fragments in the table.
 repeating the string patterns:
 
 - `attemptAnchorId(executionKey, attemptNo)` / `producerAnchorId(shard)` — DOM id for a target.
-- `evidenceHref(target)` — `#…` fragment for a link, safe to use with `[href]` (same route, so
-  unrelated query parameters and the evidence pin survive).
+- `evidenceHref(target)` — the `#…` fragment for a target. The evidence panel qualifies it with the
+  current route path and query (`Router.url` without its own fragment, passed through
+  `Location.prepareExternalUrl` so a localized build keeps its base href such as `/vi/`), so the
+  rendered `href` is copyable and opens the same view and locale with the pin in a new tab. A bare
+  `#…` must not reach an `href`: it resolves against the base and navigates to the site root.
 - `resolveEvidenceAnchor(fragment, document)` — the target element, or `null`. It decodes the
   fragment once, checks the documented prefix/suffix and then looks the id up exactly with
   `getElementById`. A fragment is data: never pass it to `querySelector`, a URL, a filesystem path
   or an authorization decision.
+
+A plain click on a reason link is handled in the evidence panel: it prevents the default
+navigation, resolves the fragment and scrolls the row into view, then focuses it. A modified click
+(Ctrl/Cmd/Shift/Alt, middle button) keeps the browser's own behaviour, so "open in a new tab"
+uses the qualified `href`. A target that is not rendered yet resolves to nothing and the click
+changes nothing; the fragment still travels in the copied or opened URL.
 
 ## How reason links resolve
 
@@ -85,6 +94,13 @@ translated anchor aliases.
 ## Landing behaviour
 
 A destination row carries `tabindex="-1"` (focusable, out of the sequential tab order) and the
-sticky-header scroll margin from the existing spacing tokens. A target that is not rendered yet
-(attempt on an unfetched cursor page) keeps the fragment and offers the existing "Load more"
-action; resolution is retried after each accepted page and never scans unbounded pages.
+sticky-header scroll margin from the existing spacing tokens.
+
+Opening the run URL with a fragment (`…/runs/<run_id>?evidence_revision=<n>#attempt-…`) lands on
+that row once the attempts table has rendered it: the page resolves the fragment after the first
+attempts page, scrolls the row into view and focuses it. The landing happens once per fragment, so
+a decision refresh or any other polling update never moves focus again.
+
+A target on a page the visitor has not loaded yet is not fetched on its own: there is no automatic
+pagination. The landing is retried when a visitor-requested page arrives (Load more), and a
+fragment that still names nothing rendered leaves focus where it was.

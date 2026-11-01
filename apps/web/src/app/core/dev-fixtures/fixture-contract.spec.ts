@@ -950,11 +950,11 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       new Set(catalogNames).size,
       `FIXTURE_CATALOG lists a fixture twice: ${catalogNames.join(', ')}`,
     ).toBe(catalogNames.length);
-    // 09.3.1-T5: the decision and evidence-revision documents are typed modules
+    // The decision and evidence-revision documents are typed modules
     // (`./decision-fixtures`, `./evidence-revision-fixtures`) rather than corpus directories until
-    // 07.5.2-T1 reconciles the `Decision` schema — a `pending` body needs `reasons: null`, which
-    // today's non-nullable `Decision.reasons` refuses. They are exempt from the directory equality
-    // and from the body check above, and 07.5.2-T1 deletes this list together with the modules.
+    // the reconciled `Decision` schema lands — a `pending` body needs `reasons: null`, which today's
+    // non-nullable `Decision.reasons` refuses. They are exempt from the directory equality and from
+    // the body check above, and the reconciliation deletes this list together with the modules.
     const TYPED_MODULE_DOCUMENTS: readonly string[] = [
       'run-decision',
       'run-decision-evaluated-fail-missing-shard',
@@ -972,7 +972,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     ).toEqual([...corpusByName.keys()].sort());
     expect(
       catalogNames.filter((name) => fromModules.has(name)).sort(),
-      'FIXTURE_CATALOG no longer serves one of the typed-module documents of 09.3.1-T5',
+      'FIXTURE_CATALOG no longer serves one of the typed-module documents',
     ).toEqual([...fromModules].sort());
 
     for (const entry of CATALOG) {
@@ -1299,10 +1299,10 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
   });
 
   it('pins at most one ok variant per operation and the 403 and 412 error fixtures (AC10)', () => {
-    const documents = CORPUS.map((fixture) => ({
-      name: fixture.name,
-      document: readDocument(fixture),
-    }));
+    // The served set, not the corpus directory: the decision and evidence-revision documents are
+    // typed modules (`./decision-fixtures`, `./evidence-revision-fixtures`), and a routed operation
+    // must resolve its variants here whether or not `fixtures/web-api` holds a directory for it.
+    const documents = CATALOG.map((entry) => ({ name: entry.name, document: entry.document }));
 
     const variantsByOperation = new Map<string, string[]>();
     for (const { name, document } of documents) {
