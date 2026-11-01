@@ -91,6 +91,12 @@ function legacyTokenCachePath(config: TokenCacheConfig): string {
 
 /** The binding half of a cache file name, after its destination prefix. */
 const boundNameSuffix = /^[0-9a-f]{64}\.json$/;
+/**
+ * A temp file `writeCachedToken` left behind. It is not bound to a destination in its name, so
+ * only the exact shape that writer mints is matched, and it goes on any purge because a crashed
+ * write may still be holding a whole token at `0600` for a project that is being signed out.
+ */
+const staleTempName = /^\.ci-token\.[0-9a-f-]{36}\.tmp$/;
 
 /** The exchange source a config resolves to, and the credential value that exchange presents. */
 interface CredentialBinding {
@@ -227,8 +233,9 @@ export async function writeCachedToken(
 /**
  * Deletes every cached token for this destination, whatever credential minted it — including a
  * purge with no credential, which is what `auth logout` runs once the source is gone — plus the
- * destination-only file of the previous scheme. The destination digest in the name scopes it,
- * so another project's files are untouched; nothing is read to decide.
+ * destination-only file of the previous scheme and any temp file a crashed write left holding a
+ * token. The destination digest in the name scopes it, so another project's files are untouched
+ * and only the temp shape that writer mints is claimed; nothing is read to decide.
  */
 export async function deleteCachedToken(config: TokenCacheConfig): Promise<void> {
   const prefix = `ci-token.${destinationKey(config)}.`;
@@ -242,7 +249,8 @@ export async function deleteCachedToken(config: TokenCacheConfig): Promise<void>
       throw error;
     });
     for (const name of names) {
-      if (name.startsWith(prefix) && boundNameSuffix.test(name.slice(prefix.length))) {
+      const bound = name.startsWith(prefix) && boundNameSuffix.test(name.slice(prefix.length));
+      if (bound || staleTempName.test(name)) {
         await rm(join(config.cacheDir, name), { force: true });
       }
     }

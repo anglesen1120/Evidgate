@@ -68,8 +68,11 @@ after a `5xx`/`429`, while a `401` refresh that outlives the wait exits 3
 bounded retries, or whose decision body breaks or is aborted after its headers,
 is exit 3 even when an earlier poll answered `pending`; no such path may exit 0.
 
-A `401` on a poll is answered by one refresh per expiry: the refresh flag resets
-once a replay with the refreshed token gets a non-`401` answer, so a `--wait`
+A `401` on a poll is answered by one refresh per token: the refresh is spent until
+a replay with the refreshed token produces an accepted answer (a decision body,
+pending or decided). A replayed `5xx`/`429`/transport failure says nothing about
+the token and does not restore it, so a server alternating `401` and `503` mints
+once for the whole wait. Each accepted answer restores the refresh, so a `--wait`
 spanning several token lifetimes keeps going, while a `401` on the replay right
 after a refresh still exits 3 with no further refresh.
 
@@ -351,14 +354,21 @@ server subcode changes the exit code.
   writer that replaces a registered value with `[REDACTED]`. `resolveConfig`
   registers them, and `main()` calls `resetSecrets()` then
   `registerEnvSecrets(env)` as its first statements, before any argument parsing.
-- `registerSecret(value)` also registers the trimmed, `encodeURIComponent`-
-  (both hex cases), JSON-string-escaped, control-character-escaped (`\uXXXX`,
-  the form error messages print) and base64 (standard and url-safe, padded and
-  unpadded) forms of the value when they differ and are non-empty; a value
-  shorter than 4 characters after trim is still registered (fail-safe).
-  `redact()` replaces longest-first, so a shorter secret cannot leave the tail
-  of a longer one in clear text. `getToken()` registers the token it returns and
-  `createApiClient(config, token)` registers `token`.
+- `registerSecret(value)` also registers the trimmed, JSON-string-escaped,
+  control-character-escaped (`\uXXXX`, the form error messages print) and
+  percent-encoded forms of the value when they differ and are non-empty. The
+  encoded form is matched per escape with either hex case, so `qa/a:b` covers
+  `qa%2Fa%3Ab` and `qa%2fa%3ab` alike; a separate lower-case spelling is not
+  needed and no longer registered. The value, the trimmed and the JSON form are
+  registered at any length (`x` is still a secret). Base64 forms (standard and
+  url-safe, padded and unpadded) are registered only when the form is at least
+  8 characters long, or when it carries a character outside `[A-Za-z0-9]`
+  (padding or the url-safe `-`/`_`): the unpadded encoding of a one-character
+  secret is two letters of ordinary text, and stripping `eA` from prose that
+  never held a secret is worse than leaving an encoded one-character secret in
+  place. `redact()` replaces longest-first, so a shorter secret cannot leave the
+  tail of a longer one in clear text. `getToken()` registers the token it
+  returns and `createApiClient(config, token)` registers `token`.
 - Consumer obligation: the registry is process-global and reset per `main()`.
   Any token minted at runtime must go through `registerSecret` before it can
   reach any writer, otherwise T78 rests on "never print it" alone. The
@@ -436,6 +446,9 @@ Cache:
   before the error propagates (a delete failure is best-effort and never hides
   the server code); `auth logout` deletes every entry of the destination
   explicitly (04.2.1 §8 retention).
+  A purge also removes a `.ci-token.<uuid>.tmp` file that a crashed write left in
+  `cache_dir` (only that exact name shape; it holds a whole token at `0600` and
+  its name carries no destination).
 - `[DECISION]` a cache write or delete failure is exit 3 `token_cache_error`
   whose message names the operation and never a token value.
 - `[note]` worst-case time to failure is bounded at ~150 s: 30 s for the
@@ -1372,9 +1385,32 @@ length-prefixed upload identity — every value the `upload-url` body is built f
   credential and its signature travels there under whatever parameter name the
   provider uses; userinfo (`user:pw@`) is removed from any authority — any
   `scheme://`, a scheme-relative `//` and the percent-encoded spelling
-  (`https%3A%2F%2Fuser%3Apass%40host`, `%2f%2f`, `%3a`, `%40`) — and a raw space
-  inside the password does not stop it. The `http(s)` query-or-fragment rule is
-  unchanged.
+  (`https%3A%2F%2Fuser%3Apass%40host`, `%2f%2f`, `%3a`, `%40`). The scan is one
+  pass, never a rescan of a run it already consumed, so a megabyte of
+  `%2f%2f`-shaped hostile text costs the same per byte as clean text. What it
+  reads:
+
+  - The userinfo ends at the last `@` before the first `/`, so a password may
+    hold an `@`.
+  - Once the run has its `:`, only `/`, `\`, CR, LF and a tab end it: a `'`,
+    `"`, `?` or `#` is a password character (`postgres://svc:pa'ss@db/x`,
+    `pa#ss`, `pa?ss` are real passwords) until a `@` closes the userinfo.
+  - A raw space is a password character too (`user:one two three@host`), but
+    prose uses that shape, so a run holding a space is stripped only when the
+    text before the `:` holds no `.`, is not `localhost`, does not start a space
+    right after the `:` and is not a port followed by words. So
+    `Read https://docs.test: contact@example.com`,
+    `http://localhost:3000, foo@bar` and `https://host:8080 and user@mail` stay
+    readable. Residue: prose shaped `host:1 2 admin@corp.test` (a dotless name, a
+    digit, then words) is stripped, because it is indistinguishable from a
+    numeric password with a space.
+  - A run without a space must not read as a host and port either, so
+    `https://example.test:8080/users@corp.test` keeps its text.
+  - The run is capped at 4096 characters, far above any token or JWT, and the
+    bound keeps the scan linear.
+
+  The `http(s)` query-or-fragment rule is unchanged.
+
 - Server text that reaches a message is echoed only in a safe shape. A rejected
   `complete` names the artifact id and its `failure_code` when that is a plain
   token (`[A-Za-z0-9_.-]{1,64}`); any other value — an escape sequence, a newline

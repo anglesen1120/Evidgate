@@ -25,6 +25,7 @@ import {
   verdictLine,
 } from './gateDecision.js';
 import { pollDecision, type PollStep } from './gatePoll.js';
+import { refreshedToken, refreshOutlivedWait } from './gateRefresh.js';
 
 import type { CommandDefinition } from './index.js';
 
@@ -142,8 +143,9 @@ function parseWait(raw: string | undefined): number {
  * One poll. A 401 is answered by minting a new token and replaying this poll, because a wait
  * can outlive more than one token. The refresh is spent once per expiry: a 401 on the replay
  * itself is the server's last word, and a source that cannot mint again never gets the replay.
- * Attempts and the refresh share the one deadline, so a slow exchange cannot grant the replay
- * a window that overruns the wait.
+ * The flag is released only by an accepted answer, so a replay that failed on its own merits
+ * cannot buy another mint. Attempts and the refresh share the one deadline, so a slow exchange
+ * cannot grant the replay a window that overruns the wait.
  */
 async function requestDecision(
   session: Session,
@@ -165,22 +167,7 @@ async function requestDecision(
   session.refreshed = true;
   // Best-effort purge: the server's answer is the one that must surface.
   await deleteCachedToken(request.config).catch(() => undefined);
-  let token: string;
-  try {
-    ({ token } = await refreshedToken(request, deadlineAt, now));
-  } catch (error) {
-    if (error instanceof ExchangeAuthError) {
-      // The source itself was refused — a replayed single-use JWT is the usual cause — so
-      // the 401 on the decision is still the answer that explains the failure.
-      throw first.error;
-    }
-    if (deadlineAt !== undefined && now() >= deadlineAt) {
-      // The wait ran out while the credential was being minted: whatever the transport
-      // reported, the deadline is why this poll has no answer.
-      throw refreshOutlivedWait();
-    }
-    throw error;
-  }
+  const token = await mintForReplay(session, request, deadlineAt, now, first.error);
   if (token === session.token) {
     // The purge failed and the cache handed back the token the server just refused.
     throw first.error;
@@ -197,54 +184,45 @@ async function requestDecision(
   if (second.kind === 'unauthorized') {
     throw second.error;
   }
-  // The refreshed token was accepted, so this expiry is settled: clearing the flag lets a
-  // later 401 within the same wait mint again. The bound is one refresh per expiry, not per
-  // invocation, because a wait can span more than one token lifetime.
-  session.refreshed = false;
+  // Only an answer the server actually gave means the refreshed token was accepted. A replayed
+  // transient (5xx/429/transport) says nothing about the token, so the flag stays set: a poll
+  // that alternates 401 and 503 mints once, never once per poll. A wait spanning several
+  // lifetimes still refreshes each time, because each accepted answer clears the flag.
+  if (second.kind === 'body') {
+    session.refreshed = false;
+  }
   return second;
 }
 
 /**
- * Mints the token the replay needs, bounded by the poll's own deadline: a `--wait` may not be
- * extended by an exchange whose first byte never arrives, so the wait itself ends the refresh.
- * The abandoned exchange rejects into a race that has already settled, and its own budget is
- * lowered by the same instant, so the request it opened is aborted rather than left running.
+ * Mints the token the replay needs, and releases the refresh latch on every failure: no token
+ * was minted, so that expiry is still unanswered and a latch left set would claim otherwise.
+ * Success keeps it set, where it bounds the replay's own answer rather than the mint.
  */
-async function refreshedToken(
+async function mintForReplay(
+  session: Session,
   request: DecisionRequest,
   deadlineAt: number | undefined,
   now: () => number,
-): Promise<{ readonly token: string }> {
-  const deps: GetTokenDeps =
-    deadlineAt === undefined ? request.deps : { ...request.deps, deadlineAt };
-  const exchange = getToken(request.config, deps);
-  if (deadlineAt === undefined) {
-    return exchange;
-  }
-  const remaining = deadlineAt - now();
-  if (remaining <= 0) {
-    exchange.catch(() => undefined);
-    throw refreshOutlivedWait();
-  }
-  let timer: NodeJS.Timeout | undefined;
-  // Executor form: `Promise.withResolvers` is ES2024 and this workspace targets ES2022.
-  const expired = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      reject(refreshOutlivedWait());
-    }, remaining);
-  });
+  refusal: CliError,
+): Promise<string> {
   try {
-    return await Promise.race([exchange, expired]);
-  } finally {
-    clearTimeout(timer);
+    const { token } = await refreshedToken(request, deadlineAt, now);
+    return token;
+  } catch (error) {
+    session.refreshed = false;
+    if (error instanceof ExchangeAuthError) {
+      // The source itself was refused — a replayed single-use JWT is the usual cause — so
+      // the 401 on the decision is still the answer that explains the failure.
+      throw refusal;
+    }
+    if (deadlineAt !== undefined && now() >= deadlineAt) {
+      // The wait ran out while the credential was being minted: whatever the transport
+      // reported, the deadline is why this poll has no answer.
+      throw refreshOutlivedWait();
+    }
+    throw error;
   }
-}
-
-/** The failure a refresh that outlived the wait reports: the wait, not the 401, ended it. */
-function refreshOutlivedWait(): CliError {
-  return new CliError('the token refresh outlived the --wait deadline', {
-    code: 'request_failed',
-  });
 }
 
 /**

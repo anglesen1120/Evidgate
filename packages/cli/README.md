@@ -125,11 +125,12 @@ Only a literal `PASS` exits 0:
 
 Everything else exits 3 with `evidgate: error <code>`: a transport failure, a
 decision body that breaks or is aborted after its headers, a `401` that a
-freshly minted token does not fix (each expiry gets one refresh), a `403` or `404`,
-a `5xx`/`429` that still fails after the bounded retries, a refused redirect, a
-decision body larger than 256 KiB, a body that is not JSON, a body that is not
-an object, a body without a `decision` member, and any `decision` value outside
-the four above (`"pass"`, `""`, a number).
+freshly minted token does not fix (one refresh per token, cleared only by an
+accepted answer), a `403` or `404`, a `5xx`/`429` that still fails after the
+bounded retries, a refused redirect, a decision body larger than 256 KiB, a
+body that is not JSON, a body that is not an object, a body without a
+`decision` member, and any `decision` value outside the four above (`"pass"`,
+`""`, a number).
 
 `--wait` takes the same grammar as `EVIDGATE_SEND_DEADLINE`: bare seconds or an
 `s`/`m`/`h` suffix, greater than zero and at most 24 hours; anything else exits 3

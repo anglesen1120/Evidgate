@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   chmod,
   lstat,
@@ -181,6 +181,34 @@ describe('tokenCache', () => {
     await deleteCachedToken(base);
 
     await expect(readCachedToken(bound)).resolves.toBeUndefined();
+    await expect(readCachedToken(otherProject)).resolves.toEqual({
+      token: 'egt_other',
+      expiresAt: '2030-01-01T00:00:00.000Z',
+    });
+  });
+
+  // A write that crashed left a temp file holding a whole token at 0600, and its name carries no
+  // destination. A purge removes that one shape and leaves every other name in the directory.
+  it('deletes a crash-left temp file and keeps unrelated names and other projects', async () => {
+    const base = cacheConfig(cacheDir);
+    const otherProject = { ...base, project: 'proj-2' };
+    await mkdir(cacheDir, { recursive: true, mode: 0o700 });
+    const staleTemp = join(cacheDir, `.ci-token.${randomUUID()}.tmp`);
+    const plainTemp = join(cacheDir, '.notes.tmp');
+    const wrongShape = join(cacheDir, '.ci-token.not-a-uuid.tmp');
+    await writeFile(staleTemp, validBody, { mode: 0o600 });
+    await writeFile(plainTemp, 'keep', { mode: 0o600 });
+    await writeFile(wrongShape, 'keep', { mode: 0o600 });
+    await writeCachedToken(otherProject, {
+      token: 'egt_other',
+      expiresAt: '2030-01-01T00:00:00.000Z',
+    });
+
+    await deleteCachedToken(base);
+
+    await expect(lstat(staleTemp)).rejects.toThrow();
+    expect(await readFile(plainTemp, 'utf8')).toBe('keep');
+    expect(await readFile(wrongShape, 'utf8')).toBe('keep');
     await expect(readCachedToken(otherProject)).resolves.toEqual({
       token: 'egt_other',
       expiresAt: '2030-01-01T00:00:00.000Z',

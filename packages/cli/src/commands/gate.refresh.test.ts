@@ -133,4 +133,46 @@ describe('gate --wait across token lifetimes', () => {
     expect(out.stdout.join('')).toBe('');
     expect(out.stderr.join('')).toContain('error token_invalid');
   });
+
+  it('mints once when the replay fails transiently and the next poll is refused again', async () => {
+    const env = await ingestEnv(dirs);
+    // The server refuses the starting bearer, then answers the replay with a 503. That answer
+    // says nothing about the refreshed token, so the next 401 must not buy a second mint: the
+    // one wait mints two tokens in total however long it has left.
+    let transientLeft = 3;
+    const stub = tokenStub((authorization) => {
+      if (authorization !== 'Bearer egt-token-1' && transientLeft > 0) {
+        transientLeft -= 1;
+        return refusal(503, 'upstream_unavailable', { retryable: true });
+      }
+      return refusal(401, 'token_invalid');
+    });
+    const out = capture();
+
+    const { code, clock } = await invoke(
+      gateArgv(['--run', runId, '--wait', '1m']),
+      env,
+      out,
+      stub.fetchImpl,
+    );
+
+    expect(code).toBe(3);
+    // One mint for the starting bearer plus the single refresh, even though the 401 poll
+    // follows the transient replay with most of the wait unspent.
+    expect(stub.exchanges()).toBe(2);
+    expect(transientLeft).toBe(0);
+    expect(
+      stub.decisionCalls().map((call) => call.request.headers.get('authorization')),
+    ).toStrictEqual([
+      'Bearer egt-token-1',
+      'Bearer egt-token-2',
+      'Bearer egt-token-2',
+      'Bearer egt-token-2',
+      'Bearer egt-token-2',
+    ]);
+    // The replay spends the call's own retries before the poll loop pauses once and asks again.
+    expect(clock.sleeps.filter((pause) => pause > 0)).toStrictEqual([1_000]);
+    expect(out.stdout.join('')).toBe('');
+    expect(out.stderr.join('')).toContain('error token_invalid');
+  });
 });
