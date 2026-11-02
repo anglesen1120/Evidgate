@@ -26,7 +26,9 @@ async function api(page: Page, loginStatus: number) {
       status: authenticated ? 200 : 401,
       json: authenticated
         ? { items: [] }
-        : { error: { code: 'token_invalid', message: 'Unauthenticated', request_id: randomUUID() } },
+        : {
+            error: { code: 'token_invalid', message: 'Unauthenticated', request_id: randomUUID() },
+          },
     });
   });
   await page.route('**/v1/permissions**', async (route) => {
@@ -35,7 +37,9 @@ async function api(page: Page, loginStatus: number) {
       status: authenticated ? 200 : 401,
       json: authenticated
         ? { items: [], next_cursor: null }
-        : { error: { code: 'token_invalid', message: 'Unauthenticated', request_id: randomUUID() } },
+        : {
+            error: { code: 'token_invalid', message: 'Unauthenticated', request_id: randomUUID() },
+          },
     });
   });
   await page.route('**/v1/dev/session', async (route) => {
@@ -49,7 +53,9 @@ async function api(page: Page, loginStatus: number) {
 
 for (const locale of ['en', 'vi'] as const) {
   for (const theme of ['light', 'dark'] as const) {
-    test(`${locale} ${theme}: keyboard sign-in re-probes the real session seam`, async ({ page }) => {
+    test(`${locale} ${theme}: keyboard sign-in re-probes the real session seam`, async ({
+      page,
+    }) => {
       await page.setViewportSize({ width: 360, height: 800 });
       await page.emulateMedia({ colorScheme: theme });
       const stub = await api(page, 204);
@@ -65,13 +71,19 @@ for (const locale of ['en', 'vi'] as const) {
       await expect(page).toHaveURL(new RegExp(`/${locale}/dev/ui-gallery$`));
       expect(stub.probes.organizations).toBeGreaterThanOrEqual(2);
       expect(stub.probes.permissions).toBeGreaterThanOrEqual(2);
-      expect(await page.evaluate(() => Object.values(localStorage).join(''))).not.toContain(stub.value);
-      expect(await page.evaluate(() => Object.values(sessionStorage).join(''))).not.toContain(stub.value);
+      expect(await page.evaluate(() => Object.values(localStorage).join(''))).not.toContain(
+        stub.value,
+      );
+      expect(await page.evaluate(() => Object.values(sessionStorage).join(''))).not.toContain(
+        stub.value,
+      );
     });
   }
 
   for (const status of [401, 404, 503]) {
-    test(`${locale}: status ${status} is announced inline without leaving login`, async ({ page }) => {
+    test(`${locale}: status ${status} is announced inline without leaving login`, async ({
+      page,
+    }) => {
       const stub = await api(page, status);
       await page.goto(`/${locale}/login`);
       await page.locator('summary', { hasText: copy[locale].heading }).click();
@@ -83,7 +95,9 @@ for (const locale of ['en', 'vi'] as const) {
       );
       await expect(input).toHaveValue('');
       await expect(page).toHaveURL(new RegExp(`/${locale}/login$`));
-      await expect(page.getByRole('button', { name: copy[locale].heading, exact: true })).toBeEnabled();
+      await expect(
+        page.getByRole('button', { name: copy[locale].heading, exact: true }),
+      ).toBeEnabled();
       expect(stub.probes.organizations).toBe(1);
       expect(stub.probes.permissions).toBe(1);
     });
