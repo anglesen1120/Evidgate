@@ -340,7 +340,12 @@ const SessionStoreDefinition = signalStore(
       if (revision !== sessionRevision || store.signedOut()) {
         return;
       }
-      const firstOrgId = organizations.ok ? (organizations.value[0]?.id ?? null) : null;
+      // A 200 whose body is no org list (an HTML page from a proxy) has no `items`; it counts as
+      // "no org" for the permission read instead of crashing the bootstrap.
+      const listed: readonly OrganizationSummaryDto[] | undefined = organizations.ok
+        ? organizations.value
+        : undefined;
+      const firstOrgId = listed?.[0]?.id ?? null;
       const permissions = await settledRead(() =>
         loadPermissionsForTenant(tenant, permissionsSource, firstOrgId),
       );

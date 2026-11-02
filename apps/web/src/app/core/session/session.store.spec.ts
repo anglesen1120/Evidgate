@@ -269,6 +269,16 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(tenant.orgId()).toBeNull();
     });
 
+    it('survives an org list answer without items, reading permissions with no tenant', async () => {
+      // The body a proxy's HTML page decodes to: `items` is missing at runtime.
+      Object.assign(identity, { organizations: undefined });
+
+      await store.bootstrap();
+
+      expect(source.tenants).toEqual([null]);
+      expect(tenant.orgId()).toBeNull();
+    });
+
     it('prefers a 401 from either read over the other read failing', async () => {
       identity.organizationFailure = apiError('unavailable', 503);
       source.failure = apiError('unauthenticated', 401);
