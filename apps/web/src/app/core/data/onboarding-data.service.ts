@@ -135,20 +135,14 @@ export class OnboardingDataService {
    * `pending_verification`; the route takes no `Idempotency-Key`, so the caller's single in-flight
    * submit is the guard and a `409` (`binding_exists`) arrives typed.
    *
-   * `X-Evidgate-Org` travels with the request because the contract asks for it in prose — without
-   * it "the org is the caller's only choice, so send it" — while the generated `headers` type
-   * declares no such parameter. It is therefore passed as a header map rather than as an object
-   * literal, which the SDK's excess-property check would reject.
+   * `X-Evidgate-Org` is the interceptor's (`tenant-org.interceptor.ts`), never built here: the
+   * generated `headers` type declares no such parameter anyway.
    */
   createCiBinding(
-    orgId: string,
     projectId: string,
     body: CreateCiBindingRequest,
   ): Promise<CiBindingCreatedResponse> {
-    const headers: Record<string, string> = { 'X-Evidgate-Org': orgId };
-    return this.gateway.call((client) =>
-      createCiBinding({ client, path: { p: projectId }, body, headers }),
-    );
+    return this.gateway.call((client) => createCiBinding({ client, path: { p: projectId }, body }));
   }
 
   /**

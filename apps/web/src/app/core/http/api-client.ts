@@ -3,10 +3,10 @@
 //
 // Shape A of the ADR: one `@hey-api/client-fetch` client whose `fetch` is the Angular
 // `HttpClient` adapter, so the functional interceptors (X-Request-Id/traceparent,
-// Idempotency-Key) and Angular's own XSRF interceptor see every SDK call. `baseUrl` is the
-// relative `/v1` — the API shares the page origin (rule 1), which is also what T38's `__Host-`
-// session cookie requires. The SDK's own header hooks are deliberately not registered: two
-// implementations of the same header duty would drift.
+// X-Evidgate-Org, Idempotency-Key) and Angular's own XSRF interceptor see every SDK call.
+// `baseUrl` is the relative `/v1` — the API shares the page origin (rule 1), which is also what
+// T38's `__Host-` session cookie requires. The SDK's own header hooks are deliberately not
+// registered: two implementations of the same header duty would drift.
 
 import {
   HttpClient,
@@ -27,6 +27,7 @@ import { API_BASE_PATH } from './api-origin';
 import { createHttpClientFetch } from './http-client-fetch';
 import { idempotencyInterceptor } from './idempotency.interceptor';
 import { requestIdInterceptor } from './request-id.interceptor';
+import { tenantOrgInterceptor } from './tenant-org.interceptor';
 
 /**
  * XSRF double-submit names (T38): the API sets the readable `XSRF-TOKEN` cookie and keeps the
@@ -53,10 +54,14 @@ export const API_CLIENT = new InjectionToken<Client>('evidgate.api-client');
  * origin that is not the page's, so only same-origin `/v1` mutations gain `X-XSRF-TOKEN`. A spec
  * adds `provideHttpClientTesting()` after this call to reach the real stack.
  *
- * 09.1.1-T9.1 put `telemetryInterceptor` first of the three so the W3C `traceparent` it writes is
- * the header `requestIdInterceptor` finds and therefore keeps: one trace id per route change,
+ * `telemetryInterceptor` runs first so the W3C `traceparent` it writes is the header
+ * `requestIdInterceptor` finds and therefore keeps: one trace id per route change,
  * continued on the server. Telemetry appends nothing else — with the chunk unloaded it hands
  * `next` the same request and the random traceparent T3 writes is the one that leaves.
+ *
+ * `tenantOrgInterceptor` sits ahead of `idempotencyInterceptor` because it decides from the
+ * request itself (`X-Evidgate-Org` for a tenant-scoped API call); the two write different headers
+ * onto the same clone chain, so their relative order changes nothing on the wire.
  *
  * `baseUrl` stays `/v1` in the application (the API shares the page origin, rule 1) and exists as
  * a parameter only because the SDK builds `new Request(baseUrl + path)`: a browser resolves the
@@ -67,7 +72,12 @@ export const API_CLIENT = new InjectionToken<Client>('evidgate.api-client');
 export function provideApi(baseUrl: string = API_BASE_PATH): EnvironmentProviders {
   return makeEnvironmentProviders([
     provideHttpClient(
-      withInterceptors([telemetryInterceptor, requestIdInterceptor, idempotencyInterceptor]),
+      withInterceptors([
+        telemetryInterceptor,
+        requestIdInterceptor,
+        tenantOrgInterceptor,
+        idempotencyInterceptor,
+      ]),
       withXsrfConfiguration({ cookieName: XSRF_COOKIE_NAME, headerName: XSRF_HEADER_NAME }),
     ),
     {

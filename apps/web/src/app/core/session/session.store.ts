@@ -45,6 +45,8 @@ import {
   EffectivePermissionsSource,
 } from './effective-permissions.source';
 import { SESSION_ENDER } from './session-ender';
+import { loadPermissionsForTenant } from './tenant-permissions';
+import { TenantStore } from './tenant.store';
 
 /** What the shell knows about the caller's session (00 §8.9). */
 export type SessionState =
@@ -150,6 +152,12 @@ function scopeFailure(error: unknown): ScopeResolution {
   return 'unavailable';
 }
 
+/** The route a scope read is serving, named for the expiry redirect when the session is gone. */
+function scopePath(orgId: string, projectId: string | null): string {
+  const org = `/orgs/${encodeURIComponent(orgId)}`;
+  return projectId === null ? org : `${org}/projects/${encodeURIComponent(projectId)}`;
+}
+
 /**
  * The store definition. The non-signal bookkeeping a `signalStore` cannot hold as state — the
  * single in-flight bootstrap, the two revision counters, the project-list cache — is per-instance
@@ -168,6 +176,9 @@ const SessionStoreDefinition = signalStore(
      */
     const permissionsSource =
       inject(EffectivePermissionsSource, { optional: true }) ?? inject(CataloguePermissionsSource);
+
+    /** The tenant the requests are scoped by; this store is its only writer. */
+    const tenant = inject(TenantStore);
 
     /** The sign-in page the two session boundaries leave through (a redirect, never a reload). */
     const router = inject(Router);
@@ -192,6 +203,12 @@ const SessionStoreDefinition = signalStore(
     let sessionRevision = 0;
     /** Bumped by every `resolveScope` call and by `reload()`; guards the async part of a scope. */
     let scopeRevision = 0;
+    /**
+     * The org whose grants `permissions` holds. The tenant can be published before its read
+     * returns, so the tenant alone is not proof: a switch whose load was superseded must read again
+     * instead of keeping the previous org's codes.
+     */
+    let permissionsOrgId: string | null = null;
 
     /**
      * The route an in-flight scope read is resolving, so a `401` from that read can name it as the
@@ -223,6 +240,8 @@ const SessionStoreDefinition = signalStore(
       inFlight = null;
       pendingAttemptedPath = null;
       projectsByOrg.clear();
+      permissionsOrgId = null;
+      tenant.clear();
       patchState(store, {
         sessionState: 'anonymous',
         signedOut: true,
@@ -294,6 +313,8 @@ const SessionStoreDefinition = signalStore(
     /** Forgets the resolved pair, its project list, and every cached project list. */
     function clearScope(): void {
       scopeRevision += 1;
+      permissionsOrgId = null;
+      tenant.clear();
       patchState(store, { currentOrg: null, currentProject: null, projects: NO_PROJECTS });
       projectsByOrg.clear();
     }
@@ -301,8 +322,9 @@ const SessionStoreDefinition = signalStore(
     /**
      * One round trip of organizations and permissions; a stale generation writes nothing.
      *
-     * The two reads are independent (only the caller's session joins them), so they run together:
-     * the catalogue is up to twenty cursor pages and must not sit behind the organization list.
+     * The organization list is read FIRST: the permission read is tenant-scoped, so the header the
+     * interceptor writes for it must name this session's tenant. An empty (or failed) list leaves no
+     * tenant to scope by — the interceptor adds nothing and the read answers the pre-tenant route.
      *
      * A `401` from EITHER read is the one refusal with a UI state of its own (`anonymous`) and wins
      * over the other read's failure — an expired session is an answer, not an outage. Everything
@@ -312,12 +334,16 @@ const SessionStoreDefinition = signalStore(
      * cannot publish a list read under a session that is no longer confirmed.
      */
     async function readSession(revision: number): Promise<void> {
-      const [organizations, permissions] = await Promise.all([
-        settledRead(() => identity.listMyOrganizations()),
-        settledRead(() => permissionsSource.load()),
-      ]);
+      const organizations = await settledRead(() => identity.listMyOrganizations());
       // A newer generation (a `reload()`, a logout, an expiry) owns the state by now; a latched
       // sign-out must never be undone by a read that was already on the wire.
+      if (revision !== sessionRevision || store.signedOut()) {
+        return;
+      }
+      const firstOrgId = organizations.ok ? (organizations.value[0]?.id ?? null) : null;
+      const permissions = await settledRead(() =>
+        loadPermissionsForTenant(tenant, permissionsSource, firstOrgId),
+      );
       if (revision !== sessionRevision || store.signedOut()) {
         return;
       }
@@ -337,6 +363,7 @@ const SessionStoreDefinition = signalStore(
         permissions: permissions.value,
         sessionState: 'authenticated',
       });
+      permissionsOrgId = firstOrgId;
     }
 
     /**
@@ -397,6 +424,48 @@ const SessionStoreDefinition = signalStore(
     }
 
     /**
+     * The answer to a failed scope read: a `401` ends the session and cancels the guard chain, any
+     * other failure clears the scope and is `unavailable`, and an answer a newer navigation
+     * superseded changes nothing.
+     */
+    function failScopeRead(error: unknown, revision: number): ScopeResolution {
+      const unauthenticated = isApiRequestError(error) && error.error.kind === 'unauthenticated';
+      if (revision !== scopeRevision) {
+        // A newer navigation owns the pending route: erasing it here would send its expiry
+        // redirect to the wrong page (or none).
+        return unauthenticated ? 'superseded' : scopeFailure(error);
+      }
+      const attempted = pendingAttemptedPath;
+      pendingAttemptedPath = null;
+      if (unauthenticated) {
+        handleUnauthenticated(attempted);
+        return 'superseded';
+      }
+      clearScope();
+      return scopeFailure(error);
+    }
+
+    /**
+     * A failed grant reload. It answers nothing about the org's existence, so a refusal is
+     * `unavailable` (never the `not-found` a project lookup may share); the session's own `401` is
+     * the expiry path, and a failure a newer navigation overtook is `superseded` without touching
+     * the state that navigation now owns.
+     */
+    function failPermissionReload(error: unknown, revision: number): ScopeResolution {
+      if (revision !== scopeRevision) {
+        return 'superseded';
+      }
+      const attempted = pendingAttemptedPath;
+      pendingAttemptedPath = null;
+      if (isApiRequestError(error) && error.error.kind === 'unauthenticated') {
+        handleUnauthenticated(attempted);
+        return 'superseded';
+      }
+      clearScope();
+      return 'unavailable';
+    }
+
+    /**
      * Resolves the URL's org/project pair against what the server listed and makes it the current
      * scope. Never trusts an id: a foreign or unknown org, a project of another org, or a project
      * the server did not list is `not-found`, and the scope is cleared so nothing stale stays
@@ -413,7 +482,9 @@ const SessionStoreDefinition = signalStore(
      *
      * A resolution that a newer one (or a `reload()`) overtook while it awaited answers
      * `superseded`, not `not-found`: the id was never shown to be unknown, and the guard that
-     * receives it must cancel rather than render the 404 pattern.
+     * receives it must cancel rather than render the 404 pattern. A resolve that changes the org
+     * also republishes the request tenant and reloads the permission set it scopes; a failure
+     * there is `unavailable`, and a `401` is the expiry path below.
      *
      * A `401` from the project-list read is the session expiring mid-navigation (T5.2) and is the
      * one failure with an answer of its own: `handleUnauthenticated` — which the gateway's relay may
@@ -437,6 +508,25 @@ const SessionStoreDefinition = signalStore(
       if (org === undefined) {
         clearScope();
         return 'not-found';
+      }
+
+      // The tenant follows the org the route resolved to, and it does so before anything
+      // tenant-scoped is read: the permission set is scoped by it too, so a switch reloads it. The
+      // tenant alone does not say the grants arrived — a load that a newer resolve overtook never
+      // patched them — so the org the published grants belong to is the second half of the test.
+      if (tenant.orgId() !== orgId || permissionsOrgId !== orgId) {
+        pendingAttemptedPath = scopePath(orgId, projectId);
+        try {
+          const granted = await loadPermissionsForTenant(tenant, permissionsSource, orgId);
+          if (revision !== scopeRevision) {
+            return 'superseded';
+          }
+          patchState(store, { permissions: granted });
+          permissionsOrgId = orgId;
+        } catch (error) {
+          return failPermissionReload(error, revision);
+        }
+        pendingAttemptedPath = null;
       }
 
       // The org is already current and its list is loaded: answer from the cache. `undefined`
@@ -468,35 +558,18 @@ const SessionStoreDefinition = signalStore(
 
       let projects: readonly ProjectDto[];
       // The route this read is serving, named for the expiry redirect if the session is gone (T5.2).
-      pendingAttemptedPath =
-        projectId === null
-          ? `/orgs/${encodeURIComponent(orgId)}`
-          : `/orgs/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}`;
+      pendingAttemptedPath = scopePath(orgId, projectId);
       try {
         projects = await identity.listProjects(orgId);
       } catch (error) {
-        const attempted = pendingAttemptedPath;
-        pendingAttemptedPath = null;
-        if (isApiRequestError(error) && error.error.kind === 'unauthenticated') {
-          // The session expired mid-navigation: flip once and send the caller back here after
-          // signing in. `superseded` cancels the guard chain — the redirect this store started owns
-          // the navigation now, and matching the route would render a screen it cannot fill.
-          if (revision === scopeRevision) {
-            handleUnauthenticated(attempted);
-          }
-          return 'superseded';
-        }
-        if (revision === scopeRevision) {
-          clearScope();
-        }
-        return scopeFailure(error);
+        return failScopeRead(error, revision);
       }
-      pendingAttemptedPath = null;
       if (revision !== scopeRevision) {
-        // A newer navigation owns the scope by now; this answer is about a request nobody waits
-        // for.
+        // A newer navigation owns the scope (and the pending route) by now; this answer is about a
+        // request nobody waits for.
         return 'superseded';
       }
+      pendingAttemptedPath = null;
 
       // Only the rows the server attributed to THIS org. The endpoint is asked per org, but the
       // published list is what the switcher offers and what a landing address is built from, so a

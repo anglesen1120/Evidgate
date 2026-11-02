@@ -64,6 +64,7 @@ import {
   findFixtureEntryById,
   type FixtureEntry,
 } from './fixture-catalog';
+import { FIXTURE_REQUEST_LOG, type FixtureCallRecord } from './fixture-request-log';
 import {
   apiRelativePath,
   matchFixtureRoute,
@@ -168,6 +169,23 @@ function fixtureHeaders(entry: FixtureEntry): HttpHeaders {
 }
 
 /**
+ * Appends the request the backend is about to answer to the page-global log. A spec runs in Node
+ * (`window` absent), and the log is a review seam, never app state, so a missing window is a no-op.
+ */
+function recordRequest(request: HttpRequest<unknown>): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const headers: Record<string, string[]> = {};
+  for (const name of request.headers.keys()) {
+    headers[name.toLowerCase()] = request.headers.getAll(name) ?? [];
+  }
+  const recorded: FixtureCallRecord = { method: request.method, url: request.url, headers };
+  const log = (window[FIXTURE_REQUEST_LOG] ??= []);
+  log.push(recorded);
+}
+
+/**
  * The dev fixture `HttpBackend`. One instance answers every request (`useExisting`), so the toggles
  * are read per request instead of being captured at construction.
  */
@@ -176,6 +194,7 @@ export class FixtureHttpBackend implements HttpBackend {
   private readonly toggles: FixtureToggles = inject(FixtureToggles);
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
+    recordRequest(request);
     const relativePath = apiRelativePath(request.url);
     const route =
       relativePath === null ? undefined : matchFixtureRoute(request.method, relativePath);

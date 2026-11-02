@@ -183,7 +183,7 @@ describe('ConnectCiPage', () => {
     await fillOidc();
     await submit('oidc');
     expect(createCiBinding).toHaveBeenCalledTimes(1);
-    expect(createCiBinding).toHaveBeenCalledWith('org-1', 'project-1', {
+    expect(createCiBinding).toHaveBeenCalledWith('project-1', {
       provider: 'github_actions',
       repository_id: 123,
       repository_full_name: 'acme/web',
@@ -235,7 +235,7 @@ describe('ConnectCiPage', () => {
   it('accepts the maximum safe integer repository ID', async () => {
     await fillOidc({ 'connect-oidc-repo-id': '9007199254740991' });
     await submit('oidc');
-    expect(createCiBinding.mock.calls[0]?.[2].repository_id).toBe(9007199254740991);
+    expect(createCiBinding.mock.calls[0]?.[1].repository_id).toBe(9007199254740991);
     expect(root.querySelector('#connect-oidc-repo-id')?.getAttribute('aria-invalid')).toBeNull();
   });
 
@@ -403,7 +403,7 @@ describe('ConnectCiPage', () => {
       ),
     });
     await submit('oidc');
-    expect(createCiBinding.mock.calls[0]?.[2].allowed_ref_patterns).toHaveLength(32);
+    expect(createCiBinding.mock.calls[0]?.[1].allowed_ref_patterns).toHaveLength(32);
   });
 
   it.each(['', '   ', 'n'.repeat(129), '\u{10400}'.repeat(129)])(
