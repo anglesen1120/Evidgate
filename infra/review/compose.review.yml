@@ -1,0 +1,500 @@
+# Review stack: the Pilot-0 build served to named reviewers behind a Cloudflare
+# Tunnel. Self-contained on one host (`$HOME/evidgate-review/releases/<sha>/`),
+# digest-pinned, and unreachable from the internet except through the tunnel.
+# scripts/review/deploy.sh owns the env file, the sha and the public origin:
+#   docker compose --project-name evidgate-review \
+#     --env-file "$HOME/evidgate-review/.env.review" \
+#     -f "$release/infra/review/compose.review.yml" up -d --wait postgres seaweedfs
+#
+# Profiles decide what is reachable from outside the container network:
+#   tunnel        cloudflared + dashboard token: the only ingress, no host port
+#   tunnel-quick  cloudflared-quick: an ephemeral *.trycloudflare.com URL, no
+#                 token, basic auth forced on by compose.quick.yml
+#   local         web-local publishes the bundle on 127.0.0.1 (--tunnel none)
+#   debug         api-debug publishes the raw Api on 127.0.0.1 (an `ssh -L`)
+# The publishing services are separate entries because a compose port mapping is
+# not profile-conditional; they are the same images as web/api, so a replica is
+# what the environment contract already runs (prod: >= 2 Api replicas).
+# Memory limits are sized for one 4 GB / 2 vCPU host: ~2.9 GB of limits in total,
+# and each reservation is the working set its process settles at.
+#
+# Secrets arrive only as container environment from .env.review (mode 600, written
+# once by deploy.sh): this file interpolates them and carries no value. `compose
+# config` DOES print every resolved value, so deploy.sh never runs it and
+# check-config-redacted.sh checks only sentinel values.
+
+name: evidgate-review
+
+# Shared runtime settings: the Api, its debug replica and the Worker read the same
+# database and object-store coordinates, so a rename stays local.
+x-review-runtime-environment: &review-runtime-environment
+  DOTNET_ENVIRONMENT: Development
+  ASPNETCORE_ENVIRONMENT: Development
+  # Workstation GC: a server-GC heap sizes per core and would take the container
+  # limit on a 4 GB host. Each Api/Worker also caps its heap below mem_limit.
+  DOTNET_gcServer: '0'
+  EVIDGATE__DATABASE__CONNECTIONSTRING: ${EVIDGATE__DATABASE__CONNECTIONSTRING:?missing from .env.review}
+  EVIDGATE__OBJECT__ENDPOINT: http://seaweedfs:8333
+  EVIDGATE__OBJECT__REGION: us-east-1
+  EVIDGATE__OBJECT__BUCKET: evidgate-review
+  EVIDGATE__OBJECT__FORCEPATHSTYLE: 'true'
+  EVIDGATE__OBJECT__ACCESSKEY: ${EVIDGATE_S3_ACCESS_KEY:?missing from .env.review}
+  EVIDGATE__OBJECT__SECRETKEY: ${EVIDGATE_S3_SECRET_KEY:?missing from .env.review}
+
+# Development-only sign-in lane (POST /v1/dev/session): the Api maps the route only
+# when the environment is Development and both keys are present.
+x-review-dev-login-environment: &review-dev-login-environment
+  EVIDGATE__DEVLOGIN__ENABLED: ${EVIDGATE__DEVLOGIN__ENABLED:?missing from .env.review}
+  EVIDGATE__DEVLOGIN__SECRET: ${EVIDGATE__DEVLOGIN__SECRET:?missing from .env.review}
+
+x-review-build: &review-build
+  restart: 'no'
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+# Everything the two web services share. web-local is this container plus the
+# loopback publish only the local smoke may have.
+x-review-web: &review-web
+  restart: unless-stopped
+  depends_on: [api]
+  # Basic auth: the container writes /tmp/evidgate/htpasswd at start from USER and
+  # HASH only; the plaintext password stays in .env.review. Quick tunnels force
+  # `required` (compose.quick.yml, and the image's start script independently).
+  environment:
+    EVIDGATE_REVIEW_TUNNEL_MODE: ${EVIDGATE_REVIEW_TUNNEL_MODE:-token}
+    EVIDGATE_REVIEW_BASIC_AUTH: ${EVIDGATE_REVIEW_BASIC_AUTH:-optional}
+    EVIDGATE_REVIEW_BASIC_AUTH_USER: ${EVIDGATE_REVIEW_BASIC_AUTH_USER:-}
+    EVIDGATE_REVIEW_BASIC_AUTH_HASH: ${EVIDGATE_REVIEW_BASIC_AUTH_HASH:-}
+  mem_limit: 64m
+  mem_reservation: 32m
+  # nginx writes request bodies and proxy buffers under /tmp; the image is
+  # root-owned and read-only to the nginx uid.
+  read_only: true
+  tmpfs:
+    - /tmp:mode=1777,size=64m
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  # busybox wget, which the alpine image ships; the Api behind nginx has no HTTP
+  # client of its own, so `probe` checks it separately.
+  healthcheck:
+    test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:8080/nginx-health']
+    interval: 5s
+    timeout: 3s
+    retries: 12
+    start_period: 5s
+  networks: [net]
+
+services:
+  postgres:
+    image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    container_name: evidgate-review-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${EVIDGATE_DB_SUPERUSER_PASSWORD:?missing from .env.review}
+      POSTGRES_DB: postgres
+      # As in the dev stack: without it `host all all 127.0.0.1/32 trust` would
+      # accept the app connections with no password, defeating the role split.
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256'
+    volumes:
+      # postgres:18 keeps PGDATA under /var/lib/postgresql/18/docker, so the
+      # parent is what must persist.
+      - pg-data:/var/lib/postgresql
+    # 512m with a 128 MB pool and 50 connections: one Api, one Worker, one migrator.
+    command: ['postgres', '-c', 'shared_buffers=128MB', '-c', 'max_connections=50']
+    mem_limit: 512m
+    mem_reservation: 256m
+    healthcheck:
+      # TCP, not the socket: initdb's temporary server only listens on the socket.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -p 5432 -U postgres -d postgres']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    stop_grace_period: 10s
+    networks: [net]
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    container_name: evidgate-review-seaweedfs
+    restart: unless-stopped
+    # The identity file is built from the environment inside the container: a bind
+    # mount of a repository file is unreadable through colima/virtiofs, and unlike
+    # the dev stack there is no committed JSON to keep in step with.
+    environment:
+      EVIDGATE_REVIEW_S3_ACCESS_KEY: ${EVIDGATE_S3_ACCESS_KEY:?missing from .env.review}
+      EVIDGATE_REVIEW_S3_SECRET_KEY: ${EVIDGATE_S3_SECRET_KEY:?missing from .env.review}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        if [ -z "$$EVIDGATE_REVIEW_S3_ACCESS_KEY" ] || [ -z "$$EVIDGATE_REVIEW_S3_SECRET_KEY" ]; then
+          echo "seaweedfs: the review S3 identity is empty" >&2
+          exit 1
+        fi
+        printf '{"identities":[{"name":"evidgate-review","actions":["Admin","Read","Write","List","Tagging"],"credentials":[{"accessKey":"%s","secretKey":"%s"}]}]}' \
+          "$$EVIDGATE_REVIEW_S3_ACCESS_KEY" "$$EVIDGATE_REVIEW_S3_SECRET_KEY" \
+          > /etc/seaweedfs/s3-config.json
+        exec /entrypoint.sh server -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3-config.json
+    volumes:
+      - s3-data:/data
+    mem_limit: 384m
+    mem_reservation: 192m
+    healthcheck:
+      # 403 on an unsigned GET still proves the listener is up.
+      test: ['CMD-SHELL', 'curl -s -o /dev/null http://127.0.0.1:8333/']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    networks: [net]
+
+  # One-shot role bootstrap in two commands, run around the migrations:
+  #   docker compose ... run --rm db-init bootstrap   (evidgate_owner + database)
+  #   <migrator applies migrations; migration 0001 creates the three app roles>
+  #   docker compose ... run --rm db-init grants      (LOGIN + passwords)
+  # The script is inlined as a compose config rather than bind-mounted, and runs
+  # in the pinned postgres image because that image already carries psql.
+  db-init:
+    image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    container_name: evidgate-review-db-init
+    restart: 'no'
+    command: ['bootstrap']
+    environment:
+      PGPASSWORD: ${EVIDGATE_DB_SUPERUSER_PASSWORD:?missing from .env.review}
+      EVIDGATE_OWNER_PASSWORD: ${EVIDGATE_OWNER_PASSWORD:?missing from .env.review}
+      EVIDGATE_APP_PASSWORD: ${EVIDGATE_APP_PASSWORD:?missing from .env.review}
+      EVIDGATE_OPERATOR_PASSWORD: ${EVIDGATE_OPERATOR_PASSWORD:?missing from .env.review}
+      EVIDGATE_WORKER_SCHED_PASSWORD: ${EVIDGATE_WORKER_SCHED_PASSWORD:?missing from .env.review}
+    configs:
+      - source: db-init-script
+        target: /usr/local/bin/evidgate-db-init
+        mode: 0444
+    entrypoint: ['/bin/sh', '/usr/local/bin/evidgate-db-init']
+    # psql only: two short statements, then it exits.
+    mem_limit: 128m
+    mem_reservation: 64m
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [net]
+
+  migrator:
+    image: evidgate-review-migrator:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+    container_name: evidgate-review-migrator
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.migrator
+    # Built here or shipped with `docker save|load`; never pulled from a registry.
+    pull_policy: never
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      EVIDGATE_MIGRATOR__CONNECTIONSTRING: ${EVIDGATE_MIGRATOR__CONNECTIONSTRING:?missing from .env.review}
+      # seed-dev writes through the application role, not the owner.
+      EVIDGATE__DATABASE__CONNECTIONSTRING: ${EVIDGATE__DATABASE__CONNECTIONSTRING:?missing from .env.review}
+      # seed-dev --with-token binds the minted ingest token to the CI pepper.
+      EVIDGATE__CI__PEPPER: ${EVIDGATE__CI__PEPPER:?missing from .env.review}
+      EVIDGATE__CI__SIGNINGKEY: ${EVIDGATE__CI__SIGNINGKEY:?missing from .env.review}
+    mem_limit: 512m
+    mem_reservation: 128m
+    <<: *review-build
+    networks: [net]
+
+  # The bucket and its pending/ 24 h lifecycle, through the SeaweedFS image's own
+  # curl: the same two SigV4 requests scripts/dev/up.sh makes.
+  bucket-init:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    container_name: evidgate-review-bucket-init
+    restart: 'no'
+    environment:
+      EVIDGATE_REVIEW_S3_ACCESS_KEY: ${EVIDGATE_S3_ACCESS_KEY:?missing from .env.review}
+      EVIDGATE_REVIEW_S3_SECRET_KEY: ${EVIDGATE_S3_SECRET_KEY:?missing from .env.review}
+    configs:
+      - source: pending-lifecycle
+        target: /run/evidgate/pending-lifecycle.xml
+        mode: 0444
+    mem_limit: 128m
+    mem_reservation: 64m
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        bucket=evidgate-review
+        endpoint=http://seaweedfs:8333
+        credentials="$$EVIDGATE_REVIEW_S3_ACCESS_KEY:$$EVIDGATE_REVIEW_S3_SECRET_KEY"
+        sigv4='aws:amz:us-east-1:s3'
+        code=$$(curl -s -o /dev/null -w '%{http_code}' --aws-sigv4 "$$sigv4" \
+          --user "$$credentials" -X PUT "$$endpoint/$$bucket" || true)
+        case "$$code" in
+          200 | 409) ;;
+          *) echo "bucket-init: creating bucket '$$bucket' failed (HTTP $$code)" >&2; exit 1 ;;
+        esac
+        code=$$(curl -s -o /dev/null -w '%{http_code}' --aws-sigv4 "$$sigv4" \
+          --user "$$credentials" -X PUT --data-binary @- "$$endpoint/$$bucket?lifecycle=" \
+          </run/evidgate/pending-lifecycle.xml || true)
+        if [ "$$code" != 200 ]; then
+          echo "bucket-init: putting the lifecycle rule failed (HTTP $$code)" >&2
+          exit 1
+        fi
+        echo "bucket-init: $$bucket ready with the pending/ 24 h lifecycle rule"
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    networks: [net]
+
+  api:
+    image: evidgate-review-api:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+    container_name: evidgate-review-api
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      <<: [*review-runtime-environment, *review-dev-login-environment]
+      EVIDGATE__CI__PEPPER: ${EVIDGATE__CI__PEPPER:?missing from .env.review}
+      EVIDGATE__CI__SIGNINGKEY: ${EVIDGATE__CI__SIGNINGKEY:?missing from .env.review}
+      # 384m heap under the 640m limit: the other ~40% is native and runtime
+      # memory, so the GC ceiling stays clear of the cgroup OOM kill.
+      DOTNET_GCHeapHardLimit: '0x18000000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+    mem_limit: 640m
+    mem_reservation: 256m
+    # No HEALTHCHECK: the chiseled base has no shell and no curl, so `probe` checks it.
+    networks: [net]
+
+  worker:
+    image: evidgate-review-worker:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+    container_name: evidgate-review-worker
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      <<: *review-runtime-environment
+      EVIDGATE__TASKS__SWEEPCONNECTIONSTRING: ${EVIDGATE__TASKS__SWEEPCONNECTIONSTRING:?missing from .env.review}
+      # 192m heap under the 384m limit: the Worker runs one sweep at a time.
+      DOTNET_GCHeapHardLimit: '0x0C000000'
+    mem_limit: 384m
+    mem_reservation: 192m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+    networks: [net]
+
+  web:
+    image: evidgate-review-web:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+    container_name: evidgate-review-web
+    build:
+      context: ../..
+      dockerfile: infra/review/Dockerfile.web
+      args:
+        # The origin's connect-src entry is part of the served document, so a
+        # deploy with a new origin rebuilds this image.
+        EVIDGATE_REVIEW_PUBLIC_ORIGIN: ${EVIDGATE_REVIEW_PUBLIC_ORIGIN:-}
+    # Built here or shipped with `docker save|load`; never pulled from a registry.
+    pull_policy: never
+    <<: *review-web
+
+  # The local smoke needs the port mapping the tunnel profiles must not have.
+  web-local:
+    image: evidgate-review-web:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+    container_name: evidgate-review-web-local
+    profiles: ['local']
+    build:
+      context: ../..
+      dockerfile: infra/review/Dockerfile.web
+      args:
+        EVIDGATE_REVIEW_PUBLIC_ORIGIN: ${EVIDGATE_REVIEW_PUBLIC_ORIGIN:-}
+    pull_policy: never
+    ports:
+      - '127.0.0.1:${EVIDGATE_REVIEW_LOCAL_PORT:-8088}:8080'
+    <<: *review-web
+
+  api-debug:
+    image: evidgate-review-api:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+    container_name: evidgate-review-api-debug
+    profiles: ['debug']
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      <<: [*review-runtime-environment, *review-dev-login-environment]
+      EVIDGATE__CI__PEPPER: ${EVIDGATE__CI__PEPPER:?missing from .env.review}
+      EVIDGATE__CI__SIGNINGKEY: ${EVIDGATE__CI__SIGNINGKEY:?missing from .env.review}
+      DOTNET_GCHeapHardLimit: '0x18000000'
+    ports:
+      - '127.0.0.1:${EVIDGATE_REVIEW_API_PORT:-18080}:8080'
+    mem_limit: 640m
+    mem_reservation: 256m
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+    networks: [net]
+
+  # Waits for readiness through the container network, so no host client is needed:
+  #   docker compose ... run --rm --no-deps probe
+  #   docker compose ... run --rm --no-deps probe -fsS http://worker:8081/internal/health/ready
+  probe:
+    image: curlimages/curl:8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
+    container_name: evidgate-review-probe
+    restart: 'no'
+    command:
+      - -fsS
+      - --retry
+      - '60'
+      - --retry-delay
+      - '2'
+      - --retry-all-errors
+      - http://api:8080/internal/health/ready
+    mem_limit: 64m
+    mem_reservation: 16m
+    networks: [net]
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+    container_name: evidgate-review-cloudflared
+    profiles: ['tunnel']
+    restart: unless-stopped
+    # The tunnel is remotely managed: its public hostname and the `http://web:8080`
+    # service live in the Cloudflare dashboard, so the token is the whole ingress
+    # configuration, and deploy.sh refuses the tunnel profile without one.
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    command: ['tunnel', '--no-autoupdate', 'run']
+    depends_on:
+      web:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 96m
+    mem_reservation: 32m
+    # net carries no egress (internal), so cloudflared needs the second network
+    # to reach Cloudflare's edge, and net to reach web:8080.
+    networks: [net, egress]
+
+  # Quick tunnel: cloudflared dials out, Cloudflare hands it an ephemeral
+  # https://<words>.trycloudflare.com URL which it logs on its own stdout/stderr
+  # (`docker logs evidgate-review-cloudflared-quick`), and no token or dashboard
+  # is involved. That URL is public, so compose.quick.yml makes basic auth
+  # mandatory and the web image independently refuses to serve in quick mode
+  # without credentials: a quick tunnel can never be unauthenticated.
+  cloudflared-quick:
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+    container_name: evidgate-review-cloudflared-quick
+    profiles: ['tunnel-quick']
+    restart: unless-stopped
+    command: ['tunnel', '--no-autoupdate', '--url', 'http://web:8080']
+    depends_on:
+      web:
+        condition: service_healthy
+    mem_limit: 96m
+    mem_reservation: 32m
+    security_opt:
+      - no-new-privileges:true
+    # Not read_only: a quick tunnel persists short-lived credentials under the
+    # image's HOME. Nothing is published on a host port either way.
+    networks: [net, egress]
+
+networks:
+  # Internal: no route off the host, so a compromised container cannot phone home.
+  net:
+    name: evidgate-review-net
+    internal: true
+  # Egress exists for cloudflared only.
+  egress:
+    name: evidgate-review-egress
+
+volumes:
+  # Data survives `down`; down.sh --purge deletes both explicitly.
+  pg-data:
+    name: evidgate-review-pg-data
+  s3-data:
+    name: evidgate-review-s3-data
+
+configs:
+  # Inlined, not bind-mounted: see the seaweedfs comment above. Kept byte-equal
+  # to scripts/dev/db-init.sh's SQL, which check-inlined-files.sh cannot diff
+  # (that script is shell, this one is psql), so the four role names and the
+  # two statements that must match are named there instead.
+  db-init-script:
+    content: |
+      #!/bin/sh
+      # Review-stack role bootstrap. `bootstrap` runs before the migrations and
+      # `grants` after them, because migration 0001 creates the three app roles
+      # without LOGIN: passwords are a bootstrap concern, never a migration's.
+      set -eu
+      command="$${1:-}"
+      case "$$command" in
+        bootstrap | grants) ;;
+        *)
+          echo "db-init: usage: evidgate-db-init bootstrap|grants" >&2
+          exit 2
+          ;;
+      esac
+      if [ -z "$${PGPASSWORD:-}" ]; then
+        echo "db-init: PGPASSWORD is empty (the bootstrap superuser)" >&2
+        exit 1
+      fi
+
+      run_sql() {
+        psql -X -q -v ON_ERROR_STOP=1 -h postgres -p 5432 -U postgres -d postgres -v db_name=evidgate
+      }
+
+      if [ "$$command" = bootstrap ]; then
+        run_sql <<'SQL'
+      \getenv owner_password EVIDGATE_OWNER_PASSWORD
+      select 'create role evidgate_owner login createrole'
+       where not exists (select 1 from pg_catalog.pg_roles where rolname = 'evidgate_owner')
+      \gexec
+      alter role evidgate_owner login createrole nosuperuser nocreatedb nobypassrls password :'owner_password';
+      select format('create database %I owner evidgate_owner', :'db_name')
+       where not exists (select 1 from pg_catalog.pg_database where datname = :'db_name')
+      \gexec
+      SQL
+        echo "db-init: evidgate_owner and the evidgate database are ready"
+        exit 0
+      fi
+
+      run_sql <<'SQL'
+      \getenv app_password EVIDGATE_APP_PASSWORD
+      \getenv operator_password EVIDGATE_OPERATOR_PASSWORD
+      \getenv worker_sched_password EVIDGATE_WORKER_SCHED_PASSWORD
+      alter role evidgate_app login password :'app_password';
+      alter role evidgate_operator login password :'operator_password';
+      alter role evidgate_worker_sched login password :'worker_sched_password';
+      SQL
+      echo "db-init: evidgate_app, evidgate_operator and evidgate_worker_sched may log in"
+
+  # Copied verbatim from infra/seaweedfs/pending-lifecycle.xml;
+  # check-inlined-files.sh fails when the two drift apart.
+  pending-lifecycle:
+    content: |
+      <LifecycleConfiguration>
+        <Rule>
+          <ID>evidgate-pending-24h</ID>
+          <Filter>
+            <Prefix>pending/</Prefix>
+          </Filter>
+          <Status>Enabled</Status>
+          <Expiration>
+            <Days>1</Days>
+          </Expiration>
+        </Rule>
+      </LifecycleConfiguration>
