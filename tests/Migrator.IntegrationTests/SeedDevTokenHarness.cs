@@ -114,6 +114,7 @@ internal sealed class SeedDevTokenHarness(PostgresMigratorFixture fixture)
         (await fixture.ScalarAsync<long>(database, "select count(*) from public.project")).ShouldBe(0);
         (await fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token")).ShouldBe(0);
         (await fixture.ScalarAsync<long>(database, "select count(*) from public.policy_revision")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(database, "select count(*) from public.policy_activation")).ShouldBe(0);
     }
 
     internal async Task<(Guid Id, string Hash)> PolicyRevisionAsync(string database) => (
