@@ -30,8 +30,9 @@ fx_assert_eq "$(cat "$release/.release-sha")" "$FX_FIRST_SHA" "the release marke
 fx_assert_eq "$(cat "$release/VERSION")" "first release" "the shipped tree is the asked sha"
 fx_assert_absent "$root/releases/$FX_SECOND_SHA"
 fx_assert_eq "$(readlink "$root/current")" "releases/$FX_FIRST_SHA" "current points at the shipped release"
-fx_assert_eq "$(sed -n 's/^EVIDGATE_REVIEW_SHA=//p' "$root/.env.review")" "$FX_FIRST_SHA" "the env file tags images with the release sha"
+fx_assert_eq "$(sed -n 's/^EVIDGATE_REVIEW_TAG=//p' "$root/.env.review")" "$FX_FIRST_SHA" "the env file tags images with the release sha"
 fx_assert_log_has "$DOCKER_LOG" "$FX_FIRST_SHA" "every compose call tags the release sha"
+fx_assert_log_has "$GATE_LOG" "check-web-image.sh TAG=$FX_FIRST_SHA" "the image gate inspects the image this deploy will run"
 
 out="$(bash "$FX_REPO/scripts/review/status.sh" review-host 2>&1)"
 fx_assert_contains "$out" "$FX_FIRST_SHA" "status reports the shipped sha"

@@ -14,10 +14,12 @@ rv_tunnel_mode_valid() { # MODE
 }
 
 # cloudflared prints its throwaway host on its own log, so the URL is read back
-# from the container instead of guessed. An empty result means "not yet".
+# from the container instead of guessed. The banner also mentions
+# api.trycloudflare.com, which is the service endpoint and never the tunnel.
 rv_quick_tunnel_url_now() {
   rv_run "docker logs $(rv_quote "$RV_QUICK_TUNNEL_CONTAINER") 2>&1 \
-    | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | sort -u | tail -n 1" || true
+    | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | grep -v '^https://api\.' \
+    | sort -u | tail -n 1" || true
 }
 
 # A quick tunnel that dies leaves no URL and no reason, so the wait reports the

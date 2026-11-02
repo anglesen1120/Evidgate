@@ -21,6 +21,9 @@ done
 fx_assert_log_has "$DOCKER_LOG" "save evidgate-review-migrator:$tag" "the images are saved on this machine"
 fx_assert_log_has "$SSH_LOG" "docker load" "the images are loaded on the host"
 fx_assert_log_has "$DOCKER_LOG" "EVIDGATE_REVIEW_TAG=$tag" "compose resolves the shipped tag"
+# The gate asks compose for the web image, and the env file still holds the first
+# deploy's full sha: only the passed tag keeps it inspecting what was loaded.
+fx_assert_log_has "$GATE_LOG" "check-web-image.sh TAG=$tag" "the image gate inspects the loaded short tag"
 
 # `compose ... build` would mean the host built something, which is the whole
 # thing this flag exists to avoid.

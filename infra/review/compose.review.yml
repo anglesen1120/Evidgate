@@ -47,6 +47,16 @@ x-review-dev-login-environment: &review-dev-login-environment
   EVIDGATE__DEVLOGIN__ENABLED: ${EVIDGATE__DEVLOGIN__ENABLED:?missing from .env.review}
   EVIDGATE__DEVLOGIN__SECRET: ${EVIDGATE__DEVLOGIN__SECRET:?missing from .env.review}
 
+x-review-api-environment: &review-api-environment
+  # Minting a session needs the pepper (the cookie is stored only as an HMAC of
+  # its value); without it every such route answers 503.
+  EVIDGATE__SESSION__PEPPER: ${EVIDGATE__SESSION__PEPPER:?missing from .env.review}
+  # The Api is reachable only from nginx on the internal net, and nginx always
+  # sends X-Forwarded-Proto: https (the edge terminates TLS), so the header can be
+  # trusted: without it Request.IsHttps is false and the __Host-/Secure session
+  # cookie cannot be written.
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: 'true'
+
 x-review-build: &review-build
   restart: 'no'
   depends_on:
@@ -256,7 +266,7 @@ services:
     pull_policy: never
     restart: unless-stopped
     environment:
-      <<: [*review-runtime-environment, *review-dev-login-environment]
+      <<: [*review-runtime-environment, *review-dev-login-environment, *review-api-environment]
       EVIDGATE__CI__PEPPER: ${EVIDGATE__CI__PEPPER:?missing from .env.review}
       EVIDGATE__CI__SIGNINGKEY: ${EVIDGATE__CI__SIGNINGKEY:?missing from .env.review}
       # 384m heap under the 640m limit: the other ~40% is native and runtime
@@ -333,7 +343,7 @@ services:
     pull_policy: never
     restart: unless-stopped
     environment:
-      <<: [*review-runtime-environment, *review-dev-login-environment]
+      <<: [*review-runtime-environment, *review-dev-login-environment, *review-api-environment]
       EVIDGATE__CI__PEPPER: ${EVIDGATE__CI__PEPPER:?missing from .env.review}
       EVIDGATE__CI__SIGNINGKEY: ${EVIDGATE__CI__SIGNINGKEY:?missing from .env.review}
       DOTNET_GCHeapHardLimit: '0x18000000'

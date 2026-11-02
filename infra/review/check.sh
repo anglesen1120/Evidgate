@@ -60,6 +60,7 @@ printf '== generate-nginx-headers.mjs tests\n'
 
 "$SCRIPT_DIR/check-pins.sh"
 "$SCRIPT_DIR/check-inlined-files.sh"
+"$SCRIPT_DIR/check-nginx-phases.sh"
 
 if [ "$static_only" = false ]; then
   "$SCRIPT_DIR/check-no-public-ports.sh"

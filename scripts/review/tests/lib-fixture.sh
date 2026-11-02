@@ -126,10 +126,16 @@ STUB
 
   cat >"$bin/docker" <<'STUB'
 #!/bin/sh
-# The release tag reaches compose as an environment assignment in the command
-# string, so the log records it the way compose sees it.
-if [ -n "${EVIDGATE_REVIEW_TAG:-}" ]; then
-  printf 'EVIDGATE_REVIEW_TAG=%s %s\n' "$EVIDGATE_REVIEW_TAG" "$*" >>"$DOCKER_LOG"
+# The release tag and the profile switch reach compose as environment
+# assignments in the command string, so the log records them the way compose
+# sees them.
+prefix=""
+# An empty value is recorded too: compose refuses a service whose tag is
+# required but empty, so a blank assignment is a defect, not an absence.
+[ -z "${EVIDGATE_REVIEW_TAG+x}" ] || prefix="$prefix EVIDGATE_REVIEW_TAG=$EVIDGATE_REVIEW_TAG"
+[ -z "${COMPOSE_PROFILES:-}" ] || prefix="$prefix COMPOSE_PROFILES=$COMPOSE_PROFILES"
+if [ -n "$prefix" ]; then
+  printf '%s %s\n' "${prefix# }" "$*" >>"$DOCKER_LOG"
 else
   printf '%s\n' "$*" >>"$DOCKER_LOG"
 fi
@@ -140,6 +146,8 @@ case "$*" in
   *seed-dev*) cat "$SEED_STDOUT" ;;
   *logs*cloudflared-quick*)
     echo '2026-11-02T10:00:00Z INF Requesting new quick Tunnel on trycloudflare.com...'
+    echo '2026-11-02T10:00:00Z INF +------------------------------------------------------------------------------+'
+    echo '2026-11-02T10:00:00Z INF |  https://api.trycloudflare.com/v1/tunnels/9f1c  |'
     echo '2026-11-02T10:00:01Z INF |  https://bright-river-1234.trycloudflare.com  |'
     ;;
   *State.Running*) echo true ;;
@@ -173,17 +181,18 @@ services:
 YAML
 
   # The real deploy runs these two gates from the release tree; the fixture only
-  # has to prove the deploy calls them, so they record their arguments.
+  # has to prove the deploy calls them, so they record their arguments and the
+  # tag the image gate resolves with (compose prefers it over the env file).
   for gate in check.sh check-web-image.sh; do
     cat >"$FX_REPO/infra/review/$gate" <<'GATE'
 #!/usr/bin/env bash
-printf '%s %s\n' "$0" "$*" >>"$GATE_LOG"
+printf '%s TAG=%s %s\n' "$0" "${EVIDGATE_REVIEW_TAG:-}" "$*" >>"$GATE_LOG"
 GATE
   done
 
   cat >"$FX_REPO/infra/review/env.review.template" <<'TEMPLATE'
 COMPOSE_PROJECT_NAME=evidgate-review
-EVIDGATE_REVIEW_SHA=__EVIDGATE_REVIEW_SHA__
+EVIDGATE_REVIEW_TAG=__EVIDGATE_REVIEW_SHA__
 EVIDGATE_DB_SUPERUSER_PASSWORD=__EVIDGATE_DB_SUPERUSER_PASSWORD__
 EVIDGATE_OWNER_PASSWORD=__EVIDGATE_OWNER_PASSWORD__
 EVIDGATE_APP_PASSWORD=__EVIDGATE_APP_PASSWORD__

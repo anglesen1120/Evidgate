@@ -359,7 +359,10 @@ main() {
   else
     rv_compose build
   fi
-  rv_mutate "cd $(rv_quote "$RV_RELEASE_DIR") && bash infra/review/check-web-image.sh --env-file $(rv_quote "$RV_ENV_FILE")"
+  # The gate resolves the web image from compose, and the shell value wins over
+  # the one stored at first deploy: without this it would inspect the previous
+  # release's image, or nothing at all under --build-local's short tag.
+  rv_mutate "cd $(rv_quote "$RV_RELEASE_DIR") && EVIDGATE_REVIEW_TAG=$(rv_quote "$RV_IMAGE_TAG") bash infra/review/check-web-image.sh --env-file $(rv_quote "$RV_ENV_FILE")"
 
   rv_step "6/13 database and object store"
   rv_compose up -d --wait postgres seaweedfs

@@ -21,6 +21,11 @@ if ! out="$(bash "$down" review-host 2>&1)"; then
 fi
 fx_assert_log_has "$DOCKER_LOG" "down" "a plain down stops the stack"
 fx_assert_log_lacks "$DOCKER_LOG" "-v" "a plain down keeps the volumes"
+fx_assert_log_has "$DOCKER_LOG" "COMPOSE_PROFILES=*" "a plain down enables every profile, so the tunnel stops too"
+fx_assert_log_lacks "$DOCKER_LOG" "EVIDGATE_REVIEW_TAG= " "no compose call is handed an empty tag"
+fx_assert_log_has "$DOCKER_LOG" "EVIDGATE_REVIEW_TAG=$(sed -n 's/^EVIDGATE_REVIEW_TAG=//p' "$root/.env.review")" \
+  "the teardown uses the tag the env file records"
+fx_assert_log_has "$SSH_LOG" "docker rm -f" "containers left by a disabled profile are swept"
 fx_assert_file "$root/releases/$FX_SECOND_SHA/.release-sha"
 
 : >"$DOCKER_LOG"
@@ -36,6 +41,7 @@ if ! out="$(bash "$down" review-host --purge --yes 2>&1)"; then
   fx_fail "a confirmed purge failed: $out"
 fi
 fx_assert_log_has "$DOCKER_LOG" "down -v" "a confirmed purge deletes the volumes"
+fx_assert_log_has "$DOCKER_LOG" "COMPOSE_PROFILES=*" "a purge enables every profile as well"
 fx_assert_absent "$root/releases"
 fx_assert_absent "$root/current"
 fx_assert_file "$root/.env.review"

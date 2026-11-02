@@ -73,6 +73,31 @@ review_step "nginx -t inside $tag (realm enabled)"
 compose run --rm --no-deps --entrypoint /bin/sh web -c \
   'set -e; mkdir -p /tmp/evidgate; printf "auth_basic \"Evidgate review\";\nauth_basic_user_file /tmp/evidgate/htpasswd;\n" > /tmp/evidgate/auth.conf; printf "reviewer:\$apr1\$c2FsdA\$ZHVtbXk\n" > /tmp/evidgate/htpasswd; nginx -t'
 
+review_step 'the health probe answers loopback only'
+# The rewrite-phase guard is the only thing keeping /nginx-health off the tunnel,
+# so it is exercised instead of trusted: nginx runs in a one-shot container, is
+# asked from loopback (200 ok) and from the container's own bridge address, which
+# is the source an off-host request presents (must be 403).
+# shellcheck disable=SC2016 # the container shell expands these, not this one
+health_probe_script='set -e
+mkdir -p /tmp/evidgate
+printf "auth_basic off;\n" > /tmp/evidgate/auth.conf
+nginx
+i=0
+while [ "$i" -lt 40 ]; do
+  if wget -qO- http://127.0.0.1:8080/nginx-health > /tmp/evidgate/health 2>/dev/null; then break; fi
+  i=$((i + 1)); sleep 0.25
+done
+grep -qx ok /tmp/evidgate/health || { echo "FAIL: the loopback probe did not answer ok"; exit 1; }
+ip=$(hostname -i 2>/dev/null | tr " " "\n" | grep -E "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" | head -1)
+[ -n "$ip" ] || { echo "FAIL: no IPv4 address to test the refusal with"; exit 1; }
+out=$(wget -qO- -S "http://$ip:8080/nginx-health" 2>&1 || true)
+case "$out" in
+  *403*) echo "loopback 200 ok, bridge address $ip refused (403)" ;;
+  *) echo "FAIL: /nginx-health answered a non-loopback source $ip: $out"; exit 1 ;;
+esac'
+compose run --rm --no-deps --entrypoint /bin/sh web -c "$health_probe_script"
+
 review_step 'both locale bundles exist'
 # shellcheck disable=SC2016 # $locale must reach the container unexpanded
 compose run --rm --no-deps --entrypoint /bin/sh web -c \

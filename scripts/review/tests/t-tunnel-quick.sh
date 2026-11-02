@@ -27,9 +27,12 @@ fx_ok "the token tunnel is not started"
 content="$(cat "$root/.env.review")"
 fx_assert_contains "$content" 'EVIDGATE_REVIEW_TUNNEL_MODE=quick' "the mode is recorded in the env file"
 fx_assert_contains "$content" 'EVIDGATE_REVIEW_BASIC_AUTH_USER=reviewer' "the reviewer user is the fixed one"
-grep -Eq '^EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD=[0-9a-f]{16}$' "$root/.env.review" \
-  || fx_fail "the password is not 16 hex characters"
-fx_ok "the password is 16 hex characters"
+grep -Eq '^EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD=[0-9a-f]{48}$' "$root/.env.review" \
+  || fx_fail "the password is not 48 hex characters"
+fx_ok "the password is 48 hex characters"
+grep -Eq '^EVIDGATE__SESSION__PEPPER=.{44}$' "$root/.env.review" \
+  || fx_fail "the session pepper is missing: /v1/dev/session would answer 503"
+fx_ok "the session pepper is minted as base64 32 bytes"
 # Single quotes matter: compose's dotenv would read the $apr1 prefix as a
 # variable reference and hand the container a mangled hash.
 grep -Eq "^EVIDGATE_REVIEW_BASIC_AUTH_HASH='\\\$apr1\\\$[./A-Za-z0-9]+\\\$[./A-Za-z0-9]+'$" "$root/.env.review" \

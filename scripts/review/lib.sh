@@ -14,6 +14,9 @@ RV_PROJECT="evidgate-review"
 RV_ENV_BASENAME=".env.review"
 RV_COMPOSE_REL="infra/review/compose.review.yml"
 RV_TEMPLATE_REL="infra/review/env.review.template"
+# Set only for teardown: `down` ignores --profile, so an all-profiles switch is
+# the way to reach a service whose profile is not enabled.
+RV_COMPOSE_PROFILES=""
 RV_DEFAULT_API_PORT=18080
 RV_DEFAULT_WEB_PORT=8088
 # Three image builds plus a database, an object store and one release tree per
@@ -144,7 +147,7 @@ rv_mutate_stdin() {
 # is passed per call so switching between quick and token never needs a rewrite
 # of the env file: the shell value wins over the one recorded at creation.
 rv_compose_argv() {
-  local arg out="" extra=""
+  local arg out="" extra="" profiles="" envs=""
   for arg in "$@"; do
     out="$out $(rv_quote "$arg")"
   done
@@ -154,11 +157,20 @@ rv_compose_argv() {
   if [ "$RV_TUNNEL_MODE" = quick ]; then
     extra=" -f $(rv_quote "$RV_RELEASE_DIR/infra/review/compose.quick.yml")"
   fi
-  printf 'cd %s && EVIDGATE_REVIEW_SHA=%s EVIDGATE_REVIEW_TAG=%s EVIDGATE_REVIEW_TUNNEL_MODE=%s docker compose --project-name %s --env-file %s -f %s%s%s' \
+  # Quoted even for '*': an unquoted star would be globbed by the remote shell.
+  if [ -n "$RV_COMPOSE_PROFILES" ]; then
+    profiles="COMPOSE_PROFILES=$(rv_quote "$RV_COMPOSE_PROFILES") "
+  fi
+  # Only non-empty values are exported. An empty EVIDGATE_REVIEW_TAG would beat
+  # the one in the env file and compose refuses a service that requires it, so a
+  # teardown (which needs no image) must not send one.
+  [ -z "$RV_IMAGE_TAG" ] || envs="$envs EVIDGATE_REVIEW_TAG=$(rv_quote "$RV_IMAGE_TAG")"
+  [ -z "$RV_IMAGE_TAG" ] || envs="$envs EVIDGATE_REVIEW_SHA=$(rv_quote "$RV_IMAGE_TAG")"
+  [ -z "$RV_TUNNEL_MODE" ] || envs="$envs EVIDGATE_REVIEW_TUNNEL_MODE=$(rv_quote "$RV_TUNNEL_MODE")"
+  printf 'cd %s && %s%s docker compose --project-name %s --env-file %s -f %s%s%s' \
     "$(rv_quote "$RV_RELEASE_DIR")" \
-    "$(rv_quote "$RV_IMAGE_TAG")" \
-    "$(rv_quote "$RV_IMAGE_TAG")" \
-    "$(rv_quote "$RV_TUNNEL_MODE")" \
+    "$profiles" \
+    "$envs" \
     "$(rv_quote "$RV_PROJECT")" \
     "$(rv_quote "$RV_ENV_FILE")" \
     "$(rv_quote "$RV_COMPOSE_REL")" \
@@ -166,9 +178,22 @@ rv_compose_argv() {
     "$out"
 }
 
-rv_compose() { rv_mutate "$(rv_compose_argv "$@")"; }
+# A command substitution that fails leaves an empty string, and an empty remote
+# command exits 0 over ssh: that would skip a compose step in silence, so the
+# argv is checked before it is run.
+rv_compose() {
+  local argv
+  argv="$(rv_compose_argv "$@")" || rv_die "cannot build the compose command for '$*'"
+  [ -n "$argv" ] || rv_die "internal: empty compose command for '$*'"
+  rv_mutate "$argv"
+}
 
-rv_compose_read() { rv_run "$(rv_compose_argv "$@")"; }
+rv_compose_read() {
+  local argv
+  argv="$(rv_compose_argv "$@")" || rv_die "cannot build the compose command for '$*'"
+  [ -n "$argv" ] || rv_die "internal: empty compose command for '$*'"
+  rv_run "$argv"
+}
 
 # Compose by project name alone: teardown and status must work when the release
 # tree a stack was started from is already gone, and the labels carry the rest.
@@ -180,7 +205,12 @@ rv_compose_project_argv() {
   printf 'docker compose --project-name %s%s' "$(rv_quote "$RV_PROJECT")" "$out"
 }
 
-rv_project_compose() { rv_mutate "$(rv_compose_project_argv "$@")"; }
+rv_project_compose() {
+  local argv
+  argv="$(rv_compose_project_argv "$@")" || rv_die "cannot build the compose command for '$*'"
+  [ -n "$argv" ] || rv_die "internal: empty compose command for '$*'"
+  rv_mutate "$argv"
+}
 
 # Teardown must still work when the tree behind `current` is gone; the container
 # labels identify the project, so compose can run without a file then.
@@ -192,7 +222,16 @@ rv_teardown() {
       RV_RELEASE_SHA="${RV_RELEASE_SHA#releases/}"
     fi
     RV_RELEASE_DIR="$RV_HOST_ROOT/current"
+    # No image has to exist for a down, and an unset tag makes compose refuse the
+    # whole file: take the one the file records, and let the argv skip it if the
+    # file has none.
+    [ -n "$RV_IMAGE_TAG" ] || RV_IMAGE_TAG="$(rv_env_get EVIDGATE_REVIEW_TAG || true)"
+    # down ignores --profile, and a service whose profile is not enabled is not
+    # part of the model: '*' puts the tunnel and the debug doors in scope too.
+    RV_COMPOSE_PROFILES="*"
     rv_compose "$@"
+    RV_COMPOSE_PROFILES=""
+    rv_mutate "ids=\$(docker ps -aq --filter $(rv_quote "label=com.docker.compose.project=$RV_PROJECT")); [ -z \"\$ids\" ] || docker rm -f \$ids"
   else
     rv_project_compose "$@"
   fi

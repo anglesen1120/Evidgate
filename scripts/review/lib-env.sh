@@ -71,8 +71,9 @@ rv_render_env() { # SHA PUBLIC_ORIGIN TUNNEL_TOKEN
       *BASIC_AUTH_USER*) value="$RV_AUTH_USER" ;;
       *BASIC_AUTH_PASSWORD*)
         # Plaintext exists only for the owner to hand to a reviewer; the
-        # container verifies the apr1 hash below.
-        RV_AUTH_PASSWORD="$(rv_random_hex 8)"
+        # container verifies the apr1 hash below. 24 bytes because the quick
+        # tunnel puts that password on a public URL with no rate limit.
+        RV_AUTH_PASSWORD="$(rv_random_hex 24)"
         value="$RV_AUTH_PASSWORD"
         ;;
       *BASIC_AUTH_HASH*)
@@ -97,6 +98,13 @@ rv_render_env() { # SHA PUBLIC_ORIGIN TUNNEL_TOKEN
   # parser and the container would reject every login.
   [ -z "$RV_AUTH_HASH" ] \
     || content="$(rv_env_set "$content" EVIDGATE_REVIEW_BASIC_AUTH_HASH "'$RV_AUTH_HASH'")"
+  # Minting a dev session needs this key; without it POST /v1/dev/session answers
+  # 503. The template owns it, and this keeps a template that predates the key
+  # from shipping a stack nobody can log into.
+  if ! printf '%s\n' "$content" | grep -q '^EVIDGATE__SESSION__PEPPER='; then
+    content="$content
+EVIDGATE__SESSION__PEPPER=$(rv_random_base64 32)"
+  fi
 
   if printf '%s\n' "$content" | sed -n 's/^[^=]*=//p' | grep -qE '__[A-Za-z0-9_]+__'; then
     rv_die "$RV_TEMPLATE_REL still has a placeholder this script cannot mint: $(printf '%s\n' "$content" | sed -n 's/^[^=]*=//p' | grep -oE '__[A-Za-z0-9_]+__' | sort -u | tr '\n' ' ')"
