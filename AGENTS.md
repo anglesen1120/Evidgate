@@ -66,7 +66,7 @@ Full rules, evidence and gates: [`docs/engineering/agent-code-rules.md`](docs/en
 - **Database.** Every policy has `TO <role>`. State columns get transition triggers. References get FKs. Dedupe compares a payload hash.
 - **Size.** File ≤ 500 lines, method ≤ 60. Split by responsibility.
 - **Never bend a gate:** no `--ignore-exit-code`, `Skip`, `as unknown as`, or logging a secret for a test. Never claim "idempotent/safe/atomic" without a test.
-- **Before "done",** run `scripts/verify.sh --stage …` for the layers you touched; a bare `scripts/verify.sh` (no `--stage`) narrows by changed paths to the `docs`, `no-dotnet` or `full` tier (01.2.1-T7), prints one `== gate scope:` line naming the tier, the reason and the base, and runs only that tier's stages. Pass the `--stage` names you need, or `EVIDGATE_GATE_SCOPE=full`, to run the whole gate. In the PR, state what you could not run.
+- **Before "done",** run `scripts/verify.sh --stage …` for the layers you touched; a bare `scripts/verify.sh` (no `--stage`) narrows by changed paths to the `docs`, `review-infra`, `no-dotnet` or `full` tier (01.2.1-T7; `review-infra` is a diff confined to `infra/review/**`, `scripts/review/**` and docs, which adds the `check-review-infra` stage), prints one `== gate scope:` line naming the tier, the reason and the base, and runs only that tier's stages. Pass the `--stage` names you need, or `EVIDGATE_GATE_SCOPE=full`, to run the whole gate. In the PR, state what you could not run.
 
 ## Definition of Done
 

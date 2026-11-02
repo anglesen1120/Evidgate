@@ -140,6 +140,38 @@ class PathClasses(unittest.TestCase):
             ("no-dotnet", gate_scope.NO_DOTNET_REASON),
         )
 
+    def test_review_paths_are_the_review_infra_tier(self):
+        for path in (
+            "infra/review/nginx/nginx.conf",
+            "infra/review/check.sh",
+            "infra/review/compose.review.yml",
+            "scripts/review/deploy.sh",
+            "scripts/review/tests/run.sh",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(gate_scope.tier_of_path(path)[0], "review-infra")
+        self.assertEqual(
+            gate_scope.tier_of_paths(["infra/review/check.sh", "docs/a.md"]),
+            ("review-infra", gate_scope.REVIEW_INFRA_REASON),
+        )
+
+    def test_review_dockerfiles_and_lookalikes_stay_outside_the_tier(self):
+        for path in (
+            "infra/review/Dockerfile.web",
+            "infra/review/Dockerfile.web.dockerignore",
+            "infra/reviewer/x.sh",
+            "infra/README.md",
+            "scripts/review_blockers/rules.py",
+            "scripts/reviewer.sh",
+        ):
+            with self.subTest(path=path):
+                self.assertNotEqual(gate_scope.tier_of_path(path)[0], "review-infra")
+
+    def test_review_plus_web_takes_the_stricter_tier_and_review_plus_source_is_full(self):
+        self.assertEqual(gate_scope.tier_of_paths(["infra/review/check.sh", "apps/web/src/a.ts"])[0], "no-dotnet")
+        self.assertEqual(gate_scope.tier_of_paths(["infra/review/check.sh", "src/Program.cs"])[0], "full")
+        self.assertEqual(gate_scope.tier_of_paths(["infra/review/check.sh", "scripts/verify.sh"])[0], "full")
+
     def test_one_unsafe_path_makes_the_whole_set_full(self):
         tier, why = gate_scope.tier_of_paths(["apps/web/src/a.ts", "src/Program.cs"])
         self.assertEqual(tier, "full")
@@ -173,15 +205,29 @@ class StageSelection(unittest.TestCase):
         for name in ("tsc-build", "tsc-spec", "vitest", "eslint", "image-pins"):
             self.assertIn(name, stages)
 
-    def test_docs_is_the_formatter_plus_every_check_stage(self):
+    def test_docs_is_the_formatter_plus_every_check_stage_but_the_review_one(self):
         stages = gate_scope.stages_for("docs")
         expected = [
             name
             for name in gate_scope.CANONICAL_STAGES
-            if name.startswith("check-") or name == "prettier"
+            if (name.startswith("check-") or name == "prettier")
+            and name not in gate_scope.REVIEW_ONLY_STAGES
         ]
         self.assertEqual(stages, expected)
         self.assertIn("check-gate-scope", stages)
+        self.assertNotIn("check-review-infra", stages)
+
+    def test_review_infra_adds_its_checks_to_the_docs_tier_and_drops_the_build_stages(self):
+        stages = gate_scope.stages_for("review-infra")
+        for name in gate_scope.stages_for("docs") + ["check-review-infra", "image-pins", "licence-scan"]:
+            self.assertIn(name, stages)
+        for name in ("restore", "build", "format", "test", "isolation", "images", "tsc-build", "vitest"):
+            self.assertNotIn(name, stages)
+        self.assertEqual(stages, [n for n in gate_scope.CANONICAL_STAGES if n in stages])
+
+    def test_no_dotnet_and_full_run_the_review_check(self):
+        self.assertIn("check-review-infra", gate_scope.stages_for("no-dotnet"))
+        self.assertIn("check-review-infra", gate_scope.stages_for("full"))
 
     def test_an_unknown_tier_is_a_full_gate(self):
         self.assertEqual(gate_scope.stages_for("nothing-like-it"), list(gate_scope.CANONICAL_STAGES))
@@ -211,7 +257,7 @@ class Requests(unittest.TestCase):
     def test_an_unreadable_request_is_a_full_gate(self):
         tier, note = gate_scope.apply_request("docs", "quick")
         self.assertEqual(tier, "full")
-        self.assertIn("auto|docs|no-dotnet|full", note)
+        self.assertIn("auto|docs|review-infra|no-dotnet|full", note)
 
 
 class Repository(RepoTest):
@@ -344,6 +390,38 @@ class ChangeSet(Repository):
     def test_a_mixed_documentation_and_web_commit_stays_no_dotnet(self):
         self.change(("docs/a.md", "text\n"), ("packages/sdk/src/a.ts", "export {};\n"))
         self.assertEqual(self.scope().tier, "no-dotnet")
+
+    def test_a_review_deployment_commit_is_the_review_infra_tier(self):
+        self.change(
+            ("infra/review/nginx/nginx.conf", "events {}\n"),
+            ("infra/review/check-web-image.sh", "#!/usr/bin/env bash\n"),
+        )
+        scope = self.scope()
+        self.assertEqual(scope.tier, "review-infra")
+        self.assertEqual(scope.stages(), gate_scope.stages_for("review-infra"))
+
+    def test_a_review_deployment_commit_with_its_runbook_stays_review_infra(self):
+        self.change(("scripts/review/deploy.sh", "#!/usr/bin/env bash\n"), ("docs/runbooks/review-deploy.md", "x\n"))
+        self.assertEqual(self.scope().tier, "review-infra")
+
+    def test_a_review_deployment_commit_with_a_source_file_is_the_full_tier(self):
+        self.change(("infra/review/nginx/nginx.conf", "events {}\n"), ("src/Evidgate.Api/Program.cs", "// x\n"))
+        self.assertEqual(self.scope().tier, "full")
+
+    def test_a_review_deployment_commit_with_a_gate_file_is_the_full_tier(self):
+        for gate in ("scripts/verify.sh", "scripts/gate_scope.py", ".github/workflows/ci.yml"):
+            with self.subTest(gate=gate):
+                scope = self.tier_of(("infra/review/nginx/nginx.conf", f"# {gate}\n"), (gate, "# x\n"))
+                self.assertEqual(scope.tier, "full")
+
+    def test_a_review_dockerfile_commit_is_the_full_tier(self):
+        self.assertEqual(self.tier_of(("infra/review/Dockerfile.web", "FROM scratch\n")).tier, "full")
+
+    def test_a_review_deployment_and_web_commit_takes_the_stricter_no_dotnet_tier(self):
+        self.change(("infra/review/compose.review.yml", "services: {}\n"), ("apps/web/src/x.ts", "export {};\n"))
+        scope = self.scope()
+        self.assertEqual(scope.tier, "no-dotnet")
+        self.assertIn("check-review-infra", scope.stages())
 
     def test_a_source_commit_is_the_full_tier(self):
         self.change(("src/Evidgate.Api/Program.cs", "// x\n"))

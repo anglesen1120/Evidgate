@@ -75,6 +75,7 @@ CANONICAL_STAGES = (
     "check-permissions-drift",
     "check-rls",
     "check-review-blockers",
+    "check-review-infra",
     "check-gate-scope",
     "image-pins",
     "images",
@@ -93,7 +94,18 @@ DOCKER_STAGES = frozenset({"images"})
 SKIPPED_WHEN_NARROWED = DOTNET_STAGES | DOCKER_STAGES
 
 # Ordered narrowest first: a requested scope may only move up this scale.
-TIER_ORDER = {"docs": 0, "no-dotnet": 1, "full": 2}
+TIER_ORDER = {"docs": 0, "review-infra": 1, "no-dotnet": 2, "full": 3}
+
+# The review deployment's own paths (nginx, compose, the deploy scripts and their
+# offline tests). No .NET test reads them, so a change confined to them cannot
+# fail the .NET or Docker stages; the stages below are what can. The Dockerfiles
+# there stay `full` through FULL_NAME_PATTERNS, because no narrowed stage builds
+# an image.
+REVIEW_PREFIXES = ("infra/review/", "scripts/review/")
+# Run only by a tier that can touch the review deployment: a prose-only change
+# has nothing for it to check, and its run starts the review stack's test suites.
+REVIEW_ONLY_STAGES = frozenset({"check-review-infra"})
+REVIEW_INFRA_EXTRA_STAGES = frozenset({"prettier", "image-pins", "licence-scan"})
 
 DOC_PREFIXES = ("docs/", "plans/")
 # `fixtures/web-api` is deliberately absent: the fixture loader walks every
@@ -161,6 +173,7 @@ GATE_PREFIXES = ("scripts/dev/", "scripts/review_blockers/")
 LOCAL_ONLY_PREFIXES = (".omp/",)
 
 DOCS_REASON = "every changed path is Markdown under docs/, plans/, or a root *.md"
+REVIEW_INFRA_REASON = "every changed path is documentation or review deployment (infra/review, scripts/review)"
 NO_DOTNET_REASON = (
     "every changed path is documentation, an ADR, apps/web, packages, a non-gate "
     "script, or a root JS/TS tooling config"
@@ -210,7 +223,10 @@ def stages_for(tier: str) -> list[str]:
         return kept
     # The docs tier: the formatter and the text-only checks. A check stage is
     # cheap and reads files, so it runs even when the change is prose.
-    return [name for name in kept if name == "prettier" or name.startswith("check-")]
+    checks = [name for name in kept if name == "prettier" or name.startswith("check-")]
+    if tier == "review-infra":
+        return [name for name in kept if name in checks or name in REVIEW_INFRA_EXTRA_STAGES]
+    return [name for name in checks if name not in REVIEW_ONLY_STAGES]
 
 
 def _basename(path: str) -> str:
@@ -245,6 +261,8 @@ def tier_of_path(path: str, *, untracked=(), deleted=()) -> tuple[str, str]:
         return "full", "deleted story file a .NET catalogue test globs"
     if path.startswith(DOCS_NO_DOTNET_PREFIXES):
         return "no-dotnet", "ADR file the licence and dependency scans resolve"
+    if path.startswith(REVIEW_PREFIXES):
+        return "review-infra", "review deployment"
     if is_doc(path):
         return "docs", "documentation"
     if path.startswith(SAFE_PREFIXES):
@@ -270,8 +288,11 @@ def tier_of_paths(paths, *, untracked=(), deleted=()) -> tuple[str, str]:
     if blocked:
         path, why = blocked[0]
         return "full", f"{printable(path)} ({why}) needs the full gate"
-    if any(tier == "no-dotnet" for _path, tier, _why in judged):
+    tiers = {tier for _path, tier, _why in judged}
+    if "no-dotnet" in tiers:
         return "no-dotnet", NO_DOTNET_REASON
+    if "review-infra" in tiers:
+        return "review-infra", REVIEW_INFRA_REASON
     return "docs", DOCS_REASON
 
 
@@ -281,7 +302,7 @@ def apply_request(computed: str, requested: str | None) -> tuple[str, str | None
     if requested == "auto":
         return computed, None
     if requested not in TIER_ORDER:
-        return "full", f"EVIDGATE_GATE_SCOPE={requested!r} is not auto|docs|no-dotnet|full, so the gate runs full"
+        return "full", f"EVIDGATE_GATE_SCOPE={requested!r} is not auto|docs|review-infra|no-dotnet|full, so the gate runs full"
     if TIER_ORDER[requested] < TIER_ORDER[computed]:
         return computed, f"EVIDGATE_GATE_SCOPE={requested} was refused: the change set needs {computed}"
     if TIER_ORDER[requested] > TIER_ORDER[computed]:
