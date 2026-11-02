@@ -104,6 +104,29 @@ case "$out" in
 esac'
 compose run --rm --no-deps --entrypoint /bin/sh web -c "$health_probe_script"
 
+review_step 'redirects are relative: no scheme, host or listen port in Location'
+# Behind the tunnel the browser sees https on 443; a Location that names http://
+# or :8080 sends it to a port nothing serves over TLS. Raw requests keep the
+# probe independent of a client that would follow the redirect.
+# shellcheck disable=SC2016 # the container shell expands these, not this one
+redirect_probe_script='set -e
+mkdir -p /tmp/evidgate
+printf "auth_basic off;\n" > /tmp/evidgate/auth.conf
+printf "# auth off\n" > /tmp/evidgate/proxy-auth.conf
+nginx
+i=0
+while [ "$i" -lt 40 ]; do
+  if wget -qO- http://127.0.0.1:8080/nginx-health >/dev/null 2>&1; then break; fi
+  i=$((i + 1)); sleep 0.25
+done
+for pair in "/ /vi/" "/vi /vi/" "/en /en/"; do
+  set -- $pair
+  loc=$(printf "GET %s HTTP/1.0\r\nHost: review.example.trycloudflare.com\r\n\r\n" "$1" | nc 127.0.0.1 8080 | tr -d "\r" | sed -n "s/^[Ll]ocation: //p")
+  [ "$loc" = "$2" ] || { echo "FAIL: GET $1 redirected to [$loc], expected [$2]"; exit 1; }
+done
+echo "/, /vi and /en redirect with a relative Location"'
+compose run --rm --no-deps --entrypoint /bin/sh web -c "$redirect_probe_script"
+
 review_step 'both locale bundles exist'
 # shellcheck disable=SC2016 # $locale must reach the container unexpanded
 compose run --rm --no-deps --entrypoint /bin/sh web -c \
