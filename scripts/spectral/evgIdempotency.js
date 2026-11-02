@@ -34,6 +34,8 @@ var IDEMPOTENCY_EXEMPT = {
     'naturally idempotent: revoking an already revoked row changes nothing and the answer is the same 204 (02.3.2-T2.1 §5)',
   'post /auth/logout':
     'naturally idempotent: the session row is revoked once and replaying the old cookie is 401 session_revoked, so a key could not change the outcome (02.3.2-T2.1 §5, AC8)',
+  'post /dev/session':
+    'no resource is created: the route sets the session cookies of one fixed development user, so a repeat only replaces the caller own session (Development-only route)',
 };
 
 module.exports = function evgIdempotency(targetVal, opts, ctx) {
