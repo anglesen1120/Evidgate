@@ -7,6 +7,7 @@
 // whose route does not match, or the reverse.
 
 import type { ProductPhase } from './nav.models';
+import { REVIEW_OPEN_ENTRIES } from './review-entries';
 
 /** Phase order, earliest first (CR-D-2: G1 Author → G2 Run → G3 Learn and repair → G4 Expand). */
 const PHASE_ORDER: readonly ProductPhase[] = ['G1', 'G2', 'G3', 'G4'];
@@ -27,4 +28,15 @@ export const ACTIVE_PHASE: ProductPhase = 'G1';
  */
 export function isPhaseActive(phase: ProductPhase): boolean {
   return PHASE_ORDER.indexOf(phase) <= PHASE_ORDER.indexOf(ACTIVE_PHASE);
+}
+
+/**
+ * `isPhaseActive` for a registry entry, plus the entries the build opens early
+ * (`review-entries.ts`; empty in production). The sidebar and `entryPhaseGuard` both call this.
+ */
+export function isEntryActive(entry: {
+  readonly id: string;
+  readonly phase: ProductPhase;
+}): boolean {
+  return isPhaseActive(entry.phase) || REVIEW_OPEN_ENTRIES.some((open) => open.id === entry.id);
 }

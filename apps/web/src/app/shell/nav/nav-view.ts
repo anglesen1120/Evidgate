@@ -19,7 +19,7 @@ import { computed, inject, Injectable, type Signal } from '@angular/core';
 import { SessionStore } from '../../core/session/session.store';
 import type { NavEntry, NavGroupView, NavItemView } from './nav.models';
 import { NAV_ENTRIES, NAV_GROUPS } from './nav-registry';
-import { isPhaseActive } from './product-phase';
+import { isEntryActive } from './product-phase';
 
 /** One entry that survived the filters, with the router commands it renders (D-S68-Q4). */
 interface VisibleEntry {
@@ -48,7 +48,7 @@ export class NavViewService {
     const projectId = this.session.currentProject()?.id ?? null;
 
     const visible = NAV_ENTRIES.flatMap((entry): VisibleEntry[] => {
-      if (!isPhaseActive(entry.phase) || !this.session.has(entry.permission)) {
+      if (!isEntryActive(entry) || !this.session.has(entry.permission)) {
         return [];
       }
       if (entry.scope === 'org') {

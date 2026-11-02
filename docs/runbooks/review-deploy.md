@@ -178,6 +178,8 @@ The route exists only when `ASPNETCORE_ENVIRONMENT=Development` and both `EVIDGA
 
 The form reaches a shipped artifact only through the review web image, which is built with `npm run build:review -w apps/web`: `angular.json`'s `review` configuration is the production configuration plus the `login-extension.ts` → `login-extension.development.ts` replacement, while the production build (`npm run build`) keeps the empty production extension and stays form-free. `check-no-fixture-code.mjs --allow-dev-sign-in` permits exactly the six sign-in markers for that build and fails it when they disappear ⚠️ — otherwise a review image that lost the form would pass the gate vacuously, and a reviewer would have nothing to sign in with.
 
+**Runs and run detail.** After sign-in the sidebar of the signed-in project shows **Runs** (the review image opens that one phase-G2 entry; `check-no-fixture-code.mjs --require-run-views` fails the build when it is missing). It opens `/<locale>/orgs/<org>/projects/<project>/runs`, the real run list; a row opens `/runs/<run_id>` with the decision view and the evidence panel. The seeded dogfood runs show A with decision PASS, B with FAIL and C pending. The session needs `run:read`; without it the route is refused like any product route. The production build does not mount the entry.
+
 The **operator** reads the secret on the host in their own terminal — not a reviewer:
 
 ```console

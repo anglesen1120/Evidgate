@@ -109,6 +109,10 @@
                 {
                   "replace": "src/app/features/auth/login/login-extension.ts",
                   "with": "src/app/features/auth/login/login-extension.development.ts"
+                },
+                {
+                  "replace": "src/app/shell/nav/review-entries.ts",
+                  "with": "src/app/shell/nav/review-entries.review.ts"
                 }
               ]
             },

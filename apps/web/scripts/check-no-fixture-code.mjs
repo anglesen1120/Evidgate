@@ -41,6 +41,11 @@
 // additionally requires one of `app-dev-sign-in` / `/dev/session` in the output, so a review
 // build that lost the form fails here instead of serving a login screen with no way in.
 //
+// `--require-run-views` is the review build's second flag: it requires the `review-run-views` tag
+// of the review-only seam `shell/nav/review-entries.review.ts`, which opens the `runs` entry
+// (real run list + run detail, product guards) in the review image; without the flag the tag is
+// forbidden like any marker, and the 18-marker production line is unchanged.
+//
 // The check fails closed: a missing/empty dist directory, or a corpus with no `input.json`, is a
 // failure, not a pass — otherwise a broken build or a moved corpus would make the gate vacuous.
 //
@@ -146,6 +151,15 @@ const MARKERS = [...FIXTURE_MARKERS, ...DEV_SIGN_IN_MARKERS];
 const allowDevSignIn = process.argv.slice(2).includes('--allow-dev-sign-in');
 const SIGN_IN_PRESENCE_NEEDLES = ['app-dev-sign-in'];
 const forbiddenMarkers = allowDevSignIn ? FIXTURE_MARKERS : MARKERS;
+
+/**
+ * The tag `review-entries.review.ts` carries for the run views the review build opens early. The
+ * review build must keep it (`--require-run-views`, so a review image without the run list fails
+ * here); any other build must not, so the review seam cannot reach production. It is checked on top
+ * of the marker list, whose count (and the report line) stays as it was.
+ */
+const requireRunViews = process.argv.slice(2).includes('--require-run-views');
+const RUN_VIEWS_TAG = 'review-run-views';
 
 /**
  * Shortest corpus string treated as a leak signal. Shorter values (`ok`, ids, `en`) collide with
@@ -349,6 +363,7 @@ if (files.length === 0) {
 
 const needles = [
   ...forbiddenMarkers.map((marker) => ({ needle: marker, source: 'the fixture backend code' })),
+  ...(requireRunViews ? [] : [{ needle: RUN_VIEWS_TAG, source: 'the review-only run views seam' }]),
   ...[...fixtureValues].map(([value, name]) => ({
     needle: value,
     source: `fixtures/web-api/${name}/input.json`,
@@ -365,10 +380,14 @@ const needles = [
 
 const leaks = [];
 let signInPresent = false;
+let runViewsPresent = false;
 for (const file of files) {
   const text = readFileSync(join(DIST_DIR, file), 'utf8');
   if (allowDevSignIn && SIGN_IN_PRESENCE_NEEDLES.some((needle) => text.includes(needle))) {
     signInPresent = true;
+  }
+  if (requireRunViews && text.includes(RUN_VIEWS_TAG)) {
+    runViewsPresent = true;
   }
   for (const { needle, source } of needles) {
     if (text.includes(needle)) {
@@ -394,8 +413,17 @@ if (allowDevSignIn && !signInPresent) {
   );
 }
 
+if (requireRunViews && !runViewsPresent) {
+  fail(
+    `the review output has no run views: "${RUN_VIEWS_TAG}" is not in ${shown(DIST_DIR)}/. ` +
+      '--require-run-views expects the review build (angular.json `review`, which replaces ' +
+      'review-entries.ts); without it a reviewer could not reach the run list or run detail.',
+  );
+}
+
 console.log(
   `fixture code: ${files.length} file(s) in ${shown(DIST_DIR)}/ scanned for ` +
     `${forbiddenMarkers.length} marker(s) and ${fixtureValues.size} fixture string(s)` +
-    `${allowDevSignIn ? ' (dev sign-in allowed and present)' : ''}.`,
+    `${allowDevSignIn ? ' (dev sign-in allowed and present)' : ''}` +
+    `${requireRunViews ? ' (run views present)' : ''}.`,
 );

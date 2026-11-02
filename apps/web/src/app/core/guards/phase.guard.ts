@@ -10,7 +10,7 @@ import { inject } from '@angular/core';
 import type { CanMatchFn } from '@angular/router';
 
 import type { ProductPhase } from '../../shell/nav/nav.models';
-import { isPhaseActive } from '../../shell/nav/product-phase';
+import { isEntryActive, isPhaseActive } from '../../shell/nav/product-phase';
 import { SessionStore } from '../session/session.store';
 
 /**
@@ -25,5 +25,17 @@ export function phaseGuard(phase: ProductPhase): CanMatchFn {
     const session = inject(SessionStore);
     await session.bootstrap();
     return isPhaseActive(phase);
+  };
+}
+
+/** `phaseGuard` for a registry entry: also matches an entry the build opens early. */
+export function entryPhaseGuard(entry: {
+  readonly id: string;
+  readonly phase: ProductPhase;
+}): CanMatchFn {
+  return async () => {
+    const session = inject(SessionStore);
+    await session.bootstrap();
+    return isEntryActive(entry);
   };
 }
