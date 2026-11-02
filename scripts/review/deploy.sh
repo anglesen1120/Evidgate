@@ -54,6 +54,9 @@ HOST_ARG=""
 KEY_ARG=""
 TUNNEL_ARG=""
 TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-}"
+# The token is kept in a shell variable only: an exported copy is inherited by
+# every child (docker, buildx, ssh, tar), and none of them needs it.
+unset CLOUDFLARE_TUNNEL_TOKEN
 
 usage() {
   awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"
@@ -233,20 +236,19 @@ print_plan() {
   fi
   case "$RV_TUNNEL_MODE" in
     token)
-      printf ' 12  tunnel     %s\n' "$(rv_compose_argv --profile tunnel up -d --wait cloudflared)"
-      printf '                 then no container may publish a host port'
-      [ -z "$RV_PUBLIC_ORIGIN" ] || printf ', and %s/ must answer' "$RV_PUBLIC_ORIGIN"
-      printf '\n'
+      printf ' 12  tunnel     no container may publish a host port, then %s\n' "$(rv_compose_argv --profile tunnel up -d --wait cloudflared)"
+      [ -z "$RV_PUBLIC_ORIGIN" ] || printf '                 and %s/ must answer 401 without credentials\n' "$RV_PUBLIC_ORIGIN"
       ;;
     quick)
-      printf ' 12  tunnel     %s\n' "$(rv_compose_argv --profile tunnel-quick up -d cloudflared-quick)"
-      printf '                 then no container may publish a host port, and the trycloudflare.com URL is read from its log\n'
+      printf ' 12  tunnel     no container may publish a host port, then %s\n' "$(rv_compose_argv --profile tunnel-quick up -d cloudflared-quick)"
+      printf '                 then the trycloudflare.com URL is read from its log and must answer 401 without credentials\n'
       ;;
     none)
       printf ' 12  tunnel     none (nothing is published; --tunnel quick gives a temporary public URL)\n'
       ;;
   esac
-  printf ' 13  current    %s -> releases/%s\n' "$RV_HOST_ROOT/current" "$RV_RELEASE_SHA"
+  printf ' 13  current    %s -> releases/%s, then keep 3 releases and prune older images\n' \
+    "$RV_HOST_ROOT/current" "$RV_RELEASE_SHA"
 }
 
 # The seed prints its inputs only while it creates them; a redeploy against the
@@ -265,11 +267,16 @@ run_dogfood() { # TOKEN SUITE CASE_REV ENV_REV
       token="$EVIDGATE_DEV_TOKEN"
       rv_info "using EVIDGATE_DEV_TOKEN from this shell (the seed minted none)"
     else
-      rv_die "dogfood needs a dev ingest token and the seed printed none: a live token exists and its secret cannot be shown again. Export the token from the first deploy, or pass --no-dogfood to deploy without the dogfood run."
+      # A seeded stack cannot print its token again, so a redeploy has nothing to
+      # run with. Refusing here would make every redeploy need --no-dogfood, and
+      # the stack it just started is healthy either way.
+      rv_warn "dogfood skipped: the seed printed no EVIDGATE_DEV_TOKEN (it seeds once). Export the token from the first deploy to run it, or pass --no-dogfood to say so explicitly"
+      return 0
     fi
   fi
   if [ -z "$suite" ] || [ -z "$case_rev" ] || [ -z "$env_rev" ]; then
-    rv_die "dogfood needs PILOT0_SUITE_REVISION_ID, PILOT0_CASE_REVISION_ID and PILOT0_ENVIRONMENT_REVISION_ID, and the seed printed none (it seeds only once). Read them from the first deploy's output, or pass --no-dogfood."
+    rv_warn "dogfood skipped: the seed printed no PILOT0_SUITE_REVISION_ID, PILOT0_CASE_REVISION_ID or PILOT0_ENVIRONMENT_REVISION_ID (it seeds once). Read them from the first deploy's output, or pass --no-dogfood"
+    return 0
   fi
 
   # The dev token cannot read the catalog and the dev user has no login, so the
@@ -301,13 +308,9 @@ run_dogfood() { # TOKEN SUITE CASE_REV ENV_REV
   rv_close_forward
 }
 
-main() {
-  local env_state seed_out dev_token suite case_rev env_rev previous public_url=""
-
-  parse_args "$@"
-  trap rv_cleanup EXIT
-  rv_resolve_ssh_key "$KEY_ARG"
-
+# Every step below is one numbered phase of the deploy; main only sequences them
+# so a reader can see the order without scrolling through 170 lines.
+step_resolve() {
   rv_step "1/13 preflight"
   rv_preflight
   rv_step "2/13 resolve the release"
@@ -322,16 +325,10 @@ main() {
   if [ "$RV_MODE" = local ]; then
     rv_info "local smoke root: $RV_HOST_ROOT (delete it when the smoke is done)"
   fi
+}
 
-  if [ "$RV_DRY_RUN" = 1 ]; then
-    # The plan must name the tunnel step exactly when the real run would take
-    # it, so the read-only env read happens here too.
-    [ -z "$ORIGIN_ARG" ] || RV_PUBLIC_ORIGIN="$ORIGIN_ARG"
-    rv_refresh_ports
-    print_plan
-    exit 0
-  fi
-
+step_secrets() {
+  local env_state=0
   rv_step "3/13 secrets: $RV_ENV_FILE"
   # Refuse before the file exists: a first deploy that wrote .env.review without
   # the token would leave a file that is never rewritten and can never tunnel.
@@ -339,12 +336,14 @@ main() {
     && ! rv_run "test -e $(rv_quote "$RV_ENV_FILE")"; then
     rv_die "--tunnel token on a first deploy needs CLOUDFLARE_TUNNEL_TOKEN in this shell: the token is written into .env.review (never argv), and that file is created once"
   fi
-  env_state=0
   rv_env_ensure "$RV_RELEASE_SHA" "$ORIGIN_ARG" "$TUNNEL_TOKEN" || env_state=$?
+  # Nothing below needs the token, and every child process would inherit an
+  # exported one: buildx, tar and the remote shell must never see it.
+  rv_forget_tunnel_token
   rv_refresh_ports
   if [ "$RV_TUNNEL_MODE" = token ]; then
     [ "$(rv_env_get CLOUDFLARE_TUNNEL_TOKEN)" != "" ] \
-      || rv_die "$RV_ENV_FILE has no CLOUDFLARE_TUNNEL_TOKEN; export CLOUDFLARE_TUNNEL_TOKEN in this shell and delete that file on the host (first deploy only), or deploy with --tunnel quick"
+      || rv_die "$RV_ENV_FILE has no CLOUDFLARE_TUNNEL_TOKEN. Append the line on $(rv_target) instead of deleting the file — a new file mints new database and API passwords and locks every service out of its data: printf 'CLOUDFLARE_TUNNEL_TOKEN=%s\\n' '<token from the Cloudflare dashboard>' >> $(rv_quote "$RV_ENV_FILE")"
     if [ "$env_state" = 1 ] && [ -n "$ORIGIN_ARG" ]; then
       rv_warn "$RV_ENV_FILE already existed: --public-origin only takes effect on the first deploy"
     fi
@@ -358,7 +357,9 @@ main() {
   elif [ "$RV_MODE" != local ]; then
     rv_warn "no tunnel: the stack runs but reviewers cannot reach it (--tunnel quick gives a temporary public URL)"
   fi
+}
 
+step_images() {
   rv_step "4/13 ship release"
   rv_ship_release "$RV_RELEASE_SHA"
 
@@ -366,19 +367,12 @@ main() {
   # single layer is built. The image check needs the image, so it follows build.
   rv_step "5/13 infra checks and images"
   if [ "$RV_BUILD_LOCAL" = 1 ]; then
-    # The host only loads what was built here: it runs no gate, so it needs
-    # neither node nor python3. rv_build_local_images runs the same static gate on
-    # the extracted sha before the first build.
-    :
-  else
-    rv_mutate "cd $(rv_quote "$RV_RELEASE_DIR") && bash infra/review/check.sh --static-only"
-  fi
-  if [ "$RV_BUILD_LOCAL" = 1 ]; then
-    # The host only loads what was built here, so it never needs the build
-    # headroom that a 4 GiB VM does not have.
+    # The host only loads what was built here: it runs no gate and needs no build
+    # headroom. rv_build_local_images runs the same static gate over the sha.
     rv_build_local_images
     rv_ship_images
   else
+    rv_mutate "cd $(rv_quote "$RV_RELEASE_DIR") && bash infra/review/check.sh --static-only"
     # Bases before the images derived from them; see rv_build_host_images.
     rv_build_host_images
   fi
@@ -386,7 +380,10 @@ main() {
   # the one stored at first deploy: without this it would inspect the previous
   # release's image, or nothing at all under --build-local's short tag.
   rv_mutate "cd $(rv_quote "$RV_RELEASE_DIR") && EVIDGATE_REVIEW_TAG=$(rv_quote "$RV_IMAGE_TAG") bash infra/review/check-web-image.sh --env-file $(rv_quote "$RV_ENV_FILE")"
+}
 
+step_data() {
+  local seed_out
   rv_step "6/13 database and object store"
   rv_compose up -d --wait postgres seaweedfs
 
@@ -402,11 +399,13 @@ main() {
   seed_out="$(rv_compose run --rm -T seed seed-dev --with-token)"
   # The one secret line is dropped before anything reaches the terminal.
   printf '%s\n' "$seed_out" | sed -e '/^EVIDGATE_DEV_TOKEN=/d' -e '/^[[:space:]]*$/d'
-  dev_token="$(seed_field "$seed_out" EVIDGATE_DEV_TOKEN)"
-  suite="$(seed_field "$seed_out" suite_revision_id)"
-  case_rev="$(seed_field "$seed_out" case_revision_id)"
-  env_rev="$(seed_field "$seed_out" environment_revision_id)"
+  RV_SEED_TOKEN="$(seed_field "$seed_out" EVIDGATE_DEV_TOKEN)"
+  RV_SEED_SUITE="$(seed_field "$seed_out" suite_revision_id)"
+  RV_SEED_CASE_REV="$(seed_field "$seed_out" case_revision_id)"
+  RV_SEED_ENV_REV="$(seed_field "$seed_out" environment_revision_id)"
+}
 
+step_serve() {
   rv_step "10/13 api, worker, web"
   if [ "$RV_MODE" = local ]; then
     # web-local is web plus the loopback publish; naming services explicitly
@@ -422,16 +421,21 @@ main() {
     --retry-all-errors http://worker:8081/internal/health/ready
 
   rv_step "11/13 dogfood"
-  run_dogfood "$dev_token" "$suite" "$case_rev" "$env_rev"
+  run_dogfood "$RV_SEED_TOKEN" "$RV_SEED_SUITE" "$RV_SEED_CASE_REV" "$RV_SEED_ENV_REV"
+}
 
+# The tunnel is the only door, so it may only open onto a stack that publishes
+# nothing: the check runs before the connector starts and again afterwards, in
+# every mode, because a container started earlier can still hold a port.
+step_tunnel() {
   rv_step "12/13 tunnel"
+  rv_assert_no_host_ports
   case "$RV_TUNNEL_MODE" in
     token)
       rv_compose --profile tunnel up -d --wait cloudflared
       rv_assert_no_host_ports
       if [ -n "$RV_PUBLIC_ORIGIN" ]; then
-        # 401 is a pass: Basic Auth answers before anything else does.
-        rv_wait_http "$RV_PUBLIC_ORIGIN/" 180 "200 301 302 303 307 308 401" "the public origin"
+        rv_wait_http "$RV_PUBLIC_ORIGIN/" 180 "$(rv_ingress_codes)" "the public origin"
       else
         rv_info "no --public-origin recorded, so the tunnel's hostname is whatever the Cloudflare dashboard serves"
       fi
@@ -439,17 +443,35 @@ main() {
     quick)
       rv_compose --profile tunnel-quick up -d cloudflared-quick
       rv_assert_no_host_ports
-      public_url="$(rv_quick_tunnel_url 180)"
-      rv_wait_http "$public_url/" 120 "200 301 302 303 307 308 401" "the quick tunnel"
+      RV_PUBLIC_URL="$(rv_quick_tunnel_url 180)"
+      rv_wait_http "$RV_PUBLIC_URL/" 120 "$(rv_ingress_codes)" "the quick tunnel"
       ;;
     none)
+      rv_assert_no_host_ports
       rv_info "no tunnel: nothing is published beyond the loopback binds of this profile"
       ;;
   esac
+}
 
+# The command that reproduces this release, including the flags that decide what
+# the images are: a rollback with the wrong ones rebuilds for the wrong platform
+# or starts the wrong ingress.
+rollback_command() { # PREVIOUS_SHA
+  local cmd="$0 ${HOST_ARG:-<ssh-host>} --sha $1"
+  [ "$RV_BUILD_LOCAL" = 0 ] || cmd="$cmd --build-local"
+  [ "$RV_TUNNEL_MODE" = none ] || cmd="$cmd --tunnel $RV_TUNNEL_MODE"
+  [ -z "$RV_SSH_KEY" ] || cmd="$cmd -i $RV_SSH_KEY"
+  printf '%s' "$cmd"
+}
+
+step_current() {
   rv_step "13/13 current"
-  previous="$(rv_point_current "$RV_RELEASE_SHA")"
+  RV_PREVIOUS="$(rv_point_current "$RV_RELEASE_SHA")"
+  rv_prune_releases
+  rv_prune_images "${RV_PREVIOUS#releases/}"
+}
 
+print_summary() {
   printf '\n'
   rv_info "deployed $RV_RELEASE_SHA"
   case "$RV_TUNNEL_MODE" in
@@ -459,7 +481,7 @@ main() {
       fi
       ;;
     quick)
-      rv_info "public URL: $public_url/"
+      rv_info "public URL: $RV_PUBLIC_URL/"
       rv_warn "a quick tunnel host changes on every restart of cloudflared-quick; --tunnel token with your own hostname is the stable one"
       ;;
   esac
@@ -469,9 +491,33 @@ main() {
     rv_info "no public URL: deploy again with --tunnel quick for a temporary one, or --tunnel token with a Cloudflare token"
   fi
   rv_info "Basic Auth user '$RV_AUTH_USER', and user/password are in $RV_ENV_FILE (mode 600, never printed)"
-  if [ -n "$previous" ]; then
-    rv_info "previous release: $previous — roll back with: $0 ${HOST_ARG:-<ssh-host>} --sha ${previous#releases/}"
+  if [ -n "$RV_PREVIOUS" ]; then
+    rv_info "previous release: $RV_PREVIOUS — roll back with: $(rollback_command "${RV_PREVIOUS#releases/}")"
   fi
+}
+
+main() {
+  parse_args "$@"
+  trap rv_cleanup EXIT
+  rv_resolve_ssh_key "$KEY_ARG"
+
+  step_resolve
+  if [ "$RV_DRY_RUN" = 1 ]; then
+    # The plan must name the tunnel step exactly when the real run would take
+    # it, so the read-only env read happens here too.
+    [ -z "$ORIGIN_ARG" ] || RV_PUBLIC_ORIGIN="$ORIGIN_ARG"
+    rv_refresh_ports
+    print_plan
+    exit 0
+  fi
+
+  step_secrets
+  step_images
+  step_data
+  step_serve
+  step_tunnel
+  step_current
+  print_summary
 }
 
 main "$@"

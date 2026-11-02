@@ -19,6 +19,15 @@ rv_basic_auth_hash() { # PASSWORD
   esac
 }
 
+# The token is only needed while the env file is rendered. An exported copy would
+# be inherited by every child process from here on (buildx, docker, the remote
+# shell), so both the environment and the local copy are dropped.
+rv_forget_tunnel_token() {
+  unset CLOUDFLARE_TUNNEL_TOKEN
+  # shellcheck disable=SC2034 # the caller's copy, cleared so nothing can reuse it
+  TUNNEL_TOKEN=""
+}
+
 # A stack without a hash would serve the review build with no door at all, so
 # quick mode refuses to start one. The value is compared, never printed.
 rv_require_auth_hash() { # MODE

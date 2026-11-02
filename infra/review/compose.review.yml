@@ -22,6 +22,15 @@
 # once by deploy.sh): this file interpolates them and carries no value. `compose
 # config` DOES print every resolved value, so deploy.sh never runs it and
 # check-config-redacted.sh checks only sentinel values.
+#
+# Two internal networks split reachability: `net` carries the database, the object
+# store, the Api, the Worker and web; `edge` is the only path from the tunnel to
+# web, so a cloudflared container can reach the web server and nothing else.
+# `cloudflared*` also join `egress`, and that pair is their whole network set.
+#
+# Container logs are bounded (x-review-logging) and the application and tunnel
+# containers drop every capability (x-review-hardening): the host has 30 GB and no
+# log shipper, and no image here runs as root.
 
 name: evidgate-review
 
@@ -84,8 +93,28 @@ x-review-build: &review-build
     postgres:
       condition: service_healthy
 
+# Bounded logs: without a cap a chatty container fills the host disk and takes
+# postgres with it. Every service carries this anchor, one-shots included.
+x-review-logging: &review-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
+
+# No capability and no setuid escalation: every image here runs as a non-root
+# user and needs neither. Applied to the Api, the Worker and the tunnel, i.e. the
+# containers that parse untrusted input or face the internet.
+x-review-hardening: &review-hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
 # Everything the two web services share. web-local is this container plus the
-# loopback publish only the local smoke may have.
+# loopback publish only the local smoke may have. Both services declare their own
+# `networks:`, because the tunnel reaches `web` over `edge` and the loopback
+# publish needs `loopback`.
 x-review-web: &review-web
   restart: unless-stopped
   depends_on: [api]
@@ -116,7 +145,6 @@ x-review-web: &review-web
     timeout: 3s
     retries: 12
     start_period: 5s
-  networks: [net]
 
 services:
   postgres:
@@ -146,6 +174,7 @@ services:
       retries: 30
       start_period: 10s
     stop_grace_period: 10s
+    <<: *review-logging
     networks: [net]
 
   seaweedfs:
@@ -182,6 +211,7 @@ services:
       timeout: 3s
       retries: 30
       start_period: 5s
+    <<: *review-logging
     networks: [net]
 
   # One-shot role bootstrap in two commands, run around the migrations:
@@ -206,6 +236,7 @@ services:
         mode: 0444
     entrypoint: ['/bin/sh', '/usr/local/bin/evidgate-db-init']
     # psql only: two short statements, then it exits.
+    <<: *review-logging
     mem_limit: 128m
     mem_reservation: 64m
     depends_on:
@@ -222,6 +253,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.migrator
+    <<: *review-logging
     networks: [net]
 
   migrator:
@@ -235,7 +267,7 @@ services:
     environment: *review-job-environment
     mem_limit: 512m
     mem_reservation: 128m
-    <<: *review-build
+    <<: [*review-build, *review-logging]
     networks: [net]
 
   # seed-dev resolves contracts/schemas beside /app/migrations
@@ -257,6 +289,7 @@ services:
     environment: *review-job-environment
     mem_limit: 512m
     mem_reservation: 128m
+    <<: *review-logging
     networks: [net]
 
   # The bucket and its pending/ 24 h lifecycle, through the SeaweedFS image's own
@@ -299,6 +332,7 @@ services:
     depends_on:
       seaweedfs:
         condition: service_healthy
+    <<: *review-logging
     networks: [net]
 
   # Build-only: exactly what infra/docker/Dockerfile.api produces, under its own
@@ -312,6 +346,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.api
+    <<: *review-logging
     networks: [net]
 
   api:
@@ -342,6 +377,7 @@ services:
     mem_limit: 640m
     mem_reservation: 256m
     # No HEALTHCHECK: the chiseled base has no shell and no curl, so `probe` checks it.
+    <<: [*review-hardening, *review-logging]
     networks: [net]
 
   # Build-only: exactly what infra/docker/Dockerfile.worker produces, under its own
@@ -355,6 +391,7 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.worker
+    <<: *review-logging
     networks: [net]
 
   worker:
@@ -380,6 +417,7 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_healthy
+    <<: [*review-hardening, *review-logging]
     networks: [net]
 
   web:
@@ -394,7 +432,10 @@ services:
         EVIDGATE_REVIEW_PUBLIC_ORIGIN: ${EVIDGATE_REVIEW_PUBLIC_ORIGIN:-}
     # Built here or shipped with `docker save|load`; never pulled from a registry.
     pull_policy: never
-    <<: *review-web
+    <<: [*review-web, *review-logging]
+    # `net` is how nginx reaches the Api; `edge` is the only network the tunnel
+    # shares with this container, and it carries nothing else.
+    networks: [net, edge]
 
   # The local smoke needs the port mapping the tunnel profiles must not have.
   web-local:
@@ -412,7 +453,10 @@ services:
     # Docker cannot NAT a published port through an internal network, so the two
     # loopback-published services also join `loopback` (smoke and debug only).
     networks: [net, loopback]
-    <<: *review-web
+    # A debug replica, not part of the served stack: it must not come back on its
+    # own after a reboot with a loopback port open.
+    restart: 'no'
+    <<: [*review-web, *review-logging]
 
   api-debug:
     image: evidgate-review-api:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
@@ -426,7 +470,10 @@ services:
       args:
         BASE: evidgate-review-api-base:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
     pull_policy: never
-    restart: unless-stopped
+    # `ssh -L` target only: no restart policy, so a reboot cannot bring a second
+    # Api online behind the tunnel.
+    restart: 'no'
+    <<: [*review-hardening, *review-logging]
     environment:
       <<: [*review-runtime-environment, *review-dev-login-environment, *review-api-environment]
       EVIDGATE__CI__PEPPER: ${EVIDGATE__CI__PEPPER:?missing from .env.review}
@@ -459,6 +506,7 @@ services:
       - http://api:8080/internal/health/ready
     mem_limit: 64m
     mem_reservation: 16m
+    <<: *review-logging
     networks: [net]
 
   cloudflared:
@@ -475,13 +523,13 @@ services:
     depends_on:
       web:
         condition: service_healthy
-    security_opt:
-      - no-new-privileges:true
+    <<: [*review-hardening, *review-logging]
     mem_limit: 96m
     mem_reservation: 32m
-    # net carries no egress (internal), so cloudflared needs the second network
-    # to reach Cloudflare's edge, and net to reach web:8080.
-    networks: [net, egress]
+    # `edge` is the only network this container shares with web, and `egress`
+    # reaches Cloudflare's edge. Not `net`: the tunnel must not be able to
+    # address the Api, postgres or seaweedfs even if it is compromised.
+    networks: [edge, egress]
 
   # Quick tunnel: cloudflared dials out, Cloudflare hands it an ephemeral
   # https://<words>.trycloudflare.com URL which it logs on its own stdout/stderr
@@ -500,16 +548,21 @@ services:
         condition: service_healthy
     mem_limit: 96m
     mem_reservation: 32m
-    security_opt:
-      - no-new-privileges:true
+    <<: [*review-hardening, *review-logging]
     # Not read_only: a quick tunnel persists short-lived credentials under the
     # image's HOME. Nothing is published on a host port either way.
-    networks: [net, egress]
+    # Same split as the token tunnel: `edge` to web, `egress` to Cloudflare.
+    networks: [edge, egress]
 
 networks:
   # Internal: no route off the host, so a compromised container cannot phone home.
   net:
     name: evidgate-review-net
+    internal: true
+  # Internal too, and narrower than `net`: web is the only service on it that the
+  # tunnel can resolve, which is all the ingress needs.
+  edge:
+    name: evidgate-review-edge
     internal: true
   # Egress exists for cloudflared only.
   egress:

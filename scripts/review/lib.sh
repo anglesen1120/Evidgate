@@ -17,6 +17,9 @@ RV_TEMPLATE_REL="infra/review/env.review.template"
 # Set only for teardown: `down` ignores --profile, so an all-profiles switch is
 # the way to reach a service whose profile is not enabled.
 RV_COMPOSE_PROFILES=""
+# Extra `NAME=value` pairs for one compose call, e.g. a serialized build. Empty
+# for every other call, so their argv is unchanged.
+RV_COMPOSE_ENVS=""
 RV_DEFAULT_API_PORT=18080
 RV_DEFAULT_WEB_PORT=8088
 # Three image builds plus a database, an object store and one release tree per
@@ -60,6 +63,20 @@ RV_QUICK_TUNNEL_CONTAINER="evidgate-review-cloudflared-quick"
 
 RV_SSH_KEY=""
 RV_SSH_OPTS=()
+# Filled by the deploy's own steps: the seed's inputs, the previous release and
+# the quick tunnel's URL, so the summary does not re-read them.
+# shellcheck disable=SC2034 # written and read by deploy.sh
+RV_SEED_TOKEN=""
+# shellcheck disable=SC2034 # same
+RV_SEED_SUITE=""
+# shellcheck disable=SC2034 # same
+RV_SEED_CASE_REV=""
+# shellcheck disable=SC2034 # same
+RV_SEED_ENV_REV=""
+# shellcheck disable=SC2034 # same
+RV_PREVIOUS=""
+# shellcheck disable=SC2034 # same
+RV_PUBLIC_URL=""
 
 rv_info() { printf '%s: %s\n' "${0##*/}" "$*"; }
 
@@ -87,8 +104,19 @@ rv_target() {
 # all, which leaves the choice to that config. `~` is expanded here because the
 # value often comes from a shell export.
 rv_resolve_ssh_key() { # FLAG_VALUE (may be empty)
-  local key="${1:-${EVIDGATE_REVIEW_SSH_KEY:-}}" mode
+  local key="${1:-${EVIDGATE_REVIEW_SSH_KEY:-}}" mode socket_dir
   RV_SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
+  # One connection per host instead of one per command: a deploy runs dozens of
+  # short remote commands, and a reused master also survives a slow link.
+  # ssh refuses a ControlPath over 100 characters and expands %C to 40, so the
+  # directory comes from a fixed short root: macOS TMPDIR alone is 49.
+  if [ "$RV_MODE" != local ]; then
+    socket_dir="$(mktemp -d /tmp/eg-ssh.XXXXXX)" \
+      || rv_die "cannot create a directory for the ssh control socket"
+    RV_SCRATCH+=("$socket_dir")
+    RV_SSH_OPTS+=(-o ControlMaster=auto -o "ControlPath=$socket_dir/%C" -o ControlPersist=60
+      -o ServerAliveInterval=30 -o ServerAliveCountMax=4)
+  fi
   if [ -z "$key" ]; then
     RV_SSH_KEY=""
     return 0
@@ -157,32 +185,18 @@ rv_run() { # read-only command; always executes, even under --dry-run
   if [ "$RV_MODE" = local ]; then
     bash -c "$1"
   else
-    ssh "${RV_SSH_OPTS[@]}" "$RV_SSH_HOST" "$1"
+    # shellcheck disable=SC2029 # callers quote the remote command with rv_quote
+    ssh ${RV_SSH_OPTS[@]+"${RV_SSH_OPTS[@]}"} "$RV_SSH_HOST" "$1"
   fi
 }
 
-# shellcheck disable=SC2029 # same: the stdin command arrives already quoted
-rv_run_stdin() {
-  if [ "$RV_MODE" = local ]; then
-    bash -c "$1"
-  else
-    ssh "${RV_SSH_OPTS[@]}" "$RV_SSH_HOST" "$1"
-  fi
-}
-
-# Refuses under --dry-run instead of trusting every caller to remember.
+# Refuses under --dry-run instead of trusting every caller to remember. stdin
+# passes through, which is how every secret reaches the host.
 rv_mutate() { # command that changes the host
   if [ "$RV_DRY_RUN" = 1 ]; then
     rv_die "internal: a mutating command ran under --dry-run: $1"
   fi
   rv_run "$1"
-}
-
-rv_mutate_stdin() {
-  if [ "$RV_DRY_RUN" = 1 ]; then
-    rv_die "internal: a mutating command ran under --dry-run: $1"
-  fi
-  rv_run_stdin "$1"
 }
 
 # The command text, without running it: --dry-run prints these, and the real
@@ -205,6 +219,13 @@ rv_compose_argv() {
   # Quoted even for '*': an unquoted star would be globbed by the remote shell.
   if [ -n "$RV_COMPOSE_PROFILES" ]; then
     profiles="COMPOSE_PROFILES=$(rv_quote "$RV_COMPOSE_PROFILES") "
+  fi
+  # A build sets this so compose runs one build at a time; an unset hook keeps
+  # every other call byte-identical to what it printed before. The pairs are
+  # constants from this script, so they are emitted unquoted: a quoted word
+  # would be a command name, not an assignment.
+  if [ -n "$RV_COMPOSE_ENVS" ]; then
+    envs="$RV_COMPOSE_ENVS $envs"
   fi
   # Only non-empty values are exported. An empty EVIDGATE_REVIEW_TAG would beat
   # the one in the env file and compose refuses a service that requires it, so a
@@ -288,7 +309,7 @@ rv_teardown() {
 
 # Resolves the host layout and proves docker answers; status and down need no
 # more than this, and deploy builds on it.
-rv_probe_host() {
+rv_probe_host() { # CALLER (deploy, or anything else for a read-only command)
   local home
   # shellcheck disable=SC2016 # ${HOME} must expand on the host, not here
   home="$(rv_run 'printf %s "${HOME:-}"')" \
@@ -296,9 +317,17 @@ rv_probe_host() {
   [ -n "$home" ] || rv_die "$(rv_target) reported an empty HOME"
   RV_HOST_HOME="${EVIDGATE_REVIEW_HOST_HOME:-$home}"
   if [ "$RV_MODE" = local ] && [ -z "${EVIDGATE_REVIEW_HOST_ROOT:-}" ]; then
-    # The smoke must not inherit or leave the real review layout on this
-    # machine, so it gets a throwaway root and prints where it went.
-    RV_HOST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/evidgate-review-local.XXXXXX")"
+    # Only a deploy may mint a throwaway root; status and down must name an
+    # existing one, because an invented empty root would report a stack that
+    # does not exist and then tear nothing down.
+    if [ "${1:-read}" != deploy ]; then
+      rv_die "--local needs EVIDGATE_REVIEW_HOST_ROOT: status and down read an existing smoke root, never a new one (export the root the deploy printed)"
+    elif [ "$RV_DRY_RUN" = 1 ]; then
+      # A dry run creates nothing, so the plan shows a path of the same shape.
+      RV_HOST_ROOT="${TMPDIR:-/tmp}/evidgate-review-local.XXXXXXXX"
+    else
+      RV_HOST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/evidgate-review-local.XXXXXX")"
+    fi
   else
     RV_HOST_ROOT="${EVIDGATE_REVIEW_HOST_ROOT:-$RV_HOST_HOME/evidgate-review}"
   fi
@@ -318,28 +347,34 @@ rv_preflight() {
   rv_require_cmd git
   rv_require_cmd curl
   [ "$RV_MODE" = local ] || rv_require_cmd ssh
+  # A deploy that runs the release's static gate on this machine needs the
+  # generator's toolchain here; a load-only host builds nothing and needs none.
+  if [ "$RV_BUILD_LOCAL" = 1 ] || [ "$RV_MODE" = local ]; then
+    rv_require_cmd node
+    rv_require_cmd python3
+  fi
 
   local arch free_kb compose_version
-  rv_probe_host
+  rv_probe_host deploy
 
   compose_version="$(rv_run 'docker compose version --short 2>/dev/null || true')"
-  local compose_major="${compose_version#v}"
-  compose_major="${compose_major%%.*}"
-  case "$compose_major" in
-    '' | *[!0-9]*) rv_die "cannot read the docker compose version on $(rv_target): '${compose_version:-nothing}'" ;;
+  local compose_major compose_minor version="${compose_version#v}"
+  compose_major="${version%%.*}"
+  version="${version#*.}"
+  compose_minor="${version%%.*}"
+  case "$compose_major:$compose_minor" in
+    *[!0-9:]* | :* | *:) rv_die "cannot read the docker compose version on $(rv_target): '${compose_version:-nothing}'" ;;
   esac
-  # The floor is what the file uses (profiles, depends_on conditions, --wait); a
-  # newer major is fine, and the packaged version's major is not 2 everywhere.
-  [ "$compose_major" -ge 2 ] \
-    || rv_die "docker compose v2 or newer is required on $(rv_target) (found $compose_version)"
+  # Inline configs require Compose 2.23; a newer major keeps that capability.
+  { [ "$compose_major" -gt 2 ] || { [ "$compose_major" -eq 2 ] && [ "$compose_minor" -ge 23 ]; }; } \
+    || rv_die "docker compose >= 2.23 is required on $(rv_target) for configs content (found $compose_version)"
   rv_run "command -v curl >/dev/null 2>&1" || rv_die "curl is required on $(rv_target)"
   # The release's infra gate runs the generator's node:test suite. A host that
   # only loads images never runs it (--build-local runs the same gate on this
   # machine, over the same extracted sha), so only a building host needs node
   # and python3.
-  if [ "$RV_BUILD_LOCAL" = 1 ] || [ "$RV_MODE" = local ]; then
-    rv_require_cmd node
-  else
+  if [ "$RV_BUILD_LOCAL" != 1 ] && [ "$RV_MODE" != local ]; then
+    local tool
     for tool in node python3; do
       rv_run "command -v $tool >/dev/null 2>&1" \
         || rv_die "$tool is required on $(rv_target): infra/review/check.sh runs there before the build (node >= 20)"
@@ -427,12 +462,21 @@ rv_refresh_ports() {
 
 
 # In the tunnel profile cloudflared is the only ingress, so a published host
-# port would be a second door the runbook does not describe.
+# port would be a second door the runbook does not describe. The local smoke is
+# the one exception the environment contract names: web-local publishes the
+# bundle on loopback and nothing else may be reachable from this machine.
 rv_assert_no_host_ports() {
-  local published
+  local published allowed unexpected
   published="$(rv_run "docker ps --filter label=com.docker.compose.project=$(rv_quote "$RV_PROJECT") --format '{{.Names}} {{.Ports}}' | grep -F -- '->' || true")"
-  [ -z "$published" ] \
-    || rv_die "the tunnel profile must publish nothing on the host, but: $published"
+  [ -n "$published" ] || return 0
+  if [ "$RV_MODE" = local ]; then
+    allowed="127.0.0.1:$RV_WEB_PORT->8080/tcp"
+    unexpected="$(printf '%s\n' "$published" | grep -vF -- "$allowed" || true)"
+    [ -z "$unexpected" ] \
+      || rv_die "the local smoke may publish only $allowed, but: $unexpected"
+    return 0
+  fi
+  rv_die "the tunnel profile must publish nothing on the host, but: $published"
 }
 
 # Waits on a condition the caller can observe, never on a fixed sleep.
@@ -456,7 +500,7 @@ rv_open_forward() {
     return 0
   fi
   rv_info "forwarding 127.0.0.1:$RV_API_PORT to $(rv_target)"
-  ssh -N -o ExitOnForwardFailure=yes "${RV_SSH_OPTS[@]}" \
+  ssh -N -o ExitOnForwardFailure=yes ${RV_SSH_OPTS[@]+"${RV_SSH_OPTS[@]}"} \
     -L "127.0.0.1:$RV_API_PORT:127.0.0.1:$RV_API_PORT" "$RV_SSH_HOST" &
   RV_FORWARD_PID=$!
 }

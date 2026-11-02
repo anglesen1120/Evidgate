@@ -18,6 +18,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/lib-check.sh"
 
 review_require docker "$(basename "$0")"
+# The credential cases are minted with openssl, and a minted hash is what proves
+# the realm path end to end; skipping them on a host without openssl would leave
+# the only case that enables basic auth untested.
+review_require openssl "$(basename "$0")"
 
 env_file=""
 while [ $# -gt 0 ]; do
@@ -62,16 +66,17 @@ docker image inspect "$tag" >/dev/null 2>&1 ||
   review_die "no image $tag on this host: build the web image before running this gate"
 
 review_step "nginx -t inside $tag (auth off)"
-# The configuration always includes /tmp/evidgate/auth.conf, which the container
-# start script writes; `run` bypasses that script, so the gate writes both shapes
-# of the file itself. A missing include would otherwise fail the parse here.
+# The configuration always includes /tmp/evidgate/auth.conf and, inside /v1/,
+# proxy-auth.conf; the container start script writes both, and `run` bypasses that
+# script, so the gate writes both shapes of both files itself. A missing include
+# would otherwise fail the parse here.
 compose run --rm --no-deps --entrypoint /bin/sh web -c \
-  'set -e; mkdir -p /tmp/evidgate; printf "auth_basic off;\n" > /tmp/evidgate/auth.conf; nginx -t'
+  'set -e; mkdir -p /tmp/evidgate; printf "auth_basic off;\n" > /tmp/evidgate/auth.conf; printf "# auth off\n" > /tmp/evidgate/proxy-auth.conf; nginx -t'
 
 review_step "nginx -t inside $tag (realm enabled)"
 # shellcheck disable=SC2016 # the $apr1$ text is a credential literal, not expansion
 compose run --rm --no-deps --entrypoint /bin/sh web -c \
-  'set -e; mkdir -p /tmp/evidgate; printf "auth_basic \"Evidgate review\";\nauth_basic_user_file /tmp/evidgate/htpasswd;\n" > /tmp/evidgate/auth.conf; printf "reviewer:\$apr1\$c2FsdA\$ZHVtbXk\n" > /tmp/evidgate/htpasswd; nginx -t'
+  'set -e; mkdir -p /tmp/evidgate; printf "auth_basic \"Evidgate review\";\nauth_basic_user_file /tmp/evidgate/htpasswd;\n" > /tmp/evidgate/auth.conf; printf "proxy_set_header Authorization \"\";\n" > /tmp/evidgate/proxy-auth.conf; printf "reviewer:\$apr1\$c2FsdA\$ZHVtbXk\n" > /tmp/evidgate/htpasswd; nginx -t'
 
 review_step 'the health probe answers loopback only'
 # The rewrite-phase guard is the only thing keeping /nginx-health off the tunnel,
@@ -82,6 +87,7 @@ review_step 'the health probe answers loopback only'
 health_probe_script='set -e
 mkdir -p /tmp/evidgate
 printf "auth_basic off;\n" > /tmp/evidgate/auth.conf
+printf "# auth off\n" > /tmp/evidgate/proxy-auth.conf
 nginx
 i=0
 while [ "$i" -lt 40 ]; do
@@ -93,7 +99,7 @@ ip=$(hostname -i 2>/dev/null | tr " " "\n" | grep -E "^[0-9]+\.[0-9]+\.[0-9]+\.[
 [ -n "$ip" ] || { echo "FAIL: no IPv4 address to test the refusal with"; exit 1; }
 out=$(wget -qO- -S "http://$ip:8080/nginx-health" 2>&1 || true)
 case "$out" in
-  *403*) echo "loopback 200 ok, bridge address $ip refused (403)" ;;
+  *"HTTP/1.1 403"*) echo "loopback 200 ok, bridge address $ip refused (403)" ;;
   *) echo "FAIL: /nginx-health answered a non-loopback source $ip: $out"; exit 1 ;;
 esac'
 compose run --rm --no-deps --entrypoint /bin/sh web -c "$health_probe_script"
@@ -116,30 +122,38 @@ grep -q 'refusing to serve' "$work/quick.out" ||
 
 # A real apr1 hash, because the start script rejects every other format on
 # purpose: nginx in this image has no bcrypt crypt().
-hash="$(openssl passwd -apr1 sentinel 2>/dev/null || true)"
-if [ -z "$hash" ]; then
-  printf 'skip: openssl is unavailable, so the apr1 enforcement case cannot be minted here\n'
-else
-  review_step 'basic auth: quick mode with credentials enables the realm'
-  compose run --rm --no-deps -e EVIDGATE_WEB_START_CHECK=1 \
-    -e EVIDGATE_REVIEW_TUNNEL_MODE=quick \
-    -e EVIDGATE_REVIEW_BASIC_AUTH_USER=reviewer \
-    -e "EVIDGATE_REVIEW_BASIC_AUTH_HASH=$hash" \
-    --entrypoint /bin/sh web -c 'exec /bin/sh /usr/local/bin/evidgate-web-start' \
-    >"$work/on.out" 2>&1 ||
-    review_die "the web image rejected valid apr1 credentials: $(head -n 3 "$work/on.out" | tr '\n' ' ')"
-  grep -q 'auth_basic "Evidgate review"' "$work/on.out" ||
-    review_die "the image did not write an auth realm: $(head -n 3 "$work/on.out" | tr '\n' ' ')"
-
-  review_step 'basic auth: token mode without credentials turns the realm off'
-  compose run --rm --no-deps -e EVIDGATE_WEB_START_CHECK=1 \
-    -e EVIDGATE_REVIEW_TUNNEL_MODE=token -e EVIDGATE_REVIEW_BASIC_AUTH=optional \
-    -e EVIDGATE_REVIEW_BASIC_AUTH_USER= -e EVIDGATE_REVIEW_BASIC_AUTH_HASH= \
-    --entrypoint /bin/sh web -c 'exec /bin/sh /usr/local/bin/evidgate-web-start' \
-    >"$work/off.out" 2>&1 ||
-    review_die "the web image failed without credentials in token mode: $(head -n 3 "$work/off.out" | tr '\n' ' ')"
-  grep -q 'auth_basic off' "$work/off.out" ||
-    review_die "auth was not disabled in token mode: $(head -n 3 "$work/off.out" | tr '\n' ' ')"
+if ! hash="$(openssl passwd -apr1 sentinel 2>/dev/null)"; then
+  review_die 'openssl could not mint an apr1 hash, so the realm case cannot run; install a working openssl'
 fi
+[ -n "$hash" ] || review_die 'openssl produced an empty apr1 hash, so the realm case cannot run'
+
+review_step 'basic auth: quick mode with credentials enables the realm'
+compose run --rm --no-deps -e EVIDGATE_WEB_START_CHECK=1 \
+  -e EVIDGATE_REVIEW_TUNNEL_MODE=quick \
+  -e EVIDGATE_REVIEW_BASIC_AUTH_USER=reviewer \
+  -e "EVIDGATE_REVIEW_BASIC_AUTH_HASH=$hash" \
+  --entrypoint /bin/sh web -c 'exec /bin/sh /usr/local/bin/evidgate-web-start' \
+  >"$work/on.out" 2>&1 ||
+  review_die "the web image rejected valid apr1 credentials: $(head -n 3 "$work/on.out" | tr '\n' ' ')"
+grep -q 'auth_basic "Evidgate review"' "$work/on.out" ||
+  review_die "the image did not write an auth realm: $(head -n 3 "$work/on.out" | tr '\n' ' ')"
+# The Basic credential authenticated the reviewer to nginx; the Api must not
+# receive it as a bearer token.
+grep -q 'proxy_set_header Authorization "";' "$work/on.out" ||
+  review_die "the realm is on but the proxy still forwards the Basic credential: $(head -n 3 "$work/on.out" | tr '\n' ' ')"
+
+review_step 'basic auth: token mode without credentials turns the realm off'
+compose run --rm --no-deps -e EVIDGATE_WEB_START_CHECK=1 \
+  -e EVIDGATE_REVIEW_TUNNEL_MODE=token -e EVIDGATE_REVIEW_BASIC_AUTH=optional \
+  -e EVIDGATE_REVIEW_BASIC_AUTH_USER= -e EVIDGATE_REVIEW_BASIC_AUTH_HASH= \
+  --entrypoint /bin/sh web -c 'exec /bin/sh /usr/local/bin/evidgate-web-start' \
+  >"$work/off.out" 2>&1 ||
+  review_die "the web image failed without credentials in token mode: $(head -n 3 "$work/off.out" | tr '\n' ' ')"
+grep -q 'auth_basic off' "$work/off.out" ||
+  review_die "auth was not disabled in token mode: $(head -n 3 "$work/off.out" | tr '\n' ' ')"
+# With no Basic auth there is no hop credential to remove: the header is the
+# client's own bearer token and stripping it would break every Api call.
+grep -q 'Authorization passes through' "$work/off.out" ||
+  review_die "auth is off but the proxy empties Authorization anyway: $(head -n 3 "$work/off.out" | tr '\n' ' ')"
 
 review_step 'ok: the web image parses its configuration and serves both locales'

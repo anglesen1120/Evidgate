@@ -114,12 +114,14 @@ if [ "$host" != "review-host" ]; then
   exit 255
 fi
 printf '%s\n' "$*" >>"$SSH_LOG"
-# Host facts are faked so a test can describe the host it deploys to.
+# Host facts are faked so a test can describe the host it deploys to. The real
+# callers print one field of /proc/meminfo through awk, so the answer must be the
+# bare number: a whole line reads as non-numeric and silently disables the check.
 case "$*" in
   *"/proc/meminfo"*)
     case "$*" in
-      *SwapTotal*) echo "SwapTotal:      2097148 kB" ;;
-      *) echo "MemTotal:       4030000 kB" ;;
+      *SwapTotal*) echo "${FX_SWAP_TOTAL_KB:-2097148}" ;;
+      *) echo "${FX_MEM_TOTAL_KB:-4030000}" ;;
     esac
     exit 0
     ;;
@@ -134,6 +136,9 @@ STUB
 # assignments in the command string, so the log records them the way compose
 # sees them.
 prefix=""
+# A token in the environment of a docker call is a leak: nothing docker runs
+# needs the tunnel token, and the deploy keeps it in a shell variable only.
+[ -z "${CLOUDFLARE_TUNNEL_TOKEN:-}" ] || printf 'LEAK %s\n' "$*" >>"$DOCKER_LOG"
 # An empty value is recorded too: compose refuses a service whose tag is
 # required but empty, so a blank assignment is a defect, not an absence.
 [ -z "${EVIDGATE_REVIEW_TAG+x}" ] || prefix="$prefix EVIDGATE_REVIEW_TAG=$EVIDGATE_REVIEW_TAG"
@@ -150,6 +155,16 @@ case "$*" in
   "compose version"*) echo "Docker Compose version ${FX_COMPOSE_VERSION:-v2.32.0}" ;;
   "info"*) exit 0 ;;
   *seed-dev*) cat "$SEED_STDOUT" ;;
+  # FX_PORTS lists the published ports a host reports, so a test can describe a
+  # stack that already holds a door open.
+  "ps --filter"*"--format"*)
+    [ -z "${FX_PORTS:-}" ] || cat "$FX_PORTS"
+    ;;
+  # FX_IMAGES lists `repo:tag` refs, so a test can describe the images a host
+  # already holds and check which ones a prune removes.
+  "images --format"*)
+    [ -z "${FX_IMAGES:-}" ] || cat "$FX_IMAGES"
+    ;;
   *logs*cloudflared-quick*)
     # FX_QUICK_LOG lets a test describe a log that outlived several starts; the
     # default is one session with the service endpoint in the banner.
@@ -166,7 +181,9 @@ case "$*" in
     # The current session's start, so the caller narrows the log with --since.
     [ -z "${FX_STARTED_AT:-}" ] || echo "${FX_STARTED_AT}"
     ;;
-  *State.Running*) echo true ;;
+  # FX_RUNNING=false describes a connector that exists but is stopped: it
+  # publishes nothing, so status must not report it as live.
+  *State.Running*) echo "${FX_RUNNING:-true}" ;;
 esac
 exit 0
 STUB
@@ -175,12 +192,29 @@ STUB
 #!/bin/sh
 printf '%s\n' "$*" >>"$CURL_LOG"
 case "$*" in
-  *"%{http_code}"*) printf '200' ;;
+  # The real origin answers 401 without credentials; FX_HTTP_CODE lets a test
+  # describe an edge that redirects or serves first instead.
+  *"%{http_code}"*) printf '%s' "${FX_HTTP_CODE:-401}" ;;
 esac
 exit 0
 STUB
 
-  chmod +x "$bin/ssh" "$bin/docker" "$bin/curl"
+  # The remote commands run in this shell, so a `sudo` in one of them would touch
+  # the real machine (a swap file, /etc/fstab). This stub records the argv and
+  # does nothing, which keeps the deploy's command string under test without
+  # letting the suite mutate the host it runs on.
+  cat >"$bin/sudo" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >>"$SUDO_LOG"
+# Only `tee` reads stdin; draining it for every command would block on a
+# terminal. What it would have appended is recorded instead.
+case "$1" in
+  tee) printf 'stdin %s\n' "$(cat)" >>"$SUDO_LOG" ;;
+esac
+exit 0
+STUB
+
+  chmod +x "$bin/ssh" "$bin/docker" "$bin/curl" "$bin/sudo"
 }
 
 # A commit carries the whole contract the scripts read: the compose file, the env
@@ -248,6 +282,7 @@ TEMPLATE
 
 fx_setup() { # NAME
   SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/evidgate-review-$1.XXXXXX")"
+  export SANDBOX
   FX_REPO="$SANDBOX/repo"
   export HOME="$SANDBOX/home"
   mkdir -p "$HOME" "$SANDBOX/bin" "$FX_REPO"
@@ -255,11 +290,13 @@ fx_setup() { # NAME
   export DOCKER_LOG="$SANDBOX/docker.log"
   export CURL_LOG="$SANDBOX/curl.log"
   export GATE_LOG="$SANDBOX/gate.log"
+  export SUDO_LOG="$SANDBOX/sudo.log"
   export SEED_STDOUT="$SANDBOX/seed.out"
   : >"$SSH_LOG"
   : >"$DOCKER_LOG"
   : >"$CURL_LOG"
   : >"$GATE_LOG"
+  : >"$SUDO_LOG"
   cat >"$SEED_STDOUT" <<'SEED'
 seed-dev: manifest inputs suite_revision_id=0198a000-0000-7000-8000-00000000d101 case_revision_id=0198a000-0000-7000-8000-00000000d102
 seed-dev: manifest inputs environment_revision_id=0198a000-0000-7000-8000-00000000d103 environment_key=dev

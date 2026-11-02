@@ -23,8 +23,20 @@ invocations() { grep -F 'argv: ' "$SSH_LOG" || true; }
 if ! out="$(bash "$FX_REPO/scripts/review/deploy.sh" review-host --no-dogfood -i '~/.ssh/evidgate-review' 2>&1)"; then
   fx_fail "the deploy with -i failed: $out"
 fi
-fx_assert_log_has "$SSH_LOG" "argv: -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -i $key -o IdentitiesOnly=yes review-host" \
+fx_assert_log_has "$SSH_LOG" "-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o ControlMaster=auto -o ControlPath=" \
+  "every call carries the fixed options and one multiplexed connection"
+fx_assert_log_has "$SSH_LOG" "-i $key -o IdentitiesOnly=yes review-host" \
   "every call carries the expanded key and IdentitiesOnly"
+# ssh refuses a ControlPath over 100 characters and expands %C to 40 of them,
+# so what matters is the expanded path, not the directory alone: a long TMPDIR
+# must not be able to break every call.
+path="$(sed -n 's/.*-o ControlPath=\([^ ]*\)\/%C.*/\1/p' "$SSH_LOG" | sed -n '1p')"
+[ -n "$path" ] || fx_fail "no ControlPath directory in the ssh argv"
+expanded=$(( ${#path} + 2 + 40 ))
+[ "$expanded" -lt 100 ] || fx_fail "the expanded ControlPath is $expanded characters (> 99): $path/%C"
+fx_ok "the expanded ControlPath is $expanded characters ($path/%C)"
+[ ! -e "$path" ] || fx_fail "the socket directory $path outlived the deploy"
+fx_ok "the socket directory is removed when the deploy exits"
 fx_assert_not_contains "$out" "$key" "the key path is not echoed into the deploy output"
 
 # --- the env var is the fallback, and the flag wins over it -----------------

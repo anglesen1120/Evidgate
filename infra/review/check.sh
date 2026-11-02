@@ -58,10 +58,13 @@ fi
 printf '== generate-nginx-headers.mjs tests\n'
 "$node_bin" --test "$SCRIPT_DIR/generate-nginx-headers.test.mjs"
 
+"$SCRIPT_DIR/web-start.test.sh"
+
 "$SCRIPT_DIR/check-pins.sh"
 "$SCRIPT_DIR/check-inlined-files.sh"
 "$SCRIPT_DIR/check-nginx-phases.sh"
 "$SCRIPT_DIR/check-restart-policy.sh"
+"$SCRIPT_DIR/check-container-policy.sh"
 
 if [ "$static_only" = false ]; then
   "$SCRIPT_DIR/check-no-public-ports.sh"

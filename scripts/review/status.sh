@@ -5,7 +5,7 @@
 # stops anything, so it is safe to run from anywhere, any time.
 #
 # usage: scripts/review/status.sh <ssh-host> [-i <ssh-keyfile>]
-#        scripts/review/status.sh --local
+#        EVIDGATE_REVIEW_HOST_ROOT=<root> scripts/review/status.sh --local
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -61,6 +61,9 @@ main() {
   local current sha marker env_state containers ports origin auth_user public_url
 
   parse_args "$@"
+  # The control socket lives in a per-run scratch directory; without this the
+  # directory outlives every status call.
+  trap rv_cleanup EXIT
   rv_resolve_ssh_key "$KEY_ARG"
   rv_probe_host
 
@@ -101,8 +104,9 @@ main() {
   fi
 
   # Which ingress is live is a property of the running containers, not of the
-  # env file: the mode is passed per deploy, so the env file can be stale.
-  if rv_run "docker inspect $(rv_quote "$RV_QUICK_TUNNEL_CONTAINER") >/dev/null 2>&1"; then
+  # env file: the mode is passed per deploy, so the env file can be stale. A
+  # stopped connector publishes nothing, so it must not be reported as live.
+  if rv_connector_running "$RV_QUICK_TUNNEL_CONTAINER"; then
     public_url="$(rv_quick_tunnel_url_now)"
     if [ -n "$public_url" ]; then
       # Reviewers are handed this URL, and it does not survive a reboot.
@@ -111,7 +115,7 @@ main() {
     else
       printf '  tunnel          : quick, no trycloudflare.com URL in its log since its last start\n'
     fi
-  elif rv_run "docker inspect $(rv_quote "evidgate-review-cloudflared") >/dev/null 2>&1"; then
+  elif rv_connector_running "evidgate-review-cloudflared"; then
     printf '  tunnel          : token\n'
   else
     printf '  tunnel          : none (nothing is published)\n'

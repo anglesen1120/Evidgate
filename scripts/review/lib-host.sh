@@ -8,6 +8,9 @@
 # real headroom, hence the swap check.
 
 RV_MIN_SWAP_KB=$((1024 * 1024))
+# Under this much RAM a host build has died; without swap it is refused rather
+# than attempted, because the failure lands mid-build with a dead database.
+RV_MIN_BUILD_MEM_KB=$((6 * 1024 * 1024))
 # web-local and api-debug reuse the web and api images, so these five tags cover
 # every image compose runs; saving more than that only costs transfer time. The
 # three `*-base` images are build scaffolding and stay on whichever machine built
@@ -49,12 +52,18 @@ rv_build_base_arg() { # NAME
 # The host build, in the only order that works: the build-only bases first (the
 # `images` profile, so `up` can never start one), then the images derived from
 # them. The migrator is in the first pass with its base: same Dockerfile, and
-# BuildKit serves the second tag from cache.
+# BuildKit serves the second tag from cache. One build at a time: compose would
+# otherwise run the passes concurrently and take a small host out of memory.
 rv_build_host_images() {
+  RV_COMPOSE_ENVS="COMPOSE_PARALLEL_LIMIT=1"
   rv_compose "${RV_BUILD_BASES_ARGS[@]}"
   rv_compose "${RV_BUILD_DERIVED_ARGS[@]}"
+  # shellcheck disable=SC2034 # consumed by rv_compose_argv in lib.sh
+  RV_COMPOSE_ENVS=""
 }
 
+# Refuses a host build the host cannot survive, and prints the plan instead of
+# mutating anything under --dry-run.
 rv_report_memory() {
   local mem_kb swap_kb
   # shellcheck disable=SC2016 # $2 must reach the host's awk, not this shell
@@ -70,12 +79,19 @@ rv_report_memory() {
   rv_info "memory on $(rv_target): $((mem_kb / 1024)) MiB RAM, $((swap_kb / 1024)) MiB swap"
   [ "$swap_kb" -ge "$RV_MIN_SWAP_KB" ] && return 0
   if [ "$RV_SETUP_SWAP" = 1 ]; then
+    if [ "$RV_DRY_RUN" = 1 ]; then
+      rv_info "would add a 2 GiB swap file on $(rv_target) (--setup-swap)"
+      return 0
+    fi
     rv_setup_swap
     return 0
   fi
   if [ "$RV_BUILD_LOCAL" = 1 ]; then
     rv_info "swap is under 1 GiB, which is fine for --build-local: the host only loads images"
     return 0
+  fi
+  if [ "$mem_kb" -lt "$RV_MIN_BUILD_MEM_KB" ]; then
+    rv_die "$((mem_kb / 1024)) MiB RAM and $((swap_kb / 1024)) MiB swap on $(rv_target) cannot build these images: deploy with --build-local (build here, ship the images), or re-run with --setup-swap to add a 2 GiB swap file first"
   fi
   rv_warn "swap is under 1 GiB on a host that builds images; two builds in a row can take a 4 GiB machine out of memory"
   if [ "$RV_MODE" = local ]; then
@@ -99,7 +115,7 @@ rv_setup_swap() {
 # The build runs from an extraction of the sha, never the working tree: the same
 # bytes that `git archive` ships to the host are what the image is built from.
 rv_build_local_images() {
-  local tmp svc dockerfile base_arg failed=0
+  local tmp svc dockerfile base_arg base tags failed=0
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/evidgate-review-build.XXXXXX")" \
     || rv_die "cannot create a temporary build directory"
   RV_SCRATCH+=("$tmp")
@@ -157,7 +173,7 @@ rv_ship_images() {
   # shellcheck disable=SC2086 # the list is built from fixed names and a sha
   docker save $images \
     | gzip -c \
-    | rv_mutate_stdin "set -eu; gunzip -c | docker load" \
+    | rv_mutate "set -eu; gunzip -c | docker load" \
     || rv_die "shipping the images failed"
   # Proof the host now holds them: a load that silently did nothing would fail
   # later, at `up`, with a much worse message.
@@ -165,4 +181,17 @@ rv_ship_images() {
     rv_run "docker image inspect evidgate-review-$svc:$RV_IMAGE_TAG >/dev/null 2>&1" \
       || rv_die "evidgate-review-$svc:$RV_IMAGE_TAG is missing on $(rv_target) after the load"
   done
+}
+
+# A host with 30 GB of disk cannot hold a release tree and an image set per sha:
+# only the serving release and the one the rollback command names are kept. The
+# `*-base` images are build scaffolding and go in every case; a tag still used by
+# a running container refuses the removal, which is the answer we want.
+rv_prune_images() { # PREVIOUS_SHA (may be empty)
+  local keep=" $RV_IMAGE_TAG "
+  if [ -n "$1" ]; then
+    keep="$keep$1 ${1:0:12} "
+  fi
+  rv_info "pruning review images other than $keep"
+  rv_mutate "set -eu; keep=$(rv_quote "$keep"); docker images --format '{{.Repository}}:{{.Tag}}' --filter 'reference=evidgate-review-*' | while IFS= read -r ref; do case \"\$ref\" in *':<none>') continue ;; esac; case \"\$ref\" in *-base:*) ;; *) case \"\$keep\" in *\" \${ref##*:} \"*) continue ;; esac ;; esac; docker rmi \"\$ref\" >/dev/null 2>&1 || true; done"
 }

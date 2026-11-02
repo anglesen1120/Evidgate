@@ -13,6 +13,24 @@ rv_tunnel_mode_valid() { # MODE
   return 1
 }
 
+# A connector container that exists but is stopped publishes nothing, so status
+# and the deploy must ask about its running state, never about its existence.
+rv_connector_running() { # CONTAINER
+  [ "$(rv_run "docker inspect -f '{{.State.Running}}' $(rv_quote "$1") 2>/dev/null || true")" = true ]
+}
+
+# The tunnel publishes one door, so what an unauthenticated request gets is the
+# proof it is locked. Basic Auth answers 401; only a Cloudflare Access policy in
+# front of the hostname (no local hash) may redirect or serve first.
+rv_ingress_codes() {
+  if [ "$RV_TUNNEL_MODE" = quick ] \
+    || [ -n "$(rv_env_get EVIDGATE_REVIEW_BASIC_AUTH_HASH)" ]; then
+    printf '401'
+  else
+    printf '200 301 302 303 307 308 401'
+  fi
+}
+
 # cloudflared prints its throwaway host on its own log, so the URL is read back
 # from the container instead of guessed. The banner also mentions
 # api.trycloudflare.com, which is the service endpoint and never the tunnel.

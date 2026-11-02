@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # The host is stopped every evening and started every morning, so the stack has to
 # come back on its own. That is a property of this file: every long-running
-# service must be `unless-stopped`, and no one-shot may carry a restart policy
-# (a restarted migration, seed or bucket bootstrap would act on a live database).
+# service must be `unless-stopped`, no one-shot may carry a restart policy (a
+# restarted migration, seed or bucket bootstrap would act on a live database), and
+# the two loopback debug replicas must be explicitly `no` — they are a person's
+# `ssh -L` or smoke target, not part of the served stack.
 # `depends_on` orders a `up`, never a boot, which is why the policy is the only
 # thing that can bring the stack back unasked.
 set -euo pipefail
@@ -16,12 +18,13 @@ COMPOSE="$REVIEW_COMPOSE"
   exit 1
 }
 
-# Services that must survive a boot, the jobs that must not be restarted, and the
-# build-only images that are never started at all (`images` profile): a restart
-# policy on one of those would only ever be a mistake.
-LONG_RUNNING="postgres seaweedfs api api-debug worker web web-local cloudflared cloudflared-quick"
+# Services that must survive a boot, the jobs that must not be restarted, the
+# build-only images that are never started at all (`images` profile), and the
+# local-only replicas: a restart policy on one of those would only be a mistake.
+LONG_RUNNING="postgres seaweedfs api worker web cloudflared cloudflared-quick"
 ONE_SHOT="db-init migrator seed bucket-init probe"
 BUILD_ONLY="migrator-base api-base worker-base"
+LOCAL_ONLY="api-debug web-local"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -40,7 +43,8 @@ review_split_services "$work"
   exit 1
 }
 
-# The web services take their policy from the shared anchor, so read it from there.
+# `web` takes its policy from the shared anchor, so read it from there; web-local
+# overrides it with `no` and is checked as a local-only service.
 web_anchor_restart="$(sed -nE '/^x-review-web: &review-web[[:space:]]*$/,/^[a-z]/p' "$COMPOSE" |
   sed -nE 's/^[[:space:]]+restart:[[:space:]]*(.+[^[:space:]])[[:space:]]*$/\1/p' | head -1)"
 build_anchor_restart="$(sed -nE '/^x-review-build: &review-build[[:space:]]*$/,/^[a-z]/p' "$COMPOSE" |
@@ -49,7 +53,9 @@ build_anchor_restart="$(sed -nE '/^x-review-build: &review-build[[:space:]]*$/,/
 
 policy_of() { # SERVICE
   local body="$work/$1" explicit
-  explicit="$(sed -nE 's/^[[:space:]]+restart:[[:space:]]*(.+[^[:space:]])[[:space:]]*$/\1/p' "$body" | head -1)"
+  # `restart: 'no'` is quoted in the file because bare `no` reads as a boolean.
+  explicit="$(sed -nE 's/^[[:space:]]+restart:[[:space:]]*(.+[^[:space:]])[[:space:]]*$/\1/p' "$body" |
+    head -1 | tr -d "'\"")"
   if [ -n "$explicit" ]; then
     printf '%s' "$explicit"
     return 0
@@ -97,15 +103,25 @@ for svc in $BUILD_ONLY; do
     note "'$svc' is only built, never run: it must carry no restart policy (found '$policy')"
 done
 
+for svc in $LOCAL_ONLY; do
+  [ -f "$work/$svc" ] || {
+    note "local-only service '$svc' is not in $COMPOSE; update this list"
+    continue
+  }
+  policy="$(policy_of "$svc")"
+  [ "$policy" = no ] ||
+    note "'$svc' is a local-only replica: it needs restart: 'no' (found '$policy')"
+done
+
 # A service nobody classified would silently keep Compose's default of "no".
 while IFS= read -r svc; do
-  case " $LONG_RUNNING $ONE_SHOT $BUILD_ONLY " in
+  case " $LONG_RUNNING $ONE_SHOT $BUILD_ONLY $LOCAL_ONLY " in
     *" $svc "*) ;;
-    *) note "service '$svc' is neither in the long-running, the one-shot nor the build-only list" ;;
+    *) note "service '$svc' is in none of the long-running, one-shot, build-only or local-only lists" ;;
   esac
 done <"$work/.names"
 
 if [ "$fail" -eq 0 ]; then
-  printf '== ok: long-running services restart after a boot, one-shots never do\n'
+  printf '== ok: long-running services restart after a boot, one-shots and local replicas never do\n'
 fi
 exit "$fail"

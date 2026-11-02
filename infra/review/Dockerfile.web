@@ -75,8 +75,9 @@ EXPOSE 8080
 # start. This image ships a finished configuration, writes only the auth files
 # under /tmp, and runs with a read-only rootfs, so they would write nowhere.
 #
-# The start script writes /tmp/evidgate/{auth.conf,htpasswd} from the basic-auth
-# environment and then execs nginx; it exits non-zero (never serving) when auth
-# is required but unset, which is how a quick tunnel stays authenticated.
+# The start script writes /tmp/evidgate/{auth.conf,proxy-auth.conf,htpasswd} from
+# the basic-auth environment and then execs nginx; it exits non-zero (never
+# serving) when auth is required but unset, which is how a quick tunnel stays
+# authenticated.
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/evidgate-web-start"]
 CMD []

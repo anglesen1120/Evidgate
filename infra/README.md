@@ -295,10 +295,25 @@ file it ships is the record), publishes **no host port** in either tunnel profil
 tunnel with HTTP Basic Auth on every path — with nginx serving the bundle same-origin, demanding
 the credential before any proxying and forwarding `/v1/` to `api:8080`.
 
+The review stack carries its own S3 identity instead of the dev stack's committed
+file: `.env.review` holds `EVIDGATE_S3_ACCESS_KEY`/`EVIDGATE_S3_SECRET_KEY` (48 hex
+characters each), compose passes them to the container as
+`EVIDGATE_REVIEW_S3_ACCESS_KEY`/`EVIDGATE_REVIEW_S3_SECRET_KEY`, and `seaweedfs`
+writes its identity file from them, so no repository path is bind-mounted and
+`EVIDGATE_SEAWEEDFS_S3_CONFIG` plays no part here. The connector meets only
+`web`: `cloudflared` shares the internal `evidgate-review-edge` network with `web`
+and never joins `evidgate-review-net`, so `api`, `postgres` and `seaweedfs` are
+unreachable from the tunnel even if a dashboard route is changed. `api`, `worker`
+and the connectors also run with `no-new-privileges:true` and every capability
+dropped.
+
 The reference host is a 4 GB ARM EC2 instance that runs the stack but does not build it:
 `scripts/review/deploy.sh --build-local` builds the five images here for the host's platform (migrator, api, worker, web, seed; the three `*-base` images stay local) and
 ships them with `docker save | docker load`. Every service carries a `mem_limit`/
-`mem_reservation` sized for that host. Host requirements, both ingress modes, upgrades, rollback and
+`mem_reservation` sized for that host. A redeploy or a rollback to an older sha
+re-runs that same build-and-ship step for the sha in question; `releases/` keeps
+the last three, and images outside the current and previous release are pruned.
+Host requirements, both ingress modes, upgrades, rollback and
 the verification checklist are in [`docs/runbooks/review-deploy.md`](../docs/runbooks/review-deploy.md).
 
 This image is not the production hosting decision: `apps/web` is still the static bundle on

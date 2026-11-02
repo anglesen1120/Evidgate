@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2016 # $review_health_allowed is an nginx variable, matched literally
-# Guards the one nginx phase trap this configuration can still fall into.
+# Guards the nginx phase trap this configuration can still fall into, and the two
+# proxy properties of /v1/ that a parse cannot show (overwritten client address,
+# streamed request body) plus the conditional Authorization strip.
 #
 # `return` runs in the rewrite phase, before nginx evaluates the access phase, so
 # `allow`/`deny` (and `auth_basic`) inside a location that returns are dead
@@ -73,8 +75,43 @@ else
   fi
 fi
 
-if [ "$fail" -eq 0 ]; then
-  printf '== ok: the health probe is loopback-gated in the rewrite phase\n'
+# The /v1/ proxy carries properties no `nginx -t` can show: the client address is
+# overwritten rather than appended, a body is streamed instead of spooled to the
+# tmpfs, the response is not buffered, the body cap is still nginx's, and the
+# Authorization header is emptied only when the start script says basic auth is on.
+# The block keeps its comments, which explain the traps, so they are stripped
+# before matching: a commented-out directive must not satisfy any check here.
+v1="$(awk '/location \/v1\/[[:space:]]*\{/,/^[[:space:]]{4}\}/' "$CONF")"
+if [ -z "$v1" ]; then
+  note 'location /v1/ is missing: the bundle has no Api proxy'
+else
+  v1_active="$(sed -E 's/(^|[[:space:]])#.*$//' <<<"$v1")"
+  grep -qE '^[[:space:]]*proxy_set_header X-Forwarded-For \$remote_addr;' <<<"$v1_active" ||
+    note 'location /v1/ must overwrite X-Forwarded-For with $remote_addr: an
+      appended header lets a caller choose the address the Api sees'
+  grep -qE '^[[:space:]]*proxy_request_buffering off;' <<<"$v1_active" ||
+    note 'location /v1/ buffers request bodies to the tmpfs before the Api sees
+      them; an upload then needs the body twice and starts late'
+  grep -qE '^[[:space:]]*proxy_buffering off;' <<<"$v1_active" ||
+    note 'location /v1/ buffers the response, so a download waits for its first
+      disk write and the tmpfs holds a second copy'
+  grep -qE '^[[:space:]]*include /tmp/evidgate/proxy-auth\.conf;' <<<"$v1_active" ||
+    note 'location /v1/ no longer includes the start script proxy-auth.conf, so
+      the Authorization header can no longer be emptied when basic auth is on'
+fi
+
+# A zero cap leaves only Kestrel's limit, and the Api's 413 then arrives after the
+# proxy has accepted a body it was supposed to refuse.
+grep -qE '^[[:space:]]*client_max_body_size[[:space:]]+32m;' <<<"$directives" ||
+  note 'client_max_body_size 32m is missing from the http block: the proxy stops
+    being the smaller of the two limits and an oversized upload is proxied'
+
+# The strip is conditional by design: written here it would also empty the header
+# in a deployment without basic auth, where it is the client's bearer token. Header
+# names are case-insensitive in nginx, so the match is too.
+if grep -qiE '^[[:space:]]*proxy_set_header[[:space:]]+authorization' <<<"$directives"; then
+  note 'nginx.conf sets proxy_set_header Authorization directly; it belongs in the
+      auth-on file the start script writes, or bearer tokens are lost when auth is off'
 fi
 
 # A 2xx/3xx `return` outside a named location answers before the access phase,
@@ -110,6 +147,6 @@ while IFS= read -r line; do
 done <"$work/blocks"
 
 if [ "$fail" -eq 0 ]; then
-  printf '== ok: no redirect answers before the access phase\n'
+  printf '== ok: directives run in the phases the design needs, and the /v1/ proxy streams, overwrites the client address and strips only a Basic credential\n'
 fi
 exit "$fail"

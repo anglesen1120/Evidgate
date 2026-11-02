@@ -6,7 +6,7 @@
 # later deploy reuses the credentials the services and the reviewers already know.
 #
 # usage: scripts/review/down.sh <ssh-host> [-i <ssh-keyfile>] [--purge] [--yes]
-#        scripts/review/down.sh --local [--purge] [--yes]
+#        EVIDGATE_REVIEW_HOST_ROOT=<root> scripts/review/down.sh --local [--purge] [--yes]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -70,6 +70,9 @@ parse_args() {
 
 main() {
   parse_args "$@"
+  # The control socket lives in a per-run scratch directory; without this the
+  # directory outlives every down call.
+  trap rv_cleanup EXIT
   rv_resolve_ssh_key "$KEY_ARG"
   rv_probe_host
 

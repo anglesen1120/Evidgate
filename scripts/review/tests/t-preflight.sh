@@ -18,7 +18,15 @@ fx_assert_contains "$out" "docker compose v5.6.1" "report v5.6.1 in the prefligh
 if out="$(FX_COMPOSE_VERSION=v1.29.2 bash "$FX_REPO/scripts/review/deploy.sh" review-host --no-dogfood 2>&1)"; then
   fx_fail "compose v1.29.2 was accepted"
 fi
-fx_assert_contains "$out" "docker compose v2 or newer" "compose 1.x is refused with the floor"
+fx_assert_contains "$out" "docker compose >= 2.23" "compose 1.x is refused with the floor"
+
+# --- a 2.x below the configs floor is refused too --------------------------
+# Inline `configs: content:` needs Compose 2.23; an older 2.x parses the file
+# but serves nothing, which is worse than a refusal.
+if out="$(FX_COMPOSE_VERSION=v2.20.3 bash "$FX_REPO/scripts/review/deploy.sh" review-host --no-dogfood 2>&1)"; then
+  fx_fail "compose v2.20.3 was accepted"
+fi
+fx_assert_contains "$out" "docker compose >= 2.23" "compose 2.20 is refused with the floor"
 
 # --- a load-only host is never asked for node or python3 -------------------
 fx_assert_log_lacks "$SSH_LOG" "command -v node" "the host is not asked for node"

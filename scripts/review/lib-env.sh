@@ -136,7 +136,7 @@ rv_env_ensure() { # SHA PUBLIC_ORIGIN TUNNEL_TOKEN; returns 0 created, 1 kept
 
   remote_tmp="$RV_ENV_FILE.new.$$"
   rv_mutate "set -eu; mkdir -p $(rv_quote "$RV_HOST_ROOT")"
-  rv_mutate_stdin "set -eu; umask 077; cat > $(rv_quote "$remote_tmp") && chmod 600 $(rv_quote "$remote_tmp")" <"$rendered"
+  rv_mutate "set -eu; umask 077; cat > $(rv_quote "$remote_tmp") && chmod 600 $(rv_quote "$remote_tmp")" <"$rendered"
   # -n: a concurrent deploy that won the race keeps its file and ours is dropped.
   rv_mutate "mv -n $(rv_quote "$remote_tmp") $(rv_quote "$RV_ENV_FILE")"
   rv_mutate "rm -f $(rv_quote "$remote_tmp")"
@@ -169,13 +169,23 @@ rv_ship_release() { # SHA
   rv_info "shipping $sha to $(rv_target):$RV_RELEASE_DIR"
   rv_mutate "set -eu; mkdir -p $(rv_quote "$RV_HOST_ROOT/releases") && rm -rf $(rv_quote "$tmp") && mkdir -p $(rv_quote "$tmp")"
   git -C "$RV_REPO_ROOT" archive --format=tar "$sha" \
-    | rv_mutate_stdin "set -eu; tar -xf - -C $(rv_quote "$tmp")"
-  printf '%s\n' "$sha" | rv_mutate_stdin "set -eu; cat > $(rv_quote "$tmp/.release-sha")"
-  rv_mutate "set -eu; chmod 644 $(rv_quote "$tmp/.release-sha") && mv $(rv_quote "$tmp") $(rv_quote "$RV_RELEASE_DIR")"
+    | rv_mutate "set -eu; tar -xf - -C $(rv_quote "$tmp")"
+  printf '%s\n' "$sha" | rv_mutate "set -eu; cat > $(rv_quote "$tmp/.release-sha")"
+  # One rename, never a merge into an existing directory: `mv` without -T moves
+  # INTO a directory that appeared concurrently and leaves a half-tree behind.
+  rv_mutate "set -eu; chmod 644 $(rv_quote "$tmp/.release-sha"); if [ -e $(rv_quote "$RV_RELEASE_DIR") ]; then echo $(rv_quote "$RV_RELEASE_DIR appeared concurrently; re-run") >&2; exit 1; fi; if mv --version >/dev/null 2>&1; then mv -T $(rv_quote "$tmp") $(rv_quote "$RV_RELEASE_DIR"); else mv $(rv_quote "$tmp") $(rv_quote "$RV_RELEASE_DIR"); fi"
   rv_run "test -f $(rv_quote "$RV_RELEASE_DIR/$RV_COMPOSE_REL")" \
     || rv_die "the shipped release has no $RV_COMPOSE_REL"
   [ "$(rv_run "cat $(rv_quote "$RV_RELEASE_DIR/.release-sha")")" = "$sha" ] \
     || rv_die "$RV_RELEASE_DIR does not read back as $sha"
+}
+
+# Keeps the three newest release trees and the one `current` points at, so a
+# rollback still has its target while an old sha cannot fill the disk. Runs after
+# the stack serves the new release, never before.
+rv_prune_releases() {
+  rv_info "keeping the 3 newest releases under $(rv_target):$RV_HOST_ROOT/releases"
+  rv_mutate "set -eu; cd $(rv_quote "$RV_HOST_ROOT/releases"); cur=\$(readlink $(rv_quote "$RV_HOST_ROOT/current") 2>/dev/null || true); cur=\${cur#releases/}; ls -1dt -- */ 2>/dev/null | sed 's#/\$##' | awk -v cur=\"\$cur\" 'NR > 3 && \$0 != cur' | while IFS= read -r old; do rm -rf -- \"\$old\"; done"
 }
 
 # Points `current` at the release that is now serving; prints the previous
