@@ -298,13 +298,26 @@ describe('no-fixture-code gate', () => {
     expect(result.stderr).toContain('--allow-dev-sign-in');
   });
 
+  it('review_mode_fails_when_only_the_sdk_route_remains', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+    await ws.output('main-ABC123.js', CLEAN_MAIN_JS);
+    await ws.output('chunk-SDK123.js', 'const url="/dev/session";');
+
+    // The generated SDK always carries the route; only the mounted component proves the form.
+    const result = ws.run(['--allow-dev-sign-in']);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('the review output has no dev sign-in');
+  });
+
   it('review_mode_reports_the_sign_in_it_allowed', async () => {
     const ws = await workspace();
     await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
     await ws.output('main-ABC123.js', CLEAN_MAIN_JS);
     await ws.output(
       'chunk-DEV123.js',
-      'const c="/v1/dev/session";const n="createDevSession";const l="Dev sign-in";',
+      'const s="app-dev-sign-in";const c="/v1/dev/session";const n="createDevSession";const l="Dev sign-in";',
     );
 
     const result = ws.run(['--allow-dev-sign-in']);

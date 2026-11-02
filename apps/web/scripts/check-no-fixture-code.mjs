@@ -144,7 +144,7 @@ const MARKERS = [...FIXTURE_MARKERS, ...DEV_SIGN_IN_MARKERS];
  * instead of passing vacuously.
  */
 const allowDevSignIn = process.argv.slice(2).includes('--allow-dev-sign-in');
-const SIGN_IN_PRESENCE_NEEDLES = ['app-dev-sign-in', '/dev/session'];
+const SIGN_IN_PRESENCE_NEEDLES = ['app-dev-sign-in'];
 const forbiddenMarkers = allowDevSignIn ? FIXTURE_MARKERS : MARKERS;
 
 /**
