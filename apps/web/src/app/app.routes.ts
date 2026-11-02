@@ -48,11 +48,11 @@ import { devRoutes } from './core/dev-routes/dev-routes';
 import { AUTH_ROUTES } from './features/auth/auth.routes';
 import {
   authGuard,
-  entryPhaseGuard,
   landingRedirectGuard,
   orgLandingGuard,
   orgScopeGuard,
   permissionGuard,
+  phaseGuard,
   projectScopeGuard,
 } from './core/guards';
 import { ShellComponent } from './shell/layout/shell.component';
@@ -132,7 +132,7 @@ function entryRoute(entry: NavEntry): Route {
   const table = ENTRY_ROUTES[entry.id];
   const common = {
     path: entry.segment,
-    canMatch: [entryPhaseGuard(entry), permissionGuard(entry.permission)],
+    canMatch: [phaseGuard(entry), permissionGuard(entry.permission)],
     data: { entryId: entry.id },
   };
   if (page !== undefined) {

@@ -41,10 +41,8 @@
 // additionally requires one of `app-dev-sign-in` / `/dev/session` in the output, so a review
 // build that lost the form fails here instead of serving a login screen with no way in.
 //
-// `--require-run-views` is the review build's second flag: it requires the `review-run-views` tag
-// of the review-only seam `shell/nav/review-entries.review.ts`, which opens the `runs` entry
-// (real run list + run detail, product guards) in the review image; without the flag the tag is
-// forbidden like any marker, and the 18-marker production line is unchanged.
+// `--require-run-views` (review build) requires the tag `review-run-views` of the seam that opens
+// the `runs` entry; without it the tag is forbidden. The 18-marker production line is unchanged.
 //
 // The check fails closed: a missing/empty dist directory, or a corpus with no `input.json`, is a
 // failure, not a pass — otherwise a broken build or a moved corpus would make the gate vacuous.
@@ -152,12 +150,7 @@ const allowDevSignIn = process.argv.slice(2).includes('--allow-dev-sign-in');
 const SIGN_IN_PRESENCE_NEEDLES = ['app-dev-sign-in'];
 const forbiddenMarkers = allowDevSignIn ? FIXTURE_MARKERS : MARKERS;
 
-/**
- * The tag `review-entries.review.ts` carries for the run views the review build opens early. The
- * review build must keep it (`--require-run-views`, so a review image without the run list fails
- * here); any other build must not, so the review seam cannot reach production. It is checked on top
- * of the marker list, whose count (and the report line) stays as it was.
- */
+/** Tag of `review-entries.review.ts`: required by `--require-run-views`, forbidden otherwise. */
 const requireRunViews = process.argv.slice(2).includes('--require-run-views');
 const RUN_VIEWS_TAG = 'review-run-views';
 

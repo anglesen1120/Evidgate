@@ -27,4 +27,15 @@ describe('review entries seam', () => {
     expect(runs?.permission).toBe('run:read');
     expect(runs?.phase).not.toBe('G1');
   });
+
+  it('with the review list only runs opens; every other later-phase entry stays closed', () => {
+    const runs = NAV_ENTRIES.find((entry) => entry.id === 'runs');
+    if (runs === undefined) throw new Error('no runs entry');
+    expect(isEntryActive(runs, REVIEW)).toBe(true);
+    const others = NAV_ENTRIES.filter((entry) => entry.phase !== 'G1' && entry.id !== 'runs');
+    expect(others.length).toBeGreaterThan(0);
+    for (const entry of others) {
+      expect(isEntryActive(entry, REVIEW), entry.id).toBe(false);
+    }
+  });
 });

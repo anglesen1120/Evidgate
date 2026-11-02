@@ -8,6 +8,6 @@
 
 export { attemptedPath, authGuard, signInTree } from './auth.guard';
 export { permissionGuard } from './permission.guard';
-export { entryPhaseGuard, phaseGuard } from './phase.guard';
+export { phaseGuard } from './phase.guard';
 export { orgScopeGuard, projectScopeGuard } from './scope.guard';
 export { landingRedirectGuard, orgLandingGuard } from './landing.guard';

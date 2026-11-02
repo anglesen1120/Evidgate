@@ -1,11 +1,6 @@
-// The seam the review build opens one later-phase navigation entry through. This file is the
-// PRODUCTION stand-in: it opens nothing, so the phase gate stays exactly `ACTIVE_PHASE`.
-//
-// `angular.json`'s `review` configuration replaces it (`fileReplacements`) with
-// `review-entries.review.ts`, which lets the review stack show the real run list and run detail
-// although `runs` is a later phase. Which entries are visible is a build decision, never a runtime
-// flag a shipped page could flip; `isEntryActive` is the one predicate the sidebar and the route
-// table both read, so a visible entry always has a matching route.
+// Build seam: entries the build opens although their phase is not reached. Production stand-in,
+// opens none; the `review` configuration swaps in `review-entries.review.ts`. A build decision,
+// never a runtime flag; sidebar and `phaseGuard` both read it through `isEntryActive`.
 
 import type { ReviewOpenEntry } from './nav.models';
 

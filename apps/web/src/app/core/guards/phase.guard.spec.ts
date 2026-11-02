@@ -33,7 +33,7 @@ describe('phaseGuard (09.1.1-T4.1)', () => {
 
   function run(phase: ProductPhase): Promise<unknown> {
     return TestBed.runInInjectionContext(async () =>
-      phaseGuard(phase)({}, [], EMPTY_MATCH_SNAPSHOT),
+      phaseGuard({ id: 'spec-entry', phase })({}, [], EMPTY_MATCH_SNAPSHOT),
     );
   }
 

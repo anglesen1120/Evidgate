@@ -344,6 +344,15 @@ describe('no-fixture-code gate', () => {
     expect(present.stdout).toContain('(run views present)');
   });
 
+  it('run_views_flag_works_without_the_sign_in_flag', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+    await ws.output('chunk-RUN123.js', 'const o=[{id:"runs",mount:"review-run-views"}];');
+
+    expect(ws.run(['--require-run-views']).status).toBe(0);
+    expect(ws.run(['--allow-dev-sign-in']).status).toBe(1);
+  });
+
   it('run_views_flag_keeps_every_fixture_marker_forbidden', async () => {
     for (const marker of FIXTURE_MARKERS) {
       const ws = await workspace();

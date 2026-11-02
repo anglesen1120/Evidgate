@@ -2,11 +2,11 @@
 // predicate the sidebar and the route table share.
 //
 // Until a release flag exists, the workspace's phase is a build constant. `ACTIVE_PHASE` is the
-// single place it is written: the navigation registry's visible set (`nav-view.ts`) and
-// `phaseGuard` both read it through `isPhaseActive`, so an entry can never be visible in a phase
+// single place it is written (the review build may open single entries early, `isEntryActive`): the navigation registry's visible set (`nav-view.ts`) and
+// `phaseGuard` both read it through `isEntryActive`, so an entry can never be visible in a phase
 // whose route does not match, or the reverse.
 
-import type { ProductPhase } from './nav.models';
+import type { ProductPhase, ReviewOpenEntry } from './nav.models';
 import { REVIEW_OPEN_ENTRIES } from './review-entries';
 
 /** Phase order, earliest first (CR-D-2: G1 Author → G2 Run → G3 Learn and repair → G4 Expand). */
@@ -32,11 +32,12 @@ export function isPhaseActive(phase: ProductPhase): boolean {
 
 /**
  * `isPhaseActive` for a registry entry, plus the entries the build opens early
- * (`review-entries.ts`; empty in production). The sidebar and `entryPhaseGuard` both call this.
+ * (`review-entries.ts`; empty in production). `open` is a parameter only so a spec can pass the
+ * review build's list.
  */
-export function isEntryActive(entry: {
-  readonly id: string;
-  readonly phase: ProductPhase;
-}): boolean {
-  return isPhaseActive(entry.phase) || REVIEW_OPEN_ENTRIES.some((open) => open.id === entry.id);
+export function isEntryActive(
+  entry: { readonly id: string; readonly phase: ProductPhase },
+  open: readonly ReviewOpenEntry[] = REVIEW_OPEN_ENTRIES,
+): boolean {
+  return isPhaseActive(entry.phase) || open.some((opened) => opened.id === entry.id);
 }
