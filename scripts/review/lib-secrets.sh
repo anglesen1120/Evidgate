@@ -33,5 +33,5 @@ rv_forget_tunnel_token() {
 rv_require_auth_hash() { # MODE
   [ "$1" = quick ] || return 0
   [ -n "$(rv_env_get EVIDGATE_REVIEW_BASIC_AUTH_HASH)" ] && return 0
-  rv_die "$RV_ENV_FILE has no EVIDGATE_REVIEW_BASIC_AUTH_HASH, and quick mode serves the build on a public URL. The file is never rewritten, so add the three keys by hand with: printf '%s\\n' \"EVIDGATE_REVIEW_BASIC_AUTH_USER=reviewer\" \"EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD=<pick one>\" \"EVIDGATE_REVIEW_BASIC_AUTH_HASH='\$(printf '%s\\n' '<same password>' | openssl passwd -apr1 -stdin)'\" >> $RV_ENV_FILE"
+  rv_die "$RV_ENV_FILE has no EVIDGATE_REVIEW_BASIC_AUTH_HASH, and quick mode serves the build on a public URL. The file is never rewritten, so add the three keys by hand with: printf '%s\\n' \"EVIDGATE_REVIEW_BASIC_AUTH_USER=reviewer\" \"EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD='<pick-yours>'\" \"EVIDGATE_REVIEW_BASIC_AUTH_HASH='\$(printf '%s\\n' '<same password>' | openssl passwd -apr1 -stdin)'\" >> $RV_ENV_FILE"
 }

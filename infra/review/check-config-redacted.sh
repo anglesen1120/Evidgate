@@ -84,8 +84,8 @@ for service, definition in sorted(services.items()):
 raw = json.dumps(services)
 if 'EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD' in raw:
     problems.append(
-        'a container receives EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD: only the user and the '
-        'apr1 hash may reach web, the plaintext stays in .env.review for the owner'
+        'a container receives EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD, yet only the user and the '
+        'apr1 hash may reach web; the plaintext stays in .env.review for the owner'
     )
 
 if problems:

@@ -7,7 +7,7 @@
 #     -f "$release/infra/review/compose.review.yml" up -d --wait postgres seaweedfs
 #
 # Profiles decide what is reachable from outside the container network:
-#   tunnel        cloudflared + dashboard token: the only ingress, no host port
+#   tunnel        cloudflared + dashboard token is the only ingress, no host port
 #   tunnel-quick  cloudflared-quick: an ephemeral *.trycloudflare.com URL, no
 #                 token, basic auth forced on by compose.quick.yml
 #   local         web-local publishes the bundle on 127.0.0.1 (--tunnel none)

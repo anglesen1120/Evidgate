@@ -19,7 +19,7 @@ set -eu
 auth_dir="${EVIDGATE_WEB_START_AUTH_DIR:-/tmp/evidgate}"
 auth_conf="$auth_dir/auth.conf"
 proxy_conf="$auth_dir/proxy-auth.conf"
-htpasswd="$auth_dir/htpasswd"
+htpasswd_file="$auth_dir/htpasswd"
 
 die() {
   echo "evidgate-web: $*" >&2
@@ -52,9 +52,9 @@ if [ -n "$user" ] && [ -n "$hash" ]; then
   # shellcheck disable=SC2016 # "$apr1$salt$digest" is literal text, not expansion
   printf '%s' "$hash" | grep -Eq '^\$apr1\$[^$]+\$[^$]+$' ||
     die 'EVIDGATE_REVIEW_BASIC_AUTH_HASH must be an apr1 hash ($apr1$salt$digest), e.g. openssl passwd -apr1'
-  printf '%s:%s\n' "$user" "$hash" >"$htpasswd"
-  chmod 600 "$htpasswd"
-  printf 'auth_basic "Evidgate review";\nauth_basic_user_file %s;\n' "$htpasswd" >"$auth_conf"
+  printf '%s:%s\n' "$user" "$hash" >"$htpasswd_file"
+  chmod 600 "$htpasswd_file"
+  printf 'auth_basic "Evidgate review";\nauth_basic_user_file %s;\n' "$htpasswd_file" >"$auth_conf"
   # The Basic credential is for this hop only. Forwarded unchanged, the Api would
   # read it as a bearer token, so the header is emptied for /v1/ requests; the
   # session cookie is what authenticates them. A Bearer client (CLI/CI) is refused
