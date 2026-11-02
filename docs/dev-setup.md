@@ -351,18 +351,27 @@ for it.
 Enable it in `.env.dev` (never in a deployed environment):
 
 ```sh
-# Generate the value once in your shell, then paste it below: a command substitution
+# Generate each value once in your shell, then paste it below: a command substitution
 # written here is re-run every time up.sh sources the file, so the secret would change
 # on every restart (and a reader that parses plain KEY=VALUE lines would see the
 # expression itself).
-openssl rand -base64 32          # paste the output as the SECRET value below
+openssl rand -base64 32          # the dev-login secret
+openssl rand -base64 32          # the session pepper (a different value)
 ```
 
 ```sh
 # .env.dev — the switch and the shared secret of the local sign-in.
 EVIDGATE__DEVLOGIN__ENABLED=true
 EVIDGATE__DEVLOGIN__SECRET=<the value generated above>
+# The session pepper every issued session is hashed with (base64, at least 32
+# bytes); `openssl rand -base64 32` and paste. The local stack ships none.
+EVIDGATE__SESSION__PEPPER=<the other value generated above>
 ```
+
+The session pepper is not optional for this route: `session_create` stores the HMAC of
+the cookie value, so a host without `EVIDGATE__SESSION__PEPPER` answers **503
+`unavailable`** to a correct secret as well (the audit row is written and no session
+row follows). The dev-login pair alone is therefore not enough to sign in.
 
 `ENABLED` must be set to `true` explicitly — it defaults to false, and no environment
 sets it, so the route stays unmapped until you write the line. Use at least 16 random
@@ -389,6 +398,7 @@ dotnet dev-certs https --trust                       # once per machine
 ASPNETCORE_URLS=https://localhost:8443 \
   EVIDGATE__DEVLOGIN__ENABLED=true \
   EVIDGATE__DEVLOGIN__SECRET="$EVIDGATE__DEVLOGIN__SECRET" \
+  EVIDGATE__SESSION__PEPPER="$EVIDGATE__SESSION__PEPPER" \
   dotnet run --project src/Evidgate.Api
 ```
 
