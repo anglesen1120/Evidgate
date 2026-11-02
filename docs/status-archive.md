@@ -176,3 +176,56 @@ Implementation result (2026-09-26): `scripts/verify.sh` green on the host with D
 | CLI token cache orphans after rotation (S178) | a credential rotation leaves the previous `ci-token.<destination>.<binding>.json` until `auth logout` or a 401/403 purge; each holds only a token valid at most about 65 minutes at mode 0600 (#375) | receiver: next `packages/cli` auth task; State: closed by #381 (S181, 450b1a65) |
 | CLI test comment carries a plan id (S178) | `packages/cli/src/auth/tokenCache.test.ts:52` comment names `04.2.1-T1.2 / AC3` (U1 ratchet); the line pre-dates #375 and was reworded in it | receiver: next `packages/cli` task; State: closed by #381 (S181, 450b1a65) |
 | CLI dev command fails on unwritable cache (S177) | a dev command used to need no cache; since #372 it exchanges and writes the cache like an ingest token, so an unwritable `EVIDGATE_CACHE_DIR` is `token_cache_error`, exit 3 (consistent with `contracts/cli.md` §4; cold-cache `config check` now does a real exchange and concurrent cold starts can each exchange) — closed by S184 PR (pending merge) | receiver: owner decision if a cache-less dev path is wanted; State: closed by #384 (S184, c33fed43; owner decision 2026-11-01 (chat), recorded by the coordinator): an unwritable or unsafe cache now warns once and continues in memory |
+
+## STATUS replaced text (S189, 2026-11-02)
+
+Moved verbatim from STATUS.md §1 Resume here (lines 8, 9, 11, 12, 13, 14, 17, 18, 19) and §2 when the counters were refreshed after the S173-S186 wave.
+
+- S124 (08.6.3-T1, `0052_healing_switch.sql`) is merged (#260, 569b538f); 11.5.1-T5 (`0053_security_security_event.sql`) is merged (#286, 560b5aba), 0054 (08.5.1-T1.1/T1.2, #306) merged, next free `0055`; T1 stays partial. Older line: Develop: `787f592` (PR #228, S102 02.3.2-T2, merged); 220 first-parent PR merges into develop. Migration `0048_identity_session_routes.sql` is merged in #228. S115 (05.3.2-T5) is in review with `0049_orchestration_evidence_revision.sql` (PR number in the delivery row below); the migration lane is held by S115 until it merges, next free migration `0051`. Closed owner-review rows now live in `docs/phase-review-archive.md` (S127, merged #266, c91f63a5); a row moves there verbatim in the commit that closes it.
+- Open PRs: the S91 close-out PR plus dependabot PRs (not lanes).
+- Active lanes (SESSION-CLAIMS 2026-10-27): S91 10.3.1-T2 not started (T1 merged, #203, closed out here); S98 09.1.1-T5 web-only (merged, #213, closed out here). S97 (03.2.1-T5) and S99 (09.1.1-T9.2, #209) are merged and closed out here. S102 (02.3.2-T2, sessions/logout) is merged (#228, 787f592) and closed out here.
+- Fully landed on develop (counting S115 05.3.2-T5, S123 05.3.2-T2 and S131 11.5.2-T1 and S132 10.11.1-T3 once merged, and 01.2.1-T6, PR #310): 187/659 tasks; 191.75/705.75 raw person-days; remaining 472 tasks / 514.0 d. Via merged PRs: 160 tasks / 166.75 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged STATUS rows expanded against plan_graph task ids; a parent counts only when all its sub-rows landed.
+- Landed by phase (done tasks / raw d): G1 137 / 147.75; G2 44 / 38; G3 0 / 0; G4 6 / 6.
+- Plan totals: 659 tasks / 705.75 raw / 846.9 buffered person-days (S130 F47 added 02.3.2-T3, S, V1, G1; the owner decisions of 2026-10-30 added 01.2.1-T6 and 01.2.1-T7, both M, V1, G1; S171 added 05.3.2-T6, S, V1, G2; the S93 canonical figures were 655 / 702.75 / 843.3). `plan_graph.py` verified in this S102 close-out on `787f592`: errors 0, 205 stories, TOTAL 655 / 702.75 raw / 843.3 buffered. `check_features.py` still exits 1, now with 8 missing 13.x feature plans (13.5.1 to 13.9.1) after the S112 plans for 13.3.1 and 13.4.1 (queue F37 first part, §6 row); both new plans are `proposed, owner confirmation pending`.
+- Next picks, web-only lane: 09.1.1-T5 is merged (#213) and 09.1.1-T9.2 is done (#209), so the web-only lane moves to G2 (§5).
+- **Priority override (owner 2026-10-29): the code-review fix register `plans/features/REVIEW-2026-10-29.md` comes first — its P0 rows (CR-01…CR-06, 6.0 d) before any §5 pick in either lane, its P1 rows before the task named in their *Must precede* cell (07.2.1 waits on CR-07…CR-11); the next free migration `0055` goes to CR-03.** Next picks, backend lane (after P0): refill order in `.omp/coordinator/prompts/held/README.md`; when a backend slot frees, 08.5.1-T1 (XL, split, migration lane) unless §5 ranks another G1 task higher, and 04.1.2-T1 only after S91 releases.
+- Next step: §5, 90 dependency-ready tasks / 101.5 d split by backend and web-only lane; §6 lists the non-graph blockers and carried items.
+
+Section 2 tables replaced (baseline 187 tasks / 191.75 d):
+
+| Delivery scope | Tasks | Raw person-days |
+|---|---|---|
+| Fully landed on develop | 187 | 191.75 |
+| Via merged PRs | 160 | 166.75 |
+| Direct commits on develop, no PR | 27 | 25.0 |
+| Remaining | 472 | 514.0 |
+| Plan total | 659 | 705.75 |
+
+| Group | Tasks | XS | S | M | L | XL | Person-days |
+|---|---|---|---|---|---|---|---|
+| 01 | 46 | 2 | 10 | 22 | 11 | 1 | 52.5 |
+| 02 | 29 | 0 | 8 | 18 | 3 | 0 | 28 |
+| 03 | 8 | 0 | 3 | 4 | 1 | 0 | 7.5 |
+| 04 | 22 | 0 | 7 | 12 | 3 | 0 | 21.5 |
+| 05 | 19 | 0 | 5 | 9 | 5 | 0 | 21.5 |
+| 06 | 12 | 0 | 4 | 8 | 0 | 0 | 10 |
+| 07 | 6 | 0 | 2 | 4 | 0 | 0 | 5 |
+| 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
+| 09 | 22 | 0 | 6 | 13 | 3 | 0 | 22 |
+| 10 | 5 | 0 | 2 | 2 | 1 | 0 | 5 |
+| 11 | 11 | 1 | 5 | 4 | 1 | 0 | 8.75 |
+| 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
+| 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
+| TOTAL | 187 | 3 | 52 | 100 | 31 | 1 | 191.75 |
+
+| Group | Tasks | XS | S | M | L | XL | Person-days |
+|---|---|---|---|---|---|---|---|
+| G1 | 137 | 3 | 32 | 74 | 27 | 1 | 147.75 |
+| G2 | 44 | 0 | 18 | 23 | 3 | 0 | 38 |
+| G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
+| TOTAL | 187 | 3 | 52 | 100 | 31 | 1 | 191.75 |
+
+Section 2 partial-parent paragraph replaced (old STATUS line 34):
+
+Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, fbb2fe91) and whose remainder is T2.3 and T2.4; and 09.8.1-T1, whose T1.1 + T1.2 landed in #284 and whose remainder is T1.3 + T1.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
