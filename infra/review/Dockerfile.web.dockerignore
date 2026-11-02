@@ -15,7 +15,8 @@ TestResults
 docs
 plans
 tests
-fixtures
+fixtures/*
+!fixtures/web-api
 src
 contracts
 migrations

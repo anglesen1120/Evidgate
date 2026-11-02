@@ -37,6 +37,9 @@ RUN npm ci --ignore-scripts
 
 COPY tsconfig.base.json tsconfig.json ./
 COPY apps/web/ apps/web/
+# The app build's fixture-leak gate cross-checks against this corpus and fails
+# without it; it is a build input only and never reaches the final stage.
+COPY fixtures/web-api/ fixtures/web-api/
 COPY infra/review/ infra/review/
 
 # The repository's own build chain: `tsc -b tsconfig.json` emits the workspace
