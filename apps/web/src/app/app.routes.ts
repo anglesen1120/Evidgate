@@ -132,7 +132,7 @@ function entryRoute(entry: NavEntry): Route {
   const table = ENTRY_ROUTES[entry.id];
   const common = {
     path: entry.segment,
-    canMatch: [phaseGuard(entry.phase), permissionGuard(entry.permission)],
+    canMatch: [phaseGuard(entry), permissionGuard(entry.permission)],
     data: { entryId: entry.id },
   };
   if (page !== undefined) {

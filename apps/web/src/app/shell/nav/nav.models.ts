@@ -83,3 +83,9 @@ export interface NavGroupView {
   readonly label: string;
   readonly items: readonly NavItemView[];
 }
+
+/** An entry the build opens although its phase has not been reached, with a leak-gate tag. */
+export interface ReviewOpenEntry {
+  readonly id: string;
+  readonly mount: string;
+}

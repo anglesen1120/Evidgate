@@ -6,7 +6,7 @@
     "start": "ng serve",
     "start:fixtures": "ng serve --configuration fixtures",
     "build": "ng build && node scripts/check-bundle-budget.mjs && node scripts/check-no-fixture-code.mjs",
-    "build:review": "ng build --configuration review && node scripts/check-bundle-budget.mjs && node scripts/check-no-fixture-code.mjs --allow-dev-sign-in",
+    "build:review": "ng build --configuration review && node scripts/check-bundle-budget.mjs && node scripts/check-no-fixture-code.mjs --allow-dev-sign-in --require-run-views",
     "test": "ng test --watch=false && vitest run --config eslint-rules/vitest.config.mts && node --test scripts/",
     "i18n:extract": "ng extract-i18n",
     "i18n:check": "node scripts/check-i18n-keys.mjs",

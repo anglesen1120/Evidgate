@@ -10,20 +10,21 @@ import { inject } from '@angular/core';
 import type { CanMatchFn } from '@angular/router';
 
 import type { ProductPhase } from '../../shell/nav/nav.models';
-import { isPhaseActive } from '../../shell/nav/product-phase';
+import { isEntryActive } from '../../shell/nav/product-phase';
 import { SessionStore } from '../session/session.store';
 
 /**
- * Matches a route only while its phase is at most the active phase.
- *
- * It awaits the bootstrap like every other guard — not because a phase depends on the session, but
- * because the shell's guard set is one behaviour: a route never matches while the session is
- * still unknown, so a phase-hidden route and a protected route become visible in the same tick.
+ * Matches a route only while its entry's phase is at most the active phase, or the build opened
+ * the entry early (`isEntryActive`). It awaits the bootstrap like every other guard, so a
+ * phase-hidden route and a protected route become visible in the same tick.
  */
-export function phaseGuard(phase: ProductPhase): CanMatchFn {
+export function phaseGuard(entry: {
+  readonly id: string;
+  readonly phase: ProductPhase;
+}): CanMatchFn {
   return async () => {
     const session = inject(SessionStore);
     await session.bootstrap();
-    return isPhaseActive(phase);
+    return isEntryActive(entry);
   };
 }

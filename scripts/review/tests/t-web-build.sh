@@ -31,6 +31,8 @@ grep -qF -- '"build:review": "ng build --configuration review' "$web_package" ||
   fail "apps/web has no build:review script starting with the review configuration"
 grep -qF -- 'check-no-fixture-code.mjs --allow-dev-sign-in' "$web_package" ||
   fail "build:review does not pass --allow-dev-sign-in to the fixture-leak gate"
+grep -qF -- 'check-no-fixture-code.mjs --allow-dev-sign-in --require-run-views' "$web_package" ||
+  fail "build:review does not pass --require-run-views to the fixture-leak gate"
 grep -qF -- '"build": "ng build &&' "$web_package" ||
   fail "the production build script no longer starts with a plain ng build"
 ok "build:review runs the review configuration behind both gates"
