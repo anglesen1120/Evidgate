@@ -106,6 +106,7 @@ compose run --rm --no-deps --entrypoint /bin/sh web -c \
 review_step 'basic auth: quick mode without credentials refuses to start'
 if compose run --rm --no-deps -e EVIDGATE_WEB_START_CHECK=1 \
   -e EVIDGATE_REVIEW_TUNNEL_MODE=quick \
+  -e EVIDGATE_REVIEW_BASIC_AUTH_USER= -e EVIDGATE_REVIEW_BASIC_AUTH_HASH= \
   --entrypoint /bin/sh web -c 'exec /bin/sh /usr/local/bin/evidgate-web-start' \
   >"$work/quick.out" 2>&1; then
   review_die 'the web image started in quick mode with no credentials: a public quick tunnel would serve without auth'
@@ -132,7 +133,8 @@ else
 
   review_step 'basic auth: token mode without credentials turns the realm off'
   compose run --rm --no-deps -e EVIDGATE_WEB_START_CHECK=1 \
-    -e EVIDGATE_REVIEW_TUNNEL_MODE=token \
+    -e EVIDGATE_REVIEW_TUNNEL_MODE=token -e EVIDGATE_REVIEW_BASIC_AUTH=optional \
+    -e EVIDGATE_REVIEW_BASIC_AUTH_USER= -e EVIDGATE_REVIEW_BASIC_AUTH_HASH= \
     --entrypoint /bin/sh web -c 'exec /bin/sh /usr/local/bin/evidgate-web-start' \
     >"$work/off.out" 2>&1 ||
     review_die "the web image failed without credentials in token mode: $(head -n 3 "$work/off.out" | tr '\n' ' ')"
