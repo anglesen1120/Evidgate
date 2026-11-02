@@ -2,6 +2,6 @@
 # directory: without this file the whole tree (fixtures, node_modules, the release
 # archives) would be sent for a single COPY.
 *
-!contracts/schemas
-!contracts/schemas/**
+!contracts
+!contracts/**
 !infra/review/Dockerfile.seed

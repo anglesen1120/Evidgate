@@ -25,12 +25,12 @@ fx_assert_eq "$(grep -cE '^FROM ' "$dockerfile")" "1" "the seed image is one sta
 assert_file_has "$dockerfile" "ARG BASE" "the base image is an argument"
 # shellcheck disable=SC2016 # ${BASE} is Dockerfile syntax, not a shell variable
 assert_file_has "$dockerfile" 'FROM ${BASE}' "the seed image derives from that base"
-assert_file_has "$dockerfile" "COPY --chmod=a=rX contracts/schemas/ /app/contracts/schemas/" \
+assert_file_has "$dockerfile" "COPY --chmod=a=rX contracts/ /app/contracts/" \
   "contracts/schemas lands where DevSeedRun looks for it"
 # The runtime user of the base image is non-root, so the COPY has to stay
 # readable by it: a=rX is what makes the directory 0555 and the files 0444.
-assert_file_has "$real_repo/infra/review/Dockerfile.seed.dockerignore" '!contracts/schemas' \
-  "the build context keeps only contracts/schemas"
+assert_file_has "$real_repo/infra/review/Dockerfile.seed.dockerignore" '!contracts' \
+  "the build context keeps only contracts/"
 
 assert_file_has "$real_repo/infra/review/compose.review.yml" 'dockerfile: infra/review/Dockerfile.seed' \
   "compose builds the seed service from that Dockerfile"

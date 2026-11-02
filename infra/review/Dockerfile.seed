@@ -1,4 +1,4 @@
-# The seed job: the migrator image plus the repository's contracts/schemas.
+# The seed job: the migrator image plus the repository's contracts/ (seed-dev validates against schemas from several subdirectories).
 #
 # seed-dev resolves `<directory of migrations>/contracts/schemas`
 # (DevSeedRun.ContractsDirectory, i.e. /app/contracts/schemas with the migrator's
@@ -19,4 +19,4 @@ FROM ${BASE}
 # uid and only ever reads these files, so nothing the job does can rewrite a
 # schema. The chmod is explicit for the same reason as the migrator's COPY: the
 # context is a working checkout whose umask is not the image's business.
-COPY --chmod=a=rX contracts/schemas/ /app/contracts/schemas/
+COPY --chmod=a=rX contracts/ /app/contracts/
