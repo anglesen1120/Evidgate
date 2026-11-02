@@ -43,10 +43,14 @@ COPY fixtures/web-api/ fixtures/web-api/
 COPY infra/review/ infra/review/
 
 # The repository's own build chain: `tsc -b tsconfig.json` emits the workspace
-# libraries the app imports, then the web workspace's production build (which
-# also runs its bundle-budget and fixture-leak checks). `localize: ["en","vi"]`
-# writes dist/browser/<locale>/ with that locale's own <base href>.
-RUN npx tsc -b tsconfig.json && npm run build -w apps/web
+# libraries the app imports, then the web workspace's review build (which also
+# runs its bundle-budget and fixture-leak checks). The review configuration is
+# the production one plus the Development-only dev sign-in form: the review
+# stack has no human login yet, so a browser reviewer needs that form to sign in,
+# while the production bundle stays form-free (`npm run build`). It stays the
+# production profile otherwise: `localize: ["en","vi"]` writes
+# dist/browser/<locale>/ with that locale's own <base href>.
+RUN npx tsc -b tsconfig.json && npm run build:review -w apps/web
 
 # The nginx header snippet is generated from apps/web/scripts/csp.mjs so the
 # policy has one source; see generate-nginx-headers.mjs for the nonce handoff.

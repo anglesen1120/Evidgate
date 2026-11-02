@@ -33,6 +33,14 @@
 //    matches per value — a fixture that grows any other status or provider word keeps it as a
 //    needle, so it cannot hide a new fixture string behind a common member name.
 //
+// The production invocation forbids all 18 markers. The review web image is the one caller that
+// may carry a dev-only surface: `npm run build:review -w apps/web` adds the `review` angular.json
+// configuration, which swaps `login-extension.ts` for its development replacement so the review
+// stack shows the dev sign-in form. Its six markers are listed in `DEV_SIGN_IN_MARKERS` and are
+// NOT forbidden under `--allow-dev-sign-in`; everything else stays forbidden, and the flag
+// additionally requires one of `app-dev-sign-in` / `/dev/session` in the output, so a review
+// build that lost the form fails here instead of serving a login screen with no way in.
+//
 // The check fails closed: a missing/empty dist directory, or a corpus with no `input.json`, is a
 // failure, not a pass — otherwise a broken build or a moved corpus would make the gate vacuous.
 //
@@ -76,10 +84,29 @@ const SCANNED_EXTENSIONS = [
 ];
 
 /**
- * The marker strings of the dev-only code (see the header). They are matched verbatim, so a
- * production build that kept any of them fails here.
+ * The markers of the Development-only sign-in: the login-extension seam of the `development` and
+ * `fixtures` configurations, the route `/v1/dev/session` it calls, and the generated SDK operation
+ * that spells the same route. The `review` configuration mounts the same form on purpose (the
+ * review stack has no human login yet), so `--allow-dev-sign-in` exempts exactly these six and
+ * requires one of the presence needles below to survive in the output.
  */
-const MARKERS = [
+export const DEV_SIGN_IN_MARKERS = [
+  'app-dev-sign-in',
+  '/v1/dev/session',
+  'Dev sign-in',
+  'Đăng nhập phát triển',
+  // The same dev sign-in seen through the generated SDK (`packages/sdk/gen/sdk.gen.ts`): its `url`
+  // is the bare `/dev/session` (the app's client adds `/v1`) and its operation name survives in a
+  // source map, so either needle catches a chunk that kept the SDK operation.
+  'createDevSession',
+  '/dev/session',
+];
+
+/**
+ * The marker strings every build must keep out: the fixture backend, the review-only routes and
+ * the UI gallery (see the header).
+ */
+const FIXTURE_MARKERS = [
   'X-Evidgate-Fixture',
   'evidgate.fixture-backend',
   'fixtures/web-api',
@@ -101,16 +128,24 @@ const MARKERS = [
   'dev/run-list',
   'dev/run-detail',
   'dev/suite-composition',
-  'app-dev-sign-in',
-  '/v1/dev/session',
-  'Dev sign-in',
-  'Đăng nhập phát triển',
-  // The same dev sign-in seen through the generated SDK (`packages/sdk/gen/sdk.gen.ts`): its `url`
-  // is the bare `/dev/session` (the app's client adds `/v1`) and its operation name survives in a
-  // source map, so either needle catches a chunk that kept the SDK operation.
-  'createDevSession',
-  '/dev/session',
 ];
+
+/**
+ * Every marker, in its historical order (fixture first, sign-in last): the production invocation
+ * forbids this whole list, so its count and its report line stay what they were.
+ */
+const MARKERS = [...FIXTURE_MARKERS, ...DEV_SIGN_IN_MARKERS];
+
+/**
+ * `--allow-dev-sign-in` is the review build's mode: `npm run build:review -w apps/web` passes it
+ * to this gate after `ng build --configuration review` and the bundle-budget gate. It exempts
+ * `DEV_SIGN_IN_MARKERS` only, and then requires one of these two needles in the output — the form
+ * component's selector or the route it posts to — so a review build that lost the sign-in fails
+ * instead of passing vacuously.
+ */
+const allowDevSignIn = process.argv.slice(2).includes('--allow-dev-sign-in');
+const SIGN_IN_PRESENCE_NEEDLES = ['app-dev-sign-in', '/dev/session'];
+const forbiddenMarkers = allowDevSignIn ? FIXTURE_MARKERS : MARKERS;
 
 /**
  * Shortest corpus string treated as a leak signal. Shorter values (`ok`, ids, `en`) collide with
@@ -313,7 +348,7 @@ if (files.length === 0) {
 }
 
 const needles = [
-  ...MARKERS.map((marker) => ({ needle: marker, source: 'the fixture backend code' })),
+  ...forbiddenMarkers.map((marker) => ({ needle: marker, source: 'the fixture backend code' })),
   ...[...fixtureValues].map(([value, name]) => ({
     needle: value,
     source: `fixtures/web-api/${name}/input.json`,
@@ -329,8 +364,12 @@ const needles = [
 ];
 
 const leaks = [];
+let signInPresent = false;
 for (const file of files) {
   const text = readFileSync(join(DIST_DIR, file), 'utf8');
+  if (allowDevSignIn && SIGN_IN_PRESENCE_NEEDLES.some((needle) => text.includes(needle))) {
+    signInPresent = true;
+  }
   for (const { needle, source } of needles) {
     if (text.includes(needle)) {
       leaks.push(`${shown(join(DIST_DIR, file))}: ${JSON.stringify(needle)} (${source})`);
@@ -346,7 +385,17 @@ if (leaks.length > 0) {
   );
 }
 
+if (allowDevSignIn && !signInPresent) {
+  fail(
+    'the review output has no dev sign-in: neither "app-dev-sign-in" nor "/dev/session" is in ' +
+      `${shown(DIST_DIR)}/. --allow-dev-sign-in expects the review build (angular.json ` +
+      '`review`, which replaces login-extension.ts); the form is missing, so a reviewer could ' +
+      'not sign in.',
+  );
+}
+
 console.log(
   `fixture code: ${files.length} file(s) in ${shown(DIST_DIR)}/ scanned for ` +
-    `${MARKERS.length} marker(s) and ${fixtureValues.size} fixture string(s).`,
+    `${forbiddenMarkers.length} marker(s) and ${fixtureValues.size} fixture string(s)` +
+    `${allowDevSignIn ? ' (dev sign-in allowed and present)' : ''}.`,
 );

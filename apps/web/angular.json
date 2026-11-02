@@ -75,6 +75,43 @@
               "extractLicenses": true,
               "localize": ["en", "vi"]
             },
+            "review": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "600kB",
+                  "maximumError": "900kB"
+                },
+                {
+                  "type": "anyScript",
+                  "maximumWarning": "300kB",
+                  "maximumError": "450kB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "6kB",
+                  "maximumError": "12kB"
+                }
+              ],
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": false
+                },
+                "fonts": true
+              },
+              "outputHashing": "all",
+              "sourceMap": false,
+              "extractLicenses": true,
+              "localize": ["en", "vi"],
+              "fileReplacements": [
+                {
+                  "replace": "src/app/features/auth/login/login-extension.ts",
+                  "with": "src/app/features/auth/login/login-extension.development.ts"
+                }
+              ]
+            },
             "development": {
               "optimization": false,
               "sourceMap": true,
