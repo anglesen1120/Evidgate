@@ -17,7 +17,7 @@
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="Dapper" Version="2.1.89" />
     <PackageVersion Include="dbup-postgresql" Version="7.0.1" />
-    <PackageVersion Include="Corvus.Json.Validator" Version="5.6.1" />
+    <PackageVersion Include="Corvus.Json.Validator" Version="5.8.0" />
     <PackageVersion Include="FluentValidation" Version="12.2.0" />
     <PackageVersion Include="Cronos" Version="0.13.0" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
