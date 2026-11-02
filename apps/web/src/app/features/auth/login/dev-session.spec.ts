@@ -18,13 +18,14 @@ describe('DevSession', () => {
     reload: vi.fn<() => Promise<void>>(),
     sessionState: state,
   };
-  const router = { navigateByUrl: vi.fn(async () => true) };
+  const router = { navigateByUrl: vi.fn(() => Promise.resolve(true)) };
 
   beforeEach(() => {
     vi.clearAllMocks();
     state.set('anonymous');
-    session.reload.mockImplementation(async () => {
+    session.reload.mockImplementation(() => {
       state.set('authenticated');
+      return Promise.resolve();
     });
     TestBed.configureTestingModule({
       providers: [
@@ -33,7 +34,10 @@ describe('DevSession', () => {
         provideHttpClientTesting(),
         DevSession,
         { provide: SessionStore, useValue: session },
-        { provide: AuthFlow, useValue: { returnUrl: signal('/orgs/o/projects/p/overview?tab=runs') } },
+        {
+          provide: AuthFlow,
+          useValue: { returnUrl: signal('/orgs/o/projects/p/overview?tab=runs') },
+        },
         { provide: Router, useValue: router },
       ],
     });
@@ -46,12 +50,13 @@ describe('DevSession', () => {
   it('success: clears the signed-out latch and awaits a fresh session probe before navigation', async () => {
     let finishProbe: () => void = () => undefined;
     session.reload.mockImplementation(
-      () => new Promise<void>((resolve) => {
-        finishProbe = () => {
-          state.set('authenticated');
-          resolve();
-        };
-      }),
+      () =>
+        new Promise<void>((resolve) => {
+          finishProbe = () => {
+            state.set('authenticated');
+            resolve();
+          };
+        }),
     );
     const attempt = subject.signIn(crypto.randomUUID());
     expect(session.reauth).not.toHaveBeenCalled();
@@ -71,7 +76,7 @@ describe('DevSession', () => {
   });
 
   it('does not navigate when the accepted cookie still probes as anonymous', async () => {
-    session.reload.mockImplementation(async () => undefined);
+    session.reload.mockImplementation(() => Promise.resolve());
     const attempt = subject.signIn(crypto.randomUUID());
     const outcome = expect(attempt).rejects.toThrow('Session verification did not complete.');
     http.expectOne('/v1/dev/session').flush(null, { status: 204, statusText: 'No Content' });

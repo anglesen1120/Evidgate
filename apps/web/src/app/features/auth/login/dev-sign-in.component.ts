@@ -32,12 +32,18 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable';
             "
           />
           <button type="submit" [disabled]="state() === 'submitting'">{{ heading }}</button>
-          <p role="status" aria-live="polite" aria-atomic="true">{{
-            state() === 'submitting' ? submitting : ''
-          }}</p>
-          <p id="dev-sign-in-error" class="error" role="alert" aria-atomic="true">{{
-            state() === 'wrong-secret' ? wrongSecret : state() === 'unavailable' ? unavailable : ''
-          }}</p>
+          <p role="status" [attr.aria-live]="'polite'" aria-atomic="true">
+            {{ state() === 'submitting' ? submitting : '' }}
+          </p>
+          <p id="dev-sign-in-error" class="error" role="alert" aria-atomic="true">
+            {{
+              state() === 'wrong-secret'
+                ? wrongSecret
+                : state() === 'unavailable'
+                  ? unavailable
+                  : ''
+            }}
+          </p>
         </form>
       }
     </details>

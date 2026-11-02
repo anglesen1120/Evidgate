@@ -16,10 +16,10 @@ describe('DevSignInComponent', () => {
   let http: HttpTestingController;
   const session = {
     reauth: vi.fn(),
-    reload: vi.fn(async () => undefined),
+    reload: vi.fn(() => Promise.resolve()),
     sessionState: signal('authenticated'),
   };
-  const router = { navigateByUrl: vi.fn(async () => true) };
+  const router = { navigateByUrl: vi.fn(() => Promise.resolve(true)) };
 
   function element<T extends Element>(selector: string): T {
     const found = root.querySelector<T>(selector);
@@ -36,13 +36,24 @@ describe('DevSignInComponent', () => {
     fixture.detectChanges();
   }
 
-  function submit(value = crypto.randomUUID()): string {
+  function submit(value: string = crypto.randomUUID()): string {
     element<HTMLInputElement>('input').value = value;
     element<HTMLFormElement>('form').dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true }),
     );
     fixture.detectChanges();
     return value;
+  }
+
+  /**
+   * Lets the component's own promise chain finish before an assertion reads the DOM: the template's
+   * `(submit)` handler returns a promise nothing awaits, so a flushed response settles after the
+   * chain's microtasks, however many hops it takes. One macrotask hop drains all of them, and the
+   * detection pass renders the settled state.
+   */
+  async function settle(): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
   }
 
   beforeEach(async () => {
@@ -104,6 +115,8 @@ describe('DevSignInComponent', () => {
     expect(document.activeElement).toBe(input);
     expect(element<HTMLButtonElement>('button').disabled).toBe(true);
     expect(element('[role="status"]').textContent).toContain(fixture.componentInstance.submitting);
+    expect(element('[role="status"]').getAttribute('aria-live')).toBe('polite');
+    expect(element('[role="status"]').getAttribute('aria-atomic')).toBe('true');
     element<HTMLFormElement>('form').dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true }),
     );
@@ -113,7 +126,7 @@ describe('DevSignInComponent', () => {
     expect(request.request.withCredentials).toBe(true);
     expect(request.request.headers.get('X-XSRF-TOKEN')).toBe('development-xsrf');
     request.flush(null, { status: 204, statusText: 'No Content' });
-    await fixture.whenStable();
+    await settle();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/workspace', { replaceUrl: true });
   });
 
@@ -121,8 +134,7 @@ describe('DevSignInComponent', () => {
     open();
     submit();
     http.expectOne('/v1/dev/session').flush({}, { status: 401, statusText: 'Unauthorized' });
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await settle();
     expect(element('[role="alert"]').textContent).toContain(fixture.componentInstance.wrongSecret);
     expect(element('input').getAttribute('aria-invalid')).toBe('true');
     expect(element('input').getAttribute('aria-describedby')).toContain('dev-sign-in-error');
@@ -130,26 +142,30 @@ describe('DevSignInComponent', () => {
     expect(session.reload).not.toHaveBeenCalled();
     submit();
     http.expectOne('/v1/dev/session').flush(null, { status: 204, statusText: 'No Content' });
-    await fixture.whenStable();
+    await settle();
     expect(session.reload).toHaveBeenCalledOnce();
   });
 
-  it.each([404, 500, 503, 0])('unavailable: maps status %s to the disabled-server message', async (status) => {
-    open();
-    submit();
-    const request = http.expectOne('/v1/dev/session');
-    if (status === 0) {
-      request.error(new ProgressEvent('error'));
-    } else {
-      request.flush({}, { status, statusText: 'Unavailable' });
-    }
-    await fixture.whenStable();
-    fixture.detectChanges();
-    expect(element('[role="alert"]').textContent).toContain(fixture.componentInstance.unavailable);
-    expect(element('[role="status"]').textContent?.trim()).toBe('');
-    expect(element<HTMLButtonElement>('button').disabled).toBe(false);
-    expect(session.reload).not.toHaveBeenCalled();
-  });
+  it.each([404, 500, 503, 0])(
+    'unavailable: maps status %s to the disabled-server message',
+    async (status) => {
+      open();
+      submit();
+      const request = http.expectOne('/v1/dev/session');
+      if (status === 0) {
+        request.error(new ProgressEvent('error'));
+      } else {
+        request.flush({}, { status, statusText: 'Unavailable' });
+      }
+      await settle();
+      expect(element('[role="alert"]').textContent).toContain(
+        fixture.componentInstance.unavailable,
+      );
+      expect(element('[role="status"]').textContent?.trim()).toBe('');
+      expect(element<HTMLButtonElement>('button').disabled).toBe(false);
+      expect(session.reload).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not persist, log, render, or place the submitted secret in navigation', async () => {
     open();
@@ -159,7 +175,7 @@ describe('DevSignInComponent', () => {
     );
     const value = submit();
     http.expectOne('/v1/dev/session').flush(null, { status: 204, statusText: 'No Content' });
-    await fixture.whenStable();
+    await settle();
     expect(store).not.toHaveBeenCalled();
     for (const log of logs) {
       expect(log).not.toHaveBeenCalled();

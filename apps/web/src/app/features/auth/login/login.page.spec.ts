@@ -45,7 +45,7 @@ describe('LoginPage', () => {
       imports: [LoginPage],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: LOGIN_EXTENSION_LOADER, useValue: async () => null },
+        { provide: LOGIN_EXTENSION_LOADER, useValue: () => Promise.resolve(null) },
         { provide: AuthFlow, useValue: flow },
         { provide: Router, useValue: router },
       ],
