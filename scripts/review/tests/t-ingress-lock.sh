@@ -41,7 +41,7 @@ codes_for() { # MODE HASH
 
 fx_assert_eq "$(codes_for quick '')" "401" "quick mode requires a 401 even with no hash recorded"
 # shellcheck disable=SC2016 # the apr1 prefix is a literal, not an expansion
-fx_assert_eq "$(codes_for token '\$apr1\$x\$y')" "401" "token mode with a hash requires exactly 401"
+fx_assert_eq "$(codes_for token '\$apr1\$x\$y')" "301 302 303 307 308 401" "token mode with a hash takes an Access redirect or the Basic Auth 401, never a 200"
 fx_assert_eq "$(codes_for token '')" "200 301 302 303 307 308 401" "token mode without a hash allows the Access edge to answer"
 
 # --- a 401 is the pass it must be, end to end ----------------------------

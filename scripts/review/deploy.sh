@@ -187,7 +187,7 @@ parse_args() {
 print_plan() {
   rv_info "dry run: nothing is created, built, started or written"
   rv_step "plan"
-  printf '  1  preflight  %s: docker, compose v2, curl, arch, >=15 GiB free, %s writable\n' \
+  printf '  1  preflight  %s: docker, compose v2.23+, curl, arch, >=15 GiB free, %s writable\n' \
     "$(rv_target)" "$RV_HOST_HOME"
   printf '  2  resolve    release %s (tree already verified clean)\n' "$RV_RELEASE_SHA"
   printf '  3  secrets    %s: create from %s if absent, mode 600; kept if present\n' \

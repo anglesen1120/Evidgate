@@ -303,10 +303,6 @@ rv_teardown() {
   fi
 }
 
-
-
-
-
 # Resolves the host layout and proves docker answers; status and down need no
 # more than this, and deploy builds on it.
 rv_probe_host() { # CALLER (deploy, or anything else for a read-only command)
@@ -457,10 +453,6 @@ rv_refresh_ports() {
   done
 }
 
-
-
-
-
 # In the tunnel profile cloudflared is the only ingress, so a published host
 # port would be a second door the runbook does not describe. The local smoke is
 # the one exception the environment contract names: web-local publishes the
@@ -470,13 +462,27 @@ rv_assert_no_host_ports() {
   published="$(rv_run "docker ps --filter label=com.docker.compose.project=$(rv_quote "$RV_PROJECT") --format '{{.Names}} {{.Ports}}' | grep -F -- '->' || true")"
   [ -n "$published" ] || return 0
   if [ "$RV_MODE" = local ]; then
-    allowed="127.0.0.1:$RV_WEB_PORT->8080/tcp"
-    unexpected="$(printf '%s\n' "$published" | grep -vF -- "$allowed" || true)"
+    allowed="evidgate-review-web-local 127.0.0.1:$RV_WEB_PORT->8080/tcp"
+    unexpected="$(printf '%s\n' "$published" | rv_published_mappings | grep -vxF -- "$allowed" || true)"
     [ -z "$unexpected" ] \
-      || rv_die "the local smoke may publish only $allowed, but: $unexpected"
+      || rv_die "the local smoke may publish only ${allowed#* }, and only from ${allowed%% *}, but: $unexpected"
     return 0
   fi
   rv_die "the tunnel profile must publish nothing on the host, but: $published"
+}
+
+# One `container mapping` line per published port. Docker prints every mapping
+# of a container on one line, so a line-level test would accept a second door
+# that shares a line with an allowed one.
+rv_published_mappings() {
+  awk '{
+    name = $1
+    for (i = 2; i <= NF; i++) {
+      p = $i
+      gsub(/,$/, "", p)
+      if (index(p, "->")) print name, p
+    }
+  }'
 }
 
 # Waits on a condition the caller can observe, never on a fixed sleep.

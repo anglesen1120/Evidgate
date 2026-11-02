@@ -61,4 +61,25 @@ fi
 fx_assert_contains "$out" "the local smoke may publish only 127.0.0.1:8088->8080/tcp" \
   "the unexpected local mapping is named"
 fx_assert_contains "$out" "5432->5432" "the offending local port is quoted"
+# A second mapping on the same line is the easy bypass: a line-level test would
+# see the allowed substring and let the other door through.
+cat >"$SANDBOX/published" <<'PORTS'
+evidgate-review-web-local 127.0.0.1:8088->8080/tcp, 0.0.0.0:9090->9090/tcp
+PORTS
+if out="$(bash "$deploy" --local --no-dogfood 2>&1)"; then
+  fx_fail "a second mapping on the allowed line was accepted"
+fi
+fx_assert_contains "$out" "9090->9090" "the extra mapping on the same line is quoted"
+fx_assert_contains "$out" "0.0.0.0:9090" "the extra mapping keeps its bind address"
+
+# The identity matters too: the same loopback bind on another container is a
+# different process publishing it, which the local profile does not describe.
+cat >"$SANDBOX/published" <<'PORTS'
+evidgate-review-web 127.0.0.1:8088->8080/tcp
+PORTS
+if out="$(bash "$deploy" --local --no-dogfood 2>&1)"; then
+  fx_fail "the loopback bind was accepted from another container"
+fi
+fx_assert_contains "$out" "evidgate-review-web 127.0.0.1:8088->8080/tcp" \
+  "the container that publishes it is named"
 fx_ok "the local smoke rejects every mapping but its own loopback bind"

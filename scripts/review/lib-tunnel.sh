@@ -20,12 +20,15 @@ rv_connector_running() { # CONTAINER
 }
 
 # The tunnel publishes one door, so what an unauthenticated request gets is the
-# proof it is locked. Basic Auth answers 401; only a Cloudflare Access policy in
-# front of the hostname (no local hash) may redirect or serve first.
+# proof it is locked. A quick tunnel has only Basic Auth (exactly 401). A named
+# tunnel is locked either by Cloudflare Access (an edge redirect) or, if Access
+# is not attached yet, by the local Basic Auth (401); a 200 is never a pass while
+# a hash is configured.
 rv_ingress_codes() {
-  if [ "$RV_TUNNEL_MODE" = quick ] \
-    || [ -n "$(rv_env_get EVIDGATE_REVIEW_BASIC_AUTH_HASH)" ]; then
+  if [ "$RV_TUNNEL_MODE" = quick ]; then
     printf '401'
+  elif [ -n "$(rv_env_get EVIDGATE_REVIEW_BASIC_AUTH_HASH)" ]; then
+    printf '301 302 303 307 308 401'
   else
     printf '200 301 302 303 307 308 401'
   fi
