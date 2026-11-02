@@ -63,6 +63,13 @@ public static class SecretNames
     /// </summary>
     public const string DevIngestToken = "EVIDGATE_DEV_TOKEN";
 
+    /// <summary>
+    /// Shared secret a developer presents to <c>POST /v1/dev/session</c> to sign in as the seeded dev user.
+    /// Unlike <see cref="DevIngestToken"/> it IS resolved through <see cref="ISecretProvider"/>: the route
+    /// compares it in constant time and refuses to be mapped at all while it is unset.
+    /// </summary>
+    public const string DevLoginSecret = "EVIDGATE__DEVLOGIN__SECRET";
+
     private static readonly string[] Names =
     [
         DatabaseConnectionString,
@@ -78,6 +85,7 @@ public static class SecretNames
         SessionPepper,
         SessionPreviousPepper,
         InvitePepper,
+        DevLoginSecret,
     ];
 
     /// <summary>Every known secret name; a name outside this list is rejected by the provider.</summary>

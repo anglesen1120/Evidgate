@@ -495,7 +495,7 @@ public static class LoginEndpoints
     /// stricter are spent from the same window when they are available and never refuse by themselves, so a
     /// legal <c>ExchangeBurstLimit</c> of 1 (or an odd one) cannot make the route unusable.
     /// </summary>
-    private static Error? Throttle(HttpContext context, ExchangeRateLimiter limiter, string key, int cost)
+    internal static Error? Throttle(HttpContext context, ExchangeRateLimiter limiter, string key, int cost)
     {
         if (!limiter.TryAcquire(key, out var retryAfter))
         {

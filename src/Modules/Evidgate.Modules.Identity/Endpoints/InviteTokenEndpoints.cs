@@ -113,23 +113,38 @@ internal static class InviteTokenEndpoints
             return Result.Failure(throttled);
         }
 
-        var (body, error) = await ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
+        var (body, error) = await BoundedJsonBody.ReadAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
         if (error is not null)
         {
             return Result.Failure(error);
         }
 
+        string? token;
+        using (body)
+        {
+            if (body!.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return Result.Failure(BoundedJsonBody.Invalid("the request body must be a JSON object"));
+            }
+
+            (token, error) = ReadToken(body.RootElement);
+            if (error is not null)
+            {
+                return Result.Failure(error);
+            }
+        }
+
         // Shape only: whether the token exists, has expired or belongs to another org is not this route's
         // business (the binder resolves it per org at login), and answering it here would turn the route into
         // an oracle for invite prefixes.
-        if (!InviteTokenFormat.TryParse(body, out _, out _))
+        if (!InviteTokenFormat.TryParse(token, out _, out _))
         {
             return Result.Failure(Error.Invalid(
                 "the invite token is not valid",
                 [new ErrorDetail("invite_token", "invalid")]));
         }
 
-        cookie.Write(context, body!);
+        cookie.Write(context, token!);
 
         return Result.Success(StatusCodes.Status204NoContent);
     }
@@ -153,74 +168,6 @@ internal static class InviteTokenEndpoints
             "too many invite attempts; retry later",
             StatusCodes.Status429TooManyRequests,
             Retryable: true);
-    }
-
-    /// <summary>
-    /// Reads the body under <see cref="MaxBodyBytes"/> and returns <c>invite_token</c>, or the error the route
-    /// answers (413 or 422). Nothing read here is logged.
-    /// </summary>
-    /// <remarks>
-    /// The body is parsed as a <see cref="JsonDocument"/> rather than deserialized into a record, because the
-    /// contract fixes WHICH field a refusal names: a non-string <c>invite_token</c> is
-    /// <c>details[].path = invite_token</c>, while a body that is not JSON, or not a JSON object, is the whole
-    /// body's fault and reports <c>body</c> (contracts/openapi.yaml, <c>POST /auth/invite-token</c>).
-    /// </remarks>
-    /// <param name="context">The request.</param>
-    /// <param name="cancellationToken">Request abort.</param>
-    private static async Task<(string? Token, Error? Error)> ReadBodyAsync(
-        HttpContext context,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-
-        if (context.Request.ContentLength > MaxBodyBytes)
-        {
-            return (null, TooLarge());
-        }
-
-        // Media type first, because it is a security boundary and not a formality: a cross-site form post can
-        // set a victim's cookie (SameSite governs what the browser SENDS, not what a response may Set-Cookie),
-        // and `enctype=text/plain` is the one encoding that lets an attacker put JSON-looking text into the
-        // body without triggering a CORS preflight. Requiring `application/json` means such a form cannot
-        // stage a token: the browser cannot label a form post with that type.
-        if (!context.Request.HasJsonContentType())
-        {
-            return (null, Invalid("the request body must be application/json"));
-        }
-
-        using var limited = new MemoryStream();
-        var buffer = new byte[1024];
-        int read;
-        while ((read = await context.Request.Body.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
-        {
-            await limited.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-            if (limited.Length > MaxBodyBytes)
-            {
-                return (null, TooLarge());
-            }
-        }
-
-        if (limited.Length == 0)
-        {
-            return (null, Invalid("the request body is required"));
-        }
-
-        JsonDocument document;
-        try
-        {
-            document = JsonDocument.Parse(limited.ToArray());
-        }
-        catch (JsonException)
-        {
-            return (null, Invalid("the request body is not valid JSON"));
-        }
-
-        using (document)
-        {
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                ? ReadToken(document.RootElement)
-                : (null, Invalid("the request body must be a JSON object"));
-        }
     }
 
     /// <summary>
@@ -261,10 +208,4 @@ internal static class InviteTokenEndpoints
         return (token, null);
     }
 
-    private static Error TooLarge() => new(
-        ApiErrorCode.PayloadTooLarge,
-        "the request body is too large",
-        StatusCodes.Status413PayloadTooLarge);
-
-    private static Error Invalid(string message) => Error.Invalid(message, [new ErrorDetail("body", "invalid")]);
 }

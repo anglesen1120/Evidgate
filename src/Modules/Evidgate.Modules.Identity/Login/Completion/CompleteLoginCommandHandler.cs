@@ -112,9 +112,67 @@ internal sealed class CompleteLoginCommandHandler(
             }
         }
 
-        // 3. Access: at least one org where the account holds an active membership — the bind of step 2
-        //    included, which is what an invited account now has.
-        var orgs = await memberOrgs.MemberOrgsAsync(user.UserId, cancellationToken).ConfigureAwait(false);
+        // 3-5. Access, audit and the session: the same three ordered steps a development sign-in runs, so one
+        //    method owns the "audited before the session" invariant instead of two copies of it.
+        var issued = await IssueKnownUserAsync(
+                user.UserId,
+                identity.Provider,
+                command.ClientIpAddress,
+                command.UserAgent,
+                command.PredecessorCookieValue,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!issued.IsSuccess)
+        {
+            return Result.Failure<LoginResult>(issued.Error!);
+        }
+
+        return Result.Success(new LoginResult(
+            user.UserId,
+            issued.Value.SessionId,
+            issued.Value.CookieValue,
+            issued.Value.ExpiresAt,
+            ReturnUrlEncoder.ToLocation(command.ReturnUrl)));
+    }
+
+    /// <summary>
+    /// The last three steps of a sign-in for an account that is already identified: at least one active
+    /// membership, the <c>auth.login</c> row of every active org, and only then the session row.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Extracted so the federated login and the development-only sign-in share ONE implementation of the order
+    /// and of the fail-closed rule: a sign-in that cannot be audited issues nothing, and the writer's fault
+    /// propagates to the seam that answers 503 <c>unavailable</c>.
+    /// </para>
+    /// <para>
+    /// No identity is written here: the caller has already resolved the account (the provider upsert, or the
+    /// seeded dev user), and a session is only ever created for the id it names.
+    /// </para>
+    /// </remarks>
+    /// <param name="userId">The account the session belongs to.</param>
+    /// <param name="provider">The provider name the audit row records (<c>google</c>, <c>github</c>, <c>dev</c>).</param>
+    /// <param name="clientIpAddress">The client address as the request reported it (sanitised before the write).</param>
+    /// <param name="userAgent">The client's user agent, already bounded (never logged).</param>
+    /// <param name="predecessorCookieValue">The session cookie value the browser presented, or null.</param>
+    /// <param name="cancellationToken">Request abort.</param>
+    /// <returns>
+    /// The created ticket, or 403 <c>no_membership</c>, or the session store's own failure
+    /// (403 <c>account_disabled</c> / 503 <c>unavailable</c>) unchanged.
+    /// </returns>
+    internal async ValueTask<Result<SessionTicket>> IssueKnownUserAsync(
+        Guid userId,
+        string provider,
+        string? clientIpAddress,
+        string? userAgent,
+        string? predecessorCookieValue,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+
+        // Access: at least one org where the account holds an active membership.
+        var orgs = await memberOrgs.MemberOrgsAsync(userId, cancellationToken).ConfigureAwait(false);
 
         var activeOrgs = new List<Guid>(orgs.Count);
         foreach (var org in orgs)
@@ -127,41 +185,29 @@ internal sealed class CompleteLoginCommandHandler(
 
         if (activeOrgs.Count == 0)
         {
-            return Result.Failure<LoginResult>(LoginErrors.NoMembership);
+            return Result.Failure<SessionTicket>(LoginErrors.NoMembership);
         }
 
-        // 4. The audit row of this login, one per active org, before the session exists (Q5): a login that
-        //    cannot be recorded does not happen, so the writer's fault propagates and no session is issued.
+        // The audit row of this sign-in, one per active org, before the session exists (Q5): a login that
+        // cannot be recorded does not happen, so the writer's fault propagates and no session is issued.
         await audit
             .WriteAsync(
-                new IdentityAuditEvent(IdentityAuditActions.Login, user.UserId, identity.Provider),
+                new IdentityAuditEvent(IdentityAuditActions.Login, userId, provider),
                 activeOrgs,
                 cancellationToken)
             .ConfigureAwait(false);
 
-        // 5. The session: the store owns the row, the HMAC of the cookie value and the expiry pair. D5a: the
-        //    value the browser presented to this callback travels with the creation, so the store revokes that row
-        //    in the same transaction and chains `rotated_from` — a sign-in never leaves the previous session alive.
-        var ticket = await sessions
+        // The session: the store owns the row, the HMAC of the cookie value and the expiry pair. D5a: the value
+        // the browser presented travels with the creation, so the store revokes that row in the same statement
+        // and chains `rotated_from` — a sign-in never leaves the previous session alive.
+        return await sessions
             .CreateAsync(
                 new SessionCreation(
-                    user.UserId,
-                    ClientAddress.Sanitise(command.ClientIpAddress),
-                    command.UserAgent,
-                    command.PredecessorCookieValue),
+                    userId,
+                    ClientAddress.Sanitise(clientIpAddress),
+                    userAgent,
+                    predecessorCookieValue),
                 cancellationToken)
             .ConfigureAwait(false);
-
-        if (!ticket.IsSuccess)
-        {
-            return Result.Failure<LoginResult>(ticket.Error!);
-        }
-
-        return Result.Success(new LoginResult(
-            user.UserId,
-            ticket.Value.SessionId,
-            ticket.Value.CookieValue,
-            ticket.Value.ExpiresAt,
-            ReturnUrlEncoder.ToLocation(command.ReturnUrl)));
     }
 }

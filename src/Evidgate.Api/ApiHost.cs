@@ -17,6 +17,7 @@ using Evidgate.Modules.Authoring.Endpoints;
 using Evidgate.Modules.Catalog;
 using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Identity;
+using Evidgate.Modules.Identity.DevLogin;
 using Evidgate.Modules.Identity.Endpoints;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Ingestion;
@@ -230,6 +231,9 @@ public static partial class ApiHost
         // session yet), and the callback resolves nothing before the provider has verified the identity, so
         // only the envelope filter applies.
         app.MapLoginEndpoints().AddEndpointFilter<ResultEndpointFilter>();
+        // The development-only sign-in: the route is mapped only in a Development host that enabled it and
+        // provisioned its secret, so every other environment has no such path at all. Pre-tenant as well.
+        app.MapDevSession().AddEndpointFilter<ResultEndpointFilter>();
         app.MapOpenApi();
 
         return app;
