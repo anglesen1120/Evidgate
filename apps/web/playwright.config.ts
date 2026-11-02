@@ -29,7 +29,7 @@ export default defineConfig({
   // backend, a trimmed grant set and the dev-only `/dev/ui-gallery` route, none of which exists in
   // the production bundle this config serves. Excluding it here is what keeps `npm run e2e` — the
   // production smoke + static-server gate — exactly the suite it was.
-  testIgnore: 'shell/**',
+  testIgnore: ['shell/**', 'dev-login/**'],
   // This workspace has no other `*.test.ts`; keeping the explicit glob documents that the
   // Angular component specs (`src/**/*.spec.ts`) belong to `ng test` / Vitest, not to
   // Playwright, and that `exclude` of the `test` target in angular.json keeps them apart.

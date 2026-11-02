@@ -2983,6 +2983,12 @@
         <source>View decision evidence</source>
         <target>Xem bằng chứng của quyết định</target>
       </trans-unit>
+      <trans-unit id="auth.dev.heading" datatype="html"><source>Dev sign-in</source><target>Đăng nhập phát triển</target></trans-unit>
+      <trans-unit id="auth.dev.note" datatype="html"><source>Development only. Use the configured dev-login secret instead of a provider account.</source><target>Chỉ dành cho môi trường phát triển. Dùng khóa bí mật đăng nhập phát triển đã cấu hình thay cho tài khoản nhà cung cấp.</target></trans-unit>
+      <trans-unit id="auth.dev.secret" datatype="html"><source>Dev-login secret</source><target>Khóa bí mật đăng nhập phát triển</target></trans-unit>
+      <trans-unit id="auth.dev.submitting" datatype="html"><source>Signing in and checking your session…</source><target>Đang đăng nhập và kiểm tra phiên…</target></trans-unit>
+      <trans-unit id="auth.dev.wrong-secret" datatype="html"><source>The dev-login secret is incorrect. Try again.</source><target>Khóa bí mật đăng nhập phát triển không đúng. Hãy thử lại.</target></trans-unit>
+      <trans-unit id="auth.dev.unavailable" datatype="html"><source>Dev sign-in is not enabled. Check the development server configuration.</source><target>Đăng nhập phát triển chưa được bật. Hãy kiểm tra cấu hình máy chủ phát triển.</target></trans-unit>
     </body>
   </file>
 </xliff>

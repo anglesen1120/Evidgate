@@ -74,3 +74,17 @@ test('serves the English bundle under /en', async ({ page }) => {
   expect(pageErrors, 'page errors during bootstrap').toEqual([]);
   expect(consoleErrors, 'console errors during bootstrap').toEqual([]);
 });
+
+for (const locale of ['en', 'vi']) {
+  test(`production ${locale}: excludes the development sign-in control`, async ({ page }) => {
+    const requests: string[] = [];
+    page.on('request', (request) => requests.push(request.url()));
+    await page.goto(`/${locale}/login`);
+    await expect(page.locator('main h1')).toBeVisible();
+    await expect(page.locator('app-dev-sign-in')).toHaveCount(0);
+    await expect(page.locator('input[type="password"]')).toHaveCount(0);
+    expect(await page.locator('main').textContent()).not.toContain('Dev sign-in');
+    expect(await page.locator('main').textContent()).not.toContain('Đăng nhập phát triển');
+    expect(requests.some((url) => url.includes('/v1/dev/session'))).toBe(false);
+  });
+}

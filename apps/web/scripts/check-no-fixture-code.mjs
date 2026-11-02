@@ -101,6 +101,10 @@ const MARKERS = [
   'dev/run-list',
   'dev/run-detail',
   'dev/suite-composition',
+  'app-dev-sign-in',
+  '/v1/dev/session',
+  'Dev sign-in',
+  'Đăng nhập phát triển',
 ];
 
 /**
