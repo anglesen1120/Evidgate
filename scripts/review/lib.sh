@@ -506,7 +506,10 @@ rv_open_forward() {
     return 0
   fi
   rv_info "forwarding 127.0.0.1:$RV_API_PORT to $(rv_target)"
-  ssh -N -o ExitOnForwardFailure=yes ${RV_SSH_OPTS[@]+"${RV_SSH_OPTS[@]}"} \
+  # A mux handoff exits this child and leaves the master's forward behind.
+  # ssh uses the first option value: ControlPath=none is what rules reuse out
+  # (ControlMaster=no alone still reuses a live master), so it goes first.
+  ssh -N -o ControlMaster=no -o ControlPath=none -o ExitOnForwardFailure=yes ${RV_SSH_OPTS[@]+"${RV_SSH_OPTS[@]}"} \
     -L "127.0.0.1:$RV_API_PORT:127.0.0.1:$RV_API_PORT" "$RV_SSH_HOST" &
   RV_FORWARD_PID=$!
 }

@@ -8,7 +8,7 @@
 // and a synthetic fixture corpus, handed over through the gate's two proof-only environment
 // overrides, so no case reads the real `dist/`, and nothing is written outside a temp directory.
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,8 +19,12 @@ const GATE = fileURLToPath(
   new URL('../../../apps/web/scripts/check-no-fixture-code.mjs', import.meta.url),
 );
 
-/** The dev-only marker strings, matched verbatim by the gate (see its header). */
-const MARKERS = [
+/**
+ * The dev-only marker strings, matched verbatim by the gate (see its header). The split mirrors
+ * the gate's `FIXTURE_MARKERS` / `DEV_SIGN_IN_MARKERS`: the whole list is forbidden in the
+ * production invocation, and the sign-in half is what `--allow-dev-sign-in` exempts.
+ */
+const FIXTURE_MARKERS = [
   'X-Evidgate-Fixture',
   'evidgate.fixture-backend',
   'fixtures/web-api',
@@ -35,6 +39,10 @@ const MARKERS = [
   'dev/run-list',
   'dev/run-detail',
   'dev/suite-composition',
+] as const;
+
+/** The six Development-only sign-in markers, exempt under `--allow-dev-sign-in` only. */
+const DEV_SIGN_IN_MARKERS = [
   'app-dev-sign-in',
   '/v1/dev/session',
   'Dev sign-in',
@@ -43,6 +51,9 @@ const MARKERS = [
   'createDevSession',
   '/dev/session',
 ] as const;
+
+/** Every marker in the gate's order: fixture first, sign-in last. */
+const MARKERS = [...FIXTURE_MARKERS, ...DEV_SIGN_IN_MARKERS] as const;
 
 /** A corpus body string long enough to count as a leak signal, and absent from production code. */
 const CORPUS_NAME = 'fixture-only-project-name';
@@ -88,7 +99,7 @@ interface GateWorkspace {
   /** Writes one file below the synthetic build output. */
   output(name: string, text: string): Promise<void>;
   /** Runs the gate against this workspace, with the workspace as its cwd. */
-  run(): GateResult;
+  run(args?: readonly string[]): GateResult;
 }
 
 /** Runs the gate once; `env` carries the two proof-only overrides, everything else is inherited. */
@@ -96,8 +107,9 @@ function spawnGate(invocation: {
   readonly cwd: string;
   readonly dist: string;
   readonly corpus: string;
+  readonly args?: readonly string[] | undefined;
 }): GateResult {
-  const result = spawnSync(process.execPath, [GATE], {
+  const result = spawnSync(process.execPath, [GATE, ...(invocation.args ?? [])], {
     cwd: invocation.cwd,
     encoding: 'utf8',
     env: {
@@ -166,7 +178,7 @@ describe('no-fixture-code gate', () => {
         await mkdir(dirname(path), { recursive: true });
         await writeFile(path, text, 'utf8');
       },
-      run: () => spawnGate({ cwd: root, dist, corpus }),
+      run: (args) => spawnGate({ cwd: root, dist, corpus, args }),
     };
   }
 
@@ -223,6 +235,96 @@ describe('no-fixture-code gate', () => {
     expect(sdkLeak.status).toBe(1);
     expect(sdkLeak.stderr).toContain('chunk-SDK456.js: "createDevSession"');
     expect(sdkLeak.stderr).toContain('chunk-SDK456.js: "/dev/session"');
+  });
+
+  it('default_mode_fails_the_sign_in_the_review_flag_permits', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+    await ws.output('chunk-DEV123.js', 'const selector="app-dev-sign-in";');
+
+    const production = ws.run();
+    expect(production.status).toBe(1);
+    expect(production.stderr).toContain('"app-dev-sign-in"');
+
+    const review = ws.run(['--allow-dev-sign-in']);
+    expect(review.status).toBe(0);
+    expect(review.stderr).toBe('');
+  });
+
+  it('review_mode_keeps_every_fixture_marker_forbidden', async () => {
+    // The exemption is the six sign-in needles only: a leaked fixture backend or a leaked review
+    // route is still a failure in the review build, which is the whole reason the flag exists
+    // rather than a blanket skip.
+    for (const marker of FIXTURE_MARKERS) {
+      const ws = await workspace();
+      await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+      await ws.output(
+        'main-ABC123.js',
+        `${CLEAN_MAIN_JS}const dev=${JSON.stringify(marker)};const s="app-dev-sign-in";`,
+      );
+
+      const result = ws.run(['--allow-dev-sign-in']);
+
+      expect(result.status, marker).toBe(1);
+      expect(result.stderr).toContain(`"${marker}"`);
+    }
+  });
+
+  it('review_mode_still_fails_a_fixture_body_string', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+    await ws.output(
+      'chunk-ABC123.js',
+      `export const label=${JSON.stringify(CORPUS_NAME)};const s="app-dev-sign-in";`,
+    );
+
+    const result = ws.run(['--allow-dev-sign-in']);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(CORPUS_NAME);
+  });
+
+  it('review_mode_fails_when_the_sign_in_is_missing', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+    await ws.output('main-ABC123.js', CLEAN_MAIN_JS);
+
+    // A clean bundle with no sign-in needle is exactly what a production build looks like: the
+    // review invocation must not accept it, because a reviewer could not open the form.
+    const result = ws.run(['--allow-dev-sign-in']);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('the review output has no dev sign-in');
+    expect(result.stderr).toContain('--allow-dev-sign-in');
+  });
+
+  it('review_mode_fails_when_only_the_sdk_route_remains', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+    await ws.output('main-ABC123.js', CLEAN_MAIN_JS);
+    await ws.output('chunk-SDK123.js', 'const url="/dev/session";');
+
+    // The generated SDK always carries the route; only the mounted component proves the form.
+    const result = ws.run(['--allow-dev-sign-in']);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('the review output has no dev sign-in');
+  });
+
+  it('review_mode_reports_the_sign_in_it_allowed', async () => {
+    const ws = await workspace();
+    await ws.fixture('permissions-list', corpusDocument(CORPUS_NAME));
+    await ws.output('main-ABC123.js', CLEAN_MAIN_JS);
+    await ws.output(
+      'chunk-DEV123.js',
+      'const s="app-dev-sign-in";const c="/v1/dev/session";const n="createDevSession";const l="Dev sign-in";',
+    );
+
+    const result = ws.run(['--allow-dev-sign-in']);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(`${FIXTURE_MARKERS.length} marker(s)`);
+    expect(result.stdout).toContain('(dev sign-in allowed and present)');
   });
 
   it('passes_a_permission_row_whose_resource_and_action_production_carries', async () => {
@@ -467,5 +569,88 @@ describe('no-fixture-code gate', () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('fixture corpus this gate cross-checks is missing');
+  });
+});
+
+const ANGULAR_JSON = fileURLToPath(new URL('../../../apps/web/angular.json', import.meta.url));
+const WEB_PACKAGE_JSON = fileURLToPath(new URL('../../../apps/web/package.json', import.meta.url));
+
+interface FileReplacement {
+  readonly replace: string;
+  readonly with: string;
+}
+
+interface BuildConfiguration {
+  readonly fileReplacements?: readonly FileReplacement[];
+  readonly [key: string]: unknown;
+}
+
+interface AngularConfiguration {
+  readonly projects: {
+    readonly web: {
+      readonly architect: {
+        readonly build: {
+          readonly defaultConfiguration: string;
+          readonly configurations: Record<string, BuildConfiguration>;
+        };
+      };
+    };
+  };
+}
+
+interface WebPackage {
+  readonly scripts: Record<string, string>;
+}
+
+/**
+ * The review web image is built from a `review` configuration, not from `production`: the review
+ * stack has no human login yet, so it carries the Development-only sign-in form, while the
+ * production bundle must stay form-free. These assertions read the two definitions instead of
+ * building either, so a drift between them fails without a docker build.
+ */
+describe('review build configuration', () => {
+  async function configurations(): Promise<Record<string, BuildConfiguration>> {
+    const angular = JSON.parse(await readFile(ANGULAR_JSON, 'utf8')) as AngularConfiguration;
+    return angular.projects.web.architect.build.configurations;
+  }
+
+  it('review_is_production_plus_only_the_dev_sign_in_replacement', async () => {
+    const build = await configurations();
+    const review = build.review;
+    const production = build.production;
+
+    if (!review || !production) {
+      throw new Error('angular.json must define the production and review build configurations');
+    }
+    expect(review.fileReplacements).toEqual([
+      {
+        replace: 'src/app/features/auth/login/login-extension.ts',
+        with: 'src/app/features/auth/login/login-extension.development.ts',
+      },
+    ]);
+
+    const reviewWithoutReplacements: Record<string, unknown> = { ...review };
+    delete reviewWithoutReplacements.fileReplacements;
+    expect(reviewWithoutReplacements).toEqual(production);
+  });
+
+  it('production_carries_no_file_replacement', async () => {
+    const production = (await configurations()).production;
+
+    if (!production) {
+      throw new Error('angular.json must define the production build configuration');
+    }
+    expect(production.fileReplacements).toBeUndefined();
+  });
+
+  it('build_review_runs_the_review_configuration_behind_both_gates', async () => {
+    const pkg = JSON.parse(await readFile(WEB_PACKAGE_JSON, 'utf8')) as WebPackage;
+
+    expect(pkg.scripts['build:review']).toContain('ng build --configuration review');
+    expect(pkg.scripts['build:review']).toContain('node scripts/check-bundle-budget.mjs');
+    expect(pkg.scripts['build:review']).toContain(
+      'node scripts/check-no-fixture-code.mjs --allow-dev-sign-in',
+    );
+    expect(pkg.scripts.build).not.toContain('--allow-dev-sign-in');
   });
 });
