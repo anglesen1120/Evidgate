@@ -1,4 +1,5 @@
 using System.Globalization;
+using Evidgate.BuildingBlocks.SharedKernel.Dev;
 using Npgsql;
 
 namespace Evidgate.Migrator;
@@ -33,8 +34,8 @@ public static class DevSeed
     /// <summary>The dev project.</summary>
     public static readonly Guid ProjectId = Guid.Parse("0198a000-0000-7000-8000-00000000d002");
 
-    /// <summary>The dev user (no login exists yet; the id is what a session will carry).</summary>
-    public static readonly Guid UserId = Guid.Parse("0198a000-0000-7000-8000-00000000d003");
+    /// <summary>The dev user (the id the development sign-in of the Identity module acts as).</summary>
+    public static readonly Guid UserId = KnownDevUser.UserId;
 
     /// <summary>The dev user's membership.</summary>
     public static readonly Guid MembershipId = Guid.Parse("0198a000-0000-7000-8000-00000000d004");

@@ -1,14 +1,17 @@
+import { NgComponentOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
   effect,
   inject,
+  resource,
   viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { AuthFlow } from '../auth-flow';
+import { LOGIN_EXTENSION_LOADER } from './login-extension';
 
 @Component({
   selector: 'app-login-page',
@@ -19,6 +22,7 @@ import { AuthFlow } from '../auth-flow';
   // the route is the activation's own, and the flow (with its `pageshow` listener) is destroyed with
   // the page.
   providers: [AuthFlow],
+  imports: [NgComponentOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shell/layout/shell-page.css', './login.page.css'],
   template: `
@@ -72,12 +76,17 @@ import { AuthFlow } from '../auth-flow';
         </div>
 
         <p class="login-credential-note">{{ credentialNote }}</p>
+        @if (extension.value(); as component) {
+          <ng-container *ngComponentOutlet="component" />
+        }
       </section>
     </main>
   `,
 })
 export class LoginPage {
   protected readonly auth = inject(AuthFlow);
+  private readonly loadExtension = inject(LOGIN_EXTENSION_LOADER);
+  protected readonly extension = resource({ loader: () => this.loadExtension() });
   private readonly router = inject(Router);
   /** The page's own focus target: `tabindex="-1"`, so it is reachable but never a Tab stop. */
   private readonly headingTarget = viewChild<ElementRef<HTMLElement>>('loginHeading');

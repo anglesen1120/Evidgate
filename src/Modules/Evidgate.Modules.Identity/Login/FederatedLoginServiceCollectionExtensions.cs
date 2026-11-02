@@ -71,6 +71,10 @@ internal static class FederatedLoginServiceCollectionExtensions
         // (AddSessions: EVIDGATE:SESSION options, the pepper secret, ILoginIdentityStore, ISessions).
         services.AddSessions(configuration);
         services.TryAddSingleton<CompleteLoginCommandHandler>();
+
+        // The cookie pair and the outage answer both sign-in seams share; it holds only the bound options,
+        // the antiforgery service and the clock, so one instance serves every request.
+        services.TryAddSingleton<LoginSessionCompletion>();
         services.TryAddSingleton<ILoginCompletion, LoginCommandCompletion>();
 
         // 02.3.1-T2.2 (Q5): the identity audit writer. Both the login completion and the linking confirm

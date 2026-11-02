@@ -131,15 +131,56 @@ Two script-side workarounds remain (carried, see the PR): the reporter stamps it
 
 ## 6. Web view against the live API
 
-Not met. The web app's `development` build calls the real API with a session cookie, and the dev user has no login (`docs/dev-setup.md`, "no login exists"). With only the dev token:
+Pilot-0 exit check (e): **sign-in met, shell blocked on 09.1.1-T4.2 (S190)**. The screenshots below
+used a local front door that injects `X-Evidgate-Org`; the app itself does not send it yet.
 
-```
-GET http://127.0.0.1:8080/v1/runs/{run_id}           -> 401
-GET http://127.0.0.1:8080/v1/runs/{run_id}/decision  -> 401 (no credential; with the dev token it is 200, which is how the gate reads it)
-```
+Exercised on 2026-11-02 against the stack of §2 on branch `feature/dev-login-s187`: the
+development bundle of `apps/web`, both locales, against the real API — no fixture
+backend, no mock decision. What it takes beyond §2:
 
-No screenshots are committed. A Development-only dev login is an owner option; the planned
-receiver is the federated login (02.3.1; 02.4.1 is the CI OIDC exchange).
+1. The dev-login pair **and** a session pepper in `.env.dev` ("Signing in to the web app
+   against the real API" in `docs/dev-setup.md`): without `EVIDGATE__SESSION__PEPPER` a
+   correct secret answers `503 unavailable`, because `session_create` stores the cookie's
+   HMAC and no session row can be written without the pepper.
+2. Both locales, from the `development` configuration, so the review routes and the
+   dev sign-in component are present: `npx ng build --configuration development
+   --localize` (`apps/web` is the CLI workspace root) writes `en/` and `vi/` under
+   `dist/browser`, each with its own base href.
+3. One HTTPS origin for the browser: the bundle served by `apps/web/e2e/static-server.mjs`
+   (`EVIDGATE_WEB_E2E_ROOT=<dist>/browser`, port 9555) behind a small HTTPS front door
+   that forwards `/v1` to the Api's own HTTPS listener (`ASPNETCORE_URLS=http://127.0.0.1:8080;https://localhost:8443`,
+   Kestrel `Certificates:Default:Path/KeyPath` with a local PEM pair). The session cookie
+   is `__Host-`, so the web origin and the API origin must be the same host and scheme.
+
+Result of that run:
+
+| Step | Observed |
+| --- | --- |
+| `POST /v1/dev/session` with the secret, over HTTPS | `204`, `Set-Cookie` for `__Host-evidgate_session`, `__Host-evidgate_af` and `XSRF-TOKEN` |
+| same secret over plaintext | `503` (the route refuses before the secret is judged) |
+| a wrong secret over HTTPS | `401` |
+| the route with `EVIDGATE__DEVLOGIN__ENABLED` absent from a fresh host | `404` (path never mapped) |
+| authenticated reads with that cookie (`GET /v1/orgs`) | `200` |
+| run A / run B detail | live decision `PASS` / `FAIL` with the evidence panel (`evaluated`, `live`, completeness complete), in `en` and `vi`, light theme |
+
+The runs product route is phase G2, so the detail pages were opened on the review
+address the development configuration adds, `/dev/run-detail/orgs/{orgId}/projects/{projectId}/runs/{runId}`
+(`apps/web/src/app/core/dev-routes/dev-routes.fixtures.ts`), under the product guards.
+
+Two gaps this exercise found (the first is carried as 'Web active-org context missing (S187)', receiver 09.1.1-T4.2):
+
+- The web client sends no `X-Evidgate-Org` header on its tenant reads. The Api requires
+  one and answers `422 request_invalid` (`name the organization: use /orgs/{o} or the
+  X-Evidgate-Org header`) to `GET /v1/permissions`, which `SessionStore.readSession`
+  reads at bootstrap: the shell then reports the workspace as unavailable and the run
+  detail renders "Something went wrong". For the screenshots above the header was added
+  by the local front door (the header the Api itself documents), not by the app.
+- `docs/dev-setup.md` listed only the dev-login pair; the session pepper it now names is
+  what turned the `503` into a session.
+
+No screenshot is committed; the four run-detail captures (run A and run B, `en` and `vi`,
+light) and one login-page capture with the Dev sign-in disclosure live outside the
+repository.
 
 ## 7. Troubleshooting
 

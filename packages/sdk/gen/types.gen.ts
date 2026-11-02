@@ -1704,6 +1704,16 @@ export type InviteTokenRequest = {
 };
 
 /**
+ * Body of `POST /dev/session` (S187), the development-only sign-in: the deployment's dev-login secret and nothing else. There is deliberately no user id, email or org member — the session always belongs to the seeded dev account — so this route can never sign a caller in as anyone else. An absent or `null` `secret` is treated as a wrong one (401 `token_invalid`, the same answer a mismatch gets, so the route is not an oracle); a non-string value is 422 `request_invalid` with `details[].path` = `secret`.
+ */
+export type DevSessionRequest = {
+    /**
+     * The value of `EVIDGATE__DEVLOGIN__SECRET` for this deployment. Compared in constant time against SHA-256 digests of both sides; never logged, echoed or stored.
+     */
+    secret: string;
+};
+
+/**
  * Body of `POST /v1/auth/link/{provider}` (02.3.1-T2 Q4), optional: an empty or absent body lands on the app root after the link. A member this schema does not declare is ignored, not refused: the route binds with a snake_case `JsonSerializerOptions` and no strict-member check, exactly like `CiTokenRequest`.
  */
 export type LinkStartRequest = {
@@ -2843,6 +2853,51 @@ export type StageInviteTokenResponses = {
 };
 
 export type StageInviteTokenResponse = StageInviteTokenResponses[keyof StageInviteTokenResponses];
+
+export type CreateDevSessionData = {
+    body: DevSessionRequest;
+    path?: never;
+    query?: never;
+    url: '/dev/session';
+};
+
+export type CreateDevSessionErrors = {
+    /**
+     * 401 `token_invalid` — the presented secret is wrong, absent or blank. No session row is written and no cookie is set, and the answer is identical for every one of those cases.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 `no_membership` — the seeded dev account holds no active membership in any organization (the seed has not run, or the membership was removed). No session is issued.
+     */
+    403: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 `unavailable` — the audit chain or the session write failed, so the sign-in did not happen (no session exists for a sign-in nothing recorded), or the request did not arrive over HTTPS: the cookie pair this route must issue is Secure-only, so a plaintext sign-in can never complete. The plaintext refusal is answered before the secret is judged, so the status code says nothing about whether the presented secret was right, and it writes neither a row nor a cookie.
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateDevSessionError = CreateDevSessionErrors[keyof CreateDevSessionErrors];
+
+export type CreateDevSessionResponses = {
+    /**
+     * Signed in as the seeded dev user: no body, and the browser now holds the session cookie and the antiforgery pair.
+     */
+    204: void;
+};
+
+export type CreateDevSessionResponse = CreateDevSessionResponses[keyof CreateDevSessionResponses];
 
 export type StartProviderLinkData = {
     body?: LinkStartRequest;

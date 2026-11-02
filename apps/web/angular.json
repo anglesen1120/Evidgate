@@ -84,6 +84,10 @@
                 {
                   "replace": "src/app/core/dev-routes/dev-routes.ts",
                   "with": "src/app/core/dev-routes/dev-routes.fixtures.ts"
+                },
+                {
+                  "replace": "src/app/features/auth/login/login-extension.ts",
+                  "with": "src/app/features/auth/login/login-extension.development.ts"
                 }
               ]
             },
@@ -100,6 +104,10 @@
                 {
                   "replace": "src/app/core/dev-routes/dev-routes.ts",
                   "with": "src/app/core/dev-routes/dev-routes.fixtures.ts"
+                },
+                {
+                  "replace": "src/app/features/auth/login/login-extension.ts",
+                  "with": "src/app/features/auth/login/login-extension.development.ts"
                 }
               ]
             }

@@ -118,8 +118,8 @@ the Worker and the Migrator:
 | `EVIDGATE__DATABASE__CONNECTIONSTRING` | Api, Worker; `db-init.sh --with-token` builds the same value from the role password and port for the seed | `evidgate_app` — subject to RLS |
 | `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` | Worker | `evidgate_worker_sched` — the scheduled owner `SECURITY DEFINER` sweeps (01.5.1-T6.2, TL T80) |
 | `EVIDGATE_MIGRATOR__CONNECTIONSTRING` | `Evidgate.Migrator` | `evidgate_owner` — the only writer of `public.schema_migration` |
-| `EVIDGATE__CI__PEPPER` | `db-init.sh --with-token` (the seed) | base64 HMAC pepper for ingest tokens and binding challenges (`EVIDGATE:CI:PEPPER`), at least 32 bytes after decoding; the seed refuses and writes nothing when it is missing or invalid. Not in `.env.dev.template`: add `EVIDGATE__CI__PEPPER=<openssl rand -base64 32>` to `.env.dev` before the first `--with-token` run |
-| `EVIDGATE__CI__SIGNINGKEY` | Api | HS256 key of the `ci_producer` tokens `POST /v1/ci/token` mints and every CI route accepts; base64, at least 32 bytes after decoding. Not in `.env.dev.template`: add `EVIDGATE__CI__SIGNINGKEY=<openssl rand -base64 48>` to `.env.dev` and restart the Api, otherwise `/ci/token` answers 503 `CI authentication is not configured` |
+| `EVIDGATE__CI__PEPPER` | `db-init.sh --with-token` (the seed) | base64 HMAC pepper for ingest tokens and binding challenges (`EVIDGATE:CI:PEPPER`), at least 32 bytes after decoding; the seed refuses and writes nothing when it is missing or invalid. Not in `.env.dev.template`: generate one with `openssl rand -base64 32` and paste it as `EVIDGATE__CI__PEPPER=<the value>` in `.env.dev` before the first `--with-token` run |
+| `EVIDGATE__CI__SIGNINGKEY` | Api | HS256 key of the `ci_producer` tokens `POST /v1/ci/token` mints and every CI route accepts; base64, at least 32 bytes after decoding. Not in `.env.dev.template`: generate one with `openssl rand -base64 48`, paste it as `EVIDGATE__CI__SIGNINGKEY=<the value>` in `.env.dev` and restart the Api, otherwise `/ci/token` answers 503 `CI authentication is not configured` |
 | `ASPNETCORE_URLS`, `EVIDGATE__WORKER__HEALTHPORT`, `EVIDGATE__WORKER__HEALTHADDRESS` | Api, Worker | HTTP endpoint, worker probe port, and the address that probe binds (`127.0.0.1` in the template; the option default is `0.0.0.0`) |
 | `DOTNET_ENVIRONMENT`, `ASPNETCORE_ENVIRONMENT` | Api, Worker | `Development` for the dev stack |
 | `EVIDGATE_S3_ENDPOINT`, `EVIDGATE_S3_REGION`, `EVIDGATE_S3_BUCKET`, `EVIDGATE_S3_ACCESS_KEY`, `EVIDGATE_S3_SECRET_KEY` | `up.sh` | local emulator coordinates and identity |
@@ -305,8 +305,9 @@ seeded CI binding with a GitHub OIDC token.
 after the application-role grants, because the seed writes through that role
 (skip it with `EVIDGATE_DB_INIT_SEED=0`). It writes, idempotently and in one
 transaction as the owner role, a synthetic tenant: org `dev-org`, project
-`dev-project`, a dev user (`0198a000-0000-7000-8000-00000000d003`, no login exists
-yet) holding `tenant_admin` and `release_approver`, and one **active** CI binding for
+`dev-project`, a dev user (`0198a000-0000-7000-8000-00000000d003`, signed in through
+the development sign-in below) holding `tenant_admin` and `release_approver`, and one
+**active** CI binding for
 the synthetic repository id `9000000000001` (`evidgate-dev/sample`). It refuses, writing
 nothing, unless `DOTNET_ENVIRONMENT=Development` and both database hosts are local or
 bare compose service names. The data is fully synthetic.
@@ -338,6 +339,104 @@ Under `--with-token` the same seed also mints the ingest token and writes the sa
 policy revision and its advisory activation through the application role;
 `EVIDGATE_DB_INIT_SEED=0` skips it either way.
 
+## Signing in to the web app against the real API (`POST /v1/dev/session`)
+
+The dev user the seed writes has no login: there is no OIDC provider configured in the
+local stack, so the federated login answers 503 and the web development build, which
+needs a session cookie, cannot open any screen. The development-only sign-in fills that
+gap — it gives the seeded dev user a real session through the same audit and session
+machinery a federated login uses, and it exists **only** in a Development host that asked
+for it.
+
+Enable it in `.env.dev` (never in a deployed environment):
+
+```sh
+# Generate each value once in your shell, then paste it below: a command substitution
+# written here is re-run every time up.sh sources the file, so the secret would change
+# on every restart (and a reader that parses plain KEY=VALUE lines would see the
+# expression itself).
+openssl rand -base64 32          # the dev-login secret
+openssl rand -base64 32          # the session pepper (a different value)
+```
+
+```sh
+# .env.dev — the switch and the shared secret of the local sign-in.
+EVIDGATE__DEVLOGIN__ENABLED=true
+EVIDGATE__DEVLOGIN__SECRET=<the value generated above>
+# The session pepper every issued session is hashed with (base64, at least 32
+# bytes); `openssl rand -base64 32` and paste. The local stack ships none.
+EVIDGATE__SESSION__PEPPER=<the other value generated above>
+```
+
+The session pepper is not optional for this route: `session_create` stores the HMAC of
+the cookie value, so a host without `EVIDGATE__SESSION__PEPPER` answers **503
+`unavailable`** to a correct secret as well (the audit row is written and no session
+row follows). The dev-login pair alone is therefore not enough to sign in.
+
+`ENABLED` must be set to `true` explicitly — it defaults to false, and no environment
+sets it, so the route stays unmapped until you write the line. Use at least 16 random
+characters for the secret (the base64 of 32 random bytes is 44): the route only requires
+a non-empty value, so the strength is entirely yours to choose. Only the Api host acts on
+these two keys — the Worker and the Migrator compile the same module but map no route —
+and neither key is required at boot. The route is mapped
+when **all three** conditions hold — the host environment is `Development`,
+`EVIDGATE__DEVLOGIN__ENABLED` is true, and `EVIDGATE__DEVLOGIN__SECRET` is set — and in
+every other case the path is not registered at all, so the answer is the host's ordinary
+**404**, never a 401: a deployment cannot be talked into a development sign-in by
+configuration alone. Restart the stack after adding the keys (`scripts/dev/up.sh`),
+because the mapping is decided while the host builds its routes.
+
+The sign-in needs **HTTPS**, even locally: the session cookie is `__Host-` and the
+antiforgery pair is `CookieSecurePolicy.Always`, so a plaintext request cannot mint them
+and the route answers `503 unavailable` before writing anything (no half-made session).
+The dev stack's `ASPNETCORE_URLS=http://127.0.0.1:8080` endpoint therefore cannot sign
+anyone in; run the Api with a certificate instead and point the web dev build's proxy at
+it:
+
+```sh
+dotnet dev-certs https --trust                       # once per machine
+ASPNETCORE_URLS=https://localhost:8443 \
+  EVIDGATE__DEVLOGIN__ENABLED=true \
+  EVIDGATE__DEVLOGIN__SECRET="$EVIDGATE__DEVLOGIN__SECRET" \
+  EVIDGATE__SESSION__PEPPER="$EVIDGATE__SESSION__PEPPER" \
+  dotnet run --project src/Evidgate.Api
+```
+
+Then sign in with the secret and keep the cookie jar (`-k` only because the dev
+certificate is local to this machine):
+
+```sh
+curl -sS -k -i -c /tmp/evidgate-dev.cookies \
+  -H 'Content-Type: application/json' \
+  --data "{\"secret\":\"$EVIDGATE__DEVLOGIN__SECRET\"}" \
+  https://localhost:8443/v1/dev/session
+```
+
+A success is a bodiless `204` whose `Set-Cookie` headers carry
+`__Host-evidgate_session` plus the antiforgery pair (`XSRF-TOKEN`, `__Host-evidgate_af`);
+a cookie-authenticated mutation then echoes the `XSRF-TOKEN` value in `X-XSRF-TOKEN`.
+The session always belongs to the seeded dev user (`0198a000-0000-7000-8000-00000000d003`)
+and to nobody else — the body carries the secret and nothing more — and the sign-in writes
+the `auth.login` row of the dev org **before** the session row, so a sign-in that cannot
+be audited issues nothing (`503 unavailable`). A wrong, absent or blank secret is `401
+token_invalid` with no session row and no cookie; the value is compared in constant time
+and never logged. Without an active membership the answer is `403 no_membership`. The
+session is an ordinary row: the logout and revoke routes end it, and signing in again
+replaces the previous one. If the web app reports a stale session after a reseed, rerun
+the curl above.
+
+Behind a TLS-terminating proxy (a tunnel or a load balancer) the Api sees plaintext unless
+forwarded headers are trusted, and then this route refuses with the same `503`: the
+deployment has to terminate TLS at the Api or enable and trust `X-Forwarded-Proto`. It is
+never solved by relaxing the cookie flags.
+
+The route is throttled per client address: 30 attempts per 60-second window by default
+(`EVIDGATE__CI__EXCHANGEBURSTLIMIT` and `EVIDGATE__CI__EXCHANGEWINDOWSECONDS`), counted
+before anything else, so a successful sign-in spends one unit exactly like a wrong guess.
+The key is the address the Api sees — every caller behind one proxy or tunnel shares a
+single key unless forwarded headers are trusted — and a spent window answers `429
+rate_limited` with `Retry-After` until it resets.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
@@ -345,7 +444,7 @@ policy revision and its advisory activation through the application role;
 | `cannot reach a docker daemon (try: colima start)` | no daemon answers: start one (`colima start`, or Docker Desktop). With colima, `export DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` (or let `up.sh` detect it). |
 | `port <n> on 127.0.0.1 is already in use` (`up.sh`), `port is already allocated` (compose) | a host PostgreSQL/Homebrew service, another stack or another `ng serve` holds the port. `up.sh` refuses before compose starts when no container of this stack owns that service, because a publish onto a taken port would silently not apply and `db-init.sh` would then talk to that other server; it also warns when this stack's container exists but is not running and something answers on that port, because starting that container would then fail. Stop the listener, or change the port in `.env.dev` — for the database also the `Port=` values of the connection strings, for S3 also `EVIDGATE_S3_ENDPOINT` and `EVIDGATE__OBJECT__ENDPOINT` (both carry the S3 port). |
 | `EVIDGATE_DB_PORT must be a number of digits only` | a port value in `.env.dev` carries something other than digits (`5432 `, `localhost:5432`, `58333abc`): fix the variable the message names; `up.sh` checks `EVIDGATE_DB_PORT`, `EVIDGATE_S3_PORT` and `EVIDGATE_WEB_PORT` before anything starts. An empty value is not an error: each of the three falls back to its default (`5432`, `8333`, `4200`). |
-| `EVIDGATE__CI__PEPPER is not set` (`up.sh --with-token`), or the seed refuses with a pepper message | the token seed resolves the CI pepper like the Api does. Add `EVIDGATE__CI__PEPPER=$(openssl rand -base64 32)` to `.env.dev` (base64, at least 32 bytes after decoding) and rerun; `up.sh` refuses before compose starts, and the seed refuses before writing anything. |
+| `EVIDGATE__CI__PEPPER is not set` (`up.sh --with-token`), or the seed refuses with a pepper message | the token seed resolves the CI pepper like the Api does. Generate one with `openssl rand -base64 32` in your shell, paste it as `EVIDGATE__CI__PEPPER=<the value>` in `.env.dev` (base64, at least 32 bytes after decoding) and rerun; `up.sh` refuses before compose starts, and the seed refuses before writing anything. |
 | `EVIDGATE_S3_ACCESS_KEY/SECRET_KEY in .env.dev do not match …` | the identity in `.env.dev` and in `infra/seaweedfs/s3-config.json` (read by the 01.8.1-T1 parity suite) drifted apart; keep them equal. |
 | `api exited during startup` | the last 15 log lines are printed; the full log is `.local/dev/logs/api.log`. Usual causes: a mutated `.env.dev`, or the database missing a migration head. |
 | `ready` answers `503` with `journal_behind` | the running build expects a later migration than the database has: restart with `scripts/dev/up.sh` (it re-applies migrations through `db-init.sh`). |

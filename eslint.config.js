@@ -74,6 +74,7 @@ module.exports = tseslint.config(
       '**/vitest.config.ts',
       '**/playwright.config.ts',
       'apps/web/playwright.fixtures.config.ts',
+      'apps/web/playwright.dev-login.config.ts',
       // 09.1.1-T4.4: the shell suite's shared helper module (`e2e/shell/support.ts`) is not a spec
       // file, so it needs its own entry: the emitting app project does not include `e2e/`, and the
       // block below types the directory against `apps/web/tsconfig.spec.json`.
@@ -293,6 +294,7 @@ module.exports = tseslint.config(
       // 09.1.1-T4.4: the shell's fixtures-build Playwright config, typed by the same no-emit
       // spec project (`apps/web/tsconfig.spec.json`) as the suite it starts.
       'apps/web/playwright.fixtures.config.ts',
+      'apps/web/playwright.dev-login.config.ts',
       // 09.1.1-T4.4: and the suite's own non-spec module (`e2e/shell/support.ts`), which the
       // emitting app project does not include.
       'apps/web/e2e/**/*.ts',
