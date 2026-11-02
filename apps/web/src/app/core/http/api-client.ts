@@ -5,7 +5,7 @@
 // `HttpClient` adapter, so the functional interceptors (X-Request-Id/traceparent,
 // X-Evidgate-Org, Idempotency-Key) and Angular's own XSRF interceptor see every SDK call.
 // `baseUrl` is the relative `/v1` — the API shares the page origin (rule 1), which is also what
-// T38's `__Host-` session cookie requires. The SDK's own header hooks are deliberately not
+// the session cookie's `__Host-` prefix requires. The SDK's own header hooks are deliberately not
 // registered: two implementations of the same header duty would drift.
 
 import {

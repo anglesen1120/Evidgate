@@ -26,6 +26,14 @@ const PRE_TENANT_PREFIXES: readonly string[] = ['/v1/auth', '/v1/webhooks'];
 /** The `{o}` of a `/v1/orgs/{o}` path, which is also the tenant of every `/v1/orgs/{o}/…` read. */
 const ORG_SCOPE_PATH = /^\/v1\/orgs\/([^/]+)/;
 
+/**
+ * The `{o}` of a `/v1/orgs/{o}` path as a header value, or `null` when the segment is not an id.
+ * A path is caller-supplied text and URLs carry encodings a header cannot: `%0d%0a` would split the
+ * request, `%E2%82%AC` is not ASCII. Only the id charset an org id is spelled in may leave here;
+ * anything else lets the caller fall back to the store instead of writing a malformed header.
+ */
+const ORG_ID_CHARSET = /^[0-9a-fA-F-]{1,64}$/;
+
 function isPreTenant(pathname: string): boolean {
   if (PRE_TENANT_PATHS[pathname] === true) {
     return true;
@@ -50,7 +58,8 @@ function pathOrgId(pathname: string): string | null {
     return null;
   }
   const segment = match[1];
-  return segment === undefined ? null : decodeSegment(segment);
+  const decoded = segment === undefined ? null : decodeSegment(segment);
+  return decoded !== null && ORG_ID_CHARSET.test(decoded) ? decoded : null;
 }
 
 /**

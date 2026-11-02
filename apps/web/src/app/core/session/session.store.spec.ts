@@ -256,6 +256,19 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(store.permissions().size).toBe(0);
     });
 
+    it('drops the tenant of a refused bootstrap, so no stale org rides to sign-in', async () => {
+      identity.organizations = [ORG_ONE];
+      source.failure = apiError('unauthenticated', 401);
+
+      await store.bootstrap();
+
+      // The permission read ran under the first listed org, and that tenant is gone with the
+      // session: `/login` and the next sign-in must not carry it as `X-Evidgate-Org`.
+      expect(source.tenants).toEqual([ORG_ONE.id]);
+      expect(store.sessionState()).toBe('anonymous');
+      expect(tenant.orgId()).toBeNull();
+    });
+
     it('prefers a 401 from either read over the other read failing', async () => {
       identity.organizationFailure = apiError('unavailable', 503);
       source.failure = apiError('unauthenticated', 401);

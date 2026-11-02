@@ -351,7 +351,9 @@ const SessionStoreDefinition = signalStore(
         const failures = [organizations, permissions].flatMap((read) =>
           read.ok ? [] : [read.error],
         );
-        projectsByOrg.clear();
+        // The tenant that scoped the refused read dies with the session: a later `/login` or
+        // sign-in must not inherit it as the header of its first request.
+        clearScope();
         const sessionGone = failures.some(
           (error) => isApiRequestError(error) && error.error.kind === 'unauthenticated',
         );
@@ -370,10 +372,9 @@ const SessionStoreDefinition = signalStore(
      * Reads the session once (00 §8.9). Idempotent: a settled state is returned as-is and
      * concurrent callers share one in-flight read, so every guard may await it unconditionally.
      *
-     * The two reads are independent — the organization list is not a prerequisite of the
-     * permission catalogue — so they run together, and a `401` from EITHER of them is the one
-     * refusal that means the caller has no session (`readSession` maps a pair of failures
-     * accordingly).
+     * The organization list is read first, then permissions are read under the first org's
+     * tenant header. A `401` from either read means the caller has no session; `readSession`
+     * maps that refusal to an anonymous outcome.
      */
     function bootstrap(): Promise<void> {
       // The caller ended this session on this tab: no request may re-open it (T5.2). `reauth()`
