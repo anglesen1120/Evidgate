@@ -2,9 +2,9 @@
 // predicate the sidebar and the route table share.
 //
 // Until a release flag exists, the workspace's phase is a build constant. `ACTIVE_PHASE` is the
-// single place it is written (the review build may open single entries early, `isEntryActive`): the navigation registry's visible set (`nav-view.ts`) and
-// `phaseGuard` both read it through `isEntryActive`, so an entry can never be visible in a phase
-// whose route does not match, or the reverse.
+// single place it is written (the review build may open single entries early): the navigation
+// registry's visible set (`nav-view.ts`) and `phaseGuard` both read it through `isEntryActive`, so
+// an entry can never be visible in a phase whose route does not match, or the reverse.
 
 import type { ProductPhase, ReviewOpenEntry } from './nav.models';
 import { REVIEW_OPEN_ENTRIES } from './review-entries';
