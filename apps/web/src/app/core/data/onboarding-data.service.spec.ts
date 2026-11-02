@@ -42,6 +42,7 @@ import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
 import { API_BASE_PATH } from '../http/api-origin';
 import { createIntent } from '../http/intent';
+import { TenantStore } from '../session/tenant.store';
 import { OnboardingDataService } from './onboarding-data.service';
 
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
@@ -235,6 +236,9 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
     });
     httpMock = TestBed.inject(HttpTestingController);
     service = TestBed.inject(OnboardingDataService);
+    // The tenant the session publishes after sign-in; the tenant interceptor reads it for the
+    // routes that name no org on the path.
+    TestBed.inject(TenantStore).setOrg('o-1');
   });
 
   afterEach(() => {
@@ -372,12 +376,12 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
     await expect(tokens).resolves.toEqual(NO_TOKENS);
   });
 
-  it('createCiBinding() posts the binding with the org header and answers the challenge once', async () => {
-    const created = service.createCiBinding('o-1', 'p-1', BINDING_BODY);
+  it('createCiBinding() posts the binding with the tenant header and answers the challenge once', async () => {
+    const created = service.createCiBinding('p-1', BINDING_BODY);
     const request = await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/ci-bindings`);
     expect(request.request.method).toBe('POST');
-    // The contract asks for `X-Evidgate-Org` on this route ("without it the org is the caller's
-    // only choice, so send it"), and the service passes the id the caller named, not a guess.
+    // The route is tenant-scoped and the service builds no header itself: the value on the wire is
+    // the interceptor's, read from the tenant the session published.
     expect(request.request.headers.get('X-Evidgate-Org')).toBe('o-1');
     expect(request.request.body).toBe(JSON.stringify(BINDING_BODY));
     request.flush(JSON.stringify(BINDING_CREATED), {
@@ -395,7 +399,7 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
     // server is the interceptor's, minted per request. A caller-owned key would repeat on a
     // second submit of the same body — and the response carrying the one-time challenge is never
     // replayed, so a repeated key would only turn the retry into a conflict.
-    const first = service.createCiBinding('o-1', 'p-1', BINDING_BODY);
+    const first = service.createCiBinding('p-1', BINDING_BODY);
     const firstRequest = await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/ci-bindings`);
     const firstKey = firstRequest.request.headers.get('Idempotency-Key');
     firstRequest.flush(JSON.stringify(BINDING_CREATED), {
@@ -405,7 +409,7 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
     });
     await first;
 
-    const second = service.createCiBinding('o-1', 'p-1', BINDING_BODY);
+    const second = service.createCiBinding('p-1', BINDING_BODY);
     const secondRequest = await takeRequest(httpMock, `${API_BASE_URL}/projects/p-1/ci-bindings`);
     const secondKey = secondRequest.request.headers.get('Idempotency-Key');
     secondRequest.flush(JSON.stringify(BINDING_CREATED), {
@@ -420,7 +424,7 @@ describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
   });
 
   it('createCiBinding() surfaces a 409 envelope as a typed conflict, not a created binding', async () => {
-    const created = service.createCiBinding('o-1', 'p-1', BINDING_BODY);
+    const created = service.createCiBinding('p-1', BINDING_BODY);
     const envelope = {
       error: {
         code: 'binding_exists',
