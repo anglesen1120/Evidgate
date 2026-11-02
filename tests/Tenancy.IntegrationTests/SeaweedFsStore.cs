@@ -1,9 +1,13 @@
 // The real SeaweedFS S3 gateway the end-to-end `complete` tests PUT bytes to and inspect afterwards.
 // One digest-pinned container per test assembly (an xUnit assembly fixture) and one bucket per test class
-// on it, so the class-level seam (endpoint, credentials, Configuration()) is unchanged while the suite no
-// longer starts a container per class. Only the container-start logic of tests/ObjectStorage.IntegrationTests'
-// SeaweedFsFixture is copied (the digest-pinned image, the mounted local-only identity file, the S3 gateway
-// command and the HTTP readiness probe).
+// on it, emptied and dropped when that class fixture releases, so the class-level seam (endpoint,
+// credentials, Configuration()) is unchanged while the suite no longer starts a container per class.
+// xUnit starts the assembly fixture on every run of this assembly, S3 classes or not; that is accepted
+// because it is one start per assembly instead of one per class, and because a lazy start would put
+// start-up synchronisation back inside the tests that need it — the flake this file already guards.
+// Only the container-start logic of tests/ObjectStorage.IntegrationTests' SeaweedFsFixture is copied (the
+// digest-pinned image, the mounted local-only identity file, the S3 gateway command and the HTTP
+// readiness probe).
 using System.Net;
 using System.Text.Json;
 using Amazon.Runtime;
@@ -308,8 +312,50 @@ public sealed class SeaweedFsStore : IAsyncLifetime
         await DeleteAsync(client, WarmUpKey, cancellationToken);
     }
 
-    /// <summary>The bucket dies with the shared container, so the class fixture itself has nothing to release.</summary>
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    /// <summary>
+    /// Empties this class's bucket and drops it, so the shared gateway does not accumulate one bucket per
+    /// test class. Teardown is best effort on purpose: a bucket left behind only occupies space on a
+    /// container that stops with the assembly, and failing here would mask the run's real result.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            using var client = CreateClient();
+            await DeleteAllObjectsAsync(client, CancellationToken.None);
+            await client.DeleteBucketAsync(
+                new DeleteBucketRequest { BucketName = BucketName }, CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            // Covers the absent bucket of a class whose init failed, a gateway already gone, and any
+            // delete answer: none of them may fail a run that has already produced its results.
+        }
+    }
+
+    /// <summary>Deletes every object the class left in its bucket; an absent bucket lists as empty.</summary>
+    private async Task DeleteAllObjectsAsync(AmazonS3Client client, CancellationToken cancellationToken)
+    {
+        string? continuationToken = null;
+        do
+        {
+            var page = await client.ListObjectsV2Async(
+                new ListObjectsV2Request
+                {
+                    BucketName = BucketName,
+                    ContinuationToken = continuationToken,
+                },
+                cancellationToken);
+
+            foreach (var item in page.S3Objects ?? [])
+            {
+                await DeleteAsync(client, item.Key, cancellationToken);
+            }
+
+            continuationToken = page.IsTruncated == true ? page.NextContinuationToken : null;
+        }
+        while (continuationToken is not null);
+    }
 
     /// <summary>A signed client for the arrange/assert steps that bypass the presigned URL.</summary>
     internal AmazonS3Client CreateClient() => new(new BasicAWSCredentials(AccessKey, SecretKey), ClientConfig());

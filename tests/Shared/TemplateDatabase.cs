@@ -23,8 +23,10 @@ namespace Evidgate.Testing;
 /// </summary>
 /// <remarks>
 /// PostgreSQL refuses to copy a template that has open connections, so every
-/// connection this type opens is unpooled and copies are serialised: a concurrent
-/// <c>create database</c> from one template fails transiently with 55006.
+/// connection this type opens is unpooled. The copy gate is a defensive guard:
+/// each fixture is one xUnit collection whose classes run serially, so copies do
+/// not overlap today, but a concurrent <c>create database</c> from one template
+/// fails transiently with 55006.
 /// </remarks>
 internal sealed class TemplateDatabase : IDisposable
 {
@@ -65,6 +67,33 @@ internal sealed class TemplateDatabase : IDisposable
 
     /// <summary>Releases the copy gate; call after the fixture has stopped creating databases.</summary>
     public void Dispose() => _copyGate.Dispose();
+
+    /// <summary>
+    /// Drops the migrated template database. Only a reused server needs this: a container is discarded
+    /// whole, while a server that outlives the run would otherwise keep the template forever. The
+    /// <c>is_template</c> flag refuses a plain drop, so it comes off first.
+    /// </summary>
+    internal async Task DropAsync()
+    {
+        if (_template is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await ExecuteSuperuserAsync(
+                MaintenanceDatabase,
+                $"alter database \"{_templateName}\" is_template false").ConfigureAwait(false);
+            await ExecuteSuperuserAsync(
+                MaintenanceDatabase,
+                $"drop database if exists \"{_templateName}\" with (force)").ConfigureAwait(false);
+        }
+        catch (NpgsqlException)
+        {
+            // Same rule as the fixture's scratch-database cleanup: a leftover template never fails a run.
+        }
+    }
 
     /// <summary>Creates the named database as a copy of the migrated template.</summary>
     /// <param name="database">The database name; the caller's own per-test prefix applies.</param>

@@ -18,8 +18,9 @@ namespace Isolation.Tests;
 ///
 /// AC5: with <see cref="SuperuserConnectionStringVariable"/> set the suite does
 /// not start a container at all — it runs against that already-running server
-/// (the compose dev stack), reusing its <c>evidgate_owner</c> role and adding one
-/// copied scratch database per test to it (dropped when the assembly finishes).
+/// (the compose dev stack), reusing its <c>evidgate_owner</c> role, adding one
+/// migrated template and one copied scratch database per test to it, and dropping
+/// both when the assembly finishes.
 /// </summary>
 public sealed class PostgresIsolationFixture : IAsyncLifetime
 {
@@ -102,16 +103,17 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        _template?.Dispose();
-
         if (_externalSuperuserConnectionString is null)
         {
             await _container.DisposeAsync().ConfigureAwait(false);
+            _template?.Dispose();
             return;
         }
 
         // A reused server outlives the run: drop the scratch databases it holds
-        // for this assembly (the rotated role passwords stay — docs/dev-setup.md).
+        // for this assembly, then the template they were copied from — in that
+        // order, because PostgreSQL refuses to drop a template another database
+        // still depends on (the rotated role passwords stay — docs/dev-setup.md).
         foreach (var database in _createdDatabases)
         {
             try
@@ -123,6 +125,13 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
                 // A leftover scratch database must never fail the run.
             }
         }
+
+        if (_template is not null)
+        {
+            await _template.DropAsync().ConfigureAwait(false);
+        }
+
+        _template?.Dispose();
     }
 
     /// <summary>The migrated template every per-test database is copied from.</summary>
