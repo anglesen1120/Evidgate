@@ -15,18 +15,20 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEV_COMPOSE="$REVIEW_DIR/../compose.dev.yml"
 NVMRC="$REVIEW_DIR/../../.nvmrc"
 DOCKERFILE_WEB="$REVIEW_DIR/Dockerfile.web"
+DOCKERFILE_SEED="$REVIEW_DIR/Dockerfile.seed"
 fail=0
 
 [ -f "$REVIEW_COMPOSE" ] || review_die "missing $REVIEW_COMPOSE"
 [ -f "$DOCKERFILE_WEB" ] || review_die "missing $DOCKERFILE_WEB"
+[ -f "$DOCKERFILE_SEED" ] || review_die "missing $DOCKERFILE_SEED"
 
 review_step 'compose image references'
 while IFS= read -r ref; do
   case "$ref" in
     evidgate-review-*)
       case "$ref" in
-        *"\${EVIDGATE_REVIEW_SHA"*) ;;
-        *) echo "check-pins: built image '$ref' is not tagged with the release sha" >&2; fail=1 ;;
+        *"\${EVIDGATE_REVIEW_TAG"*) ;;
+        *) echo "check-pins: built image '$ref' is not tagged with the release tag" >&2; fail=1 ;;
       esac
       ;;
     *@sha256:*)
@@ -40,7 +42,7 @@ while IFS= read -r ref; do
       fail=1
       ;;
   esac
-done < <(sed -nE 's/^[[:space:]]+image:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' "$REVIEW_COMPOSE")
+done < <(sed -nE 's/^[[:space:]]+image:[[:space:]]*(.+[^[:space:]])[[:space:]]*$/\1/p' "$REVIEW_COMPOSE")
 
 review_step 'web Dockerfile FROM lines'
 stages=0
@@ -72,6 +74,37 @@ else
   fail=1
 fi
 
+review_step 'the seed image derives from the migrator image'
+froms="$(grep -cE '^FROM ' "$DOCKERFILE_SEED" || true)"
+[ "$froms" = 1 ] || {
+  echo "check-pins: Dockerfile.seed must have exactly one FROM line (found $froms)" >&2
+  fail=1
+}
+base="$(sed -nE 's/^FROM[[:space:]]+(.*[^[:space:]])[[:space:]]*$/\1/p' "$DOCKERFILE_SEED")"
+# shellcheck disable=SC2016 # the Dockerfile's own ${BASE}, not a shell value
+[ "$base" = '${BASE}' ] || {
+  echo "check-pins: Dockerfile.seed must take its base as ARG BASE (found '$base'): it is a local derivative, not a registry image" >&2
+  fail=1
+}
+grep -qE '^ARG BASE[[:space:]]*$' "$DOCKERFILE_SEED" || {
+  echo "check-pins: Dockerfile.seed declares no 'ARG BASE'" >&2
+  fail=1
+}
+seed_image="$(sed -nE 's/^[[:space:]]+image:[[:space:]]*(evidgate-review-seed:.+[^[:space:]])[[:space:]]*$/\1/p' "$REVIEW_COMPOSE")"
+[ -n "$seed_image" ] || {
+  echo "check-pins: compose.review.yml has no seed image" >&2
+  fail=1
+}
+seed_base="$(sed -nE 's/^[[:space:]]+BASE:[[:space:]]*(evidgate-review-migrator:.+[^[:space:]])[[:space:]]*$/\1/p' "$REVIEW_COMPOSE")"
+[ -n "$seed_base" ] || {
+  echo "check-pins: the seed build takes no BASE=evidgate-review-migrator:<tag> argument" >&2
+  fail=1
+}
+case "$seed_base" in
+  *'EVIDGATE_REVIEW_TAG'*) ;;
+  *) echo "check-pins: the seed BASE '$seed_base' is not tagged with the release tag" >&2; fail=1 ;;
+esac
+
 review_step 'node pin matches .nvmrc'
 if [ -f "$NVMRC" ]; then
   wanted="$(tr -d '[:space:]' <"$NVMRC")"
@@ -88,4 +121,4 @@ fi
 if [ "$fail" -ne 0 ]; then
   review_die 'check-pins: FAILED'
 fi
-review_step 'ok: pins are immutable and share the dev stack digests'
+review_step 'ok: pins are immutable, the seed image derives from the migrator, digests match the dev stack'

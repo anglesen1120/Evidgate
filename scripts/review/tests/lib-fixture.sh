@@ -90,6 +90,7 @@ fx_write_stubs() {
 # Options come before the host (-N, -T, -o X, -L spec, ...), so they have to be
 # consumed before the command can be found. A port forward stays in the
 # foreground so the caller can kill it.
+raw="$*"
 forward=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -101,6 +102,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 host="$1"
+# The raw argv, identity options included: a test proves the key reaches every
+# call without having to replay ssh's option parsing.
+printf 'argv: %s\n' "$raw" >>"$SSH_LOG"
 shift
 if [ "$forward" = 1 ]; then
   exec sleep 300
@@ -140,15 +144,27 @@ else
   printf '%s\n' "$*" >>"$DOCKER_LOG"
 fi
 case "$*" in
-  "compose version --short"*) echo "v2.32.0" ;;
-  "compose version"*) echo "Docker Compose version v2.32.0" ;;
+  # FX_COMPOSE_VERSION lets a test describe a host whose compose is newer (or
+  # too old) than the one this stub assumes.
+  "compose version --short"*) echo "${FX_COMPOSE_VERSION:-v2.32.0}" ;;
+  "compose version"*) echo "Docker Compose version ${FX_COMPOSE_VERSION:-v2.32.0}" ;;
   "info"*) exit 0 ;;
   *seed-dev*) cat "$SEED_STDOUT" ;;
   *logs*cloudflared-quick*)
-    echo '2026-11-02T10:00:00Z INF Requesting new quick Tunnel on trycloudflare.com...'
-    echo '2026-11-02T10:00:00Z INF +------------------------------------------------------------------------------+'
-    echo '2026-11-02T10:00:00Z INF |  https://api.trycloudflare.com/v1/tunnels/9f1c  |'
-    echo '2026-11-02T10:00:01Z INF |  https://bright-river-1234.trycloudflare.com  |'
+    # FX_QUICK_LOG lets a test describe a log that outlived several starts; the
+    # default is one session with the service endpoint in the banner.
+    if [ -n "${FX_QUICK_LOG:-}" ] && [ -f "${FX_QUICK_LOG}" ]; then
+      cat "${FX_QUICK_LOG}"
+    else
+      echo '2026-11-02T10:00:00Z INF Requesting new quick Tunnel on trycloudflare.com...'
+      echo '2026-11-02T10:00:00Z INF +------------------------------------------------------------------------------+'
+      echo '2026-11-02T10:00:00Z INF |  https://api.trycloudflare.com/v1/tunnels/9f1c  |'
+      echo '2026-11-02T10:00:01Z INF |  https://bright-river-1234.trycloudflare.com  |'
+    fi
+    ;;
+  *State.StartedAt*)
+    # The current session's start, so the caller narrows the log with --since.
+    [ -z "${FX_STARTED_AT:-}" ] || echo "${FX_STARTED_AT}"
     ;;
   *State.Running*) echo true ;;
 esac

@@ -4,7 +4,7 @@
 # and which host ports are published. Read-only: it never creates, starts or
 # stops anything, so it is safe to run from anywhere, any time.
 #
-# usage: scripts/review/status.sh <ssh-host>
+# usage: scripts/review/status.sh <ssh-host> [-i <ssh-keyfile>]
 #        scripts/review/status.sh --local
 set -euo pipefail
 
@@ -13,6 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/lib.sh"
 
 HOST_ARG=""
+KEY_ARG=""
 
 usage() {
   awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"
@@ -23,6 +24,15 @@ parse_args() {
     case "$1" in
       --local)
         RV_MODE=local
+        shift
+        ;;
+      -i)
+        [ $# -ge 2 ] || rv_die "-i needs an ssh key file"
+        KEY_ARG="$2"
+        shift 2
+        ;;
+      -i?*)
+        KEY_ARG="${1#-i}"
         shift
         ;;
       -h | --help)
@@ -51,6 +61,7 @@ main() {
   local current sha marker env_state containers ports origin auth_user public_url
 
   parse_args "$@"
+  rv_resolve_ssh_key "$KEY_ARG"
   rv_probe_host
 
   printf 'review stack on %s (%s)\n' "$(rv_target)" "$RV_HOST_ROOT"
@@ -93,7 +104,13 @@ main() {
   # env file: the mode is passed per deploy, so the env file can be stale.
   if rv_run "docker inspect $(rv_quote "$RV_QUICK_TUNNEL_CONTAINER") >/dev/null 2>&1"; then
     public_url="$(rv_quick_tunnel_url_now)"
-    printf '  tunnel          : quick, %s\n' "${public_url:-no trycloudflare.com URL in its log yet}"
+    if [ -n "$public_url" ]; then
+      # Reviewers are handed this URL, and it does not survive a reboot.
+      printf '  tunnel          : quick, %s\n' "$public_url"
+      printf '                    this URL changes every time the host or the container starts: print it again after a boot\n'
+    else
+      printf '  tunnel          : quick, no trycloudflare.com URL in its log since its last start\n'
+    fi
   elif rv_run "docker inspect $(rv_quote "evidgate-review-cloudflared") >/dev/null 2>&1"; then
     printf '  tunnel          : token\n'
   else

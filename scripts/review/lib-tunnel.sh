@@ -16,10 +16,22 @@ rv_tunnel_mode_valid() { # MODE
 # cloudflared prints its throwaway host on its own log, so the URL is read back
 # from the container instead of guessed. The banner also mentions
 # api.trycloudflare.com, which is the service endpoint and never the tunnel.
+#
+# The container is restarted on every host boot and each start asks Cloudflare for
+# a NEW host, while `docker logs` keeps the previous sessions. The current URL is
+# therefore the LAST match logged since the current start, not the first or the
+# alphabetically last: `--since` is the container's StartedAt and `tail -n 1`
+# keeps log order.
 rv_quick_tunnel_url_now() {
-  rv_run "docker logs $(rv_quote "$RV_QUICK_TUNNEL_CONTAINER") 2>&1 \
+  local since logs
+  since="$(rv_run "docker inspect -f '{{.State.StartedAt}}' $(rv_quote "$RV_QUICK_TUNNEL_CONTAINER") 2>/dev/null || true")"
+  logs="docker logs"
+  if [ -n "$since" ]; then
+    logs="docker logs --since $(rv_quote "$since")"
+  fi
+  rv_run "$logs $(rv_quote "$RV_QUICK_TUNNEL_CONTAINER") 2>&1 \
     | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | grep -v '^https://api\.' \
-    | sort -u | tail -n 1" || true
+    | tail -n 1" || true
 }
 
 # A quick tunnel that dies leaves no URL and no reason, so the wait reports the

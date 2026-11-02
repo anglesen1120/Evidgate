@@ -1,0 +1,22 @@
+# The seed job: the migrator image plus the repository's contracts/schemas.
+#
+# seed-dev resolves `<directory of migrations>/contracts/schemas`
+# (DevSeedRun.ContractsDirectory, i.e. /app/contracts/schemas with the migrator's
+# EVIDGATE_MIGRATOR__MIGRATIONSPATH) to validate the manifests it writes, and the
+# migrator image ships only migrations/. Deriving from that image instead of
+# repeating its build keeps the runtime base, its pin, the non-root user and the
+# entry point identical by construction.
+#
+# Build it only after the migrator image exists (compose cannot order one
+# service's build after another's, so deploy.sh builds the migrator first):
+#   docker build -f infra/review/Dockerfile.seed \
+#     --build-arg BASE=evidgate-review-migrator:<tag> \
+#     -t evidgate-review-seed:<tag> .
+ARG BASE
+FROM ${BASE}
+
+# Root-owned and world-readable only: the job runs as the base image's non-root
+# uid and only ever reads these files, so nothing the job does can rewrite a
+# schema. The chmod is explicit for the same reason as the migrator's COPY: the
+# context is a working checkout whose umask is not the image's business.
+COPY --chmod=a=rX contracts/schemas/ /app/contracts/schemas/

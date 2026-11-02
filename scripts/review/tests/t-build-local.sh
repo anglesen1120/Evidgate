@@ -15,10 +15,12 @@ if ! out="$(bash "$deploy" review-host --build-local --no-dogfood 2>&1)"; then
   fx_fail "the build-local deploy failed: $out"
 fi
 fx_assert_log_has "$DOCKER_LOG" "buildx build --platform linux/arm64" "the images are built for the host platform"
-for svc in migrator api worker web; do
+for svc in migrator api worker web seed; do
   fx_assert_log_has "$DOCKER_LOG" "-t evidgate-review-$svc:$tag" "$svc is tagged with the short sha"
 done
 fx_assert_log_has "$DOCKER_LOG" "save evidgate-review-migrator:$tag" "the images are saved on this machine"
+fx_assert_log_has "$DOCKER_LOG" " evidgate-review-seed:$tag" "the seed image is shipped too"
+fx_assert_log_has "$DOCKER_LOG" "--build-arg BASE=evidgate-review-migrator:$tag" "the seed image is built on the migrator image"
 fx_assert_log_has "$SSH_LOG" "docker load" "the images are loaded on the host"
 fx_assert_log_has "$DOCKER_LOG" "EVIDGATE_REVIEW_TAG=$tag" "compose resolves the shipped tag"
 # The gate asks compose for the web image, and the env file still holds the first

@@ -5,7 +5,7 @@
 # seed (it prints one once per database). The secrets file is never deleted: a
 # later deploy reuses the credentials the services and the reviewers already know.
 #
-# usage: scripts/review/down.sh <ssh-host> [--purge] [--yes]
+# usage: scripts/review/down.sh <ssh-host> [-i <ssh-keyfile>] [--purge] [--yes]
 #        scripts/review/down.sh --local [--purge] [--yes]
 set -euo pipefail
 
@@ -14,6 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/lib.sh"
 
 HOST_ARG=""
+KEY_ARG=""
 PURGE=0
 CONFIRMED=0
 
@@ -34,6 +35,15 @@ parse_args() {
         ;;
       --local)
         RV_MODE=local
+        shift
+        ;;
+      -i)
+        [ $# -ge 2 ] || rv_die "-i needs an ssh key file"
+        KEY_ARG="$2"
+        shift 2
+        ;;
+      -i?*)
+        KEY_ARG="${1#-i}"
         shift
         ;;
       -h | --help)
@@ -60,6 +70,7 @@ parse_args() {
 
 main() {
   parse_args "$@"
+  rv_resolve_ssh_key "$KEY_ARG"
   rv_probe_host
 
   if [ "$PURGE" = 1 ] && [ "$CONFIRMED" != 1 ]; then

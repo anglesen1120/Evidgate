@@ -20,7 +20,7 @@ Purpose: put the Pilot-0 build (API, worker, web) on one Linux host at an HTTPS 
 Compose project `evidgate-review`; every container and volume is named `evidgate-review-<service>`. Base file `../../infra/review/compose.review.yml`, with `../../infra/review/compose.quick.yml` layered on for the quick tunnel.
 
 - `postgres` — the dev stack's pinned PostgreSQL 18 on a volume, no host publish; data survives `down.sh`, dies with `--purge --yes`. `seaweedfs` — same pin, its S3 identity handed over as `EVIDGATE_SEAWEEDFS_S3_CONFIG`, no bind-mounted repository file (why: [`../../infra/README.md`](../../infra/README.md)).
-- One-shots: `db-init` (`bootstrap` creates the owner role, the database and the application roles as `scripts/dev/db-init.sh` does, then `grants`), `migrator` (`infra/docker/Dockerfile.migrator`, applies migrations and is the seed entry point — `docker compose run --rm migrator seed-dev [--with-token]`), `bucket-init` (creates the `evidgate-review` bucket and PUTs the dev stack's 24 h `pending/` lifecycle rule from inside the network), `probe` (polls readiness from inside).
+- One-shots: `db-init` (`bootstrap` creates the owner role, the database and the application roles as `scripts/dev/db-init.sh` does, then `grants`), `migrator` (`infra/docker/Dockerfile.migrator`, applies migrations), `seed` (`infra/review/Dockerfile.seed`: the migrator image plus `contracts/schemas/` at `/app/contracts/schemas`, because `seed-dev` resolves that directory to validate the manifests it writes; the base arrives as `ARG BASE=<migrator image>`, so the runtime base, pin, non-root uid and entry point stay identical by construction, and the image must be built **after** the migrator. `check-pins.sh` asserts that derivation and `check.sh` also runs `check-restart-policy.sh`), `bucket-init` (creates the `evidgate-review` bucket and PUTs the dev stack's 24 h `pending/` lifecycle rule from inside the network), `probe` (polls readiness from inside).
 - `api` (`infra/docker/Dockerfile.api`, port 8080 inside the network only) and `worker` (`infra/docker/Dockerfile.worker`, no port).
 - `web` — `../../infra/review/Dockerfile.web`: the built `apps/web` bundle (en + vi) on nginx on 8080, same-origin, reverse-proxying `/v1/` to `http://api:8080`, answering `404` for `/internal/*` (the API's operator and probe surface never leaves the network), and Basic Auth on every path, so a credential-less request gets `401` before any proxying. Its start script writes `/tmp/evidgate/htpasswd` from user + apr1 hash and refuses to serve quick mode without them.
 - `web` healthcheck: `wget -q -O /dev/null http://127.0.0.1:8080/nginx-health`. `/nginx-health` turns auth off and refuses every source but loopback — a rewrite-phase `map $remote_addr` guard returns `403` before the `200`, because `allow`/`deny` would never run in a location that returns — so it answers `200` only from inside the container and `403` to anything that arrives through the tunnel or the published port.
@@ -36,9 +36,11 @@ Profiles: `tunnel` / `tunnel-quick` are the public deployments (one cloudflared 
 
 Reference host: **AWS EC2 `t4g.medium`** — `arm64`, Ubuntu 24.04, user `ubuntu`, 2 vCPU, 4 GB RAM, 30 GB `gp3`. Security group: **no inbound rule except SSH from the operator's IP**, outbound 7844 (TCP **and** UDP — the tunnel transport) plus 443 for image pulls and update checks.
 
-- Linux `x86_64` or `aarch64`/`arm64` (the base images are multi-arch from one pinned builder; pins in [`../../infra/README.md`](../../infra/README.md)); `deploy.sh` reads `uname -m` and refuses others. Docker Engine with Compose v2, reachable by the SSH account without an interactive re-login.
+- Linux `x86_64` or `aarch64`/`arm64` (the base images are multi-arch from one pinned builder; pins in [`../../infra/README.md`](../../infra/README.md)); `deploy.sh` reads `uname -m` and refuses others. Docker Engine with Compose **v2 or newer** (a newer major is fine), reachable by the SSH account without an interactive re-login, and `curl` for the in-network probes.
 - **At least 15 GB free** under the SSH account's `$HOME`: `deploy.sh` measures `df` there and refuses below that. On the 30 GB reference disk, prune images between releases. `$HOME` must be writable: the release tree, the secrets file and `current` live under `$HOME/evidgate-review/` (override with `EVIDGATE_REVIEW_HOST_HOME` or `EVIDGATE_REVIEW_HOST_ROOT` on the operator side).
-- **2 GB of swap.** 4 GB RAM runs the stack and cannot also build three .NET images. `deploy.sh --setup-swap` creates a 2 GiB `/swapfile` when the host has under 1 GiB, needs passwordless `sudo`, and is idempotent (existing file reused, one `fstab` line). By hand:
+**`node` ≥ 20 and `python3` are needed on the host only when the host builds the images.** `--build-local` runs the same static gate (`check.sh --static-only`) on the deploying machine against the extracted sha, so the host then needs neither.
+
+- **2 GB of swap.** 4 GB RAM runs the stack and cannot also build four .NET images (migrator, seed, api, worker). `deploy.sh --setup-swap` creates a 2 GiB `/swapfile` when the host has under 1 GiB, needs passwordless `sudo`, and is idempotent (existing file reused, one `fstab` line). By hand:
 
   ```console
   sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
@@ -46,8 +48,8 @@ Reference host: **AWS EC2 `t4g.medium`** — `arm64`, Ubuntu 24.04, user `ubuntu
   echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
   ```
 
-- **Build on the operator machine**: `--build-local` (§5) builds the four images from the exact sha for the host's platform and ships them with `docker save | docker load`; the host only loads. The default host-side build is too heavy for 4 GB and is the path a bigger host may take.
-- `curl`, `python3` and `node` ≥ 20 on the host as well: the gates in §5 run there. The operator machine needs `git`, `curl`, `ssh` and `docker` with `buildx`, and a clone holding the sha (§5, §7).
+- **Build on the operator machine**: `--build-local` (§5) builds the five images from the exact sha for the host's platform and ships them with `docker save | docker load`; the host only loads. The default host-side build is too heavy for 4 GB and is the path a bigger host may take.
+- The operator machine needs `git`, `curl`, `ssh`, `docker` with `buildx`, `node` ≥ 20 and `python3` — the gates run there under `--build-local`; a host that builds needs `curl`, `python3` and `node` ≥ 20 itself (§5 step 5).
 - **No inbound port**: no security-group rule beyond SSH and no OS-level `ufw allow` — read both yourself, because `status.sh`/`docker ps` see what Docker published, not a firewall rule (§10.4). [WARN] a box with an instance profile attached can hand that profile to code running in a container through `169.254.169.254`: attach none, require IMDSv2, hop limit 1.
 
 ## 4. Ingress setup
@@ -110,9 +112,11 @@ scripts/review/deploy.sh <ssh-host> --tunnel token --public-origin https://evidg
   --build-local --setup-swap                                                   # named tunnel
 ```
 
-`--build-local` builds `migrator`, `api`, `worker` and `web` here for `linux/<host arch>` from an extraction of the exact sha (`docker buildx` required, QEMU when the architectures differ), then ships them as a compressed `docker save` stream the host only loads.
+`--build-local` builds `migrator`, `seed`, `api`, `worker` and `web` here for `linux/<host arch>` from an extraction of the exact sha (`docker buildx` required, QEMU when the architectures differ), then ships them as a compressed `docker save` stream the host only loads.
 
-Flags: `--sha <sha>` (default `HEAD`), `--tunnel quick|token|none`, `--public-origin <https-url>`, `--build-local`, `--setup-swap`, `--no-dogfood`, `--dry-run`, `--local`. Refusals: `--tunnel quick` takes no `--public-origin`; `--local` takes no host, no tunnel and no `--build-local`; a first `--tunnel token` deploy without `CLOUDFLARE_TUNNEL_TOKEN` in the shell stops before the secrets file exists (§5.1), as does quick mode with a file that has no auth hash.
+Flags: `--sha <sha>` (default `HEAD`), `-i <keyfile>`, `--tunnel quick|token|none`, `--public-origin <https-url>`, `--build-local`, `--setup-swap`, `--no-dogfood`, `--dry-run`, `--local`. Refusals: `--tunnel quick` takes no `--public-origin`; `--local` takes no host, no tunnel and no `--build-local`; a first `--tunnel token` deploy without `CLOUDFLARE_TUNNEL_TOKEN` in the shell stops before the secrets file exists (§5.1), as does quick mode with a file that has no auth hash.
+
+**SSH identity.** With neither `-i` nor `EVIDGATE_REVIEW_SSH_KEY`, `ssh` chooses the identity from `~/.ssh/config`. Pass `-i <keyfile>` (the flag wins) or export the variable to force one: `~` is expanded, the file must exist, be readable and **not** group- or world-accessible (the script refuses a `chmod` looser than `600`, because ssh would refuse the key later, mid-deploy). Every connection then carries `-i <key> -o IdentitiesOnly=yes`, so no agent can answer with a key the host rejects; that includes the `git archive | ssh tar -x` and `docker save | ssh docker load` pipes. Example (illustrative, not run here): `EVIDGATE_REVIEW_SSH_KEY=~/.ssh/evidgate-review scripts/review/deploy.sh ubuntu@13.212.214.50 --build-local`. `status.sh` and `down.sh` accept the same `-i`.
 
 `--dry-run` prints the thirteen-step plan and runs only the read-only preflight (§3). The real run:
 
@@ -120,11 +124,11 @@ Flags: `--sha <sha>` (default `HEAD`), `--tunnel quick|token|none`, `--public-or
 2. resolve the release: `--sha` or `HEAD`, a full 40-character commit that is an ancestor of `HEAD` and holds `infra/review/compose.review.yml` and `infra/review/env.review.template`;
 3. secrets: create `$HOME/evidgate-review/.env.review` **once** from the template in the shipped commit, mode `600` (§5.1); a second run reports "kept existing" and rewrites nothing;
 4. ship: `git archive <sha>` unpacked into `releases/<sha>/` beside a `.release-sha` marker (reused only when its marker reads the same sha);
-5. gates and images: `infra/review/check.sh --static-only` (pins and inlined files) before a layer is built, then `docker compose build` — or, with `--build-local`, the build here plus `docker save | docker load` — then `infra/review/check-web-image.sh --env-file "$HOME/evidgate-review/.env.review"` (two `nginx -t` runs, three fail-closed Basic Auth cases, and a live probe that requires `200` from `127.0.0.1` and `403` from the container's own bridge address on `/nginx-health`);
+5. gates and images: `infra/review/check.sh --static-only` (pins and inlined files) before a layer is built, then `docker compose build` — or, with `--build-local`, the build here plus `docker save | docker load` of **five** images (`migrator`, `seed`, `api`, `worker`, `web`) — then `infra/review/check-web-image.sh --env-file "$HOME/evidgate-review/.env.review"` (two `nginx -t` runs, three fail-closed Basic Auth cases, and a live probe that requires `200` from `127.0.0.1` and `403` from the container's own bridge address on `/nginx-health`);
 6. start `postgres` and `seaweedfs` with `up -d --wait`, so the start waits on their healthchecks;
 7. schema: `db-init bootstrap`, `migrator`, `db-init grants`;
 8. object store: `bucket-init` creates the bucket and applies the 24 h `pending/` lifecycle rule — the same rule, not a second implementation;
-9. seed: `seed-dev --with-token`. Its `EVIDGATE_DEV_TOKEN=` line is deleted before anything is printed, and the token plus the suite / case / environment ids stay in shell variables;
+9. seed: `docker compose run --rm -T seed seed-dev --with-token` against `evidgate-review-seed:<tag>`. Its `EVIDGATE_DEV_TOKEN=` line is deleted before anything is printed, and the token plus the suite / case / environment ids stay in shell variables;
 10. serve: `up -d --wait api worker web` (`web-local` on `--local`), then the one-shot `probe` polls `/internal/health/ready` on `api` and `worker` — the chiseled Api image has no shell or curl, so it cannot healthcheck itself, and `web` waits on its own `/nginx-health`;
 11. dogfood (§5.2): `--profile debug up -d api-debug`, an `ssh -L` forward of its loopback port, a readiness wait through it, the script, then `rm -sf api-debug`;
 12. tunnel: `token` starts `cloudflared` and waits for the public origin to answer `200`/`401`/`3xx` — the wait proves the edge answers, **not** that a connector is attached, so §10.6 stays mandatory; `quick` starts `cloudflared-quick`, reads the URL from its log and waits for `401` or `200`/`3xx` there. Either way an assertion follows that no container publishes a host port;
@@ -214,6 +218,16 @@ scripts/review/down.sh <ssh-host> --purge --yes
 also deletes the volumes (Postgres data and the bucket) and every `releases/<sha>/` plus `current`. `--purge` without `--yes` refuses: the volumes are the only copy and there are no backups. The **secrets file survives on purpose** (a later deploy reuses the credentials the services know, Basic Auth included), so deleting it by hand mints new role passwords and a new Basic Auth password, and purging the database volume is the only way to get a new dev ingest token out of the seed (§5.2).
 
 Cloudflare teardown, in this order (§4.2 paths): **Networking** > **Tunnels** > `evidgate-review` > **Routes**: delete the published application route (the hostname stops resolving — first, when decommissioning); **Zero Trust** > **Access controls** > **Applications**: delete the application and its policy; **Networking** > **Tunnels**: delete the tunnel, which invalidates the token in `.env.review` (delete that file too if the host goes away); partial (CNAME) setups also need the DNS record removed at your own provider, a full setup's record goes with the route ✅. A quick tunnel needs no teardown: `down.sh` removes `cloudflared-quick`.
+
+### 8.1 Boot behaviour
+
+The reference host is stopped at **19:00** and started at **08:00** `Asia/Ho_Chi_Minh`, Monday to Friday, by a scheduler (EventBridge Scheduler, from 2026-11-06). A boot needs no operator:
+
+- **Long-running services return by themselves.** `api`, `worker`, `web`, `postgres`, `seaweedfs` and the connector are `restart: unless-stopped`, so Docker starts them with the engine — no ssh, no `compose up`.
+- **`depends_on` orders a `compose up`, not a boot.** A container that starts before its dependency exits and is restarted by the policy, so `api` and `worker` retry the database and the object store until they answer and `web` proxies as soon as `api` does: expect a minute or two of `502`/`503` right after the boot, not forever.
+- **One-shots do not restart, on purpose.** `db-init`, `migrator`, `seed`, `bucket-init` and `probe` carry no restart policy: a restart of a migration or of the seed would act on a live database. The deployed release simply stays as it is; re-run a one-shot by hand only when you mean to.
+- **Volumes survive** the stop/start, so the data and the seeded ids are the ones the stack had before the stop. Only `--purge --yes` deletes them.
+- **A quick tunnel gets a new URL on every start** — a held link stops working after a boot or a restart. `status.sh` prints the current one: the last `trycloudflare.com` URL in the container's log since its last start, with `api.trycloudflare.com` excluded. Re-send it after a boot; a named tunnel keeps its hostname.
 
 ## 9. Rotating secrets
 

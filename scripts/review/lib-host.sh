@@ -8,9 +8,10 @@
 # real headroom, hence the swap check.
 
 RV_MIN_SWAP_KB=$((1024 * 1024))
-# web-local and api-debug reuse the web and api images, so these four tags cover
-# every image compose needs; saving more than that only costs transfer time.
-RV_BUILT_SERVICES="migrator api worker web"
+# web-local and api-debug reuse the web and api images, so these five tags cover
+# every image compose needs; saving more than that only costs transfer time. The
+# seed image must follow the migrator: it derives from it.
+RV_BUILT_SERVICES="migrator api worker web seed"
 
 # The platform comes from the host, not from this machine: a laptop on arm64
 # can deploy to an amd64 VM. rv_preflight sets RV_HOST_ARCH from the same answer.
@@ -59,7 +60,7 @@ rv_setup_swap() {
 # The build runs from an extraction of the sha, never the working tree: the same
 # bytes that `git archive` ships to the host are what the image is built from.
 rv_build_local_images() {
-  local tmp svc dockerfile failed=0
+  local tmp svc dockerfile base_arg failed=0
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/evidgate-review-build.XXXXXX")" \
     || rv_die "cannot create a temporary build directory"
   RV_SCRATCH+=("$tmp")
@@ -74,14 +75,28 @@ rv_build_local_images() {
     rv_info "this machine is not linux/$RV_HOST_ARCH: buildx needs qemu emulation for the target platform"
   fi
 
+  # The host does not run this under --build-local, so the release's static gate
+  # runs here, on the same extracted sha the images are built from.
+  ( cd "$tmp" && bash infra/review/check.sh --static-only ) \
+    || rv_die "--static-only failed on the extracted $RV_RELEASE_SHA; nothing was built"
+
   for svc in $RV_BUILT_SERVICES; do
-    dockerfile="infra/review/Dockerfile.web"
-    [ "$svc" = web ] || dockerfile="infra/docker/Dockerfile.$svc"
-    # Unquoted words: this is a plain docker build, and every argument is either
-    # a literal or a value this script controls.
+    case "$svc" in
+      web) dockerfile="infra/review/Dockerfile.web" ;;
+      seed) dockerfile="infra/review/Dockerfile.seed" ;;
+      *) dockerfile="infra/docker/Dockerfile.$svc" ;;
+    esac
+    # The seed image is the migrator image plus contracts/schemas, so it takes the
+    # migrator tag built just before it in this loop.
+    base_arg=""
+    [ "$svc" != seed ] || base_arg="--build-arg BASE=evidgate-review-migrator:$RV_IMAGE_TAG"
+    # Unquoted $base_arg: this is a plain docker build, and the value is one
+    # argument this script controls.
+    # shellcheck disable=SC2086
     if ! ( cd "$tmp" && docker buildx build \
       --platform "linux/$RV_HOST_ARCH" --load \
       --build-arg "EVIDGATE_REVIEW_PUBLIC_ORIGIN=$RV_PUBLIC_ORIGIN" \
+      $base_arg \
       -f "$dockerfile" -t "evidgate-review-$svc:$RV_IMAGE_TAG" . ); then
       failed=1
       rv_warn "building evidgate-review-$svc failed"

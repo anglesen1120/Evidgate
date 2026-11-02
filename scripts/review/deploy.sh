@@ -8,6 +8,7 @@
 #
 # usage: scripts/review/deploy.sh <ssh-host> [--sha <sha>] [--tunnel quick|token|none]
 #                                 [--public-origin <https-url>] [--build-local]
+#                                 [-i <ssh-keyfile>]
 #                                 [--setup-swap] [--no-dogfood] [--dry-run]
 #        scripts/review/deploy.sh --local [--sha <sha>] [--no-dogfood] [--dry-run]
 #
@@ -50,6 +51,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOGFOOD=1
 ORIGIN_ARG=""
 HOST_ARG=""
+KEY_ARG=""
 TUNNEL_ARG=""
 TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-}"
 
@@ -100,6 +102,15 @@ parse_args() {
         ;;
       --build-local)
         RV_BUILD_LOCAL=1
+        shift
+        ;;
+      -i)
+        [ $# -ge 2 ] || rv_die "-i needs an ssh key file"
+        KEY_ARG="$2"
+        shift 2
+        ;;
+      -i?*)
+        KEY_ARG="${1#-i}"
         shift
         ;;
       --setup-swap)
@@ -185,9 +196,12 @@ print_plan() {
     printf '                 docker buildx build --platform linux/%s --load -t evidgate-review-<svc>:%s (from a git archive of the sha)\n' \
       "$RV_HOST_ARCH" "$RV_IMAGE_TAG"
     printf '                 docker save %s | gzip | %s: gunzip | docker load\n' \
-      "$(for svc in migrator api worker web; do printf 'evidgate-review-%s:%s ' "$svc" "$RV_IMAGE_TAG"; done)" "$(rv_target)"
+      "$(for svc in migrator api worker web seed; do printf 'evidgate-review-%s:%s ' "$svc" "$RV_IMAGE_TAG"; done)" "$(rv_target)"
   else
-    printf '                 %s\n' "$(rv_compose_argv build)"
+    # Two calls, in this order: the seed image is the migrator image plus
+    # contracts/schemas, so it cannot be built before its base exists.
+    printf '                 %s\n' "$(rv_compose_argv build migrator api worker web)"
+    printf '                 %s\n' "$(rv_compose_argv build seed)"
   fi
   printf '                 cd %s && bash infra/review/check-web-image.sh --env-file %s\n' \
     "$RV_RELEASE_DIR" "$RV_ENV_FILE"
@@ -196,7 +210,7 @@ print_plan() {
   printf '     %s\n' "$(rv_compose_argv run --rm -T migrator)"
   printf '     %s\n' "$(rv_compose_argv run --rm -T db-init grants)"
   printf '  8  storage    %s\n' "$(rv_compose_argv run --rm -T bucket-init)"
-  printf '  9  seed       %s\n' "$(rv_compose_argv run --rm -T migrator seed-dev --with-token)"
+  printf '  9  seed       %s\n' "$(rv_compose_argv run --rm -T seed seed-dev --with-token)"
   printf '                 (the EVIDGATE_DEV_TOKEN line is kept in a shell variable only)\n'
   if [ "$RV_MODE" = local ]; then
     printf ' 10  serve      %s\n' "$(rv_compose_argv up -d --wait api worker web-local)"
@@ -292,6 +306,7 @@ main() {
 
   parse_args "$@"
   trap rv_cleanup EXIT
+  rv_resolve_ssh_key "$KEY_ARG"
 
   rv_step "1/13 preflight"
   rv_preflight
@@ -350,14 +365,24 @@ main() {
   # Static first: a drifting pin or lifecycle rule stops the deploy before a
   # single layer is built. The image check needs the image, so it follows build.
   rv_step "5/13 infra checks and images"
-  rv_mutate "cd $(rv_quote "$RV_RELEASE_DIR") && bash infra/review/check.sh --static-only"
+  if [ "$RV_BUILD_LOCAL" = 1 ]; then
+    # The host only loads what was built here: it runs no gate, so it needs
+    # neither node nor python3. rv_build_local_images runs the same static gate on
+    # the extracted sha before the first build.
+    :
+  else
+    rv_mutate "cd $(rv_quote "$RV_RELEASE_DIR") && bash infra/review/check.sh --static-only"
+  fi
   if [ "$RV_BUILD_LOCAL" = 1 ]; then
     # The host only loads what was built here, so it never needs the build
     # headroom that a 4 GiB VM does not have.
     rv_build_local_images
     rv_ship_images
   else
-    rv_compose build
+    # Two calls, in this order: the seed image derives from the migrator image,
+    # and compose does not order one service's build after another's.
+    rv_compose build migrator api worker web
+    rv_compose build seed
   fi
   # The gate resolves the web image from compose, and the shell value wins over
   # the one stored at first deploy: without this it would inspect the previous
@@ -376,7 +401,7 @@ main() {
   rv_compose run --rm -T bucket-init
 
   rv_step "9/13 seed"
-  seed_out="$(rv_compose run --rm -T migrator seed-dev --with-token)"
+  seed_out="$(rv_compose run --rm -T seed seed-dev --with-token)"
   # The one secret line is dropped before anything reaches the terminal.
   printf '%s\n' "$seed_out" | sed -e '/^EVIDGATE_DEV_TOKEN=/d' -e '/^[[:space:]]*$/d'
   dev_token="$(seed_field "$seed_out" EVIDGATE_DEV_TOKEN)"

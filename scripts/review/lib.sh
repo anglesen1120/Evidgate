@@ -58,6 +58,9 @@ RV_HOST_ARCH=""
 # shellcheck disable=SC2034 # read by lib-tunnel.sh and status.sh
 RV_QUICK_TUNNEL_CONTAINER="evidgate-review-cloudflared-quick"
 
+RV_SSH_KEY=""
+RV_SSH_OPTS=()
+
 rv_info() { printf '%s: %s\n' "${0##*/}" "$*"; }
 
 rv_warn() { printf '%s: %s\n' "${0##*/}" "$*" >&2; }
@@ -76,6 +79,48 @@ rv_target() {
   else
     printf 'ssh:%s' "$RV_SSH_HOST"
   fi
+}
+
+# The ssh identity. An explicit key (the -i flag, or EVIDGATE_REVIEW_SSH_KEY)
+# wins over the user's ssh config and is the only identity offered, so an agent
+# cannot answer first with a key the host refuses; without one no -i is added at
+# all, which leaves the choice to that config. `~` is expanded here because the
+# value often comes from a shell export.
+rv_resolve_ssh_key() { # FLAG_VALUE (may be empty)
+  local key="${1:-${EVIDGATE_REVIEW_SSH_KEY:-}}" mode
+  RV_SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
+  if [ -z "$key" ]; then
+    RV_SSH_KEY=""
+    return 0
+  fi
+  # shellcheck disable=SC2088 # the literal ~ is what this code expands
+  case "$key" in
+    '~') key="$HOME" ;;
+    '~/'*) key="$HOME/${key#\~/}" ;;
+    /* | '') ;;
+    *) key="$PWD/$key" ;;
+  esac
+  [ -f "$key" ] || rv_die "ssh key '$key' is not a file"
+  [ -r "$key" ] || rv_die "ssh key '$key' is not readable"
+  # A key ssh itself would refuse is worth naming here: the remote side cannot
+  # explain it once every call runs with BatchMode.
+  #
+  # The two stat dialects are probed in the order that keeps them apart: GNU
+  # `stat -f` reports the FILESYSTEM and still writes some of it before rejecting
+  # `%Lp`, so running it first would glue that output in front of the real mode
+  # and hide a 0644 key behind a warning. `-c '%a'` is GNU's spelling and fails
+  # outright on BSD; `-f '%Lp'` is BSD's. Anything that is not a plain octal mode
+  # afterwards means the bits could not be read, which is a refusal, not a note.
+  mode="$(stat -c '%a' "$key" 2>/dev/null || stat -f '%Lp' "$key" 2>/dev/null || true)"
+  case "$mode" in
+    '' | *[!0-7]*)
+      rv_die "cannot read the permission bits of ssh key '$key' (stat printed '$mode'); chmod 600 it and re-run"
+      ;;
+  esac
+  [ $((0$mode & 077)) -eq 0 ] \
+    || rv_die "ssh key '$key' is group/world accessible (mode $mode): chmod 600 it"
+  RV_SSH_KEY="$key"
+  RV_SSH_OPTS+=(-i "$RV_SSH_KEY" -o IdentitiesOnly=yes)
 }
 
 # One argument, quoted for a POSIX shell. The remote side re-parses every
@@ -107,21 +152,21 @@ rv_random_base64() { # BYTES
 # Remote commands run through the login shell of the host. `accept-new` records
 # a host key on first contact and still fails on a changed one: a deploy cannot
 # answer an interactive prompt, and silently trusting a new key would defeat it.
+# shellcheck disable=SC2029 # callers quote the remote command with rv_quote
 rv_run() { # read-only command; always executes, even under --dry-run
   if [ "$RV_MODE" = local ]; then
     bash -c "$1"
   else
-    ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
-      "$RV_SSH_HOST" "$1"
+    ssh "${RV_SSH_OPTS[@]}" "$RV_SSH_HOST" "$1"
   fi
 }
 
+# shellcheck disable=SC2029 # same: the stdin command arrives already quoted
 rv_run_stdin() {
   if [ "$RV_MODE" = local ]; then
     bash -c "$1"
   else
-    ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
-      "$RV_SSH_HOST" "$1"
+    ssh "${RV_SSH_OPTS[@]}" "$RV_SSH_HOST" "$1"
   fi
 }
 
@@ -278,14 +323,28 @@ rv_preflight() {
   rv_probe_host
 
   compose_version="$(rv_run 'docker compose version --short 2>/dev/null || true')"
-  [ -n "$compose_version" ] || rv_die "docker compose v2 is required on $(rv_target)"
+  local compose_major="${compose_version#v}"
+  compose_major="${compose_major%%.*}"
+  case "$compose_major" in
+    '' | *[!0-9]*) rv_die "cannot read the docker compose version on $(rv_target): '${compose_version:-nothing}'" ;;
+  esac
+  # The floor is what the file uses (profiles, depends_on conditions, --wait); a
+  # newer major is fine, and the packaged version's major is not 2 everywhere.
+  [ "$compose_major" -ge 2 ] \
+    || rv_die "docker compose v2 or newer is required on $(rv_target) (found $compose_version)"
   rv_run "command -v curl >/dev/null 2>&1" || rv_die "curl is required on $(rv_target)"
-  # The release's own infra gate runs on the host before any image is built, and
-  # it needs node (>= 20) and python3 there, not in a container.
-  for tool in node python3; do
-    rv_run "command -v $tool >/dev/null 2>&1" \
-      || rv_die "$tool is required on $(rv_target): infra/review/check.sh runs there before the build (node >= 20)"
-  done
+  # The release's infra gate runs the generator's node:test suite. A host that
+  # only loads images never runs it (--build-local runs the same gate on this
+  # machine, over the same extracted sha), so only a building host needs node
+  # and python3.
+  if [ "$RV_BUILD_LOCAL" = 1 ] || [ "$RV_MODE" = local ]; then
+    rv_require_cmd node
+  else
+    for tool in node python3; do
+      rv_run "command -v $tool >/dev/null 2>&1" \
+        || rv_die "$tool is required on $(rv_target): infra/review/check.sh runs there before the build (node >= 20)"
+    done
+  fi
   rv_run "test -w $(rv_quote "$RV_HOST_HOME")" \
     || rv_die "$RV_HOST_HOME is not writable on $(rv_target)"
 
@@ -397,7 +456,7 @@ rv_open_forward() {
     return 0
   fi
   rv_info "forwarding 127.0.0.1:$RV_API_PORT to $(rv_target)"
-  ssh -N -o ExitOnForwardFailure=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+  ssh -N -o ExitOnForwardFailure=yes "${RV_SSH_OPTS[@]}" \
     -L "127.0.0.1:$RV_API_PORT:127.0.0.1:$RV_API_PORT" "$RV_SSH_HOST" &
   RV_FORWARD_PID=$!
 }
