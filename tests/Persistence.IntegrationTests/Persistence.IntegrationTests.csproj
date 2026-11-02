@@ -5,6 +5,9 @@
        The xUnit/Shouldly package set and OutputType live in tests/Directory.Build.props (01.6.1-T1.1). -->
   <PropertyGroup>
     <RootNamespace>Persistence.IntegrationTests</RootNamespace>
+    <!-- The Migrator reference below is aliased, so the linked template helper routes its
+         migration types through the same alias instead of the global namespace. -->
+    <DefineConstants>$(DefineConstants);EVIDGATE_MIGRATOR_ALIASED</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Testcontainers.PostgreSQL" />
@@ -23,5 +26,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\TemplateDatabase.cs" Link="TemplateDatabase.cs" />
   </ItemGroup>
 </Project>

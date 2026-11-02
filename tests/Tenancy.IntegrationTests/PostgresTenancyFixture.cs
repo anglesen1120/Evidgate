@@ -10,20 +10,21 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// One digest-pinned PostgreSQL 18 container per test assembly and a fresh
-/// database per test, each brought to head by the real <c>Evidgate.Migrator</c>
-/// as <c>evidgate_owner</c> (02.1.1-T1.4): the superuser bootstrap creates only
-/// the owner role with LOGIN + CREATEROLE (migration 0001 creates the three
-/// application roles) and then hands <c>evidgate_app</c> and
-/// <c>evidgate_operator</c> their LOGIN + credential — exactly the split
-/// <c>scripts/dev/db-init.sh</c> performs (01 §6).
+/// database per test, each copied from one database brought to head once by the
+/// real <c>Evidgate.Migrator</c> as <c>evidgate_owner</c> (02.1.1-T1.4): the
+/// superuser bootstrap creates only the owner role with LOGIN + CREATEROLE
+/// (migration 0001 creates the three application roles) and then hands
+/// <c>evidgate_app</c> and <c>evidgate_operator</c> their LOGIN + credential —
+/// exactly the split <c>scripts/dev/db-init.sh</c> performs (01 §6).
 /// </summary>
 public sealed class PostgresTenancyFixture : IAsyncLifetime
 {
     private const string DatabaseOwnerRole = "evidgate_owner";
 
-    // One fresh migrated database per test lives in this single container; PostgreSQL's cumulative-statistics
-    // shared memory (posix DSA in /dev/shm) grows by doubling with the database count and, at the Docker default of
-    // 64 MB, fails with 53100 "could not resize shared memory segment" once the suite passes ~750 databases.
+    // One fresh database per test, copied from one migrated template, lives in this single container;
+    // PostgreSQL's cumulative-statistics shared memory (posix DSA in /dev/shm) grows by doubling with
+    // the database count and, at the Docker default of 64 MB, fails with 53100 "could not resize shared
+    // memory segment" once the suite passes ~750 databases.
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(ContainerImages.Postgres)
         .WithDatabase("evidgate")
         .WithUsername("postgres")
@@ -38,6 +39,8 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _operatorPassword = "operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+
+    private TemplateDatabase? _template;
 
     /// <summary>
     /// Repository <c>migrations/</c>, resolved by the Migrator's own default-path
@@ -58,9 +61,22 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
         await ExecuteAsync(
             connection,
             $"create role {DatabaseOwnerRole} login createrole password '{_ownerPassword}'").ConfigureAwait(false);
+
+        _template = new TemplateDatabase(
+            SuperuserConnectionString,
+            OwnerConnectionString,
+            RepoMigrationsPath,
+            [
+                $"alter role evidgate_app login password '{_appPassword}'",
+                $"alter role evidgate_operator login password '{_operatorPassword}'",
+            ]);
     }
 
-    public async ValueTask DisposeAsync() => await _container.DisposeAsync().ConfigureAwait(false);
+    public async ValueTask DisposeAsync()
+    {
+        _template?.Dispose();
+        await _container.DisposeAsync().ConfigureAwait(false);
+    }
 
     /// <summary>Creates a database owned by the migration role, without applying anything.</summary>
     public async Task<string> CreateEmptyDatabaseAsync()
@@ -78,21 +94,20 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
         return database;
     }
 
-    /// <summary>Creates a database at head (real migration files) and enables the application logins.</summary>
+    /// <summary>The migrated template every per-test database is copied from.</summary>
+    private TemplateDatabase Template =>
+        _template ?? throw new InvalidOperationException("the fixture has not started its container");
+
+    /// <summary>Creates a database at head (copied from the migrated template) and enables the application logins.</summary>
     public async Task<string> CreateDatabaseAsync()
     {
-        var database = await CreateEmptyDatabaseAsync().ConfigureAwait(false);
-        var run = ApplyMigrations(database);
+        var database = "tenancy_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
 
-        if (run.ExitCode != MigratorExitCodes.Success)
-        {
-            throw new InvalidOperationException(
-                $"the suite could not reach head on '{database}' (exit {run.ExitCode}): {string.Join(" | ", run.Messages)}");
-        }
+        await Template.CreateDatabaseAsync(database).ConfigureAwait(false);
 
-        await using var connection = await OpenSuperuserAsync(database).ConfigureAwait(false);
-        await ExecuteAsync(connection, $"alter role evidgate_app login password '{_appPassword}'").ConfigureAwait(false);
-        await ExecuteAsync(connection, $"alter role evidgate_operator login password '{_operatorPassword}'").ConfigureAwait(false);
+        // The host's stand-in session seeds the `user` row a signed-in caller implies
+        // (0044's membership_user_fk), so the database must be registered here.
+        SessionUserSeed.Register(database, OwnerConnectionString(database));
 
         return database;
     }

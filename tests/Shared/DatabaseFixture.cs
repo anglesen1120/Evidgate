@@ -32,10 +32,9 @@ namespace Evidgate.Testing;
 /// <para>
 /// It differs from the sibling fixtures that read <see cref="ContainerImages"/>
 /// (<c>tests/Persistence.IntegrationTests</c>, <c>tests/Tasks.IntegrationTests</c>)
-/// in one way only: those create a fresh database per test — no reset risk, but a
-/// full migration run per test — while this harness migrates once per assembly and
-/// resets with Respawn between tests, which is what makes a shared suite
-/// affordable.
+/// in one way only: those copy a migrated template into a fresh database per test
+/// — no reset risk — while this harness keeps one database and resets with Respawn
+/// between tests.
 /// </para>
 /// </summary>
 public sealed class DatabaseFixture : IAsyncLifetime
