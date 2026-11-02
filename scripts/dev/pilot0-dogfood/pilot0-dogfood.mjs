@@ -12,17 +12,55 @@
 // (fixtures/variant-hash/vectors.json, "empty-object"). The server still owns the real
 // key; this copy only tells the reporter which planned execution it is producing.
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const TARGET_ENV = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const PRODUCER = 'shard-1';
+// The red run's only test maps to the same planned execution through the injected identity
+// and fails on purpose, so reconcile has a real failed attempt to weigh.
+const FORCED_FAILURE_SPEC = [
+  "import { expect, test } from '@playwright/test';",
+  '',
+  "test('pilot0 forced failure', () => {",
+  '  expect(1).toBe(2);',
+  '});',
+  '',
+].join('\n');
 
 function fail(message) {
   process.stderr.write(`pilot0-dogfood: ${message}\n`);
   process.exit(2);
+}
+
+function writeJson(path, value) {
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+}
+
+// A spool chunk is drained by another process, so its new bytes replace the old file in one
+// rename; a truncated or half-written chunk would fail the next `events send`.
+function writeAtomically(path, text) {
+  const temp = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`);
+  writeFileSync(temp, text, { mode: 0o600 });
+  try {
+    renameSync(temp, path);
+  } catch (error) {
+    try {
+      unlinkSync(temp);
+    } catch {
+      // The rename already failed; the temp file is all that is left to remove.
+    }
+    throw error;
+  }
 }
 
 function flags(argv) {
@@ -124,6 +162,21 @@ function manifest({ suiteRevisionId, environmentRevisionId, caseRevisionId, envs
   };
 }
 
+function writeManifests(work, { identity, single, twoShard }) {
+  const paths = {
+    identity: join(work, 'identity.json'),
+    single: join(work, 'manifest-1.json'),
+    twoShard: join(work, 'manifest-2.json'),
+  };
+  writeJson(paths.identity, identity);
+  writeJson(paths.single, single);
+  writeJson(paths.twoShard, twoShard);
+  writeFileSync(join(work, 'red', 'pilot0-forced-failure.spec.ts'), FORCED_FAILURE_SPEC, {
+    mode: 0o600,
+  });
+  return paths;
+}
+
 function prepare(values) {
   const work = required(values, 'work');
   const caseId = uuid(values, 'case-id');
@@ -143,53 +196,30 @@ function prepare(values) {
       target_env: env,
       source: 'annotation',
     };
-    const single = manifest({
-      suiteRevisionId,
-      environmentRevisionId,
-      caseRevisionId,
-      envs: [env],
+    const paths = writeManifests(work, {
+      identity,
+      single: manifest({ suiteRevisionId, environmentRevisionId, caseRevisionId, envs: [env] }),
+      twoShard: manifest({
+        suiteRevisionId,
+        environmentRevisionId,
+        caseRevisionId,
+        envs: [env, secondTargetEnv(env)],
+      }),
     });
-    const twoShard = manifest({
-      suiteRevisionId,
-      environmentRevisionId,
-      caseRevisionId,
-      envs: [env, secondTargetEnv(env)],
-    });
-    const identityPath = join(work, 'identity.json');
-    const singlePath = join(work, 'manifest-1.json');
-    const twoShardPath = join(work, 'manifest-2.json');
-    writeFileSync(identityPath, `${JSON.stringify(identity, null, 2)}\n`, { mode: 0o600 });
-    writeFileSync(singlePath, `${JSON.stringify(single, null, 2)}\n`, { mode: 0o600 });
-    writeFileSync(twoShardPath, `${JSON.stringify(twoShard, null, 2)}\n`, { mode: 0o600 });
-    // The red run's only test: it maps to the same planned execution through the injected
-    // identity, and fails on purpose so reconcile has a real failed attempt to weigh.
-    writeFileSync(
-      join(work, 'red', 'pilot0-forced-failure.spec.ts'),
-      [
-        "import { expect, test } from '@playwright/test';",
-        '',
-        "test('pilot0 forced failure', () => {",
-        '  expect(1).toBe(2);',
-        '});',
-        '',
-      ].join('\n'),
-      { mode: 0o600 },
-    );
     process.stdout.write(
       `${JSON.stringify({
         execution_key: identity.execution_key,
         variant_hash: variantHash,
-        identity: identityPath,
-        manifest_1: singlePath,
-        manifest_2: twoShardPath,
+        identity: paths.identity,
+        manifest_1: paths.single,
+        manifest_2: paths.twoShard,
         app,
       })}\n`,
     );
   });
 }
 
-/** Writes one throwaway Playwright config that wraps the apps/web e2e workspace. */
-function config(values) {
+function configInputs(values) {
   const work = required(values, 'work');
   const mode = required(values, 'mode');
   if (mode !== 'green' && mode !== 'red') {
@@ -207,6 +237,12 @@ function config(values) {
   if (!/^[0-9]{1,5}$/.test(port)) {
     fail('--port must be digits');
   }
+  return { work, mode, runId, label, spool, output, port, app };
+}
+
+/** Writes one throwaway Playwright config that wraps the apps/web e2e workspace. */
+function config(values) {
+  const { work, mode, runId, label, spool, output, port, app } = configInputs(values);
   const identity = join(work, 'identity.json');
   const testDir = mode === 'green' ? join(app, 'e2e') : join(work, 'red');
   const testMatch = mode === 'green' ? 'smoke.spec.ts' : 'pilot0-forced-failure.spec.ts';
@@ -282,7 +318,12 @@ async function decision(values) {
   if (!exchange.ok) {
     fail(`the dev token exchange answered HTTP ${exchange.status}`);
   }
-  const minted = await exchange.json();
+  let minted;
+  try {
+    minted = await exchange.json();
+  } catch {
+    fail('the dev token exchange answered malformed JSON');
+  }
   if (typeof minted.token !== 'string' || minted.token.length === 0) {
     fail('the dev token exchange answered no token');
   }
@@ -293,7 +334,12 @@ async function decision(values) {
   if (!response.ok) {
     fail(`GET /v1/runs/${run}/decision answered HTTP ${response.status}`);
   }
-  const body = await response.json();
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    fail(`GET /v1/runs/${run}/decision answered malformed JSON`);
+  }
   const pick = (name) => (name in body ? body[name] : null);
   process.stdout.write(
     `${JSON.stringify({
@@ -321,6 +367,9 @@ function parse(values) {
     } catch {
       fail(`stdin was not one JSON value (looking for ${name})`);
     }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      fail('stdin was not one JSON object');
+    }
     const value = parsed[name];
     if (value === undefined || value === null) {
       return;
@@ -339,16 +388,29 @@ function rekey(values) {
   let changed = 0;
   for (const name of readdirSync(dir).filter((file) => file.endsWith('.jsonl'))) {
     const path = join(dir, name);
-    const lines = readFileSync(path, 'utf8').split('\n');
-    const out = lines.map((line) => {
-      if (line === '') return line;
-      const envelope = JSON.parse(line);
-      if (envelope.execution_key !== placeholder) return line;
+    const original = readFileSync(path, 'utf8');
+    const out = [];
+    for (const [index, line] of original.split(/\r?\n/).entries()) {
+      if (line.trim() === '') continue;
+      let envelope;
+      try {
+        envelope = JSON.parse(line);
+      } catch {
+        fail(`spool line ${index + 1} of ${name} is not JSON`);
+      }
+      if (typeof envelope !== 'object' || envelope === null) {
+        fail(`spool line ${index + 1} of ${name} is not a JSON object`);
+      }
+      if (envelope.execution_key !== placeholder) {
+        out.push(line);
+        continue;
+      }
       envelope.execution_key = key;
       changed += 1;
-      return JSON.stringify(envelope);
-    });
-    writeFileSync(path, out.join('\n'), { mode: 0o600 });
+      out.push(JSON.stringify(envelope));
+    }
+    const body = out.length === 0 ? '' : `${out.join('\n')}${original.endsWith('\n') ? '\n' : ''}`;
+    writeAtomically(path, body);
   }
   process.stdout.write(`${changed}\n`);
 }
@@ -374,8 +436,8 @@ try {
     fail(`unknown command ${String(command)}`);
   }
 } catch (error) {
-  if (error instanceof Error && typeof error.message === 'string') {
-    fail(error.message);
-  }
-  fail('unexpected failure');
+  // A parser message can quote the input, so only the stable error code is ever echoed.
+  const code =
+    error && typeof error === 'object' && typeof error.code === 'string' ? error.code : '';
+  fail(code.length === 0 ? 'unexpected failure' : `unexpected failure (${code})`);
 }

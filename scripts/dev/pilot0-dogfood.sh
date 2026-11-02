@@ -10,11 +10,11 @@
 # cache rules. The decision is never computed here: it is read from
 # GET /v1/runs/{r}/decision, and `evidgate gate` supplies the exit code.
 #
-# Known live gap this run will expose (not worked around here): the reporter emits its
-# run.log capability/run_begin markers with PLACEHOLDER_EXECUTION_KEY
-# (packages/adapter-playwright/src/reporter.ts emitBeginMarkers), and ingest rejects any
-# envelope whose key is not a planned execution (IngestEventBatch, unknown_execution_key),
-# so `events send` fails until the adapter or the server gives run-level events their key.
+# The reporter stamps its run-level capability/run_begin markers with an all-zero placeholder
+# execution key (packages/adapter-playwright/src/reporter.ts), and ingest accepts only planned
+# execution keys (IngestEventBatch, unknown_execution_key), so the script rewrites that key in
+# the spool before `events send`; a rewrite of zero lines fails the run instead of sending
+# envelopes the server would answer 422.
 #
 # usage: scripts/dev/pilot0-dogfood.sh
 #
@@ -25,11 +25,15 @@
 #   PILOT0_CASE_REVISION_ID          case_revision_id of the seeded sample case
 #   PILOT0_ENVIRONMENT_REVISION_ID   environment_revision_id of the seeded dev environment
 #   PILOT0_CASE_ID                   catalog case id (test_case.id) of the seeded sample
-#                                    case; seed-dev prints only the revision ids, so read
-#                                    it once from the project's case list
+#                                    case; seed-dev prints only the revision ids, and the
+#                                    case list needs a login, so read it once from the dev
+#                                    database:
+#                                    docker exec evidgate-dev-postgres psql -U postgres \
+#                                      -d evidgate -At -c "select id from test_case limit 1"
 # Optional: EVIDGATE_API_URL (default http://127.0.0.1:8080), EVIDGATE_PROJECT (default
 # the seeded dev project), PILOT0_TARGET_ENV (default local), PILOT0_GATE_WAIT (90s),
-# PILOT0_GATE_WAIT_C (20s).
+# PILOT0_GATE_WAIT_C (20s, independent of PILOT0_GATE_WAIT: run C only has to observe the
+# still-pending answer, not wait out a deadline).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -72,7 +76,7 @@ API_URL="${API_URL%/}"
 PROJECT="${EVIDGATE_PROJECT:-$SEEDED_PROJECT}"
 TARGET_ENV="${PILOT0_TARGET_ENV:-local}"
 GATE_WAIT="${PILOT0_GATE_WAIT:-90s}"
-GATE_WAIT_C="${PILOT0_GATE_WAIT_C:-${PILOT0_GATE_WAIT:-20s}}"
+GATE_WAIT_C="${PILOT0_GATE_WAIT_C:-20s}"
 DEV_TOKEN="${EVIDGATE_DEV_TOKEN:-}"
 SUITE_REVISION="${PILOT0_SUITE_REVISION_ID:-}"
 CASE_REVISION="${PILOT0_CASE_REVISION_ID:-}"
@@ -216,7 +220,7 @@ run_once() {
   local spool="$WORK/spool-$label"
   local output="$WORK/results-$label"
   local port=$((40000 + RANDOM % 20000))
-  local run_id config gate_exit play_exit decision_json
+  local run_id config gate_exit play_exit decision_json rekeyed
   # A, B and C upload the same manifests, so the CLI's derived run key would be identical
   # and the server would replay A's stored 201 for B (contracts/cli.md §9: the
   # Idempotency-Key is the arbiter). One invocation id plus the label keeps every run,
@@ -246,7 +250,14 @@ run_once() {
   fi
 
   info "run $label: sending the spool and finalizing shard $shard"
-  "$NODE" "$HELPER" rekey --dir "$spool/$run_id/shard-1" --key "$EXECUTION_KEY" >/dev/null
+  # Without a rewritten key ingest answers 422 unknown_execution_key, so a zero count means
+  # the placeholder markers moved (or the spool is empty) and the run would fail later anyway.
+  rekeyed="$("$NODE" "$HELPER" rekey --dir "$spool/$run_id/shard-1" --key "$EXECUTION_KEY")" \
+    || die "run $label: the spool rekey failed"
+  case "$rekeyed" in
+    '' | 0) die "run $label: the spool rekey rewrote no line; the reporter's placeholder execution key was not found" ;;
+    *[!0-9]*) die "run $label: the spool rekey printed a non-numeric count" ;;
+  esac
   spooled "$spool" events send --run "$run_id" --producer shard-1 --json >/dev/null
   spooled "$spool" runs finalize --run "$run_id" --producer shard-1 --shard "$shard" \
     --manifest-hash "$manifest_hash" --json >/dev/null
@@ -277,6 +288,8 @@ run_once() {
       "" | INCONCLUSIVE) ;;
       *) ok=0 ;;
     esac
+    # Run C is still collecting, so the promised answer is the pending status, not a decision.
+    [ "$status" = "pending" ] || ok=0
   else
     [ "$decision" = "$expected_decision" ] || ok=0
   fi

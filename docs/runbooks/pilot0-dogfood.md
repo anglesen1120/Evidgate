@@ -12,16 +12,41 @@ through `evidgate gate --json`.
 
 - Docker (colima or Docker Desktop), .NET 10 SDK, Node 26, `curl`.
 - Free ports for PostgreSQL, SeaweedFS, the Api, the Worker and the web dev server
-  (`.env.dev.template`). `scripts/dev/lib.sh` uses fixed container names
-  (`evidgate-dev-postgres`, `evidgate-dev-seaweedfs`): if a stack of the same name already runs,
-  stop it first and restore it afterwards. Never delete its volumes.
+  (`.env.dev.template`). `scripts/dev/lib.sh` fixes the container names
+  (`evidgate-dev-postgres`, `evidgate-dev-seaweedfs`) and `infra/compose.dev.yml` fixes the
+  compose project `evidgate-dev`, so a second stack cannot run beside the first (§2).
 - A fresh `npm ci` and a built Release solution in the checkout.
 
 ## 2. Bring the stack up
 
+`up.sh --reset` runs `docker compose down -v` on the compose project (default `evidgate-dev`)
+and deletes the `pg-data`/`s3-data` volumes, so use it only on a throwaway stack. Where a dev
+stack you care about lives, run `scripts/dev/down.sh` instead (it keeps the volumes).
+
+With an existing dev stack, stop it (`scripts/dev/down.sh`), then run the dogfood under its own
+compose project so the two keep separate volumes:
+
 ```sh
-scripts/dev/up.sh --reset --with-token
+COMPOSE_PROJECT_NAME=evidgate-pilot0 scripts/dev/up.sh --with-token
 ```
+
+The container names `evidgate-dev-postgres` and `evidgate-dev-seaweedfs` are fixed in
+`infra/compose.dev.yml` and ignore the project name, so the other stack's containers must be
+stopped (renamed aside) first. DB port 5432 may be taken by a host Postgres: set
+`EVIDGATE_DB_PORT` and the `Port=` values of the connection strings in `.env.dev` (e.g. 5433),
+as `docs/dev-setup.md` explains. Stop this stack the way it was started:
+`COMPOSE_PROJECT_NAME=evidgate-pilot0 scripts/dev/down.sh`.
+
+Before the first `--with-token`, `.env.dev` needs two values that `.env.dev.template` does not
+ship:
+
+```sh
+EVIDGATE__CI__PEPPER=$(openssl rand -base64 32)
+EVIDGATE__CI__SIGNINGKEY=$(openssl rand -base64 48)
+```
+
+Without the signing key `/v1/ci/token` answers 503 `CI authentication is not configured`, and
+the script fails at manifest upload. Never print either value.
 
 Copy from the output, once (the token is shown only once and is stored nowhere):
 
@@ -29,10 +54,23 @@ Copy from the output, once (the token is shown only once and is stored nowhere):
 | ------------------------------------------------------------------- | ----------------------------------------------------- |
 | `EVIDGATE_DEV_TOKEN=…`                                              | `EVIDGATE_DEV_TOKEN`                                  |
 | `seed-dev: manifest inputs suite_revision_id=… case_revision_id=…`  | `PILOT0_SUITE_REVISION_ID`, `PILOT0_CASE_REVISION_ID` |
-| the seeded environment revision (see `docs/dev-setup.md`)           | `PILOT0_ENVIRONMENT_REVISION_ID`                      |
-| the case id of the seeded sample case (the project's case list)     | `PILOT0_CASE_ID`                                      |
+| `seed-dev: manifest inputs environment_revision_id=… environment_key=dev` | `PILOT0_ENVIRONMENT_REVISION_ID`                 |
+| the case id of the seeded sample case (see below)                   | `PILOT0_CASE_ID`                                      |
 
-A rerun without `--reset` prints no token when a live one exists; reset to mint a new one.
+`PILOT0_CASE_ID` cannot be read from a list: the dev user has no login, and the dev token
+cannot read the catalog. Read the one seeded case from the throwaway dev database directly:
+
+```sh
+docker exec evidgate-dev-postgres psql -U postgres -d evidgate -At -c \
+  "select id from test_case limit 1"
+```
+
+The container's superuser is fine here: it is the local throwaway dev database, with no
+customer data.
+
+A rerun without `--reset` prints no token when a live `dev-seed` token already exists; its
+secret was shown once and cannot be shown again. `up.sh` suggests `--reset` to mint another,
+which deletes the volumes, so do that on a throwaway stack only.
 
 ## 3. Run
 
@@ -67,13 +105,18 @@ missing`. Exit 0 only when the three gate exits are 0, 1 and 2.
 
 ## 5. Observed result
 
-Live run on 2026-11-02 against `develop` after #390 (decision route), dev stack from `scripts/dev/up.sh --reset --with-token`, local Playwright chromium, dev token with scopes `artifact:write`, `decision:read`, `event:write`, `run:create`. Run ids are shortened to the first 13 characters.
+Live run on 2026-11-02 against `develop` after #390 (decision route), throwaway dev stack from `scripts/dev/up.sh --reset --with-token`, local Playwright chromium, dev token with scopes `artifact:write`, `decision:read`, `event:write`, `run:create`. Run ids are shortened to the first 13 characters.
 
 | Run | run id     | what ran                                                    | gate exit | status    | decision | completeness | outcome      | missing |
 | --- | ---------- | ----------------------------------------------------------- | --------- | --------- | -------- | ------------ | ------------ | ------- |
 | A   | `01a199a1-0361` | apps/web `smoke.spec.ts` through the reporter and the CLI   | 0         | evaluated | PASS     | complete     | all_passed   | `[]`    |
 | B   | `01a199a1-17e9` | one throwaway forced-failure spec (never committed)         | 1         | evaluated | FAIL     | complete     | has_failures | `[]`    |
 | C   | `01a199a1-2970` | two-shard manifest, only shard 1 finalized                  | 2         | pending   | none     | none         | none         | none    |
+
+Only the apps/web `smoke.spec.ts` (the vi boot test) runs through the reporter: the seeded
+catalog holds exactly one case, so a planned execution exists for exactly one test. The other
+apps/web specs (csp, shell, telemetry, static-server) have no planned execution and their
+results would be refused.
 
 Run C is not INCONCLUSIVE: the run is still collecting, so the gate reports `still pending after 20s` and exits 2, the contract's code for INCONCLUSIVE or pending (`contracts/cli.md` §2). The INCONCLUSIVE path (a deadline that closes the run with a missing shard) was not exercised live.
 
@@ -93,15 +136,16 @@ GET http://127.0.0.1:8080/v1/runs/{run_id}           -> 401
 GET http://127.0.0.1:8080/v1/runs/{run_id}/decision  -> 401 (no credential; with the dev token it is 200, which is how the gate reads it)
 ```
 
-No screenshots are committed. A Development-only dev login is an owner option; the planned receiver is the OIDC login (02.4.1).
+No screenshots are committed. A Development-only dev login is an owner option; the planned
+receiver is the federated login (02.3.1; 02.4.1 is the CI OIDC exchange).
 
 ## 7. Troubleshooting
 
 | Symptom                                                       | Cause and action                                                                                                  |
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `missing required environment: …`                             | One of the five variables of §3 is unset. The script names each.                                                  |
-| `dev_token_refused`                                           | `EVIDGATE_ENV` is not `dev` or the API URL is not loopback (`contracts/cli.md` §4).                               |
-| `events send` exits 3 `unknown_execution_key`                 | A run-level event carries the adapter's placeholder key; only planned execution keys are accepted.                |
-| `evidgate gate` exits 3 with 403                              | The CI token lacks `decision:read`; the role gains it with the decision route.                                    |
-| Port already in use / container name conflict                 | See §1: another stack holds the port or the fixed container name.                                                 |
+| `dev_token_refused`                                           | `EVIDGATE_API_URL` is not loopback; the script forces `EVIDGATE_ENV=dev` on every CLI call (`contracts/cli.md` §4). |
+| `events send` exits 3 `unknown_execution_key`                 | The script rewrites the reporter's placeholder key before `events send`; after that rewrite the error means the planned key formula drifted from `src/Modules/Evidgate.Modules.Orchestrator/Domain/ExecutionKey.cs`. |
+| `evidgate gate` exits 3 with 403                              | The minted CI token lacks `decision:read`. `ci_producer` holds it since the decision route landed, so check the token's scopes at the `/v1/ci/token` exchange rather than waiting for a later grant. |
+| Port already in use / container name conflict                 | See §2: another stack holds the port or one of the fixed container names.                                         |
 | Run C exits 3 instead of 2                                    | The decision request failed rather than answered `pending`; read the stderr `error.code`.                         |
