@@ -366,6 +366,9 @@ services:
     pull_policy: never
     ports:
       - '127.0.0.1:${EVIDGATE_REVIEW_LOCAL_PORT:-8088}:8080'
+    # Docker cannot NAT a published port through an internal network, so the two
+    # loopback-published services also join `loopback` (smoke and debug only).
+    networks: [net, loopback]
     <<: *review-web
 
   api-debug:
@@ -391,7 +394,7 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_healthy
-    networks: [net]
+    networks: [net, loopback]
 
   # Waits for readiness through the container network, so no host client is needed:
   #   docker compose ... run --rm --no-deps probe
@@ -464,6 +467,10 @@ networks:
   # Egress exists for cloudflared only.
   egress:
     name: evidgate-review-egress
+  # Not internal, because a loopback publish needs NAT; only the local and debug
+  # profiles use it, and the tunnel profile never starts either service.
+  loopback:
+    name: evidgate-review-loopback
 
 volumes:
   # Data survives `down`; down.sh --purge deletes both explicitly.
