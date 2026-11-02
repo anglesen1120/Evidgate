@@ -220,7 +220,7 @@ class StageSelection(unittest.TestCase):
 
     def test_review_infra_adds_its_checks_to_the_docs_tier_and_drops_the_build_stages(self):
         stages = gate_scope.stages_for("review-infra")
-        for name in gate_scope.stages_for("docs") + ["check-review-infra", "eslint", "image-pins", "licence-scan"]:
+        for name in gate_scope.stages_for("docs") + ["check-review-infra", "eslint", "image-pins"]:
             self.assertIn(name, stages)
         for name in ("restore", "build", "format", "test", "isolation", "images", "tsc-build", "tsc-spec", "vitest"):
             self.assertNotIn(name, stages)

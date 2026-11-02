@@ -106,8 +106,9 @@ REVIEW_PREFIXES = ("infra/review/", "scripts/review/")
 # has nothing for it to check, and its run starts the review stack's test suites.
 REVIEW_ONLY_STAGES = frozenset({"check-review-infra"})
 # `eslint` lints the generator's .mjs files under infra/review; `tsc` and `vitest`
-# have no input in these trees (a .ts file added there needs a wider tier).
-REVIEW_INFRA_EXTRA_STAGES = frozenset({"prettier", "eslint", "image-pins", "licence-scan"})
+# have no input in these trees (a .ts file added there needs a wider tier);
+# `licence-scan` needs a prior `dotnet restore` and no package manifest is here.
+REVIEW_INFRA_EXTRA_STAGES = frozenset({"prettier", "eslint", "image-pins"})
 
 DOC_PREFIXES = ("docs/", "plans/")
 # `fixtures/web-api` is deliberately absent: the fixture loader walks every
