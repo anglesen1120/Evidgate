@@ -28,6 +28,38 @@ review_require() {
     review_die "$2: '$1' is required on this host (it runs here, not in a container); install it and re-run"
 }
 
+# Splits the `services:` map of REVIEW_COMPOSE into one file per service under
+# WORK, plus WORK/.names in file order. Pure text: the checks that read this
+# never need docker, and a merge key inherited from an anchor can be read from
+# the service that carries it. `services:` ends at the next top-level key.
+review_split_services() { # WORK
+  local dir="$1"
+  : >"$dir/.names"
+  awk -v dir="$dir" '
+    function flush() {
+      if (name == "") return
+      f = dir "/" name
+      for (i = 1; i <= n; i++) print body[i] > f
+      close(f)
+      n = 0
+    }
+    /^services:[[:space:]]*$/ { inv = 1; next }
+    inv && /^[a-z]/ { flush(); inv = 0; name = ""; next }
+    inv && /^  [a-z0-9-]+:[[:space:]]*$/ {
+      flush()
+      name = $0
+      sub(/^  /, "", name)
+      sub(/:[[:space:]]*$/, "", name)
+      print name >> (dir "/.names")
+      close(dir "/.names")
+      body[++n] = $0
+      next
+    }
+    inv && name != "" { body[++n] = $0 }
+    END { flush() }
+  ' "$REVIEW_COMPOSE"
+}
+
 # Writes the template with every __NAME__ placeholder replaced by SENTINEL-NAME.
 # One sentinel per key, so a leak names the key it came from. Empty values (the
 # tunnel token, the public origin) stay empty: they are optional by design.

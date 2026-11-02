@@ -296,7 +296,7 @@ tunnel with HTTP Basic Auth on every path — with nginx serving the bundle same
 the credential before any proxying and forwarding `/v1/` to `api:8080`.
 
 The reference host is a 4 GB ARM EC2 instance that runs the stack but does not build it:
-`scripts/review/deploy.sh --build-local` builds the four images here for the host's platform and
+`scripts/review/deploy.sh --build-local` builds the five images here for the host's platform (migrator, api, worker, web, seed; the three `*-base` images stay local) and
 ships them with `docker save | docker load`. Every service carries a `mem_limit`/
 `mem_reservation` sized for that host. Host requirements, both ingress modes, upgrades, rollback and
 the verification checklist are in [`docs/runbooks/review-deploy.md`](../docs/runbooks/review-deploy.md).

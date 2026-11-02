@@ -20,7 +20,30 @@ for svc in migrator api worker web seed; do
 done
 fx_assert_log_has "$DOCKER_LOG" "save evidgate-review-migrator:$tag" "the images are saved on this machine"
 fx_assert_log_has "$DOCKER_LOG" " evidgate-review-seed:$tag" "the seed image is shipped too"
-fx_assert_log_has "$DOCKER_LOG" "--build-arg BASE=evidgate-review-migrator:$tag" "the seed image is built on the migrator image"
+# The api, worker and seed images are their infra/docker image plus contracts/,
+# which the runtime resolves above the binary; the bases they derive from are
+# build scaffolding and must never be shipped.
+for svc in migrator api worker; do
+  fx_assert_log_has "$DOCKER_LOG" "-t evidgate-review-$svc-base:$tag" "the $svc base image is built first"
+done
+fx_assert_log_has "$DOCKER_LOG" "-t evidgate-review-migrator:$tag -f infra/docker/Dockerfile.migrator" \
+  "the migrator tag comes from the same build as its base"
+for pair in api:api worker:worker seed:migrator; do
+  svc="${pair%%:*}"
+  base="${pair##*:}"
+  fx_assert_log_has "$DOCKER_LOG" "-f infra/review/Dockerfile.contracts" "$svc is built from the contracts image"
+  fx_assert_log_has "$DOCKER_LOG" "--build-arg BASE=evidgate-review-$base-base:$tag" "$svc derives from the $base base"
+done
+for pair in api:api worker:worker seed:migrator; do
+  svc="${pair%%:*}"
+  base="${pair##*:}"
+  base_line="$(grep -nF -- "-t evidgate-review-$base-base:$tag" "$DOCKER_LOG" | head -1 | cut -d: -f1 || true)"
+  derived_line="$(grep -nF -- "--build-arg BASE=evidgate-review-$base-base:$tag" "$DOCKER_LOG" | head -1 | cut -d: -f1 || true)"
+  [ -n "$base_line" ] && [ -n "$derived_line" ] || fx_fail "the $svc build order is not recorded"
+  [ "$base_line" -lt "$derived_line" ] || fx_fail "$svc was built before its base image"
+done
+fx_assert_log_lacks "$DOCKER_LOG" "save evidgate-review-api-base" "the build-only bases are not shipped"
+fx_assert_log_lacks "$SSH_LOG" "-base:$tag" "no build-only base reaches the host"
 fx_assert_log_has "$SSH_LOG" "docker load" "the images are loaded on the host"
 fx_assert_log_has "$DOCKER_LOG" "EVIDGATE_REVIEW_TAG=$tag" "compose resolves the shipped tag"
 # The gate asks compose for the web image, and the env file still holds the first

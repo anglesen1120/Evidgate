@@ -41,8 +41,10 @@ if offenders:
     sys.exit('the tunnel profile publishes host port(s):\n  ' + '\n  '.join(offenders))
 PY
 
-review_step 'rendering the local and debug profiles'
-review_render "$work/env.sentinel" "$work/local.json" --profile local --profile debug
+review_step 'rendering the local and debug profiles (plus the build-only images)'
+# `images` is not a runtime profile: it is rendered here so the build-only base
+# services are covered by this check too, and a port added to one of them fails.
+review_render "$work/env.sentinel" "$work/local.json" --profile local --profile debug --profile images
 python3 - "$work/local.json" <<'PY'
 import json
 import sys

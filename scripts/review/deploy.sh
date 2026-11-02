@@ -25,7 +25,7 @@
 #                         the value lives in .env.review, which is never rewritten.
 #   --build-local         build the images on this machine for the host's platform
 #                         and ship them with docker save, for a host too small to
-#                         build three images itself.
+#                         build the images itself.
 #   --setup-swap          add a 2 GiB swap file to the host when it has under 1 GiB.
 #   --no-dogfood          skip the Pilot-0 dogfood run against the deployed API.
 #   --dry-run             print the plan and run only the read-only preflight.
@@ -193,15 +193,15 @@ print_plan() {
     "$RV_REPO_ROOT" "$RV_RELEASE_SHA" "$(rv_target)" "$RV_RELEASE_DIR"
   printf '  5  images     cd %s && bash infra/review/check.sh --static-only\n' "$RV_RELEASE_DIR"
   if [ "$RV_BUILD_LOCAL" = 1 ]; then
-    printf '                 docker buildx build --platform linux/%s --load -t evidgate-review-<svc>:%s (from a git archive of the sha)\n' \
+    printf '                 docker buildx build --platform linux/%s --load -t evidgate-review-<svc>:%s, bases before derived (from a git archive of the sha)\n' \
       "$RV_HOST_ARCH" "$RV_IMAGE_TAG"
     printf '                 docker save %s | gzip | %s: gunzip | docker load\n' \
       "$(for svc in migrator api worker web seed; do printf 'evidgate-review-%s:%s ' "$svc" "$RV_IMAGE_TAG"; done)" "$(rv_target)"
   else
-    # Two calls, in this order: the seed image is the migrator image plus
-    # contracts/schemas, so it cannot be built before its base exists.
-    printf '                 %s\n' "$(rv_compose_argv build migrator api worker web)"
-    printf '                 %s\n' "$(rv_compose_argv build seed)"
+    # Two passes, in this order: api, worker and seed are an infra/docker image
+    # plus contracts/, so those bases (build-only, `images` profile) come first.
+    printf '                 %s\n' "$(rv_compose_argv "${RV_BUILD_BASES_ARGS[@]}")"
+    printf '                 %s\n' "$(rv_compose_argv "${RV_BUILD_DERIVED_ARGS[@]}")"
   fi
   printf '                 cd %s && bash infra/review/check-web-image.sh --env-file %s\n' \
     "$RV_RELEASE_DIR" "$RV_ENV_FILE"
@@ -379,10 +379,8 @@ main() {
     rv_build_local_images
     rv_ship_images
   else
-    # Two calls, in this order: the seed image derives from the migrator image,
-    # and compose does not order one service's build after another's.
-    rv_compose build migrator api worker web
-    rv_compose build seed
+    # Bases before the images derived from them; see rv_build_host_images.
+    rv_build_host_images
   fi
   # The gate resolves the web image from compose, and the shell value wins over
   # the one stored at first deploy: without this it would inspect the previous

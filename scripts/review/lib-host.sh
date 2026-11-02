@@ -9,12 +9,51 @@
 
 RV_MIN_SWAP_KB=$((1024 * 1024))
 # web-local and api-debug reuse the web and api images, so these five tags cover
-# every image compose needs; saving more than that only costs transfer time. The
-# seed image must follow the migrator: it derives from it.
+# every image compose runs; saving more than that only costs transfer time. The
+# three `*-base` images are build scaffolding and stay on whichever machine built
+# them: the host never builds, so it never needs them.
 RV_BUILT_SERVICES="migrator api worker web seed"
+
+# Build order, and the reason it is an order: compose cannot sequence one
+# service's build after another's, so a base is built first and the image derived
+# from it second. migrator-base carries the migrator tag too (one Dockerfile, one
+# cache, two names) because the seed derives from the base while the stack runs
+# the plain tag.
+RV_BUILD_ORDER="migrator-base api-base worker-base api worker seed web"
+RV_BUILD_BASES_ARGS=(--profile images build migrator-base migrator api-base worker-base)
+RV_BUILD_DERIVED_ARGS=(build api worker seed web)
+
+# The Dockerfile a build name is made from, and the build-only base it derives
+# from (empty for a base itself, for the migrator and for web).
+rv_build_dockerfile() { # NAME
+  case "$1" in
+    web) printf 'infra/review/Dockerfile.web' ;;
+    api | worker | seed) printf 'infra/review/Dockerfile.contracts' ;;
+    *-base) printf 'infra/docker/Dockerfile.%s' "${1%-base}" ;;
+    *) printf 'infra/docker/Dockerfile.%s' "$1" ;;
+  esac
+}
+
+rv_build_base_arg() { # NAME
+  case "$1" in
+    api) printf 'evidgate-review-api-base' ;;
+    worker) printf 'evidgate-review-worker-base' ;;
+    seed) printf 'evidgate-review-migrator-base' ;;
+    *) printf '' ;;
+  esac
+}
 
 # The platform comes from the host, not from this machine: a laptop on arm64
 # can deploy to an amd64 VM. rv_preflight sets RV_HOST_ARCH from the same answer.
+
+# The host build, in the only order that works: the build-only bases first (the
+# `images` profile, so `up` can never start one), then the images derived from
+# them. The migrator is in the first pass with its base: same Dockerfile, and
+# BuildKit serves the second tag from cache.
+rv_build_host_images() {
+  rv_compose "${RV_BUILD_BASES_ARGS[@]}"
+  rv_compose "${RV_BUILD_DERIVED_ARGS[@]}"
+}
 
 rv_report_memory() {
   local mem_kb swap_kb
@@ -80,24 +119,25 @@ rv_build_local_images() {
   ( cd "$tmp" && bash infra/review/check.sh --static-only ) \
     || rv_die "--static-only failed on the extracted $RV_RELEASE_SHA; nothing was built"
 
-  for svc in $RV_BUILT_SERVICES; do
-    case "$svc" in
-      web) dockerfile="infra/review/Dockerfile.web" ;;
-      seed) dockerfile="infra/review/Dockerfile.seed" ;;
-      *) dockerfile="infra/docker/Dockerfile.$svc" ;;
-    esac
-    # The seed image is the migrator image plus contracts/schemas, so it takes the
-    # migrator tag built just before it in this loop.
+  # Bases first, then the images derived from them, in the same order the host
+  # would build them.
+  for svc in $RV_BUILD_ORDER; do
+    dockerfile="$(rv_build_dockerfile "$svc")"
+    base="$(rv_build_base_arg "$svc")"
+    tags="-t evidgate-review-$svc:$RV_IMAGE_TAG"
     base_arg=""
-    [ "$svc" != seed ] || base_arg="--build-arg BASE=evidgate-review-migrator:$RV_IMAGE_TAG"
-    # Unquoted $base_arg: this is a plain docker build, and the value is one
-    # argument this script controls.
+    [ -z "$base" ] || base_arg="--build-arg BASE=$base:$RV_IMAGE_TAG"
+    # The migrator's build-only base is the migrator image: tag both from one
+    # build instead of compiling the same Dockerfile twice.
+    [ "$svc" != migrator-base ] || tags="$tags -t evidgate-review-migrator:$RV_IMAGE_TAG"
+    # Unquoted $base_arg and $tags: this is a plain docker build, and both values
+    # are arguments this script controls.
     # shellcheck disable=SC2086
     if ! ( cd "$tmp" && docker buildx build \
       --platform "linux/$RV_HOST_ARCH" --load \
       --build-arg "EVIDGATE_REVIEW_PUBLIC_ORIGIN=$RV_PUBLIC_ORIGIN" \
-      $base_arg \
-      -f "$dockerfile" -t "evidgate-review-$svc:$RV_IMAGE_TAG" . ); then
+      $base_arg $tags \
+      -f "$dockerfile" . ); then
       failed=1
       rv_warn "building evidgate-review-$svc failed"
     fi

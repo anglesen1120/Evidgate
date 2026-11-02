@@ -7,17 +7,21 @@
 # thing that can bring the stack back unasked.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-COMPOSE="$SCRIPT_DIR/compose.review.yml"
+# shellcheck source=infra/review/lib-check.sh
+. "$(cd "$(dirname "$0")" && pwd)/lib-check.sh"
+COMPOSE="$REVIEW_COMPOSE"
 
 [ -r "$COMPOSE" ] || {
   echo "check-restart-policy.sh: cannot read $COMPOSE" >&2
   exit 1
 }
 
-# Services that must survive a boot, and the jobs that must not be restarted.
+# Services that must survive a boot, the jobs that must not be restarted, and the
+# build-only images that are never started at all (`images` profile): a restart
+# policy on one of those would only ever be a mistake.
 LONG_RUNNING="postgres seaweedfs api api-debug worker web web-local cloudflared cloudflared-quick"
 ONE_SHOT="db-init migrator seed bucket-init probe"
+BUILD_ONLY="migrator-base api-base worker-base"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -29,32 +33,7 @@ note() {
 
 printf '== restart policy per service\n'
 
-# One file per service, so a merge key inherited from an anchor can be read from
-# the service that carries it. `services:` ends at the next top-level key.
-: >"$work/.names"
-awk -v dir="$work" '
-  function flush() {
-    if (name == "") return
-    f = dir "/" name
-    for (i = 1; i <= n; i++) print body[i] > f
-    close(f)
-    n = 0
-  }
-  /^services:[[:space:]]*$/ { inv = 1; next }
-  inv && /^[a-z]/ { flush(); inv = 0; name = ""; next }
-  inv && /^  [a-z0-9-]+:[[:space:]]*$/ {
-    flush()
-    name = $0
-    sub(/^  /, "", name)
-    sub(/:[[:space:]]*$/, "", name)
-    print name >> (dir "/.names")
-    close(dir "/.names")
-    body[++n] = $0
-    next
-  }
-  inv && name != "" { body[++n] = $0 }
-  END { flush() }
-' "$COMPOSE"
+review_split_services "$work"
 
 [ -s "$work/.names" ] || {
   echo "check-restart-policy.sh: no services found in $COMPOSE" >&2
@@ -108,11 +87,21 @@ for svc in $ONE_SHOT; do
     note "'$svc' is a one-shot: it must carry no restart policy (found '$policy')"
 done
 
+for svc in $BUILD_ONLY; do
+  [ -f "$work/$svc" ] || {
+    note "build-only service '$svc' is not in $COMPOSE; update this list"
+    continue
+  }
+  policy="$(policy_of "$svc")"
+  [ "$policy" = none ] ||
+    note "'$svc' is only built, never run: it must carry no restart policy (found '$policy')"
+done
+
 # A service nobody classified would silently keep Compose's default of "no".
 while IFS= read -r svc; do
-  case " $LONG_RUNNING $ONE_SHOT " in
+  case " $LONG_RUNNING $ONE_SHOT $BUILD_ONLY " in
     *" $svc "*) ;;
-    *) note "service '$svc' is neither in the long-running nor in the one-shot list" ;;
+    *) note "service '$svc' is neither in the long-running, the one-shot nor the build-only list" ;;
   esac
 done <"$work/.names"
 

@@ -4,4 +4,4 @@
 *
 !contracts
 !contracts/**
-!infra/review/Dockerfile.seed
+!infra/review/Dockerfile.contracts

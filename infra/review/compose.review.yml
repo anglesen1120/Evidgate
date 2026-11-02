@@ -213,6 +213,17 @@ services:
         condition: service_healthy
     networks: [net]
 
+  # Build-only: the migrator's own image under the tag the seed derives from. One
+  # Dockerfile, one cache, two names: the migrator itself ships as the plain tag,
+  # the seed builds on this one.
+  migrator-base:
+    image: evidgate-review-migrator-base:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+    profiles: ['images']
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.migrator
+    networks: [net]
+
   migrator:
     image: evidgate-review-migrator:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
     container_name: evidgate-review-migrator
@@ -229,20 +240,18 @@ services:
 
   # seed-dev resolves contracts/schemas beside /app/migrations
   # (DevSeedRun.ContractsDirectory), which the migrator image does not ship, so
-  # this image is that image plus the one directory and nothing else. No
-  # depends_on: step 9 runs once the database is up, and `compose run` should not
-  # start the rest of the stack by itself.
+  # this image is that image plus contracts/ and nothing else. No depends_on: step
+  # 9 runs once the database is up, and `compose run` should not start the rest of
+  # the stack by itself.
   seed:
     image: evidgate-review-seed:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
     container_name: evidgate-review-seed
     build:
       context: ../..
-      dockerfile: infra/review/Dockerfile.seed
+      dockerfile: infra/review/Dockerfile.contracts
       args:
-        # The migrator image built or loaded just before this one. compose cannot
-        # order one service's build after another's, so deploy.sh builds the
-        # migrator first and this one second.
-        BASE: evidgate-review-migrator:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+        # The migrator's build-only base, which deploy.sh builds before this image.
+        BASE: evidgate-review-migrator-base:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
     # Built here or shipped with `docker save|load`; never pulled from a registry.
     pull_policy: never
     environment: *review-job-environment
@@ -292,12 +301,30 @@ services:
         condition: service_healthy
     networks: [net]
 
+  # Build-only: exactly what infra/docker/Dockerfile.api produces, under its own
+  # tag. The review image of api is this image plus contracts/, and compose cannot
+  # order one service's build after another's, so the base is a service of its own
+  # that deploy.sh builds first. `images` is not a runtime profile: it never starts
+  # and it is never shipped.
+  api-base:
+    image: evidgate-review-api-base:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+    profiles: ['images']
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    networks: [net]
+
   api:
     image: evidgate-review-api:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
     container_name: evidgate-review-api
     build:
       context: ../..
-      dockerfile: infra/docker/Dockerfile.api
+      # The api image plus contracts/ at /app/contracts: the runtime resolves the
+      # schemas and the adapter directory from there, and answers 500 on a manifest
+      # submission when they are missing.
+      dockerfile: infra/review/Dockerfile.contracts
+      args:
+        BASE: evidgate-review-api-base:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
     pull_policy: never
     restart: unless-stopped
     environment:
@@ -317,12 +344,28 @@ services:
     # No HEALTHCHECK: the chiseled base has no shell and no curl, so `probe` checks it.
     networks: [net]
 
+  # Build-only: exactly what infra/docker/Dockerfile.worker produces, under its own
+  # tag. The review image of worker is this image plus contracts/, and compose cannot
+  # order one service's build after another's, so the base is a service of its own
+  # that deploy.sh builds first. `images` is not a runtime profile: it never starts
+  # and it is never shipped.
+  worker-base:
+    image: evidgate-review-worker-base:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
+    profiles: ['images']
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    networks: [net]
+
   worker:
     image: evidgate-review-worker:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
     container_name: evidgate-review-worker
     build:
       context: ../..
-      dockerfile: infra/docker/Dockerfile.worker
+      # Same derivation as the api: the worker validates manifests too.
+      dockerfile: infra/review/Dockerfile.contracts
+      args:
+        BASE: evidgate-review-worker-base:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
     pull_policy: never
     restart: unless-stopped
     environment:
@@ -377,7 +420,11 @@ services:
     profiles: ['debug']
     build:
       context: ../..
-      dockerfile: infra/docker/Dockerfile.api
+      # Identical to the api image: the debug profile publishes the same binary on
+      # the loopback, it does not change what is in it.
+      dockerfile: infra/review/Dockerfile.contracts
+      args:
+        BASE: evidgate-review-api-base:${EVIDGATE_REVIEW_TAG:?missing from .env.review}
     pull_policy: never
     restart: unless-stopped
     environment:
