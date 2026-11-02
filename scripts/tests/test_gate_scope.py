@@ -155,17 +155,18 @@ class PathClasses(unittest.TestCase):
             ("review-infra", gate_scope.REVIEW_INFRA_REASON),
         )
 
-    def test_review_dockerfiles_and_lookalikes_stay_outside_the_tier(self):
-        for path in (
-            "infra/review/Dockerfile.web",
-            "infra/review/Dockerfile.web.dockerignore",
-            "infra/reviewer/x.sh",
-            "infra/README.md",
-            "scripts/review_blockers/rules.py",
-            "scripts/reviewer.sh",
-        ):
+    def test_review_dockerfiles_and_lookalikes_keep_their_own_tier(self):
+        expected = {
+            "infra/review/Dockerfile.web": "full",
+            "infra/review/Dockerfile.web.dockerignore": "full",
+            "infra/reviewer/x.sh": "full",
+            "infra/README.md": "full",
+            "scripts/review_blockers/rules.py": "full",
+            "scripts/reviewer.sh": "no-dotnet",
+        }
+        for path, tier in expected.items():
             with self.subTest(path=path):
-                self.assertNotEqual(gate_scope.tier_of_path(path)[0], "review-infra")
+                self.assertEqual(gate_scope.tier_of_path(path)[0], tier)
 
     def test_review_plus_web_takes_the_stricter_tier_and_review_plus_source_is_full(self):
         self.assertEqual(gate_scope.tier_of_paths(["infra/review/check.sh", "apps/web/src/a.ts"])[0], "no-dotnet")
@@ -219,9 +220,9 @@ class StageSelection(unittest.TestCase):
 
     def test_review_infra_adds_its_checks_to_the_docs_tier_and_drops_the_build_stages(self):
         stages = gate_scope.stages_for("review-infra")
-        for name in gate_scope.stages_for("docs") + ["check-review-infra", "image-pins", "licence-scan"]:
+        for name in gate_scope.stages_for("docs") + ["check-review-infra", "eslint", "image-pins", "licence-scan"]:
             self.assertIn(name, stages)
-        for name in ("restore", "build", "format", "test", "isolation", "images", "tsc-build", "vitest"):
+        for name in ("restore", "build", "format", "test", "isolation", "images", "tsc-build", "tsc-spec", "vitest"):
             self.assertNotIn(name, stages)
         self.assertEqual(stages, [n for n in gate_scope.CANONICAL_STAGES if n in stages])
 

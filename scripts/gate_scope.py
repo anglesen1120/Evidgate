@@ -105,7 +105,9 @@ REVIEW_PREFIXES = ("infra/review/", "scripts/review/")
 # Run only by a tier that can touch the review deployment: a prose-only change
 # has nothing for it to check, and its run starts the review stack's test suites.
 REVIEW_ONLY_STAGES = frozenset({"check-review-infra"})
-REVIEW_INFRA_EXTRA_STAGES = frozenset({"prettier", "image-pins", "licence-scan"})
+# `eslint` lints the generator's .mjs files under infra/review; `tsc` and `vitest`
+# have no input in these trees (a .ts file added there needs a wider tier).
+REVIEW_INFRA_EXTRA_STAGES = frozenset({"prettier", "eslint", "image-pins", "licence-scan"})
 
 DOC_PREFIXES = ("docs/", "plans/")
 # `fixtures/web-api` is deliberately absent: the fixture loader walks every
