@@ -33,7 +33,7 @@ namespace Tenancy.IntegrationTests;
 /// <para>
 /// The object-store endpoint, bucket and credentials travel through the same in-memory
 /// configuration seam the 06.1.2-T1 tests use (<see cref="SeaweedFsStore.Configuration"/>), pointing
-/// at the class fixture's container; the caller is published by the same test startup filter T1
+/// at this class's bucket on the shared container; the caller is published by the same test startup filter T1
 /// uses, because a service principal's <c>CredentialId</c> cannot be expressed through headers.
 /// </para>
 /// </summary>
