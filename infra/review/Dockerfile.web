@@ -50,7 +50,8 @@ RUN npx tsc -b tsconfig.json && npm run build -w apps/web
 
 # The nginx header snippet is generated from apps/web/scripts/csp.mjs so the
 # policy has one source; see generate-nginx-headers.mjs for the nonce handoff.
-RUN EVIDGATE_REVIEW_PUBLIC_ORIGIN="$EVIDGATE_REVIEW_PUBLIC_ORIGIN" \
+RUN mkdir -p /out \
+ && EVIDGATE_REVIEW_PUBLIC_ORIGIN="$EVIDGATE_REVIEW_PUBLIC_ORIGIN" \
     node infra/review/generate-nginx-headers.mjs --out /out/security-headers.conf
 
 FROM nginxinc/nginx-unprivileged:1.29.8-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6 AS runtime
