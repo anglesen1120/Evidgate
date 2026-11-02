@@ -107,6 +107,8 @@ missing`. Exit 0 only when the three gate exits are 0, 1 and 2.
 
 Live run on 2026-11-02 against `develop` after #390 (decision route), throwaway dev stack from `scripts/dev/up.sh --reset --with-token`, local Playwright chromium, dev token with scopes `artifact:write`, `decision:read`, `event:write`, `run:create`. Run ids are shortened to the first 13 characters.
 
+Landed in #392 (merge a7c6d7c1).
+
 | Run | run id     | what ran                                                    | gate exit | status    | decision | completeness | outcome      | missing |
 | --- | ---------- | ----------------------------------------------------------- | --------- | --------- | -------- | ------------ | ------------ | ------- |
 | A   | `01a199a1-0361` | apps/web `smoke.spec.ts` through the reporter and the CLI   | 0         | evaluated | PASS     | complete     | all_passed   | `[]`    |
