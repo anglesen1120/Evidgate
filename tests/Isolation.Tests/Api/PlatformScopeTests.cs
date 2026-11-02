@@ -53,6 +53,12 @@ public sealed class PlatformScopeTests(ApiIsolationFixture fixture)
             "the one row the presented cookie proves",
     };
 
+    /// <summary>
+    /// Specified but mapped only by a Development host with the dev-login flag, so this Production-shaped host
+    /// does not serve it. It is skipped while unserved; a host that does serve it fails the check below.
+    /// </summary>
+    private static readonly HashSet<ApiRoute> DevOnlyRoutes = [new ApiRoute("POST", "/v1/dev/session")];
+
     /// <summary>AC5: no tenant API reaches a user, user_identity or session row.</summary>
     [Fact]
     public async Task SessionUserIdentity_NotReachableViaV1()
@@ -71,6 +77,11 @@ public sealed class PlatformScopeTests(ApiIsolationFixture fixture)
 
         foreach (var route in served.Concat(spec).Distinct())
         {
+            if (DevOnlyRoutes.Contains(route) && !served.Contains(route))
+            {
+                continue;
+            }
+
             var segments = PlatformSegmentsOf(route);
             if (segments.Count > 0 && !PlatformScopeRoutes.ContainsKey(route))
             {

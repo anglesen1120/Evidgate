@@ -2823,6 +2823,12 @@
       <trans-unit id="runs.decision.updated-announcement" datatype="html"><source>Live decision updated for evidence revision <x id="REVISION" equiv-text="${revision}"/></source></trans-unit>
       <trans-unit id="runs.decision.revision-mismatch" datatype="html"><source>This decision was evaluated at evidence revision <x id="DECISION" equiv-text="${decisionRevision}"/> while the selected evidence revision is <x id="SELECTED" equiv-text="${selectedRevision}"/>.</source></trans-unit>
       <trans-unit id="runs.decision.view-evidence" datatype="html"><source>View decision evidence</source></trans-unit>
+      <trans-unit id="auth.dev.heading" datatype="html"><source>Dev sign-in</source></trans-unit>
+      <trans-unit id="auth.dev.note" datatype="html"><source>Development only. Use the configured dev-login secret instead of a provider account.</source></trans-unit>
+      <trans-unit id="auth.dev.secret" datatype="html"><source>Dev-login secret</source></trans-unit>
+      <trans-unit id="auth.dev.submitting" datatype="html"><source>Signing in and checking your session…</source></trans-unit>
+      <trans-unit id="auth.dev.wrong-secret" datatype="html"><source>The dev-login secret is incorrect. Try again.</source></trans-unit>
+      <trans-unit id="auth.dev.unavailable" datatype="html"><source>Dev sign-in is not enabled. Check the development server configuration.</source></trans-unit>
     </body>
   </file>
 </xliff>

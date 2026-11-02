@@ -6,6 +6,7 @@ using Evidgate.Modules.Identity.Application.Commands;
 using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Contracts;
+using Evidgate.Modules.Identity.DevLogin;
 using Evidgate.Modules.Identity.Infrastructure.Persistence;
 using Evidgate.Modules.Identity.Invites;
 using Evidgate.Modules.Identity.Login;
@@ -57,6 +58,16 @@ internal static class IdentityModule
             .Bind(configuration.GetSection(IdentityOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        // The development-only sign-in. Bound like every other EVIDGATE__* group, but deliberately NOT
+        // required: an unset secret is a legal configuration and simply leaves the route unmapped, which is
+        // what every deployment outside a development host looks like. The secret is resolved through the
+        // provider after the binder, as the session, invite and CI peppers are.
+        services
+            .AddOptions<DevLoginOptions>()
+            .Bind(configuration.GetSection(DevLoginOptions.SectionName));
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IPostConfigureOptions<DevLoginOptions>, DevLoginOptionsSecretPostConfigure>());
 
         // The EF write model of role/role_permission (00 §5.5 C4): the flagged
         // custom-role commands of T2.2 are its only writers in V1.

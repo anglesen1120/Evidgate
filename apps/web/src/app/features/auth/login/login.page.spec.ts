@@ -6,6 +6,7 @@ import { vi, type Mock } from 'vitest';
 
 import { AuthFlow, type LoginProvider, type LoginReason } from '../auth-flow';
 import { LoginPage } from './login.page';
+import { LOGIN_EXTENSION_LOADER } from './login-extension';
 
 describe('LoginPage', () => {
   let fixture: ComponentFixture<LoginPage>;
@@ -44,6 +45,7 @@ describe('LoginPage', () => {
       imports: [LoginPage],
       providers: [
         provideZonelessChangeDetection(),
+        { provide: LOGIN_EXTENSION_LOADER, useValue: () => Promise.resolve(null) },
         { provide: AuthFlow, useValue: flow },
         { provide: Router, useValue: router },
       ],

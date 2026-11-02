@@ -40,6 +40,8 @@ const EXPECTED = [
   // caller could be denied for (the linking routes act only on the caller's own session), which is
   // also why the viewer and ci_producer deny matrices derive them as unpermissioned.
   ['/auth/invite-token', 'post', 'none', 'v1'],
+  // Development-only sign-in of the seeded dev user: pre-tenant, anonymous, guarded by a config secret.
+  ['/dev/session', 'post', 'none', 'v1'],
   ['/auth/link/{provider}', 'post', 'none', 'v1'],
   ['/auth/link/pending', 'get', 'none', 'v1'],
   ['/auth/link/pending', 'delete', 'none', 'v1'],
@@ -272,6 +274,7 @@ const IDEM_EXEMPT = new Set([
   'delete /auth/sessions/{s}',
   'post /auth/sessions/revoke-all',
   'post /auth/logout',
+  'post /dev/session',
 ]);
 for (const { path, method, op } of ops) {
   for (const prm of op.parameters ?? []) {
