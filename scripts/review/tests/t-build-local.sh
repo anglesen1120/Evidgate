@@ -20,7 +20,7 @@ for svc in migrator api worker web; do
 done
 fx_assert_log_has "$DOCKER_LOG" "save evidgate-review-migrator:$tag" "the images are saved on this machine"
 fx_assert_log_has "$SSH_LOG" "docker load" "the images are loaded on the host"
-fx_assert_log_has "$DOCKER_LOG" "EVIDGATE_REVIEW_TAG='$tag'" "compose resolves the shipped tag"
+fx_assert_log_has "$DOCKER_LOG" "EVIDGATE_REVIEW_TAG=$tag" "compose resolves the shipped tag"
 
 # `compose ... build` would mean the host built something, which is the whole
 # thing this flag exists to avoid.

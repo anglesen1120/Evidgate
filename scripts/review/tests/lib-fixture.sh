@@ -87,12 +87,24 @@ fx_write_stubs() {
 
   cat >"$bin/ssh" <<'STUB'
 #!/bin/sh
-# A port forward has to stay in the foreground so the caller can kill it.
-case "$1" in
-  -N) exec sleep 300 ;;
-esac
+# Options come before the host (-N, -T, -o X, -L spec, ...), so they have to be
+# consumed before the command can be found. A port forward stays in the
+# foreground so the caller can kill it.
+forward=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -N) forward=1; shift ;;
+    -L|-R) forward=1; shift 2 ;;
+    -o|-i|-p|-l|-F|-E|-J) shift 2 ;;
+    -*) shift ;;
+    *) break ;;
+  esac
+done
 host="$1"
 shift
+if [ "$forward" = 1 ]; then
+  exec sleep 300
+fi
 if [ "$host" != "review-host" ]; then
   echo "stub ssh: unexpected host '$host'" >&2
   exit 255
@@ -114,7 +126,13 @@ STUB
 
   cat >"$bin/docker" <<'STUB'
 #!/bin/sh
-printf '%s\n' "$*" >>"$DOCKER_LOG"
+# The release tag reaches compose as an environment assignment in the command
+# string, so the log records it the way compose sees it.
+if [ -n "${EVIDGATE_REVIEW_TAG:-}" ]; then
+  printf 'EVIDGATE_REVIEW_TAG=%s %s\n' "$EVIDGATE_REVIEW_TAG" "$*" >>"$DOCKER_LOG"
+else
+  printf '%s\n' "$*" >>"$DOCKER_LOG"
+fi
 case "$*" in
   "compose version --short"*) echo "v2.32.0" ;;
   "compose version"*) echo "Docker Compose version v2.32.0" ;;

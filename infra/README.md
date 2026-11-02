@@ -283,3 +283,31 @@ does not exist yet, so `Dockerfile.worker` carries **no** Node layer: 08.4.1-T3.
 owns that pin and the spawn path, and a layer with no consumer could not be
 verified (nothing to run, nothing to assert). Add `node:26` (digest-pinned) to the
 worker's runtime stage there, next to these pins.
+
+## Pilot-0 review deployment
+
+`infra/review/` holds the one-host review stack: `compose.review.yml` (the project
+`evidgate-review`, every container and volume named `evidgate-review-<service>`),
+`compose.quick.yml`, `env.review.template` and `Dockerfile.web`. It reuses the postgres and
+SeaweedFS pins above by digest and pins its own node, nginx and cloudflared images in place (the
+file it ships is the record), publishes **no host port** in either tunnel profile, and puts the
+`apps/web` bundle behind Cloudflare Tunnel — a named tunnel with Access, or the account-less quick
+tunnel with HTTP Basic Auth on every path — with nginx serving the bundle same-origin, demanding
+the credential before any proxying and forwarding `/v1/` to `api:8080`.
+
+The reference host is a 4 GB ARM EC2 instance that runs the stack but does not build it:
+`scripts/review/deploy.sh --build-local` builds the four images here for the host's platform and
+ships them with `docker save | docker load`. Every service carries a `mem_limit`/
+`mem_reservation` sized for that host. Host requirements, both ingress modes, upgrades, rollback and
+the verification checklist are in [`docs/runbooks/review-deploy.md`](../docs/runbooks/review-deploy.md).
+
+This image is not the production hosting decision: `apps/web` is still the static bundle on
+object storage + CDN that 10.2.1-T1.4 owns. The review image exists so one host can carry
+the whole Pilot-0 build for a reviewer, and it applies the CSP of `apps/web/scripts/csp.mjs` +
+`apps/web/scripts/app-origin-csp.json` with a per-response nonce rather than a second policy.
+
+The operating procedure — host requirements, the Cloudflare setup order (Access application
+before the public route), deploy, rollback, rotation and the verification checklist — is
+[`../docs/runbooks/review-deploy.md`](../docs/runbooks/review-deploy.md). The operator entry
+points are [`../scripts/review/deploy.sh`](../scripts/review/deploy.sh),
+[`status.sh`](../scripts/review/status.sh) and [`down.sh`](../scripts/review/down.sh).
