@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Dev;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -10,14 +9,12 @@ using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Login.Completion;
 using Evidgate.Modules.Identity.Sessions;
 using Evidgate.Modules.Identity.Sessions.Http;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Npgsql;
 
 namespace Evidgate.Modules.Identity.DevLogin;
 
@@ -27,29 +24,21 @@ namespace Evidgate.Modules.Identity.DevLogin;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The route exists only in a development host that asked for it.</b> It is mapped when the host environment
-/// is Development, <c>EVIDGATE__DEVLOGIN__ENABLED</c> is true and <c>EVIDGATE__DEVLOGIN__SECRET</c> is set
-/// (<see cref="DevSessionGate"/>); in every other case the path is not registered at all, so the answer is the
-/// host's ordinary 404 and no anonymous caller can even probe the credential. This is the one route in the
-/// product that mints a session from a shared secret, which is exactly why its absence is the default.
+/// The route exists only when the host environment is Development, <c>EVIDGATE__DEVLOGIN__ENABLED</c> is true
+/// and <c>EVIDGATE__DEVLOGIN__SECRET</c> is set (<see cref="DevSessionGate"/>); otherwise nothing is mapped and
+/// the answer is the host's ordinary 404, never a 401 on a credential that does not exist.
 /// </para>
 /// <para>
-/// <b>One account, never a caller-chosen one.</b> The body carries the secret and nothing else: the session is
-/// created for <see cref="KnownDevUser.UserId"/>, the account <c>seed-dev</c> writes. There is no user id, email
-/// or org input, so the route can never sign a caller in as anyone else, and it writes no identity row.
+/// The body carries the secret and nothing else, so the session always belongs to
+/// <see cref="KnownDevUser.UserId"/> and no identity row is written. Both sides are reduced to SHA-256 digests
+/// and compared with <see cref="System.Security.Cryptography.CryptographicOperations.FixedTimeEquals"/>
+/// (<see cref="DevLoginSecret"/>), so neither the timing nor the branch depends on the presented value; a wrong,
+/// absent or blank secret is the login's 401 <c>token_invalid</c>, with no session row and no cookie.
 /// </para>
 /// <para>
-/// <b>The secret is compared in constant time and never leaves the request.</b> Both sides are reduced to
-/// SHA-256 digests and compared with <see cref="System.Security.Cryptography.CryptographicOperations.FixedTimeEquals"/>
-/// (<see cref="DevLoginSecret"/>), so neither the timing nor the branch depends on the presented value or its
-/// length. A wrong or absent secret is the same 401 <c>token_invalid</c> the login callback answers, no session
-/// row is written and no cookie is set; the value reaches no log line, metric, body or exception message.
-/// </para>
-/// <para>
-/// <b>Audited before the session, and revocable like any other.</b> The <c>auth.login</c> row of every active
-/// org is written before the session row exists (<see cref="CompleteLoginCommandHandler.IssueKnownUserAsync"/>),
-/// so a sign-in that cannot be audited issues nothing; a database or audit-chain fault is 503
-/// <c>unavailable</c>. The session it creates is an ordinary row: the existing logout and revoke routes end it.
+/// Plaintext is refused before the secret is judged: the cookie pair this route must issue is Secure-only, so a
+/// plaintext sign-in can never complete, and answering the outage first keeps the status code independent of
+/// whether the presented secret is right. The session itself is an ordinary row, so logout and revoke end it.
 /// </para>
 /// </remarks>
 internal static class DevSessionEndpoints
@@ -112,18 +101,20 @@ internal static class DevSessionEndpoints
 
     /// <summary>
     /// <c>sign in</c>: a 429 once the client's window is spent, a 413/422 for a body that is not the contract's,
-    /// 401 for a wrong or absent secret, 503 for a fault on the audit or session write, otherwise 204 plus the
-    /// session cookie and the antiforgery pair.
+    /// 503 for a plaintext request or a fault on the audit or session write, 401 for a wrong or absent secret,
+    /// otherwise 204 plus the session cookie and the antiforgery pair.
     /// </summary>
     private static async Task<Result> HandleAsync(
         HttpContext context,
         ExchangeRateLimiter limiter,
         IOptions<DevLoginOptions> options,
+        LoginSessionCompletion completion,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(limiter);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(completion);
 
         context.Response.Headers.CacheControl = NoStore;
 
@@ -160,6 +151,14 @@ internal static class DevSessionEndpoints
             }
         }
 
+        // Refused before the secret is judged, so the status code does not tell a plaintext caller whether its
+        // guess was right. The pair this route must issue is Secure-only, so a plaintext sign-in can never
+        // complete; the honest answer is the same 503 a composition gap gets — never a weaker cookie, never a row.
+        if (!context.Request.IsHttps)
+        {
+            return completion.Failure(LoginErrors.ProviderUnavailable, context);
+        }
+
         // One answer for a wrong secret, an absent member and a blank value: the route is not an oracle for the
         // deployment's secret, and no session row or cookie is written on this path.
         if (!DevLoginSecret.Matches(options.Value.Secret, presented))
@@ -167,37 +166,13 @@ internal static class DevSessionEndpoints
             return Result.Failure(LoginErrors.TokenInvalid);
         }
 
-        // Refused BEFORE anything is written. The pair this route must issue is Secure-only
-        // (`SessionAntiforgeryServiceCollectionExtensions`: CookieSecurePolicy.Always, and a `__Host-` cookie is
-        // Secure by definition), so a plaintext request cannot complete a sign-in at all: minting the pair throws
-        // after the session row is already committed, which would leave a live session no browser can use. The
-        // honest answer is the same 503 a composition gap gets — never a weaker cookie, and never a row.
-        if (!context.Request.IsHttps)
-        {
-            return Result.Failure(LoginErrors.ProviderUnavailable);
-        }
-
-        return await SignInAsync(context, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Issues the seeded dev user's session through the login's own steps and writes the cookie pair from the
-    /// ticket; a database or audit-chain fault is the same 503 the login completion answers.
-    /// </summary>
-    private static async Task<Result> SignInAsync(HttpContext context, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-
         var handler = context.RequestServices.GetRequiredService<CompleteLoginCommandHandler>();
-        var sessionOptions = context.RequestServices.GetRequiredService<IOptions<Evidgate.Modules.Identity.Sessions.SessionOptions>>();
-        var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
-        var clock = context.RequestServices.GetRequiredService<TimeProvider>();
 
-        Result<SessionTicket> issued;
-        try
-        {
-            issued = await handler
-                .IssueKnownUserAsync(
+        // The login's own ordered write — audited before the session row exists — and the cookie pair that
+        // answers it, exactly as the federated completion runs both.
+        var issued = await completion
+            .CompleteAsync<SessionTicket>(
+                token => handler.IssueKnownUserAsync(
                     KnownDevUser.UserId,
                     Provider,
                     context.Connection.RemoteIpAddress?.ToString(),
@@ -205,44 +180,15 @@ internal static class DevSessionEndpoints
                     // The value the browser already holds, handed over as the rotation predecessor: signing in
                     // again replaces that session instead of leaving a second live row behind.
                     context.Request.Cookies[SessionCookieNames.Session],
-                    cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (NpgsqlException)
-        {
-            return Result.Failure(LoginErrors.ProviderUnavailable);
-        }
-        catch (TimeoutException)
-        {
-            return Result.Failure(LoginErrors.ProviderUnavailable);
-        }
-        catch (AuditBusyException)
-        {
-            // The audit chain of the dev user's org held its lock too long: fail closed, so no session exists
-            // for a sign-in nothing recorded.
-            return Result.Failure(LoginErrors.ProviderUnavailable);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            // A database timeout that surfaced as cancellation is an outage, not the caller leaving.
-            return Result.Failure(LoginErrors.ProviderUnavailable);
-        }
+                    token),
+                session => session,
+                context,
+                cancellationToken)
+            .ConfigureAwait(false);
 
-        if (!issued.IsSuccess)
-        {
-            return Result.Failure(issued.Error!);
-        }
-
-        // A fresh row's absolute deadline is exactly `now + AbsoluteLifetime`, so the browser keeps the cookie
-        // until the row's hard deadline and never past it (the login completion's own rule).
-        SessionCookieWriter.Write(
-            context,
-            issued.Value,
-            clock.GetUtcNow() + sessionOptions.Value.AbsoluteLifetime,
-            antiforgery,
-            clock);
-
-        return Result.Success(StatusCodes.Status204NoContent);
+        return issued.IsSuccess
+            ? Result.Success(StatusCodes.Status204NoContent)
+            : Result.Failure(issued.Error!);
     }
 
     /// <summary>

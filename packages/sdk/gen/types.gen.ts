@@ -2883,7 +2883,7 @@ export type CreateDevSessionErrors = {
      */
     429: ErrorEnvelope;
     /**
-     * 503 `unavailable` — the audit chain or the session write failed, so the sign-in did not happen (fail closed: no session exists for a sign-in nothing recorded).
+     * 503 `unavailable` — the audit chain or the session write failed, so the sign-in did not happen (no session exists for a sign-in nothing recorded), or the request did not arrive over HTTPS: the cookie pair this route must issue is Secure-only, so a plaintext sign-in can never complete. The plaintext refusal is answered before the secret is judged, so the status code says nothing about whether the presented secret was right, and it writes neither a row nor a cookie.
      */
     503: ErrorEnvelope;
 };

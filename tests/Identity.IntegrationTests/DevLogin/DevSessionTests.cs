@@ -209,26 +209,32 @@ public sealed class DevSessionTests : CatalogueTestBase
     }
 
     /// <summary>
-    /// A plaintext request is refused before anything is written: the antiforgery pair this route must issue is
-    /// Secure-only, so a sign-in over http would throw after the session row was committed and leave a live
-    /// session no browser can use. The answer is 503 and no row exists.
+    /// A plaintext request is refused before the secret is judged and before anything is written: the
+    /// antiforgery pair this route must issue is Secure-only, so a sign-in over http would throw after the
+    /// session row was committed and leave a live session no browser can use. A wrong and the right secret get
+    /// the same 503 <c>unavailable</c> — the status is not an oracle for the deployment's secret — and no row
+    /// exists afterwards.
     /// </summary>
     [Fact]
-    public async Task PlaintextRequest_Answers_503_And_Writes_No_Session()
+    public async Task PlaintextRequest_Answers_503_For_Any_Secret_And_Writes_No_Session()
     {
         await SeedDevAccountAsync(withMembership: true);
 
         using var host = DevSessionTestHost.Start(Fixture, DevSessionTestHost.Development);
         using var client = host.CreatePlaintextClient();
 
-        using var response = await client.PostAsJsonAsync(
-            DevSessionTestHost.Route,
-            new { secret = host.Secret },
-            DevSessionTestHost.Token);
+        foreach (var presented in new[] { host.Secret + "x", host.Secret })
+        {
+            using var response = await client.PostAsJsonAsync(
+                DevSessionTestHost.Route,
+                new { secret = presented },
+                DevSessionTestHost.Token);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
-        (await DevSessionTestHost.ErrorCodeAsync(response)).ShouldBe("unavailable");
-        DevSessionTestHost.SessionCookies(response).ShouldBeEmpty();
+            response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+            (await DevSessionTestHost.ErrorCodeAsync(response)).ShouldBe("unavailable");
+            DevSessionTestHost.SessionCookies(response).ShouldBeEmpty();
+        }
+
         await AssertNoSessionAsync();
     }
 

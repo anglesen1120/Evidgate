@@ -105,6 +105,11 @@ const MARKERS = [
   '/v1/dev/session',
   'Dev sign-in',
   'Đăng nhập phát triển',
+  // The same dev sign-in seen through the generated SDK (`packages/sdk/gen/sdk.gen.ts`): its `url`
+  // is the bare `/dev/session` (the app's client adds `/v1`) and its operation name survives in a
+  // source map, so either needle catches a chunk that kept the SDK operation.
+  'createDevSession',
+  '/dev/session',
 ];
 
 /**

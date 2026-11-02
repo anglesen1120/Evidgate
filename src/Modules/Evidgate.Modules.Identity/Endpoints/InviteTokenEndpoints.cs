@@ -207,5 +207,4 @@ internal static class InviteTokenEndpoints
 
         return (token, null);
     }
-
 }

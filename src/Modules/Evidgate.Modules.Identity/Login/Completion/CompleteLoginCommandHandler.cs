@@ -32,9 +32,9 @@ namespace Evidgate.Modules.Identity.Login.Completion;
 /// domain allowlist) are the binder's own rules; this call site adds none.
 /// </para>
 /// <para>
-/// <b>Audited before the session, fail-closed.</b> The <c>auth.login</c> row is appended to the chain of every
-/// active org of the user (02.3.1-T2.2, Q5) before the session row exists, so a login that cannot be audited
-/// issues nothing: the writer's fault propagates and the seam above answers 503 <c>unavailable</c>.
+/// <b>Audited before the session.</b> The <c>auth.login</c> row is appended to the chain of every active org
+/// of the user before the session row exists, so a login that cannot be audited issues nothing: the writer's
+/// fault propagates and the seam above answers 503 <c>unavailable</c>.
 /// </para>
 /// <para>
 /// Exceptions are not caught here: a database fault is not a business outcome, and the seam that owns the
@@ -141,15 +141,10 @@ internal sealed class CompleteLoginCommandHandler(
     /// membership, the <c>auth.login</c> row of every active org, and only then the session row.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Extracted so the federated login and the development-only sign-in share ONE implementation of the order
-    /// and of the fail-closed rule: a sign-in that cannot be audited issues nothing, and the writer's fault
-    /// propagates to the seam that answers 503 <c>unavailable</c>.
-    /// </para>
-    /// <para>
-    /// No identity is written here: the caller has already resolved the account (the provider upsert, or the
-    /// seeded dev user), and a session is only ever created for the id it names.
-    /// </para>
+    /// Extracted so the federated login and the development-only sign-in share ONE implementation of that order:
+    /// a sign-in that cannot be audited issues nothing, and the writer's fault propagates to the seam that
+    /// answers 503 <c>unavailable</c>. No identity is written here — the caller has already resolved the account,
+    /// and a session is only ever created for the id it names.
     /// </remarks>
     /// <param name="userId">The account the session belongs to.</param>
     /// <param name="provider">The provider name the audit row records (<c>google</c>, <c>github</c>, <c>dev</c>).</param>
@@ -188,8 +183,8 @@ internal sealed class CompleteLoginCommandHandler(
             return Result.Failure<SessionTicket>(LoginErrors.NoMembership);
         }
 
-        // The audit row of this sign-in, one per active org, before the session exists (Q5): a login that
-        // cannot be recorded does not happen, so the writer's fault propagates and no session is issued.
+        // The audit row of this sign-in, one per active org, before the session exists: a login that cannot be
+        // recorded does not happen, so the writer's fault propagates and no session is issued.
         await audit
             .WriteAsync(
                 new IdentityAuditEvent(IdentityAuditActions.Login, userId, provider),
@@ -197,9 +192,9 @@ internal sealed class CompleteLoginCommandHandler(
                 cancellationToken)
             .ConfigureAwait(false);
 
-        // The session: the store owns the row, the HMAC of the cookie value and the expiry pair. D5a: the value
-        // the browser presented travels with the creation, so the store revokes that row in the same statement
-        // and chains `rotated_from` — a sign-in never leaves the previous session alive.
+        // The session: the store owns the row, the HMAC of the cookie value and the expiry pair. The value the
+        // browser presented travels with the creation, so the store revokes that row in the same statement and
+        // chains `rotated_from` — a sign-in never leaves the previous session alive.
         return await sessions
             .CreateAsync(
                 new SessionCreation(

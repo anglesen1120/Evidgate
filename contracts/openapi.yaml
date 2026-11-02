@@ -423,9 +423,9 @@ paths:
         session always belongs to the seeded dev account (`KnownDevUser.UserId`, the id `seed-dev`
         writes), never to an account the caller names, and no identity row is written. Both sides
         are reduced to SHA-256 digests and compared with `CryptographicOperations.FixedTimeEquals`,
-        so neither the timing nor the branch depends on the presented value or its length; a wrong,
-        absent or blank secret is the same 401 `token_invalid` the login callback answers, with no
-        session row and no cookie, and the value is never logged, echoed, counted or put in an
+        so neither the timing nor the branch depends on the presented value or its length; over HTTPS,
+        a wrong, absent or blank secret is the same 401 `token_invalid` the login callback answers, with
+        no session row and no cookie, and the value is never logged, echoed, counted or put in an
         exception message. The session is issued through the login's own machinery: the
         `auth.login` row of every active org is written before the session row exists (a sign-in
         that cannot be audited issues nothing and answers 503 `unavailable`), an account with no
@@ -497,10 +497,20 @@ paths:
         '503':
           description: >-
             503 `unavailable` — the audit chain or the session write failed, so the sign-in did not
-            happen (fail closed: no session exists for a sign-in nothing recorded).
+            happen (no session exists for a sign-in nothing recorded), or the request did not arrive
+            over HTTPS: the cookie pair this route must issue is Secure-only, so a plaintext sign-in
+            can never complete. The plaintext refusal is answered before the secret is judged, so the
+            status code says nothing about whether the presented secret was right, and it writes
+            neither a row nor a cookie.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+            Retry-After:
+              description: >-
+                Seconds to wait, from `EVIDGATE__LOGIN__RETRYAFTERSECONDS` (30 by default) — the same
+                value the login completion sets on its own outage answer.
+              schema:
+                type: integer
           content:
             application/json:
               schema:

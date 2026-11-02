@@ -39,6 +39,9 @@ const MARKERS = [
   '/v1/dev/session',
   'Dev sign-in',
   'Đăng nhập phát triển',
+  // The same sign-in through the generated SDK: the operation name and its bare `url`.
+  'createDevSession',
+  '/dev/session',
 ] as const;
 
 /** A corpus body string long enough to count as a leak signal, and absent from production code. */
@@ -212,6 +215,14 @@ describe('no-fixture-code gate', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('app-dev-sign-in');
     expect(result.stderr).toContain('/v1/dev/session');
+
+    // The generated SDK spells the same route `url: '/dev/session'` under its operation name, so a
+    // chunk (or its source map) that kept the operation instead of the app's service is caught too.
+    await ws.output('chunk-SDK456.js', 'const op="createDevSession";const url="/dev/session";');
+    const sdkLeak = ws.run();
+    expect(sdkLeak.status).toBe(1);
+    expect(sdkLeak.stderr).toContain('chunk-SDK456.js: "createDevSession"');
+    expect(sdkLeak.stderr).toContain('chunk-SDK456.js: "/dev/session"');
   });
 
   it('passes_a_permission_row_whose_resource_and_action_production_carries', async () => {

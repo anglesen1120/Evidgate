@@ -1,15 +1,7 @@
-// `core/data` is one of the two directories that own HTTP, so the development-only sign-in
-// exchange lives here rather than in the feature that uses it. The feature never imports
-// `HttpClient`; it calls this service like any other data service.
-//
-// Nothing in production imports this file — only `features/auth/login/login-extension.development`
-// reaches it, through the dev sign-in component — so the production bundle tree-shakes it and the
-// `/v1/dev/session` path stays a marker of `apps/web/scripts/check-no-fixture-code.mjs`.
-//
-// The response is 204 with the session cookie on `Set-Cookie`, so the request itself is the whole
-// result and the body is `void`. The route is XSRF-exempt by contract (it sets the antiforgery pair
-// rather than authenticating with a token), so nothing here depends on that header, and the relative
-// `/v1` path is the page origin: `withCredentials` stays exactly as the feature call had it.
+// The development-only sign-in exchange, in `core/data` because that is where the app's HTTP
+// boundary lives. Only the `development`/`fixtures` login extension reaches it, through a lazily
+// imported dev sign-in component, so a production build has no import edge to it and
+// `/v1/dev/session` stays a marker of `apps/web/scripts/check-no-fixture-code.mjs`.
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { type Observable } from 'rxjs';

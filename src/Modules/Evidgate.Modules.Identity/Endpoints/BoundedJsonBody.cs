@@ -23,13 +23,13 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// </remarks>
 internal static class BoundedJsonBody
 {
-    /// <summary>Reads a JSON object body no larger than <paramref name="maxBytes"/>.</summary>
+    /// <summary>Reads a body no larger than <paramref name="maxBytes"/> as a parsed JSON document.</summary>
     /// <param name="context">The request.</param>
     /// <param name="maxBytes">The route's own body cap.</param>
     /// <param name="cancellationToken">Request abort.</param>
     /// <returns>
-    /// The parsed document (a JSON object, or any other kind, which the caller judges) with a null error, or the
-    /// 413/422 the route answers: too large, not <c>application/json</c>, empty, not JSON, or not an object.
+    /// The parsed document (whatever its root kind is, which the caller judges) with a null error, or the
+    /// 413/422 the route answers: too large, not <c>application/json</c>, empty, or not JSON.
     /// </returns>
     internal static async Task<(JsonDocument? Document, Error? Error)> ReadAsync(
         HttpContext context,
