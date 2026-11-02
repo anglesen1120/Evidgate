@@ -376,7 +376,7 @@ export class ConnectCiPage {
     const version = this.scopeVersion;
     await this.perform(
       async () => {
-        const response = await this.data.createCiBinding(orgId, projectId, {
+        const response = await this.data.createCiBinding(projectId, {
           provider: 'github_actions',
           repository_id: Number(this.repositoryId()),
           repository_full_name: this.repositoryName().trim(),

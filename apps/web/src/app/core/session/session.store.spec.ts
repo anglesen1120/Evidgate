@@ -22,6 +22,7 @@ import { IdentityDataService } from '../data/identity-data.service';
 import { EffectivePermissionsSource } from './effective-permissions.source';
 import { SESSION_ENDER, type SessionEnder } from './session-ender';
 import { SessionStore } from './session.store';
+import { TenantStore } from './tenant.store';
 
 function apiError(kind: ApiErrorKind, status: number): ApiRequestError {
   return new ApiRequestError({
@@ -129,9 +130,28 @@ class FakePermissionsSource {
   granted: ReadonlySet<string> = new Set<string>();
   failure: Error | null = null;
   calls = 0;
+  /**
+   * The tenant each read ran under, read from the live store at call time: a permission read is
+   * tenant-scoped, so what matters is the org published BEFORE the source was asked.
+   */
+  tenantAtLoad: (() => string | null) | null = null;
+  readonly tenants: Array<string | null> = [];
+  /** When true, `load` answers only when the test settles {@link pendingLoads}. */
+  manual = false;
+  readonly pendingLoads: Array<{
+    readonly resolve: (granted: ReadonlySet<string>) => void;
+    readonly reject: (error: unknown) => void;
+  }> = [];
 
   load(): Promise<ReadonlySet<string>> {
     this.calls += 1;
+    this.tenants.push(this.tenantAtLoad?.() ?? null);
+    if (this.manual) {
+      // This project's lib is ES2022, so `Promise.withResolvers` is unavailable.
+      return new Promise<ReadonlySet<string>>((resolve, reject) => {
+        this.pendingLoads.push({ resolve, reject });
+      });
+    }
     return this.failure === null ? Promise.resolve(this.granted) : Promise.reject(this.failure);
   }
 }
@@ -164,6 +184,7 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
   let router: Router;
   let navigations: Array<{ commands: readonly unknown[]; extras: unknown }>;
   let store: SessionStore;
+  let tenant: TenantStore;
 
   beforeEach(() => {
     identity = new FakeIdentityDataService();
@@ -178,6 +199,8 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       ],
     });
     store = TestBed.inject(SessionStore);
+    tenant = TestBed.inject(TenantStore);
+    source.tenantAtLoad = () => tenant.orgId();
     router = TestBed.inject(Router);
     // The two session boundaries leave through `/login`; a spec records the decision instead of
     // running a navigation through an empty route table. Recording (rather than asserting on the
@@ -199,6 +222,9 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(store.sessionState()).toBe('authenticated');
       expect(store.organizations()).toEqual([ORG_ONE, ORG_TWO]);
       expect(store.permissions()).toBe(source.granted);
+      // The first listed org is the tenant the tenant-scoped reads are sent for.
+      expect(tenant.orgId()).toBe(ORG_ONE.id);
+      expect(source.tenants).toEqual([ORG_ONE.id]);
       expect(store.currentOrg()).toBeNull();
       expect(store.currentProject()).toBeNull();
       expect(store.projects()).toEqual([]);
@@ -228,6 +254,29 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(store.sessionState()).toBe('anonymous');
       expect(store.organizations()).toEqual([]);
       expect(store.permissions().size).toBe(0);
+    });
+
+    it('drops the tenant of a refused bootstrap, so no stale org rides to sign-in', async () => {
+      identity.organizations = [ORG_ONE];
+      source.failure = apiError('unauthenticated', 401);
+
+      await store.bootstrap();
+
+      // The permission read ran under the first listed org, and that tenant is gone with the
+      // session: `/login` and the next sign-in must not carry it as `X-Evidgate-Org`.
+      expect(source.tenants).toEqual([ORG_ONE.id]);
+      expect(store.sessionState()).toBe('anonymous');
+      expect(tenant.orgId()).toBeNull();
+    });
+
+    it('survives an org list answer without items, reading permissions with no tenant', async () => {
+      // The body a proxy's HTML page decodes to: `items` is missing at runtime.
+      Object.assign(identity, { organizations: undefined });
+
+      await store.bootstrap();
+
+      expect(source.tenants).toEqual([null]);
+      expect(tenant.orgId()).toBeNull();
     });
 
     it('prefers a 401 from either read over the other read failing', async () => {
@@ -287,26 +336,42 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(store.sessionState()).toBe('authenticated');
     });
 
-    it('asks the permission source without waiting for the organization list', async () => {
+    it('publishes the first organization as the tenant before it reads the permissions', async () => {
       identity.manualOrganizations = true;
-      identity.organizations = [ORG_ONE];
+      identity.organizations = [ORG_ONE, ORG_TWO];
 
       const booting = store.bootstrap();
       await settle();
 
-      // Independent reads: the catalogue (up to twenty cursor pages) must not sit behind orgs.
-      expect(source.calls).toBe(1);
+      // The permission read is tenant-scoped, so it waits for the org the header must name.
+      expect(source.calls).toBe(0);
+      expect(tenant.orgId()).toBeNull();
 
       const first = identity.pendingOrgs[0];
       if (first === undefined) {
         throw new Error('the organization read must have reached the fake');
       }
-      first([ORG_ONE]);
+      first([ORG_ONE, ORG_TWO]);
       await booting;
 
+      expect(tenant.orgId()).toBe(ORG_ONE.id);
+      expect(source.tenants).toEqual([ORG_ONE.id]);
       expect(store.sessionState()).toBe('authenticated');
-      expect(store.organizations()).toEqual([ORG_ONE]);
+      expect(store.organizations()).toEqual([ORG_ONE, ORG_TWO]);
       expect(store.permissions()).toBe(source.granted);
+    });
+
+    it('reads the permissions with no tenant when the caller has no organization', async () => {
+      identity.organizations = [];
+      source.granted = new Set(['run:read']);
+
+      await store.bootstrap();
+
+      // No organization, no tenant: the interceptor adds nothing and the read answers as before.
+      expect(tenant.orgId()).toBeNull();
+      expect(source.calls).toBe(1);
+      expect(source.tenants).toEqual([null]);
+      expect(store.sessionState()).toBe('authenticated');
     });
 
     it('does not read again once the state is settled', async () => {
@@ -383,6 +448,132 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       identity.projectsByOrg.set('o-2', [PROJECT_Q1]);
       source.granted = new Set(['run:read']);
       await store.bootstrap();
+    });
+
+    it('switches the request tenant and reloads the permissions on a real org change', async () => {
+      await store.resolveScope('o-1', null);
+      expect(tenant.orgId()).toBe(ORG_ONE.id);
+      expect(source.calls).toBe(1);
+      source.granted = new Set(['run:read', 'audit:read']);
+
+      expect(await store.resolveScope('o-2', 'q-1')).toBe('ok');
+
+      expect(tenant.orgId()).toBe(ORG_TWO.id);
+      expect(source.calls).toBe(2);
+      expect(source.tenants).toEqual([ORG_ONE.id, ORG_TWO.id]);
+      // The grant set follows the tenant: the previous org's codes are not reused.
+      expect(store.has('audit:read')).toBe(true);
+    });
+
+    it('does not reload the permissions for a navigation inside the org it already scoped', async () => {
+      await store.resolveScope('o-1', 'p-1');
+
+      expect(await store.resolveScope('o-1', 'p-2')).toBe('ok');
+
+      expect(source.calls).toBe(1);
+      expect(tenant.orgId()).toBe(ORG_ONE.id);
+    });
+
+    it('does not keep the previous org grants when the switch was superseded', async () => {
+      await store.resolveScope('o-1', null);
+      expect(store.has('run:read')).toBe(true);
+      source.granted = new Set(['run:read', 'audit:read']);
+      source.manual = true;
+
+      // The first resolve publishes the tenant and parks its load; the second one is a newer
+      // navigation to the SAME org, so the tenant alone must not make it skip the read.
+      const first = store.resolveScope('o-2', null);
+      await settle();
+      const second = store.resolveScope('o-2', 'q-1');
+      await settle();
+      expect(source.tenants).toEqual([ORG_ONE.id, ORG_TWO.id, ORG_TWO.id]);
+
+      const newer = source.pendingLoads[1];
+      if (newer === undefined) {
+        throw new Error('the newer resolution must have asked for the grants');
+      }
+      newer.resolve(source.granted);
+      expect(await second).toBe('ok');
+      expect(store.has('audit:read')).toBe(true);
+
+      // The abandoned load settles last: a newer navigation owns the scope, so its failure is
+      // `superseded` — it must neither republish its answer nor blank the newer scope.
+      source.pendingLoads[0]?.reject(apiError('unavailable', 503));
+      expect(await first).toBe('superseded');
+      expect(store.has('audit:read')).toBe(true);
+      expect(store.currentOrg()).toEqual(ORG_TWO);
+      expect(tenant.orgId()).toBe(ORG_TWO.id);
+    });
+
+    it('keeps the newer route for the expiry redirect when the abandoned load settles first', async () => {
+      await store.resolveScope('o-1', null);
+      source.manual = true;
+
+      // Both resolves publish the tenant and park a grant read; the older one settles first.
+      const older = store.resolveScope('o-2', 'q-1');
+      await settle();
+      const newer = store.resolveScope('o-2', 'p-1');
+      await settle();
+      expect(source.pendingLoads).toHaveLength(2);
+
+      source.pendingLoads[0]?.resolve(source.granted);
+      expect(await older).toBe('superseded');
+
+      // The newer read is the one that expires the session, so its redirect must name ITS route:
+      // the abandoned answer above may not erase the route it was waiting on.
+      source.pendingLoads[1]?.reject(apiError('unauthenticated', 401));
+      expect(await newer).toBe('superseded');
+
+      expect(store.sessionState()).toBe('anonymous');
+      expect(navigations).toEqual([
+        {
+          commands: ['/login'],
+          extras: { queryParams: { reason: 'expired', returnUrl: '/orgs/o-2/projects/p-1' } },
+        },
+      ]);
+    });
+
+    it('clears the request tenant when an unknown org resolves not-found', async () => {
+      expect(await store.resolveScope('o-foreign', null)).toBe('not-found');
+
+      expect(tenant.orgId()).toBeNull();
+      expect(store.currentOrg()).toBeNull();
+    });
+
+    for (const [kind, status] of [
+      ['unavailable', 503],
+      ['forbidden', 403],
+      ['not_found', 404],
+    ] as const) {
+      it(`answers unavailable, not not-found, when the permission reload fails ${kind}`, async () => {
+        await store.resolveScope('o-1', null);
+        source.failure = apiError(kind, status);
+
+        // A refused grant read says nothing about whether the org exists, so it is never the
+        // 404 pattern the project lookup shares.
+        expect(await store.resolveScope('o-2', 'q-1')).toBe('unavailable');
+
+        expect(tenant.orgId()).toBeNull();
+        expect(store.currentOrg()).toBeNull();
+        // No project list was read for an org whose grants could not be loaded.
+        expect(identity.projectOrgIds).toEqual(['o-1']);
+      });
+    }
+
+    it('ends the session when the permission reload answers 401', async () => {
+      await store.resolveScope('o-1', null);
+      source.failure = apiError('unauthenticated', 401);
+
+      expect(await store.resolveScope('o-2', 'q-1')).toBe('superseded');
+
+      expect(store.sessionState()).toBe('anonymous');
+      expect(tenant.orgId()).toBeNull();
+      expect(navigations).toEqual([
+        {
+          commands: ['/login'],
+          extras: { queryParams: { reason: 'expired', returnUrl: '/orgs/o-2/projects/q-1' } },
+        },
+      ]);
     });
 
     it('resolves an org and its project from the server lists', async () => {
@@ -766,6 +957,8 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(store.currentOrg()).toBeNull();
       expect(store.currentProject()).toBeNull();
       expect(store.permissions().size).toBe(0);
+      // No tenant survives the session: the next request cannot be scoped by the ended one.
+      expect(tenant.orgId()).toBeNull();
       // `reason=signed-out` is what the login page reads; it never claims the server session ended
       // (session-ender.ts: the HttpOnly cookie is still valid until 02.3.2-T2).
       expect(navigations).toEqual([
@@ -847,6 +1040,8 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(store.sessionState()).toBe('anonymous');
       expect(store.organizations()).toEqual([]);
       expect(store.signedOut()).toBe(true);
+      // The late organization list must not republish a tenant for the ended session.
+      expect(tenant.orgId()).toBeNull();
     });
 
     it('does not redirect again for a 401 reported after the sign-out', async () => {
