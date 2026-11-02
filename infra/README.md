@@ -320,9 +320,6 @@ This image is not the production hosting decision: `apps/web` is still the stati
 object storage + CDN that 10.2.1-T1.4 owns. The review image exists so one host can carry
 the whole Pilot-0 build for a reviewer, and it applies the CSP of `apps/web/scripts/csp.mjs` +
 `apps/web/scripts/app-origin-csp.json` with a per-response nonce rather than a second policy.
-It is built with `npm run build:review -w apps/web` (`angular.json` → `review`), the production
-configuration plus the Development-only dev sign-in form: the review stack has no human login
-yet, so a browser reviewer signs in there, while the plain `npm run build` bundle has no form.
 
 The operating procedure — host requirements, the Cloudflare setup order (Access application
 before the public route), deploy, rollback, rotation and the verification checklist — is
