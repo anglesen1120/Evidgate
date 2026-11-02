@@ -1,0 +1,7 @@
+# The build context is the repository root, but this image reads exactly one
+# directory: without this file the whole tree (fixtures, node_modules, the release
+# archives) would be sent for a single COPY.
+*
+!contracts
+!contracts/**
+!infra/review/Dockerfile.contracts

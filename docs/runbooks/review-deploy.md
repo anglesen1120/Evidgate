@@ -1,0 +1,325 @@
+# Review deployment runbook
+
+Status: **Pilot-0 review deployment (S188) — written with the lane; no ingress mode has been exercised against a live EC2 host or a real Cloudflare account yet** ⚠️. The stack is in [`../../infra/review/`](../../infra/review/compose.review.yml), the commands in [`../../scripts/review/`](../../scripts/review/lib.sh); this file is the operator procedure. Not a production deployment: hosts run in Development mode, the data is synthetic, and the only perimeter is Cloudflare Access (named tunnel) or HTTP Basic Auth (quick tunnel).
+
+Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · ⚠️ unverified or blocked today · `[INFERENCE]` · `[DECISION]` · `[OPEN]`.
+
+## 1. Purpose, audience and rules
+
+Purpose: put the Pilot-0 build (API, worker, web) on one Linux host at an HTTPS URL, so a reviewer can open the run list, a run, its evidence panel and its decision, and nothing else can reach it. Audience: the operator with SSH to the host. A Cloudflare account and a domain are needed for the named tunnel; quick mode needs neither and is the short-demo path (§4.1).
+
+- **One ingress mode at a time** (§4.0), and `deploy.sh` starts only the tunnel it was asked for — stop the other container before switching (§7). `--tunnel quick` puts the build on a public `*.trycloudflare.com` URL with **no Access in front**: Basic Auth on every path is the whole perimeter, and the stack refuses to serve quick mode without credentials (§2, §4.1). The secrets file mints the Basic Auth pair in every mode, so a **named** tunnel is Access **and** the password: a reviewer needs both, and blanking the pair to drop the prompt is a silent downgrade of a file that is never re-minted (§6).
+- **Named tunnel only: Access application and allow-list policy first, public route second** (§4.4, §4.5). A route without an Access application is open to anyone, and Access is deny-by-default ✅ ([self-hosted app](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)).
+- **Nothing is published on a host port in either tunnel profile.** `web`, `api`, `worker` and the stateful services are reachable only inside the internal `evidgate-review-net` bridge; `cloudflared` / `cloudflared-quick` joins a second internal network, `evidgate-review-edge`, shared **only with `web`**, plus a non-internal egress network for Cloudflare, so a dashboard route pointed at `api`, `postgres` or `seaweedfs` cannot connect at all instead of reaching them ✅ (`../../infra/review/compose.review.yml`). `ss -ltn` must show no `0.0.0.0:8080`, `:5432`, `:8333`.
+- **Not for real customer data.** The seed creates one org, one project and one dev user (§5); retention, backups and per-tenant isolation are not exercised here.
+- **Secrets never leave the host through a terminal you do not control.** `.env.review` is mode `600`, generated once, and the scripts print its path — never its contents. Do not paste the dev-login secret or the Basic Auth password into chat, a ticket or a screenshot.
+- **The hosts stay in Development mode** (`seed-dev` refuses any other environment and the dev sign-in route is Development-only), so the ingress credential layer is the perimeter (`../../infra/review/env.review.template`).
+
+## 2. What runs on the host
+
+Compose project `evidgate-review`; every container and volume is named `evidgate-review-<service>`. Base file `../../infra/review/compose.review.yml`, with `../../infra/review/compose.quick.yml` layered on for the quick tunnel.
+
+- `postgres` — the dev stack's pinned PostgreSQL 18 on a volume, no host publish; data survives `down.sh`, dies with `--purge --yes`. `seaweedfs` — same pin; `.env.review` holds `EVIDGATE_S3_ACCESS_KEY` and `EVIDGATE_S3_SECRET_KEY` (48 hex characters each), compose hands them to the container as `EVIDGATE_REVIEW_S3_ACCESS_KEY`/`EVIDGATE_REVIEW_S3_SECRET_KEY`, and the container writes its identity file from them — so no repository file is bind-mounted and this stack has no `EVIDGATE_SEAWEEDFS_S3_CONFIG` key, which belongs to the dev stack (why no bind mount: [`../../infra/README.md`](../../infra/README.md)).
+- One-shots: `db-init` (`bootstrap` creates the owner role, the database and the application roles as `scripts/dev/db-init.sh` does, then `grants`), `migrator` (`infra/docker/Dockerfile.migrator`, applies migrations), `seed` (`infra/review/Dockerfile.contracts` on the migrator's build-only base: the migrator image plus `contracts/` at `/app/contracts`, because `seed-dev` resolves `contracts/schemas` there; `ARG BASE=evidgate-review-migrator-base:<tag>`, so runtime base, pin, non-root uid and entry point are identical by construction), `bucket-init` (creates the `evidgate-review` bucket and PUTs the dev stack's 24 h `pending/` lifecycle rule from inside the network), `probe` (polls readiness from inside).
+- `api` (`infra/docker/Dockerfile.api`, port 8080 inside the network only) and `worker` (`infra/docker/Dockerfile.worker`, no port).
+- `web` — `../../infra/review/Dockerfile.web`: the built `apps/web` bundle (en + vi) on nginx on 8080, same-origin, reverse-proxying `/v1/` to `http://api:8080`, answering `404` for `/internal/*` (the API's operator and probe surface never leaves the network), and Basic Auth on every path, so a credential-less request gets `401` before any proxying; with Basic Auth on, nginx also strips the `Authorization` header before forwarding `/v1/`, so the shared password never reaches the Api; the same realm makes the edge browser-only — a Bearer (CLI or CI) caller is refused with `401` before `/v1/` is proxied, so while `EVIDGATE_REVIEW_BASIC_AUTH_*` is set the review URL cannot be driven by the CLI/CI token path. Its start script writes `/tmp/evidgate/htpasswd` from user + apr1 hash and refuses to serve quick mode without them.
+- **Derived images.** `api`, `worker` and `seed` are an `infra/docker` image plus `contracts/`: those Dockerfiles compile `contracts/` in the **build stage only**, while the runtime resolves `contracts/schemas` and `contracts/adapter` above its binary (`/app/contracts`, then `/contracts`) and answers `500` on `POST /v1/projects/{p}/manifests` without them (seen in the S188 local smoke). The bases are build-only: compose profile `images`, tags `evidgate-review-<svc>-base:<tag>`, never started, never shipped. Two passes, because compose cannot sequence one service's build after another's: `--profile images build migrator-base migrator api-base worker-base`, then `build api worker seed web`. `deploy.sh` runs both; `--build-local` does the same order on the deploying machine and ships only the five final tags. `check-pins.sh` asserts the derivation (one `FROM ${BASE}`, `ARG BASE`, `COPY contracts/ /app/contracts/`, each service's `BASE` tag, and that the three `images`-profile bases come from `infra/docker` with the release tag), and `check.sh` also runs `check-restart-policy.sh`.
+- `web` healthcheck: `wget -q -O /dev/null http://127.0.0.1:8080/nginx-health`. `/nginx-health` turns auth off and refuses every source but loopback — a rewrite-phase `map $remote_addr` guard returns `403` before the `200`, because `allow`/`deny` would never run in a location that returns — so it answers `200` only from inside the container and `403` to anything that arrives through the tunnel or the published port.
+- `cloudflared` — profile `tunnel`: `tunnel --no-autoupdate run`, token from `CLOUDFLARE_TUNNEL_TOKEN`, no ports, hostname from the dashboard route (§4.5). `cloudflared-quick` — profile `tunnel-quick`: `tunnel --no-autoupdate --url http://web:8080`, no token and no dashboard; its ephemeral URL is read from `docker logs evidgate-review-cloudflared-quick`.
+
+Every service has a compose `mem_limit`/`mem_reservation` sized for the 4 GB host — ≈2.9 GB of limits in total: postgres 512m (`shared_buffers` 128 MB, 50 connections), seaweedfs 384m, api 640m, worker 384m, web 64m, cloudflared 96m, migrator 512m, db-init/bucket-init 128m, probe 64m, plus `DOTNET_gcServer=0` with the Api heap capped at `0x18000000` (384 MB under its 640m) and the Worker at `0x0C000000` (192 MB under 384m). Measured on the local smoke: idle `docker stats` memory right after a dogfood run (arm64, `--tunnel none`): api 55 MiB, worker 58 MiB, postgres 64 MiB, seaweedfs 62 MiB, web 5 MiB, about 245 MiB in total, far below the limits; cloudflared was not part of the smoke and RSS grows under load.
+
+Images are tagged `EVIDGATE_REVIEW_TAG` (the release sha, or its first 12 characters under `--build-local`) as `evidgate-review-{migrator,api,worker,web,seed}:<tag>` with `pull_policy: never`, so a host that never builds can receive them via `docker save | docker load`.
+
+Profiles: `tunnel` / `tunnel-quick` are the public deployments (one cloudflared variant joins the stack, nothing is published on the host). Quick mode pins the target (`--url http://web:8080`); a named tunnel routes to whatever the dashboard says, so keep it on `web`: `cloudflared` meets `web` on `evidgate-review-edge` and has no route to `api`, `seaweedfs` or `postgres`, so a route aimed at any of them fails instead of bypassing nginx (§4.5). `local` / `debug` publish through separate services (`web-local`, `api-debug`) because a compose port mapping is not profile-conditional: `local` adds `web-local` on `127.0.0.1:${EVIDGATE_REVIEW_LOCAL_PORT:-8088}`, `debug` adds `api-debug` on `127.0.0.1:${EVIDGATE_REVIEW_API_PORT:-18080}` for the dogfood window and by-hand probes.
+
+- **Hardening and logs.** `api`, `worker` and both connector containers run with `no-new-privileges:true` and **every** Linux capability dropped; nothing in the stack needs one. Every service logs through Docker's `json-file` driver with `max-size: 10m` and `max-file: 3`, so one noisy container is capped at 30 MB on the 30 GB disk instead of filling it.
+
+## 3. Host requirements
+
+Reference host: **AWS EC2 `t4g.medium`** — `arm64`, Ubuntu 24.04, user `ubuntu`, 2 vCPU, 4 GB RAM, 30 GB `gp3`. Security group: **no inbound rule except SSH from the operator's IP**, outbound 7844 (TCP **and** UDP — the tunnel transport) plus 443 for image pulls and update checks.
+
+- Linux `x86_64` or `aarch64`/`arm64` (the base images are multi-arch from one pinned builder; pins in [`../../infra/README.md`](../../infra/README.md)); `deploy.sh` reads `uname -m` and refuses others. Docker Engine with Compose **v2 or newer** (a newer major is fine), reachable by the SSH account without an interactive re-login, and `curl` for the in-network probes.
+- **One ssh connection per run.** `deploy.sh`, `status.sh` and `down.sh` keep a control socket (`ControlMaster`/`ControlPersist`) and reuse it for every remote command, so a thirteen-step deploy pays one handshake rather than one per step and does not trip an ssh config that rate-limits connections.
+- **At least 15 GB free** under the SSH account's `$HOME`: `deploy.sh` measures `df` there and refuses below that. On the 30 GB reference disk the deploy itself prunes images outside the current and previous release, so build cache is the usual thing to reclaim between host-side builds. `$HOME` must be writable: the release tree, the secrets file and `current` live under `$HOME/evidgate-review/` (override with `EVIDGATE_REVIEW_HOST_HOME` or `EVIDGATE_REVIEW_HOST_ROOT` on the operator side).
+**`node` ≥ 20 and `python3` are needed on the host only when the host builds the images.** `--build-local` runs the same static gate (`check.sh --static-only`) on the deploying machine against the extracted sha, so the host then needs neither.
+
+- **2 GB of swap, or build elsewhere.** 4 GB RAM runs the stack and cannot also build its four .NET images (migrator, seed, api, worker): `deploy.sh` refuses a host-side build when the host reports under 6 GiB RAM and no swap, and it runs the host's builds **serially** (`COMPOSE_PARALLEL_LIMIT=1`; two concurrent .NET builds are what takes a small machine out of memory). `deploy.sh --setup-swap` creates a 2 GiB `/swapfile` when the host has under 1 GiB, needs passwordless `sudo`, and is idempotent (existing file reused, one `fstab` line). By hand:
+
+  ```console
+  sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+  sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  ```
+
+- **Build on the operator machine**: `--build-local` (§5) builds the five images from the exact sha for the host's platform and ships them with `docker save | docker load`; the host only loads. The default host-side build is too heavy for 4 GB and is the path a bigger host may take.
+- The operator machine needs `git`, `curl`, `ssh`, `docker` with `buildx`, `node` ≥ 20 and `python3` — the gates run there under `--build-local`; a host that builds needs `curl`, `python3` and `node` ≥ 20 itself (§5 step 5).
+- **No inbound port**: no security-group rule beyond SSH and no OS-level `ufw allow` — read both yourself, because `status.sh`/`docker ps` see what Docker published, not a firewall rule (§10.4). [WARN] a box with an instance profile attached can hand that profile to code running in a container through `169.254.169.254`: attach none, require IMDSv2, hop limit 1.
+
+## 4. Ingress setup
+
+### 4.0 Choose the mode
+
+| Mode | Flag | Front door | Needs | Lifetime |
+|---|---|---|---|---|
+| quick | `--tunnel quick` (`tunnel-quick`) | Basic Auth on every path (mandatory) | 7844 (TCP/UDP) + 443 egress, incl. `api.trycloudflare.com` | demo: new URL on every restart |
+| named | `--public-origin <url>` implies `--tunnel token` (`tunnel`) | Cloudflare Access (OTP), **then** Basic Auth | account + domain, same egress | stable hostname, the review deployment |
+| none | the default with neither flag | — | — | local / ssh-only checks |
+
+`EVIDGATE_REVIEW_TUNNEL_MODE` in `.env.review` records the mode `deploy.sh` resolved — `quick`, `token`, or `none` when neither `--tunnel` nor `--public-origin` was passed, which is why an upgrade of a named deployment repeats `--tunnel token --public-origin …` (§7). `[DECISION]` quick mode exists so the Pilot-0 build can be shown before a domain is in the account: short demo, not the review deployment.
+
+### 4.1 Quick tunnel: no account, Basic Auth instead of Access
+
+```console
+scripts/review/deploy.sh <ssh-host> --tunnel quick --build-local --setup-swap
+```
+
+- `cloudflared-quick` opens a throwaway tunnel to `http://web:8080` and gets a random `https://<words>.trycloudflare.com` hostname; `deploy.sh` prints it, `status.sh` reprints it from the log (`docker logs evidgate-review-cloudflared-quick | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com'`).
+- **No Cloudflare Access and no account**: anyone with the URL reaches the edge, so `compose.quick.yml` forces `EVIDGATE_REVIEW_BASIC_AUTH=required`, and the image's start script independently refuses to serve quick mode without credentials — a quick tunnel can never be unauthenticated. No public origin is passed, so the CSP keeps `connect-src 'self'`.
+- Credentials are generated into the host's `.env.review` (mode `600`) on the first deploy: user `reviewer`, a random password (plaintext kept for the owner to hand out; no container receives it) and its apr1 hash (the only form a container sees). `deploy.sh` prints the user and the file path, never the password.
+- The URL is **ephemeral**: restarting `cloudflared-quick`, redeploying or rebooting hands out a new hostname and the old one dies. Do not bookmark it. `[OPEN]` nothing in the stack can pin or name it; that is what the named tunnel is for.
+
+### 4.2 Named tunnel: create it and its token
+
+**Networking** > **Tunnels** > **Create a tunnel** ✅ ([create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)). Older notes say "Networks > Tunnels", the current page says **Networking** > **Tunnels** ⚠️; direct link `https://dash.cloudflare.com/?to=/:account/tunnels`. Name it `evidgate-review`, choose **Docker** as the connector platform, copy the install command: the token is the long string after `--token` ⚠️ (the Docker variant carries `tunnel --no-autoupdate run --token …`, which is what compose runs).
+
+The connector reaches Cloudflare on **7844 TCP and UDP** (UDP for QUIC, TCP for HTTP/2), so the security group must allow egress there or neither tunnel mode connects; an SNI-enforcing firewall also needs `region1/2.v2.argotunnel.com`, `cftunnel.com`, `h2.cftunnel.com` and `quic.cftunnel.com` on that port ✅ ([tunnel with firewall](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/tunnel-with-firewall/)). Port 443 is optional traffic (update checks, and Access JWT validation only when the `access` origin parameter is on). `deploy.sh` reads the token from `CLOUDFLARE_TUNNEL_TOKEN` in the **operator's** shell — never from a flag, because `argv` is visible in `ps` — and writes it into the host's `.env.review` on the first deploy, where it is never printed and never rewritten. Do not commit it. Leave the tunnel **without** a public hostname until §4.5.
+
+### 4.3 Add the One-time PIN identity provider
+
+One-time PIN is **not** added automatically for new Zero Trust organisations: **Zero Trust** > **Integrations** > **Identity providers** > **Add new identity provider** > **One-time PIN** ✅ ([one-time PIN](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/)). The PIN is single-use, expires 10 minutes after the request, a new PIN invalidates the old one, and mail goes only to an address a policy allows ✅ (same page). Sender is `noreply@notify.cloudflare.com`; a scanner that follows links consumes the PIN — request a new code.
+
+### 4.4 Create the Access application and the allow policy
+
+**Zero Trust** > **Access controls** > **Applications** > **Create new application** > **Self-hosted and private** > **Add public hostname** ✅ ([self-hosted application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)).
+
+- **Domain**: the review hostname (`evidgate-review.<your-domain>`), matching §4.5 exactly; the zone must be active in the same account.
+- **Access policies**: one **Allow** policy whose include rule is an e-mail list (the selector's label is ⚠️ unverified) with every reviewer address plus your own. Add no `Bypass`: Access is deny-by-default, so an unlisted address cannot sign in even with a valid PIN.
+- **Authentication**: enable the One-time PIN provider from §4.3 and leave **Apply instant authentication** off — with one provider it would skip the login page, and that page is what §10.1 proves.
+- **Session Duration**: `24 hours`, the default ✅ ([session management](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/)). That is the application token for this hostname; the global session (default 24 h, 15 min to one month) bounds PIN re-entry. `[DECISION]` 24 h: a review day, not a week.
+
+### 4.5 Add the public hostname route (last)
+
+**Networking** > **Tunnels** > `evidgate-review` > **Routes** > **Add route** > **Published application** ✅ (same create-tunnel page as §4.2). **Subdomain / domain**: the hostname of §4.4. **Service URL**: `http://web:8080` — the compose service, plain HTTP inside the bridge network. Not `https://`, not the host's loopback: `cloudflared` reaches `web` over `evidgate-review-edge`, the only network it shares with the stack. Save; Cloudflare creates the DNS record for a full zone setup, and with a partial (CNAME) setup you create the `CNAME` at your own provider ✅ (same page). The service must be `web`: the connector has no route to `api:8080`, `seaweedfs:8333` or `postgres:5432` (they stay on `evidgate-review-net`, which `cloudflared` does not join), so a route aimed at `api` fails to connect rather than serving `/internal/*` and the dev-sign-in route with no Basic Auth in front.
+
+The route is the moment the hostname resolves, which is why it comes after the Access application. If §4.4 was skipped, stop — the app is public. Pass `--public-origin https://<hostname>` on the first deploy to extend the CSP's `connect-src` to that origin; without it the policy stays `'self'` and the hostname is only whatever the dashboard route serves ⚠️.
+
+Optional hardening, **not** in the shipped compose ⚠️: the tunnel's origin parameters can validate the Access JWT themselves ("Protect with Access"), so a request that bypasses the edge is rejected at `cloudflared` ✅ ([origin parameters](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access)). Dashboard change on the public hostname, untested here — prove it before trusting it.
+
+## 5. First deploy
+
+Run from a clone on the operator machine, never on the host. The tree must be clean: the release is `git archive <sha>` and nothing else, so an uncommitted edit would silently not ship.
+
+```console
+scripts/review/deploy.sh <ssh-host> --tunnel quick --build-local --setup-swap   # demo, no domain
+scripts/review/deploy.sh <ssh-host> --tunnel token --public-origin https://evidgate-review.example.com \
+  --build-local --setup-swap                                                   # named tunnel
+```
+
+`--build-local` builds `migrator`, `seed`, `api`, `worker` and `web` here for `linux/<host arch>` in the same two passes (bases first, then the derived images) from an extraction of the exact sha (`docker buildx` required, QEMU when the architectures differ), then ships them as a compressed `docker save` stream the host only loads.
+
+Flags: `--sha <sha>` (default `HEAD`), `-i <keyfile>`, `--tunnel quick|token|none`, `--public-origin <https-url>`, `--build-local`, `--setup-swap`, `--no-dogfood`, `--dry-run`, `--local`. Refusals: `--tunnel quick` takes no `--public-origin`; `--local` takes no host, no tunnel and no `--build-local`; a first `--tunnel token` deploy without `CLOUDFLARE_TUNNEL_TOKEN` in the shell stops before the secrets file exists (§5.1), as does quick mode with a file that has no auth hash.
+
+**SSH identity.** With neither `-i` nor `EVIDGATE_REVIEW_SSH_KEY`, `ssh` chooses the identity from `~/.ssh/config`. Pass `-i <keyfile>` (the flag wins) or export the variable to force one: `~` is expanded, the file must exist, be readable and **not** group- or world-accessible (the script refuses a `chmod` looser than `600`, because ssh would refuse the key later, mid-deploy). Every connection then carries `-i <key> -o IdentitiesOnly=yes`, so no agent can answer with a key the host rejects; that includes the `git archive | ssh tar -x` and `docker save | ssh docker load` pipes. Example (illustrative, not run here): `EVIDGATE_REVIEW_SSH_KEY=~/.ssh/evidgate-review scripts/review/deploy.sh ubuntu@13.212.214.50 --build-local`. `status.sh` and `down.sh` accept the same `-i`.
+
+**Host key on first contact.** Every connection runs with `StrictHostKeyChecking=accept-new`, which records the key it sees the first time and only fails later when a different key appears — the first deploy therefore trusts whatever answers on that address. Check the fingerprint against the EC2 console's instance output (or, on a host you already trust, `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`) and pre-seed `~/.ssh/known_hosts` when you cannot compare it out of band; a rebuilt instance at the same IP keeps its security group but gets a new host key, so expect the mismatch and remove the stale line.
+
+`--dry-run` prints the thirteen-step plan and runs only the read-only preflight (§3). The real run:
+
+1. preflight over ssh (§3), including the memory/swap report and, with `--setup-swap`, the swap file;
+2. resolve the release: `--sha` or `HEAD`, a full 40-character commit that is an ancestor of `HEAD` and holds `infra/review/compose.review.yml` and `infra/review/env.review.template`;
+3. secrets: create `$HOME/evidgate-review/.env.review` **once** from the template in the shipped commit, mode `600` (§5.1); a second run reports "kept existing" and rewrites nothing;
+4. ship: `git archive <sha>` unpacked into `releases/<sha>/` beside a `.release-sha` marker (reused only when its marker reads the same sha);
+5. gates and images: `infra/review/check.sh --static-only` (pins and inlined files) before a layer is built, then the two build passes (bases through `--profile images`, then `api worker seed web`; a plain `docker compose build` on a cold host fails on the missing bases, so build through `deploy.sh`) — or, with `--build-local`, the build here plus `docker save | docker load` of **five** images (`migrator`, `seed`, `api`, `worker`, `web`) — then `infra/review/check-web-image.sh --env-file "$HOME/evidgate-review/.env.review"` (two `nginx -t` runs, three fail-closed Basic Auth cases, and a live probe that requires `200` from `127.0.0.1` and `403` from the container's own bridge address on `/nginx-health`);
+6. start `postgres` and `seaweedfs` with `up -d --wait`, so the start waits on their healthchecks;
+7. schema: `db-init bootstrap`, `migrator`, `db-init grants`;
+8. object store: `bucket-init` creates the bucket and applies the 24 h `pending/` lifecycle rule — the same rule, not a second implementation;
+9. seed: `docker compose run --rm -T seed seed-dev --with-token` against `evidgate-review-seed:<tag>`. Its `EVIDGATE_DEV_TOKEN=` line is deleted before anything is printed, and the token plus the suite / case / environment ids stay in shell variables;
+10. serve: `up -d --wait api worker web` (`web-local` on `--local`), then the one-shot `probe` polls `/internal/health/ready` on `api` and `worker` — the chiseled Api image has no shell or curl, so it cannot healthcheck itself, and `web` waits on its own `/nginx-health`;
+11. dogfood (§5.2): `--profile debug up -d api-debug`, an `ssh -L` forward of its loopback port, a readiness wait through it, the script, then `rm -sf api-debug` — against a seeded stack there is no token left to use, so the step is **skipped with a warning** (and `--no-dogfood` skips it explicitly);
+12. tunnel: `token` starts `cloudflared` and waits for the public origin to answer with the code the mode allows — an Access redirect (`301`/`302`/`303`/`307`/`308`) or the Basic Auth `401` for a named deployment whose file carries a hash (the minted file always does), never a `200`; only a named deployment with no hash also accepts `200`, where Access is the sole front door. The wait proves the edge answers, **not** that a connector is attached, so §10.6 stays mandatory; `quick` starts `cloudflared-quick`, reads the URL from its log and requires an unauthenticated **`401`** there — a `200` or `3xx` fails the deploy, because Basic Auth is the only perimeter quick mode has. Either way an assertion follows that no container publishes a host port;
+13. `current` is repointed, the previous release is offered as the rollback command, and the deploy prunes: `releases/` keeps the last three, and images that belong to neither the current nor the previous release are removed.
+
+It prints the sha, the public URL (quick: the random host plus the warning that it changes on every restart), the Basic Auth user with the **path** of the secrets file, and the rollback command — never a secret value: the ingest token is dropped from the seed output.
+
+### 5.1 The secrets file
+
+`$HOME/evidgate-review/.env.review`, mode `600`, next to `releases/`. `deploy.sh` mints every placeholder of `infra/review/env.review.template`: a 32-byte CI pepper and 48-byte signing key as base64, the dev-login secret as base64 of 32 bytes, the two SeaweedFS S3 keys (`EVIDGATE_S3_ACCESS_KEY`, `EVIDGATE_S3_SECRET_KEY`) as 24 random hex bytes each (48 characters, independent values, no shared prefix), the role passwords as 24 random hex bytes, and the Basic Auth password as **24** random hex bytes (48 characters) plus its apr1 hash — a hand-shared credential over a public URL with no rate limit, which is part of why quick mode is not the review deployment. `EVIDGATE_REVIEW_SHA` holds the **first** deploy's sha and `EVIDGATE_REVIEW_TAG` the tag the images carry (the full sha, or its first 12 characters when `--build-local` shipped them); every later run overrides `EVIDGATE_REVIEW_TAG` (and `EVIDGATE_REVIEW_SHA`) on the command line, which wins over the file — so a hand-run compose command must pass `EVIDGATE_REVIEW_TAG=<tag>` too, or it starts the first deploy's images or dies on `pull_policy: never` (§9). It carries the S3 identity as `EVIDGATE_S3_ACCESS_KEY`/`EVIDGATE_S3_SECRET_KEY`, which compose passes to the container as `EVIDGATE_REVIEW_S3_ACCESS_KEY`/`EVIDGATE_REVIEW_S3_SECRET_KEY` (the container writes its identity file from them, so nothing is bind-mounted; there is no `EVIDGATE_SEAWEEDFS_S3_CONFIG` in this stack), the tunnel mode, the Basic Auth keys, `EVIDGATE_REVIEW_PUBLIC_ORIGIN`, `CLOUDFLARE_TUNNEL_TOKEN` and the loopback ports later runs read back. `COMPOSE_PROJECT_NAME` pins the project.
+
+The Basic Auth keys are load-bearing: `EVIDGATE_REVIEW_BASIC_AUTH_USER` (default `reviewer`) and `EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD` (plaintext, only for the owner to hand out) stay in the file; compose passes only the user and the apr1 hash `EVIDGATE_REVIEW_BASIC_AUTH_HASH` (single-quoted, so `$apr1$` survives) — bcrypt is rejected on purpose, there is no `crypt()` in the nginx image. `EVIDGATE_REVIEW_BASIC_AUTH=required` refuses to start `web` without user and hash; `optional` enforces them the moment both are set and serves without auth only while both are empty. `CLOUDFLARE_TUNNEL_TOKEN` is the one value not minted: it comes from the operator's shell (§4.2).
+
+`EVIDGATE__SESSION__PEPPER` (base64 of 32 bytes) is what lets the Api mint a session — without it `POST /v1/dev/session` answers `503` (§6) — and compose declares it as `${EVIDGATE__SESSION__PEPPER:?missing from .env.review}` on `api` and `api-debug` only, so a file that predates the key fails `up` with that message instead of serving a silent `503`: add the line by hand on the host, mode `600` unchanged.
+
+It is written over stdin into a `umask 077` temporary and moved in with `mv -n`, so a concurrent deploy keeps the file that won and no value becomes an argv. Never copy it into the repository, a ticket or a chat message, and never let it appear in `docker compose config` output.
+
+### 5.2 The dogfood run
+
+The default flow runs `scripts/dev/pilot0-dogfood.sh` **from the operator machine** against the deployed API: the `ssh -L` forward of step 11 makes it a loopback address there, the only shape the script accepts (`EVIDGATE_API_URL`, default `http://127.0.0.1:8080`); the case id is read from the review database on the host (the dev token cannot read the catalog). Run A must gate PASS (0), run B FAIL (1), run C pending (2) — the check in [`pilot0-dogfood.md`](pilot0-dogfood.md) and item (d) of the S186 notes in [`../../plans/features/SOLO-PATH.md`](../../plans/features/SOLO-PATH.md).
+
+The seed prints its inputs **only while it creates them**, and `deploy.sh` deletes the one line that carries the dev token, because a minted token's secret cannot be shown again. A redeploy or rollback therefore reaches a seeded stack with no token and no `PILOT0_*` ids, and the operator has no way to recover them from the host: the dogfood step is **skipped with a warning** instead of failing the deploy, and the review deployment never depends on its result. `--no-dogfood` skips it explicitly, which is what an operator machine without `node_modules`/Playwright wants.
+
+`--local` runs the same steps here (no ssh, no tunnel, `web-local` instead of `web`, an `http://127.0.0.1:<port>/` URL) under a throwaway root it prints as `local smoke root: …` (`mktemp -d $TMPDIR/evidgate-review-local.XXXXXX`), so `$HOME` keeps nothing and every smoke mints fresh secrets. `EVIDGATE_REVIEW_HOST_ROOT` pins a path; `status.sh --local` and `down.sh --local` refuse to run without it, because they inspect or stop an existing smoke rather than create one, so export the root the smoke printed. `--local` refuses `--public-origin`.
+
+## 6. How a reviewer signs in
+
+**Quick tunnel:** the reviewer opens the printed `https://<words>.trycloudflare.com/` URL and the browser prompts for Basic Auth — user `reviewer`, password from the owner, who reads it on the host in their own terminal and delivers it out of band (password manager, not chat):
+
+```console
+ssh <ssh-host> "grep '^EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD=' \$HOME/evidgate-review/.env.review"
+```
+
+A wrong password answers `401` on every path that serves content or proxies; the locale redirects and the `404`s also sit behind the access phase once auth is on, and only with both Basic Auth keys empty — the single state that disables it — do they answer before it. There is no Access page in this mode, and the browser keeps the credential for that origin, so the app's own sign-in below needs nothing extra.
+
+**Named tunnel:** the reviewer opens `https://evidgate-review.example.com/`, gets the Access page, enters their email and selects **Send login code**; the PIN arrives from `noreply@notify.cloudflare.com` and is valid for 10 minutes ✅ (§4.3). After the PIN the browser also prompts for Basic Auth — the same `reviewer` user and password as quick mode, because the shipped `.env.review` mints the pair in every mode and `optional` enforces both keys the moment they are set (§5.1) — and then the `web` bundle loads: `/` answers `302` to `/vi/` (the default locale), `/vi/` and `/en/` are the two builds, the routing `apps/web/e2e/static-server.mjs:8-16` implements.
+
+**App sign-in, both modes.** The app has no human login yet (02.3.1 is open), so the review build uses the Development-only dev sign-in: `POST /v1/dev/session` with the secret from `.env.review`. The route exists only when `ASPNETCORE_ENVIRONMENT=Development` and both `EVIDGATE__DEVLOGIN__ENABLED=true` and `EVIDGATE__DEVLOGIN__SECRET` are set ⚠️ (parallel dev-login lane) — check that the deployed sha carries it (`404` means the sha predates it, `401`/`403` means environment or keys are wrong). It issues a real session cookie through the normal session machinery, which is what makes `GET /v1/runs/{r}` answer instead of 401. Diagnostics: `503` means the Api refused to mint the session — either it did not consider the request HTTPS or the session pepper is unset. The scheme arrives as nginx's constant `X-Forwarded-Proto: https` on the trusted bridge (`ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` on `api`/`api-debug` only, never on the Worker: the header is trusted because nothing but nginx can reach the Api). `404` is a sha without the route, `401`/`403` the environment or the keys. The **operator** reads the secret on the host in their own terminal — not a reviewer:
+
+```console
+ssh <ssh-host> "grep '^EVIDGATE__DEVLOGIN__SECRET=' \$HOME/evidgate-review/.env.review"
+```
+
+That prints the secret to the operator's terminal and to no file; the reviewer receives only that one value, out of band. Do not hand a reviewer SSH to the deploy account: it is in the `docker` group, which is root-equivalent and can read every secret in the file. The cookies are scoped to the hostname, and the reviewer then sees the run list, run detail, evidence panel and decision.
+
+`[OPEN]` the Dev sign-in form lands with 02.3.1's session work; until then the web path is the `POST /v1/dev/session` call itself, which a reviewer cannot drive from the browser. The tunnel and credential layers do not depend on it.
+
+## 7. Upgrade and rollback
+
+Upgrade to a newer commit (a seeded stack has no dev token left, so the dogfood is skipped with a warning; §5.2):
+
+```console
+scripts/review/deploy.sh <ssh-host> --tunnel token \
+  --public-origin https://evidgate-review.example.com --build-local
+```
+
+`--build-local` is the 4 GB reference host's path: it builds and ships the images here, and the host only loads them (a host-side build there is refused under 6 GiB RAM without swap, §3, and with swap it still means four .NET builds on 4 GB). Repeat the ingress flags as well: without `--tunnel` or `--public-origin` the mode resolves to `none` and the tunnel is not restarted at all. Pass `--tunnel quick` again to keep a quick tunnel — **restarting it hands out a new URL**, so tell the reviewer and expect the old link to fail. Switching modes does not stop the other container (each tunnel service is `restart: unless-stopped`): remove it first, `docker rm -f evidgate-review-cloudflared-quick` before going named and `docker rm -f evidgate-review-cloudflared` before going quick, then confirm `docker ps --filter name=evidgate-review-cloudflared` lists exactly one connector. With no `--sha` this deploys `HEAD` of the clean tree; `--sha <sha>` ships a specific 40-character ancestor of `HEAD`. One `releases/<sha>/` is kept per sha (reused only when its `.release-sha` matches) and `current` is repointed; the **last three** stay on disk and older ones are pruned, while images that belong to neither the current nor the previous release are removed — that retention is what makes a rollback to one of them cheap.
+
+Against existing volumes the seed prints nothing, so every redeploy and rollback reaches the dogfood step without a token and skips it with a warning (§5.2); `--no-dogfood` skips it explicitly.
+
+Rollback (code only, one step):
+
+```console
+scripts/review/deploy.sh <ssh-host> --sha <previous-sha> --build-local
+```
+
+`<previous-sha>` is the `previous release:` line the last deploy printed and exists in the operator's clone (the clone deployed it); add `-i <keyfile>` (or export `EVIDGATE_REVIEW_SSH_KEY`) when no `~/.ssh/config` identity applies (§5). A rollback is the ordinary deploy path with an older sha: it ships that tree into `releases/<sha>/` and **re-builds and re-ships the images for that sha**, because the host's tags are what compose resolves — `docker save | docker load` under `--build-local`, or a host-side build. Its dogfood step is skipped with a warning like any redeploy. Two limits ⚠️: **migrations are forward-only** (the migrator applies what is missing and never reverts, so an older API against a newer schema works only when the newer migration was additive; across a destructive one, recreate the stack with `down.sh --purge --yes` and deploy the old sha), and **rollback does not restore data** — volumes keep whatever the newer build wrote.
+
+## 8. Status, stop, purge, teardown
+
+```console
+scripts/review/status.sh <ssh-host>
+```
+
+is read-only and safe at any time. It prints the compose project, the release `current` points at and whether its `.release-sha` marker still matches, the secrets file path with its mode (`ls -l`, never the content), the tunnel mode (`token`, `quick` or `none`), the public origin **recorded in `.env.review`** — the value the deploy that passed `--public-origin` wrote, which for a named tunnel is that value and not the dashboard's hostname — and, while `cloudflared-quick` runs, its ephemeral `trycloudflare.com` URL from the container log, the Basic Auth user and the path of the file holding the password, every container with its state and status, and **every published host port**. `host ports: none published` is the expected line for either tunnel profile; anything else is a second door (§10.4). `--local` reports this machine's stack instead and needs `EVIDGATE_REVIEW_HOST_ROOT` set to the root a smoke printed (§5.2).
+
+```console
+scripts/review/down.sh <ssh-host>
+```
+
+runs the `down --remove-orphans` with `COMPOSE_PROFILES='*'` (so the tunnel and the `local`/`debug` services are in the model), exporting the tag `.env.review` records so the command never aborts on the `${EVIDGATE_REVIEW_TAG:?}` guard, and then sweeps the project's labels with `docker rm -f`, so **every** container of `evidgate-review` stops, the tunnel included; the volumes stay and the next deploy of the same or an older sha serves the same data. `--purge --yes` takes the same path plus `down -v` before deleting `releases/` and `current`. To confirm, `docker ps --filter label=com.docker.compose.project=evidgate-review` prints nothing — a straggler at that point is a bug, and `docker rm -f <name>` is the by-hand recovery. `down.sh --local` needs `EVIDGATE_REVIEW_HOST_ROOT` like `status.sh --local` (the root a smoke printed) and refuses without it.
+
+```console
+scripts/review/down.sh <ssh-host> --purge --yes
+```
+
+also deletes the volumes (Postgres data and the bucket) and every `releases/<sha>/` plus `current`. `--purge` without `--yes` refuses: the volumes are the only copy and there are no backups. The **secrets file survives on purpose** (a later deploy reuses the credentials the services know, Basic Auth included), so deleting it by hand mints new role passwords and a new Basic Auth password, and purging the database volume is the only way to get a new dev ingest token out of the seed (§5.2).
+
+Cloudflare teardown, in this order (§4.2 paths): **Networking** > **Tunnels** > `evidgate-review` > **Routes**: delete the published application route (the hostname stops resolving — first, when decommissioning); **Zero Trust** > **Access controls** > **Applications**: delete the application and its policy; **Networking** > **Tunnels**: delete the tunnel, which invalidates the token in `.env.review` (delete that file too if the host goes away); partial (CNAME) setups also need the DNS record removed at your own provider, a full setup's record goes with the route ✅. A quick tunnel needs no teardown: `down.sh` removes `cloudflared-quick`.
+
+### 8.1 Boot behaviour
+
+The reference host is stopped at **19:00** and started at **08:00** `Asia/Ho_Chi_Minh`, Monday to Friday, by a scheduler (EventBridge Scheduler, from 2026-11-06). A boot needs no operator:
+
+- **Long-running services return by themselves.** `api`, `worker`, `web`, `postgres`, `seaweedfs` and the connector are `restart: unless-stopped`, so Docker starts them with the engine — no ssh, no `compose up`.
+- **`depends_on` orders a `compose up`, not a boot.** A container that starts before its dependency exits and is restarted by the policy, so `api` and `worker` retry the database and the object store until they answer and `web` proxies as soon as `api` does: expect a minute or two of `502`/`503` right after the boot, not forever.
+- **One-shots do not restart, on purpose.** `db-init`, `migrator`, `seed`, `bucket-init` and `probe` carry no restart policy: a restart of a migration or of the seed would act on a live database. The deployed release simply stays as it is; re-run a one-shot by hand only when you mean to. `api-debug` and `web-local` set `restart: 'no'` explicitly: they exist only for a dogfood window or a `--local` smoke, so a boot starts neither and a redeploy removes them.
+- **Volumes survive** the stop/start, so the data and the seeded ids are the ones the stack had before the stop. Only `--purge --yes` deletes them.
+- **A quick tunnel gets a new URL on every start** — a held link stops working after a boot or a restart. `status.sh` prints the current one: the last `trycloudflare.com` URL in the container's log since its last start, with `api.trycloudflare.com` excluded (quick mode records no public origin in `.env.review`). Re-send it after a boot; a named tunnel keeps its hostname, and `status.sh` prints that recorded origin.
+
+## 9. Rotating secrets
+
+- **Tunnel token.** **Networking** > **Tunnels** > `evidgate-review` > **Rotate token** (the newer label; the permissions page calls it **Refresh token** ⚠️). Rotation blocks *new* connections with the old value but does not disconnect a running connector: replace the `CLOUDFLARE_TUNNEL_TOKEN=` value in `.env.review` (one line, mode `600` — a re-run never rewrites the file) and recreate the connector from the release that serves:
+
+  ```console
+  cd $HOME/evidgate-review/current
+  TAG=$(docker inspect -f '{{.Config.Image}}' evidgate-review-web | cut -d: -f2)
+  EVIDGATE_REVIEW_TAG="$TAG" docker compose --project-name evidgate-review \
+    --env-file "$HOME/evidgate-review/.env.review" -f infra/review/compose.review.yml \
+    --profile tunnel up -d --no-deps --force-recreate cloudflared
+  ```
+
+  Read the tag off the running `web` container, not `.release-sha`: that marker holds the full sha, while `--build-local` tags the images with its first 12 characters, so a tag made from the marker cannot resolve. The env file is given by absolute path because `current` is a symlink and a relative `../` depends on how the shell resolves it.
+
+  Then confirm the tunnel is **Healthy** (§10.6). If the token leaked, delete the tunnel's existing connections too, which drops every connector until the legitimate one reconnects ✅ ([tunnel tokens](https://developers.cloudflare.com/tunnel/advanced/tunnel-tokens/)).
+- **Basic Auth password.** Mint one on the host without leaving it in shell history: `read -rs NEW_PW` (it echoes nothing), then `NEW_HASH=$(printf '%s\n' "$NEW_PW" | openssl passwd -apr1 -stdin)` — apr1 only, bcrypt is rejected. Update `EVIDGATE_REVIEW_BASIC_AUTH_PASSWORD` and `EVIDGATE_REVIEW_BASIC_AUTH_HASH` in the same edit (mode `600`) and keep the hash **single-quoted**, or the `$apr1$…` expands and `web` refuses to start (fail-closed, not open). Then recreate the container from the release that serves, with its tag:
+
+  ```console
+  cd $HOME/evidgate-review/current
+  TAG=$(docker inspect -f '{{.Config.Image}}' evidgate-review-web | cut -d: -f2)
+  EVIDGATE_REVIEW_TAG="$TAG" docker compose --project-name evidgate-review \
+    --env-file "$HOME/evidgate-review/.env.review" -f infra/review/compose.review.yml \
+    --profile tunnel up -d --no-deps --force-recreate web
+  ```
+
+  `TAG` and the absolute env path for the reason given under the tunnel token; the recreate reads the edited file, so the new account and apr1 hash land in the container's start-time htpasswd.
+
+  A stale tag recreates the first deploy's image and the old hash with it (`pull_policy: never` fails instead). Prove the change: the new password gets `200` on `/vi/` and the old one `401` (§10.2). There is no Basic Auth session to expire — but an app session cookie already issued outlives the change, see the dev-login entry.
+- **Dev-login secret.** `EVIDGATE__DEVLOGIN__SECRET` is generated into `.env.review`; edit that one value (mode `600`) and recreate `api` the same way — same container-derived `TAG`, same absolute `--env-file`, `--no-deps --force-recreate api`. `deploy.sh` never rewrites the file, so rotation is a manual edit and nothing else changes. The secret is only compared when a session is minted, so rotating it **does not** end sessions already issued: the cookie is an ordinary session row signed with `EVIDGATE__SESSION__PEPPER` and lives until its idle/absolute expiry. To cut a departed reviewer off, revoke the session rows or rotate `EVIDGATE__SESSION__PEPPER` (which ends every app session; then `up -d --no-deps --force-recreate api worker`).
+- **CI pepper and signing key.** Same shape, recreating `api` and `worker`. A rotated pepper invalidates previously minted ingest tokens, and the seed prints a token only when it mints one (and `deploy.sh` suppresses that line) — purge the database volume (§8) to mint a new one.
+- **Public origin.** `.env.review` holds the origin the **first** deploy wrote, a later deploy does not update it, and it is baked into the web image's CSP (`connect-src` is a build arg): moving the hostname needs the line edited on the host **and** a rebuild of `web` (the same container-derived `TAG` and absolute `--env-file`, `build web` then `up -d --no-deps --force-recreate web`), with the Access application and route following. Quick mode has no origin: its CSP keeps `'self'` and the browser's Basic Auth credential covers the same origin.
+- **Database and SeaweedFS credentials.** Changing them means `down.sh --purge --yes` and a fresh deploy: `db-init` creates the roles from the file, once.
+
+## 10. Verification checklist
+
+Run after a deploy and after any ingress change. Each row is a fact to observe, not a smoke test that "looks fine".
+
+1. **Named tunnel: unauthenticated request is challenged.** `curl -sSI https://evidgate-review.example.com/vi/` and `…/v1/runs/x` without cookies both redirect to `https://<team>.cloudflareaccess.com/cdn-cgi/access/login/...` (`302`, the code Access uses ⚠️). A `200` with app HTML, a `401`, or a redirect to the app's own `/vi/` means Access is not attached to that path: take the route down and fix §4.4 first. This check must never be skipped. The redirect proves an application exists, **not** what its policy allows: §4.4's email allow-list and the absence of `Bypass` have to be read in the dashboard, and one request with an **unlisted** address must not produce a code (no mail arrives, or Access refuses) — a code for an outsider's address means the policy is `Everyone` or a domain rule.
+2. **Quick tunnel: unauthenticated request is refused.** `curl -sSI https://<words>.trycloudflare.com/vi/` answers `401` with `www-authenticate: Basic realm=…`, `-u reviewer:<wrong>` stays `401`, and the real password answers `200`. A `200` without credentials means the Basic Auth layer is missing: `down.sh`, fix `.env.review` (§5.1), deploy again. Probe `/vi/`, not `/`: `/` is a redirect, so a `302` there distinguishes nothing. `deploy.sh` makes this assertion itself before it reports success: in quick mode an unauthenticated `200` or `3xx` fails the deploy.
+3. **Headers.** Signed in (or with Basic Auth), `GET /en/` returns `content-security-policy` (`style-src` with `'nonce-<32 hex>'`, `connect-src` starting `'self'`), `strict-transport-security: max-age=31536000`, `x-content-type-options: nosniff`, `referrer-policy: no-referrer`, `frame-ancestors 'none'` inside the CSP, `cache-control: no-store` on the document and a long one on a hashed asset. The policy is generated at image build from `apps/web/scripts/csp.mjs` + `apps/web/scripts/app-origin-csp.json` — the same policy the e2e static server applies.
+4. **Nothing is published on a host port.** `status.sh` prints `host ports      : none published`, and `ss -ltn` on the host shows no `:8080`, `:5432`, `:8333`. `deploy.sh` asserts it before reporting success, and `infra/review/check.sh` (docker) asserts it for both tunnel profiles. Under `--profile local` (or `--local`) the published loopback port is the surface to assert instead: `curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8088/vi/` answers `401`, because a deployed stack always has both Basic Auth keys set — a `200` there is a **failure**, not a pre-auth state: the keys are empty or `.env.review` was not read. With the real password it answers `200`, wrong credentials `401` with `WWW-Authenticate: Basic realm="Evidgate review"`, `/` answers `302` to `/vi/` for an authenticated request and `401` for an anonymous one, and `/favicon.ico` is a plain `404`, never a redirect.
+5. **The right sha is running.** The same output prints `current` → `releases/<sha>` with a matching release marker, equal to the sha `deploy.sh` reported.
+6. **Named tunnel is healthy.** **Networking** > **Tunnels** lists `evidgate-review` as **Healthy** ✅ (§4.2), and `docker logs evidgate-review-cloudflared 2>&1 | grep -i 'registered tunnel connection'` shows the four edge registrations — the dashboard is the authority, because an Access application answers `302` whether or not a connector is attached. `Inactive` means no edge connection.
+7. **The app works behind the ingress.** After both prompts (Access PIN, then Basic Auth in named mode) the run list renders, run detail shows the evidence panel and the decision, `/vi/` and `/en/` both load, and `ss -ltn` shows nothing but sshd. A 401 from `/v1/runs/{r}` means the session cookie is missing (§6), not a broken proxy.
+8. **Headers, nonce and the health endpoint are as built.** nginx writes `$request_id` into the header and into the body's `__CSP_NONCE__`, so the nonce is 32 hex characters rather than the 22-character base64 (`==`-padded) the e2e server generates; hex is in the base64 alphabet, so `'nonce-<32 hex>'` is a valid nonce source, and one value per response is what the policy requires. A literal `__CSP_NONCE__` in a body means `sub_filter` did not run (not `text/html`). `curl -sSI` shows `server: cloudflare` and no `server: nginx/x.y.z` (`server_tokens off`). `/nginx-health` answers `403` to anything arriving through the tunnel, and the only valid way to assert its `200` is from inside the container — `docker exec evidgate-review-web wget -qO- http://127.0.0.1:8080/nginx-health` (use `evidgate-review-web-local` under `--profile local`). A host `curl` at a published port is not a stable assertion: the guard tests the peer address nginx sees, and Docker rewrites the source to the bridge gateway, so the answer depends on the host's proxy settings. `infra/review/check-nginx-phases.sh` (run by `check.sh`) fails if the guard or its deny default disappears, if `allow`/`deny`/`satisfy` reappear, or if a non-named location returns a `2xx`/`3xx` before auth; `check-web-image.sh` proves the probe live (200 `ok` from `127.0.0.1`, `403` from the container's bridge address).
+9. **The dogfood result** (from `deploy.sh` or a manual `scripts/dev/pilot0-dogfood.sh`): run A exits 0, run B 1, run C 2. A redeploy or rollback against a seeded stack skips this step with a warning (§5.2) — that is not a pass, and only a fresh deploy proves the three exits.
+
+## 11. Known limits and risks
+
+- **Quick mode has no Access in front.** One public `trycloudflare.com` URL plus one shared Basic Auth password (48 hex characters on a freshly minted file) is the whole perimeter: whoever the password reaches can use the app, the URL lands in every log and chat it is pasted into, and nothing rate-limits guesses. Short demo only; the named tunnel is the review deployment.
+- **The quick URL is ephemeral.** Every `cloudflared-quick` restart, redeploy or reboot produces a new hostname; links already sent stop working and nothing in the stack can pin one.
+- **Access and the Basic Auth password are the perimeter in named mode**, because the file mints both and `optional` enforces the pair the moment it is set. The app has no human authentication (02.3.1 open) and hosts run in Development mode. A mistake in §4.4 — a `Bypass` policy, an `Everyone` rule, a wrong hostname, a route without the application — exposes an app that can mint sessions behind one shared password; hence §4.5, §10.1 and the unlisted-address check.
+- **4 GB host: run, do not build.** Its four .NET images (migrator, seed, api, worker) next to the stack exhaust the machine, which is why a host-side build is refused under 6 GiB RAM without swap and why the reference host takes `--build-local --setup-swap` (§3). Memory limits stop one container taking the others down; they do not make the host bigger.
+- **One host, no backups, no HA, no alerting ⚠️.** The volumes are the only copy, `--purge` is destructive, and a host loss needs a full redeploy.
+- **No TLS to the origin.** `cloudflared` terminates public TLS and speaks plain HTTP to `web:8080` over `evidgate-review-edge`: acceptable only while `web` is unpublished on a single-tenant net. The connector has no route to `api`, `seaweedfs` or `postgres` — those stay on `evidgate-review-net`, which `cloudflared` does not join — so a mis-aimed dashboard route fails instead of publishing them (§4.5).
+- **Development mode, synthetic data.** The dev sign-in, the seed and the relaxed diagnostics are Development-only behaviours behind the ingress; the seeded org, project, dev user, suite and policy prove nothing about multi-tenant isolation, retention or deletion.
+- **The product images ship no `contracts/`.** `infra/docker/Dockerfile.{api,worker}` compile `contracts/` only in their build stage, so a manifest submission answers `500` unless something puts `contracts/` above the binary at runtime; this deployment adds it through the derived images above, while the product images themselves still need that fix (open item, outside this lane).
+- **Forward-only migrations** (§7): rollback is code, not schema. **The dev sign-in form is not shipped** (§6, `[OPEN]`): a browser reviewer cannot sign in until it lands.
+- **Every client IP in an audit trail is the connector's.** nginx overwrites `X-Forwarded-For` with `$remote_addr` (it never appends, so a forged entry cannot reach the Api) and sends the same value as `X-Real-IP`; behind a tunnel that address is `cloudflared`'s container, and nothing reads an edge-supplied client IP, so a log review, rate limit or incident timeline built on it sees the connector, not the reviewer.
+- **`web` runs inside 64 MiB with body buffering off.** `/v1/` sets `proxy_buffering off` and `proxy_request_buffering off` (with `/tmp` a 64m tmpfs), so concurrent large uploads and evidence downloads are held in memory instead of spooled, and the container's `mem_limit` is the ceiling for all of them; how many concurrent slow transfers that holds, and in what order they complete, has not been measured.
+- **Stateful healthchecks poll every 2 s** (`5s` on `web`, retries sized for a cold start). That is an acceptable cadence for one host and not a production one, and every `up -d --wait` in the deploy inherits it.
+- **`--build-local` re-ships every image on every deploy**, unchanged layers included: the host's build cache is not consulted, and `docker save | docker load` moves all five images each time — including on a rollback to a sha that is still on disk.
+- **The compose file is long and its inlined shell has no tests.** The SeaweedFS identity writer, the bucket/lifecycle PUT and the `db-init` bootstrap are three long `sh -c` bodies inside YAML, kept in step with `scripts/dev/` by `infra/review/check-inlined-files.sh` rather than by unit tests; the deployment's own scripts carry long functions for the same reason (one ssh round trip per step). Both are recorded here as debt, not as a design goal.
+
+## 12. Troubleshooting
+
+- **`deploy.sh` refuses at preflight.** Read the line: disk below 15 GiB under `$HOME` (prune build cache), compose below v2, unsupported architecture, `$HOME` not writable, ssh without docker rights, or a host-side build on a host under 6 GiB RAM without swap (take `--build-local`, and `--setup-swap` on the host).
+- **`--build-local` fails.** `docker buildx` must exist on the operator machine, and a different architecture needs QEMU (`docker run --privileged --rm tonistiigi/binfmt --install all`). The build runs from an extraction of the sha, so a failure there is a real build failure.
+- **`deploy.sh` refuses the release.** Dirty tree, a sha that is not 40 characters, is not an ancestor of `HEAD`, or lacks `infra/review/compose.review.yml` (§7).
+- **`deploy.sh` stops at the secrets step.** `.env.review` exists with a `__PLACEHOLDER__`; it is never rewritten, so fill it in on the host or move it aside and deploy again. With `--tunnel token`, an empty `CLOUDFLARE_TUNNEL_TOKEN` there stops the run; quick mode refuses a file without `EVIDGATE_REVIEW_BASIC_AUTH_HASH`.
+- **A hand-run `check-web-image.sh` inspects the wrong image.** It resolves `evidgate-review-web:<tag>` through `compose config --images`, which prefers the shell value, and `.env.review` keeps the **first** deploy's sha forever — run it as deploy.sh does, with the tag the running container carries (`.release-sha` holds the full sha and `--build-local` tags 12 characters, so the marker is not it): `EVIDGATE_REVIEW_TAG=$(docker inspect -f '{{.Config.Image}}' evidgate-review-web | cut -d: -f2) bash infra/review/check-web-image.sh --env-file $HOME/evidgate-review/.env.review`. Without the prefix it checks the previous release, or dies with "no image".
+- **`check-web-image.sh` fails a Basic Auth case.** The image must refuse to start with `EVIDGATE_REVIEW_BASIC_AUTH=required` and no user/hash, and must serve unauthenticated only with `optional` plus empty keys — a failure there means the start script, not the deployment, is wrong.
+- **The dogfood dies.** The seed prints its token and ids only once (§5.2) and a redeploy skips the step with a warning, so a failing run means the token and ids were passed by hand and one is wrong: read the line the script names. A dead forward means `127.0.0.1:18080` was busy — free it, or change `EVIDGATE_REVIEW_API_PORT` in `.env.review` and deploy again.
+- **`cloudflared` restarts with 403/401.** The token belongs to a deleted tunnel or was rotated (§9); recreate the container after fixing the value.
+- **Sign-in succeeds but the app still answers `401`.** The cookie is `__Host-evidgate_session` (`Secure`, `Path=/`, no `Domain`), so it is only stored when the browser trusts the request — over the tunnel that is the `X-Forwarded-Proto: https` nginx sends (above), and on the `--local` smoke a loopback origin is already a secure context, so the local profile is not the place to look. Check, in order: the pepper line in `.env.review`, the dev-login secret (§6), and that `status.sh` reports the sha you expect — a stale tag among the running containers keeps an older Api that has no route.
+- **`cloudflared-quick` logs no URL.** `docker logs evidgate-review-cloudflared-quick` shows the outbound error: egress **7844** TCP *and* UDP must be open, quick mode also needs 443 to `api.trycloudflare.com` (it asks Cloudflare for the hostname there), and DNS must resolve the `argotunnel.com` names. When a URL is printed, take the one `deploy.sh` reported: the log also carries `https://api.trycloudflare.com/…`, which the script filters out and which is not the public host. `deploy.sh` waits 180 s for the URL and fails with that excerpt.
+- **Hostname resolves but the app 502s.** The route points at the wrong service; it must be `http://web:8080`. A route to `api:8080`, `seaweedfs:8333` or `postgres:5432` cannot connect at all, because the connector shares only `evidgate-review-edge` with `web` (§4.5). `status.sh` shows whether `web` is up.
+- **Access page loops.** The e-mail is not in the Allow policy, or the OTP mail was consumed by a scanner (§4.3). Blocked users get no mail by design.
+- **Basic Auth rejects a correct password.** Password and hash must be regenerated together (§9) and stay single-quoted; then `--force-recreate web`. An apr1 hash pasted into the hash line without its single quotes is split by compose and never matches.
+- **`/v1/` answers 404 behind the app.** The proxy passes `/v1/` unchanged; compare the API's routes (`GET /v1/runs`, `POST /v1/dev/session`).
+- **`--local` passes but a tunnel profile does not.** `--local` publishes `web` on loopback; the tunnels also need egress to Cloudflare (the named one additionally DNS, Access and the route).
+
+## 13. References
+
+- [`../../infra/review/compose.review.yml`](../../infra/review/compose.review.yml) — the stack, profiles and pins; [`../../infra/review/compose.quick.yml`](../../infra/review/compose.quick.yml) — the quick-tunnel overlay that forces Basic Auth; `infra/review/check.sh --static-only` — pins and inlined files without a build (needs `node` ≥ 20 and `python3`; the flag-less run adds the rendered compose checks for ports and secret redaction).
+- [`../../scripts/review/deploy.sh`](../../scripts/review/deploy.sh), [`status.sh`](../../scripts/review/status.sh), [`down.sh`](../../scripts/review/down.sh) — the operator commands of §5, §7 and §8, with `lib-host.sh` (host facts, swap, `--build-local`) and `lib-secrets.sh` (minting, Basic Auth hash) behind them.
+- [`pilot0-dogfood.md`](pilot0-dogfood.md) — what the dogfood proves and how it fails; [`../../infra/README.md`](../../infra/README.md) — image pins, the no-bind-mount rule, CSP pairing.
+- Cloudflare: [create a tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/), [self-hosted application](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/), [one-time PIN](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/), [session management](https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/), [tunnel tokens](https://developers.cloudflare.com/tunnel/advanced/tunnel-tokens/), [origin parameters](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/origin-parameters/#access), [connectivity pre-checks](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/troubleshoot-tunnels/connectivity-prechecks/), [tunnel with firewall](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/tunnel-with-firewall/).

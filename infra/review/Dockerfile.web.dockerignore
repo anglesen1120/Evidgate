@@ -1,0 +1,37 @@
+# Build context for infra/review/Dockerfile.web (BuildKit picks
+# <Dockerfile>.dockerignore up automatically).
+#
+# The context is the repository root, and this image needs what the api image
+# excludes on purpose: package.json, package-lock.json, apps/web/ and packages/.
+# Everything below is host state or another image's input: it must not be tarred
+# into the context, and .env* must never be (scripts/review/deploy.sh writes real
+# credentials into $HOME/evidgate-review/.env.review, and a context that carried a
+# copy would hand them to the builder).
+.git
+.github
+.spectral.yaml
+artifacts
+TestResults
+docs
+plans
+tests
+fixtures/*
+!fixtures/web-api
+src
+contracts
+migrations
+infra/docker
+node_modules
+**/node_modules
+**/dist
+**/bin
+**/obj
+**/*.user
+**/*.md
+.DS_Store
+.env*
+.local
+.husky
+**/playwright-report
+**/test-results
+**/*.tsbuildinfo

@@ -1,0 +1,19 @@
+# Override for `--profile tunnel-quick`, applied on top of compose.review.yml:
+#   docker compose -f infra/review/compose.review.yml -f infra/review/compose.quick.yml \
+#     --env-file "$HOME/evidgate-review/.env.review" --profile tunnel-quick \
+#     up -d --wait web cloudflared-quick
+#
+# A quick tunnel hands out a public *.trycloudflare.com URL that no operator
+# hostname fronts, so the web container must demand basic auth. The image derives
+# the same requirement from the mode independently (web-start.sh), so a quick
+# deploy that forgets this file refuses to serve rather than publishing an open
+# URL. `web-local` is included so the local smoke cannot disagree either.
+services:
+  web:
+    environment:
+      EVIDGATE_REVIEW_TUNNEL_MODE: quick
+      EVIDGATE_REVIEW_BASIC_AUTH: required
+  web-local:
+    environment:
+      EVIDGATE_REVIEW_TUNNEL_MODE: quick
+      EVIDGATE_REVIEW_BASIC_AUTH: required

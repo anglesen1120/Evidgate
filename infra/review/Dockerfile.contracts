@@ -1,0 +1,18 @@
+# The repository's contracts/ beside the application binary, which the images
+# built in infra/docker/ do not ship: they compile contracts/ in the build stage
+# only, while the runtime looks for contracts/schemas and contracts/adapter above
+# the binary (/app/contracts, then /contracts) and answers 500 without them.
+#
+# Derived, never rebuilt: the base arrives as ARG BASE, so the runtime image, its
+# pin, the non-root uid, the entry point and the published output stay identical
+# by construction. A base must exist before the image derived from it:
+#   docker build -f infra/review/Dockerfile.contracts \
+#     --build-arg BASE=evidgate-review-api-base:<tag> -t evidgate-review-api:<tag> .
+ARG BASE
+FROM ${BASE}
+
+# Root-owned and world-readable only: the app runs as the base image's non-root
+# uid and only ever reads these files, so nothing the app does can rewrite a
+# schema. The chmod is explicit for the same reason as the migrator's COPY: the
+# context is a working checkout whose umask is not the image's business.
+COPY --chmod=a=rX contracts/ /app/contracts/
