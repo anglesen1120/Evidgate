@@ -402,6 +402,109 @@ paths:
           $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
+  /dev/session:
+    post:
+      operationId: createDevSession
+      tags: [identity]
+      summary: >-
+        Development only: sign in as the seeded dev user with the deployment's dev-login secret (S187)
+      description: >-
+        The one route that mints a session from a shared secret, and the only one that is not mapped
+        in a deployment at all. It exists when — and only when — three conditions hold: the host
+        environment is `Development`, `EVIDGATE__DEVLOGIN__ENABLED` is true, and
+        `EVIDGATE__DEVLOGIN__SECRET` is set (`DevSessionGate`). Otherwise the path is not registered,
+        so the answer is the host's ordinary 404 and no anonymous caller can probe the credential;
+        the flag alone is never enough, because a deployed host is refused by the environment.
+        `x-dev-only: true` marks the operation for the SDK: it is generated so a development build
+        can call it, and it is absent from every deployed host.
+        Pre-tenant (00 §5.4.8): `x-permission: none` / `x-auth: anonymous`, `security: []`, and never
+        `X-XSRF-TOKEN` — the route SETS a cookie rather than authenticating with one, so there is no
+        session for a token to be bound to. The body carries the secret and nothing else: the
+        session always belongs to the seeded dev account (`KnownDevUser.UserId`, the id `seed-dev`
+        writes), never to an account the caller names, and no identity row is written. Both sides
+        are reduced to SHA-256 digests and compared with `CryptographicOperations.FixedTimeEquals`,
+        so neither the timing nor the branch depends on the presented value or its length; a wrong,
+        absent or blank secret is the same 401 `token_invalid` the login callback answers, with no
+        session row and no cookie, and the value is never logged, echoed, counted or put in an
+        exception message. The session is issued through the login's own machinery: the
+        `auth.login` row of every active org is written before the session row exists (a sign-in
+        that cannot be audited issues nothing and answers 503 `unavailable`), an account with no
+        active membership is 403 `no_membership`, and the resulting row is an ordinary session that
+        the logout and revoke routes end. The answer is a bodiless 204 carrying the
+        `__Host-evidgate_session` cookie and the antiforgery pair; a body over 4096 bytes is 413
+        `payload_too_large`, a body that is not `application/json`, is empty, is not JSON or is not a
+        JSON object is 422 `request_invalid`, and every response carries `Cache-Control: no-store`.
+        Throttled per client address from the CI exchange limiter's budget under its own key prefix
+        at one unit, so a wrong guess is never free. No `Idempotency-Key`: nothing is created that a
+        retry would duplicate, and a repeated sign-in replaces the browser's previous session row.
+      x-permission: none
+      x-auth: anonymous
+      x-version: v1
+      x-dev-only: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevSessionRequest'
+      responses:
+        '204':
+          description: >-
+            Signed in as the seeded dev user: no body, and the browser now holds the session cookie
+            and the antiforgery pair.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Set-Cookie:
+              description: >-
+                `__Host-evidgate_session=<opaque value>; Path=/; Secure; HttpOnly; SameSite=Lax` and
+                the antiforgery pair `XSRF-TOKEN` (readable by the page script) plus
+                `__Host-evidgate_af`, exactly as the federated login completion writes them. The
+                session value is opaque and only its HMAC is stored.
+              schema:
+                type: string
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '401':
+          description: >-
+            401 `token_invalid` — the presented secret is wrong, absent or blank. No session row is
+            written and no cookie is set, and the answer is identical for every one of those cases.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: >-
+            403 `no_membership` — the seeded dev account holds no active membership in any
+            organization (the seed has not run, or the membership was removed). No session is issued.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: >-
+            503 `unavailable` — the audit chain or the session write failed, so the sign-in did not
+            happen (fail closed: no session exists for a sign-in nothing recorded).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /auth/link/{provider}:
     post:
       operationId: startProviderLink
@@ -10133,6 +10236,23 @@ components:
             /v1/orgs/{o}/memberships` or its `resend` route (`InviteTokenFormat`). Only the shape is
             checked here: whether the token exists, has expired or belongs to another org is decided
             by the binder at login, and is never answered by this route.
+    DevSessionRequest:
+      type: object
+      description: >-
+        Body of `POST /dev/session` (S187), the development-only sign-in: the deployment's dev-login
+        secret and nothing else. There is deliberately no user id, email or org member — the session
+        always belongs to the seeded dev account — so this route can never sign a caller in as
+        anyone else. An absent or `null` `secret` is treated as a wrong one (401 `token_invalid`,
+        the same answer a mismatch gets, so the route is not an oracle); a non-string value is 422
+        `request_invalid` with `details[].path` = `secret`.
+      required: [secret]
+      properties:
+        secret:
+          type: string
+          maxLength: 512
+          description: >-
+            The value of `EVIDGATE__DEVLOGIN__SECRET` for this deployment. Compared in constant time
+            against SHA-256 digests of both sides; never logged, echoed or stored.
     LinkStartRequest:
       type: object
       description: >-

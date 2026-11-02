@@ -305,8 +305,9 @@ seeded CI binding with a GitHub OIDC token.
 after the application-role grants, because the seed writes through that role
 (skip it with `EVIDGATE_DB_INIT_SEED=0`). It writes, idempotently and in one
 transaction as the owner role, a synthetic tenant: org `dev-org`, project
-`dev-project`, a dev user (`0198a000-0000-7000-8000-00000000d003`, no login exists
-yet) holding `tenant_admin` and `release_approver`, and one **active** CI binding for
+`dev-project`, a dev user (`0198a000-0000-7000-8000-00000000d003`, signed in through
+the development sign-in below) holding `tenant_admin` and `release_approver`, and one
+**active** CI binding for
 the synthetic repository id `9000000000001` (`evidgate-dev/sample`). It refuses, writing
 nothing, unless `DOTNET_ENVIRONMENT=Development` and both database hosts are local or
 bare compose service names. The data is fully synthetic.
@@ -337,6 +338,75 @@ revision and off a newer one.
 Under `--with-token` the same seed also mints the ingest token and writes the sample
 policy revision and its advisory activation through the application role;
 `EVIDGATE_DB_INIT_SEED=0` skips it either way.
+
+## Signing in to the web app against the real API (`POST /v1/dev/session`)
+
+The dev user the seed writes has no login: there is no OIDC provider configured in the
+local stack, so the federated login answers 503 and the web development build, which
+needs a session cookie, cannot open any screen. The development-only sign-in fills that
+gap — it gives the seeded dev user a real session through the same audit and session
+machinery a federated login uses, and it exists **only** in a Development host that asked
+for it.
+
+Enable it in `.env.dev` (never in a deployed environment):
+
+```sh
+# .env.dev — the switch and the shared secret of the local sign-in.
+EVIDGATE__DEVLOGIN__ENABLED=true
+EVIDGATE__DEVLOGIN__SECRET=$(openssl rand -base64 32)
+```
+
+Both keys are secrets-or-switches of the Api only, and neither is required at boot. The
+route is mapped when **all three** conditions hold — the host environment is
+`Development`, `EVIDGATE__DEVLOGIN__ENABLED` is true, and
+`EVIDGATE__DEVLOGIN__SECRET` is set — and in every other case the path is not registered
+at all, so the answer is the host's ordinary **404**, never a 401: a deployment cannot be
+talked into a development sign-in by configuration alone. Restart the stack after adding
+the keys (`scripts/dev/up.sh`), because the mapping is decided while the host builds its
+routes.
+
+The sign-in needs **HTTPS**, even locally: the session cookie is `__Host-` and the
+antiforgery pair is `CookieSecurePolicy.Always`, so a plaintext request cannot mint them
+and the route answers `503 unavailable` before writing anything (no half-made session).
+The dev stack's `ASPNETCORE_URLS=http://127.0.0.1:8080` endpoint therefore cannot sign
+anyone in; run the Api with a certificate instead and point the web dev build's proxy at
+it:
+
+```sh
+dotnet dev-certs https --trust                       # once per machine
+ASPNETCORE_URLS=https://localhost:8443 \
+  EVIDGATE__DEVLOGIN__ENABLED=true \
+  EVIDGATE__DEVLOGIN__SECRET="$EVIDGATE__DEVLOGIN__SECRET" \
+  dotnet run --project src/Evidgate.Api
+```
+
+Then sign in with the secret and keep the cookie jar (`-k` only because the dev
+certificate is local to this machine):
+
+```sh
+curl -sS -k -i -c /tmp/evidgate-dev.cookies \
+  -H 'Content-Type: application/json' \
+  --data "{\"secret\":\"$EVIDGATE__DEVLOGIN__SECRET\"}" \
+  https://localhost:8443/v1/dev/session
+```
+
+A success is a bodiless `204` whose `Set-Cookie` headers carry
+`__Host-evidgate_session` plus the antiforgery pair (`XSRF-TOKEN`, `__Host-evidgate_af`);
+a cookie-authenticated mutation then echoes the `XSRF-TOKEN` value in `X-XSRF-TOKEN`.
+The session always belongs to the seeded dev user (`0198a000-0000-7000-8000-00000000d003`)
+and to nobody else — the body carries the secret and nothing more — and the sign-in writes
+the `auth.login` row of the dev org **before** the session row, so a sign-in that cannot
+be audited issues nothing (`503 unavailable`). A wrong, absent or blank secret is `401
+token_invalid` with no session row and no cookie; the value is compared in constant time
+and never logged. Without an active membership the answer is `403 no_membership`. The
+session is an ordinary row: the logout and revoke routes end it, and signing in again
+replaces the previous one. If the web app reports a stale session after a reseed, rerun
+the curl above.
+
+Behind a TLS-terminating proxy (a tunnel or a load balancer) the Api sees plaintext unless
+forwarded headers are trusted, and then this route refuses with the same `503`: the
+deployment has to terminate TLS at the Api or enable and trust `X-Forwarded-Proto`. It is
+never solved by relaxing the cookie flags.
 
 ## Troubleshooting
 

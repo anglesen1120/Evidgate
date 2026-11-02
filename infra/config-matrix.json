@@ -1016,6 +1016,46 @@
       "note": "`EVIDGATE:INVITE:PepperVersion` (02.1.2-T2 invite group): version stored beside every invite HMAC (`membership.invite_pepper_version`, migration 0043 rejects 0). Exactly one pepper is configured, so this names that pepper's version: bumping it makes every pending invite fail closed (`InviteSecrets.Verify` returns false for any other version) and an admin must resend them — a resend re-mints under the current pepper. Default 1."
     },
     {
+      "key": "EVIDGATE__DEVLOGIN__ENABLED",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "boolean",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:DevLogin:Enabled` (S187): the explicit switch that lets `POST /v1/dev/session` exist. It is one of three conditions and never sufficient on its own — the host environment must also be Development and `EVIDGATE__DEVLOGIN__SECRET` must be set, or the route is not mapped at all and the path answers 404, not 401. Default false, and no environment sets it: a deployment that turns it on outside a development host still has no such route."
+    },
+    {
+      "key": "EVIDGATE__DEVLOGIN__SECRET",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:DevLogin:Secret` (S187): the shared secret a developer presents to `POST /v1/dev/session` to sign in as the seeded dev user. Declared once in `SecretNames` (`DevLoginSecret`) and resolved through `ISecretProvider` by the dev-login options post-configurer, so it is never bound from configuration. Both sides are reduced to SHA-256 digests and compared with `CryptographicOperations.FixedTimeEquals`; a wrong or absent value is 401 `token_invalid` with no session row and no cookie, and the value is never logged, echoed or put in an exception message. Absent leaves the route unmapped. Staging and prod have no source at all: the secret exists only where the route does."
+    },
+    {
       "key": "EVIDGATE__ISOLATION__SELFCHECK",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],
