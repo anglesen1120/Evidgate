@@ -180,6 +180,72 @@ public sealed class SeedDevTokenTests
         (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.policy_revision")).ShouldBe(1);
     }
 
+    /// <summary>
+    /// The sample revision is activated advisory by the seed: it is the pointer a run created afterwards pins, so the
+    /// run's evaluation has a policy to apply instead of failing on a run that pins none.
+    /// </summary>
+    [Fact]
+    public async Task SeedDev_SamplePolicy_IsActivatedAdvisory_SoARunPinsIt()
+    {
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
+
+        var run = _harness.RunWithToken(database, pepper);
+        run.ExitCode.ShouldBe(MigratorExitCodes.Success, run.Error);
+
+        var (revisionId, _) = await _harness.PolicyRevisionAsync(database);
+        run.Output.ShouldContain("seed-dev: sample policy revision 1 activated (advisory)");
+
+        // One pointer, this project, this revision, advisory, moved by the seeded dev user.
+        (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.policy_activation")).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<string>(
+            database,
+            "select project_id::text from public.policy_activation")).ShouldBe(DevSeed.ProjectId.ToString("D"));
+        (await _harness.Fixture.ScalarAsync<string>(
+            database,
+            "select policy_revision_id::text from public.policy_activation")).ShouldBe(revisionId.ToString("D"));
+        (await _harness.Fixture.ScalarAsync<string>(database, "select mode from public.policy_activation")).ShouldBe("advisory");
+        (await _harness.Fixture.ScalarAsync<string>(
+            database,
+            "select activated_by::text from public.policy_activation")).ShouldBe(DevSeed.UserId.ToString("D"));
+
+        // The activation moved the revision out of draft, so the pointer and the revision's state cannot disagree.
+        (await _harness.Fixture.ScalarAsync<string>(database, "select state from public.policy_revision")).ShouldBe("active");
+
+        // A required suite no run can cover would make every decision INCONCLUSIVE, so the sample policy must name the
+        // catalog suite the seed creates.
+        (await _harness.Fixture.ScalarAsync<string>(
+            database,
+            "select body->'required_suites'->>0 from public.policy_revision")).ShouldBe(DevSeedCatalog.SuiteSlug);
+    }
+
+    /// <summary>
+    /// A rerun replays the activation instead of re-running it: still one pointer row, still that revision active, and
+    /// no second <c>policy.activate</c> audit row, so restarting the stack adds nothing to either.
+    /// </summary>
+    [Fact]
+    public async Task SeedDev_SamplePolicy_Rerun_KeepsOneActivationAndOneAuditRow()
+    {
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
+        _harness.RunWithToken(database, pepper).ExitCode.ShouldBe(MigratorExitCodes.Success);
+
+        var (revisionId, _) = await _harness.PolicyRevisionAsync(database);
+        var rerun = _harness.RunWithToken(database, pepper);
+
+        rerun.ExitCode.ShouldBe(MigratorExitCodes.Success, rerun.Error);
+
+        // The replay hands back the first call's answer, so the line repeats `activated`; `already active` is what a
+        // retry after the record's 24 h retention prints, when the handler itself answers changed: false.
+        rerun.Output.ShouldContain("seed-dev: sample policy revision 1 activated (advisory)");
+        (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.policy_activation")).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<string>(
+            database,
+            "select policy_revision_id::text from public.policy_activation")).ShouldBe(revisionId.ToString("D"));
+        (await _harness.Fixture.ScalarAsync<string>(database, "select state from public.policy_revision")).ShouldBe("active");
+        (await _harness.Fixture.ScalarAsync<long>(
+            database,
+            "select count(*) from public.audit_log where action = 'policy.activate'")).ShouldBe(1);
+    }
+
     [Theory]
     [InlineData("Production")]
     [InlineData("Staging")]

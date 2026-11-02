@@ -164,22 +164,23 @@ needs no dev-stack endpoint; to point the same assertions at the dev bucket, use
 ## The dev ingest token (`seed-dev --with-token`)
 
 `scripts/dev/up.sh --with-token` (or `scripts/dev/db-init.sh --with-token` on its own)
-mints one dev ingest token and one sample policy revision for the dev project, both
-through the real commands on the application role:
+mints one dev ingest token and writes one sample policy revision, activated advisory,
+for the dev project — all through the real commands on the application role:
 
 - token `dev-seed`, bound to `dev-project`, scopes `artifact:write`, `decision:read`,
   `event:write` and `run:create`, no expiry (local only, gone with the volume);
-- one sample `policy-revision.v1` revision for `dev-project`, so the project has
-  policy content to activate. `CreatePolicyRevisionCommand` appends a **draft**
-  revision (activation is a separate command), and a run create falls back to the
-  `EVIDGATE:Runs` defaults while no revision is active, so this does not by itself
-  change how a run behaves.
+- one sample `policy-revision.v1` revision for `dev-project` (`CreatePolicyRevisionCommand`
+  appends a **draft**) and, right after it, its activation through
+  `ActivatePolicyCommand` in mode **advisory**. A run created afterwards pins that
+  revision instead of falling back to the `EVIDGATE:Runs` defaults, so its evaluation
+  has a policy to apply instead of failing on a run that pins none.
 
 The seed stays idempotent: rerunning it returns the existing policy revision
-(`sha256:<hash>`) and mints no second token. Two concurrent first runs cannot both
-mint either: the seed holds a session-level PostgreSQL advisory lock across the
-check and the mint, so the second waits, then finds the live `dev-seed` token and
-mints nothing.
+(`sha256:<hash>`), replays its activation (no second pointer row, no second
+`policy.activate` audit row) and mints no second token. Two concurrent first runs
+cannot both mint either: the seed holds a session-level PostgreSQL advisory lock
+across the check and the mint, so the second waits, then finds the live `dev-seed`
+token and mints nothing.
 
 **The secret is printed once.** The seed writes the single line
 `EVIDGATE_DEV_TOKEN=egt_...` to the terminal that ran the script. Neither script
@@ -333,9 +334,9 @@ is rolled back instead of committed. The seed also never resubmits the sample
 content to the create command, which would move the suite's head back to that older
 revision and off a newer one.
 
-Under `--with-token` the same seed also mints the ingest token and the sample
-policy revision through the application role; `EVIDGATE_DB_INIT_SEED=0` skips it
-either way.
+Under `--with-token` the same seed also mints the ingest token and writes the sample
+policy revision and its advisory activation through the application role;
+`EVIDGATE_DB_INIT_SEED=0` skips it either way.
 
 ## Troubleshooting
 

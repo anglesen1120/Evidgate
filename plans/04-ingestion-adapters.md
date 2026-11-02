@@ -180,6 +180,7 @@
 |---|---|---|---|---|---|
 | 04.2.2-T1 | `manifests upload` (upload, verify, print `manifest_hash`) | S | V1 | G2 | 05.1.1-T4, 04.2.1-T2 |
 | 04.2.2-T2 | `runs create` with `Idempotency-Key`, `--json`, policy/suite/env flags | S | V1 | G2 | 05.2.1-T1, 04.2.1-T2 |
+| 04.2.2-T3 | CLI builds `manifest.v1` from a Playwright project and the catalog suite revision (`suite_revision_id`, `case_revision_id`s, planned shards); replaces the Pilot-0 script builder | M | V1 | G2 | 04.2.2-T1, 03.1.3-T1, 03.2.1-T1 |
 #### Story 04.2.3 Spool, send and finalize — acceptance: with the API down for 10 minutes the CLI spools within its size cap, then delivers every event with `duplicate` acks ignored, and never re-runs tests.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
@@ -310,7 +311,7 @@
 | Epic | V1 | V2 | V3 | Total |
 |---|---|---|---|---|
 | 04.1 Event ingest API | 11.5 | — | — | 11.5 |
-| 04.2 `evidgate` CLI | 7.0 | — | — | 7.0 |
+| 04.2 `evidgate` CLI | 8.0 | — | — | 8.0 |
 | 04.3 Playwright reporter | 6.0 | — | — | 6.0 |
 | 04.4 JUnit XML mapper | 7.5 | — | — | 7.5 |
 | 04.5 Appium mapping | — | 5.0 | — | 5.0 |
@@ -318,9 +319,9 @@
 | 04.7 Capability and protocol | 2.5 | — | — | 2.5 |
 | 04.8 Usage events | 1.5 | — | — | 1.5 |
 | 04.9 Replay step, release, docs | 7.5 | — | — | 7.5 |
-| **Total** | **47.0** | **5.0** | **—** | **52.0** |
+| **Total** | **48.0** | **5.0** | **—** | **53.0** |
 
-→ with 20 % buffer **62.4** person-days (V1 56.4, V2 6.0; unit: one senior full-stack .NET + Angular developer for server work, Node/TypeScript unchanged for CLI/adapters, CR-D-1).
+→ with 20 % buffer **63.6** person-days (V1 57.6, V2 6.0; unit: one senior full-stack .NET + Angular developer for server work, Node/TypeScript unchanged for CLI/adapters, CR-D-1).
 
 ## 13. Contract change requests
 

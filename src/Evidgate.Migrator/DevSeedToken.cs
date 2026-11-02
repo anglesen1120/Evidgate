@@ -40,10 +40,11 @@ internal static class DevSeedToken
         "seed-dev: the token above is shown once and is not stored — capture it before this output is lost";
 
     /// <summary>
-    /// The sample <c>policy-revision.v1</c> body: the two suites a run must cover and the flaky budget. Deliberately
+    /// The sample <c>policy-revision.v1</c> body: the seeded catalog suite a run must cover and the flaky budget. The
+    /// suite is the catalog seed's slug, because a required suite no run can cover would make every decision INCONCLUSIVE. Deliberately
     /// minimal and fixed, so the content address is stable and a rerun replays the stored revision instead of appending.
     /// </summary>
-    private const string SamplePolicyBody = """{"flaky_budget":3,"required_suites":["smoke","regression"]}""";
+    private const string SamplePolicyBody = """{"flaky_budget":3,"required_suites":["dev-seed-smoke"]}""";
 
     /// <summary>Applies the seed; <paramref name="withToken"/> adds the ingest token and the sample policy revision.</summary>
     /// <param name="options">Owner-role connection and paths (the tenant is written as the owner first).</param>
@@ -190,7 +191,10 @@ internal static class DevSeedToken
         return true;
     }
 
-    /// <summary>The dev project's one sample revision, through the real command; a rerun replays it (200) instead of appending.</summary>
+    /// <summary>
+    /// The dev project's one sample revision and its activation, both through the real commands; a rerun replays both
+    /// (200) instead of appending or re-activating.
+    /// </summary>
     private static async Task<int> WriteSamplePolicyAsync(IMediator mediator, TextWriter output, TextWriter error)
     {
         var appended = await mediator
@@ -210,8 +214,43 @@ internal static class DevSeedToken
             CultureInfo.InvariantCulture,
             $"seed-dev: sample policy revision {revision.RevisionNo} {revision.Hash} ({outcome})"));
 
+        // Without an active policy a run created afterwards pins no revision and its evaluation task fails forever, so
+        // the seed is not done at the append. The key names the revision, so a rerun replays the stored 200 instead of
+        // writing a second audit row, and new sample content (a new revision id) gets a key of its own rather than a 409.
+        var activated = await mediator
+            .Send(new ActivatePolicyCommand(
+                DevSeed.ProjectId,
+                ActivationBody(revision.Id),
+                ActivationKey(DevSeed.ProjectId, revision.Id)))
+            .ConfigureAwait(false);
+
+        if (!activated.IsSuccess)
+        {
+            await error.WriteLineAsync($"E seed-dev: the sample policy revision could not be activated ({activated.Error!.Code}): {activated.Error.Message}");
+
+            return MigratorExitCodes.MigrationFailed;
+        }
+
+        var activation = activated.Value;
+        await output.WriteLineAsync(string.Create(
+            CultureInfo.InvariantCulture,
+            $"seed-dev: sample policy revision {revision.RevisionNo} {(activation.Changed ? "activated" : "already active")} ({activation.Mode})"));
+
         return MigratorExitCodes.Success;
     }
+
+    /// <summary>The activation body: the sample revision, in the only mode this milestone accepts.</summary>
+    private static byte[] ActivationBody(Guid revisionId) => Encoding.UTF8.GetBytes(string.Create(
+        CultureInfo.InvariantCulture,
+        $$"""{"policy_revision_id":"{{revisionId:D}}","mode":"advisory"}"""));
+
+    /// <summary>
+    /// The activation's <c>Idempotency-Key</c>, derived from the two ids so a rerun replays the stored answer instead of
+    /// re-activating; naming the revision keeps new sample content from conflicting with the previous key.
+    /// </summary>
+    private static string ActivationKey(Guid projectId, Guid revisionId) => string.Create(
+        CultureInfo.InvariantCulture,
+        $"dev-seed-policy-activate:{projectId:N}:{revisionId:N}");
 
     /// <summary>Mints the dev token and prints its secret once, on stdout; a failed mint writes nothing at all.</summary>
     private static async Task<int> MintTokenAsync(

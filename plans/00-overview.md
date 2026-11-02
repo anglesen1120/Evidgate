@@ -487,7 +487,7 @@ Recomputed by `scripts/plan_graph.py` from every task row of 01-13 (sizes per §
 | `01-foundation.md` | 55 | 58.5 | 0.5 | 0.25 | 59.25 | 71.1 |
 | `02-identity-tenancy.md` | 49 | 40 | 3.5 | 3 | 46.5 | 55.8 |
 | `03-catalog-authoring.md` | 40 | 25 | 13 | 0 | 38 | 45.6 |
-| `04-ingestion-adapters.md` | 53 | 47 | 5 | 0 | 52 | 62.4 |
+| `04-ingestion-adapters.md` | 54 | 48 | 5 | 0 | 53 | 63.6 |
 | `05-runs-orchestration.md` | 54 | 38 | 22 | 2 | 62 | 74.4 |
 | `06-evidence-artifacts.md` | 36 | 30.5 | 1 | 0 | 31.5 | 37.8 |
 | `07-policy-decisions.md` | 42 | 30.25 | 1.5 | 0 | 31.75 | 38.1 |
@@ -497,10 +497,10 @@ Recomputed by `scripts/plan_graph.py` from every task row of 01-13 (sizes per §
 | `11-security-compliance.md` | 51 | 45.25 | 9 | 1 | 55.25 | 66.3 |
 | `12-pilot-commercial.md` | 30 | 29.5 | 2 | 0 | 31.5 | 37.8 |
 | `13-product-phases.md` | 54 | 66.5 | 0 | 0 | 66.5 | 79.8 |
-| **Total** | **659** | **571.75** | **120.75** | **13.25** | **705.75** | **846.9** |
+| **Total** | **660** | **572.75** | **120.75** | **13.25** | **706.75** | **848.1** |
 | Buffered (× 1.2) | | 686.1 | 144.9 | 15.9 | | |
 
-By milestone (raw): G1 283.75 · G2 196 · G3 106.75 · G4 119.25. Every V1 task is placed by phase rather than by version: V1 work spans all four phases (raw G1 264.0 · G2 186.5 · G3 72.5 · G4 48.75), V2 spans G1–G4 and V3 sits in G1, G3 and G4; no task depends on a task in a later phase and the task dependency graph has no cycles (`scripts/plan_graph.py`, 2026-10-26, after the role-profile story 13.2.2: 655 tasks, 702.75 raw / 843.3 buffered; before it, 2026-10-23 after CR-D-2 and the UI tasks 13.4.1-T7 / 13.5.1-T7: 647 tasks, 693.25 raw / 831.9 buffered). Owner decisions 2026-10-30 add 01.2.1-T6 and 01.2.1-T7 (both M, V1, G1): two tasks / 2 raw days. The S171 decision adds 05.3.2-T6 (S, V1, G2): one task / 0.5 raw days (659 tasks, 705.75 raw / 846.9 buffered).
+By milestone (raw): G1 283.75 · G2 197 · G3 106.75 · G4 119.25. Every V1 task is placed by phase rather than by version: V1 work spans all four phases (raw G1 264.0 · G2 187.5 · G3 72.5 · G4 48.75), V2 spans G1–G4 and V3 sits in G1, G3 and G4; no task depends on a task in a later phase and the task dependency graph has no cycles (`scripts/plan_graph.py`, 2026-10-26, after the role-profile story 13.2.2: 655 tasks, 702.75 raw / 843.3 buffered; before it, 2026-10-23 after CR-D-2 and the UI tasks 13.4.1-T7 / 13.5.1-T7: 647 tasks, 693.25 raw / 831.9 buffered). Owner decisions 2026-10-30 add 01.2.1-T6 and 01.2.1-T7 (both M, V1, G1): two tasks / 2 raw days. The S171 decision adds 05.3.2-T6 (S, V1, G2): one task / 0.5 raw days (659 tasks, 705.75 raw / 846.9 buffered).
 
 **Calendar check [INFERENCE] (arithmetic, not a forecast):** buffered V1 is 686.1 person-days (499.8 before CR-D-1 and the TL review). At 5 working days per week and full parallelism, that is ≈ 68.6 weeks for 2 engineers and ≈ 45.7 weeks for 3, against the source's 12 weeks to the M3 pilot (§4, pre-CR-D-2 sequence). V2 buffered (144.9 d) is ≈ 14.5 / 9.7 weeks against the source's 6 weeks for M4 (§4, pre-CR-D-2; now G3). **The source calendar does not fit this scope with 2-3 engineers.** Options for the owner (O8): (a) cut V1 to the M3 pilot's critical path (ingest → evidence → decision for one engine; UI screens, cost model and ASVS mapping trimmed), (b) keep scope and treat the source's weeks as sequence only (source §1 already says milestones are priority order, not a commitment), or (c) add engineers. **O8 decided 2026-09-25: option (b)** — scope is kept and milestones are ordering and exit gates, not dates; the source's weeks are sequence only (kept in the historical note of §4). Calendar dates are set after O2 (team size). A V1 cut was simulated and does not reach 12 weeks (DECISIONS O8).
 
