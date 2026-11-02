@@ -12,7 +12,7 @@
 // (fixtures/variant-hash/vectors.json, "empty-object"). The server still owns the real
 // key; this copy only tells the reporter which planned execution it is producing.
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -329,6 +329,30 @@ function parse(values) {
   });
 }
 
+// The reporter stamps its run-level `run.log` markers with an all-zero placeholder key and the
+// server accepts only planned keys (a gap the adapter's plan row owns). Until then the spool
+// is rewritten line by line before `events send`; nothing else in an envelope changes.
+function rekey(values) {
+  const dir = required(values, 'dir');
+  const placeholder = '0'.repeat(64);
+  const key = required(values, 'key');
+  let changed = 0;
+  for (const name of readdirSync(dir).filter((file) => file.endsWith('.jsonl'))) {
+    const path = join(dir, name);
+    const lines = readFileSync(path, 'utf8').split('\n');
+    const out = lines.map((line) => {
+      if (line === '') return line;
+      const envelope = JSON.parse(line);
+      if (envelope.execution_key !== placeholder) return line;
+      envelope.execution_key = key;
+      changed += 1;
+      return JSON.stringify(envelope);
+    });
+    writeFileSync(path, out.join('\n'), { mode: 0o600 });
+  }
+  process.stdout.write(`${changed}\n`);
+}
+
 const [command, ...rest] = process.argv.slice(2);
 const values = flags(rest);
 try {
@@ -340,6 +364,8 @@ try {
     await decision(values);
   } else if (command === 'parse') {
     parse(values);
+  } else if (command === 'rekey') {
+    rekey(values);
   } else if (command === 'invocation') {
     // One id per script invocation, so `runs create --idempotency-key` never replays an
     // earlier run's 201 (contracts/cli.md §9: the key, not the body, is what replays).

@@ -246,6 +246,7 @@ run_once() {
   fi
 
   info "run $label: sending the spool and finalizing shard $shard"
+  "$NODE" "$HELPER" rekey --dir "$spool/$run_id/shard-1" --key "$EXECUTION_KEY" >/dev/null
   spooled "$spool" events send --run "$run_id" --producer shard-1 --json >/dev/null
   spooled "$spool" runs finalize --run "$run_id" --producer shard-1 --shard "$shard" \
     --manifest-hash "$manifest_hash" --json >/dev/null
@@ -302,9 +303,9 @@ fi
 
 printf '\nrun | gate exit | expected | decision | completeness | missing\n'
 for row in "${ROWS[@]}"; do
-  IFS='|' read -r r_exit r_expected r_decision r_completeness r_missing <<<"$row"
+  IFS='|' read -r r_label r_exit r_expected r_decision r_completeness r_missing <<<"$row"
   printf '%s | %s | %s | %s | %s | %s\n' \
-    "${row%%|*}" "$r_exit" "$r_expected" "$r_decision" "$r_completeness" "$r_missing"
+    "$r_label" "$r_exit" "$r_expected" "$r_decision" "$r_completeness" "$r_missing"
 done
 
 if [ "$MISMATCHES" -ne 0 ]; then
