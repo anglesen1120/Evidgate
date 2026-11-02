@@ -225,3 +225,7 @@ Section 2 tables replaced (baseline 187 tasks / 191.75 d):
 | G3 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | G4 | 6 | 0 | 2 | 3 | 1 | 0 | 6 |
 | TOTAL | 187 | 3 | 52 | 100 | 31 | 1 | 191.75 |
+
+Section 2 partial-parent paragraph replaced (old STATUS line 34):
+
+Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, fbb2fe91) and whose remainder is T2.3 and T2.4; and 09.8.1-T1, whose T1.1 + T1.2 landed in #284 and whose remainder is T1.3 + T1.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.

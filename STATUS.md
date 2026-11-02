@@ -5,7 +5,7 @@ Updated 2026-11-02. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 ## 1. Snapshot
 
 ### Resume here
-- Develop: `fb7b8683` (#393, S186 close-out). Migrations `0001`–`0060` are contiguous; highest is `0060_identity_ingest_token_decision_read.sql` (#390), next free `0061`. Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
+- Develop: `fb7b8683` (#393, S186 close-out). Migrations `0001`–`0060` are contiguous; highest is `0060_identity_ingest_token_decision_read.sql` (#390), next free `0061`; 08.5.1-T1.1/T1.2 merged (#306), T1 stays partial (T1.3–T1.7 open). Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
 - Open PRs: lane PRs of S187/S188/S189 plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a lane whose diff `python3 scripts/gate_scope.py` classifies `docs` or `no-dotnet` runs phase 1 (that tier's stages) + `npm run e2e -w apps/web` when `apps/web` changed, and never takes the Docker gate lock; a `full` tier needs phase 2 and the lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Lanes in flight (SESSION-CLAIMS 2026-11-02): S187 DEV-LOGIN, S188 REVIEW-DEPLOY, S189 STATUS-REFRESH (this refresh). S173-S186 are merged and closed out.
@@ -31,7 +31,7 @@ Counted by expanding task ranges in merged STATUS rows against plan_graph task i
 | Remaining | 459 | 501.75 |
 | Plan total | 660 | 706.75 |
 
-Five partial parents in this table (01.7.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, fbb2fe91) and whose remainder is T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. 01.8.1-T3 and 09.8.1-T1 were credited in the S189 recount on their sub-row done-whens, but their §5 rows (01.8.1-T3, 09.3.1-T3, 09.8.1-T1) still read as open and are not yet pruned (recorded gap). Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
+Five partial parents in this table (01.7.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, fbb2fe91) and whose remainder is T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. 01.8.1-T3 and 09.8.1-T1 were credited in the S189 recount on their sub-row done-whens, but their delivery rows (01.8.1 and 09.8.1 "partial"), their §5 rows (01.8.1-T3 including its T4.1 201-check wording, 09.3.1-T3, 09.8.1-T1) and the §5 08.5.1-T1 row still read as before and are not yet pruned (recorded gap). Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
 
 ### Done by area
 
