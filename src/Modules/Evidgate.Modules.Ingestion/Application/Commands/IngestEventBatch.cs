@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Contracts.Validation;
@@ -163,9 +164,31 @@ internal sealed class IngestEventBatchHandler(
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Ingestion, nameof(IngestEventBatch));
 
         // The ids a trace needs exist before parsing, so a refused batch is still attributable
-        // without carrying any body value; producer and event count follow the parse.
-        activity?.SetTag(CorrelationNames.RunId, command.RunId);
+        // without carrying any body value; producer and event count follow the parse. The run id is
+        // tagged in the canonical D form, the same text the edge and the task carrier write.
+        activity?.SetTag(CorrelationNames.RunId, command.RunId.ToString("D", CultureInfo.InvariantCulture));
         activity?.SetTag(CorrelationNames.RequestId, command.RequestId);
+
+        // The caller's identity is settled before the body is looked at: neither guard depends on it, and a
+        // credential that cannot be attributed to a project is refused without spending the parse on it.
+        var principal = principals.Current;
+        if (principal is null || string.IsNullOrEmpty(principal.CredentialId))
+        {
+            // Fail closed: the batch's producer binding needs the caller's token identity (T9).
+            return Result.Failure<BatchAckResult>(new Error(
+                ApiErrorCode.Unauthenticated,
+                "no authenticated producer could be resolved",
+                StatusCodes.Status401Unauthorized));
+        }
+
+        // A producer credential names the one project it writes for. Without that claim the batch
+        // cannot be attributed to a project, so it is refused in the handler, before any read or
+        // write, instead of by the burst limiter, which has no partition to charge such a caller.
+        if (principal.Kind == PrincipalKind.ServicePrincipal && principal.ProjectScope is null)
+        {
+            return Result.Failure<BatchAckResult>(Error.Forbidden(
+                "the events route requires a project-scoped producer token"));
+        }
 
         // (a) The edge cap comes from the schema itself (event-envelope.v1's x-max-bytes), so the limit has
         // one home. It bounds the body as sent, not the decoded size: a gzip body may legitimately inflate
@@ -204,15 +227,6 @@ internal sealed class IngestEventBatchHandler(
         }
 
         var events = parsed.Events;
-        var principal = principals.Current;
-        if (principal is null || string.IsNullOrEmpty(principal.CredentialId))
-        {
-            // Fail closed: the batch's producer binding needs the caller's token identity (T9).
-            return Result.Failure<BatchAckResult>(new Error(
-                ApiErrorCode.Unauthenticated,
-                "no authenticated producer could be resolved",
-                StatusCodes.Status401Unauthorized));
-        }
 
         var producerId = events[0].ProducerId;
         activity?.SetTag(EvidgateTelemetry.ProducerIdTag, producerId);

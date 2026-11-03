@@ -123,20 +123,21 @@ public sealed class IngestLimitsTests
         using var listener = RejectionListener(out var reasons);
 
         // Exactly the cap: decoded and accepted by both caps. The decoded bytes are not a valid batch, so the
-        // route answers 422 event_invalid — never 413, and the limit counter is not touched.
+        // route answers 422 event_invalid — never 413 — and the only refusal counted is the schema one: no
+        // limit reason fires at the boundary.
         var atCap = await PostGzipAsync(client, world.RunId, GzipOf(RepetitiveText(ExpandedCap)));
 
         atCap.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, atCap.ErrorMessage);
         atCap.ErrorCode.ShouldBe("event_invalid");
-        reasons.ShouldBeEmpty();
+        reasons.ShouldBe([IngestBatchRejection.EventInvalid], ignoreOrder: true);
         (await EventRowsAsync(world)).ShouldBe(0);
 
-        // One decoded byte over the cap: 413 expanded_too_large, one counter measurement, zero rows.
+        // One decoded byte over the cap: 413 expanded_too_large, one more counter measurement, zero rows.
         var overCap = await PostGzipAsync(client, world.RunId, GzipOf(RepetitiveText(ExpandedCap + 1)));
 
         overCap.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge, overCap.ErrorMessage);
         overCap.ErrorCode.ShouldBe("batch_too_large");
-        reasons.ShouldHaveSingleItem().ShouldBe(IngestBatchRejection.ExpandedTooLarge);
+        reasons.ShouldBe([IngestBatchRejection.EventInvalid, IngestBatchRejection.ExpandedTooLarge], ignoreOrder: true);
         (await EventRowsAsync(world)).ShouldBe(0);
         (await BatchRowsAsync(world)).ShouldBe(0);
     }

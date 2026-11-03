@@ -61,7 +61,8 @@ public static class IngestionEndpoints
     /// <summary>
     /// Admits, reads and hands one batch to the handler. The burst limit is charged before the
     /// body is read and before the pipeline's permission check: a caller over its budget is
-    /// refused cheaply there by design, and every refusal is counted once.
+    /// refused cheaply there by design, and every refusal is counted once. A caller the limiter
+    /// cannot key on is left to the pipeline and the handler, which refuse it without a write.
     /// </summary>
     private static async Task<Result<BatchAckResult>> IngestEventBatchAsync(
         Guid r,
@@ -90,33 +91,29 @@ public static class IngestionEndpoints
 
         var limits = context.RequestServices.GetRequiredService<IOptions<IngestionLimits>>().Value;
 
-        // The burst limit runs before a byte of the body is read, keyed by the authenticated
-        // project and token id only: no header or body value moves a caller into another
-        // partition, and a caller without both values is refused rather than sharing one.
-        if (!TryRatePartition(principals.Current, out var partition))
+        // The burst limit runs before a byte of the body is read, keyed by the authenticated project
+        // and token id only: no header or body value moves a caller into another partition. A caller
+        // whose key cannot be resolved is not refused here — the limiter never answers before the
+        // pipeline does — and the handler refuses it without a write.
+        if (TryRatePartition(principals.Current, out var partition))
         {
-            IngestBatchRejection.Record(logger, IngestBatchRejection.Forbidden, context.TraceIdentifier, r, 0, 0);
+            var limiter = context.RequestServices.GetRequiredService<IngestionRateLimiter>();
 
-            return Result.Failure<BatchAckResult>(Error.Forbidden(
-                "the events route requires a project-scoped producer token"));
-        }
+            // One charge against both budgets (the token's own and the project's), committed only when
+            // both admit, so a refused token never spends the budget its siblings share.
+            var admission = limiter.AcquireBoth(partition.ProjectId, partition.TokenId);
 
-        var limiter = context.RequestServices.GetRequiredService<IngestionRateLimiter>();
+            if (!admission.Allowed)
+            {
+                context.Response.Headers.RetryAfter = RetryAfterHeader.Format(admission.RetryAfterSeconds);
+                IngestBatchRejection.Record(logger, IngestBatchRejection.RateLimited, context.TraceIdentifier, r, 0, 0);
 
-        // One charge against both budgets (the token's own and the project's), committed only when
-        // both admit, so a refused token never spends the budget its siblings share.
-        var admission = limiter.AcquireBoth(partition.ProjectId, partition.TokenId);
-
-        if (!admission.Allowed)
-        {
-            context.Response.Headers.RetryAfter = RetryAfterHeader.Format(admission.RetryAfterSeconds);
-            IngestBatchRejection.Record(logger, IngestBatchRejection.RateLimited, context.TraceIdentifier, r, 0, 0);
-
-            return Result.Failure<BatchAckResult>(new Error(
-                ApiErrorCode.RateLimited,
-                "the project's event ingest rate was exceeded",
-                StatusCodes.Status429TooManyRequests,
-                Retryable: true));
+                return Result.Failure<BatchAckResult>(new Error(
+                    ApiErrorCode.RateLimited,
+                    "the project's event ingest rate was exceeded",
+                    StatusCodes.Status429TooManyRequests,
+                    Retryable: true));
+            }
         }
 
         // Content-Encoding must be exactly one of gzip/identity (case-insensitive). Anything else — an
@@ -240,7 +237,7 @@ public static class IngestionEndpoints
     /// <summary>
     /// The limiter partition of the authenticated caller: the token's project scope and its
     /// credential id. Only a service principal carries both; any other shape has no budget to
-    /// charge, so the route refuses it instead of inventing a shared key.
+    /// charge and is left to the pipeline and the handler, which refuse it without a write.
     /// </summary>
     private static bool TryRatePartition(IRequestPrincipal? principal, out (Guid ProjectId, string TokenId) partition)
     {

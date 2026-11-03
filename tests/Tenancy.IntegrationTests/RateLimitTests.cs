@@ -1,8 +1,8 @@
 // The burst budget of POST /v1/runs/{r}/events over the real host and a real PostgreSQL: a burst over the
 // per-project, per-token limit is 429 rate_limited with an integer Retry-After and no write, header values
-// cannot move a caller into another partition, and a caller without both identity values is refused before
-// the budget is consulted. The partition arithmetic itself is unit-tested in IngestionRateLimiterTests,
-// because each host owns its own limiter instance.
+// cannot move a caller into another partition, and a caller the limiter cannot key on is refused by the
+// pipeline or the handler, never by the limiter. The partition arithmetic itself is unit-tested in
+// IngestionRateLimiterTests, because each host owns its own limiter instance.
 #pragma warning disable CA1861
 using System.Globalization;
 using System.Net;
@@ -119,8 +119,9 @@ public sealed class RateLimitTests
     {
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: 5);
 
-        // A service token that is not scoped to a project has no budget to charge: the route refuses it
-        // rather than sharing one partition with every other unscoped caller.
+        // A service token that is not scoped to a project has no budget to charge: the limiter leaves it
+        // alone rather than sharing one partition with every other unscoped caller, and the handler refuses
+        // the batch it cannot attribute to a project.
         await using var unscoped = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database),
             world.Org,
