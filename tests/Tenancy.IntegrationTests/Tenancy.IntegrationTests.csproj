@@ -57,7 +57,7 @@
     <Compile Include="..\Shared\TemplateDatabase.cs" Link="TemplateDatabase.cs" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Bounded class-level parallelism: bounded to 2: four workers overloaded the Postgres container VM (copy timeouts, 100 ms regex guard trips). -->
+    <!-- Bounded class-level parallelism (4 workers): more workers can overload a small Postgres container VM (copy timeouts, 100 ms regex guard trips). -->
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
