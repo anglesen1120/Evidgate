@@ -15,6 +15,7 @@ namespace Tenancy.IntegrationTests;
 /// through the real host and a real PostgreSQL.
 /// </summary>
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class IngestQaBoundaryTests
 {
     private readonly PostgresTenancyFixture _fixture;

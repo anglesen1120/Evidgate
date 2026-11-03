@@ -22,6 +22,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed partial class EvaluationTaskTests
 {
     private readonly PostgresTenancyFixture _fixture;

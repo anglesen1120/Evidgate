@@ -22,6 +22,7 @@ namespace Tenancy.IntegrationTests;
 /// schema and catalogue checks, secret-free variants, matrix coverage, tenant isolation and the statement budget.
 /// </summary>
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class ManifestTests
 {
     private readonly PostgresTenancyFixture _fixture;

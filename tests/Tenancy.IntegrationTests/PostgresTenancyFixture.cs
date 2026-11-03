@@ -74,12 +74,13 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
 
         await _container.StartAsync().ConfigureAwait(false);
 
-        // Bootstrap must not await the public connection helper's own startup task.
+        // Shared by every test: bootstrap must neither await the public connection helpers' own startup
+        // task nor take the first test's cancellation token, or one cancelled test would fail the run.
         await using var connection = new NpgsqlConnection(SuperuserConnectionString("postgres"));
-        await connection.OpenAsync().ConfigureAwait(false);
-        await ExecuteAsync(
-            connection,
-            $"create role {DatabaseOwnerRole} login createrole password '{_ownerPassword}'").ConfigureAwait(false);
+        await connection.OpenAsync(CancellationToken.None).ConfigureAwait(false);
+        await using var create = connection.CreateCommand();
+        create.CommandText = $"create role {DatabaseOwnerRole} login createrole password '{_ownerPassword}'";
+        await create.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
 
         _template = new TemplateDatabase(
             SuperuserConnectionString,

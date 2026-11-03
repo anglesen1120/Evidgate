@@ -27,6 +27,7 @@ namespace Tenancy.IntegrationTests;
 /// <c>evidgate_ingest_batch_rejected_total</c> counter once with a closed-set reason.
 /// </summary>
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class IngestLimitsTests
 {
     private readonly PostgresTenancyFixture _fixture;
