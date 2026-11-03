@@ -113,6 +113,12 @@ internal sealed class RemoveMemberCommandHandler(
             var latest = await MembershipReader.ReadAsync(db, orgId, membership.Id, cancellationToken)
                 .ConfigureAwait(false);
 
+            if (latest is { Status: MembershipStatus.Removed })
+            {
+                // The winner's removal wrote the audit row; the loser changed nothing.
+                audit.Suppress();
+            }
+
             return latest switch
             {
                 null => Result.Failure(Error.NotFound("no membership with that id is visible to this tenant")),

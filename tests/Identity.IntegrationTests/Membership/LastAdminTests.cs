@@ -27,6 +27,12 @@ public sealed class LastAdminTests : CatalogueTestBase
     /// <summary>One lucky interleaving must not pass for the invariant; each round uses a fresh org.</summary>
     private const int RaceIterations = 3;
 
+    /// <summary>
+    /// Long enough that an unlocked request would have finished many times over, so "still pending"
+    /// is evidence of the guard's row lock rather than of a slow machine.
+    /// </summary>
+    private const int PendingDelayMilliseconds = 1500;
+
     public LastAdminTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -231,6 +237,88 @@ public sealed class LastAdminTests : CatalogueTestBase
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await response.Content.ReadFromJsonAsync<JsonElement>(Token))
             .GetProperty("error").GetProperty("code").GetString().ShouldBe("last_admin");
+    }
+
+    /// <summary>
+    /// The guard's lock is what makes the race deterministic, so this proves it directly instead of
+    /// inferring it from an outcome: an owner transaction runs the guard's own statement —
+    /// <c>… order by membership.id for update of membership, membership_role</c> — over the org's two
+    /// admins, and the DELETE of one of them cannot get past it. The request stays pending far past the
+    /// point an unlocked one would have finished, then completes the moment the holder commits. Drop the
+    /// <c>for update</c> and the pending assertion fails.
+    /// </summary>
+    [Fact]
+    public async Task Remove_Of_An_Admin_Waits_For_The_Guard_Lock_And_Completes_When_It_Is_Released()
+    {
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var (keptAdminId, _) = await SeedActiveMemberAsync(org, Unique("lock-kept"), "tenant_admin");
+        var (targetAdminId, _) = await SeedActiveMemberAsync(org, Unique("lock-target"), "tenant_admin");
+
+        await using var factory = IdentityApiFactory.Start(Fixture, org);
+        using var client = factory.CreateClient();
+
+        await using var connection = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await connection.OpenAsync(Token);
+
+        // The runtime object is an NpgsqlTransaction; the cast only states the type the holder's
+        // commands need (NpgsqlCommand.Transaction is NpgsqlTransaction, not DbTransaction).
+        await using var holder = (NpgsqlTransaction)await connection.BeginTransactionAsync(Token);
+
+        (await LockAdminsAsync(connection, holder, org)).ShouldBe(
+            2, "the holder must hold both admin rows, or the DELETE below is free to run");
+
+        var pending = DeleteAsync(client, $"/v1/orgs/{org}/memberships/{targetAdminId}", "lock-remove-1");
+        await Task.Delay(PendingDelayMilliseconds, Token);
+        pending.IsCompleted.ShouldBeFalse(
+            "the DELETE waits on the guard's row lock; a request that finished here ran without it");
+
+        await holder.CommitAsync(Token);
+
+        using var response = await pending;
+        response.StatusCode.ShouldBe(
+            HttpStatusCode.NoContent, "released, the guard sees the kept admin and allows the removal");
+        (await MembershipStatusAsync(targetAdminId)).ShouldBe("removed");
+        (await MembershipStatusAsync(keptAdminId)).ShouldBe("active");
+    }
+
+    /// <summary>
+    /// The guard's statement itself (<c>MembershipReadSql.ActiveMembershipsHoldingRole</c>), run by the
+    /// case so the lock it takes is the lock the request must wait for.
+    /// </summary>
+    /// <param name="connection">The owner connection the holder runs on.</param>
+    /// <param name="transaction">The holder's open transaction.</param>
+    /// <param name="orgId">The org whose admin rows to lock.</param>
+    private static async Task<int> LockAdminsAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid orgId)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            select membership.id
+              from public.membership
+              join public.membership_role
+                on membership_role.org_id = membership.org_id
+               and membership_role.membership_id = membership.id
+              join public.role on role.id = membership_role.role_id
+             where membership.org_id = @org_id
+               and membership.status = 'active'
+               and role.code = 'tenant_admin'
+             order by membership.id
+               for update of membership, membership_role
+            """;
+        command.Parameters.AddWithValue("org_id", orgId);
+
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        var locked = 0;
+        while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+        {
+            locked++;
+        }
+
+        return locked;
     }
 
     /// <summary>An address no other case of this run uses, so the shared database stays isolated.</summary>

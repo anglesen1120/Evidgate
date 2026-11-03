@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Identity.Sessions;
@@ -7,6 +9,7 @@ using Evidgate.Testing;
 using Identity.IntegrationTests.Sessions.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Shouldly;
@@ -252,6 +255,107 @@ public sealed class RemovalTests : TenantTest
             SessionTestHost.CookieHeaderFor(member.SessionCookie));
 
         next.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The revocation covers the sessions that exist when it runs; a session minted afterwards — the
+    /// successor a rotation would have written for a request already in flight — is still refused by the
+    /// membership check, because removability is decided per request from the org's active memberships
+    /// (the real <c>PermissionEvaluator</c> member path), not from the credential.
+    /// </summary>
+    [Fact]
+    public async Task A_Session_Minted_After_The_Removal_Is_403_NoMembership_On_The_Org_Route()
+    {
+        using var host = SessionTestHost.Start(Fixture);
+        using var sessionClient = host.CreateSessionClient();
+        var member = await host.SignInMemberAsync(sessionClient);
+        var membershipId = await MembershipIdAsync(host, member.OrgId, member.UserId);
+
+        var (status, _) = await RemoveAsync(member.OrgId, membershipId, "remove-after-mint-1");
+        status.ShouldBe(HttpStatusCode.NoContent);
+
+        // Written after the revoke-all ran, so the removal cannot have stamped it: only the membership
+        // check can refuse the next request.
+        var successor = await host.CreateSessionAsync(member.UserId);
+        (await host.SessionRowAsync(successor.SessionId)).RevokedAt.ShouldBeNull(
+            "the successor was written after the revocation, so it is live for this case to mean anything");
+
+        using var factory = IdentityApiFactory.Start(
+                Fixture,
+                new IdentityHostSetup(member.OrgId, Principal: RequestPrincipal.Member(member.UserId)))
+            .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+                {
+                    // The session host minted the cookie with its own fresh pepper; this host must hash
+                    // with the same one, or the request is 401 before the membership check is reached.
+                    ["EVIDGATE:SESSION:PEPPER"] = Convert.ToBase64String(host.Pepper),
+                    ["EVIDGATE:SESSION:PEPPERVERSION"] =
+                        SessionTestHost.PepperVersion.ToString(CultureInfo.InvariantCulture),
+                })));
+        using var orgClient = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/v1/orgs/{member.OrgId}/memberships");
+        request.Headers.Add("Cookie", SessionTestHost.CookieHeaderFor(successor.CookieValue));
+
+        using var response = await orgClient.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await SessionTestHost.ErrorCodeAsync(response)).ShouldBe(
+            ApiErrorCode.NoMembership,
+            "an unrevoked session of a removed member is no member of the org");
+    }
+
+    /// <summary>
+    /// Two removals of one non-admin member race each other with different idempotency keys — the one
+    /// arrangement the route does not serialise for the client. Both answer 204 (the loser reads the
+    /// winner's <c>removed</c> row and answers what the serial replay would have), and the chain carries
+    /// exactly ONE <c>membership.remove</c> row for that membership, because the loser suppresses the
+    /// ambient audit unit instead of describing a change it did not make.
+    /// </summary>
+    [Fact]
+    public async Task Two_Concurrent_Removals_Of_One_Member_Both_Answer_204_And_Write_One_Audit_Row()
+    {
+        using var host = SessionTestHost.Start(Fixture);
+        using var sessionClient = host.CreateSessionClient();
+        var member = await host.SignInMemberAsync(sessionClient);
+        var membershipId = await MembershipIdAsync(host, member.OrgId, member.UserId);
+        var path = $"/v1/orgs/{member.OrgId}/memberships/{membershipId}";
+
+        await using var factory = IdentityApiFactory.Start(Fixture, member.OrgId);
+        using var client = factory.CreateClient();
+        using var first = new HttpRequestMessage(HttpMethod.Delete, path);
+        first.Headers.Add("Idempotency-Key", "concurrent-remove-1");
+        using var second = new HttpRequestMessage(HttpMethod.Delete, path);
+        second.Headers.Add("Idempotency-Key", "concurrent-remove-2");
+
+        var raced = await Task.WhenAll(
+            client.SendAsync(first, TestContext.Current.CancellationToken),
+            client.SendAsync(second, TestContext.Current.CancellationToken));
+
+        try
+        {
+            raced.ShouldAllBe(
+                response => response.StatusCode == HttpStatusCode.NoContent,
+                "both removals answer the route's idempotent 204");
+            (await MembershipStatusAsync(host, membershipId)).ShouldBe("removed");
+            ((long)(await host.ScalarAsync(
+                """
+                select count(*)
+                  from public.audit_log
+                 where org_id = @org_id
+                   and action = 'membership.remove'
+                   and object_id = @object_id
+                """,
+                [("org_id", member.OrgId), ("object_id", membershipId.ToString("D"))]))!).ShouldBe(
+                1L,
+                "one membership was removed, so exactly one audit row describes it");
+        }
+        finally
+        {
+            foreach (var response in raced)
+            {
+                response.Dispose();
+            }
+        }
     }
 
     /// <summary>
