@@ -23,14 +23,13 @@ namespace Identity.IntegrationTests.Login.Completion;
 /// second file (<c>LoginFlowTests.GitHub.cs</c>) over the same host helper, without touching this one.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class LoginFlowTests : CatalogueTestBase
 {
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container and migrated template.</param>
     public LoginFlowTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

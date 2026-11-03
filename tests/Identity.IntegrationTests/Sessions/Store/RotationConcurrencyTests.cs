@@ -20,10 +20,10 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// so both statements are known to be queued on it — that is what makes the two rotations overlap instead of
 /// happening to run one after the other.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RotationConcurrencyTests : SessionHardeningTestBase
 {
+    /// <summary>Shares the run's database: the chain it counts hangs off the session it minted.</summary>
     public RotationConcurrencyTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -33,7 +33,7 @@ public sealed class RotationConcurrencyTests : SessionHardeningTestBase
     [Fact]
     public async Task Two_Concurrent_Rotations_Of_One_Session_Produce_Exactly_One_Successor()
     {
-        var userId = await SeedUserAsync("rotate-race@example.com");
+        var userId = await SeedUserAsync(Unique.Email("rotate-race"));
         var clock = ClockAt();
         var predecessor = await CreateSessionAsync(userId, clock);
         var store = CreateStore(clock);
@@ -91,7 +91,7 @@ public sealed class RotationConcurrencyTests : SessionHardeningTestBase
     [Fact]
     public async Task Back_To_Back_Rotations_Leave_One_Successor()
     {
-        var userId = await SeedUserAsync("rotate-back-to-back@example.com");
+        var userId = await SeedUserAsync(Unique.Email("rotate-back-to-back"));
         var clock = ClockAt();
         var predecessor = await CreateSessionAsync(userId, clock);
         var store = CreateStore(clock);

@@ -23,9 +23,8 @@ namespace Identity.IntegrationTests.Qa;
 /// helper's. Sequence numbering, rate-limit budgets and the ten-minute staging all come from the
 /// production wiring.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class QaLinkEdgeTests : HarnessTest
+public sealed class QaLinkEdgeTests : TenantTest
 {
     /// <summary>The address the first account's provider verifies.</summary>
     private const string EmailA = "qa-a@example.test";
@@ -46,9 +45,9 @@ public sealed class QaLinkEdgeTests : HarnessTest
     private const string GitHubSubjectC = "qa-github-c";
 
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container; this class gets a private database dropped after each test.</param>
     public QaLinkEdgeTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

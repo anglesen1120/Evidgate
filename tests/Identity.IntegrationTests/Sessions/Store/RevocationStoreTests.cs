@@ -10,10 +10,10 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// writes run on the CALLER's tenant scope — same transaction — so a rolled-back membership change or role
 /// change takes its revocations with it, and nothing of another account is touched.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RevocationStoreTests : SessionHardeningTestBase
 {
+    /// <summary>Shares the run's database: the stores act on the account and org the case seeded.</summary>
     public RevocationStoreTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -27,8 +27,8 @@ public sealed class RevocationStoreTests : SessionHardeningTestBase
     public async Task Revoke_All_For_A_User_Stamps_The_Live_Sessions_Only()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var member = await SeedUserAsync("revoke-all@example.com");
-        var bystander = await SeedUserAsync("bystander@example.com");
+        var member = await SeedUserAsync(Unique.Email("revoke-all"));
+        var bystander = await SeedUserAsync(Unique.Email("bystander"));
         var clock = ClockAt();
 
         var first = await CreateSessionAsync(member, clock);
@@ -77,7 +77,7 @@ public sealed class RevocationStoreTests : SessionHardeningTestBase
     public async Task Revoke_All_Rolls_Back_With_The_Callers_Transaction()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var member = await SeedUserAsync("revoke-rollback@example.com");
+        var member = await SeedUserAsync(Unique.Email("revoke-rollback"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(member, clock);
 
@@ -103,7 +103,7 @@ public sealed class RevocationStoreTests : SessionHardeningTestBase
     public async Task Require_Rotation_Flags_Live_Sessions_And_Re_Stamps_The_Latest_Change()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var member = await SeedUserAsync("require-rotation@example.com");
+        var member = await SeedUserAsync(Unique.Email("require-rotation"));
         var clock = ClockAt();
 
         var live = await CreateSessionAsync(member, clock);
@@ -166,7 +166,7 @@ public sealed class RevocationStoreTests : SessionHardeningTestBase
     public async Task A_User_With_No_Live_Sessions_Is_Counted_As_Zero()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var member = await SeedUserAsync("no-sessions@example.com");
+        var member = await SeedUserAsync(Unique.Email("no-sessions"));
         var clock = ClockAt();
 
         await using var scope = await Fixture.BeginTenantScopeAsync(org, cancellationToken: Token);

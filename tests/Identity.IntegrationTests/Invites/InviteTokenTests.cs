@@ -19,7 +19,6 @@ namespace Identity.IntegrationTests.Invites;
 /// the ids-only payload of the notification is pinned by
 /// <c>InviteLifecycleTests.Outbox_OneNotifyRowPerMintWithIdsOnly</c> instead.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class InviteTokenTests : CatalogueTestBase
 {

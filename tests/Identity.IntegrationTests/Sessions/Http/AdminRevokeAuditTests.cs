@@ -41,9 +41,8 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// name the session either (02.3.2 D9).
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class AdminRevokeAuditTests : HarnessTest
+public sealed class AdminRevokeAuditTests : TenantTest
 {
     /// <summary>The single-session route of AC6.</summary>
     private const string SessionsPath = "/v1/auth/sessions";
@@ -72,16 +71,10 @@ public sealed class AdminRevokeAuditTests : HarnessTest
     /// <summary>The shape every stored trace id has: what <c>Activity.TraceId</c> renders.</summary>
     private const string TraceIdShape = "^[0-9a-f]{32}$";
 
+    /// <summary>Own database: the faulted-append case installs a trigger on <c>public.audit_log</c>.</summary>
     public AdminRevokeAuditTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
-    }
-
-    /// <summary>Resets the harness database, then restores the migration-seeded permission catalogue.</summary>
-    public override async ValueTask InitializeAsync()
-    {
-        await Fixture.ResetAsync(Token);
-        await CatalogueSeed.ApplyAsync(Fixture, Token);
     }
 
     /// <summary>

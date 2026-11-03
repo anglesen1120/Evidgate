@@ -13,10 +13,10 @@ namespace Foundation.IntegrationTests;
 /// <c>sha256:</c> digest of <c>expected.json</c> — a byte-level proof that both
 /// runtimes read the same corpus.
 /// <para>
-/// The class deliberately does not extend <see cref="HarnessTest"/> or join
-/// <see cref="HarnessSuite"/>: loading files needs neither the container nor the
-/// migrated database (<c>DatabaseFixture</c> starts its container lazily, so
-/// this class never starts one and runs where no Docker daemon exists).
+/// The class deliberately does not extend <see cref="TenantTest"/>: loading files needs
+/// neither the container nor the migrated database (<c>DatabaseFixture</c> starts its
+/// container lazily, so this class never starts one and runs where no Docker daemon
+/// exists).
 /// </para>
 /// </summary>
 public sealed class FixtureLoaderTests

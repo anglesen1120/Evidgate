@@ -17,7 +17,6 @@ namespace Identity.IntegrationTests;
 /// class over the harness's production Dapper path, so the SQL under test is the SQL
 /// the Api and the Worker run.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvaluatorTests : CatalogueTestBase
 {

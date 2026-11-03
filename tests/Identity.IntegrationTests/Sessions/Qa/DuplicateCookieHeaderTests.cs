@@ -44,13 +44,13 @@ namespace Identity.IntegrationTests.Sessions.Qa;
 /// this file's namespace <c>Identity.IntegrationTests.Sessions.Qa</c> is inside that wildcard.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class DuplicateCookieHeaderTests : HarnessTest
+public sealed class DuplicateCookieHeaderTests : TenantTest
 {
     /// <summary>The route that needs an authenticated member and answers the caller's orgs.</summary>
     private const string OrgsPath = "/v1/orgs";
 
+    /// <summary>Shares the run's database: every row it reads is addressed by its own user or HMAC.</summary>
     public DuplicateCookieHeaderTests(DatabaseFixture fixture)
         : base(fixture)
     {

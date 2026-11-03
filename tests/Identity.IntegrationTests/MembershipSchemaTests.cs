@@ -17,7 +17,6 @@ namespace Identity.IntegrationTests;
 /// <c>evidgate_app</c> — the same role the API uses, never the owner, which the
 /// permissive owner policy would let past every check (DECISIONS F5).
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class MembershipSchemaTests : CatalogueTestBase
 {

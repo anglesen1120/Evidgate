@@ -23,12 +23,15 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// <c>p_now</c> to <c>clock_timestamp()</c>: a suite pinned to 2032 would be clamped into "yesterday" and every
 /// deadline arranged around it would read as live.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SessionCleanupSqlTests : SessionHardeningTestBase
 {
+    /// <summary>
+    /// A database of its own: the sweep is a database-wide statement whose exact stamped and deleted counts are
+    /// the assertion, so no other test's rows may be in the table.
+    /// </summary>
     public SessionCleanupSqlTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

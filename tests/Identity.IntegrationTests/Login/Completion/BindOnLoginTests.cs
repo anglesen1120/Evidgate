@@ -35,7 +35,6 @@ namespace Identity.IntegrationTests.Login.Completion;
 /// fail-closed when the audit row cannot be written.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class BindOnLoginTests : BindTestBase
 {
@@ -55,9 +54,9 @@ public sealed class BindOnLoginTests : BindTestBase
     private static readonly Guid OpenHigherOrgId = Guid.Parse("0190f000-0000-7000-8000-000000000012");
 
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container and migrated template.</param>
     public BindOnLoginTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 
@@ -725,7 +724,7 @@ public sealed class BindOnLoginTests : BindTestBase
         return token[..(separator + 1)] + secret;
     }
 
-    /// <summary>How many session rows the whole database holds (the fixture resets between tests).</summary>
+    /// <summary>How many session rows the whole database holds (this class owns its dedicated database).</summary>
     private Task<int> SessionCountAsync() =>
         LoginCompletionTestHost.CountAsync(Fixture, "select count(*) from public.session");
 

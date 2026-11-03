@@ -10,14 +10,13 @@ namespace Identity.IntegrationTests.Login.Completion;
 /// QA exploratory cases for 02.3.1-T1.3/T1.4 (PR #164), beyond the plan's §9 matrix: a first-login race, the
 /// cookie's storage form, an oversized user agent, and per-session HMACs.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class QaExploratoryTests : CatalogueTestBase
 {
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container and migrated template.</param>
     public QaExploratoryTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

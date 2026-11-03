@@ -6,28 +6,23 @@ using Xunit;
 namespace Identity.IntegrationTests;
 
 /// <summary>
-/// Shared arrangement and call seams of the invite-flow schema suite (02.1.2-T2, W1):
-/// seeding rows as the owner (00 §5.5 C3 — arranging rows is the one job a test may not
-/// do through the tenant path) and calling the two <c>evidgate_resolve</c> lookups and
-/// the <c>evidgate</c> sweep through the roles that are allowed to call them.
+/// Shared arrangement and call seams of the invite-flow schema suite: seeding rows as the
+/// owner (arranging rows is the one job a test may not do through the tenant path) and calling
+/// the <c>evidgate_resolve</c> lookups and the <c>evidgate</c> sweep through their allowed roles.
 /// </summary>
 /// <remarks>
-/// The resolver calls go through <see cref="DatabaseFixture.AppDataSource"/> with no
-/// tenant setting at all, which is the pre-tenant situation the functions exist for: the
-/// app role must be able to resolve an invite without being able to read the matching
-/// <c>public.membership</c> row directly (T75, 00 §5.4.8). The sweep is called through a
-/// superuser connection switched to <c>evidgate_worker_sched</c>, because the harness has
-/// no password for that role and the point of the test is the real grant, not a
-/// substitute one.
+/// The resolver calls use <see cref="DatabaseFixture.AppDataSource"/> with no tenant setting, so
+/// the app role must resolve an invite without reading the matching <c>public.membership</c> row;
+/// the sweep runs as a superuser switched to <c>evidgate_worker_sched</c>, which owns the grant.
 /// </remarks>
 public abstract class InviteTestBase : CatalogueTestBase
 {
-    protected InviteTestBase(DatabaseFixture fixture)
-        : base(fixture)
+    protected InviteTestBase(DatabaseFixture fixture, DatabaseIsolation isolation = DatabaseIsolation.Shared)
+        : base(fixture, isolation)
     {
     }
 
-    /// <summary>A 12-character public prefix, the shape 02.1.2-T2's mint produces.</summary>
+    /// <summary>A 12-character public prefix, the shape the mint produces.</summary>
     protected static string Prefix() => Guid.NewGuid().ToString("N")[..12];
 
     /// <summary>A stand-in digest of the requested length (the real one is an HMAC-SHA256).</summary>
@@ -42,7 +37,7 @@ public abstract class InviteTestBase : CatalogueTestBase
         return bytes;
     }
 
-    /// <summary>Seeds an org with the AC8 opt-in and the status the resolver filters on.</summary>
+    /// <summary>Seeds an org with the autobind opt-in and the status the resolver filters on.</summary>
     protected async Task<Guid> SeedOrgAsync(bool autobindVerifiedDomain, string status = "active")
     {
         var id = Guid.CreateVersion7();
@@ -192,7 +187,7 @@ public abstract class InviteTestBase : CatalogueTestBase
         return rows;
     }
 
-    /// <summary>Opens a connection switched to <c>evidgate_worker_sched</c> (the T80 sweep role).</summary>
+    /// <summary>Opens a connection switched to <c>evidgate_worker_sched</c>, the sweep role.</summary>
     protected async Task<NpgsqlConnection> OpenSweepConnectionAsync()
     {
         var database = new NpgsqlConnectionStringBuilder(Fixture.AppConnectionString).Database!;
@@ -228,12 +223,11 @@ public abstract class InviteTestBase : CatalogueTestBase
 /// the transition directly. These tests therefore pin behaviour, not DDL that does not
 /// exist.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class InviteSchemaTests : InviteTestBase
 {
     public InviteSchemaTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 
@@ -463,7 +457,6 @@ public sealed class InviteSchemaTests : InviteTestBase
 /// <c>(org_id, membership_id)</c> pair, only for a row that can still bind, and works with
 /// no tenant setting while the same app role cannot read the row directly.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class InviteBySecretTests : InviteTestBase
 {
@@ -591,7 +584,7 @@ public sealed class InviteBySecretTests : InviteTestBase
     [Fact]
     public async Task Autobind_Candidates_Require_The_Opt_In_And_An_Active_Org()
     {
-        const string Email = "auto@example.com";
+        var email = Unique.Email("auto");
         var live = DateTimeOffset.UtcNow.AddDays(7);
 
         var optedIn = await SeedOrgAsync(autobindVerifiedDomain: true);
@@ -599,18 +592,18 @@ public sealed class InviteBySecretTests : InviteTestBase
         var suspended = await SeedOrgAsync(autobindVerifiedDomain: true, status: "suspended");
 
         var expected = await SeedMembershipAsync(
-            optedIn, Email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
-        await SeedMembershipAsync(optedOut, Email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
-        await SeedMembershipAsync(suspended, Email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
+            optedIn, email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
+        await SeedMembershipAsync(optedOut, email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
+        await SeedMembershipAsync(suspended, email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
         await SeedMembershipAsync(
-            optedIn, Email + ".other", prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
+            optedIn, email + ".other", prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
         await SeedMembershipAsync(
             optedIn, "past-due@example.com", prefix: Prefix(), hash: Hash(), pepperVersion: 1,
             expiresAt: DateTimeOffset.UtcNow.AddMinutes(-5));
         await SeedMembershipAsync(optedIn, "revoked@example.com", status: "revoked", prefix: Prefix(), hash: Hash(),
             pepperVersion: 1, expiresAt: live);
 
-        var candidates = await AutobindCandidatesAsync(Email);
+        var candidates = await AutobindCandidatesAsync(email);
         candidates.Count.ShouldBe(1, "exactly the opted-in, active org's pending invite");
         candidates[0].ShouldBe((optedIn, expected));
     }
@@ -623,18 +616,19 @@ public sealed class InviteBySecretTests : InviteTestBase
     [Fact]
     public async Task Autobind_Candidates_Match_The_Exact_Normalised_Address()
     {
+        var email = Unique.Email("auto");
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
         var membershipId = await SeedMembershipAsync(
-            org, "auto@example.com", prefix: Prefix(), hash: Hash(), pepperVersion: 1,
+            org, email, prefix: Prefix(), hash: Hash(), pepperVersion: 1,
             expiresAt: DateTimeOffset.UtcNow.AddDays(7));
 
-        var candidates = await AutobindCandidatesAsync("auto@example.com");
+        var candidates = await AutobindCandidatesAsync(email);
         candidates.Count.ShouldBe(1);
         candidates[0].ShouldBe((org, membershipId));
-        (await AutobindCandidatesAsync("AUTO@example.com")).ShouldBeEmpty("the function does not lowercase");
-        (await AutobindCandidatesAsync(" auto@example.com")).ShouldBeEmpty("the function does not trim");
-        (await AutobindCandidatesAsync("auto@example.com ")).ShouldBeEmpty();
-        (await AutobindCandidatesAsync("other@example.com")).ShouldBeEmpty();
+        (await AutobindCandidatesAsync(email.ToUpperInvariant())).ShouldBeEmpty("the function does not lowercase");
+        (await AutobindCandidatesAsync(" " + email)).ShouldBeEmpty("the function does not trim");
+        (await AutobindCandidatesAsync(email + " ")).ShouldBeEmpty();
+        (await AutobindCandidatesAsync("other-" + email)).ShouldBeEmpty();
         (await AutobindCandidatesAsync(string.Empty)).ShouldBeEmpty();
     }
 }

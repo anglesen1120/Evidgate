@@ -39,9 +39,8 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// </para>
 /// </remarks>
 /// <param name="fixture">The migrated harness database.</param>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class RotationTests(DatabaseFixture fixture) : HarnessTest(fixture)
+public sealed class RotationTests(DatabaseFixture fixture) : TenantTest(fixture)
 {
     /// <summary>The cookie-authenticated mutation every case drives (its 204 is the "handler ran" signal).</summary>
     private const string PendingPath = "/v1/auth/link/pending";

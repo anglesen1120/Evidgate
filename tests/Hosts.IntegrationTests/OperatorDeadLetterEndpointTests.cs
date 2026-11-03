@@ -23,7 +23,6 @@ namespace Hosts.IntegrationTests;
 /// <see cref="PermitAllOperatorGate"/> and the denial contract with the
 /// registered <c>DenyAllOperatorGate</c>.
 /// </remarks>
-[Collection(PostgresSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class OperatorDeadLetterEndpointTests
 {
@@ -86,7 +85,7 @@ public sealed class OperatorDeadLetterEndpointTests
     [Fact]
     public async Task List_Pages_MultiQueue_WithKeysetContinuation()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(connectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
 
@@ -150,7 +149,7 @@ public sealed class OperatorDeadLetterEndpointTests
     [Fact]
     public async Task List_InvalidParams_400_And_Limit_Clamped()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(connectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
         await SeedTaskAsync(admin, "ops", "dead_letter", DateTime.UtcNow.AddMinutes(-1), "dead:one");
@@ -186,7 +185,7 @@ public sealed class OperatorDeadLetterEndpointTests
     [Fact]
     public async Task Replay_DeadLetter_Requeues()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(connectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
         var taskId = await SeedTaskAsync(
@@ -222,7 +221,7 @@ public sealed class OperatorDeadLetterEndpointTests
     [Fact]
     public async Task Replay_NonDeadLetter_409()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(connectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
         var taskId = await SeedTaskAsync(
@@ -250,7 +249,7 @@ public sealed class OperatorDeadLetterEndpointTests
     [Fact]
     public async Task Replay_UnknownId_404()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
 
         await using var factory = Permitted(connectionString);
         using var client = factory.CreateClient();

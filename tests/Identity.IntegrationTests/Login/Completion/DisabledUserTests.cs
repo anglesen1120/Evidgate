@@ -18,14 +18,13 @@ namespace Identity.IntegrationTests.Login.Completion;
 /// account must not reach either seam at all. The re-enable case runs the deployment's own seams, so it proves
 /// the whole path admits the account again rather than only that a flag was read.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class DisabledUserTests : BindTestBase
 {
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container and migrated template.</param>
     public DisabledUserTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

@@ -194,21 +194,7 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     private static string NewDatabaseName() =>
         "tenancy_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
 
-    internal async Task DropDatabaseAsync(string database)
-    {
-        try
-        {
-            await using var connection = new NpgsqlConnection(SuperuserConnectionString("postgres"));
-            await connection.OpenAsync(CancellationToken.None).ConfigureAwait(false);
-            await using var command = connection.CreateCommand();
-            command.CommandText = $"drop database if exists \"{database}\" with (force)";
-            await command.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (NpgsqlException)
-        {
-            // A leftover scratch database never fails a run; the container is discarded whole.
-        }
-    }
+    internal Task DropDatabaseAsync(string database) => Template.DropDatabaseAsync(database);
 
     /// <summary>The migrated template every dedicated database is copied from.</summary>
     private TemplateDatabase Template =>

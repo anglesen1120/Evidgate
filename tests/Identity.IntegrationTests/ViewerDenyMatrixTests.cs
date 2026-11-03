@@ -38,7 +38,6 @@ namespace Identity.IntegrationTests;
 /// resolver's own <c>forbidden</c> for a non-member is the 02.6.2 suites' subject.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ViewerDenyMatrixTests(DatabaseFixture fixture) : CatalogueTestBase(fixture)
 {

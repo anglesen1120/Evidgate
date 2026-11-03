@@ -67,6 +67,25 @@ internal static class ProcessRunner
     }
 
     /// <summary>
+    /// Kills a host that outlived its test and waits (bounded) for it to exit, so
+    /// teardown is observable before the test's database is dropped.
+    /// </summary>
+    public static async Task StopAsync(Process process)
+    {
+        KillIfRunning(process);
+
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            await process.WaitForExitAsync(deadline.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // A child that ignores SIGKILL must not hang the suite; its database drop uses (force).
+        }
+    }
+
+    /// <summary>
     /// Starts a host, waits for a probe URL to answer 200, sends SIGTERM and
     /// reports the time to exit (measured with a monotonic clock, not
     /// <see cref="Process.ExitTime"/>, whose wall-clock resolution is far too
@@ -89,7 +108,7 @@ internal static class ProcessRunner
         }
         catch
         {
-            process.Kill();
+            KillIfRunning(process);
             throw;
         }
 
@@ -104,7 +123,7 @@ internal static class ProcessRunner
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            process.Kill();
+            KillIfRunning(process);
             throw new TimeoutException($"{fileName} did not exit within 30 s of SIGTERM");
         }
 
@@ -149,5 +168,22 @@ internal static class ProcessRunner
     {
         using var kill = Process.Start("kill", ["-TERM", process.Id.ToString(CultureInfo.InvariantCulture)])!;
         await kill.WaitForExitAsync(cancellationToken);
+    }
+
+    /// <summary>Kills a host that is still running; one that exited before the kill needs nothing.</summary>
+    /// <param name="process">The host process.</param>
+    private static void KillIfRunning(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill();
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // The host exited between the check and the kill, so there is nothing to stop.
+        }
     }
 }

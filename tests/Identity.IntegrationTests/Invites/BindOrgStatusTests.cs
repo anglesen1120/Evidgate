@@ -18,7 +18,6 @@ namespace Identity.IntegrationTests.Invites;
 /// scope: still <c>pending</c>, no <c>user_id</c>, no seat consumed.
 /// </remarks>
 [Trait("Category", "Docker")]
-[Collection(HarnessSuite.Name)]
 public sealed class BindOrgStatusTests : BindTestBase
 {
     public BindOrgStatusTests(DatabaseFixture fixture)

@@ -3,6 +3,7 @@ extern alias migrator;
 #endif
 
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Npgsql;
 
 #if EVIDGATE_MIGRATOR_ALIASED
@@ -26,7 +27,7 @@ namespace Evidgate.Testing;
 /// connection this type opens is unpooled. The copy gate serializes concurrent
 /// copies from the same template, which would otherwise fail transiently with 55006.
 /// </remarks>
-internal sealed class TemplateDatabase : IDisposable
+internal sealed partial class TemplateDatabase : IDisposable
 {
     private const string OwnerRole = "evidgate_owner";
     private const string MaintenanceDatabase = "postgres";
@@ -78,18 +79,28 @@ internal sealed class TemplateDatabase : IDisposable
             return;
         }
 
+        await DropTemplateDatabaseAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Drops a scratch database; idempotent, and a failure never fails a run because
+    /// the container is discarded whole.
+    /// </summary>
+    /// <param name="database">The database name, as <see cref="CreateDatabaseAsync"/> returned it.</param>
+    internal async Task DropDatabaseAsync(string database)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(database);
+        EnsureGeneratedName(database, nameof(database));
+
         try
         {
             await ExecuteSuperuserAsync(
                 MaintenanceDatabase,
-                $"alter database \"{_templateName}\" is_template false").ConfigureAwait(false);
-            await ExecuteSuperuserAsync(
-                MaintenanceDatabase,
-                $"drop database if exists \"{_templateName}\" with (force)").ConfigureAwait(false);
+                $"drop database if exists \"{database}\" with (force)").ConfigureAwait(false);
         }
         catch (NpgsqlException)
         {
-            // Same rule as the fixture's scratch-database cleanup: a leftover template never fails a run.
+            // A leftover scratch database never fails a run.
         }
     }
 
@@ -98,6 +109,7 @@ internal sealed class TemplateDatabase : IDisposable
     internal async Task<string> CreateDatabaseAsync(string database)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(database);
+        EnsureGeneratedName(database, nameof(database));
 
         var template = await EnsureTemplateAsync().ConfigureAwait(false);
 
@@ -116,11 +128,33 @@ internal sealed class TemplateDatabase : IDisposable
         return database;
     }
 
+    // Every name this type splices into SQL is generated, so only that ASCII shape is accepted.
+    // \A…\z, not ^…$: $ also matches before a terminal newline.
+    [GeneratedRegex(@"\A[A-Za-z0-9_]+\z")]
+    private static partial Regex GeneratedName();
+
+    /// <summary>Refuses any name that is not the generated shape, before SQL is built from it.</summary>
+    private static void EnsureGeneratedName(string database, string parameterName)
+    {
+        if (!GeneratedName().IsMatch(database))
+        {
+            throw new ArgumentException(
+                $"'{database}' is not a generated database name: letters, digits and '_' only.",
+                parameterName);
+        }
+    }
+
     private Task<string> EnsureTemplateAsync()
     {
         Task<string> build;
         lock (_templateLock)
         {
+            // A failed migration is retried by the next copy instead of failing forever.
+            if (_template is { IsFaulted: true } or { IsCanceled: true })
+            {
+                _template = null;
+            }
+
             build = _template ??= BuildTemplateAsync();
         }
 
@@ -129,38 +163,69 @@ internal sealed class TemplateDatabase : IDisposable
 
     private async Task<string> BuildTemplateAsync()
     {
-        await ExecuteSuperuserAsync(
-            MaintenanceDatabase,
-            $"create database \"{_templateName}\" owner {OwnerRole}").ConfigureAwait(false);
+        try
+        {
+            await ExecuteSuperuserAsync(
+                MaintenanceDatabase,
+                $"create database \"{_templateName}\" owner {OwnerRole}").ConfigureAwait(false);
 
-        var outcome = MigratorRunner.Run(
-            new MigratorOptions
+            var outcome = MigratorRunner.Run(
+                new MigratorOptions
+                {
+                    ConnectionString = Unpooled(_ownerConnectionString(_templateName)),
+                    MigrationsPath = _migrationsPath,
+                },
+                MigrationCommand.Apply,
+                new StringWriter(CultureInfo.InvariantCulture));
+
+            if (outcome.ExitCode != MigratorExitCodes.Success)
             {
-                ConnectionString = Unpooled(_ownerConnectionString(_templateName)),
-                MigrationsPath = _migrationsPath,
-            },
-            MigrationCommand.Apply,
-            new StringWriter(CultureInfo.InvariantCulture));
+                throw new InvalidOperationException(
+                    $"the suite could not reach head on '{_templateName}' (exit {outcome.ExitCode}): "
+                    + string.Join(" | ", outcome.Messages));
+            }
 
-        if (outcome.ExitCode != MigratorExitCodes.Success)
+            foreach (var statement in _templateStatements)
+            {
+                await ExecuteSuperuserAsync(_templateName, statement).ConfigureAwait(false);
+            }
+
+            // Closing the template to connections keeps a stray session from blocking a
+            // later copy; CREATE DATABASE still reads it.
+            await ExecuteSuperuserAsync(
+                MaintenanceDatabase,
+                $"alter database \"{_templateName}\" is_template true allow_connections false").ConfigureAwait(false);
+
+            return _templateName;
+        }
+        catch
         {
-            throw new InvalidOperationException(
-                $"the suite could not reach head on '{_templateName}' (exit {outcome.ExitCode}): "
-                + string.Join(" | ", outcome.Messages));
+            // The retry reuses this name, so the half-built database has to go first;
+            // it may exist with or without the is_template flag.
+            await DropTemplateDatabaseAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Removes the template database of this instance: the flag first (a plain drop is
+    /// refused while it is set), then the database itself. Both steps are idempotent and
+    /// never fail the run.
+    /// </summary>
+    private async Task DropTemplateDatabaseAsync()
+    {
+        try
+        {
+            await ExecuteSuperuserAsync(
+                MaintenanceDatabase,
+                $"alter database \"{_templateName}\" is_template false").ConfigureAwait(false);
+        }
+        catch (NpgsqlException)
+        {
+            // Not a template database (or not created yet): the drop below is the check.
         }
 
-        foreach (var statement in _templateStatements)
-        {
-            await ExecuteSuperuserAsync(_templateName, statement).ConfigureAwait(false);
-        }
-
-        // Closing the template to connections keeps a stray session from blocking a
-        // later copy; CREATE DATABASE still reads it.
-        await ExecuteSuperuserAsync(
-            MaintenanceDatabase,
-            $"alter database \"{_templateName}\" is_template true allow_connections false").ConfigureAwait(false);
-
-        return _templateName;
+        await DropDatabaseAsync(_templateName).ConfigureAwait(false);
     }
 
     private async Task ExecuteSuperuserAsync(string database, string sql)

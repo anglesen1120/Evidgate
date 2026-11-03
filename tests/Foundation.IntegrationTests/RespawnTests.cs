@@ -5,21 +5,16 @@ using Xunit;
 namespace Foundation.IntegrationTests;
 
 /// <summary>
-/// 01.6.1-T2.2 (AC2): Respawn empties the shared harness database between two
-/// tests, and the migration journal survives the reset.
+/// Respawn empties every application table of a database, and the migration journal
+/// survives the reset.
 /// <para>
-/// The two halves of <c>Respawn_TwoTestsSeeEmptyDb</c> each assert the table is
-/// empty <em>before</em> they write, then write one row and assert it is the only
-/// one. That shape is what makes the pair order-independent: xUnit does not promise
-/// the order of two test methods, and a pair where only the first writes passes in
-/// the "observer first, inserter second" order even when the reset is broken. With
-/// both halves writing, the second test to run always sees the first one's row when
-/// Respawn did not run — whichever half is second.
+/// The class runs on a private copy of the migrated template: the assertions are about the
+/// reset and a whole-database census that another test's rows would change, so each test
+/// starts empty and the reset is asserted instead of being the between-test isolation.
 /// </para>
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class RespawnTests : HarnessTest
+public sealed class RespawnTests : TenantTest
 {
     private const string InsertProbe =
         "insert into public.rls_probe (org_id, id, label) values (@org_id, @id, @label)";
@@ -27,11 +22,11 @@ public sealed class RespawnTests : HarnessTest
     private static readonly Guid ProbeOrg = Guid.Parse("0a0a0a0a-0a0a-7a0a-8a0a-0a0a0a0a0a0a");
 
     public RespawnTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 
-    /// <summary>Test A: this test's row is the first and only one — the reset ran before it.</summary>
+    /// <summary>Test A: this test's copy holds no row, and its own write is the only one.</summary>
     [Fact]
     public async Task Respawn_TwoTestsSeeEmptyDb_InsertsARow()
     {
@@ -46,8 +41,8 @@ public sealed class RespawnTests : HarnessTest
     }
 
     /// <summary>
-    /// Test B: the table test A wrote to is empty again — the reset ran in between,
-    /// and this test's own write is again the only row.
+    /// Test B: its copy is empty as well — two tests of the class each get a database
+    /// that carries no row from the other — and its own write is the only row.
     /// </summary>
     [Fact]
     public async Task Respawn_TwoTestsSeeEmptyDb_ObservesAnEmptyTable()
@@ -63,12 +58,9 @@ public sealed class RespawnTests : HarnessTest
     }
 
     /// <summary>
-    /// The outcome of the reset rather than its mechanism: Respawn builds one
-    /// truncate plan from the catalog when the harness starts, so a table it did not
-    /// cover would keep a previous test's rows. The census is read through a
-    /// superuser, the only role whose view is not filtered by row level security, and
-    /// it is asserted non-empty before the reset so an always-empty census cannot
-    /// pass this test by accident.
+    /// The outcome of the reset rather than its mechanism: Respawn builds one truncate plan
+    /// from the catalog at harness start, so an uncovered table would keep a previous test's
+    /// rows; the superuser census (RLS hides them from other roles) is asserted non-empty first.
     /// </summary>
     [Fact]
     public async Task Respawn_LeavesNoRowInAnyApplicationTable()
@@ -109,8 +101,8 @@ public sealed class RespawnTests : HarnessTest
         (await Fixture.CountProbeRowsAsync(cancellationToken: Token)).ShouldBe(0L);
 
         // ...and the Migrator's journal is not: a reset that truncated
-        // public.schema_migration would take the readiness state (01.1.2-T1.3) with
-        // it, and every later test of this project would fail as "behind head".
+        // public.schema_migration would take the readiness state with it, and every
+        // later test of this project would fail as "behind head".
         (await Fixture.JournalHeadAsync(Token)).ShouldBe(headBefore);
         (await Fixture.JournalCountAsync(Token)).ShouldBe(countBefore);
     }

@@ -3,10 +3,12 @@ using Xunit;
 namespace Evidgate.Testing;
 
 /// <summary>
-/// The shared harness (01.6.1-T2.1, T2.2, T2.4): one container and one migrated
-/// database per assembly, reset between tests. Every test of an adopting project
-/// derives from <see cref="HarnessTest"/>, so it starts from the migrated-but-empty
-/// state.
+/// The reset-based harness (01.6.1-T2.1, T2.2, T2.4): one container and one migrated
+/// database per assembly, reset between tests. A project that cannot isolate by tenant —
+/// <c>tests/Isolation.Tests</c> is the one — derives from this class and joins
+/// <see cref="HarnessSuite"/>, so it starts from the migrated-but-empty state. Suites that
+/// share the database through their own organizations derive from <c>TenantTest</c>
+/// instead and never reset it.
 /// </summary>
 public abstract class HarnessTest : IAsyncLifetime
 {

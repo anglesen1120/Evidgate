@@ -25,13 +25,13 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// leaking through the list (D9).
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class SessionListTests : HarnessTest
+public sealed class SessionListTests : TenantTest
 {
     /// <summary>The route under test (02.3.2 §5).</summary>
     private const string SessionsPath = "/v1/auth/sessions";
 
+    /// <summary>Shares the run's database: every assertion is about the sessions of the account it signed in.</summary>
     public SessionListTests(DatabaseFixture fixture)
         : base(fixture)
     {

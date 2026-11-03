@@ -14,7 +14,6 @@ namespace Identity.IntegrationTests.Invites;
 /// means <c>status</c> and <c>user_id</c> really moved inside a committed transaction.
 /// </summary>
 [Trait("Category", "Docker")]
-[Collection(HarnessSuite.Name)]
 public sealed class BindTests : BindTestBase
 {
     public BindTests(DatabaseFixture fixture)
@@ -63,7 +62,7 @@ public sealed class BindTests : BindTestBase
         // Opted in from the start: none of the three cases below may use the auto-bind path
         // to slip past the verified-address requirement.
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
-        var invite = await SeedInviteAsync(org, "invitee@example.com");
+        var invite = await SeedInviteAsync(org, Unique.Email("invitee"));
         var binder = CreateBinder();
 
         var unverified = await binder.BindAsync(

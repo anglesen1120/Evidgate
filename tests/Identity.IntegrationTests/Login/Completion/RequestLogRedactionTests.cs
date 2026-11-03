@@ -26,7 +26,6 @@ namespace Identity.IntegrationTests.Login.Completion;
 /// the same provider before the request, so "nothing was recorded" can never be an artefact of a dead provider.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RequestLogRedactionTests : CatalogueTestBase
 {
@@ -40,7 +39,7 @@ public sealed class RequestLogRedactionTests : CatalogueTestBase
         LoggerMessage.Define<string>(LogLevel.Warning, new EventId(1, nameof(ProbeCapture)), "probe {Text}");
 
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container and migrated database.</param>
     public RequestLogRedactionTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -50,11 +49,12 @@ public sealed class RequestLogRedactionTests : CatalogueTestBase
     [Fact]
     public async Task The_Callback_Request_Log_Carries_No_Code_Or_State_At_Information()
     {
+        var subject = Unique.Text("google-subject");
         using var logs = new CapturingLoggerProvider();
         using var host = LoginCompletionTestHost.StartWithLogs(
             Fixture,
             logs,
-            LoginCompletionTestHost.GoogleProvider());
+            LoginCompletionTestHost.GoogleProvider(subject));
         using var client = host.CreateLoginClient();
 
         await LoginCompletionTestHost.EstablishMemberAsync(
@@ -62,7 +62,7 @@ public sealed class RequestLogRedactionTests : CatalogueTestBase
             host,
             client,
             LoginCompletionTestHost.Google,
-            LoginCompletionTestHost.GoogleSubject);
+            subject);
 
         // The framework's own request-log category must not be enabled at Information, or the url would be
         // written by the deployment's sinks no matter what this provider captured.

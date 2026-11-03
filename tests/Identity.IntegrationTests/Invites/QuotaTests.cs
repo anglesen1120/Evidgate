@@ -15,7 +15,6 @@ namespace Identity.IntegrationTests.Invites;
 /// the Tenancy-shaped 429 <c>quota_exceeded</c>, a NULL limit means unlimited, and a resend — which
 /// re-mints an existing row and therefore consumes no seat — still succeeds at the boundary.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class QuotaTests : CatalogueTestBase
 {
@@ -42,8 +41,10 @@ public sealed class QuotaTests : CatalogueTestBase
         // One seat is taken, so the first invite (the second seat) still fits.
         var first = await PostAsync(client, $"/v1/orgs/{org}/memberships", """{"email":"first@example.com"}""", "quota-1");
         first.Status.ShouldBe(HttpStatusCode.Created);
+        var firstId = first.Body.GetProperty("id").GetGuid();
 
-        var second = await PostAsync(client, $"/v1/orgs/{org}/memberships", """{"email":"second@example.com"}""", "quota-2");
+        var refusedEmail = Unique.Email("second");
+        var second = await PostAsync(client, $"/v1/orgs/{org}/memberships", $$"""{"email":"{{refusedEmail}}"}""", "quota-2");
 
         second.Status.ShouldBe(HttpStatusCode.TooManyRequests);
 
@@ -62,6 +63,14 @@ public sealed class QuotaTests : CatalogueTestBase
         (await ScalarAsync<long>(
             "select count(*) from public.outbox where org_id = @org and task_type = 'identity.invite.notify'",
             ("org", org))).ShouldBe(1, "and no notification either");
+
+        // The same two facts keyed on what this test alone wrote, with no org filter: a row that
+        // landed under any other org would still name the refused address or the accepted invite.
+        (await ScalarAsync<long>(
+            "select count(*) from public.membership where invited_email = @email",
+            ("email", refusedEmail))).ShouldBe(0, "the refused invite wrote no membership under any other org");
+        (await ScalarAsync<long>("select count(*) from public.outbox where aggregate_id = @id", ("id", firstId)))
+            .ShouldBe(1, "the invite that fit was notified once, and only under its own org");
     }
 
     /// <summary>A NULL <c>max_seats</c> is "no limit" (02.1.1-T3), however many seats are taken.</summary>

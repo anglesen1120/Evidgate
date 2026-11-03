@@ -23,7 +23,6 @@ namespace Hosts.IntegrationTests;
 /// with 02.8.1. The permitting double also stamps the principal, because an operator route that cannot attribute a
 /// change to a person is refused (401 unauthenticated / 403 forbidden) by the handler itself.
 /// </remarks>
-[Collection(PostgresSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class OperatorHealingSwitchEndpointTests
 {
@@ -57,7 +56,7 @@ public sealed class OperatorHealingSwitchEndpointTests
     [Fact]
     public async Task The_default_gate_denies_the_system_switch()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
 
         await using var factory = new EvidgateApiFactory(connectionString);
         using var client = factory.CreateClient();
@@ -77,7 +76,7 @@ public sealed class OperatorHealingSwitchEndpointTests
     [Fact]
     public async Task The_gate_decides_before_the_body_is_parsed()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
 
         await using var factory = new EvidgateApiFactory(connectionString);
         using var client = factory.CreateClient();
@@ -96,7 +95,7 @@ public sealed class OperatorHealingSwitchEndpointTests
     [Fact]
     public async Task The_permitted_operator_sets_the_system_switch_through_the_definer()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
 
         await using var factory = new EvidgateApiFactory(
             connectionString,
@@ -142,7 +141,7 @@ public sealed class OperatorHealingSwitchEndpointTests
     [Fact]
     public async Task The_permitted_operator_may_enable_healing_when_the_clamp_is_on()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
 
         await using var factory = new EvidgateApiFactory(
             connectionString,
@@ -171,7 +170,7 @@ public sealed class OperatorHealingSwitchEndpointTests
     [Fact]
     public async Task An_unattributable_operator_is_refused()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
 
         await using var factory = new EvidgateApiFactory(
             connectionString,

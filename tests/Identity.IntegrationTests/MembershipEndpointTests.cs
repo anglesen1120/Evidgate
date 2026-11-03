@@ -20,7 +20,6 @@ namespace Identity.IntegrationTests;
 /// <c>ETag</c>/<c>If-Match</c> precondition (00 §9.1) and the 00 §9.2 envelope for a
 /// validator failure.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class MembershipEndpointTests : CatalogueTestBase
 {
@@ -32,7 +31,7 @@ public sealed class MembershipEndpointTests : CatalogueTestBase
     };
 
     public MembershipEndpointTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

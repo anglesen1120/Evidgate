@@ -17,14 +17,24 @@ namespace Identity.IntegrationTests.Login.Persistence;
 /// assertion reads what the owner connection sees afterwards: this is the row shape the login command hands
 /// to the session store, not a memento of the SQL.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class LoginIdentityStoreTests : SessionTestBase
 {
-    private readonly NpgsqlLoginIdentityStore _store;
+    private NpgsqlLoginIdentityStore _store = null!;
 
+    // Own database: one case proves no orphan user exists over the whole table, which a shared database
+    // could not prove while another class is mid-login.
     public LoginIdentityStoreTests(DatabaseFixture fixture)
-        : base(fixture) => _store = new NpgsqlLoginIdentityStore(AppDataSource);
+        : base(fixture, DatabaseIsolation.Dedicated)
+    {
+    }
+
+    /// <summary>The store under test, built once the dedicated database exists.</summary>
+    public override async ValueTask InitializeAsync()
+    {
+        await base.InitializeAsync();
+        _store = new NpgsqlLoginIdentityStore(AppDataSource);
+    }
 
     /// <summary>AC1's first half: a verified identity creates one <c>user</c> and one <c>user_identity</c>.</summary>
     [Fact]

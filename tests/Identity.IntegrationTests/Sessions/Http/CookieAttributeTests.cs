@@ -26,13 +26,13 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// <c>XSRF-TOKEN</c> half.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class CookieAttributeTests : HarnessTest
+public sealed class CookieAttributeTests : TenantTest
 {
-    /// <summary>Throttle of this file: none, the lifetimes are the host's defaults.</summary>
+    /// <summary>Throttle of this file: none, the lifetimes are the host's defaults; its own database, because
+    /// one case counts every session row.</summary>
     public CookieAttributeTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 
