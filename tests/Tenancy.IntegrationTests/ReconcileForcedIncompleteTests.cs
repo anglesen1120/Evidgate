@@ -39,7 +39,8 @@ public sealed class ReconcileForcedIncompleteTests
     public async Task Sweep_RunPastItsDeadline_ClosesIncompleteWithReasons(string state)
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database);
         var runId = world.RunId;
 
         // No finalize will ever arrive for this run: its slot stays open, which is the stall the deadline exists for.
@@ -79,7 +80,8 @@ public sealed class ReconcileForcedIncompleteTests
     public async Task Sweep_RunBeforeItsDeadline_IsIgnored(string state)
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database);
         var runId = world.RunId;
 
         await SetRunStateAsync(world, runId, state);
@@ -105,7 +107,8 @@ public sealed class ReconcileForcedIncompleteTests
     public async Task Sweep_StateWithoutAForcedClose_IsIgnored(string state)
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database);
         var runId = world.RunId;
 
         await SetRunStateAsync(world, runId, state);
@@ -124,7 +127,8 @@ public sealed class ReconcileForcedIncompleteTests
     [Fact]
     public async Task DeadlineScan_OverdueRuns_NamesQueuedRunningAndCollectingOnly()
     {
-        await using var world = await StartAsync(AlignedClock());
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(AlignedClock(), database);
 
         var runs = new Dictionary<string, Guid>(StringComparer.Ordinal) { ["created"] = world.RunId };
         foreach (var state in new[] { "queued", "running", "collecting", "complete", "canceled", "incomplete" })
@@ -169,7 +173,8 @@ public sealed class ReconcileForcedIncompleteTests
     public async Task Sweep_RunWithoutSlotsOrPlan_ClosesIncompleteWithMissingResult()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock, planned: 0, slots: 0);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database, planned: 0, slots: 0);
         var runId = world.RunId;
 
         await SetRunStateAsync(world, runId, "queued");
@@ -198,7 +203,8 @@ public sealed class ReconcileForcedIncompleteTests
     public async Task Sweep_ComparisonNamesNothing_StillClosesWithAReason()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock, planned: 0, slots: 1);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database, planned: 0, slots: 1);
         var runId = world.RunId;
 
         (await CloseSlotAsync(world, runId)).ShouldBe(1, "the run's one slot is closed: the comparison then names nothing");
@@ -224,7 +230,8 @@ public sealed class ReconcileForcedIncompleteTests
     public async Task PostScanCancel_LeavesTheRunCanceledWithNoRevision()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database);
         var runId = world.RunId;
 
         await SetRunStateAsync(world, runId, "running");
@@ -251,7 +258,8 @@ public sealed class ReconcileForcedIncompleteTests
     public async Task PostScanCollecting_AttemptTakesTheCollectingPath()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock, planned: 0, slots: 1);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database, planned: 0, slots: 1);
         var runId = world.RunId;
 
         (await CloseSlotAsync(world, runId)).ShouldBe(1, "a closed, matching slot is what makes the plan satisfied");
@@ -278,7 +286,8 @@ public sealed class ReconcileForcedIncompleteTests
     [Fact]
     public async Task DeadlineScan_DeadlineEqualToNow_IsOverdue()
     {
-        await using var world = await StartAsync(AlignedClock(), planned: 0, slots: 1);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(AlignedClock(), database, planned: 0, slots: 1);
         var runId = world.RunId;
 
         await using var connection = await _fixture.OpenSuperuserAsync(world.Database);
@@ -314,17 +323,23 @@ public sealed class ReconcileForcedIncompleteTests
     /// mechanism and a <see cref="FakeTimeProvider"/> so a case drives the schedule instead of waiting for it.
     /// </summary>
     /// <param name="clock">The fake clock the schedule's ticks read.</param>
-    /// <param name="planned">How many planned executions the seeded run carries.</param>
+    /// <param name="database">The case's private database: the sweep, the dispatcher and the task queue are database-global.</param>
+    /// <param name="planned">How many executions the seeded run carries.</param>
     /// <param name="slots">How many producer slots the seeded run carries.</param>
-    private async Task<IngestTestWorld> StartAsync(FakeTimeProvider clock, int planned = 2, int slots = 1)
+    private async Task<IngestTestWorld> StartAsync(
+        FakeTimeProvider clock,
+        string database,
+        int planned = 2,
+        int slots = 1)
     {
-        var database = new DatabaseNameHolder();
+        var databaseName = new DatabaseNameHolder();
 
         var world = await IngestTestWorld.StartAsync(
             _fixture,
             IngestTestWorld.Writer(),
             planned: planned,
             slots: slots,
+            database: database,
             services: services =>
             {
                 services.AddEvidgateTasks(new ConfigurationBuilder().Build());
@@ -334,10 +349,10 @@ public sealed class ReconcileForcedIncompleteTests
                 // The fixture mints no login for evidgate_worker_sched: the double opens a superuser connection to this
                 // database and switches to the sweep role, so grants and row level security are evaluated as that role.
                 services.RemoveAll<IWorkerSchedDataSource>();
-                services.AddSingleton<IWorkerSchedDataSource>(_ => new SweepRoleDataSource(_fixture, database));
+                services.AddSingleton<IWorkerSchedDataSource>(_ => new SweepRoleDataSource(_fixture, databaseName));
             });
 
-        database.Name = world.Database;
+        databaseName.Name = world.Database;
         return world;
     }
 

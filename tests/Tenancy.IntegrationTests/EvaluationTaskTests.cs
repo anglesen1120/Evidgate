@@ -29,9 +29,6 @@ public sealed partial class EvaluationTaskTests
 
     public EvaluationTaskTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    /// <summary>How many evaluation rows the database holds right now.</summary>
-    private static string CountSql => "select count(*) from public.evaluation";
-
     // ------------------------------------------------------------------ AC1: two callers, one row
 
     /// <summary>
@@ -76,7 +73,7 @@ public sealed partial class EvaluationTaskTests
         shadow.Mode.ShouldBe("shadow");
         shadow.Decision.ShouldBe(live.Decision, "the same evidence and rules decide the same way");
         (await CountAsync(world, seed)).ShouldBe(2, "shadow sits beside live, never instead of it");
-        (await CountAsync(world, seed, "where mode = 'live'")).ShouldBe(1);
+        (await CountAsync(world, seed, "and mode = 'live'")).ShouldBe(1);
 
         // A second live verdict can only differ by policy revision or evaluator version; repin the run to a new
         // revision, so the six-column key is free and the live partial key is the one that refuses the row.
@@ -89,7 +86,7 @@ public sealed partial class EvaluationTaskTests
             () => EvaluateAsync(world, seed, EvaluationMode.Live, TestContext.Current.CancellationToken));
         refusal.Message.ShouldContain("already exists under a different policy revision or evaluator version");
         (await CountAsync(world, seed)).ShouldBe(2, "the refused attempt stored nothing");
-        (await CountAsync(world, seed, "where mode = 'live'")).ShouldBe(
+        (await CountAsync(world, seed, "and mode = 'live'")).ShouldBe(
             1,
             "the live partial key still admits one live row per evidence revision");
     }
@@ -301,15 +298,18 @@ public sealed partial class EvaluationTaskTests
         }
     }
 
+    /// <summary>The evaluation rows this run owns; other tests insert into the same database.</summary>
     private async Task<long> CountAsync(
         RunCreationTests.World world,
         Seed seed,
-        string suffix = "")
+        string extra = "")
     {
-        _ = seed;
         await using var connection = await OwnerAsync(world);
         await using var command = connection.CreateCommand();
-        command.CommandText = $"{CountSql} {suffix}";
+        command.CommandText =
+            "select count(*) from public.evaluation where org_id = @org_id and run_id = @run_id " + extra;
+        command.Parameters.AddWithValue("org_id", seed.Org);
+        command.Parameters.AddWithValue("run_id", seed.RunId);
         return (long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
     }
 

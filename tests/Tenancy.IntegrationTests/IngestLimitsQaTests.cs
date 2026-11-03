@@ -31,8 +31,8 @@ public sealed class IngestLimitsQaTests
 
         answer.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
         answer.ErrorCode.ShouldBe("batch_too_large");
-        (await world.CountAsync("event_batch")).ShouldBe(0);
-        (await world.CountAsync("event")).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
+        (await EventRowsAsync(world)).ShouldBe(0);
         reasons.ToArray().ShouldBe(new[] { "event_count" });
     }
 
@@ -58,7 +58,7 @@ public sealed class IngestLimitsQaTests
         var answer = await PostAsync(world, padded);
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        (await world.CountAsync("event_batch")).ShouldBe(1);
+        (await BatchRowsAsync(world)).ShouldBe(1);
         reasons.ShouldBeEmpty();
     }
 
@@ -73,7 +73,7 @@ public sealed class IngestLimitsQaTests
 
         answer.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
         answer.ErrorCode.ShouldBe("batch_too_large");
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
         reasons.ToArray().ShouldBe(new[] { "body_too_large" });
     }
 
@@ -87,7 +87,7 @@ public sealed class IngestLimitsQaTests
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         answer.ErrorCode.ShouldBe("request_invalid");
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
         reasons.ToArray().ShouldBe(new[] { "gzip_invalid" });
     }
 
@@ -102,7 +102,7 @@ public sealed class IngestLimitsQaTests
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         answer.ErrorCode.ShouldBe("request_invalid");
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
         reasons.ToArray().ShouldBe(new[] { "encoding_unsupported" });
     }
 
@@ -118,11 +118,17 @@ public sealed class IngestLimitsQaTests
         (await PostGzipAsync(world, GzipOf(Encoding.UTF8.GetBytes("{}")), encoding: "br")).Status
             .ShouldBe(HttpStatusCode.UnprocessableEntity);
 
-        (await world.CountAsync("event")).ShouldBe(0);
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await EventRowsAsync(world)).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
     }
 
     // ---------------------------------------------------------------- helpers
+
+    private static Task<long> EventRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("event", $"run_id = '{world.RunId:D}'");
+
+    private static Task<long> BatchRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("event_batch", $"run_id = '{world.RunId:D}'");
 
     private static object[] Events(IngestTestWorld world, int count)
     {

@@ -15,14 +15,16 @@ public sealed class IngestRunStartQaTests
 
     public IngestRunStartQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private static Task<long> StateChangedAuditRowsAsync(IngestTestWorld world) =>
-        world.CountAsync("audit_log", "action = 'run.state_changed'");
+    private static Task<long> StateChangedAuditRowsAsync(IngestTestWorld world, Guid runId) =>
+        world.CountAsync("audit_log", $"object_id = '{runId:D}' and action = 'run.state_changed'");
 
-    private static Task<long> StateChangedOutboxRowsAsync(IngestTestWorld world) =>
-        world.CountAsync("outbox", "task_type = 'orchestrator.run.state_changed'");
+    private static Task<long> StateChangedOutboxRowsAsync(IngestTestWorld world, Guid runId) =>
+        world.CountAsync(
+            "outbox",
+            $"aggregate_id = '{runId:D}' and task_type = 'orchestrator.run.state_changed'");
 
     private static Task<long> UsageOutboxRowsAsync(IngestTestWorld world) =>
-        world.CountAsync("outbox", "task_type = 'usage.batch_accepted'");
+        world.CountAsync("outbox", $"org_id = '{world.Org:D}' and task_type = 'usage.batch_accepted'");
 
     private static Task<string> RunStateAsync(IngestTestWorld world, Guid runId) =>
         world.ScalarAsync<string>($"select state from public.run where id = '{runId:D}'");
@@ -45,10 +47,10 @@ public sealed class IngestRunStartQaTests
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("unknown_producer");
         (await RunStateAsync(world, world.RunId)).ShouldBe("queued");
-        (await StateChangedOutboxRowsAsync(world)).ShouldBe(0);
-        (await StateChangedAuditRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("event")).ShouldBe(0);
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await StateChangedOutboxRowsAsync(world, world.RunId)).ShouldBe(0);
+        (await StateChangedAuditRowsAsync(world, world.RunId)).ShouldBe(0);
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
+        (await world.CountAsync("event_batch", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -67,8 +69,8 @@ public sealed class IngestRunStartQaTests
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("event_invalid");
         (await RunStateAsync(world, world.RunId)).ShouldBe("queued");
-        (await StateChangedOutboxRowsAsync(world)).ShouldBe(0);
-        (await StateChangedAuditRowsAsync(world)).ShouldBe(0);
+        (await StateChangedOutboxRowsAsync(world, world.RunId)).ShouldBe(0);
+        (await StateChangedAuditRowsAsync(world, world.RunId)).ShouldBe(0);
     }
 
     [Fact]
@@ -94,8 +96,8 @@ public sealed class IngestRunStartQaTests
         reused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, reused.ErrorMessage);
         reused.ErrorCode.ShouldBe("sequence_reused");
         (await RunStateAsync(world, world.RunId)).ShouldBe("running");
-        (await StateChangedOutboxRowsAsync(world)).ShouldBe(1);
-        (await StateChangedAuditRowsAsync(world)).ShouldBe(1);
+        (await StateChangedOutboxRowsAsync(world, world.RunId)).ShouldBe(1);
+        (await StateChangedAuditRowsAsync(world, world.RunId)).ShouldBe(1);
     }
 
     // ------------------------------------------------------- boundary: states the transition must skip
@@ -114,8 +116,8 @@ public sealed class IngestRunStartQaTests
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         (await RunStateAsync(world, world.RunId)).ShouldBe("running");
-        (await StateChangedOutboxRowsAsync(world)).ShouldBe(0);
-        (await StateChangedAuditRowsAsync(world)).ShouldBe(0);
+        (await StateChangedOutboxRowsAsync(world, world.RunId)).ShouldBe(0);
+        (await StateChangedAuditRowsAsync(world, world.RunId)).ShouldBe(0);
     }
 
     [Fact]
@@ -132,8 +134,8 @@ public sealed class IngestRunStartQaTests
 
         answer.Status.ShouldNotBe(HttpStatusCode.InternalServerError, answer.ErrorMessage);
         (await RunStateAsync(world, world.RunId)).ShouldBe("created");
-        (await StateChangedOutboxRowsAsync(world)).ShouldBe(0);
-        (await StateChangedAuditRowsAsync(world)).ShouldBe(0);
+        (await StateChangedOutboxRowsAsync(world, world.RunId)).ShouldBe(0);
+        (await StateChangedAuditRowsAsync(world, world.RunId)).ShouldBe(0);
     }
 
     [Fact]
@@ -155,8 +157,8 @@ public sealed class IngestRunStartQaTests
         resend.Status.ShouldBe(HttpStatusCode.OK, resend.ErrorMessage);
 
         (await UsageOutboxRowsAsync(world)).ShouldBe(1);
-        (await StateChangedOutboxRowsAsync(world)).ShouldBe(1);
-        (await world.CountAsync("event")).ShouldBe(1);
+        (await StateChangedOutboxRowsAsync(world, world.RunId)).ShouldBe(1);
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------- exploratory: tenant and project boundaries
@@ -165,7 +167,7 @@ public sealed class IngestRunStartQaTests
     public async Task foreign_org_queued_run_is_not_transitioned_by_this_tenant()
     {
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
-        var (rivalOrg, _) = await world.CreateOtherOrgAsync("rival");
+        var (rivalOrg, _) = await world.CreateOtherOrgAsync(Unique.Slug("rival"));
         var foreign = await world.SeedOtherRunAsync(rivalOrg);
         await world.Fixture.ExecuteAsync(
             world.Database, $"update public.run set state = 'queued' where id = '{foreign.RunId:D}'");
@@ -180,8 +182,8 @@ public sealed class IngestRunStartQaTests
 
         answer.Status.ShouldBe(HttpStatusCode.NotFound, answer.ErrorMessage);
         (await RunStateAsync(world, foreign.RunId)).ShouldBe("queued");
-        (await StateChangedOutboxRowsAsync(world)).ShouldBe(0);
-        (await StateChangedAuditRowsAsync(world)).ShouldBe(0);
+        (await StateChangedOutboxRowsAsync(world, foreign.RunId)).ShouldBe(0);
+        (await StateChangedAuditRowsAsync(world, foreign.RunId)).ShouldBe(0);
     }
 
     [Fact]
@@ -211,9 +213,9 @@ public sealed class IngestRunStartQaTests
         answer.Status.ShouldBe(HttpStatusCode.Forbidden, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("project_scope_mismatch");
         (await RunStateAsync(world, otherRun.RunId)).ShouldBe("queued");
-        (await StateChangedOutboxRowsAsync(world)).ShouldBe(0);
-        (await StateChangedAuditRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("event")).ShouldBe(0);
+        (await StateChangedOutboxRowsAsync(world, otherRun.RunId)).ShouldBe(0);
+        (await StateChangedAuditRowsAsync(world, otherRun.RunId)).ShouldBe(0);
+        (await world.CountAsync("event", $"run_id = '{otherRun.RunId:D}'")).ShouldBe(0);
     }
 
     // ------------------------------------------------------- boundary: concurrency
@@ -246,9 +248,9 @@ public sealed class IngestRunStartQaTests
         }
 
         (await RunStateAsync(world, world.RunId)).ShouldBe("running");
-        (await StateChangedOutboxRowsAsync(world)).ShouldBe(1);
-        (await StateChangedAuditRowsAsync(world)).ShouldBe(1);
-        (await world.CountAsync("event")).ShouldBe(racers);
+        (await StateChangedOutboxRowsAsync(world, world.RunId)).ShouldBe(1);
+        (await StateChangedAuditRowsAsync(world, world.RunId)).ShouldBe(1);
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(racers);
         (await UsageOutboxRowsAsync(world)).ShouldBe(racers);
     }
 }

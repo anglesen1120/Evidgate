@@ -37,26 +37,32 @@ public sealed class IngestDedupeTests
     public IngestDedupeTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
     // ------------------------------------------------------------------ reads the assertions need
+    // Worlds share one database, so every count names the world's own tenant.
 
-    private static Task<long> EventRowsAsync(IngestTestWorld world) => world.CountAsync("event");
+    private static Task<long> EventRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("event", $"org_id = '{world.Org:D}'");
 
-    private static Task<long> BatchRowsAsync(IngestTestWorld world) => world.CountAsync("event_batch");
+    private static Task<long> EventRowsOfOrgAsync(IngestTestWorld world, Guid org) =>
+        world.CountAsync("event", $"org_id = '{org:D}'");
+
+    private static Task<long> BatchRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("event_batch", $"org_id = '{world.Org:D}'");
 
     private static Task<long> UsageRowsAsync(IngestTestWorld world) =>
-        world.CountAsync("outbox", $"task_type = '{UsageTaskType}'");
+        world.CountAsync("outbox", $"org_id = '{world.Org:D}' and task_type = '{UsageTaskType}'");
 
     private static Task<long> UsageRowsOfBatchAsync(IngestTestWorld world, Guid batchId) =>
         world.CountAsync("outbox", $"task_type = '{UsageTaskType}' and aggregate_id = '{batchId:D}'");
 
     private static Task<long> TransitionRowsAsync(IngestTestWorld world) =>
-        world.CountAsync("outbox", $"task_type = '{TransitionTaskType}'");
+        world.CountAsync("outbox", $"org_id = '{world.Org:D}' and task_type = '{TransitionTaskType}'");
 
     private static Task<long> TransitionAuditRowsAsync(IngestTestWorld world) =>
-        world.CountAsync("audit_log", "action = 'run.state_changed'");
+        world.CountAsync("audit_log", $"org_id = '{world.Org:D}' and action = 'run.state_changed'");
 
     private static Task<long> EventIdRowsAsync(IngestTestWorld world, params Guid[] eventIds) =>
         world.ScalarAsync<long>(
-            "select count(*) from public.event where event_id in ("
+            $"select count(*) from public.event where org_id = '{world.Org:D}' and event_id in ("
             + string.Join(", ", eventIds.Select(id => $"'{id:D}'"))
             + ")");
 
@@ -434,7 +440,7 @@ public sealed class IngestDedupeTests
 
         // A second tenant with its own project, run and producer slot; the run is already running, so the batch has
         // no state transition to perform.
-        var (otherOrg, otherProject) = await world.CreateOtherOrgAsync("globex");
+        var (otherOrg, otherProject) = await world.CreateOtherOrgAsync(Unique.Slug("globex"));
         var otherRun = await world.SeedOtherRunAsync(otherOrg);
         await _fixture.ExecuteAsync(
             world.Database, $"update public.run set state = 'running' where id = '{otherRun.RunId:D}'");
@@ -457,7 +463,7 @@ public sealed class IngestDedupeTests
         AckKinds(other).ShouldBe(["accepted"]);
 
         // Each tenant holds exactly its own row, with its own payload: the read-back never spans tenants.
-        (await EventRowsAsync(world)).ShouldBe(2);
+        ((await EventRowsAsync(world)) + (await EventRowsOfOrgAsync(world, otherOrg))).ShouldBe(2);
         (await world.ScalarAsync<long>(
             $"select count(*) from public.event where org_id = '{world.Org:D}' and event_id = '{shared:D}'")).ShouldBe(1);
         (await world.ScalarAsync<long>(
@@ -474,7 +480,7 @@ public sealed class IngestDedupeTests
         Accepted(resend).ShouldBe(0);
         Duplicates(resend).ShouldBe(1);
         AckKinds(resend).ShouldBe(["duplicate"]);
-        (await EventRowsAsync(world)).ShouldBe(2);
+        ((await EventRowsAsync(world)) + (await EventRowsOfOrgAsync(world, otherOrg))).ShouldBe(2);
     }
 
     // ------------------------------------------------------------------ the run half of the dedupe key

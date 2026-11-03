@@ -428,7 +428,7 @@ public sealed class ListRunsFilterTests
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, slug);
+        var org = await CreateOrgAsync(client, user, Unique.Slug(slug));
         var project = await CreateProjectAsync(client, user, org, "checkout");
         var revisions = await ManifestTests.SeedCasesAsync(_fixture, api, org, project, database, 2);
         var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);

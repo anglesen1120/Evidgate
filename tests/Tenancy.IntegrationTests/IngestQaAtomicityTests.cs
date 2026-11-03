@@ -14,6 +14,10 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// Commit-failure atomicity (AC8) and the T91 cancel-vs-ingest race of <c>POST /v1/runs/{r}/events</c>.
 /// </summary>
+/// <remarks>
+/// A private database: the fault is a deferred trigger on the whole <c>event</c> table, which would fail every
+/// other test's insert, and the assertions count whole tables to zero.
+/// </remarks>
 [Trait("Category", "Docker")]
 public sealed class IngestQaAtomicityTests
 {
@@ -26,7 +30,9 @@ public sealed class IngestQaAtomicityTests
     [Fact]
     public async Task crash_between_insert_and_commit_leaves_zero_rows_and_retry_is_accepted()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), database: database);
 
         var batch = IngestQaRequests.Batch(
             IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1),
@@ -77,7 +83,9 @@ public sealed class IngestQaAtomicityTests
     [Fact]
     public async Task flag_never_misses_committed_cancel()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), database: database);
 
         // Inverse half first: an event committed while the run is open is not after_cancel.
         var open = await IngestQaRequests.PostEventsAsync(
@@ -127,7 +135,8 @@ public sealed class IngestQaAtomicityTests
     // ---------------------------------------------------------------- helpers
 
     private static Task<long> SlotAsync(IngestTestWorld world) =>
-        world.ScalarAsync<long>("select last_sequence from public.producer_slot where producer_id = 'shard-1'");
+        world.ScalarAsync<long>(
+            $"select last_sequence from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = 'shard-1'");
 
     /// <summary>Polls <c>pg_stat_activity</c> (bounded) until the ingest backend waits on the run row's lock.</summary>
     private async Task WaitUntilIngestWaitsOnRunRowAsync(IngestTestWorld world)

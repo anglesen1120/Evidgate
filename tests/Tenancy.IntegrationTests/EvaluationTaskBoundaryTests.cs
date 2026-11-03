@@ -201,9 +201,10 @@ public sealed partial class EvaluationTaskTests
         refusal.Message.ShouldContain(LiveLoserMessage);
 
         (await CountAsync(world, seed)).ShouldBe(1, "the loser stored nothing");
-        (await CountAsync(world, seed, "where mode = 'live'")).ShouldBe(1);
+        (await CountAsync(world, seed, "and mode = 'live'")).ShouldBe(1);
         (await _fixture.ScalarAsync<string>(
-                world.Database, "select evaluator_version from public.evaluation"))
+                world.Database,
+                $"select evaluator_version from public.evaluation where org_id = '{seed.Org:D}' and run_id = '{seed.RunId:D}'"))
             .ShouldBe("eval-foreign-1");
     }
 
@@ -285,11 +286,12 @@ public sealed partial class EvaluationTaskTests
     private async Task<ForeignTenantRun> SeedForeignTenantRunAsync(RunCreationTests.World world)
     {
         var user = Guid.CreateVersion7();
+        var slug = Unique.Slug("rival");
         var orgCreated = await world.Client.SendAsync(
             HttpMethod.Post,
             "/v1/orgs",
-            TenancyApiFactory.Resolved(user: user, email: "rival@example.test"),
-            new { name = "rival", slug = "rival" },
+            TenancyApiFactory.Resolved(user: user, email: $"{slug}@example.test"),
+            new { name = "rival", slug },
             RegistryApi.NewKey());
         orgCreated.Status.ShouldBe(HttpStatusCode.Created, orgCreated.ErrorMessage);
         var org = orgCreated.Id();

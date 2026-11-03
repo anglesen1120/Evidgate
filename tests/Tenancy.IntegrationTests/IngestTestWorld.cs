@@ -41,8 +41,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         Guid org,
         Guid project,
         Guid runId,
-        PlannedExecutionSeeder.SeededRun plan,
-        DedicatedDatabase dedicated)
+        PlannedExecutionSeeder.SeededRun plan)
     {
         Fixture = fixture;
         Api = api;
@@ -54,7 +53,6 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         Project = project;
         RunId = runId;
         Plan = plan;
-        Dedicated = dedicated;
     }
 
     internal PostgresTenancyFixture Fixture { get; }
@@ -80,9 +78,6 @@ internal sealed class IngestTestWorld : IAsyncDisposable
 
     internal PlannedExecutionSeeder.SeededRun Plan { get; }
 
-    /// <summary>The private database this world owns; disposed with the world.</summary>
-    private DedicatedDatabase Dedicated { get; }
-
     /// <summary>The caller's service principal: <c>event:write</c>, scoped to the run's project, bound to <see cref="Jti"/>.</summary>
     internal static RequestPrincipal Writer(string? jti = null, Guid? projectScope = null) =>
         RequestPrincipal.Service(projectScope, [Permissions.Event.Write], credentialId: jti ?? Jti);
@@ -92,10 +87,10 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         RequestPrincipal.Service(projectScope: null, [Permissions.Run.Read], credentialId: Jti);
 
     /// <summary>
-    /// One migrated database private to the world with an org and its first project (real registry routes), one run with
+    /// A fresh org (unique slug) and its first project (real registry routes) in the shared database, or in
+    /// <paramref name="database"/> when a suite needs whole-database state and owns a dedicated one; one run with
     /// <paramref name="planned"/> planned executions and <paramref name="slots"/> producer slots, plus a host whose
-    /// requests carry <paramref name="principal"/>. The suites built on this world assert whole-table counts and the
-    /// per-request event sequence, so the world keeps a database of its own instead of the shared one.
+    /// requests carry <paramref name="principal"/>. Assertions on this world filter by <see cref="Org"/> or <see cref="RunId"/>.
     /// </summary>
     internal static async Task<IngestTestWorld> StartAsync(
         PostgresTenancyFixture fixture,
@@ -105,10 +100,10 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         string? boundJti = null,
         int? planCount = null,
         IReadOnlyList<(int Parent, int Child)>? edges = null,
-        Action<IServiceCollection>? services = null)
+        Action<IServiceCollection>? services = null,
+        string? database = null)
     {
-        var dedicated = await fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
+        database ??= await fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -117,7 +112,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await RegistryApi.CreateOrgAsync(setup, user, "acme");
+            org = await RegistryApi.CreateOrgAsync(setup, user, Unique.Slug("acme"));
             project = await RegistryApi.CreateProjectAsync(setup, user, org, "checkout");
         }
 
@@ -128,7 +123,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         await SeedSlotsAsync(fixture, database, org, plan.RunId, slots, boundJti);
 
         return new IngestTestWorld(
-            fixture, api, host, host.CreateClient(), database, user, org, project, plan.RunId, plan, dedicated);
+            fixture, api, host, host.CreateClient(), database, user, org, project, plan.RunId, plan);
     }
 
     /// <summary>One committed producer slot per shard, written as the app role inside a tenant scope.</summary>
@@ -192,14 +187,13 @@ internal sealed class IngestTestWorld : IAsyncDisposable
 
     /// <summary>Reads a column of the run's event rows in request order (producer sequence).</summary>
     internal Task<IReadOnlyList<T>> EventColumnAsync<T>(string column) =>
-        Fixture.ColumnAsync<T>(Database, $"select {column} from public.event order by sequence");
+        Fixture.ColumnAsync<T>(Database, $"select {column} from public.event where org_id = '{Org:D}' and run_id = '{RunId:D}' order by sequence");
 
     public async ValueTask DisposeAsync()
     {
         Client.Dispose();
         await Host.DisposeAsync();
         await Api.DisposeAsync();
-        await Dedicated.DisposeAsync();
     }
 }
 

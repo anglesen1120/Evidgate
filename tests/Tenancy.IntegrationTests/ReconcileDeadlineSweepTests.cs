@@ -41,7 +41,8 @@ public sealed class ReconcileDeadlineSweepTests
     public async Task Sweep_PastDeadlineWithAnOpenShard_QueuesOneReconcile_AndTheAttemptFinishesIncomplete()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database.Name);
         var runId = world.RunId;
 
         // The shard of the seeded run never closes: the slot stays open, and the deadline is in the past, which is the
@@ -72,7 +73,8 @@ public sealed class ReconcileDeadlineSweepTests
     public async Task Sweep_BeforeTheDeadline_LeavesTheRunCollecting()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database.Name);
         var runId = world.RunId;
 
         await SetRunStateAsync(world, runId, "collecting");
@@ -89,7 +91,8 @@ public sealed class ReconcileDeadlineSweepTests
     public async Task Sweep_Twice_QueuesTheRunOnce_AndYieldsOneRevision()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database.Name);
         var runId = world.RunId;
 
         await SetRunStateAsync(world, runId, "collecting");
@@ -123,7 +126,8 @@ public sealed class ReconcileDeadlineSweepTests
     public async Task Sweep_CompletedRun_IsIgnored()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database.Name);
         var runId = world.RunId;
 
         // The run already answered: its deadline is in the past, but its state is terminal, so the scan cannot name it.
@@ -141,7 +145,8 @@ public sealed class ReconcileDeadlineSweepTests
     public async Task Sweep_RunningRunPastItsDeadline_IsQueued_AndTheAttemptClosesItIncomplete()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database.Name);
         var runId = world.RunId;
 
         // A run whose events may still be arriving, past its deadline. The deadline is a verdict, not a wait: the scan
@@ -171,8 +176,9 @@ public sealed class ReconcileDeadlineSweepTests
     public async Task Sweep_TwoTenants_QueuesAndReconcilesEachRunInItsOwnScope()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
-        var (otherOrg, _) = await world.CreateOtherOrgAsync("sweep-tenant-b");
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database.Name);
+        var (otherOrg, _) = await world.CreateOtherOrgAsync(Unique.Slug("sweep-tenant-b"));
         var otherRun = await world.SeedOtherRunAsync(otherOrg);
 
         // Both tenants have a run stuck past its deadline. The scan crosses tenants on purpose — it cannot run inside
@@ -209,8 +215,9 @@ public sealed class ReconcileDeadlineSweepTests
     public async Task Sweep_SmallPageAcrossTwoTenants_QueuesEveryRunExactlyOnce()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
-        var (otherOrg, _) = await world.CreateOtherOrgAsync("sweep-paging-b");
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database.Name);
+        var (otherOrg, _) = await world.CreateOtherOrgAsync(Unique.Slug("sweep-paging-b"));
 
         // Five overdue runs split 3/2 with a page of two puts a page boundary INSIDE a tenant: the page that
         // straddles carries the last run of the first org and the first run of the second, so the handler opens two
@@ -261,7 +268,8 @@ public sealed class ReconcileDeadlineSweepTests
     public async Task Sweep_TwiceBeforeDispatch_LeavesOneOutboxRow_AndOneRevisionAfterIt()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database.Name);
         var runId = world.RunId;
 
         await SetRunStateAsync(world, runId, "collecting");
@@ -292,7 +300,8 @@ public sealed class ReconcileDeadlineSweepTests
     public async Task Sweep_PageBoundCutAFullLastPage_AndTheNextFireQueuesTheRemainder()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database.Name);
 
         // Eleven overdue runs at one row per page is one more than the ten-page bound, so the fire's last page is
         // still full and it cannot tell the backlog ended. The run past the bound must reach the next fire, never be
@@ -385,9 +394,13 @@ public sealed class ReconcileDeadlineSweepTests
     /// One migrated database with an org, a project, a run and one producer slot, composed with the production queue
     /// mechanism and a <see cref="FakeTimeProvider"/> so a case drives the schedule instead of waiting for it.
     /// </summary>
-    private async Task<IngestTestWorld> StartAsync(FakeTimeProvider clock)
+    /// <param name="database">
+    /// A private database for the cases that drive the sweep: its scan names every overdue run in the database and the
+    /// dispatcher reconciles whatever it queued, so sharing one would decide another test's runs.
+    /// </param>
+    private async Task<IngestTestWorld> StartAsync(FakeTimeProvider clock, string? database = null)
     {
-        var database = new DatabaseNameHolder();
+        var holder = new DatabaseNameHolder();
 
         var world = await IngestTestWorld.StartAsync(
             _fixture,
@@ -403,10 +416,11 @@ public sealed class ReconcileDeadlineSweepTests
                 // way InviteSchemaTests exercises the same role. Grants and row level security are evaluated against the
                 // switched role, so the scan really runs with the sweep role's privileges.
                 services.RemoveAll<IWorkerSchedDataSource>();
-                services.AddSingleton<IWorkerSchedDataSource>(_ => new SweepRoleDataSource(_fixture, database));
-            });
+                services.AddSingleton<IWorkerSchedDataSource>(_ => new SweepRoleDataSource(_fixture, holder));
+            },
+            database: database);
 
-        database.Name = world.Database;
+        holder.Name = world.Database;
         return world;
     }
 

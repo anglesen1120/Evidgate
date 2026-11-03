@@ -71,9 +71,13 @@ public sealed class IngestTraceCorrelationTests
 
         using var listener = Listen(spans);
 
+        // The dispatcher claims and the consumer polls the whole queue, so their counts need this test's own database.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+
         await using var world = await IngestTestWorld.StartAsync(
             _fixture,
             IngestTestWorld.Writer(),
+            database: database,
             services: services => services
                 // The queue mechanism, exactly as the Worker composes it; no hosted service is
                 // registered by this call, so nothing claims the row before this test does.

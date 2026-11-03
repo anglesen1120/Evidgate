@@ -500,9 +500,14 @@ public sealed class CreateRunIdentityTests
             credentialId: tokenId,
             ciRun: new CiRunReference("github_actions", CiRepositoryId, runId, attempt));
 
-    /// <summary>One identity column of the world's single run, as text (null when the column is null).</summary>
+    /// <summary>One identity column of the world's run, as text (null when the column is null).</summary>
     private async Task<string?> ColumnAsync(RunCreationTests.World world, string column) =>
-        await _fixture.ScalarAsync<string>(world.Database, $"select {column}::text from public.run");
+        await _fixture.ScalarAsync<string>(
+            world.Database, $"select {column}::text from public.run where org_id = '{world.Org:D}'");
+
+    /// <summary>One expression of the world's own outbox rows; the shared database also holds other tests' rows.</summary>
+    private Task<T> OutboxAsync<T>(RunCreationTests.World world, string expression) =>
+        _fixture.ScalarAsync<T>(world.Database, $"select {expression} from public.outbox where org_id = '{world.Org:D}'");
 
     private static async Task<ApiAnswer> GetRunAsync(RunCreationTests.World world, Guid runId) =>
         await world.Client.SendAsync(HttpMethod.Get, $"/v1/runs/{runId:D}", world.Admin);
@@ -576,17 +581,17 @@ public sealed class CreateRunIdentityTests
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
 
         // The three pre-existing members are unchanged, so a consumer that reads only them keeps working.
-        (await _fixture.ScalarAsync<string>(world.Database, "select payload ->> 'run_id' from public.outbox")).ShouldBe(result.Value.RunId.ToString("D"));
-        (await _fixture.ScalarAsync<string>(world.Database, "select payload ->> 'project_id' from public.outbox")).ShouldBe(world.Project.ToString("D"));
-        (await _fixture.ScalarAsync<string>(world.Database, "select payload ->> 'manifest_id' from public.outbox")).ShouldBe(world.ManifestId.ToString("D"));
+        (await OutboxAsync<string>(world, "payload ->> 'run_id'")).ShouldBe(result.Value.RunId.ToString("D"));
+        (await OutboxAsync<string>(world, "payload ->> 'project_id'")).ShouldBe(world.Project.ToString("D"));
+        (await OutboxAsync<string>(world, "payload ->> 'manifest_id'")).ShouldBe(world.ManifestId.ToString("D"));
 
         // The additive block: all seven members, the claim's values, and the label beside it.
-        (await _fixture.ScalarAsync<long>(world.Database, "select (select count(*) from jsonb_object_keys(payload -> 'ref')) from public.outbox")).ShouldBe(7);
-        (await _fixture.ScalarAsync<string>(world.Database, "select payload -> 'ref' ->> 'kind' from public.outbox")).ShouldBe("branch");
-        (await _fixture.ScalarAsync<string>(world.Database, "select payload -> 'ref' ->> 'name' from public.outbox")).ShouldBe("main");
-        (await _fixture.ScalarAsync<string>(world.Database, "select payload -> 'ref' ->> 'head_sha' from public.outbox")).ShouldBe(Sha);
-        (await _fixture.ScalarAsync<string>(world.Database, "select payload -> 'ref' ->> 'trigger_event' from public.outbox")).ShouldBeNull();
-        (await _fixture.ScalarAsync<string>(world.Database, "select payload -> 'unverified_ref' from public.outbox")).ShouldBe("false");
+        (await OutboxAsync<long>(world, "(select count(*) from jsonb_object_keys(payload -> 'ref'))")).ShouldBe(7);
+        (await OutboxAsync<string>(world, "payload -> 'ref' ->> 'kind'")).ShouldBe("branch");
+        (await OutboxAsync<string>(world, "payload -> 'ref' ->> 'name'")).ShouldBe("main");
+        (await OutboxAsync<string>(world, "payload -> 'ref' ->> 'head_sha'")).ShouldBe(Sha);
+        (await OutboxAsync<string>(world, "payload -> 'ref' ->> 'trigger_event'")).ShouldBeNull();
+        (await OutboxAsync<string>(world, "payload -> 'unverified_ref'")).ShouldBe("false");
     }
 
     [Fact]
@@ -925,8 +930,8 @@ public sealed class CreateRunIdentityTests
         replay.IsSuccess.ShouldBeTrue(replay.Error?.Message);
         replay.Value.RunId.ShouldBe(first.Value.RunId);
         replay.Value.UnverifiedRef.ShouldBeFalse();
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.idempotency_record where operation = 'run:create'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org:D}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.idempotency_record where operation = 'run:create' and org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     [Fact]
@@ -949,7 +954,7 @@ public sealed class CreateRunIdentityTests
 
         conflict.IsSuccess.ShouldBeFalse();
         conflict.Error!.Code.ShouldBe(ApiErrorCode.IdempotencyConflict);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     [Fact]
@@ -972,7 +977,7 @@ public sealed class CreateRunIdentityTests
 
         conflict.Status.ShouldBe(HttpStatusCode.Conflict);
         conflict.ErrorCode.ShouldBe("idempotency_conflict");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     [Fact]

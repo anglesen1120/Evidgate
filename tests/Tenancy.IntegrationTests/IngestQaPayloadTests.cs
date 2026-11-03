@@ -15,7 +15,10 @@ public sealed class IngestQaPayloadTests
 
     public IngestQaPayloadTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private static Task<long> EventRowsAsync(IngestTestWorld world) => world.CountAsync("event");
+    /// <summary>The world's own rows: the database is shared, so every read names its tenant and run.</summary>
+    private static string Scope(IngestTestWorld world) => $"org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'";
+
+    private static Task<long> EventRowsAsync(IngestTestWorld world) => world.CountAsync("event", Scope(world));
 
     [Fact]
     public async Task unicode_payload_round_trips_and_is_hashed()
@@ -33,11 +36,11 @@ public sealed class IngestQaPayloadTests
                 ext: new { schema = "playwright/1", title = "héllo → 世界 😀" })));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        var payload = await world.ScalarAsync<string>("select payload::text from public.event");
+        var payload = await world.ScalarAsync<string>($"select payload::text from public.event where {Scope(world)}");
         payload.ShouldContain("héllo → 世界 😀");
 
         // 00 §7: the content address is sha256:<64 hex>.
-        var hash = await world.ScalarAsync<string>("select payload_hash from public.event");
+        var hash = await world.ScalarAsync<string>($"select payload_hash from public.event where {Scope(world)}");
         hash.ShouldMatch("^sha256:[0-9a-f]{64}$");
     }
 
@@ -80,7 +83,7 @@ public sealed class IngestQaPayloadTests
         surrogate.ErrorCode.ShouldBe("event_invalid");
 
         (await EventRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await world.CountAsync("event_batch", Scope(world))).ShouldBe(0);
     }
 
     [Fact]
@@ -106,7 +109,7 @@ public sealed class IngestQaPayloadTests
                 })));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        var payload = await world.ScalarAsync<string>("select payload::text from public.event");
+        var payload = await world.ScalarAsync<string>($"select payload::text from public.event where {Scope(world)}");
         payload.ShouldContain("visible");
         payload.ShouldNotContain("super-secret-nested");
         payload.ShouldNotContain("token");
@@ -151,8 +154,8 @@ public sealed class IngestQaPayloadTests
                 durationMs: 3_000_000_000L)));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        (await world.ScalarAsync<long>("select duration_ms from public.event")).ShouldBe(3_000_000_000L);
-        (await world.ScalarAsync<long?>("select duration_ms from public.case_attempt")).ShouldBeNull();
+        (await world.ScalarAsync<long>($"select duration_ms from public.event where {Scope(world)}")).ShouldBe(3_000_000_000L);
+        (await world.ScalarAsync<long?>($"select duration_ms from public.case_attempt where {Scope(world)}")).ShouldBeNull();
     }
 
     [Fact]
@@ -210,13 +213,13 @@ public sealed class IngestQaPayloadTests
                 ext: new { schema = "playwright/1", xfail = true, normalized = "timed_out" })));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        var payload = await world.ScalarAsync<string>("select payload::text from public.event");
+        var payload = await world.ScalarAsync<string>($"select payload::text from public.event where {Scope(world)}");
         payload.ShouldContain("xfail");
         payload.ShouldNotContain("normalized");
         payload.ShouldNotContain("timed_out");
 
         // The server's own normalisation of the raw status with xfail flips the failed outcome to passed.
-        (await world.ScalarAsync<string>("select normalized_status from public.event")).ShouldBe("passed");
-        (await world.ScalarAsync<string>("select normalized_status from public.case_attempt")).ShouldBe("passed");
+        (await world.ScalarAsync<string>($"select normalized_status from public.event where {Scope(world)}")).ShouldBe("passed");
+        (await world.ScalarAsync<string>($"select normalized_status from public.case_attempt where {Scope(world)}")).ShouldBe("passed");
     }
 }

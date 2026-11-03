@@ -170,7 +170,7 @@ public sealed class GetRunDetailFieldsTests
 
         // Another org's run is invisible under the RLS policy, which is FORCEd on `run` (0031).
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var foreign = await GetAsync(world, runId, TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg));
         foreign.Status.ShouldBe(HttpStatusCode.NotFound);
         foreign.ErrorCode.ShouldBe(unknown.ErrorCode);

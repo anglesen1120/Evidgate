@@ -77,7 +77,7 @@ public sealed class GetRunTests
         var runId = await CreateRunAsync(world);
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var foreign = await GetAsync(
             world,
             runId,

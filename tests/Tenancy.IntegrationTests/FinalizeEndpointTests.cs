@@ -105,7 +105,7 @@ public sealed class FinalizeEndpointTests
         TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database), world.Org, world.Project, principal);
 
-    // ------------------------------------------------------------------ reads (superuser: own dedicated database per world)
+    // ------------------------------------------------------------------ reads (superuser: scoped to this world's run)
 
     /// <summary>The run's manifest hash, through <c>run.manifest_id</c> (same tenant).</summary>
     private static Task<string> ManifestHashAsync(IngestTestWorld world, Guid? runId = null) =>
@@ -133,32 +133,32 @@ public sealed class FinalizeEndpointTests
 
     private static Task<bool> SlotClosedAsync(IngestTestWorld world, string producerId = Producer) =>
         world.ScalarAsync<bool>(
-            $"select closed_at is not null from public.producer_slot where producer_id = '{producerId}'");
+            $"select closed_at is not null from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{producerId}'");
 
     /// <summary>The stored declared high-water mark; <c>-1</c> while the slot is open (the column is NULL then).</summary>
     private static Task<long> SlotDeclaredLastSequenceAsync(IngestTestWorld world, string producerId = Producer) =>
         world.ScalarAsync<long>(
-            $"select coalesce(declared_last_sequence, -1) from public.producer_slot where producer_id = '{producerId}'");
+            $"select coalesce(declared_last_sequence, -1) from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{producerId}'");
 
     /// <summary>The stored declared count; <c>-1</c> while the slot is open (the column is NULL then).</summary>
     private static Task<int> SlotDeclaredCountAsync(IngestTestWorld world, string producerId = Producer) =>
         world.ScalarAsync<int>(
-            $"select coalesce(declared_count, -1) from public.producer_slot where producer_id = '{producerId}'");
+            $"select coalesce(declared_count, -1) from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{producerId}'");
 
     /// <summary>True while the slot declares nothing — the open state migration 0035's all-or-nothing CHECK allows.</summary>
     private static Task<bool> SlotDeclaresNothingAsync(IngestTestWorld world, string producerId = Producer) =>
         world.ScalarAsync<bool>(
             "select declared_last_sequence is null and declared_count is null "
-            + $"from public.producer_slot where producer_id = '{producerId}'");
+            + $"from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{producerId}'");
 
     private static Task<int> SlotVersionAsync(IngestTestWorld world, string producerId = Producer) =>
         world.ScalarAsync<int>(
-            $"select version from public.producer_slot where producer_id = '{producerId}'");
+            $"select version from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{producerId}'");
 
     /// <summary>The bound token id; empty while the slot is unbound.</summary>
     private static Task<string> SlotBoundJtiAsync(IngestTestWorld world, string producerId = Producer) =>
         world.ScalarAsync<string>(
-            $"select coalesce(bound_token_jti, '') from public.producer_slot where producer_id = '{producerId}'");
+            $"select coalesce(bound_token_jti, '') from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{producerId}'");
 
     /// <summary>The reconcile triggers written for the world's run (never for a refused or repeated finalize).</summary>
     private static Task<long> ReconcileRowsAsync(IngestTestWorld world) =>
@@ -170,8 +170,9 @@ public sealed class FinalizeEndpointTests
             "outbox",
             $"task_type = '{StateChangedTaskType}' and aggregate_id = '{world.RunId:D}' and payload->>'to' = '{to}'");
 
-    /// <summary>Every outbox row of the test's database: a refusal writes none at all.</summary>
-    private static Task<long> OutboxRowsAsync(IngestTestWorld world) => world.CountAsync("outbox");
+    /// <summary>Every outbox row of the test's tenant: a refusal writes none at all.</summary>
+    private static Task<long> OutboxRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("outbox", $"org_id = '{world.Org:D}'");
 
     /// <summary>The transition's canonical audit entry (05.3.1 AC5).</summary>
     private static Task<long> TransitionAuditRowsAsync(IngestTestWorld world) =>
@@ -541,7 +542,7 @@ public sealed class FinalizeEndpointTests
     public async Task Finalize_CrossTenant_404()
     {
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
-        var (otherOrg, _) = await world.CreateOtherOrgAsync("globex");
+        var (otherOrg, _) = await world.CreateOtherOrgAsync(Unique.Slug("globex"));
         var otherRun = await world.SeedOtherRunAsync(otherOrg);
 
         // RLS hides the run: another tenant's run and an unknown id are the same answer (00 §5.4).
@@ -686,11 +687,16 @@ public sealed class FinalizeEndpointTests
     /// ingest hot path. A finalize that took <c>FOR NO KEY UPDATE</c> there would queue behind it, so the held lock
     /// is released and the case fails instead of hanging.
     /// </summary>
+    /// <remarks>
+    /// A private database: the ten-second bound is a wall-clock guard, so sibling tests sharing the database
+    /// would turn load into a false failure.
+    /// </remarks>
     [Fact]
     public async Task Finalize_OnCollectingRun_DoesNotWaitBehindSharedRunLock()
     {
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), slots: 2);
+            _fixture, IngestTestWorld.Writer(), slots: 2, database: database);
         await world.SetRunStateAsync("collecting");
 
         // The second shard is what finalizes, so the closed slot of shard 1 cannot make this a no-op.

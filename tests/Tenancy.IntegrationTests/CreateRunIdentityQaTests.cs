@@ -105,7 +105,8 @@ public sealed class CreateRunIdentityQaTests
         var answer = await RunCreationTests.CreateRunAsync(world, BodyWithRef(world, $$"""{"kind":"branch","name":"{{name}}"}"""));
 
         answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
-        (await _fixture.ScalarAsync<int>(world.Database, "select char_length(ref_name) from public.run")).ShouldBe(255);
+        (await _fixture.ScalarAsync<int>(
+            world.Database, $"select char_length(ref_name) from public.run where org_id = '{world.Org}'")).ShouldBe(255);
     }
 
     [Fact]
@@ -222,7 +223,8 @@ public sealed class CreateRunIdentityQaTests
         var result = await RunCreationSeams.SendDirectAsync(
             world.Api, world.Org, world.Project, Producer(world.Project, "token-qa-route"), BodyWithRef(world, """{"trigger_event":"push"}"""));
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
-        var runId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.run");
+        var runId = await _fixture.ScalarAsync<Guid>(
+            world.Database, $"select id from public.run where org_id = '{world.Org}'");
 
         var answer = await world.Client.SendAsync(new HttpMethod(verb), $"/v1/runs/{runId:D}", world.Admin);
 
@@ -311,5 +313,6 @@ public sealed class CreateRunIdentityQaTests
             ciRun: new CiRunReference("github_actions", CiRepositoryId, runId, attempt));
 
     private async Task<string?> ColumnAsync(RunCreationTests.World world, string column) =>
-        await _fixture.ScalarAsync<string>(world.Database, $"select {column}::text from public.run");
+        await _fixture.ScalarAsync<string>(
+            world.Database, $"select {column}::text from public.run where org_id = '{world.Org}'");
 }

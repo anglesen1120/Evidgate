@@ -84,9 +84,11 @@ public sealed partial class ReconcileRunTests
     private async Task<IngestTestWorld> StartAsync(
         int slots = 1,
         Action<IServiceCollection>? services = null,
-        bool attempts = true)
+        bool attempts = true,
+        string? database = null)
     {
-        var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), slots: slots, services: services);
+        var world = await IngestTestWorld.StartAsync(
+            _fixture, IngestTestWorld.Writer(), slots: slots, services: services, database: database);
         if (attempts)
         {
             await RecordPlanAttemptsAsync(world);
@@ -102,12 +104,13 @@ public sealed partial class ReconcileRunTests
     /// wrapped in <see cref="CountingRunReconciler"/> so a case can prove the handler body ran, not only that the task
     /// row ended <c>done</c>.
     /// </summary>
-    private async Task<IngestTestWorld> StartWithQueueAsync(int attemptsSkip = 0, int slots = 1)
+    private async Task<IngestTestWorld> StartWithQueueAsync(int attemptsSkip = 0, int slots = 1, string? database = null)
     {
         var world = await IngestTestWorld.StartAsync(
             _fixture,
             IngestTestWorld.Writer(),
             slots: slots,
+            database: database,
             services: services =>
             {
                 services.AddEvidgateTasks(new ConfigurationBuilder().Build());
@@ -564,7 +567,12 @@ public sealed partial class ReconcileRunTests
     private static Task<DateTime?> UpdatedAtAsync(IngestTestWorld world, Guid runId) =>
         world.ScalarAsync<DateTime?>($"select updated_at from public.run where id = '{runId:D}'");
 
-    private static Task<long> RevisionCountAsync(IngestTestWorld world) => world.CountAsync("evidence_revision");
+    private static Task<long> RevisionCountAsync(IngestTestWorld world) =>
+        world.CountAsync("evidence_revision", $"org_id = '{world.Org:D}'");
+
+    /// <summary>Revisions of one run, whatever org it belongs to (the cross-tenant cases assert on a foreign run).</summary>
+    private static Task<long> RevisionCountOfAsync(IngestTestWorld world, Guid runId) =>
+        world.CountAsync("evidence_revision", $"run_id = '{runId:D}'");
 
     /// <summary>
     /// The <c>run.state_changed</c> audit rows of one run, written by 05.3.1's transition through the attempt's audit unit.
@@ -1237,7 +1245,7 @@ public sealed partial class ReconcileRunTests
     public async Task Reconcile_RunInOtherTenant_RunNotFound()
     {
         await using var world = await StartAsync();
-        var (otherOrg, _) = await world.CreateOtherOrgAsync("other");
+        var (otherOrg, _) = await world.CreateOtherOrgAsync(Unique.Slug("other"));
         var foreignRunId = await RunRowSeeder.SeedRunAsync(_fixture, world.Database, otherOrg);
         await SetRunStateAsync(world, foreignRunId, "collecting");
 
@@ -1246,7 +1254,7 @@ public sealed partial class ReconcileRunTests
         outcome.Disposition.ShouldBe(ReconcileDisposition.RunNotFound, Describe(outcome));
         outcome.Comparison.ShouldBeNull();
         (await StateAsync(world, foreignRunId)).ShouldBe("collecting");
-        (await RevisionCountAsync(world)).ShouldBe(0);
+        (await RevisionCountOfAsync(world, foreignRunId)).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ T2.4's precondition: retrying changes nothing
@@ -1452,7 +1460,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task ReconcileRunTask_ClaimedOnceUnderSkipLocked()
     {
-        await using var world = await StartWithQueueAsync();
+        // Four concurrent claims over one due row need a database where this is the only due row.
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(database: owned.Name);
         var runId = world.RunId;
         await SetRunStateAsync(world, runId, "collecting");
         await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 3, declaredCount: 3);
@@ -1532,7 +1542,10 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Reconcile_EventAggregate_UsesEventIndex()
     {
-        await using var world = await StartAsync();
+        // The plan is decided by this case's own row counts, so it owns a database: a shared one carries other
+        // tenants' rows and the ANALYZE below would plan against them.
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(database: owned);
         var runId = world.RunId;
         await SetRunStateAsync(world, runId, "collecting");
         await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 20, declaredCount: 20);
@@ -1765,7 +1778,7 @@ public sealed partial class ReconcileRunTests
     public async Task Reconcile_OtherTenantRun_WritesNoRevision()
     {
         await using var world = await StartAsync();
-        var (otherOrg, _) = await world.CreateOtherOrgAsync("other");
+        var (otherOrg, _) = await world.CreateOtherOrgAsync(Unique.Slug("other"));
         var foreignRunId = await RunRowSeeder.SeedRunAsync(_fixture, world.Database, otherOrg);
         await SetRunStateAsync(world, foreignRunId, "collecting");
 
@@ -1773,7 +1786,7 @@ public sealed partial class ReconcileRunTests
 
         outcome.Disposition.ShouldBe(ReconcileDisposition.RunNotFound, Describe(outcome));
         finalization.ShouldBeNull();
-        (await RevisionCountAsync(world)).ShouldBe(0);
+        (await RevisionCountOfAsync(world, foreignRunId)).ShouldBe(0);
         (await StateAsync(world, foreignRunId)).ShouldBe("collecting");
         (await PointerAsync(world, foreignRunId)).ShouldBeNull();
     }
@@ -2380,9 +2393,10 @@ public sealed partial class ReconcileRunTests
             + $"from public.evidence_revision er where er.org_id = '{world.Org}' and er.run_id = '{runId:D}' "
             + $"and er.revision_no = {revisionNo}");
 
-    /// <summary>One lower-case boolean column of one stored event, read by its producer sequence.</summary>
+    /// <summary>One lower-case boolean column of one stored event of the world's run, read by its producer sequence.</summary>
     private static Task<bool> EventFlagAsync(IngestTestWorld world, long sequence, string column) =>
-        world.ScalarAsync<bool>($"select {column} from public.event where sequence = {sequence}");
+        world.ScalarAsync<bool>(
+            $"select {column} from public.event where run_id = '{world.RunId:D}' and sequence = {sequence}");
 
     /// <summary>Moves the committed outbox rows into the queue, then claims them until the expected attempts ran.</summary>
     /// <param name="world">The world whose host carries the queue.</param>
@@ -2410,11 +2424,11 @@ public sealed partial class ReconcileRunTests
             customMessage: "every queued reconcile is claimed and completed by the consumer");
     }
 
-    /// <summary>How many reconcile task rows ever reached <c>done</c>.</summary>
+    /// <summary>How many reconcile task rows of the world's org ever reached <c>done</c>.</summary>
     private static Task<long> DoneReconcilesAsync(IngestTestWorld world) =>
         world.CountAsync(
             "task",
-            where: $"task_type = '{RunReconcileContract.OutboxTaskType}' and state = 'done'");
+            $"org_id = '{world.Org:D}' and task_type = '{RunReconcileContract.OutboxTaskType}' and state = 'done'");
 
     /// <summary>
     /// A run that finished as <c>incomplete</c> with one planned execution unanswered and one declared event missing:

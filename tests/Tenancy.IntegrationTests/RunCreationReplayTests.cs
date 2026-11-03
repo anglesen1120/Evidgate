@@ -43,17 +43,18 @@ public sealed class RunCreationReplayTests
     private static string? DetailReason(ApiAnswer answer) => Detail(answer).GetProperty("reason").GetString();
 
     /// <summary>
-    /// The six row counts a refused request must leave untouched: run, planned execution, producer slot, the run-create
-    /// outbox row, the <c>run:create</c> idempotency record and the <c>run.create</c> audit row.
+    /// The six row counts a refused request must leave untouched, scoped to the world's own tenant because the
+    /// database is shared: run, planned execution, producer slot, the run-create outbox row, the <c>run:create</c>
+    /// idempotency record and the <c>run.create</c> audit row.
     /// </summary>
     private async Task<long[]> CountsAsync(RunCreationTests.World world) =>
     [
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.planned_execution"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.outbox where task_type = 'orchestrator.run.created'"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.idempotency_record where operation = 'run:create'"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.audit_log where action = 'run.create'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org:D}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.planned_execution where org_id = '{world.Org:D}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where org_id = '{world.Org:D}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.outbox where org_id = '{world.Org:D}' and task_type = 'orchestrator.run.created'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.idempotency_record where org_id = '{world.Org:D}' and operation = 'run:create'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where org_id = '{world.Org:D}' and action = 'run.create'"),
     ];
 
     // ------------------------------------------------------------------ AC8
@@ -180,14 +181,15 @@ public sealed class RunCreationReplayTests
         var defaulted = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         defaulted.Status.ShouldBe(HttpStatusCode.Created, defaulted.ErrorMessage);
 
-        (await _fixture.ColumnAsync<string>(world.Database, "select purpose from public.run order by created_at, id"))
+        (await _fixture.ColumnAsync<string>(
+            world.Database, $"select purpose from public.run where org_id = '{world.Org:D}' order by created_at, id"))
             .ShouldBe(["regular", "regular"]);
         (await _fixture.ScalarAsync<long>(
             world.Database,
-            "select count(*) from public.run where purpose = 'regular' and replay_grant_id is null")).ShouldBe(2);
+            $"select count(*) from public.run where org_id = '{world.Org:D}' and purpose = 'regular' and replay_grant_id is null")).ShouldBe(2);
         (await _fixture.ScalarAsync<long>(
             world.Database,
-            "select count(*) from public.run where replay_grant_id is not null")).ShouldBe(0);
+            $"select count(*) from public.run where org_id = '{world.Org:D}' and replay_grant_id is not null")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ the refusal stores nothing (key stays free)
@@ -212,7 +214,8 @@ public sealed class RunCreationReplayTests
         var retry = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId), idempotencyKey: key);
 
         retry.Status.ShouldBe(HttpStatusCode.Created, retry.ErrorMessage);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            world.Database, $"select count(*) from public.run where org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ a grant id from elsewhere is no grant
@@ -269,6 +272,7 @@ public sealed class RunCreationReplayTests
         var error = await scope.CaptureErrorAsync("update public.run set purpose = 'replay'");
 
         error.SqlState.ShouldBe("42501");
-        (await _fixture.ScalarAsync<string>(world.Database, "select purpose from public.run")).ShouldBe("regular");
+        (await _fixture.ScalarAsync<string>(
+            world.Database, $"select purpose from public.run where org_id = '{world.Org:D}'")).ShouldBe("regular");
     }
 }

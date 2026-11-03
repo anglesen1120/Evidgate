@@ -246,7 +246,7 @@ public sealed class ListRunsTests
         await CreateBranchAsync(world, "main", ShaOne);
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var foreign = await world.Client.SendAsync(
             HttpMethod.Get,
             $"/v1/projects/{world.Project}/runs",

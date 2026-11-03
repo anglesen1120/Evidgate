@@ -15,7 +15,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Late_Evidence_On_Incomplete_Run_Appends_Revision_Two_And_Leaves_Revision_One_Untouched()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
 
         var (runId, revisionOne) = await StartIncompleteRunAsync(world);
         await OpenLateWindowAsync(world, runId);
@@ -58,7 +60,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Late_Evidence_Resent_Appends_Exactly_One_Revision()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
 
         var (runId, _) = await StartIncompleteRunAsync(world);
         await OpenLateWindowAsync(world, runId);
@@ -88,7 +92,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Redelivered_Late_Reconcile_Appends_No_Second_Revision()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
 
         var (runId, _) = await StartIncompleteRunAsync(world);
         await OpenLateWindowAsync(world, runId);
@@ -128,7 +134,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Late_Reconcile_After_The_Window_Closed_Still_Appends_The_Next_Revision()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
 
         var (runId, revisionOne) = await StartIncompleteRunAsync(world);
         await OpenLateWindowAsync(world, runId);
@@ -177,7 +185,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Late_Reconcile_With_A_Newly_Ready_Artifact_At_The_Same_Watermark_Appends_The_Next_Revision()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
 
         var (runId, _) = await StartIncompleteRunAsync(world);
         await OpenLateWindowAsync(world, runId);
@@ -228,7 +238,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Late_Batch_Of_Two_Producers_Is_Rejected_And_Enqueues_No_Trigger()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1, slots: 2);
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, slots: 2, database: dedicated.Name);
 
         var (runId, _) = await StartIncompleteRunAsync(world, closeSecondShard: true);
         await OpenLateWindowAsync(world, runId);
@@ -253,7 +265,7 @@ public sealed partial class ReconcileRunTests
         mixed.Body.GetProperty("error").GetProperty("details")[0].GetProperty("reason").GetString()
             .ShouldBe("producer_mismatch");
         (await LateTriggerRowsAsync(world, runId)).ShouldBe(0, "a refused batch asks for no comparison");
-        (await world.CountAsync("event")).ShouldBe(1, "only the first revision's event is stored");
+        (await world.CountAsync("event", $"org_id = '{world.Org:D}'")).ShouldBe(1, "only the first revision's event is stored");
         (await RevisionCountAsync(world)).ShouldBe(1);
     }
 
@@ -264,7 +276,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Late_Batch_Writes_One_Trigger_With_Its_Producers_High_Water_Mark()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
 
         var (runId, _) = await StartIncompleteRunAsync(world, declaredLastSequence: 3, declaredCount: 3);
         await OpenLateWindowAsync(world, runId);
@@ -313,7 +327,7 @@ public sealed partial class ReconcileRunTests
 
         crashed.Status.ShouldBe(HttpStatusCode.InternalServerError, $"{crashed.ErrorMessage}: {crashed.Body}");
         (await LateTriggerRowsAsync(world, runId)).ShouldBe(0, "a trigger that failed to enqueue leaves no row");
-        (await world.CountAsync("event")).ShouldBe(1, "the late event rolled back with the trigger it asked for");
+        (await world.CountAsync("event", $"org_id = '{world.Org:D}'")).ShouldBe(1, "the late event rolled back with the trigger it asked for");
         (await RevisionCountAsync(world)).ShouldBe(1);
         (await StateAsync(world, runId)).ShouldBe("incomplete");
     }
@@ -321,7 +335,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Late_Evidence_On_Complete_Run_Is_Refused_And_Appends_No_Revision()
     {
-        await using var world = await StartWithQueueAsync();
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(database: dedicated.Name);
 
         var runId = world.RunId;
         await SetRunStateAsync(world, runId, "collecting");
@@ -349,7 +365,7 @@ public sealed partial class ReconcileRunTests
         refused.Status.ShouldBe(HttpStatusCode.Conflict, refused.ErrorMessage);
         refused.ErrorCode.ShouldBe("run_closed");
         (await LateTriggerRowsAsync(world, runId)).ShouldBe(0, "nothing was accepted, so no trigger was written");
-        (await world.CountAsync("event")).ShouldBe(1);
+        (await world.CountAsync("event", $"org_id = '{world.Org:D}'")).ShouldBe(1);
 
         // And a trigger that named a complete run anyway decides nothing: only a late window reopens the comparison.
         var attempt = await ReconcileAsync(world, runId);
@@ -362,7 +378,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Late_Evidence_Outside_The_Window_Is_Refused_And_Enqueues_No_Trigger()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
 
         var (runId, _) = await StartIncompleteRunAsync(world);
         await CloseLateWindowAsync(world, runId);
@@ -393,7 +411,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Older_Declared_Epoch_Is_Stored_Verbatim_And_Marks_Nothing_Stale()
     {
-        await using var world = await StartWithQueueAsync();
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(database: dedicated.Name);
 
         var runId = world.RunId;
         await SetRunStateAsync(world, runId, "collecting");
@@ -423,8 +443,8 @@ public sealed partial class ReconcileRunTests
                 epoch: 2L)));
         second.Status.ShouldBe(HttpStatusCode.OK, second.ErrorMessage);
 
-        (await world.ScalarAsync<long>("select epoch from public.event where sequence = 1")).ShouldBe(3);
-        (await world.ScalarAsync<long>("select epoch from public.event where sequence = 2")).ShouldBe(2);
+        (await world.ScalarAsync<long>($"select epoch from public.event where org_id = '{world.Org:D}' and sequence = 1")).ShouldBe(3);
+        (await world.ScalarAsync<long>($"select epoch from public.event where org_id = '{world.Org:D}' and sequence = 2")).ShouldBe(2);
         (await EventFlagAsync(world, 1, "stale")).ShouldBeFalse();
         (await EventFlagAsync(world, 2, "stale")).ShouldBeFalse("no epoch source exists to call it superseded");
 
