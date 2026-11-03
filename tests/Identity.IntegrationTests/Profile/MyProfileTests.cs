@@ -1,10 +1,10 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Testing;
 using Identity.IntegrationTests.Sessions.Http;
-using Npgsql;
 using Shouldly;
 using Xunit;
 
@@ -49,6 +49,7 @@ public sealed class MyProfileTests : TenantTest
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
 
+        var issued = string.Empty;
         using (var read = await SessionTestHost.SendAsync(
             client,
             HttpMethod.Get,
@@ -63,15 +64,13 @@ public sealed class MyProfileTests : TenantTest
             body.RootElement.GetProperty("email").GetString().ShouldBe(member.Email);
             body.RootElement.GetProperty("preferred_locale").ValueKind.ShouldBe(JsonValueKind.Null);
             body.RootElement.TryGetProperty("version", out _).ShouldBeFalse("the version travels in the ETag only");
-            read.Headers.ETag!.Tag.ShouldBe("\"1\"");
+            var etag = read.Headers.ETag.ShouldNotBeNull();
+            etag.IsWeak.ShouldBeFalse("the write's If-Match carries this very tag");
+            issued = etag.Tag;
             read.Headers.CacheControl!.NoStore.ShouldBeTrue();
         }
 
-        using (var written = await PatchAsync(
-            client,
-            member,
-            """{"preferred_locale":"en"}""",
-            ifMatch: "\"1\""))
+        using (var written = await PatchAsync(client, member, """{"preferred_locale":"en"}""", ifMatch: issued))
         {
             written.StatusCode.ShouldBe(HttpStatusCode.OK);
         }
@@ -83,7 +82,7 @@ public sealed class MyProfileTests : TenantTest
             SessionTestHost.CookieHeaderFor(member.SessionCookie)))
         {
             reread.StatusCode.ShouldBe(HttpStatusCode.OK);
-            reread.Headers.ETag!.Tag.ShouldBe("\"2\"");
+            reread.Headers.ETag.ShouldNotBeNull().Tag.ShouldBe(NextETag(issued), "the write bumps the version the trigger owns");
 
             using var body = JsonDocument.Parse(await reread.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
             body.RootElement.GetProperty("preferred_locale").GetString().ShouldBe("en");
@@ -97,18 +96,23 @@ public sealed class MyProfileTests : TenantTest
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
+        var issued = await CurrentETagAsync(client, member);
 
-        using (var first = await PatchAsync(client, member, """{"preferred_locale":"vi"}""", ifMatch: "\"1\""))
+        string written;
+        using (var first = await PatchAsync(client, member, """{"preferred_locale":"vi"}""", ifMatch: issued))
         {
             first.StatusCode.ShouldBe(HttpStatusCode.OK);
-            first.Headers.ETag!.Tag.ShouldBe("\"2\"");
+            var etag = first.Headers.ETag.ShouldNotBeNull();
+            etag.IsWeak.ShouldBeFalse();
+            written = etag.Tag;
+            written.ShouldBe(NextETag(issued));
 
             using var body = JsonDocument.Parse(await first.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
             body.RootElement.GetProperty("preferred_locale").GetString().ShouldBe("vi");
         }
 
         // The version the client no longer has: refused, and nothing changes.
-        using (var stale = await PatchAsync(client, member, """{"preferred_locale":"en"}""", ifMatch: "\"1\""))
+        using (var stale = await PatchAsync(client, member, """{"preferred_locale":"en"}""", ifMatch: issued))
         {
             stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
             (await SessionTestHost.ErrorCodeAsync(stale)).ShouldBe(ApiErrorCode.PreconditionFailed);
@@ -120,7 +124,7 @@ public sealed class MyProfileTests : TenantTest
             ProfilePath,
             SessionTestHost.CookieHeaderFor(member.SessionCookie)))
         {
-            still.Headers.ETag!.Tag.ShouldBe("\"2\"", "a refused write must not bump the version");
+            still.Headers.ETag.ShouldNotBeNull().Tag.ShouldBe(written, "a refused write must not bump the version");
         }
     }
 
@@ -137,7 +141,8 @@ public sealed class MyProfileTests : TenantTest
             (await SessionTestHost.ErrorCodeAsync(read)).ShouldBe(ApiErrorCode.Unauthenticated);
         }
 
-        using (var write = await PatchAsync(client, member: null, """{"preferred_locale":"en"}""", ifMatch: "\"1\""))
+        // No If-Match either: an anonymous caller must be refused for the session, never for the version.
+        using (var write = await PatchAsync(client, member: null, """{"preferred_locale":"en"}""", ifMatch: null))
         {
             write.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
             (await SessionTestHost.ErrorCodeAsync(write)).ShouldBe(ApiErrorCode.Unauthenticated);
@@ -173,18 +178,19 @@ public sealed class MyProfileTests : TenantTest
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
+        var issued = await CurrentETagAsync(client, member);
 
         using (var extra = await PatchAsync(
             client,
             member,
             """{"preferred_locale":"en","display_name":"intruder"}""",
-            ifMatch: "\"1\""))
+            ifMatch: issued))
         {
             extra.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
             (await SessionTestHost.ErrorCodeAsync(extra)).ShouldBe(ApiErrorCode.FieldNotPatchable);
         }
 
-        using (var locale = await PatchAsync(client, member, """{"preferred_locale":"fr"}""", ifMatch: "\"1\""))
+        using (var locale = await PatchAsync(client, member, """{"preferred_locale":"fr"}""", ifMatch: issued))
         {
             locale.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
             (await SessionTestHost.ErrorCodeAsync(locale)).ShouldBe(ApiErrorCode.LocaleInvalid);
@@ -196,7 +202,7 @@ public sealed class MyProfileTests : TenantTest
             ProfilePath,
             SessionTestHost.CookieHeaderFor(member.SessionCookie)))
         {
-            unchanged.Headers.ETag!.Tag.ShouldBe("\"1\"", "neither refusal may write");
+            unchanged.Headers.ETag.ShouldNotBeNull().Tag.ShouldBe(issued, "neither refusal may write");
         }
     }
 
@@ -207,14 +213,15 @@ public sealed class MyProfileTests : TenantTest
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
+        var issued = await CurrentETagAsync(client, member);
 
-        using (var absent = await PatchAsync(client, member, json: null, ifMatch: "\"1\""))
+        using (var absent = await PatchAsync(client, member, json: null, ifMatch: issued))
         {
             absent.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
             (await SessionTestHost.ErrorCodeAsync(absent)).ShouldBe(ApiErrorCode.RequestInvalid);
         }
 
-        using (var malformed = await PatchAsync(client, member, "{not json", ifMatch: "\"1\""))
+        using (var malformed = await PatchAsync(client, member, "{not json", ifMatch: issued))
         {
             malformed.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
             (await SessionTestHost.ErrorCodeAsync(malformed)).ShouldBe(ApiErrorCode.RequestInvalid);
@@ -224,7 +231,7 @@ public sealed class MyProfileTests : TenantTest
             client,
             member,
             """{"preferred_locale":"en"}""",
-            ifMatch: "\"1\"",
+            ifMatch: issued,
             contentType: "text/plain"))
         {
             plainText.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -260,12 +267,13 @@ public sealed class MyProfileTests : TenantTest
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
+        var issued = await CurrentETagAsync(client, member);
 
         using (var forged = await PatchAsync(
             client,
             member,
             """{"preferred_locale":"en"}""",
-            ifMatch: "\"1\"",
+            ifMatch: issued,
             includeXsrf: false))
         {
             forged.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -278,7 +286,7 @@ public sealed class MyProfileTests : TenantTest
             ProfilePath,
             SessionTestHost.CookieHeaderFor(member.SessionCookie)))
         {
-            unchanged.Headers.ETag!.Tag.ShouldBe("\"1\"");
+            unchanged.Headers.ETag.ShouldNotBeNull().Tag.ShouldBe(issued);
         }
     }
 
@@ -308,7 +316,8 @@ public sealed class MyProfileTests : TenantTest
             body.RootElement.GetProperty("id").GetGuid().ShouldNotBe(a.UserId);
         }
 
-        using (var writeB = await PatchAsync(clientB, b, """{"preferred_locale":"vi"}""", ifMatch: "\"1\""))
+        var issuedB = await CurrentETagAsync(clientB, b);
+        using (var writeB = await PatchAsync(clientB, b, """{"preferred_locale":"vi"}""", ifMatch: issuedB))
         {
             writeB.StatusCode.ShouldBe(HttpStatusCode.OK);
         }
@@ -318,21 +327,43 @@ public sealed class MyProfileTests : TenantTest
     }
 
     /// <summary>
-    /// The version trigger is the database's own guard: an update that does not increment the version is refused
-    /// even when it comes around the route, so no later writer can silently skip the concurrency token.
+    /// The version belongs to the row's trigger, not to its writers: an owner UPDATE that never names the column
+    /// still bumps it, and the version the caller had read is refused from then on.
     /// </summary>
     [Fact]
-    public async Task A_Non_Incrementing_Update_Is_Refused_By_The_Database()
+    public async Task An_Update_That_Omits_The_Version_Is_Stamped_And_Invalidates_The_Old_ETag()
     {
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
+        var issued = await CurrentETagAsync(client, member);
 
-        await Should.ThrowAsync<NpgsqlException>(() => host.ArrangeAsync(
+        await host.ArrangeAsync(
             "update public.\"user\" set display_name = 'renamed without a version bump' where id = @id",
-            ("id", member.UserId)));
+            ("id", member.UserId));
 
-        (await LocaleAsync(host, member.UserId)).ShouldBeNull("the refused statement wrote nothing");
+        (await VersionAsync(host, member.UserId)).ShouldBe(VersionOf(issued) + 1);
+
+        using (var reread = await SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Get,
+            ProfilePath,
+            SessionTestHost.CookieHeaderFor(member.SessionCookie)))
+        {
+            reread.StatusCode.ShouldBe(HttpStatusCode.OK);
+            reread.Headers.ETag.ShouldNotBeNull().Tag.ShouldBe(NextETag(issued));
+
+            using var body = JsonDocument.Parse(await reread.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+            body.RootElement.GetProperty("display_name").GetString().ShouldBe("renamed without a version bump");
+        }
+
+        using (var stale = await PatchAsync(client, member, """{"preferred_locale":"en"}""", ifMatch: issued))
+        {
+            stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+            (await SessionTestHost.ErrorCodeAsync(stale)).ShouldBe(ApiErrorCode.PreconditionFailed);
+        }
+
+        (await LocaleAsync(host, member.UserId)).ShouldBeNull("the refused write changed nothing");
     }
 
     /// <summary>The write appends the account's language change to the chain of each org it belongs to.</summary>
@@ -347,7 +378,11 @@ public sealed class MyProfileTests : TenantTest
             "select count(*) from public.audit_log where action = 'user.locale_changed' and org_id = @org_id",
             ("org_id", member.OrgId));
 
-        using (var written = await PatchAsync(client, member, """{"preferred_locale":"en"}""", ifMatch: "\"1\""))
+        using (var written = await PatchAsync(
+            client,
+            member,
+            """{"preferred_locale":"en"}""",
+            ifMatch: await CurrentETagAsync(client, member)))
         {
             written.StatusCode.ShouldBe(HttpStatusCode.OK);
         }
@@ -368,6 +403,41 @@ public sealed class MyProfileTests : TenantTest
 
         return value as string;
     }
+
+    /// <summary>The row's stored version, read as the owner.</summary>
+    private static async Task<int> VersionAsync(SessionTestHost host, Guid userId)
+    {
+        var value = await host.ScalarAsync(
+            "select version from public.\"user\" where id = @id",
+            [("id", userId)]);
+
+        return value.ShouldBeOfType<int>();
+    }
+
+    /// <summary>
+    /// The tag a fresh read issues. Sign-in itself updates the row, so its version is not a constant and every
+    /// write must carry the tag the caller actually read.
+    /// </summary>
+    private static async Task<string> CurrentETagAsync(HttpClient client, SignedInMember member)
+    {
+        using var response = await SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Get,
+            ProfilePath,
+            SessionTestHost.CookieHeaderFor(member.SessionCookie));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var etag = response.Headers.ETag.ShouldNotBeNull();
+        etag.IsWeak.ShouldBeFalse();
+        return etag.Tag;
+    }
+
+    /// <summary>The strong tag of the version after <paramref name="etag"/>'s.</summary>
+    private static string NextETag(string etag) =>
+        string.Create(CultureInfo.InvariantCulture, $"\"{VersionOf(etag) + 1}\"");
+
+    /// <summary>The numeric version an issued tag carries.</summary>
+    private static int VersionOf(string etag) => int.Parse(etag.Trim('"'), CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Sends the write with the headers the route requires, and without an org header: <c>If-Match</c> and the

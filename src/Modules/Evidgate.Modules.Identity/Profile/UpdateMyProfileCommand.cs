@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Resolve;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -19,11 +20,14 @@ namespace Evidgate.Modules.Identity.Profile;
 /// so no caller can name another account, and nothing here needs a tenant transaction to exist.
 /// </para>
 /// <para>
-/// <b>The order of the two effects.</b> The row is written first and the audit rows after it, one
-/// chain per active org through the same writer the login and link paths use. A chain that cannot
-/// be written answers 503 and the caller re-reads its profile: the change is already committed and
-/// attributed, so a retry with the new version either appends the row or reports the stale version,
-/// and no path returns success for a change whose record could not be written.
+/// <b>The order of the two effects.</b> The row is written and committed first, then the audit rows,
+/// one chain per active org of the account (the resolver answers at most 200 orgs), through the same
+/// writer the login and link paths use. That fan-out is best-effort and fail-closed: every fault —
+/// a database error, a timeout, a busy chain, or the whole fan-out missing its
+/// <see cref="AuditDeadline"/> — answers the one 503 this command has, with <c>Retry-After</c>. The
+/// change is already stored when that 503 is sent, so it can arrive with some orgs audited and the
+/// rest not, and a retry (with the version the caller's next read shows) can append a second row for
+/// an org that was already written. No path returns success for a change whose record is incomplete.
 /// </para>
 /// </remarks>
 /// <param name="store">The write statement.</param>
@@ -38,6 +42,13 @@ internal sealed class UpdateMyProfileCommand(
     internal const string LocaleMetadataKey = "locale";
 
     private const string ActiveOrgStatus = "active";
+
+    /// <summary>
+    /// How long the whole per-org fan-out may take. The profile row is already committed, so a chain
+    /// that is slow or busy must end in the command's own 503 rather than hold the request open or
+    /// surface as an outage the caller cannot act on.
+    /// </summary>
+    internal static readonly TimeSpan AuditDeadline = TimeSpan.FromSeconds(5);
 
     /// <summary>412: the version the caller held is no longer the row's, so nothing was written.</summary>
     internal static Error Stale { get; } = new(
@@ -92,20 +103,26 @@ internal sealed class UpdateMyProfileCommand(
 
     /// <summary>
     /// One <c>user.locale_changed</c> row per active org of the acting account, each in its own tenant
-    /// transaction through the identity audit writer.
+    /// transaction through the identity audit writer, inside one deadline.
     /// </summary>
     /// <param name="profile">The row the write produced; its id is the actor and the object.</param>
     /// <param name="preferredLocale">The language the account chose.</param>
     /// <param name="cancellationToken">Request abort; it also rolls back the org being written.</param>
-    /// <returns>True when every chain committed, false when one did not (the route answers 503).</returns>
+    /// <returns>
+    /// True when every chain committed, false when any did not — a database fault, a busy chain or the
+    /// deadline — so the route answers its one 503. A caller that left is not an answer at all.
+    /// </returns>
     private async ValueTask<bool> AuditAsync(
         MyProfile profile,
         string preferredLocale,
         CancellationToken cancellationToken)
     {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(AuditDeadline);
+
         try
         {
-            var orgIds = (await memberOrgs.MemberOrgsAsync(profile.Id, cancellationToken).ConfigureAwait(false))
+            var orgIds = (await memberOrgs.MemberOrgsAsync(profile.Id, deadline.Token).ConfigureAwait(false))
                 .Where(org => string.Equals(org.Status, ActiveOrgStatus, StringComparison.Ordinal))
                 .Select(org => org.OrgId)
                 .ToArray();
@@ -121,7 +138,7 @@ internal sealed class UpdateMyProfileCommand(
                             [LocaleMetadataKey] = preferredLocale,
                         }),
                     orgIds,
-                    cancellationToken)
+                    deadline.Token)
                 .ConfigureAwait(false);
 
             return true;
@@ -132,6 +149,18 @@ internal sealed class UpdateMyProfileCommand(
         }
         catch (TimeoutException)
         {
+            return false;
+        }
+        catch (AuditBusyException)
+        {
+            // A chain held its lock too long: the login path answers the same 503 for it, and this
+            // command has one 503 shape rather than the middleware's.
+            return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Our deadline, not the caller leaving: the fan-out stops where it was and the change stays
+            // stored with the remaining orgs unaudited.
             return false;
         }
     }

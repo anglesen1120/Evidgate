@@ -33,10 +33,14 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// with one it never read.
 /// </para>
 /// <para>
-/// <b>One member, refused by name.</b> The body is read bounded, must be <c>application/json</c>,
-/// and is judged member by member: any name other than <c>preferred_locale</c> answers 422
-/// <c>field_not_patchable</c> for that name (a valid locale alongside it does not save the
-/// request), and a locale outside <c>vi</c> / <c>en</c> answers 422 <c>locale_invalid</c>. Shape
+/// <b>One member, refused by name.</b> The body is read bounded, must be <c>application/json</c> (any
+/// other media type is 422 <c>request_invalid</c> with <c>body</c> in <c>error.details</c>, the answer
+/// <c>POST /v1/auth/invite-token</c> gives the same body), and is judged member by name first: any
+/// name other than <c>preferred_locale</c> answers 422 <c>field_not_patchable</c> for that name (a
+/// valid locale alongside it does not save the request), and a name sent twice answers 422
+/// <c>request_invalid</c> with <c>duplicate</c>, before any value is judged — so an invalid first
+/// value can never be overwritten into acceptance by a valid second one. Only then is the single
+/// value judged: a locale outside <c>vi</c> / <c>en</c> answers 422 <c>locale_invalid</c>. Shape
 /// refusals come before the precondition, as the pipeline's validation stage does for a business
 /// route.
 /// </para>
@@ -61,6 +65,9 @@ internal static class MyProfileEndpoints
 
     private const string LocaleMember = "preferred_locale";
 
+    /// <summary>The longest member name a refusal echoes back: enough for any real name, small in the envelope.</summary>
+    private const int MaxEchoedMemberChars = 64;
+
     /// <summary>Maps the two routes onto the <c>/v1</c> group and returns it.</summary>
     /// <param name="group">The <c>/v1</c> group the module's endpoints are mapped on.</param>
     /// <returns>The same group, so one composition applies to every route on it.</returns>
@@ -68,8 +75,10 @@ internal static class MyProfileEndpoints
     {
         ArgumentNullException.ThrowIfNull(group);
 
-        // `.Accepts<T>` declares the request schema without binding it: the handler reads the body
-        // itself to refuse an unknown member by name (a binder would silently ignore it).
+        // No `.Accepts<T>` on the write: that metadata makes ASP.NET answer 415 for a non-JSON body
+        // before the handler runs, while this contract's answer is the bounded reader's 422
+        // `request_invalid` (path `body`), as `POST /v1/auth/invite-token` gives the same body. The body
+        // is read here rather than bound so an unknown member is refused by name, not ignored.
         // Both routes are TENANTLESS: they sit on the /v1 group, which the host wraps in the tenant filter, and
         // that filter refuses an authenticated request that names no org. The metadata is what tells it to publish
         // the principal and stand aside, exactly as the org list and create routes declare.
@@ -79,7 +88,6 @@ internal static class MyProfileEndpoints
             .WithSummary("The signed-in account's own profile, with its version as the ETag");
 
         group.MapPatch("/me", PatchAsync)
-            .Accepts<UpdateUserProfileRequest>("application/json")
             .Produces<UserProfileDto>(StatusCodes.Status200OK)
             .WithMetadata(TenantlessEndpointMetadata.Instance)
             .WithSummary("Change the account's preferred language against its ETag (If-Match)");
@@ -163,7 +171,9 @@ internal static class MyProfileEndpoints
     /// <summary>
     /// The one member the body may carry, judged by name before by value: an unknown member is
     /// refused for itself even when a valid locale travels beside it, so a client learns that the
-    /// field it sent is not part of this contract instead of believing it was written.
+    /// field it sent is not part of this contract instead of believing it was written. A name sent
+    /// twice is refused before any value is judged, so an invalid first value can never be
+    /// overwritten into acceptance by a valid second one.
     /// </summary>
     /// <param name="root">The parsed body.</param>
     /// <param name="locale">The validated language, when the body carried one.</param>
@@ -176,21 +186,24 @@ internal static class MyProfileEndpoints
             return BoundedJsonBody.Invalid("the request body must be a JSON object");
         }
 
+        var member = default(JsonProperty);
         var seen = false;
 
-        foreach (var member in root.EnumerateObject())
+        foreach (var property in root.EnumerateObject())
         {
-            if (!string.Equals(member.Name, LocaleMember, StringComparison.Ordinal))
+            if (!string.Equals(property.Name, LocaleMember, StringComparison.Ordinal))
             {
-                return FieldNotPatchable(member.Name);
+                return FieldNotPatchable(property.Name);
             }
 
-            if (member.Value.ValueKind != JsonValueKind.String)
+            // `JsonDocument` keeps every occurrence of a repeated name, so the second one is a shape
+            // fault of the document: the client's intent is ambiguous and no value is read yet.
+            if (seen)
             {
-                return LocaleInvalid();
+                return DuplicateMember();
             }
 
-            locale = member.Value.GetString();
+            member = property;
             seen = true;
         }
 
@@ -200,6 +213,13 @@ internal static class MyProfileEndpoints
                 "preferred_locale is required",
                 [new ErrorDetail(LocaleMember, "required")]);
         }
+
+        if (member.Value.ValueKind != JsonValueKind.String)
+        {
+            return LocaleInvalid();
+        }
+
+        locale = member.Value.GetString();
 
         // The column's own check constraint carries the same two values, so a third one is refused
         // here with a field detail instead of reaching the database as a 500.
@@ -292,13 +312,35 @@ internal static class MyProfileEndpoints
     }
 
     /// <summary>422 <c>field_not_patchable</c>: the body named a member this route does not write.</summary>
-    /// <param name="member">The member the caller sent.</param>
-    private static Error FieldNotPatchable(string member) => new(
-        ApiErrorCode.FieldNotPatchable,
-        $"{member} is not patchable on this route; only preferred_locale is",
-        StatusCodes.Status422UnprocessableEntity,
-        Retryable: false,
-        Details: [new ErrorDetail(member, "not_patchable")]);
+    /// <param name="member">The member the caller sent, echoed back in the message and the detail path.</param>
+    private static Error FieldNotPatchable(string member)
+    {
+        // The name is caller-controlled, so the echoed copy is bounded: 64 characters identify any real
+        // member and keep the envelope small. The cut never splits a surrogate pair, so the message stays
+        // valid UTF-16 whatever the caller sent.
+        var length = Math.Min(member.Length, MaxEchoedMemberChars);
+        if (length < member.Length && char.IsHighSurrogate(member[length - 1]))
+        {
+            length--;
+        }
+
+        var echoed = member[..length];
+
+        return new(
+            ApiErrorCode.FieldNotPatchable,
+            $"{echoed} is not patchable on this route; only preferred_locale is",
+            StatusCodes.Status422UnprocessableEntity,
+            Retryable: false,
+            Details: [new ErrorDetail(echoed, "not_patchable")]);
+    }
+
+    /// <summary>
+    /// 422 <c>request_invalid</c>: the body sent <c>preferred_locale</c> more than once, so no value of it
+    /// can be taken as the client's choice.
+    /// </summary>
+    private static Error DuplicateMember() => Error.Invalid(
+        $"{LocaleMember} appears more than once; send it once",
+        [new ErrorDetail(LocaleMember, "duplicate")]);
 
     /// <summary>422 <c>locale_invalid</c>: the value is not one of the two languages the contract carries.</summary>
     private static Error LocaleInvalid() => new(
@@ -324,10 +366,3 @@ internal sealed record UserProfileDto(
     string Email,
     string? DisplayName,
     string? PreferredLocale);
-
-/// <summary>
-/// The body of <c>PATCH /v1/me</c>: one optional member. Declared for the contract document only —
-/// the handler reads the body itself so an unknown member is refused by name rather than ignored.
-/// </summary>
-/// <param name="PreferredLocale">The language to store: <c>vi</c> or <c>en</c>.</param>
-internal sealed record UpdateUserProfileRequest(string? PreferredLocale);

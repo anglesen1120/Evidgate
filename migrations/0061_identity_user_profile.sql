@@ -76,14 +76,14 @@
 --
 -- Locking: both `add column` statements are catalog-only (a NULL column with no
 -- default, and a NOT NULL column whose default is catalogue metadata since
--- PostgreSQL 11), so nothing is rewritten and no backfill runs; the CHECK validates
--- every existing row, which is a full scan of the identity table — small, but it is
--- the one statement that reads `public."user"` end to end. PostgreSQL takes ACCESS
--- EXCLUSIVE on the table for the length of this file's transaction, so
--- `set local lock_timeout` below bounds every lock this transaction waits for to
--- 5 s. Exit 3 (lock timeout, file rolled back and unjournalled) means "retry when the
--- table is quiet", not a defect. The function definitions take only an AccessShareLock
--- while PostgreSQL validates their bodies.
+-- PostgreSQL 11), so nothing is rewritten and no backfill runs; the CHECK is added
+-- `not valid` and then validated, and that validation scans every existing row — a
+-- full read of the identity table, small, and the one statement here that touches
+-- every row. PostgreSQL takes ACCESS EXCLUSIVE on the table for the length of this
+-- file's transaction, so `set local lock_timeout` below bounds every lock this
+-- transaction waits for to 5 s. Exit 3 (lock timeout, file rolled back and
+-- unjournalled) means "retry when the table is quiet", not a defect. The function
+-- definitions take only an AccessShareLock while PostgreSQL validates their bodies.
 set local lock_timeout = '5s';
 
 alter table public."user"
@@ -97,9 +97,14 @@ alter table public."user"
 
 -- NULL passes (the account has not chosen yet); anything else must be one of the two
 -- languages the contract names, so a writer that skips the route cannot store a third.
+-- Added `not valid` and validated in the same file (the 0056 shape): the row scan is its own
+-- statement, so a failure would name the phase — it cannot fail here, because the column is new
+-- and every existing row is NULL.
 alter table public."user"
   add constraint user_preferred_locale_check
-  check (preferred_locale in ('vi', 'en'));
+  check (preferred_locale in ('vi', 'en')) not valid;
+
+alter table public."user" validate constraint user_preferred_locale_check;
 
 drop trigger if exists user_set_updated_at_and_version on public."user";
 create trigger user_set_updated_at_and_version
@@ -111,7 +116,10 @@ create trigger user_set_updated_at_and_version
 -- authenticated caller always resolves exactly one live session, so an
 -- `unauthenticated` answer and an empty profile can never be confused. The email and
 -- display name are the row's own values: the profile of the account itself, never a
--- projection over another member.
+-- projection over another member. The owning account must be `active` as well: the
+-- request authenticator answers 403 `account_disabled` first, and this predicate is
+-- the same door one layer down, so a session that survives a disable resolves no
+-- acting user and the function still answers exactly one row.
 create or replace function evidgate_resolve.user_profile_read(
   p_cookie_hmacs bytea[],
   p_now timestamptz)
@@ -134,6 +142,7 @@ begin
   select s.user_id
     into v_user_id
     from public.session s
+    join public."user" u on u.id = s.user_id and u.status = 'active'
    where s.cookie_hmac = any (p_cookie_hmacs)
      and s.revoked_at is null
      and s.expires_at > p_now
@@ -163,7 +172,9 @@ $$;
 -- ETag cannot both win — the loser matches nothing and answers `stale`, which the
 -- route renders as 412 with the version its next read shows. The trigger increments
 -- `version` on the row this statement writes, and `returning` hands the caller the
--- value its next `If-Match` must carry.
+-- value its next `If-Match` must carry. Like the read, both the session resolution and
+-- the UPDATE itself require the owning account to be `active`, so no disable that lands
+-- between them can still write a locale for a disabled account.
 create or replace function evidgate_resolve.user_profile_update(
   p_cookie_hmacs bytea[],
   p_preferred_locale text,
@@ -192,6 +203,7 @@ begin
   select s.user_id
     into v_user_id
     from public.session s
+    join public."user" u on u.id = s.user_id and u.status = 'active'
    where s.cookie_hmac = any (p_cookie_hmacs)
      and s.revoked_at is null
      and s.expires_at > p_now
@@ -206,6 +218,7 @@ begin
   update public."user" u
      set preferred_locale = p_preferred_locale
    where u.id = v_user_id
+     and u.status = 'active'
      and u.version = p_expected_version
   returning u.id, u.email, u.display_name, u.preferred_locale, u.version
        into v_profile_id, v_email, v_display_name, v_locale, v_version;

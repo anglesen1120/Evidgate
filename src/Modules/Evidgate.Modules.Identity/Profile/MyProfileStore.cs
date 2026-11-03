@@ -33,7 +33,9 @@ internal enum MyProfileStatus
 /// <b>Pre-tenant, like the routes.</b> Both calls run before any tenant scope exists and
 /// the acting user is resolved from the presented credential INSIDE the function, so no
 /// method takes a user id. The runtime roles hold no privilege on <c>public."user"</c>, so
-/// these functions are the only door to the row.
+/// these functions are the only door to the row. Both functions also require the owning
+/// account to be <c>active</c>, so a session that outlives a disable resolves no acting user
+/// (the same door the request authenticator's 403 <c>account_disabled</c> closes one layer up).
 /// </para>
 /// <para>
 /// <b>What is passed.</b> <c>sessionProof</c> is the HMAC of the LIVE cookie value — derived

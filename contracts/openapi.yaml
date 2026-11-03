@@ -860,7 +860,8 @@ paths:
         write must send back as `If-Match`. Every response carries `Cache-Control: no-store` because the body is
         personal data. 401 `unauthenticated` / `session_expired` / `session_revoked` are the request
         authenticator's own answers, raised before the handler runs; 403 `account_disabled` is the
-        disabled-account answer of the same layer.
+        disabled-account answer of the same layer, and the definer itself also requires the account to be
+        `active`, so a session that outlives a disable resolves no row.
       x-permission: none
       x-auth: user_session
       x-version: v1
@@ -893,18 +894,27 @@ paths:
       description: >-
         Pre-tenant, session-cookie only, and one of the cookie mutations that must carry the antiforgery pair
         (403 `csrf_failed` otherwise): the session is the route's whole authority, and the acting user is again
-        resolved inside the definer from the cookie's HMAC (`user_profile_update`), never from a parameter. The
-        body carries exactly one member, `preferred_locale` (`vi` or `en`): any other name is 422
-        `field_not_patchable` WITH the offending member named in `error.details`, even when a valid locale
-        travels beside it, and an empty, non-JSON or non-object body is 422 `request_invalid`. A value outside
-        the two languages is 422 `locale_invalid`; the column's check constraint carries the same pair of
-        values. `If-Match` is required and carries the `ETag` of the profile the client read: an absent or
-        unparsable header is 422 `request_invalid` with `If-Match`/`required` or `If-Match`/`invalid`, and a
-        version the row no longer has is 412 `precondition_failed` with nothing written. The write also appends
-        one `user.locale_changed` audit row per active org of the account (the actor and the object are the same
-        user, the new language as allowlisted metadata); a chain that cannot be written answers 503 and the row
-        stays as written, so a retry with the current ETag either appends the row or reports the stale version.
-        The answer is the profile in its new state, its new `version` in the `ETag`.
+        resolved inside the definer from the cookie's HMAC (`user_profile_update`), never from a parameter; the
+        definer requires the owning account to be `active`. The body carries exactly one member,
+        `preferred_locale` (`vi` or `en`): any other name is 422 `field_not_patchable` WITH the offending member
+        named in `error.details` (bounded to 64 characters), even when a valid locale travels beside it; a name
+        sent twice is 422 `request_invalid` with `duplicate`, judged before any value, so an invalid first value
+        is never overwritten by a valid second one; an empty, non-JSON or non-object body is 422 `request_invalid`;
+        and a body that is not `application/json` is that same 422 `request_invalid` with `body` in
+        `error.details` — this route's own reader answers it, never the framework's 415. A value outside the two
+        languages is 422 `locale_invalid`; the column's check constraint carries the same pair of values.
+        `If-Match` is required and carries the `ETag` of the profile the client read: an absent or unparsable
+        header is 422 `request_invalid` with `If-Match`/`required` or `If-Match`/`invalid`, and a version the row
+        no longer has is 412 `precondition_failed` with nothing written. The `version` belongs to the database:
+        the shared `set_updated_at_and_version` trigger increments it on every update of the row — including the
+        login upsert's `last_login_at` write — so a sign-in between the client's GET and its PATCH can make an
+        otherwise valid PATCH answer 412. The write also appends one `user.locale_changed` audit row per active org
+        of the account (`member_orgs` answers at most 200), the actor and the object being the same user and the
+        new language allowlisted metadata. Those rows are written AFTER the profile commit, best-effort and
+        fail-closed: a chain that cannot be written — or the whole fan-out missing its 5 s deadline — answers 503
+        `unavailable` with `Retry-After`, and the change stays stored, so that 503 can arrive with some orgs
+        audited and the rest not, and a retry with the version the next read shows can append a second row for an
+        org that was already written. The answer is the profile in its new state, its new `version` in the `ETag`.
       x-permission: none
       x-auth: user_session
       x-version: v1
@@ -10531,8 +10541,10 @@ components:
       type: object
       description: >-
         Body of `PATCH /v1/me` (02.3.1-T3). Exactly one member: any other name is 422 `field_not_patchable` with
-        the member named in `error.details`, even when a valid locale travels beside it, and an empty,
-        non-JSON or non-object body is 422 `request_invalid`.
+        the member (at most 64 characters of it) named in `error.details`, even when a valid locale travels
+        beside it; the same name sent twice is 422 `request_invalid` with `duplicate`, judged before any value;
+        and an empty, non-JSON or non-object body — or a body that is not `application/json` — is 422
+        `request_invalid` with the body itself in `error.details`.
       required: [preferred_locale]
       additionalProperties: false
       properties:

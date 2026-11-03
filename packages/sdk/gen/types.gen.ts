@@ -1844,7 +1844,7 @@ export type UserProfileDto = {
 };
 
 /**
- * Body of `PATCH /v1/me` (02.3.1-T3). Exactly one member: any other name is 422 `field_not_patchable` with the member named in `error.details`, even when a valid locale travels beside it, and an empty, non-JSON or non-object body is 422 `request_invalid`.
+ * Body of `PATCH /v1/me` (02.3.1-T3). Exactly one member: any other name is 422 `field_not_patchable` with the member (at most 64 characters of it) named in `error.details`, even when a valid locale travels beside it; the same name sent twice is 422 `request_invalid` with `duplicate`, judged before any value; and an empty, non-JSON or non-object body — or a body that is not `application/json` — is 422 `request_invalid` with the body itself in `error.details`.
  */
 export type UpdateUserProfileRequest = {
     /**

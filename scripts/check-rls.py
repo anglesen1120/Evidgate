@@ -143,11 +143,11 @@ DEFINER_AUDIT_EXEMPT = {
         "to write into — the caller's own sign-in history, projected from the presented cookie hash"
     ),
     "evidgate_resolve.user_profile_read": (
-        "created 0061_identity_user_profile.sql:115 (bytea[], timestamptz): pre-tenant and read-only, no org chain to "
+        "created 0061_identity_user_profile.sql:123 (bytea[], timestamptz): pre-tenant and read-only, no org chain to "
         "write into — the caller's own profile, projected from the presented cookie hash"
     ),
     "evidgate_resolve.user_profile_update": (
-        "created 0061_identity_user_profile.sql:167 (bytea[], text, integer, timestamptz): pre-tenant, no org chain to "
+        "created 0061_identity_user_profile.sql:178 (bytea[], text, integer, timestamptz): pre-tenant, no org chain to "
         "write into — a person's language choice belongs to no org; the org-scoped `user.locale_changed` row is "
         "written after it by `IdentityAuditWriter` (src/Modules/Evidgate.Modules.Identity/Login/Audit/"
         "IdentityAuditWriter.cs), called from Profile/UpdateMyProfileCommand.cs"
