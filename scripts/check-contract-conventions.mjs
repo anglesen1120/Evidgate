@@ -95,6 +95,11 @@ const EXPECTED = [
   ['/orgs/{o}/projects', 'get', 'project:read', 'v1'],
   ['/projects/{p}', 'get', 'project:read', 'v1'],
   ['/projects/{p}', 'patch', 'project:write', 'v1'],
+  // The evidence retention pair: 00 §9.3 carries it in a row of its own; the read needs
+  // `project:read`, the upsert `project:write`, and the PUT is naturally idempotent (plan §5), so it
+  // is exempt from `Idempotency-Key` below.
+  ['/projects/{p}/retention', 'get', 'project:read', 'v1'],
+  ['/projects/{p}/retention', 'put', 'project:write', 'v1'],
   ['/orgs/{o}/memberships', 'post', 'membership:write', 'v1'],
   ['/orgs/{o}/memberships', 'get', 'membership:read', 'v1'],
   ['/orgs/{o}/memberships/{m}', 'get', 'membership:read', 'v1'],
@@ -256,7 +261,8 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // the invite staging writes only a short-lived cookie (no resource), and the link surface is
 // driven by one staged-link cookie that one confirmation spends, so a replay cannot write twice; the session
 // routes of 02.3.2-T2 = revocation is a row state (`revoked_at` set once) and every answer is the same on a
-// repeat, so a key could change nothing the second time.
+// repeat, so a key could change nothing the second time; the retention upsert = a PUT that writes the same
+// two windows for the same body, so a replay cannot create a second row or a different answer.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ci-bindings',
@@ -267,6 +273,7 @@ const IDEM_EXEMPT = new Set([
   'post /drafts/{d}/pull-request',
   'post /jobs/{j}/heartbeat',
   'post /projects/{p}/policies',
+  'put /projects/{p}/retention',
   'post /auth/invite-token',
   'post /auth/link/{provider}',
   'delete /auth/link/pending',

@@ -1414,6 +1414,20 @@ export type CompleteResponse = {
 };
 
 /**
+ * A project's evidence retention windows (06 §4 `retention_policy`, 06.4.1-T1): the body and the `200` answer of `PUT /v1/projects/{p}/retention`, and the `200` answer of its `GET`. `artifact_days` bounds how long artifacts are kept, `metadata_days` how long their metadata rows outlive the bytes. Both are required and the body is closed. The accepted range comes from `RetentionLimits` at runtime (documented defaults: artifact 1..90, metadata 30..90, with `metadata_days` at least `artifact_days`) and the platform defaults for a project with no stored row are 14 and 90; a value outside that range is `422 retention_out_of_range` whose `error.details[]` names the field and the bound, so the numbers stay configuration and not JSON-Schema constants.
+ */
+export type RetentionPolicy = {
+    /**
+     * Days an artifact is kept; validated against `RetentionLimits.MinArtifactDays`/`MaxArtifactDays`.
+     */
+    artifact_days: number;
+    /**
+     * Days the artifact's metadata rows are kept; validated against `RetentionLimits.MinMetadataDays`/ `MaxMetadataDays` and never shorter than `artifact_days`.
+     */
+    metadata_days: number;
+};
+
+/**
  * One feature-tree node (13.1.1 §4); 13.1.1-T2. `child_count` and `item_count` count live children and live checklist items and are always returned (§5 route 1).
  */
 export type NodeDto = {
@@ -4883,6 +4897,102 @@ export type GetArtifactDownloadUrlResponses = {
 };
 
 export type GetArtifactDownloadUrlResponse = GetArtifactDownloadUrlResponses[keyof GetArtifactDownloadUrlResponses];
+
+export type GetRetentionPolicyData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/retention';
+};
+
+export type GetRetentionPolicyErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetRetentionPolicyError = GetRetentionPolicyErrors[keyof GetRetentionPolicyErrors];
+
+export type GetRetentionPolicyResponses = {
+    /**
+     * The project's retention windows, or the platform defaults when it has no row
+     */
+    200: RetentionPolicy;
+};
+
+export type GetRetentionPolicyResponse = GetRetentionPolicyResponses[keyof GetRetentionPolicyResponses];
+
+export type SetRetentionPolicyData = {
+    body: RetentionPolicy;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/retention';
+};
+
+export type SetRetentionPolicyErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type SetRetentionPolicyError = SetRetentionPolicyErrors[keyof SetRetentionPolicyErrors];
+
+export type SetRetentionPolicyResponses = {
+    /**
+     * The stored retention windows
+     */
+    200: RetentionPolicy;
+};
+
+export type SetRetentionPolicyResponse = SetRetentionPolicyResponses[keyof SetRetentionPolicyResponses];
 
 export type ListMyOrganizationsData = {
     body?: never;

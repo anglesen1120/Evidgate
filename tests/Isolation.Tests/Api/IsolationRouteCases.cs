@@ -774,6 +774,11 @@ public static class IsolationRouteCases
         EventBatchCase(),
         FinalizeShardCase(),
         EvidenceCompleteCase(),
+        // 06.4.1-T1: the retention pair. The read answers the platform defaults for a project with no row (so the
+        // own-project control is a real 200) and the same 404 for a foreign project; the upsert's body is sent by
+        // every probe, but a foreign project is refused before the validation, so the windows never matter there.
+        ProjectCase("GET", "/v1/projects/{p}/retention", p => new(HttpMethod.Get, $"/v1/projects/{p}/retention"), ownControl: true),
+        ProjectCase("PUT", "/v1/projects/{p}/retention", p => new(HttpMethod.Put, $"/v1/projects/{p}/retention", Retention())),
 
     ];
 
@@ -1746,6 +1751,9 @@ public static class IsolationRouteCases
 
     /// <summary>The minimal valid <c>policy-revision.v1</c> body a probe sends (the shape the seeder creates, <see cref="IsolationWorld"/>).</summary>
     private static JsonObject Policy() => new() { ["flaky_budget"] = 0 };
+
+    /// <summary>The retention body a probe sends (06.4.1-T1): both windows inside the configured range.</summary>
+    private static JsonObject Retention() => new() { ["artifact_days"] = 14, ["metadata_days"] = 90 };
 
     /// <summary>The activation body a probe sends (07.1.1-T4): an unknown revision id, so the route answers 404 to every tenant.</summary>
     private static JsonObject Activation(Guid revisionId) => new() { ["policy_revision_id"] = revisionId.ToString("D") };

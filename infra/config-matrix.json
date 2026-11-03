@@ -2295,6 +2295,144 @@
         "prod": "default"
       },
       "note": "dev-stack only: password of the evidgate_worker_sched role, the only role with EXECUTE on the owner SECURITY DEFINER sweeps (TL T80); it is what makes EVIDGATE__TASKS__SWEEPCONNECTIONSTRING concrete in dev."
+    },
+    {
+      "key": "EVIDGATE__RETENTION__MINARTIFACTDAYS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3650
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Retention:MinArtifactDays` (06.4.1-T1, `RetentionLimits`): lower bound of `artifact_days` on `GET,PUT /v1/projects/{p}/retention`; a lower value is 422 `retention_out_of_range` naming the field and this bound. Default 1 is the V1 placeholder of OI-06-10, so no environment provides it."
+    },
+    {
+      "key": "EVIDGATE__RETENTION__MAXARTIFACTDAYS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3650
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Retention:MaxArtifactDays` (06.4.1-T1, `RetentionLimits`): upper bound of `artifact_days`; a higher value is 422 `retention_out_of_range`. Default 90 is the V1 placeholder of OI-06-10 (the event-class partition ceiling), raised only as a configuration change. No environment provides it."
+    },
+    {
+      "key": "EVIDGATE__RETENTION__MINMETADATADAYS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3650
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Retention:MinMetadataDays` (06.4.1-T1, `RetentionLimits`): lower bound of `metadata_days`, and the floor the metadata window must also clear against `artifact_days`; a violation is 422 `retention_out_of_range`. Default 30 is the V1 placeholder of OI-06-10; no environment provides it."
+    },
+    {
+      "key": "EVIDGATE__RETENTION__MAXMETADATADAYS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3650
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Retention:MaxMetadataDays` (06.4.1-T1, `RetentionLimits`): upper bound of `metadata_days`; a higher value is 422 `retention_out_of_range`. Default 90 is the V1 placeholder of OI-06-10 and equals the event-class partition ceiling of 06.4.6, so the two move together; no environment provides it."
+    },
+    {
+      "key": "EVIDGATE__RETENTION__DEFAULTARTIFACTDAYS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3650
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Retention:DefaultArtifactDays` (06.4.1-T1, `RetentionLimits`): the `artifact_days` a project with no `retention_policy` row reads on `GET /v1/projects/{p}/retention` (14 per 06-O1). The read returns it without creating a row, and the boot validator requires it inside this section's own bounds; no environment provides it."
+    },
+    {
+      "key": "EVIDGATE__RETENTION__DEFAULTMETADATADAYS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 3650
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:Retention:DefaultMetadataDays` (06.4.1-T1, `RetentionLimits`): the `metadata_days` a project with no `retention_policy` row reads (90 per 06-O1), returned without creating a row and required by the boot validator to sit inside this section's bounds; no environment provides it."
     }
   ]
 }

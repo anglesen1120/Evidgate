@@ -772,6 +772,13 @@ internal static class RouteRequests
             UploadUrl(), IdempotencyKey: Key()));
         Add("POST", "/v1/artifacts/{a}/complete", _ => new(HttpMethod.Post,
             $"/v1/artifacts/{Guid.CreateVersion7()}/complete", IdempotencyKey: Key()));
+        // 06.4.1-T1: the retention pair. Both address a real project id (the probe context's), the read answers
+        // the platform defaults, and the write carries the closed two-integer body of `retention_policy`. Neither
+        // takes an Idempotency-Key - the upsert is naturally idempotent - so the matrices see the authz outcome
+        // (403 for a viewer, for `ci_producer`, and for the own-project write) before any validation.
+        Add("GET", "/v1/projects/{p}/retention", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/retention"));
+        Add("PUT", "/v1/projects/{p}/retention", ctx => new(HttpMethod.Put, $"/v1/projects/{ctx.ProjectId}/retention",
+            new JsonObject { ["artifact_days"] = 14, ["metadata_days"] = 90 }));
 
         // ---- Ingestion ---------------------------------------------------------------------------------------
         // 04.1.1-T1: the run is addressed in the path, so a fresh id is used - the route answers 404 not_found

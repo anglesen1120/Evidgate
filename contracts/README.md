@@ -134,6 +134,9 @@ otherwise the envelope filter's default `60` (00 §9.2).
 - `POST /v1/projects/{p}/policies` — the RFC 8785 content hash is the
   idempotency key: an identical body returns the stored revision (`200`), a
   different body is a new revision, never a conflict (07.1.1 §5).
+- `PUT /v1/projects/{p}/retention` — naturally idempotent: the same body
+  upserts the same two windows on `(org_id, project_id)`, so a replay creates
+  no second row and cannot change the answer (06.4.1 §5).
 - `POST /v1/auth/invite-token`, `POST /v1/auth/link/{provider}` — no resource
   is created: the first validates the presented token and stages it in the
   short-lived `__Host-evidgate_invite` cookie, the second answers a state cookie

@@ -20,6 +20,8 @@ var IDEMPOTENCY_EXEMPT = {
     'naturally idempotent — the server extends only the current epoch (00 §9.3)',
   'post /projects/{p}/policies':
     'the RFC 8785 content hash is the idempotency key: an identical body returns the stored revision (07.1.1 §5)',
+  'put /projects/{p}/retention':
+    'naturally idempotent: the same body upserts the same two windows on (org_id, project_id), so a replay creates no second row and cannot change the answer (06.4.1 §5)',
   'post /auth/invite-token':
     'no resource is created: the route validates the presented token and stages it in a short-lived __Host- cookie, so a repeat writes the same cookie (02.3.1-T2 Q1)',
   'post /auth/link/{provider}':
