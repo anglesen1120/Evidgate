@@ -156,7 +156,7 @@ otherwise the envelope filter's default `60` (00 §9.2).
 - `PATCH /v1/me` — the body sets one column (`preferred_locale`) to one of two
   values, so a replay would write the same state, and the `If-Match` version makes
   a retry that re-sends the already-applied version answer `412
-  precondition_failed` instead of applying twice (02.3.1-T3).
+precondition_failed` instead of applying twice (02.3.1-T3).
 
 ## Validation corpus (`fixtures/contracts/`, 01.3.2-T2)
 
