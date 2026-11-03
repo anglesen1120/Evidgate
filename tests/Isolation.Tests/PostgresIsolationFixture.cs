@@ -9,16 +9,18 @@ namespace Isolation.Tests;
 
 /// <summary>
 /// One digest-pinned PostgreSQL 18 container per test assembly and a fresh
-/// database per test, each brought to head by the real <c>Evidgate.Migrator</c>
-/// (01.4.1 §9): the superuser bootstrap creates only <c>evidgate_owner</c> with
-/// LOGIN + CREATEROLE, migration 0001 creates the three application roles, and
-/// the superuser then hands the application roles their LOGIN + credential —
-/// exactly the split <c>scripts/dev/db-init.sh</c> performs (01 §6).
+/// database per test, each copied from one database brought to head once by the
+/// real <c>Evidgate.Migrator</c> (01.4.1 §9): the superuser bootstrap creates
+/// only <c>evidgate_owner</c> with LOGIN + CREATEROLE, migration 0001 creates the
+/// three application roles, and the superuser then hands the application roles
+/// their LOGIN + credential — exactly the split <c>scripts/dev/db-init.sh</c>
+/// performs (01 §6).
 ///
 /// AC5: with <see cref="SuperuserConnectionStringVariable"/> set the suite does
 /// not start a container at all — it runs against that already-running server
-/// (the compose dev stack), reusing its <c>evidgate_owner</c> role and adding one
-/// scratch database per test to it (dropped when the assembly finishes).
+/// (the compose dev stack), reusing its <c>evidgate_owner</c> role, adding one
+/// migrated template and one copied scratch database per test to it, and dropping
+/// both when the assembly finishes.
 /// </summary>
 public sealed class PostgresIsolationFixture : IAsyncLifetime
 {
@@ -48,6 +50,8 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _operatorPassword = "operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _workerPassword = "worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+
+    private TemplateDatabase? _template;
 
     /// <summary>
     /// Repository <c>migrations/</c>, resolved by the Migrator's own default-path
@@ -85,6 +89,16 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
             end
             $$;
             """).ConfigureAwait(false);
+
+        _template = new TemplateDatabase(
+            SuperuserConnectionString,
+            OwnerConnectionString,
+            RepoMigrationsPath,
+            [
+                $"alter role evidgate_app login password '{_appPassword}'",
+                $"alter role evidgate_operator login password '{_operatorPassword}'",
+                $"alter role evidgate_worker_sched login password '{_workerPassword}'",
+            ]);
     }
 
     public async ValueTask DisposeAsync()
@@ -92,11 +106,14 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
         if (_externalSuperuserConnectionString is null)
         {
             await _container.DisposeAsync().ConfigureAwait(false);
+            _template?.Dispose();
             return;
         }
 
         // A reused server outlives the run: drop the scratch databases it holds
-        // for this assembly (the rotated role passwords stay — docs/dev-setup.md).
+        // for this assembly, then the template they were copied from — in that
+        // order, because PostgreSQL refuses to drop a template another database
+        // still depends on (the rotated role passwords stay — docs/dev-setup.md).
         foreach (var database in _createdDatabases)
         {
             try
@@ -108,39 +125,25 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
                 // A leftover scratch database must never fail the run.
             }
         }
+
+        if (_template is not null)
+        {
+            await _template.DropAsync().ConfigureAwait(false);
+        }
+
+        _template?.Dispose();
     }
 
-    /// <summary>Creates a database owned by the migration role, migrates it, and enables the app logins.</summary>
+    /// <summary>The migrated template every per-test database is copied from.</summary>
+    private TemplateDatabase Template =>
+        _template ?? throw new InvalidOperationException("the fixture has not started its server");
+
+    /// <summary>Creates a database at head (copied from the migrated template) and enables the app logins.</summary>
     public async Task<string> CreateDatabaseAsync()
     {
         var database = "isolated_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
 
-        await using (var connection = await OpenSuperuserAsync("postgres").ConfigureAwait(false))
-        {
-            await ExecuteAsync(connection, $"create database \"{database}\" owner {DatabaseOwnerRole}").ConfigureAwait(false);
-        }
-
-        var outcome = MigratorRunner.Run(
-            new MigratorOptions
-            {
-                ConnectionString = OwnerConnectionString(database),
-                MigrationsPath = RepoMigrationsPath,
-            },
-            MigrationCommand.Apply,
-            new StringWriter(CultureInfo.InvariantCulture));
-
-        if (outcome.ExitCode != MigratorExitCodes.Success)
-        {
-            throw new InvalidOperationException(
-                $"the suite could not reach head on '{database}' (exit {outcome.ExitCode}): {string.Join(" | ", outcome.Messages)}");
-        }
-
-        await using (var connection = await OpenSuperuserAsync(database).ConfigureAwait(false))
-        {
-            await ExecuteAsync(connection, $"alter role evidgate_app login password '{_appPassword}'").ConfigureAwait(false);
-            await ExecuteAsync(connection, $"alter role evidgate_operator login password '{_operatorPassword}'").ConfigureAwait(false);
-            await ExecuteAsync(connection, $"alter role evidgate_worker_sched login password '{_workerPassword}'").ConfigureAwait(false);
-        }
+        await Template.CreateDatabaseAsync(database).ConfigureAwait(false);
 
         _createdDatabases.Add(database);
 

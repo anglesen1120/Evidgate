@@ -43,6 +43,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\TemplateDatabase.cs" Link="TemplateDatabase.cs" />
     <!-- 01.6.1-T2: the shared harness is linked source, exactly as
          tests/Foundation.IntegrationTests adopts it (tests/README.md). -->
     <Compile Include="..\Shared\DatabaseFixture.cs" Link="Shared/DatabaseFixture.cs" />
