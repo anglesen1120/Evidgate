@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Application.Freeze;
+using Evidgate.Modules.Evidence.Application.Retention;
 using Evidgate.Modules.Evidence.Application.Evaluation;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
@@ -12,6 +13,7 @@ using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Evidence;
 
@@ -89,6 +91,18 @@ internal static class EvidenceModule
         // even though only the Worker runs it. Binding them registers no capability: the runner and its task handler
         // stay in AddParseRunner, Worker-only and flag-on.
         services.AddOptions<ParseRunnerOptions>().BindConfiguration(ParseRunnerOptions.SectionName);
+
+        // The retention window's floor, ceiling and platform defaults, owner-configurable per deployment. Bound in
+        // both hosts: the read route serves the defaults and the write route enforces the range. The cross-field check
+        // refuses a floor above its ceiling or a default the floor would reject, which would otherwise make every
+        // default-served project's first write fail at runtime.
+        services.AddOptions<RetentionLimits>()
+            .BindConfiguration(RetentionLimits.SectionName)
+            .ValidateDataAnnotations()
+            .Validate(
+                limits => limits.IsCoherent,
+                $"EVIDGATE__RETENTION__* must satisfy min <= max for both windows and keep both defaults inside the range ({RetentionLimits.SectionName})")
+            .ValidateOnStart();
 
         return services;
     }
