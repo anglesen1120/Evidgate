@@ -158,17 +158,16 @@ while [ "$i" -lt 40 ]; do
   if wget -qO- http://127.0.0.1:8080/nginx-health >/dev/null 2>&1; then break; fi
   i=$((i + 1)); sleep 0.25
 done
-# get PATH EXPECTED_STATUS EXPECTED_CACHE_CONTROL [Authorization value]
+# get PATH EXPECTED_STATUS EXPECTED_CACHE_CONTROL [Basic credential] [extra header line]
 get() {
-  if [ -n "${4:-}" ]; then
-    resp=$(printf "GET /%s HTTP/1.0\r\nHost: review.example.test\r\nAuthorization: Basic %s\r\n\r\n" "$1" "$4" | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
-  else
-    resp=$(printf "GET /%s HTTP/1.0\r\nHost: review.example.test\r\n\r\n" "$1" | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
-  fi
+  hdrs="Host: review.example.test"
+  [ -z "${4:-}" ] || hdrs="$hdrs\r\nAuthorization: Basic $4"
+  [ -z "${5:-}" ] || hdrs="$hdrs\r\n$5"
+  resp=$(printf "GET /%s HTTP/1.0\r\n$hdrs\r\n\r\n" "$1" | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
   status=$(printf "%s\n" "$resp" | sed -n "1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p")
   cc=$(printf "%s\n" "$resp" | sed -n "s/^[Cc]ache-[Cc]ontrol: //p")
-  [ "$status" = "$2" ] && [ "$cc" = "$3" ] || { echo "FAIL: GET /$1 [$PROBE_AUTH] gave $status with Cache-Control [$cc], expected $2 with [$3]"; exit 1; }
-  echo "GET /$1 [$PROBE_AUTH${4:+, credentials}] -> $status Cache-Control: $cc"
+  [ "$status" = "$2" ] && [ "$cc" = "$3" ] || { echo "FAIL: GET /$1 [$PROBE_AUTH ${5:-}] gave $status with Cache-Control [$cc], expected $2 with [$3] (one header, no duplicate)"; exit 1; }
+  echo "GET /$1 [$PROBE_AUTH${4:+, credentials}${5:+, $5}] -> $status Cache-Control: $cc"
 }
 imm="max-age=31536000, immutable"
 if [ "$PROBE_AUTH" = on ]; then
@@ -176,9 +175,14 @@ if [ "$PROBE_AUTH" = on ]; then
   get "vi/missing-ABCDEFGH.js" 401 "no-store"
   get "$asset" 200 "private, $imm" "$PROBE_BASIC"
   get "vi/missing-ABCDEFGH.js" 404 "no-store" "$PROBE_BASIC"
+  get "$asset" 304 "private, $imm" "$PROBE_BASIC" "If-None-Match: *"
+  get "$asset" 200 "private, $imm" "$PROBE_BASIC" "Range: bytes=999999999-"
 else
   get "$asset" 200 "public, $imm"
   get "vi/missing-ABCDEFGH.js" 404 "no-store"
+  get "$asset" 304 "public, $imm" "" "If-None-Match: *"
+  get "$asset" 200 "public, $imm" "" "Range: bytes=999999999-"
+  get "$asset" 200 "public, $imm" "" "Range: bytes=0-9"
 fi'
 for mode in off on; do
   compose run --rm --no-deps -e "PROBE_AUTH=$mode" -e "PROBE_HASH=$asset_hash" \
