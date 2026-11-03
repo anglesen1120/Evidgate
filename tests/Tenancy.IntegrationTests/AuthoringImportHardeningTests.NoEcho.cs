@@ -26,7 +26,6 @@ namespace Tenancy.IntegrationTests;
 /// 00 §5.7 S3 forbids just as it forbids it in a response.
 /// </para>
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class AuthoringImportHardeningTests
 {

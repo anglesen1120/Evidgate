@@ -23,7 +23,6 @@ namespace Tenancy.IntegrationTests;
 /// (or returns in another position) leaves that DTO member at its default, which a
 /// null check cannot see.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ReadSqlMaterializationTests
 {

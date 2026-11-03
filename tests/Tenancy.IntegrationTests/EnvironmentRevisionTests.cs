@@ -10,7 +10,6 @@ namespace Tenancy.IntegrationTests;
 /// 05.1.2 AC1–AC7 through the real host and a real PostgreSQL: immutable, numbered, hashed and secret-free environment
 /// revisions, their read path, the pointer and project foreign keys, and the permissions.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EnvironmentRevisionTests
 {

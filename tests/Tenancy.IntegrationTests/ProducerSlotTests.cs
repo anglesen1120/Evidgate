@@ -20,7 +20,6 @@ namespace Tenancy.IntegrationTests;
 /// fresh database per test brought to head by the real <c>Evidgate.Migrator</c>), the 06.1.1-T1
 /// precedent for a new table in this suite.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ProducerSlotTests
 {

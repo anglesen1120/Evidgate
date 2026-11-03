@@ -20,7 +20,6 @@ namespace Tenancy.IntegrationTests;
 /// the outside (two HTTP requests are only <em>likely</em> to overlap) the assertion is on the invariant instead — no 500,
 /// a unique final position, and the only two outcomes AC2 can produce.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringFixNodesTests
 {

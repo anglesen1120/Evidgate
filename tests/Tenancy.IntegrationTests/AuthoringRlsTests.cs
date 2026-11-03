@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// migration so the authoring lane fails on its own file rather than on a discovery rule.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringRlsTests
 {

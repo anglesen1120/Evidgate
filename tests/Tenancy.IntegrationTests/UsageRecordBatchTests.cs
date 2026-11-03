@@ -31,7 +31,6 @@ namespace Tenancy.IntegrationTests;
 /// two-org case exists — the same billing key in another org is a different row, not a duplicate (ruling T43), and a
 /// project of another org is invisible to the pre-check instead of being insertable.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class UsageRecordBatchTests
 {

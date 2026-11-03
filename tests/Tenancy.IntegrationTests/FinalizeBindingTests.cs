@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// is the caller of this contract; these tests drive the contract directly, the plan's
 /// <c>FinalizeBindingTests</c> row.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class FinalizeBindingTests
 {

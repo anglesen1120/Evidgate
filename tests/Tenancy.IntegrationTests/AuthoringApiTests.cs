@@ -12,7 +12,6 @@ namespace Tenancy.IntegrationTests;
 /// one with 412 <c>precondition_failed</c> (the current version in <c>error.details</c>), and neither leaves a row, a
 /// version or an audit entry behind.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringApiTests
 {

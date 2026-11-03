@@ -20,7 +20,6 @@ namespace Tenancy.IntegrationTests;
 /// body replays the original response and writes nothing; same key + a different canonical body is 409
 /// <c>idempotency_conflict</c>; a failed attempt leaves no record, so the key is reusable.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunCreationIdempotencyTests
 {

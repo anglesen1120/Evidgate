@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// tenant's. The read is project-scoped and read-only: <c>run:read</c> is outside the service-role ceiling, so a
 /// service credential is the permission stage's 403.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ListRunsTests
 {

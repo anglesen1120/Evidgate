@@ -23,7 +23,7 @@ namespace Tenancy.IntegrationTests;
 /// migration/backfill role) or as the operator.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
+[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class UsageLedgerSchemaTests
 {

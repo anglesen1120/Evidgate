@@ -14,7 +14,6 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>05.2.2-T2 AC6 QA matrix (S48Qa): the run list's boundaries through the real host and PostgreSQL.</summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ListRunsQaTests
 {

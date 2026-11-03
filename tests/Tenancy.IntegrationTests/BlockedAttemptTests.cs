@@ -12,7 +12,6 @@ namespace Tenancy.IntegrationTests;
 /// (<c>suite_member</c>/<c>variant</c>/<c>case_dependency</c>) is seeded directly because 03.2.1-T3's routes
 /// refuse a cycle; the walk itself must still terminate over one.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class BlockedAttemptTests
 {

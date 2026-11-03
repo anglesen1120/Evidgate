@@ -14,7 +14,6 @@ namespace Tenancy.IntegrationTests;
 /// command appends exactly one row to the org's hash chain in the same transaction (AC1),
 /// the app role cannot rewrite history (AC2), concurrent writers leave one dense chain (AC3).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuditTrailTests
 {

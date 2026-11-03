@@ -12,7 +12,6 @@ namespace Tenancy.IntegrationTests;
 /// statuses, a dependant holding only a higher <c>attempt_no</c>, a malformed failed key, and a
 /// project-scoped caller that cannot see the run.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class BlockedAttemptQaTests
 {

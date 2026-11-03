@@ -15,7 +15,6 @@ namespace Tenancy.IntegrationTests;
 /// and the absence of any run mutation route. Each assertion is a consumer-visible outcome, not a re-statement of
 /// the implementation.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CreateRunIdentityQaTests
 {

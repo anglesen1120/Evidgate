@@ -37,7 +37,6 @@ namespace Tenancy.IntegrationTests;
 /// uses, because a service principal's <c>CredentialId</c> cannot be expressed through headers.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

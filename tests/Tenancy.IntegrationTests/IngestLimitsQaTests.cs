@@ -13,8 +13,8 @@ using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class IngestLimitsQaTests
 {
     private readonly PostgresTenancyFixture _fixture;

@@ -18,7 +18,6 @@ namespace Tenancy.IntegrationTests;
 /// columns, same key, index and foreign-key names. A model that drifts from the
 /// SQL is the failure mode this test exists for.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class WriteModelMappingTests
 {

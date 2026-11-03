@@ -25,7 +25,6 @@ namespace Tenancy.IntegrationTests;
 /// other tasks (T3, 05.3.1).
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class IngestEventBatchTests
 {

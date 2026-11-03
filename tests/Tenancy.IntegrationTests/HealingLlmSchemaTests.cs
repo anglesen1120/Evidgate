@@ -44,7 +44,6 @@ namespace Tenancy.IntegrationTests;
 /// resolves the role list by name, so the expected row pins that clause too.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class HealingLlmSchemaTests
 {

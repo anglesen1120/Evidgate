@@ -14,8 +14,8 @@ namespace Tenancy.IntegrationTests;
 /// The transport, dedupe, ordering, run-state and authorization boundaries of <c>POST /v1/runs/{r}/events</c>
 /// through the real host and a real PostgreSQL.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class IngestQaBoundaryTests
 {
     private readonly PostgresTenancyFixture _fixture;

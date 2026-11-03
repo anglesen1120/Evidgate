@@ -26,7 +26,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>PolicyEndpointTests.ProjectScopedServiceCredential_IsRefusedByTheServiceRoleCeiling_OnReadAndWrite</c>
 /// precedent).
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyActivationReadTests
 {

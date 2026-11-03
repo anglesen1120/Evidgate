@@ -23,7 +23,6 @@ namespace Tenancy.IntegrationTests;
 /// <see cref="ITenantScopeFactory"/>, so the allocator's "the open scope's organization" guard runs exactly as it does
 /// inside a request.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringAllocateManyTests
 {

@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// The gate route through the real host with the credential the CLI actually holds: the ingest-token exchange mints the
 /// <c>ci_producer</c> set, so its <c>decision:read</c> makes <c>evidgate gate</c> a single-credential caller.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunDecisionCiTokenTests
 {

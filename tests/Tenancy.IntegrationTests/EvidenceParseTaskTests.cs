@@ -40,7 +40,6 @@ namespace Tenancy.IntegrationTests;
 /// Everything else is production: the tenant scope, the EF write model, the guarded <c>UPDATE</c>, the store read and
 /// the object storage adapter.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceParseTaskTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

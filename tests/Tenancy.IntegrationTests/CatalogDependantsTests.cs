@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// root excluded, per-variant and per-revision scoping, tenant isolation, a manually planted cycle and one statement
 /// however large the graph.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CatalogDependantsTests
 {

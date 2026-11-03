@@ -18,7 +18,6 @@ namespace Tenancy.IntegrationTests;
 /// tracked entity inside one scope. Before the trigger existed nothing incremented
 /// the token and a stale write overwrote the winner silently.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class VersionConcurrencyTests
 {

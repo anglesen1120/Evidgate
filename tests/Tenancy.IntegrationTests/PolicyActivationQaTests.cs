@@ -15,7 +15,6 @@ namespace Tenancy.IntegrationTests;
 /// project, a cross-org caller, refusals writing no audit row, the retired-to-active refusal, one audit row per
 /// successful re-activation, and the app role's write grant on <c>run</c>.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyActivationQaTests
 {

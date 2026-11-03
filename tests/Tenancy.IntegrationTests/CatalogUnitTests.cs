@@ -11,6 +11,7 @@ namespace Tenancy.IntegrationTests;
 /// 03.1.1-T1.2/T1.3 and the discovery rules (AC1–AC5) without a database: the annotation parser, the repository path
 /// rules, the sidecar reader (untrusted YAML) and the tree-to-cases resolution.
 /// </summary>
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class CatalogUnitTests
 {
     private const string IdA = "018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f";

@@ -27,7 +27,6 @@ namespace Tenancy.IntegrationTests;
 /// order (F2). Each case fails when the behaviour it names is removed: the forged batch carries a
 /// positive control, so a statement that does nothing at all fails too.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceFreezeGuardTests
 {

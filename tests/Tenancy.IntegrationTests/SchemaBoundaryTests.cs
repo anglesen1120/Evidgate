@@ -12,7 +12,6 @@ namespace Tenancy.IntegrationTests;
 /// tenant setting must be as good as an unset one (00 §5.4.7), and no write may
 /// move a row into, or create a row for, another tenant (00 §5.4.1/§5.4.6).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SchemaBoundaryTests
 {

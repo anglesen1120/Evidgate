@@ -14,7 +14,6 @@ namespace Tenancy.IntegrationTests;
 /// accepted, another project of the same org holding the prefix is <c>409 case_prefix_taken</c>, and a member without
 /// <c>project:write</c> is refused before the write.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringQaCasePrefixTests
 {

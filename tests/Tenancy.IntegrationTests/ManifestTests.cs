@@ -21,8 +21,8 @@ namespace Tenancy.IntegrationTests;
 /// 05.1.1 AC1–AC8 through the real host and a real PostgreSQL: a verified, immutable, content-addressed manifest, its
 /// schema and catalogue checks, secret-free variants, matrix coverage, tenant isolation and the statement budget.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class ManifestTests
 {
     private readonly PostgresTenancyFixture _fixture;

@@ -406,7 +406,6 @@ public sealed class CreateRunCommandCiBindingHashTests
 /// verified <c>ci_token_issue</c> claim that wins over the body, the <c>unverified_ref</c> label, and the idempotency
 /// key that now covers the caller's CI run reference.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CreateRunIdentityTests
 {

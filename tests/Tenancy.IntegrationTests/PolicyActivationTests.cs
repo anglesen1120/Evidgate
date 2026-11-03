@@ -19,7 +19,6 @@ namespace Tenancy.IntegrationTests;
 /// drive the HTTP surface only, so they do not depend on the module's internal type names. The run-pinning half
 /// of AC4 (a run created before a second activation keeps its pin) lives in <c>PolicyRunPinningTests</c>.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyActivationTests
 {

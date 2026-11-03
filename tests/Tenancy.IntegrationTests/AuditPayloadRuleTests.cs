@@ -21,7 +21,6 @@ namespace Tenancy.IntegrationTests;
 /// queued) and once more in <see cref="AuditTrail.FlushAsync"/> before the lock.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuditPayloadRuleTests
 {

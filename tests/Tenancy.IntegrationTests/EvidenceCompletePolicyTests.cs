@@ -26,7 +26,6 @@ namespace Tenancy.IntegrationTests;
 /// and a kind whose capture was switched off after the mint is refused with 422 <c>kind_disabled</c>
 /// (the artifact stays <c>pending_upload</c> and nothing is promoted).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCompletePolicyTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

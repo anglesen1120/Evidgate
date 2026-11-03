@@ -12,7 +12,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>live</c> row per frozen evidence revision, and no UPDATE or DELETE path for any role. Every write runs
 /// as <c>evidgate_app</c> in a tenant-scoped transaction unless a case speaks as the owner on purpose.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class EvaluationSchemaTests
 {

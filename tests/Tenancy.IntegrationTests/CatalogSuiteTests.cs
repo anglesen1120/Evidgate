@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// 03.2.1 AC1–AC8 through the real host and a real PostgreSQL: suites, immutable revisions with variants and a dependency
 /// DAG, secret-free validation, concurrent numbering, publishing, diff, ETag and the preview.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CatalogSuiteTests
 {

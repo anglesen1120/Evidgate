@@ -11,7 +11,6 @@ namespace Tenancy.IntegrationTests;
 /// transaction: the run's pinned scope, its manifest's planned count and every planned execution. Every test names the
 /// predicate whose removal or narrowing makes it fail.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class OrchestratorEvaluationPlanTests
 {

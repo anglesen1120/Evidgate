@@ -30,7 +30,6 @@ namespace Tenancy.IntegrationTests;
 /// is observed parked on that lock in <c>pg_stat_activity</c> — so the loser is provably waiting on the lock
 /// when the winner commits.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunStateTransitionTests
 {

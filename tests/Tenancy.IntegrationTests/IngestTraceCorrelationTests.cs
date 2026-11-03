@@ -38,7 +38,6 @@ namespace Tenancy.IntegrationTests;
 /// the test reads is what a collector would receive, not a re-implementation of it.
 /// </para>
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class IngestTraceCorrelationTests
 {

@@ -31,7 +31,6 @@ namespace Tenancy.IntegrationTests;
 /// round-trip (AC4/AC15).
 /// </para>
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringImportExportTests
 {

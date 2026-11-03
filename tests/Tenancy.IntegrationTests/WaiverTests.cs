@@ -15,7 +15,6 @@ namespace Tenancy.IntegrationTests;
 /// keyset list. The server code is written from <c>local://waiver-contract.md</c>; these
 /// tests pin the HTTP/DB contract, never internals.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class WaiverTests
 {

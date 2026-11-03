@@ -12,7 +12,6 @@ namespace Tenancy.IntegrationTests;
 /// renumber, AC19's order precondition, AC7's delete guards, AC18's headers and AC10's cross-tenant 404. The tests pin the
 /// HTTP contract of §5, never internals.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringTreeTests
 {

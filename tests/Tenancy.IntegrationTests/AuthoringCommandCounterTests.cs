@@ -23,7 +23,6 @@ namespace Tenancy.IntegrationTests;
 /// driven through their HTTP edge, exactly as a client drives them.
 /// </para>
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class AuthoringCommandCounterTests
 {

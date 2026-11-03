@@ -37,7 +37,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>InternalsVisibleTo</c>) with the handler's parameters bound, mirroring <c>ListRunsIndexPlanTests</c>.
 /// </para>
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringTimelineTests
 {

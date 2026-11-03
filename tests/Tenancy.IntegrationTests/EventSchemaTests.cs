@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>Evidgate.Migrator</c> — the 05.2.1-T1 / 05.3.3-T1 precedent for a new table in this suite.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EventSchemaTests
 {

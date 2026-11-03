@@ -14,7 +14,6 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// Commit-failure atomicity (AC8) and the T91 cancel-vs-ingest race of <c>POST /v1/runs/{r}/events</c>.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class IngestQaAtomicityTests
 {

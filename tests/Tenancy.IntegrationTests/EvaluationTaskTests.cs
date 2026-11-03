@@ -21,8 +21,8 @@ namespace Tenancy.IntegrationTests;
 /// Every call therefore starts on a clean flow, exactly as two processes would.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed partial class EvaluationTaskTests
 {
     private readonly PostgresTenancyFixture _fixture;

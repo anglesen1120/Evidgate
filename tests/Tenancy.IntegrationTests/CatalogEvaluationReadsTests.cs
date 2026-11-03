@@ -10,7 +10,6 @@ namespace Tenancy.IntegrationTests;
 /// <see cref="ICatalogContracts.GetEvaluationCasesAsync"/>) over a real PostgreSQL and the real host, on a caller-owned
 /// tenant transaction. Each test states the predicate whose removal makes it fail.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CatalogEvaluationReadsTests
 {

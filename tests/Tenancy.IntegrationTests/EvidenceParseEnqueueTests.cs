@@ -26,7 +26,6 @@ namespace Tenancy.IntegrationTests;
 /// change and the outbox writes in one transaction. The only thing the test chooses is the flag in the host's
 /// configuration, which is exactly the switch the module binds for the completion to read.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

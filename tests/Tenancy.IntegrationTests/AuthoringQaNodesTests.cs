@@ -15,7 +15,6 @@ namespace Tenancy.IntegrationTests;
 /// the 404 a soft-deleted entity must answer on every verb (AC10), the 64 KiB body cap, every <c>If-Match</c> form the
 /// edge must accept or refuse (AC19), the strict body reader, and the cross-org / sibling-project addressing of AC10.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringQaNodesTests
 {

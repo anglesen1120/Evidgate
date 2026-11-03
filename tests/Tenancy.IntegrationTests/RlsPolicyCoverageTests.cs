@@ -19,7 +19,6 @@ namespace Tenancy.IntegrationTests;
 /// refuses a table it should.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RlsPolicyCoverageTests
 {

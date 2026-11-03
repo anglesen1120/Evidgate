@@ -24,7 +24,6 @@ namespace Tenancy.IntegrationTests;
 /// an optional <see cref="CiRunReference"/> cannot be expressed through request headers.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceUploadUrlTests
 {

@@ -31,7 +31,6 @@ namespace Tenancy.IntegrationTests;
 /// producer names the next planned execution instead of reusing the first batch's key.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class IngestOrderingTests
 {

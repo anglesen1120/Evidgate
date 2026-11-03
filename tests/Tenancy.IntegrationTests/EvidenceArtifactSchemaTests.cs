@@ -22,7 +22,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>tests/Shared/ContainerImages.cs</c>), so no new fixture was added.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceArtifactSchemaTests
 {

@@ -26,7 +26,6 @@ namespace Tenancy.IntegrationTests;
 /// (one <c>artifact_secret_scan</c> and one <c>artifact_staging_delete</c> row), and the defensive 23505
 /// mapping of the outbox dedupe keys must answer 409, never a 500.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCompleteRaceTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

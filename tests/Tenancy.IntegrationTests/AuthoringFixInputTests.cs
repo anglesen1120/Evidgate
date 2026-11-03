@@ -14,7 +14,6 @@ namespace Tenancy.IntegrationTests;
 /// cursor never reaches the keyset comparison of a <c>text</c> column, and every <c>details[].path</c> is a rooted
 /// pointer. Each refusal is proven to write nothing: the row counts and the case-code allocation are unchanged.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringFixInputTests
 {

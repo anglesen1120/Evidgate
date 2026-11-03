@@ -13,7 +13,6 @@ namespace Tenancy.IntegrationTests;
 /// stale tag against the committed version and answers 412 — the writer's own out-of-step guard cannot tell the two apart
 /// (each appends exactly one version above the last), which is why the check has to happen under the lock.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringConcurrencyTests
 {

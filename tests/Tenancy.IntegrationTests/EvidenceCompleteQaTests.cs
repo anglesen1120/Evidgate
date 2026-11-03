@@ -19,7 +19,6 @@ using static Tenancy.IntegrationTests.RegistryApi;
 
 namespace Tenancy.IntegrationTests;
 
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

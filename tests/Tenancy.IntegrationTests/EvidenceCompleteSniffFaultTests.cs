@@ -35,7 +35,6 @@ namespace Tenancy.IntegrationTests;
 /// prefix-null fall-through, driven through the real complete route with a fault-injecting
 /// <see cref="FaultInjectingObjectStorage"/> over the real store. Each test names the plan line it verifies.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

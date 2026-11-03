@@ -9,7 +9,6 @@ namespace Tenancy.IntegrationTests;
 /// the active binding of a repository, the resolver prefers it, a pending binding is named only when its challenge
 /// is proven, and an unproven one leaks no tenant.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CiResolverTests
 {

@@ -17,7 +17,6 @@ namespace Tenancy.IntegrationTests;
 /// The audit row itself is read as the database stores it (<c>public.audit_log</c>, 0015:25-50), because the trail's
 /// chain is the record and the API's own export is another story's.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringAuditTests
 {

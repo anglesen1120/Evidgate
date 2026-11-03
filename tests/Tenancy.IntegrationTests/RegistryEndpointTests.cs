@@ -11,7 +11,6 @@ namespace Tenancy.IntegrationTests;
 /// §5 against a migrated PostgreSQL 18 database, one database per test. Each test
 /// names the acceptance criterion it proves (§9 test plan).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RegistryEndpointTests
 {

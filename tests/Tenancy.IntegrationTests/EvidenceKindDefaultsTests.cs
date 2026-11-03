@@ -25,7 +25,6 @@ namespace Tenancy.IntegrationTests;
 /// kinds without a default keep the fail-closed 422 <c>kind_disabled</c>, and the completion re-checks the same
 /// effective policy before it promotes anything.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

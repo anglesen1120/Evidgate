@@ -11,7 +11,6 @@ namespace Tenancy.IntegrationTests;
 /// application code — an `evidgate_app` that owned a table could `ALTER TABLE …
 /// DISABLE ROW LEVEL SECURITY` and every policy on it would stop applying.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RlsRoleTests
 {

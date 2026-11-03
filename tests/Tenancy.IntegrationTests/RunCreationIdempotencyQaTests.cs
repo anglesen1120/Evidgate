@@ -9,7 +9,6 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>QA cases for the run-create <c>Idempotency-Key</c> (05.2.1-T2 AC3/AC4) through the real host and PostgreSQL.</summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunCreationIdempotencyQaTests
 {

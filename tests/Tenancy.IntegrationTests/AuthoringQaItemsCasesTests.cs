@@ -14,7 +14,6 @@ namespace Tenancy.IntegrationTests;
 /// list-query bounds (<c>q</c>, <c>limit</c>, <c>cursor</c>), AC18's replay conflict and key bound, and the 404 every verb
 /// answers for a soft-deleted entity (AC10).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringQaItemsCasesTests
 {

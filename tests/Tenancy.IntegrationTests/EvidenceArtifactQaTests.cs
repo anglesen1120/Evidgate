@@ -10,7 +10,6 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>Independent 06.1.1-T1 regression checks against the migrated database and app-role write path.</summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceArtifactQaTests
 {

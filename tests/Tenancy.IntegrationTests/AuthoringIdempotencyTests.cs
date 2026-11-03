@@ -18,7 +18,6 @@ namespace Tenancy.IntegrationTests;
 /// allocate a second code. The replayed body is compared with <see cref="JsonElement.DeepEquals"/>, not as text, because
 /// the stored response is jsonb and PostgreSQL does not keep member order.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringIdempotencyTests
 {

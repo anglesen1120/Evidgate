@@ -13,7 +13,6 @@ namespace Tenancy.IntegrationTests;
 /// and the keyset list. The server code is written from the 07.3.1 plan and the D1–D6 decisions;
 /// these tests pin the HTTP/DB contract, never internals.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class QuarantineTests
 {

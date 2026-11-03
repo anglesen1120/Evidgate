@@ -19,7 +19,6 @@ namespace Tenancy.IntegrationTests;
 /// tenant policy names <c>evidgate_app</c> alone: 0053 left the role clause out, which applied it to PUBLIC and
 /// so to the operator's SELECT grant, and 0055 re-declared it to close that path.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SecurityEventSchemaTests
 {

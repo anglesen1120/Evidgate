@@ -23,7 +23,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>quantity</c>), and the "one insert, one read-back" budget by the host's Npgsql command log.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class IngestDedupeTests
 {

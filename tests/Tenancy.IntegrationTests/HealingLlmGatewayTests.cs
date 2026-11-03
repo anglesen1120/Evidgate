@@ -24,7 +24,6 @@ namespace Tenancy.IntegrationTests;
 /// <see cref="HttpMessageHandler"/> (a hanging one, a server error, a redirect), where the handler also counts the
 /// requests, which is how the bounded retry is measured without a socket.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class HealingLlmGatewayTests
 {

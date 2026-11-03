@@ -18,7 +18,6 @@ namespace Tenancy.IntegrationTests;
 /// one statement, so N shards cost the read exactly what none does, and the three not-visible branches (unknown id,
 /// another tenant, a credential scoped to a sibling project) stay the one <c>404 not_found</c> answer.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class GetRunDetailFieldsTests
 {

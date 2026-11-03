@@ -27,7 +27,6 @@ namespace Tenancy.IntegrationTests;
 /// through the host configuration (<c>EVIDGATE:Healing:Apply</c>) and proves the other half of AC7 end to end, and
 /// <c>V1ModeClampTests</c> covers the same matrix as the gate's unit.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class HealingSwitchEndpointTests
 {

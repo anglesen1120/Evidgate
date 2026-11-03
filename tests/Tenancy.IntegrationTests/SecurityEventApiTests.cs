@@ -25,7 +25,6 @@ namespace Tenancy.IntegrationTests;
 /// canonical 32 hex digits, which is ordinal on <c>ToString("N")</c>), never with <see cref="Guid.CompareTo"/>
 /// — .NET compares a Guid field-wise, so the two orders disagree for real ids.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SecurityEventApiTests
 {

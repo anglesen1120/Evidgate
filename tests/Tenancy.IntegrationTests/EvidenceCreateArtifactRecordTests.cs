@@ -20,7 +20,6 @@ namespace Tenancy.IntegrationTests;
 /// principal holding <c>artifact:write</c> published for the flow — the same stages 06.1.2's
 /// <c>POST /v1/artifacts/upload-url</c> will drive.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCreateArtifactRecordTests
 {

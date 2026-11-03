@@ -18,7 +18,6 @@ namespace Tenancy.IntegrationTests;
 /// FALSE and `has_column_privilege(…, 'deleted_at', 'UPDATE')` is TRUE (0027:159, 0033:94).
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringVersionImmutabilityTests
 {

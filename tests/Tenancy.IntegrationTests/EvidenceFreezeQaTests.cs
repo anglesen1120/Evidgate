@@ -17,7 +17,6 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>QA cases for <see cref="IEvidenceFreeze"/> beyond the primary EvidenceFreezeTests suite.</summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceFreezeQaTests
 {

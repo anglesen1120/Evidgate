@@ -17,7 +17,6 @@ namespace Tenancy.IntegrationTests;
 /// org comes from the route/header after <c>evidgate_resolve.member_orgs</c> confirms the
 /// membership on every request (AC2, AC5, AC6; feature plan §9).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class TenantResolutionTests
 {

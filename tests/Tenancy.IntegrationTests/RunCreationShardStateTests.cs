@@ -21,7 +21,6 @@ namespace Tenancy.IntegrationTests;
 /// The boundary tests <c>CreateRun_ShardCountEqualsPlannedCount_OneSlotPerShard</c> and
 /// <c>CreateRun_TwoRunsFromOneManifest_IndependentSlotSets</c> were added by the QA agent.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunCreationShardStateTests
 {

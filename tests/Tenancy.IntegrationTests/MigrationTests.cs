@@ -12,7 +12,7 @@ namespace Tenancy.IntegrationTests;
 /// (0003), so this is the real expand path, not a from-scratch run. A second run
 /// applies nothing.
 /// </summary>
-[Collection(TenancySuite.Name)]
+[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class MigrationTests
 {

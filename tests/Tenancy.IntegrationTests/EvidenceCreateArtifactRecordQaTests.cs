@@ -21,7 +21,6 @@ namespace Tenancy.IntegrationTests;
 /// policy-row isolation by project and by org, the persisted row shape against 0028, and the tenant/permission
 /// refusals of the C2 pipeline. Real pipeline and real PostgreSQL, as in the existing class.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCreateArtifactRecordQaTests
 {

@@ -19,7 +19,6 @@ namespace Tenancy.IntegrationTests;
 /// indistinguishable from a missing one, the strong suite ETag and its 304s, that a preview writes no row anywhere, and
 /// that a preview needs the same <c>suite:write</c> standing as a real create.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SuiteDiffTests
 {

@@ -34,7 +34,7 @@ namespace Tenancy.IntegrationTests;
 /// (tree kill, temp-directory removal) is 06.3.6-T1.3's <c>ChildProcessParseRunner</c> test surface, which runs on
 /// Linux only; this test deliberately does not claim it.
 /// </remarks>
-[Collection(TenancySuite.Name)]
+[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

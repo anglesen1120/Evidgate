@@ -15,7 +15,6 @@ namespace Tenancy.IntegrationTests;
 /// The <c>policy_revision</c> and <c>policy_activation</c> rows are seeded as the app role in one tenant
 /// transaction, exactly as the activation store writes them, so the grants under test are the ones in force.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyActivationSchemaTests
 {
