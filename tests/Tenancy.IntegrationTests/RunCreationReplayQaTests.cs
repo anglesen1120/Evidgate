@@ -28,12 +28,12 @@ public sealed class RunCreationReplayQaTests
 
     private async Task<long[]> CountsAsync(RunCreationTests.World world) =>
     [
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.planned_execution"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.outbox where task_type = 'orchestrator.run.created'"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.idempotency_record where operation = 'run:create'"),
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.audit_log where action = 'run.create'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.planned_execution where org_id = '{world.Org}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where org_id = '{world.Org}'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.outbox where org_id = '{world.Org}' and task_type = 'orchestrator.run.created'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.idempotency_record where org_id = '{world.Org}' and operation = 'run:create'"),
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where org_id = '{world.Org}' and action = 'run.create'"),
     ];
 
     // ------------------------------------------------------------------ purpose is a case-sensitive exact match
@@ -194,8 +194,8 @@ public sealed class RunCreationReplayQaTests
         replayLast.ErrorCode.ShouldBe("replay_grant_invalid");
 
         // Only the regular-last body stored a run, and its stored purpose is 'regular' — never a replay.
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, "select purpose from public.run")).ShouldBe("regular");
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(world.Database, $"select purpose from public.run where org_id = '{world.Org}'")).ShouldBe("regular");
     }
 
     // ------------------------------------------------------------------ the refusals leave the key and the regular path intact
@@ -213,7 +213,7 @@ public sealed class RunCreationReplayQaTests
         var regular = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         regular.Status.ShouldBe(HttpStatusCode.Created, regular.ErrorMessage);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run where purpose = 'regular' and replay_grant_id is null"))
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}' and purpose = 'regular' and replay_grant_id is null"))
             .ShouldBe(1);
     }
 }

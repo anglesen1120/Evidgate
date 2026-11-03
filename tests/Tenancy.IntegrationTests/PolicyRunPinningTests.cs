@@ -143,7 +143,9 @@ public sealed class PolicyRunPinningTests
         activation.Status.ShouldBe(HttpStatusCode.OK, activation.ErrorMessage);
         activation.Id("policy_revision_id").ShouldBe(r1);
         activation.Body.GetProperty("changed").GetBoolean().ShouldBeTrue();
-        (await _fixture.ScalarAsync<Guid>(world.Database, "select policy_revision_id from public.policy_activation"))
+        (await _fixture.ScalarAsync<Guid>(
+            world.Database,
+            $"select policy_revision_id from public.policy_activation where org_id = '{world.Org}' and project_id = '{world.Project}'"))
             .ShouldBe(r1);
 
         var first = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
@@ -304,7 +306,7 @@ public sealed class PolicyRunPinningTests
         create.Status.ShouldBe(HttpStatusCode.Created, create.ErrorMessage);
 
         (await RunPinAsync(world, create.Id("run_id"))).ShouldBeOneOf(r1, r2);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision where state = 'active'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_revision where org_id = '{world.Org}' and state = 'active'")).ShouldBe(1);
     }
 
     /// <summary>Only <c>release_approver</c> (policy:write) may activate; every other member role is refused 403.</summary>

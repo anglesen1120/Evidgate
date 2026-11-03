@@ -60,13 +60,20 @@ public sealed class HealingSwitchEndpointTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            if (!ReferenceEquals(Host, Api))
+            try
             {
-                await Host.DisposeAsync();
-            }
+                if (!ReferenceEquals(Host, Api))
+                {
+                    await Host.DisposeAsync();
+                }
 
-            await Api.DisposeAsync();
-            await Database.DisposeAsync();
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Database.DisposeAsync();
+            }
         }
     }
 
@@ -90,64 +97,73 @@ public sealed class HealingSwitchEndpointTests
     /// <paramref name="permittingOperator"/> replaces the fail-closed operator gate so the system row can be written
     /// through the real operator route — both are host-composition changes, never product substitutions.
     /// </summary>
-    private async Task<World> StartAsync(bool applyEnabled = false, bool permittingOperator = false)
-    {
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-
-        WebApplicationFactory<Program> host = api;
-        if (applyEnabled || permittingOperator)
+    private Task<World> StartAsync(bool applyEnabled = false, bool permittingOperator = false) =>
+        _fixture.StartDedicatedAsync(async database =>
         {
-            host = api.WithWebHostBuilder(builder =>
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+
+            WebApplicationFactory<Program> host = api;
+            if (applyEnabled || permittingOperator)
             {
-                if (applyEnabled)
+                host = api.WithWebHostBuilder(builder =>
                 {
-                    builder.ConfigureAppConfiguration((_, configuration) =>
-                        configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
-                        {
-                            ["EVIDGATE:Healing:Apply"] = "true",
-                        }));
-                }
+                    if (applyEnabled)
+                    {
+                        builder.ConfigureAppConfiguration((_, configuration) =>
+                            configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+                            {
+                                ["EVIDGATE:Healing:Apply"] = "true",
+                            }));
+                    }
 
-                if (permittingOperator)
-                {
-                    builder.ConfigureTestServices(services =>
-                        services.AddSingleton<IOperatorGate>(new PermitGate(OperatorId)));
-                }
-            });
-        }
+                    if (permittingOperator)
+                    {
+                        builder.ConfigureTestServices(services =>
+                            services.AddSingleton<IOperatorGate>(new PermitGate(OperatorId)));
+                    }
+                });
+            }
 
-        var client = host.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+            var client = host.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        // The read side's caller: an active member holding `qa_engineer` (the only built-in role with
-        // `healing:triage`). 0044's `membership_user_fk` needs the account row first, and `tenant_admin` may grant a
-        // role to another member (the self-escalation rule binds self-grants only).
-        var triage = Guid.CreateVersion7();
-        var membership = Guid.CreateVersion7();
-        var email = $"qa-{triage:N}@example.test";
-        await _fixture.ExecuteAsync(
-            database, $"insert into public.\"user\" (id, email) values ('{triage:D}', '{email}')");
-        await _fixture.ExecuteAsync(
-            database,
-            $"insert into public.membership (id, org_id, user_id, invited_email, status) values ('{membership:D}', '{org:D}', '{triage:D}', '{email}', 'active')");
+            // The read side's caller: an active member holding `qa_engineer` (the only built-in role with
+            // `healing:triage`). 0044's `membership_user_fk` needs the account row first, and `tenant_admin` may grant a
+            // role to another member (the self-escalation rule binds self-grants only).
+            var triage = Guid.CreateVersion7();
+            var membership = Guid.CreateVersion7();
+            var email = $"qa-{triage:N}@example.test";
+            await _fixture.ExecuteAsync(
+                database, $"insert into public.\"user\" (id, email) values ('{triage:D}', '{email}')");
+            await _fixture.ExecuteAsync(
+                database,
+                $"insert into public.membership (id, org_id, user_id, invited_email, status) values ('{membership:D}', '{org:D}', '{triage:D}', '{email}', 'active')");
 
-        var world = new World(api, host, client, database, user, org, project, triage);
+            var world = new World(api, host, client, database, user, org, project, triage);
+            try
+            {
+                var role = await _fixture.ScalarAsync<Guid>(
+                    database, "select id from public.role where code = 'qa_engineer' and org_id is null");
+                var granted = await SendAsync(
+                    world,
+                    HttpMethod.Post,
+                    $"/v1/orgs/{org:D}/memberships/{membership:D}/roles",
+                    $$"""{"role_id":"{{role:D}}"}""",
+                    NewKey());
+                granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
 
-        var role = await _fixture.ScalarAsync<Guid>(
-            database, "select id from public.role where code = 'qa_engineer' and org_id is null");
-        var granted = await SendAsync(
-            world,
-            HttpMethod.Post,
-            $"/v1/orgs/{org:D}/memberships/{membership:D}/roles",
-            $$"""{"role_id":"{{role:D}}"}""",
-            NewKey());
-        granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
-
-        return world;
-    }
+                return world;
+            }
+            catch
+            {
+                // The world already owns the host graph and the database: a failed grant drops both before the
+                // error escapes, so the next test does not inherit them.
+                await world.DisposeAsync();
+                throw;
+            }
+        });
 
     /// <summary>
     /// Sends one request with the raw body the case wants. The registry's generic helper wraps its body in

@@ -77,9 +77,11 @@ public sealed class AuthoringTimelineTests
         }
     }
 
-    private async Task<World> StartAsync()
+    private async Task<World> StartAsync(string? database = null)
     {
-        var database = await _fixture.SharedDatabaseAsync();
+        // Tests that seed and ANALYZE the version table pass a dedicated database: planner statistics are per
+        // database, so a shared one would be shaped by every other class writing authoring_version at the same time.
+        database ??= await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -772,7 +774,9 @@ public sealed class AuthoringTimelineTests
     [Fact]
     public async Task Timeline_UsesDeclaredIndexes()
     {
-        await using var world = await StartAsync();
+        // Dedicated: the plan is decided by ANALYZE statistics, which are database-wide.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(database);
 
         var entity = await SeedTimelineAsync(world);
 

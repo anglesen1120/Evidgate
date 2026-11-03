@@ -123,7 +123,8 @@ public sealed class ListRunsQaTests
         (await IdsAsync(world, "ref_name=" + Uri.EscapeDataString("z' or '1'='1"))).ShouldBeEmpty();
         (await IdsAsync(world, "ref_name=" + Uri.EscapeDataString("'; drop table public.run; --"))).ShouldBeEmpty();
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(2);
+        (await _fixture.ScalarAsync<long>(
+            world.Database, $"select count(*) from public.run where project_id = '{world.Project:D}'")).ShouldBe(2);
     }
 
     /// <summary>AC6, 00 §9.1: the exact limit boundaries — 1 and 200 are served, 0 and 201 are 422 <c>out_of_range</c>.</summary>

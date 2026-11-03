@@ -37,8 +37,7 @@ public sealed class RlsPolicyCoverageTests
     [Fact]
     public async Task RlsPolicies_EveryBusinessTable_HasForcedRls()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
         var exceptions = RlsExceptionFile.Read();
 
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));

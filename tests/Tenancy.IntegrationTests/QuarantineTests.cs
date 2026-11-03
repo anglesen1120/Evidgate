@@ -44,9 +44,11 @@ public sealed class QuarantineTests
         }
     }
 
-    private async Task<World> StartAsync()
+    private async Task<World> StartAsync(string? database = null)
     {
-        var database = await _fixture.SharedDatabaseAsync();
+        // The plan test passes a dedicated database: it disables sequential scans and reads the planner's choice,
+        // which a table other classes seed at the same time would change.
+        database ??= await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -530,7 +532,9 @@ public sealed class QuarantineTests
     [Fact]
     public async Task ListQuery_UsesTheProjectCreatedIndex()
     {
-        await using var world = await StartAsync();
+        // Dedicated: the plan is read off this database's own table, which no parallel class seeds.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(database);
         for (var i = 0; i < 3; i++)
         {
             (await CreateAsync(world, Body(world, caseId: world.Cases[i], reason: $"case {i}"))).Status.ShouldBe(HttpStatusCode.Created);

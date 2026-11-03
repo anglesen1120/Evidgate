@@ -29,22 +29,29 @@ public sealed partial class AuthoringVersionTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Database.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Database.DisposeAsync();
+            }
         }
     }
 
-    private async Task<NodeWorld> StartNodeWorldAsync()
-    {
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+    private Task<NodeWorld> StartNodeWorldAsync() =>
+        _fixture.StartDedicatedAsync(async database =>
+        {
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new NodeWorld(api, client, database, user, org, project);
-    }
+            return new NodeWorld(api, client, database, user, org, project);
+        });
 
     [Fact]
     public async Task NodePatch_WritesOneVersion()

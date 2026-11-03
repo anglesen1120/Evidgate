@@ -22,7 +22,8 @@ public sealed class IngestQaBoundaryTests
 
     public IngestQaBoundaryTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private static Task<long> EventRowsAsync(IngestTestWorld world) => world.CountAsync("event");
+    private static Task<long> EventRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("event", $"org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'");
 
     // ---------------------------------------------------------------- AC2/AC1: duplicate event_id inside one batch
 
@@ -45,7 +46,8 @@ public sealed class IngestQaBoundaryTests
         answer.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
         answer.Body.GetProperty("duplicates").GetInt32().ShouldBe(1);
         IngestQaRequests.Acks(answer).Select(ack => ack.GetProperty("ack").GetString()).ShouldBe(["accepted", "duplicate"]);
-        (await world.ScalarAsync<int>("select accepted from public.event_batch")).ShouldBe(1);
+        (await world.ScalarAsync<int>(
+            $"select accepted from public.event_batch where run_id = '{world.RunId:D}'")).ShouldBe(1);
     }
 
     [Fact]
@@ -65,7 +67,7 @@ public sealed class IngestQaBoundaryTests
         answer.ErrorCode.ShouldBe("duplicate_different_payload");
         IngestQaRequests.Details(answer).ShouldContain(detail => IngestQaRequests.IndexOf(detail) == 1);
         (await EventRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await world.CountAsync("event_batch", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
     }
 
     // ---------------------------------------------------------------- AC6: same sequence twice in one batch
@@ -86,7 +88,7 @@ public sealed class IngestQaBoundaryTests
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("sequence_reused");
         (await EventRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await world.CountAsync("event_batch", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
     }
 
     // ---------------------------------------------------------------- AC1/AC2: two concurrent identical batches
@@ -216,8 +218,10 @@ public sealed class IngestQaBoundaryTests
 
         lateAccepted.Status.ShouldBe(HttpStatusCode.OK, lateAccepted.ErrorMessage);
         lateAccepted.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
-        (await world.ScalarAsync<bool>($"select late from public.event where sequence = {lateSequence}")).ShouldBeTrue();
-        (await world.ScalarAsync<bool>($"select after_cancel from public.event where sequence = {lateSequence}")).ShouldBeFalse();
+        (await world.ScalarAsync<bool>(
+            $"select late from public.event where run_id = '{world.RunId:D}' and sequence = {lateSequence}")).ShouldBeTrue();
+        (await world.ScalarAsync<bool>(
+            $"select after_cancel from public.event where run_id = '{world.RunId:D}' and sequence = {lateSequence}")).ShouldBeFalse();
 
         // Past the window the same incomplete run answers 409 run_closed (T81).
         await world.Fixture.ExecuteAsync(
@@ -240,7 +244,8 @@ public sealed class IngestQaBoundaryTests
 
         canceled.Status.ShouldBe(HttpStatusCode.OK, canceled.ErrorMessage);
         canceled.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
-        (await world.ScalarAsync<bool>($"select after_cancel from public.event where sequence = {sequence}")).ShouldBeTrue();
+        (await world.ScalarAsync<bool>(
+            $"select after_cancel from public.event where run_id = '{world.RunId:D}' and sequence = {sequence}")).ShouldBeTrue();
     }
 
     [Fact]
@@ -259,8 +264,10 @@ public sealed class IngestQaBoundaryTests
         accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
         accepted.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
         (await world.ScalarAsync<string>($"select state from public.run where id = '{world.RunId:D}'")).ShouldBe("canceled");
-        (await world.ScalarAsync<bool>("select after_cancel from public.event where sequence = 1")).ShouldBeTrue();
-        (await world.ScalarAsync<bool>("select late from public.event where sequence = 1")).ShouldBeFalse();
+        (await world.ScalarAsync<bool>(
+            $"select after_cancel from public.event where run_id = '{world.RunId:D}' and sequence = 1")).ShouldBeTrue();
+        (await world.ScalarAsync<bool>(
+            $"select late from public.event where run_id = '{world.RunId:D}' and sequence = 1")).ShouldBeFalse();
     }
 
     // ---------------------------------------------------------------- T81/T91: the late window
@@ -286,8 +293,10 @@ public sealed class IngestQaBoundaryTests
 
         inside.Status.ShouldBe(HttpStatusCode.OK, inside.ErrorMessage);
         inside.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
-        (await world.ScalarAsync<bool>("select late from public.event where sequence = 1")).ShouldBeTrue();
-        (await world.ScalarAsync<bool>("select after_cancel from public.event where sequence = 1")).ShouldBeFalse();
+        (await world.ScalarAsync<bool>(
+            $"select late from public.event where run_id = '{world.RunId:D}' and sequence = 1")).ShouldBeTrue();
+        (await world.ScalarAsync<bool>(
+            $"select after_cancel from public.event where run_id = '{world.RunId:D}' and sequence = 1")).ShouldBeFalse();
 
         // One second past the end (the deadline five minutes before, minus one second) the same incomplete
         // run answers 409 run_closed and writes nothing (T81).
@@ -302,7 +311,7 @@ public sealed class IngestQaBoundaryTests
 
         after.Status.ShouldBe(HttpStatusCode.Conflict, after.ErrorMessage);
         after.ErrorCode.ShouldBe("run_closed");
-        (await world.ScalarAsync<long>("select count(*) from public.event")).ShouldBe(1);
+        (await EventRowsAsync(world)).ShouldBe(1);
     }
 
     // ---------------------------------------------------------------- AC4: a key planned in another run
@@ -367,7 +376,7 @@ public sealed class IngestQaBoundaryTests
         huge.ErrorCode.ShouldBe("event_invalid");
 
         (await EventRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await world.CountAsync("event_batch", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
     }
 
     // ---------------------------------------------------------------- the closed type set
@@ -389,7 +398,7 @@ public sealed class IngestQaBoundaryTests
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         answer.Body.GetProperty("accepted").GetInt32().ShouldBe(5);
-        (await world.CountAsync("event")).ShouldBe(5);
+        (await EventRowsAsync(world)).ShouldBe(5);
 
         var unknown = await IngestQaRequests.PostEventsAsync(
             world.Client,
@@ -398,7 +407,7 @@ public sealed class IngestQaBoundaryTests
 
         unknown.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, unknown.ErrorMessage);
         unknown.ErrorCode.ShouldBe("event_invalid");
-        (await world.CountAsync("event")).ShouldBe(5);
+        (await EventRowsAsync(world)).ShouldBe(5);
     }
 
     // ---------------------------------------------------------------- rollback completeness
@@ -419,8 +428,8 @@ public sealed class IngestQaBoundaryTests
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
         (await EventRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("event_batch")).ShouldBe(0);
-        (await world.CountAsync("case_attempt")).ShouldBe(0);
-        (await world.CountAsync("outbox")).ShouldBe(0);
+        (await world.CountAsync("event_batch", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
+        (await world.CountAsync("case_attempt", $"org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'")).ShouldBe(0);
+        (await world.CountAsync("outbox", $"org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 }

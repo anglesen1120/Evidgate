@@ -161,6 +161,27 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
         return new DedicatedDatabase(this, database);
     }
 
+    /// <summary>
+    /// A private database for one test's world: <paramref name="start"/> builds the world that owns it. A factory
+    /// that throws before returning drops the database first (the drop is idempotent), so a failed arrange never
+    /// leaves a scratch database behind for the rest of the run.
+    /// </summary>
+    internal async Task<T> StartDedicatedAsync<T>(Func<DedicatedDatabase, Task<T>> start)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+
+        var database = await CreateDedicatedDatabaseAsync().ConfigureAwait(false);
+        try
+        {
+            return await start(database).ConfigureAwait(false);
+        }
+        catch
+        {
+            await database.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
     private async Task<string> CreateSharedAsync()
     {
         var database = NewDatabaseName();

@@ -62,7 +62,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Frozen_Event_Late_Revision_AppendsASecondRowWithItsOwnKey()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // Dedicated: the dispatcher claims every undispatched row and the consumer polls the whole queue.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: database.Name);
 
         var (runId, _) = await StartIncompleteRunAsync(world);
         await OpenLateWindowAsync(world, runId);
@@ -103,7 +105,9 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Frozen_Event_ReplayedAttemptThatFindsTheRevisionRecorded_WritesNoRow()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // Dedicated: the dispatcher claims every undispatched row and the consumer polls the whole queue.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: database.Name);
 
         var (runId, _) = await StartIncompleteRunAsync(world);
         await OpenLateWindowAsync(world, runId);
@@ -118,7 +122,7 @@ public sealed partial class ReconcileRunTests
         late.Status.ShouldBe(HttpStatusCode.OK, late.ErrorMessage);
 
         await DispatchAndReconcileAsync(world, expectedReconciles: 1);
-        (await RevisionCountAsync(world)).ShouldBe(2);
+        (await RunRevisionCountAsync(world, runId)).ShouldBe(2);
         (await FrozenEventRowsOfRunAsync(world, runId)).ShouldBe(2, "two revisions announced themselves once each");
 
         // Redelivery: the consumer commits the transaction and only then stamps the row done, so a crash in between
@@ -128,7 +132,7 @@ public sealed partial class ReconcileRunTests
         again.Disposition.ShouldBe(ReconcileDisposition.ComparedLate, Describe(again));
         var recorded = replay.ShouldNotBeNull("the guard answers with the revision the evidence already has");
         recorded.RevisionNo.ShouldBe(2);
-        (await RevisionCountAsync(world)).ShouldBe(2, "no revision was inserted");
+        (await RunRevisionCountAsync(world, runId)).ShouldBe(2, "no revision was inserted");
         (await FrozenEventRowsOfRunAsync(world, runId)).ShouldBe(
             2,
             "an attempt that inserts nothing announces nothing, so the run keeps its two rows");
@@ -155,7 +159,7 @@ public sealed partial class ReconcileRunTests
         outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
         var completed = finalization.ShouldNotBeNull(
             "the attempt wrote its revision inside the transaction that then rolled back");
-        (await RevisionCountAsync(world)).ShouldBe(0, "an uncommitted attempt leaves no revision behind");
+        (await RunRevisionCountAsync(world, runId)).ShouldBe(0, "an uncommitted attempt leaves no revision behind");
         (await FrozenEventRowsOfRunAsync(world, runId)).ShouldBe(
             0,
             "the frozen event rolls back with the revision it announces");
@@ -163,6 +167,10 @@ public sealed partial class ReconcileRunTests
     }
 
     // ------------------------------------------------------------------ helpers: the frozen-revision rows
+
+    /// <summary>How many revisions this run owns; other tests write into the same database.</summary>
+    private static Task<long> RunRevisionCountAsync(IngestTestWorld world, Guid runId) =>
+        world.CountAsync("evidence_revision", $"org_id = '{world.Org:D}' and run_id = '{runId:D}'");
 
     /// <summary>How many frozen-revision rows name one revision as their aggregate.</summary>
     private static Task<long> FrozenEventRowsAsync(IngestTestWorld world, Guid revisionId) =>

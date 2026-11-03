@@ -14,11 +14,10 @@ namespace Tenancy.IntegrationTests;
 /// flags, and the RLS flags 0031 set, which this file must leave alone.
 /// <para>
 /// The fixture is this project's own <see cref="PostgresTenancyFixture"/> — one digest-pinned
-/// PostgreSQL 18 container per assembly, a fresh database per test brought to head by the real
-/// <c>Evidgate.Migrator</c> — the 05.2.1-T1 / 05.3.3-T1 precedent for adding to an existing table in
-/// this suite: parents and the row itself are written through <see cref="TenantScope"/>, the parents as
-/// the migration role (the owner backfill policy of 0004/0005 permits it) and the run under test as the
-/// app role, exactly like <c>RunSchemaTests</c>.
+/// PostgreSQL 18 container per assembly and one database for the run (tests isolate by tenant), with a
+/// private database only where a case re-applies the migration. Parents and the row itself are written
+/// through <see cref="TenantScope"/>, the parents as the migration role (the owner backfill policy of
+/// 0004/0005 permits it) and the run under test as the app role, exactly like <c>RunSchemaTests</c>.
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
@@ -145,14 +144,16 @@ public sealed class RunIdentitySchemaTests
 
     public RunIdentitySchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private sealed record World(TenancyApiFactory Api, HttpClient Client, DedicatedDatabase Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
+    private sealed record World(
+        TenancyApiFactory Api,
+        HttpClient Client,
+        string Database,
+        Guid User,
+        Guid Org,
+        Guid Project,
+        DedicatedDatabase? Owned = null) : IAsyncDisposable
     {
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await Api.DisposeAsync();
-            await Database.DisposeAsync();
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Api);
     }
 
     /// <summary>
@@ -162,17 +163,18 @@ public sealed class RunIdentitySchemaTests
     /// </summary>
     private sealed record Parents(Guid SuiteRevisionId, Guid EnvironmentRevisionId, Guid ManifestId);
 
-    /// <summary>One migrated database with an org and a project, created through the real registry routes.</summary>
-    private async Task<World> StartAsync()
+    /// <summary>An org and a project on the shared database, created through the real registry routes.</summary>
+    /// <param name="dedicated">A private database for the cases that need one; the world drops it.</param>
+    private async Task<World> StartAsync(DedicatedDatabase? dedicated = null)
     {
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated?.Name ?? await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, database, user, org, project);
+        return new World(api, client, database, user, org, project, dedicated);
     }
 
     /// <summary>
@@ -307,7 +309,7 @@ public sealed class RunIdentitySchemaTests
     [Fact]
     public async Task Identity_ConstraintsFunctionAndTrigger_Exist()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         var constraints = await _fixture.ConstraintNamesAsync(database, "run");
 
@@ -333,7 +335,7 @@ public sealed class RunIdentitySchemaTests
     [Fact]
     public async Task Run_KeepsItsForcedRls()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // 0037 adds columns, a function and a trigger to `run`; the table-scoped policy and the two
         // row-security flags 0031 set are untouched (00 §5.4, DECISIONS F5).
@@ -343,6 +345,7 @@ public sealed class RunIdentitySchemaTests
     [Fact]
     public async Task CiTokenIssueRunIndex_ExistsOnTheRunReferenceKeys_AndSurvivesTheReRun()
     {
+        // Dedicated: it re-applies the migration, so the index must be counted in a database it alone owns.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         async Task<string> DefinitionAsync() =>
@@ -594,7 +597,9 @@ public sealed class RunIdentitySchemaTests
     [Fact]
     public async Task Migration_ReRun_IsANoOpAndKeepsTheGuard()
     {
-        await using var world = await StartAsync();
+        // Dedicated: it re-applies the migration and counts the run table whole, so it owns the database.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(dedicated);
         var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
         var runId = await InsertRunAsync(world, parents, Guid.CreateVersion7(), FullIdentity);
 

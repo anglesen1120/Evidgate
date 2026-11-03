@@ -30,10 +30,10 @@ public sealed class RunCreationIdempotencyTests
     /// <summary>The four row counts a replay must leave untouched (run, planned execution, producer slot, outbox).</summary>
     private async Task<long[]> CountsAsync(RunCreationTests.World world)
     {
-        var run = await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run");
-        var planned = await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.planned_execution");
-        var slots = await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot");
-        var outbox = await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.outbox");
+        var run = await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}'");
+        var planned = await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.planned_execution where org_id = '{world.Org}'");
+        var slots = await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where org_id = '{world.Org}'");
+        var outbox = await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.outbox where org_id = '{world.Org}'");
 
         return [run, planned, slots, outbox];
     }
@@ -41,7 +41,7 @@ public sealed class RunCreationIdempotencyTests
     private async Task<long> RunCreateRecordsAsync(RunCreationTests.World world) =>
         await _fixture.ScalarAsync<long>(
             world.Database,
-            "select count(*) from public.idempotency_record where operation = 'run:create'");
+            $"select count(*) from public.idempotency_record where org_id = '{world.Org}' and operation = 'run:create'");
 
     // ------------------------------------------------------------------ AC3
 
@@ -96,7 +96,7 @@ public sealed class RunCreationIdempotencyTests
 
         replay.Status.ShouldBe(HttpStatusCode.Created, replay.ErrorMessage);
         replay.Id("run_id").ShouldBe(first.Id("run_id"));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ AC4
@@ -120,7 +120,7 @@ public sealed class RunCreationIdempotencyTests
 
         conflict.Status.ShouldBe(HttpStatusCode.Conflict);
         conflict.ErrorCode.ShouldBe("idempotency_conflict");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     /// <summary>A failure Result is never stored, so the key is reusable: a first attempt refused with 422 leaves no
@@ -143,7 +143,7 @@ public sealed class RunCreationIdempotencyTests
         var retry = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId), idempotencyKey: key);
 
         retry.Status.ShouldBe(HttpStatusCode.Created, retry.ErrorMessage);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ key validation
@@ -231,7 +231,7 @@ public sealed class RunCreationIdempotencyTests
         var retry = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId), idempotencyKey: key);
 
         retry.Status.ShouldBe(HttpStatusCode.Created, retry.ErrorMessage);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ retention + shape
@@ -279,7 +279,7 @@ public sealed class RunCreationIdempotencyTests
 
         answers.ShouldAllBe(answer => answer.Status == HttpStatusCode.Created);
         answers[0].Id("run_id").ShouldBe(answers[1].Id("run_id"));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}'")).ShouldBe(1);
         (await RunCreateRecordsAsync(world)).ShouldBe(1);
     }
 
@@ -294,11 +294,11 @@ public sealed class RunCreationIdempotencyTests
         var body = RunCreationTests.RunBody(world.ManifestId);
 
         (await RunCreationTests.CreateRunAsync(world, body, idempotencyKey: key)).Status.ShouldBe(HttpStatusCode.Created);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.audit_log where action = 'run.create'"))
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where org_id = '{world.Org}' and action = 'run.create'"))
             .ShouldBe(1);
 
         (await RunCreationTests.CreateRunAsync(world, body, idempotencyKey: key)).Status.ShouldBe(HttpStatusCode.Created);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.audit_log where action = 'run.create'"))
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where org_id = '{world.Org}' and action = 'run.create'"))
             .ShouldBe(1);
     }
 

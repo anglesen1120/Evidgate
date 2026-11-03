@@ -20,7 +20,9 @@ public sealed partial class ReconcileRunTests
     [InlineData("running")]
     public async Task Frozen_Evaluation_ForcedDeadlineClose_QueuesOneEvaluation(string initialState)
     {
-        await using var world = await StartWithQueueAsync();
+        // The consumer claims any due row of the database, so this case owns one.
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(database: owned.Name);
         await SeedPinnedPolicyAsync(world, world.RunId, "trace");
         await SetRunStateAsync(world, world.RunId, initialState);
         await PassCollectionDeadlineAsync(world, world.RunId);
@@ -42,27 +44,34 @@ public sealed partial class ReconcileRunTests
         await DispatchFrozenEvaluationsAsync(world, expectedDone: 1);
 
         (await FrozenEvaluationTaskCountAsync(world)).ShouldBe(1);
-        (await world.CountAsync("evaluation")).ShouldBe(1);
-        (await world.ScalarAsync<string>("select decision from public.evaluation")).ShouldBe("INCONCLUSIVE");
+        (await EvaluationRowsAsync(world)).ShouldBe(1);
+        (await world.ScalarAsync<string>(
+            $"select decision from public.evaluation where org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'"))
+            .ShouldBe("INCONCLUSIVE");
     }
 
     [Fact]
     public async Task Frozen_Evaluation_LateSecondRevision_QueuesAndStoresSecondEvaluation()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // Dispatching and polling claim every due row of the database, so this case owns one.
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: owned.Name);
         await EvaluateFirstAndLateRevisionAsync(world);
 
         (await FrozenEvaluationTaskCountAsync(world)).ShouldBe(2);
-        (await world.CountAsync("evaluation")).ShouldBe(2);
+        (await EvaluationRowsAsync(world)).ShouldBe(2);
         (await world.ScalarAsync<long>(
-            "select count(distinct evidence_revision) from public.evaluation where mode = 'live'"))
+            "select count(distinct evidence_revision) from public.evaluation where mode = 'live' "
+            + $"and org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'"))
             .ShouldBe(2, "each frozen revision gets its own immutable live evaluation");
     }
 
     [Fact]
     public async Task Frozen_Evaluation_ReplayRecordedRevision_QueuesNoFurtherEvaluation()
     {
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1);
+        // Dispatching and polling claim every due row of the database, so this case owns one.
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: owned.Name);
         await EvaluateFirstAndLateRevisionAsync(world);
 
         var (_, replay) = await ReconcileAndFinishOnHostAsync(world, world.RunId, lateTrigger: true);
@@ -72,7 +81,7 @@ public sealed partial class ReconcileRunTests
         (await RevisionCountAsync(world)).ShouldBe(2);
         (await FrozenEventRowsOfRunAsync(world, world.RunId)).ShouldBe(2);
         (await FrozenEvaluationTaskCountAsync(world)).ShouldBe(2);
-        (await world.CountAsync("evaluation")).ShouldBe(2);
+        (await EvaluationRowsAsync(world)).ShouldBe(2);
     }
 
     [Fact]
@@ -83,7 +92,10 @@ public sealed partial class ReconcileRunTests
             ["EVIDGATE:Tasks:BackoffBaseSeconds"] = "1",
             ["EVIDGATE:Tasks:BackoffMaxSeconds"] = "1",
         }).Build();
+        // Dispatch and poll claim every due row of the database, so this case owns one.
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(),
+            database: owned.Name,
             services: services =>
             {
                 services.AddEvidgateTasks(configuration);
@@ -100,18 +112,19 @@ public sealed partial class ReconcileRunTests
         var consumer = world.Host.Services.GetRequiredService<TaskConsumer>();
         var probe = world.Host.Services.GetRequiredService<FaultingEvaluationTaskHandler>();
         var taskId = await world.ScalarAsync<Guid>(
-            $"select id from public.task where task_type = '{EvidenceRevisionFrozenContract.OutboxTaskType}'");
+            $"select id from public.task where org_id = '{world.Org:D}' "
+            + $"and task_type = '{EvidenceRevisionFrozenContract.OutboxTaskType}'");
 
         (await consumer.PollOnceAsync(DefaultQueue, Token)).ShouldBe(1);
         (await world.ScalarAsync<string>($"select state from public.task where id = '{taskId:D}'")).ShouldBe("retry");
-        (await world.CountAsync("evaluation")).ShouldBe(0, "the failed consumer attempt must roll the INSERT back");
+        (await EvaluationRowsAsync(world)).ShouldBe(0, "the failed consumer attempt must roll the INSERT back");
         probe.Snapshots.Count.ShouldBe(1, "the first attempt computed and inserted before the injected fault");
 
         await AwaitFrozenTaskRetryAsync(world, taskId);
         (await consumer.PollOnceAsync(DefaultQueue, Token)).ShouldBe(1);
         (await world.ScalarAsync<string>($"select state from public.task where id = '{taskId:D}'")).ShouldBe("done");
         (await world.ScalarAsync<int>($"select attempts from public.task where id = '{taskId:D}'")).ShouldBe(2);
-        (await world.CountAsync("evaluation")).ShouldBe(1);
+        (await EvaluationRowsAsync(world)).ShouldBe(1);
         probe.Snapshots.Count.ShouldBe(2);
         probe.Snapshots[1].ShouldBe(probe.Snapshots[0], "the re-claimed task must reproduce every deciding column");
     }
@@ -122,7 +135,7 @@ public sealed partial class ReconcileRunTests
         await StartIncompleteRunAsync(world);
         await OpenLateWindowAsync(world, world.RunId);
         await DispatchFrozenEvaluationsAsync(world, expectedDone: 1);
-        (await world.CountAsync("evaluation")).ShouldBe(1, "the first revision was actually consumed");
+        (await EvaluationRowsAsync(world)).ShouldBe(1, "the first revision was actually consumed");
 
         var late = await IngestQaRequests.PostEventsAsync(world.Client, world.RunId,
             IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(),
@@ -139,7 +152,8 @@ public sealed partial class ReconcileRunTests
         for (var poll = 0; poll < 12; poll++)
         {
             var done = await world.ScalarAsync<long>(
-                $"select count(*) from public.task where task_type = '{EvidenceRevisionFrozenContract.OutboxTaskType}' and state = 'done'");
+                $"select count(*) from public.task where org_id = '{world.Org:D}' "
+                + $"and task_type = '{EvidenceRevisionFrozenContract.OutboxTaskType}' and state = 'done'");
             if (done == expectedDone)
             {
                 return;
@@ -151,9 +165,14 @@ public sealed partial class ReconcileRunTests
         throw new ShouldAssertException($"expected {expectedDone} completed frozen-revision evaluation tasks");
     }
 
+    /// <summary>The evaluation rows of the world's run: each revision decides once, and another tenant never counts.</summary>
+    private static Task<long> EvaluationRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("evaluation", $"org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'");
+
     private static Task<long> FrozenEvaluationTaskCountAsync(IngestTestWorld world) =>
         world.ScalarAsync<long>(
-            $"select count(*) from public.task where task_type = '{EvidenceRevisionFrozenContract.OutboxTaskType}'");
+            $"select count(*) from public.task where org_id = '{world.Org:D}' "
+            + $"and task_type = '{EvidenceRevisionFrozenContract.OutboxTaskType}'");
 
     private static async Task AwaitFrozenTaskRetryAsync(IngestTestWorld world, Guid taskId)
     {

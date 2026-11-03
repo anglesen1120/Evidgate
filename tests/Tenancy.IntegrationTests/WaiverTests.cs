@@ -28,26 +28,21 @@ public sealed class WaiverTests
 
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
-        public async ValueTask DisposeAsync()
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Api);
+    }
+
+    private Task<World> StartAsync() =>
+        _fixture.StartDedicatedAsync(async owned =>
         {
-            Client.Dispose();
-            await Api.DisposeAsync();
-            await Owned.DisposeAsync();
-        }
-    }
+            var database = owned.Name;
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
 
-    private async Task<World> StartAsync()
-    {
-        var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
-
-        return new World(api, client, owned, user, org, project);
-    }
+            return new World(api, client, owned, user, org, project);
+        });
 
     // ------------------------------------------------------------------ helpers
 

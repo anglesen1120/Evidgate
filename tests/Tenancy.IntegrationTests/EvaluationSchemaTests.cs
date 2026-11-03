@@ -354,7 +354,7 @@ public sealed partial class EvaluationSchemaTests
         var runId = await CreateRunAsync(world);
         var seed = await SeedAsync(world, runId: runId);
 
-        var otherOrg = await CreateSecondTenantAsync(world, "beta");
+        var otherOrg = await CreateSecondTenantAsync(world, Unique.Slug("beta"));
         var foreignRun = await RunRowSeeder.SeedRunAsync(_fixture, world.Database, otherOrg);
 
         (await ScalarAsOrgAsync<long>(world, otherOrg, "select count(*) from public.evaluation")).ShouldBe(0);
@@ -382,7 +382,10 @@ public sealed partial class EvaluationSchemaTests
         foreignPolicyRef.SqlState.ShouldBe("23503");
         foreignPolicyRef.ConstraintName.ShouldBe("evaluation_policy_revision_fk");
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.evaluation")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.evaluation where org_id = '{world.Org:D}'"))
+            .ShouldBe(1, "this org's seeded row is the only one the refused writes could have added to");
     }
 
     // ------------------------------------------------------------------ helpers

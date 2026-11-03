@@ -55,19 +55,18 @@ public sealed class RunCreationShardStateTests
         expected.ShouldBe(["shard-1:2", "shard-2:2", "shard-3:1"], "the fixture exercises an uneven shard plan");
 
         // One slot per manifest shard, ids shard-1..shard-3, indexes 1..3, every slot on this run.
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(expected.Count);
         (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where run_id = '{runId}'"))
             .ShouldBe(expected.Count);
-        (await _fixture.ColumnAsync<string>(world.Database, "select producer_id from public.producer_slot order by shard_index"))
+        (await _fixture.ColumnAsync<string>(world.Database, $"select producer_id from public.producer_slot where run_id = '{runId}' order by shard_index"))
             .ShouldBe(["shard-1", "shard-2", "shard-3"]);
-        (await _fixture.ColumnAsync<int>(world.Database, "select shard_index from public.producer_slot order by shard_index"))
+        (await _fixture.ColumnAsync<int>(world.Database, $"select shard_index from public.producer_slot where run_id = '{runId}' order by shard_index"))
             .ShouldBe([1, 2, 3]);
 
         // planned_execution.shard_id is exactly the slot id set, and each shard holds its manifest range's size.
         var planned = await PlannedPerShardAsync(world, runId);
         planned.ShouldBe(expected);
-        (await _fixture.ColumnAsync<string>(world.Database, "select distinct shard_id from public.planned_execution order by shard_id"))
-            .ShouldBe(await _fixture.ColumnAsync<string>(world.Database, "select producer_id from public.producer_slot order by producer_id"));
+        (await _fixture.ColumnAsync<string>(world.Database, $"select distinct shard_id from public.planned_execution where run_id = '{runId}' order by shard_id"))
+            .ShouldBe(await _fixture.ColumnAsync<string>(world.Database, $"select producer_id from public.producer_slot where run_id = '{runId}' order by producer_id"));
         (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.planned_execution where run_id = '{runId}'"))
             .ShouldBe(5);
     }
@@ -90,7 +89,7 @@ public sealed class RunCreationShardStateTests
         (await _fixture.ColumnAsync<int>(world.Database, $"select shard_index from public.producer_slot where run_id = '{runId}'"))
             .ShouldBe([1]);
         (await PlannedPerShardAsync(world, runId)).ShouldBe(["shard-1:2"]);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where run_id = '{runId}'")).ShouldBe(1);
     }
 
     /// <summary>
@@ -115,7 +114,7 @@ public sealed class RunCreationShardStateTests
         (await _fixture.ColumnAsync<int>(world.Database, $"select shard_index from public.producer_slot where run_id = '{runId}' order by shard_index"))
             .ShouldBe([1, 2, 3, 4]);
         (await PlannedPerShardAsync(world, runId)).ShouldBe(["shard-1:1", "shard-2:1", "shard-3:1", "shard-4:1"]);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(4);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where run_id = '{runId}'")).ShouldBe(4);
     }
 
     /// <summary>
@@ -145,9 +144,11 @@ public sealed class RunCreationShardStateTests
                 .ShouldBe(["shard-1", "shard-2", "shard-3"]);
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(6);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(distinct (run_id, producer_id)) from public.producer_slot")).ShouldBe(6);
-        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where run_id not in ('{firstId}', '{secondId}')")).ShouldBe(0);
+        // Both runs' slots only: another test's slots live in the same database and are not this case's evidence.
+        var bothRuns = $"run_id in ('{firstId}', '{secondId}')";
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where {bothRuns}")).ShouldBe(6);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(distinct (run_id, producer_id)) from public.producer_slot where {bothRuns}")).ShouldBe(6);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where org_id = '{world.Org:D}' and run_id not in ('{firstId}', '{secondId}')")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ T4.2 created -> queued
@@ -160,7 +161,9 @@ public sealed class RunCreationShardStateTests
     [Fact]
     public async Task CreateRun_StateIsQueuedAfterCommit()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        // The case installs a trigger on public.run and reads a whole-table probe, so it cannot share a database.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: database.Name);
         await InstallStateProbeAsync(world.Database);
         (await ProbeStatesAsync(world)).ShouldBeEmpty("the trigger is installed before the first run exists");
 

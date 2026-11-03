@@ -11,8 +11,8 @@ namespace Tenancy.IntegrationTests;
 /// plus the two deferred composite run keys on <c>artifact</c> (0028) and <c>producer_slot</c> (0029).
 /// <para>
 /// The fixture is this project's own <see cref="PostgresTenancyFixture"/> — one digest-pinned
-/// PostgreSQL 18 container per assembly, a fresh database per test brought to head by the real
-/// <c>Evidgate.Migrator</c> — the 06.1.1-T1 / 04.1.2-T4 precedent for a new table in this suite.
+/// PostgreSQL 18 container per assembly and one database for the run (tests isolate by tenant), with a
+/// private database only where a case re-applies the migration.
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
@@ -31,33 +31,33 @@ public sealed class RunSchemaTests
 
     public RunSchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private sealed record World(TenancyApiFactory Api, HttpClient Client, DedicatedDatabase Owned, Guid User, Guid Org, Guid Project) : IAsyncDisposable
+    private sealed record World(
+        TenancyApiFactory Api,
+        HttpClient Client,
+        string Database,
+        Guid User,
+        Guid Org,
+        Guid Project,
+        DedicatedDatabase? Owned = null) : IAsyncDisposable
     {
-        public string Database => Owned.Name;
-
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await Api.DisposeAsync();
-            await Owned.DisposeAsync();
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Api);
     }
 
     /// <summary>The parent rows a <c>run</c> row needs, seeded as the migration role.</summary>
     private sealed record Parents(Guid SuiteRevisionId, Guid EnvironmentRevisionId, Guid ManifestId, Guid TestRevisionId);
 
-    /// <summary>One migrated database with an org and a project, created through the real registry routes.</summary>
-    private async Task<World> StartAsync()
+    /// <summary>An org and a project on the shared database, created through the real registry routes.</summary>
+    /// <param name="dedicated">A private database for the cases that need one; the world drops it.</param>
+    private async Task<World> StartAsync(DedicatedDatabase? dedicated = null)
     {
-        var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = dedicated?.Name ?? await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, owned, user, org, project);
+        return new World(api, client, database, user, org, project, dedicated);
     }
 
     /// <summary>An org and a project in it, created through the real routes.</summary>
@@ -246,8 +246,7 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task Run_AndPlannedExecution_HaveForcedRls()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in new[] { "run", "planned_execution" })
         {
@@ -259,8 +258,7 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task TenantPolicies_AreScopedToTheAppRole()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         // A policy with no `to` clause applies to PUBLIC; each tenant policy must name evidgate_app
         // only, so the operator's SELECT grant reads zero rows (T76).
@@ -279,8 +277,7 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task Run_Constraints_Exist()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         var constraints = await _fixture.ConstraintNamesAsync(database, "run");
 
@@ -300,8 +297,7 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task PlannedExecution_Constraints_Exist()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         var constraints = await _fixture.ConstraintNamesAsync(database, "planned_execution");
 
@@ -320,8 +316,7 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task RunIndexes_ExistInPgIndexes()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.IndexesAsync(database, "run"))
             .Any(index => index.StartsWith("run_project_created_idx:", StringComparison.Ordinal)).ShouldBeTrue();
@@ -336,8 +331,7 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task Run_CarriesTheAuditColumnsAndTheVersionTrigger()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         // 00 §7: a mutable business table carries created_at/updated_at/version and the shared
         // trigger, so 05.3.1's optimistic-concurrency write cannot be won by two writers (M1W3-01).
@@ -354,8 +348,7 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task DeferredRunKeys_ExistAndAreValidated()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         // The two keys 0028/0029 deferred: added `not valid`, orphan-checked, then validated.
         (await _fixture.ScalarAsync<bool>(
@@ -373,8 +366,7 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task AppRole_HasOnlySelectInsert_OnRunAndPlannedExecution()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in new[] { "run", "planned_execution" })
         {
@@ -737,7 +729,9 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task Migration_ReRun_KeepsAValidArtifactRow()
     {
-        await using var world = await StartAsync();
+        // Dedicated: it re-applies the migration and counts the artifact table whole, so it owns the database.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(dedicated);
         var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
         var runId = await InsertRunAsync(world, parents);
 
@@ -761,7 +755,9 @@ public sealed class RunSchemaTests
     [Fact]
     public async Task Migration_ReRun_WithAnOrphanArtifact_FailsWithTheClearMessage()
     {
-        await using var world = await StartAsync();
+        // Dedicated: it drops a key and re-applies the migration, both database-wide.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(dedicated);
 
         // Drop the key so an orphan row can exist, exactly the state the orphan check guards.
         await _fixture.ExecuteAsync(world.Database, "alter table public.artifact drop constraint artifact_run_fk");

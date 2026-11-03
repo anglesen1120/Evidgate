@@ -34,26 +34,33 @@ public sealed class ProducerSlotQaTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Dedicated.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Dedicated.DisposeAsync();
+            }
         }
     }
 
     /// <summary>One migrated database with an org and a project created through the real routes.</summary>
-    private async Task<World> StartAsync()
-    {
-        // The blocked-insert probe counts every transactionid wait in the current database, and the
-        // EXPLAIN cases pin an index on a three-row table: both need a database no other test touches.
-        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
-        await CreateProjectAsync(client, user, org, "checkout");
+    // The blocked-insert probe counts every transactionid wait in the current database, and the
+    // EXPLAIN cases pin an index on a three-row table: both need a database no other test touches.
+    private Task<World> StartAsync() =>
+        _fixture.StartDedicatedAsync(async dedicated =>
+        {
+            var database = dedicated.Name;
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+            await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, database, org, dedicated);
-    }
+            return new World(api, client, database, org, dedicated);
+        });
 
     /// <summary>Runs one registry call in a fresh writable ambient tenant scope and commits it.</summary>
     private static async Task<T> InScopeAsync<T>(World world, Func<IProducerRegistry, ValueTask<T>> call)

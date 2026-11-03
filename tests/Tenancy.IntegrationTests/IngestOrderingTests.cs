@@ -38,22 +38,29 @@ public sealed class IngestOrderingTests
 
     public IngestOrderingTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private static Task<long> EventRowsAsync(IngestTestWorld world) => world.CountAsync("event");
+    private static Task<long> EventRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("event", $"org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'");
 
     /// <summary>The applied <c>queued → running</c> edges of the run: one outbox row per applied transition (T82).</summary>
     private static Task<long> StateChangedRowsAsync(IngestTestWorld world) =>
-        world.CountAsync("outbox", "task_type = 'orchestrator.run.state_changed'");
+        world.CountAsync(
+            "outbox",
+            $"org_id = '{world.Org:D}' and aggregate_id = '{world.RunId:D}' "
+            + "and task_type = 'orchestrator.run.state_changed'");
 
     /// <summary>The transition's canonical audit rows (05.3.1 AC5).</summary>
     private static Task<long> TransitionAuditRowsAsync(IngestTestWorld world) =>
-        world.CountAsync("audit_log", "action = 'run.state_changed'");
+        world.CountAsync(
+            "audit_log",
+            $"org_id = '{world.Org:D}' and object_id = '{world.RunId:D}' and action = 'run.state_changed'");
 
     private static Task<string> RunStateAsync(IngestTestWorld world) =>
         world.ScalarAsync<string>($"select state from public.run where id = '{world.RunId:D}'");
 
     /// <summary>The producer's recorded high-water mark, the reconciliation anchor (04.1.1-T4.1 §3).</summary>
     private static Task<long> LastSequenceAsync(IngestTestWorld world) =>
-        world.ScalarAsync<long>("select last_sequence from public.producer_slot where producer_id = 'shard-1'");
+        world.ScalarAsync<long>(
+            $"select last_sequence from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = 'shard-1'");
 
     // ---------------------------------------------------------------- T13: first accepted batch
 
@@ -127,7 +134,8 @@ public sealed class IngestOrderingTests
         // T12: a canceled run still accepts and marks the event, and the transition is never called on it.
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         answer.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
-        (await world.ScalarAsync<bool>("select after_cancel from public.event where sequence = 1")).ShouldBeTrue();
+        (await world.ScalarAsync<bool>(
+            $"select after_cancel from public.event where run_id = '{world.RunId:D}' and sequence = 1")).ShouldBeTrue();
         (await RunStateAsync(world)).ShouldBe("canceled");
         (await StateChangedRowsAsync(world)).ShouldBe(0);
         (await TransitionAuditRowsAsync(world)).ShouldBe(0);
@@ -201,20 +209,20 @@ public sealed class IngestOrderingTests
         // accepted batch shares its transaction's `now()`, and the next batch's is later. The first group is
         // the batch that arrived first, holding 5 and 1 in stored (ascending) order: nothing was renumbered
         // or reordered on the way in, and no batch was refused for the hole or the inversion.
-        (await world.ScalarAsync<string>("""
+        (await world.ScalarAsync<string>($"""
             select string_agg(sequences, ';' order by received_at) from (
                 select received_at, string_agg(sequence::text, ',' order by sequence) as sequences
-                from public.event group by received_at) batch
+                from public.event where run_id = '{world.RunId:D}' group by received_at) batch
             """))
             .ShouldBe("1,5;3");
 
         // `occurred_at` is stored as sent and orders nothing: in the first batch the earlier arrival
         // (sequence 1) carries the later instant (12:00), and the later batch carries the earliest (09:00).
-        (await world.ScalarAsync<string>("""
+        (await world.ScalarAsync<string>($"""
             select string_agg(instants, ';' order by received_at) from (
                 select received_at,
                        string_agg(to_char(occurred_at at time zone 'UTC', 'HH24:MI'), ',' order by sequence) as instants
-                from public.event group by received_at) batch
+                from public.event where run_id = '{world.RunId:D}' group by received_at) batch
             """))
             .ShouldBe("12:00,10:00;09:00");
 
@@ -253,7 +261,8 @@ public sealed class IngestOrderingTests
         // Stored as sent, in the documented reader order, and the mark is the highest stored value.
         (await world.EventColumnAsync<long>("sequence")).ShouldBe([0L, 1L, 3L]);
         (await world.ScalarAsync<string>(
-            "select count(distinct sequence)::text || '/' || min(sequence)::text || '/' || max(sequence)::text from public.event"))
+            "select count(distinct sequence)::text || '/' || min(sequence)::text || '/' || max(sequence)::text "
+            + $"from public.event where run_id = '{world.RunId:D}'"))
             .ShouldBe("3/0/3");
         (await LastSequenceAsync(world)).ShouldBe(3L);
 
@@ -275,11 +284,13 @@ public sealed class IngestOrderingTests
 
     /// <summary>The §3 gap derivation over stored columns, for the seeded single-producer run (`shard-1`).</summary>
     private static Task<bool> GapAsync(IngestTestWorld world) =>
-        world.ScalarAsync<bool>("""
+        world.ScalarAsync<bool>($"""
             select count(distinct sequence)
-                   < (select last_sequence from public.producer_slot where producer_id = 'shard-1')
+                   < (select last_sequence from public.producer_slot
+                       where run_id = '{world.RunId:D}' and producer_id = 'shard-1')
                      - min(sequence) + 1
             from public.event
+            where run_id = '{world.RunId:D}'
             """);
 
     // ---------------------------------------------------------------- T4.2 / T84: restart
@@ -317,7 +328,8 @@ public sealed class IngestOrderingTests
         after.Body.GetProperty("accepted").GetInt32().ShouldBe(2);
         after.Body.GetProperty("duplicates").GetInt32().ShouldBe(0);
         (await LastSequenceAsync(world)).ShouldBe(4L);
-        (await world.ScalarAsync<string>("select bound_token_jti from public.producer_slot where producer_id = 'shard-1'"))
+        (await world.ScalarAsync<string>(
+            $"select bound_token_jti from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = 'shard-1'"))
             .ShouldBe(IngestTestWorld.Jti);
         (await EventRowsAsync(world)).ShouldBe(4);
     }

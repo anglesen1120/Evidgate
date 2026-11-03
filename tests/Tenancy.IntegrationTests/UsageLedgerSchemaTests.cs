@@ -16,9 +16,8 @@ namespace Tenancy.IntegrationTests;
 /// deploy path onto a database that already holds data.
 /// <para>
 /// The fixture is this suite's own <see cref="PostgresTenancyFixture"/> — one digest-pinned PostgreSQL
-/// 18 container per assembly, a fresh database per test brought to head by the real
-/// <c>Evidgate.Migrator</c> — the same precedent <c>EvidenceArtifactSchemaTests</c> (0028) and
-/// <c>AuthoringSchemaTests</c> (0039) follow for a new table. Every write runs as <c>evidgate_app</c>
+/// 18 container per assembly and one database for the run (tests isolate by tenant), with a private
+/// database where a case applies migrations or truncates. Every write runs as <c>evidgate_app</c>
 /// inside a tenant-scoped transaction (00 §5.5 C3) unless a case deliberately speaks as the owner (the
 /// migration/backfill role) or as the operator.
 /// </para>
@@ -46,9 +45,9 @@ public sealed class UsageLedgerSchemaTests
     // ------------------------------------------------------------------ (a) migrations apply
 
     [Fact]
-    public async Task Migrations_ApplyOnAFreshDatabase_BothFilesJournalled()
+    public async Task Migrations_BothFilesJournalled_OnTheMigratedDatabase()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in UsageTables)
         {
@@ -65,6 +64,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Migrations_ApplyForward_OnADatabaseAlreadyHoldingData()
     {
+        // Dedicated: it applies migrations forward on an empty database and counts the ledger table whole.
         await using var database = await _fixture.CreateEmptyDedicatedDatabaseAsync();
 
         // Every file lexically before 0046: the real expand path, which keeps working as later
@@ -129,7 +129,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task UsageTables_DeclareThePlanColumnAndKeyContract()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         var ledgerColumns = await _fixture.ColumnsAsync(database, "usage_ledger_entry");
         foreach (var prefix in new[]
@@ -247,7 +247,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task UsageTables_HaveForcedRls_AndTheAppScopedTenantPolicies()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in UsageTables)
         {
@@ -271,7 +271,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_UpdateDelete_Rejected()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var id = Guid.CreateVersion7();
 
@@ -337,7 +337,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_DuplicateBillingKey_RaisesUniqueViolation()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         await using var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org);
@@ -357,7 +357,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_DuplicateBillingKey_ConcurrentOnConflictInserts_LeaveOneRow()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         const int Writers = 8;
@@ -390,7 +390,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_Adjustment_LeavesTheOriginalIdentical_AndBothRowsAppear()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var originalId = Guid.CreateVersion7();
 
@@ -432,7 +432,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_Adjustment_CrossTenantParent_Rejected()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var (otherOrg, otherProject) = await SeedTenantAsync(database, "beta", "store");
         var foreignRow = Guid.CreateVersion7();
@@ -464,7 +464,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_Adjustment_RequiresAReason()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var originalId = Guid.CreateVersion7();
 
@@ -503,7 +503,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_CheckBoundaries_RejectUnknownMetricPeriodAndBillingKey()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         var cases = new (string Label, (string Sql, (string Name, object Value)[] Parameters) Insert, string Constraint)[]
@@ -547,13 +547,15 @@ public sealed class UsageLedgerSchemaTests
             await app.CommitAsync();
         }
 
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.usage_ledger_entry")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            database,
+            $"select count(*) from public.usage_ledger_entry where org_id = '{org}'")).ShouldBe(1);
     }
 
     [Fact]
     public async Task Ledger_NegativeQuantity_OnlyOnAnAdjustmentRow()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         // F-B: a plain metering row cannot carry a negative quantity. The domain rule refuses it with
@@ -616,7 +618,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_Unit_BoundedToOneTo32Characters()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         var refused = new (string Label, string Unit)[]
@@ -667,7 +669,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Rollup_Uniqueness_CountsANullProjectAsOneScope()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         var firstId = Guid.CreateVersion7();
@@ -707,7 +709,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Rollup_Recompute_UpsertsOnTheCoalesceIndex()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         await using var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org);
@@ -785,6 +787,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Rollup_AppRole_CannotDeleteTruncateOrRewriteTheKey()
     {
+        // Dedicated: TRUNCATE asks for ACCESS EXCLUSIVE on tables every other test reads.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
@@ -826,7 +829,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task UsageTables_CrossTenantRead_ZeroRows()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var (otherOrg, _) = await SeedTenantAsync(database, "beta", "store");
 
@@ -1009,13 +1012,14 @@ public sealed class UsageLedgerSchemaTests
     {
         var org = Guid.CreateVersion7();
         var project = Guid.CreateVersion7();
+        var slug = Unique.Slug(orgSlug);
 
         await using var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
         await seed.ExecuteAsync(
             "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
             ("id", org),
             ("name", orgSlug),
-            ("slug", orgSlug));
+            ("slug", slug));
         await seed.ExecuteAsync(
             "insert into public.project (id, org_id, name, slug) values (@id, @org_id, @name, @slug)",
             ("id", project),

@@ -44,7 +44,8 @@ public sealed class ReconcileDeadlineRearmTests
     public async Task Sweep_DeadLetteredDeadlineTask_QueuesTheNextAttempt_AndTheRunReachesIncomplete()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database);
         var runId = world.RunId;
 
         await MarkOverdueAsync(world, runId);
@@ -82,7 +83,8 @@ public sealed class ReconcileDeadlineRearmTests
     {
         var clock = AlignedClock();
         var sink = new IngestLogSink();
-        await using var world = await StartAsync(clock, sink);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database, sink);
         var runId = world.RunId;
 
         await MarkOverdueAsync(world, runId);
@@ -123,7 +125,8 @@ public sealed class ReconcileDeadlineRearmTests
     public async Task Sweep_OneDeadlineTaskStillQueued_ReArmsOnlyTheDeadLetteredRun()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database);
         var deadLettered = world.RunId;
         var stillQueued = (await world.SeedOtherRunAsync(world.Org)).RunId;
 
@@ -169,7 +172,8 @@ public sealed class ReconcileDeadlineRearmTests
     {
         var clock = AlignedClock();
         var sink = new IngestLogSink();
-        await using var world = await StartAsync(clock, sink);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database, sink);
         var runId = world.RunId;
 
         await MarkOverdueAsync(world, runId);
@@ -208,7 +212,8 @@ public sealed class ReconcileDeadlineRearmTests
     public async Task Sweep_PurgedAttemptTask_IsReArmed()
     {
         var clock = AlignedClock();
-        await using var world = await StartAsync(clock);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database);
         var runId = world.RunId;
 
         await MarkOverdueAsync(world, runId);
@@ -235,7 +240,8 @@ public sealed class ReconcileDeadlineRearmTests
     {
         var clock = AlignedClock();
         var sink = new IngestLogSink();
-        await using var world = await StartAsync(clock, sink);
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(clock, database, sink);
         var runId = world.RunId;
 
         await MarkOverdueAsync(world, runId);
@@ -277,16 +283,18 @@ public sealed class ReconcileDeadlineRearmTests
     // ------------------------------------------------------------------ world and driving
 
     /// <summary>
-    /// One migrated database with an org, a project, a run and one producer slot, composed with the production queue
-    /// mechanism and a <see cref="FakeTimeProvider"/> so a case drives the schedule instead of waiting for it.
+    /// A world in <paramref name="database"/> with an org, a project, a run and one producer slot, composed with the
+    /// production queue mechanism and a <see cref="FakeTimeProvider"/> so a case drives the schedule instead of
+    /// waiting. Each case owns its database: the sweeps, the dispatcher and the consumer work through the whole queue.
     /// </summary>
-    private async Task<IngestTestWorld> StartAsync(FakeTimeProvider clock, IngestLogSink? sink = null)
+    private async Task<IngestTestWorld> StartAsync(FakeTimeProvider clock, string database, IngestLogSink? sink = null)
     {
-        var database = new DatabaseNameHolder();
+        var name = new DatabaseNameHolder { Name = database };
 
         var world = await IngestTestWorld.StartAsync(
             _fixture,
             IngestTestWorld.Writer(),
+            database: database,
             services: services =>
             {
                 services.AddEvidgateTasks(new ConfigurationBuilder().Build());
@@ -298,18 +306,16 @@ public sealed class ReconcileDeadlineRearmTests
                     services.AddLogging(logging => logging.AddProvider(sink));
                 }
 
-                // The fixture mints no login for evidgate_worker_sched and the database name is only known once the
-                // world has started: the double opens a superuser connection and switches to the sweep role, the way
-                // the sweep suite exercises the same role.
+                // The fixture mints no login for evidgate_worker_sched: the double opens a superuser connection and
+                // switches to the sweep role, the way the sweep suite exercises the same role.
                 services.RemoveAll<IWorkerSchedDataSource>();
-                services.AddSingleton<IWorkerSchedDataSource>(_ => new SweepRoleDataSource(_fixture, database));
+                services.AddSingleton<IWorkerSchedDataSource>(_ => new SweepRoleDataSource(_fixture, name));
             });
 
-        database.Name = world.Database;
         return world;
     }
 
-    /// <summary>The database name, filled in once the world exists and read when the sweep first opens a connection.</summary>
+    /// <summary>The test's database name, read when the sweep first opens a connection.</summary>
     private sealed class DatabaseNameHolder
     {
         public string Name { get; set; } = string.Empty;

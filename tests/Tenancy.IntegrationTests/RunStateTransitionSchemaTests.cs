@@ -41,8 +41,7 @@ public sealed class RunStateTransitionSchemaTests
     [Fact]
     public async Task Migration0036_AddsTheNullablePointer_WithThe0049CompositeForeignKey()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.ScalarAsync<bool>(
             database,
@@ -76,8 +75,7 @@ public sealed class RunStateTransitionSchemaTests
     [Fact]
     public async Task Migration0036_GrantsUpdateOnTheStateColumnOnly()
     {
-        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.ColumnAsync<string>(
             database,
@@ -149,6 +147,7 @@ public sealed class RunStateTransitionSchemaTests
     [Fact]
     public async Task Migration0036_ReRun_KeepsTheColumnAndTheGrant()
     {
+        // Dedicated: it re-applies the migration, a database-wide DDL change.
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         var database = owned.Name;
 

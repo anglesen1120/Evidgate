@@ -284,7 +284,7 @@ public sealed class RunStateTransitionTests
         await using var world = await RunCreationTests.StartAsync(_fixture);
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         var foreignRun = await RunRowSeeder.SeedRunAsync(_fixture, world.Database, otherOrg);
         (await StateAsync(world, foreignRun)).ShouldBe("created");
@@ -470,7 +470,10 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_ConcurrentFirstBatch_OneWinnerOneNoOp()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        // The probe below counts lock waits across the whole database, so another test parked on its own row could
+        // satisfy it: this race owns its database.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: database);
         var runId = await CreateQueuedRunAsync(world);
         var command = new TransitionRunStateCommand(runId, "running");
 
@@ -526,7 +529,9 @@ public sealed class RunStateTransitionTests
     [Fact]
     public async Task TransitionRun_CancelRaceWithReconcilerVerdict_StaysCanceled()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        // The same database-wide lock-wait probe as the first-batch race, so this race owns its database too.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: database);
         var runId = await RunInStateAsync(world, "collecting");
         var user = Guid.CreateVersion7();
 

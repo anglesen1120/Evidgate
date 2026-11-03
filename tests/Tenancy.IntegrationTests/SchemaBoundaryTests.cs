@@ -77,7 +77,7 @@ public sealed class SchemaBoundaryTests
     [Fact]
     public async Task NameLengthBoundaries()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var slug = 0;
 
         foreach (var (name, expectAccepted) in new[]
@@ -87,7 +87,7 @@ public sealed class SchemaBoundaryTests
                      (new string('x', 129), false),
                  })
         {
-            var error = await InsertOrganizationAsync(database, $"name-{slug++}", name);
+            var error = await InsertOrganizationAsync(database, Unique.Slug($"name-{slug++}"), name);
             if (expectAccepted)
             {
                 error.ShouldBeNull($"a {name.Length}-character name is valid");
@@ -233,35 +233,35 @@ public sealed class SchemaBoundaryTests
         }
     }
 
-    private async Task<(DedicatedDatabase Database, TenantRow TenantA, TenantRow TenantB)> SeedTwoTenantsAsync()
-    {
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var tenantA = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
-        var tenantB = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
-        var index = 0;
-
-        await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
-
-        foreach (var tenant in new[] { tenantA, tenantB })
+    private Task<(DedicatedDatabase Database, TenantRow TenantA, TenantRow TenantB)> SeedTwoTenantsAsync() =>
+        _fixture.StartDedicatedAsync(async database =>
         {
-            index++;
-            await scope.ExecuteAsync(
-                "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
-                ("id", tenant.OrgId),
-                ("name", "Tenant " + index.ToString(CultureInfo.InvariantCulture)),
-                ("slug", "tenant-" + index.ToString(CultureInfo.InvariantCulture)));
-            await scope.ExecuteAsync(
-                "insert into public.project (id, org_id, name, slug) values (@id, @org_id, @name, @slug)",
-                ("id", tenant.ProjectId),
-                ("org_id", tenant.OrgId),
-                ("name", "Project " + index.ToString(CultureInfo.InvariantCulture)),
-                ("slug", "project-" + index.ToString(CultureInfo.InvariantCulture)));
-        }
+            var tenantA = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
+            var tenantB = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
+            var index = 0;
 
-        await scope.CommitAsync();
+            await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
 
-        return (database, tenantA, tenantB);
-    }
+            foreach (var tenant in new[] { tenantA, tenantB })
+            {
+                index++;
+                await scope.ExecuteAsync(
+                    "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
+                    ("id", tenant.OrgId),
+                    ("name", "Tenant " + index.ToString(CultureInfo.InvariantCulture)),
+                    ("slug", "tenant-" + index.ToString(CultureInfo.InvariantCulture)));
+                await scope.ExecuteAsync(
+                    "insert into public.project (id, org_id, name, slug) values (@id, @org_id, @name, @slug)",
+                    ("id", tenant.ProjectId),
+                    ("org_id", tenant.OrgId),
+                    ("name", "Project " + index.ToString(CultureInfo.InvariantCulture)),
+                    ("slug", "project-" + index.ToString(CultureInfo.InvariantCulture)));
+            }
+
+            await scope.CommitAsync();
+
+            return (database, tenantA, tenantB);
+        });
 
     internal sealed record TenantRow(Guid OrgId, Guid ProjectId);
 }

@@ -44,62 +44,63 @@ public sealed class RunCreationTests
         Guid ManifestId,
         Guid[] Cases) : IAsyncDisposable
     {
-        /// <summary>The private database this world was started on; dropped when the world is disposed.</summary>
-        internal DedicatedDatabase? DatabaseScope { get; init; }
-
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
             await Api.DisposeAsync();
-
-            if (DatabaseScope is { } scope)
-            {
-                await scope.DisposeAsync();
-            }
         }
     }
 
     /// <summary>An org with a project, cases, a suite revision, an environment revision and one uploaded manifest.</summary>
-    internal static async Task<World> StartAsync(PostgresTenancyFixture fixture, int cases = 2, string slug = "acme")
+    internal static async Task<World> StartAsync(PostgresTenancyFixture fixture, int cases = 2, string slug = "acme", string? database = null)
     {
-        // The "no rows" assertions of this class count the whole database, so each world owns a migrated database.
-        var database = await fixture.CreateDedicatedDatabaseAsync();
+        // A suite that counts the whole database passes its own dedicated database; the rest share one under a fresh org.
+        database ??= await fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, slug);
-        var project = await CreateProjectAsync(client, user, org, "checkout");
-        var revisions = await ManifestTests.SeedCasesAsync(fixture, api, org, project, database, cases);
-        var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
 
-        var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
-        suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
-        var revision = await client.SendAsync(
-            HttpMethod.Post,
-            $"/v1/suites/{suite.Id()}/revisions",
-            admin,
-            new { members = revisions.Select(id => new { case_revision_id = id }).ToArray() },
-            NewKey());
-        revision.Status.ShouldBe(HttpStatusCode.Created, revision.ErrorMessage);
-
-        var environment = await client.SendAsync(
-            HttpMethod.Post,
-            $"/v1/projects/{project}/environments/staging/revisions",
-            admin,
-            new { base_urls = new { web = "https://staging.example.test" }, dependency_versions = new { postgres = "18.0" } },
-            NewKey());
-        environment.Status.ShouldBe(HttpStatusCode.Created, environment.ErrorMessage);
-
-        var manifest = Manifest(revision.Id("suite_revision_id"), revisions, variants: 2, shards: 2);
-        manifest["environment_revision_id"] = environment.Id("revision_id").ToString();
-        var manifestId = await UploadAsync(client, admin, project, manifest);
-
-        return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), environment.Id("revision_id"), manifestId, revisions)
+        try
         {
-            DatabaseScope = database,
-        };
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, Unique.Slug(slug));
+            var project = await CreateProjectAsync(client, user, org, "checkout");
+            var revisions = await ManifestTests.SeedCasesAsync(fixture, api, org, project, database, cases);
+            var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
+
+            var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
+            suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
+            var revision = await client.SendAsync(
+                HttpMethod.Post,
+                $"/v1/suites/{suite.Id()}/revisions",
+                admin,
+                new { members = revisions.Select(id => new { case_revision_id = id }).ToArray() },
+                NewKey());
+            revision.Status.ShouldBe(HttpStatusCode.Created, revision.ErrorMessage);
+
+            var environment = await client.SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/environments/staging/revisions",
+                admin,
+                new { base_urls = new { web = "https://staging.example.test" }, dependency_versions = new { postgres = "18.0" } },
+                NewKey());
+            environment.Status.ShouldBe(HttpStatusCode.Created, environment.ErrorMessage);
+
+            var manifest = Manifest(revision.Id("suite_revision_id"), revisions, variants: 2, shards: 2);
+            manifest["environment_revision_id"] = environment.Id("revision_id").ToString();
+            var manifestId = await UploadAsync(client, admin, project, manifest);
+
+            return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), environment.Id("revision_id"), manifestId, revisions);
+        }
+        catch
+        {
+            // A world that never returns owns nothing: the host it was built on is disposed here, so a failed
+            // arrange does not leave a server and its connections behind for the rest of the run.
+            client.Dispose();
+            await api.DisposeAsync();
+            throw;
+        }
     }
 
     internal static JsonObject Manifest(Guid suite, Guid[] cases, int variants, int shards) => ManifestUnitTests.Build(
@@ -159,13 +160,13 @@ public sealed class RunCreationTests
 
     private Task AssertNoRunRowsAsync(World world) => AssertNoRunRowsAsync(_fixture, world);
 
-    /// <summary>No run, planned execution, producer slot or outbox row exists for the world's database.</summary>
+    /// <summary>No run, planned execution, producer slot or outbox row exists for the world's org.</summary>
     internal static async Task AssertNoRunRowsAsync(PostgresTenancyFixture fixture, World world)
     {
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(0);
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.planned_execution")).ShouldBe(0);
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(0);
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.outbox")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.run where org_id = '{world.Org}'")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.planned_execution where org_id = '{world.Org}'")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where org_id = '{world.Org}'")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.outbox where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ AC1, AC7
@@ -181,14 +182,14 @@ public sealed class RunCreationTests
         answer.Text("state").ShouldBe("queued");
         var runId = answer.Id("run_id");
 
-        (await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.run")).ShouldBe(runId);
-        (await _fixture.ScalarAsync<string>(world.Database, "select state from public.run")).ShouldBe("queued");
-        (await _fixture.ScalarAsync<string>(world.Database, "select purpose from public.run")).ShouldBe("regular");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.planned_execution")).ShouldBe(4);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(2);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.outbox where task_type = 'orchestrator.run.created'")).ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, "select payload ->> 'run_id' from public.outbox")).ShouldBe(runId.ToString("D"));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.audit_log where action = 'run.create'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.run where org_id = '{world.Org}'")).ShouldBe(runId);
+        (await _fixture.ScalarAsync<string>(world.Database, $"select state from public.run where org_id = '{world.Org}'")).ShouldBe("queued");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select purpose from public.run where org_id = '{world.Org}'")).ShouldBe("regular");
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.planned_execution where org_id = '{world.Org}'")).ShouldBe(4);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where org_id = '{world.Org}'")).ShouldBe(2);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.outbox where org_id = '{world.Org}' and task_type = 'orchestrator.run.created'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(world.Database, $"select payload ->> 'run_id' from public.outbox where org_id = '{world.Org}'")).ShouldBe(runId.ToString("D"));
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where org_id = '{world.Org}' and action = 'run.create'")).ShouldBe(1);
     }
 
     [Fact]
@@ -201,10 +202,10 @@ public sealed class RunCreationTests
 
         (await CreateRunAsync(world, RunBody(manifestId))).Status.ShouldBe(HttpStatusCode.Created);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(3);
-        (await _fixture.ColumnAsync<string>(world.Database, "select producer_id from public.producer_slot order by producer_id"))
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.producer_slot where org_id = '{world.Org}'")).ShouldBe(3);
+        (await _fixture.ColumnAsync<string>(world.Database, $"select producer_id from public.producer_slot where org_id = '{world.Org}' order by producer_id"))
             .ShouldBe(["shard-1", "shard-2", "shard-3"]);
-        (await _fixture.ColumnAsync<string>(world.Database, "select distinct shard_id from public.planned_execution order by shard_id"))
+        (await _fixture.ColumnAsync<string>(world.Database, $"select distinct shard_id from public.planned_execution where org_id = '{world.Org}' order by shard_id"))
             .ShouldBe(["shard-1", "shard-2", "shard-3"]);
     }
 
@@ -391,10 +392,10 @@ public sealed class RunCreationTests
         (await CreateRunAsync(world, RunBody(world.ManifestId))).Status.ShouldBe(HttpStatusCode.Created);
 
         // Both clocks are the transaction's now(), so the offset is exactly the default 02:00:00.
-        (await _fixture.ScalarAsync<double>(world.Database, "select (extract(epoch from (collection_deadline_at - created_at)))::double precision from public.run"))
+        (await _fixture.ScalarAsync<double>(world.Database, $"select (extract(epoch from (collection_deadline_at - created_at)))::double precision from public.run where org_id = '{world.Org}'"))
             .ShouldBe(7200d);
-        (await _fixture.ScalarAsync<int>(world.Database, "select late_window_minutes from public.run")).ShouldBe(1440);
-        (await _fixture.ScalarAsync<string>(world.Database, "select policy_revision_id::text from public.run")).ShouldBeNull();
+        (await _fixture.ScalarAsync<int>(world.Database, $"select late_window_minutes from public.run where org_id = '{world.Org}'")).ShouldBe(1440);
+        (await _fixture.ScalarAsync<string>(world.Database, $"select policy_revision_id::text from public.run where org_id = '{world.Org}'")).ShouldBeNull();
     }
 
     // ------------------------------------------------------------------ body shape
@@ -422,7 +423,7 @@ public sealed class RunCreationTests
             world,
             $$$$"""{"manifest_id":"{{{{world.ManifestId}}}}","components":{"build":"42","nested":{"a":"b"}}}""");
         accepted.Status.ShouldBe(HttpStatusCode.Created, accepted.ErrorMessage);
-        (await _fixture.ScalarAsync<string>(world.Database, "select components::text from public.run"))
+        (await _fixture.ScalarAsync<string>(world.Database, $"select components::text from public.run where org_id = '{world.Org}'"))
             .ShouldBe("""{"build": "42", "nested": {"a": "b"}}""");
 
         var tooLarge = await CreateRunAsync(
@@ -454,7 +455,7 @@ public sealed class RunCreationTests
             world,
             $$$"""{"manifest_id":"{{{world.ManifestId}}}","components":{"a":1.5e10}}""");
         accepted.Status.ShouldBe(HttpStatusCode.Created, accepted.ErrorMessage);
-        (await _fixture.ScalarAsync<bool>(world.Database, "select (components ->> 'a')::numeric = 15000000000 from public.run"))
+        (await _fixture.ScalarAsync<bool>(world.Database, $"select (components ->> 'a')::numeric = 15000000000 from public.run where org_id = '{world.Org}'"))
             .ShouldBeTrue();
     }
 
@@ -477,7 +478,7 @@ public sealed class RunCreationTests
     {
         await using var world = await StartAsync(_fixture);
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
 
         var answer = await CreateRunAsync(
             world,

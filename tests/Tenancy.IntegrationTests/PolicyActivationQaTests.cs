@@ -41,23 +41,30 @@ public sealed class PolicyActivationQaTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Database.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Database.DisposeAsync();
+            }
         }
     }
 
-    private async Task<World> StartAsync()
-    {
-        // The counters below are database-wide, so this class needs a private migrated database of its own.
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+    // The counters below are database-wide, so this class needs a private migrated database of its own.
+    private Task<World> StartAsync() =>
+        _fixture.StartDedicatedAsync(async database =>
+        {
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, database, user, org, project);
-    }
+            return new World(api, client, database, user, org, project);
+        });
 
     private static async Task<Guid> CreateRevisionAsync(World world, string body, Guid? project = null)
     {

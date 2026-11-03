@@ -31,7 +31,9 @@ public sealed class ListRunsIndexPlanTests
     [Fact]
     public async Task ListRuns_FilterByRefAndPr_UsesIndex()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        // The case seeds 40 000 runs and ANALYZEs public.run, so the planner's statistics are database-wide.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: database.Name);
 
         await _fixture.ExecuteAsync(
             world.Database,

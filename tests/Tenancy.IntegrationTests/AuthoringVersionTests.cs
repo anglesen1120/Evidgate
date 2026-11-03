@@ -35,20 +35,27 @@ public sealed partial class AuthoringVersionTests
     {
         public async ValueTask DisposeAsync()
         {
-            await Provider.DisposeAsync();
-            await DataSource.DisposeAsync();
-            await Database.DisposeAsync();
+            try
+            {
+                await Provider.DisposeAsync();
+                await DataSource.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the module's own disposal throws.
+                await Database.DisposeAsync();
+            }
         }
     }
 
-    private async Task<World> StartAsync()
-    {
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var (org, project) = await SeedAsync(database, "acme", "checkout");
-        var (dataSource, provider) = Module(database);
+    private Task<World> StartAsync() =>
+        _fixture.StartDedicatedAsync(async database =>
+        {
+            var (org, project) = await SeedAsync(database, "acme", "checkout");
+            var (dataSource, provider) = Module(database);
 
-        return new World(database, org, project, dataSource, provider);
-    }
+            return new World(database, org, project, dataSource, provider);
+        });
 
     /// <summary>One module container over the app-role connection string (the seam, not a hand-built writer).</summary>
     private (NpgsqlDataSource DataSource, ServiceProvider Provider) Module(string database)

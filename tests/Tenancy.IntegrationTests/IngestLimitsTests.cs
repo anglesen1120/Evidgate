@@ -55,7 +55,7 @@ public sealed class IngestLimitsTests
         fiveOhOne.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
         fiveOhOne.ErrorCode.ShouldBe("batch_too_large");
         (await EventRowsAsync(world)).ShouldBe(500);
-        (await world.CountAsync("event_batch")).ShouldBe(1);
+        (await BatchRowsAsync(world)).ShouldBe(1);
 
         // Exactly 1 MiB of as-sent body: accepted; 1 MiB + 1 byte: 413 before any write. The body is a
         // one-event batch object padded with trailing whitespace (PaddedBody serializes the object itself),
@@ -98,7 +98,7 @@ public sealed class IngestLimitsTests
         answer.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("batch_too_large");
         (await EventRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
         reasons.ShouldContain(IngestBatchRejection.RatioExceeded);
     }
 
@@ -138,7 +138,7 @@ public sealed class IngestLimitsTests
         overCap.ErrorCode.ShouldBe("batch_too_large");
         reasons.ShouldHaveSingleItem().ShouldBe(IngestBatchRejection.ExpandedTooLarge);
         (await EventRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("event_batch")).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
     }
 
     // ---------------------------------------------------------------- a valid gzip batch
@@ -160,8 +160,10 @@ public sealed class IngestLimitsTests
         (await EventRowsAsync(world)).ShouldBe(2);
 
         // bytes_in is the compressed size, bytes_expanded the decoded size (04.1.1 §7).
-        var bytesIn = await world.ScalarAsync<long>("select bytes_in from public.event_batch");
-        var expanded = await world.ScalarAsync<long>("select bytes_expanded from public.event_batch");
+        var bytesIn = await world.ScalarAsync<long>(
+            $"select bytes_in from public.event_batch where run_id = '{world.RunId:D}'");
+        var expanded = await world.ScalarAsync<long>(
+            $"select bytes_expanded from public.event_batch where run_id = '{world.RunId:D}'");
 
         bytesIn.ShouldBe(compressed.Length);
         expanded.ShouldBe(Encoding.UTF8.GetByteCount(body));
@@ -237,7 +239,11 @@ public sealed class IngestLimitsTests
 
     // ---------------------------------------------------------------- helpers
 
-    private static Task<long> EventRowsAsync(IngestTestWorld world) => world.CountAsync("event");
+    private static Task<long> EventRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("event", $"run_id = '{world.RunId:D}'");
+
+    private static Task<long> BatchRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("event_batch", $"run_id = '{world.RunId:D}'");
 
     /// <summary>One valid one-event batch as a serialized body (for the gzip and malformed cases).</summary>
     private static string Batch(IngestTestWorld world, long sequence) =>

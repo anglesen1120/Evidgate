@@ -134,12 +134,18 @@ public sealed class IngestEventBatchTests
 
     private static int IndexOf(JsonElement detail) => detail.GetProperty("index").GetInt32();
 
-    private static Task<long> EventRowsAsync(IngestTestWorld world) => world.CountAsync("event");
+    /// <summary>The world's own rows: the database is shared, so every read names its tenant and run.</summary>
+    private static string Scope(IngestTestWorld world) => $"org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'";
 
-    private static Task<long> BatchRowsAsync(IngestTestWorld world) => world.CountAsync("event_batch");
+    /// <summary>Org-only tables (outbox, audit, capabilities) carry no run column.</summary>
+    private static string OrgScope(IngestTestWorld world) => $"org_id = '{world.Org:D}'";
+
+    private static Task<long> EventRowsAsync(IngestTestWorld world) => world.CountAsync("event", Scope(world));
+
+    private static Task<long> BatchRowsAsync(IngestTestWorld world) => world.CountAsync("event_batch", Scope(world));
 
     private static Task<long> OutboxRowsAsync(IngestTestWorld world, string taskType) =>
-        world.CountAsync("outbox", $"task_type = '{taskType}'");
+        world.CountAsync("outbox", $"{OrgScope(world)} and task_type = '{taskType}'");
 
     /// <summary>One event of <paramref name="world"/>'s plan with its real execution key (T10).</summary>
     private static string KeyOf(IngestTestWorld world, int index) => world.Plan.Executions[index].ExecutionKey;
@@ -179,9 +185,9 @@ public sealed class IngestEventBatchTests
         // One transaction wrote every event row, the one batch row and the metering outbox row.
         (await EventRowsAsync(world)).ShouldBe(2);
         (await BatchRowsAsync(world)).ShouldBe(1);
-        (await world.ScalarAsync<int>("select accepted from public.event_batch")).ShouldBe(2);
-        (await world.ScalarAsync<int>("select duplicate from public.event_batch")).ShouldBe(0);
-        (await world.ScalarAsync<int>("select event_count from public.event_batch")).ShouldBe(2);
+        (await world.ScalarAsync<int>($"select accepted from public.event_batch where {Scope(world)}")).ShouldBe(2);
+        (await world.ScalarAsync<int>($"select duplicate from public.event_batch where {Scope(world)}")).ShouldBe(0);
+        (await world.ScalarAsync<int>($"select event_count from public.event_batch where {Scope(world)}")).ShouldBe(2);
         (await OutboxRowsAsync(world, "usage.batch_accepted")).ShouldBe(1);
 
         (await world.EventColumnAsync<Guid>("event_id")).ShouldBe([first, second]);
@@ -285,7 +291,7 @@ public sealed class IngestEventBatchTests
         Details(conflict).ShouldContain(detail => IndexOf(detail) == 0);
         (await EventRowsAsync(world)).ShouldBe(1);
         (await BatchRowsAsync(world)).ShouldBe(1);
-        (await world.ScalarAsync<string>("select raw_status from public.event")).ShouldBe("passed");
+        (await world.ScalarAsync<string>($"select raw_status from public.event where {Scope(world)}")).ShouldBe("passed");
     }
 
     // ------------------------------------------------------------------ AC6
@@ -385,7 +391,7 @@ public sealed class IngestEventBatchTests
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         answer.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
         (await EventRowsAsync(world)).ShouldBe(1);
-        (await world.ScalarAsync<bool>("select after_cancel from public.event")).ShouldBeTrue();
+        (await world.ScalarAsync<bool>($"select after_cancel from public.event where {Scope(world)}")).ShouldBeTrue();
     }
 
     [Fact]
@@ -407,7 +413,7 @@ public sealed class IngestEventBatchTests
     public async Task tenant_isolation()
     {
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
-        var (otherOrg, _) = await world.CreateOtherOrgAsync("globex");
+        var (otherOrg, _) = await world.CreateOtherOrgAsync(Unique.Slug("globex"));
         var otherRun = await world.SeedOtherRunAsync(otherOrg);
 
         // The run belongs to another tenant: RLS hides it, so the route answers 404 and writes nothing.
@@ -419,6 +425,8 @@ public sealed class IngestEventBatchTests
         answer.Status.ShouldBe(HttpStatusCode.NotFound);
         answer.ErrorCode.ShouldBe("not_found");
         (await EventRowsAsync(world)).ShouldBe(0);
+        // The caller's run is not the only place a stray write could land: the rejected target must stay empty too.
+        (await world.CountAsync("event", $"run_id = '{otherRun.RunId:D}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -456,6 +464,8 @@ public sealed class IngestEventBatchTests
         answer.Status.ShouldBe(HttpStatusCode.Forbidden);
         answer.ErrorCode.ShouldBe("project_scope_mismatch");
         (await EventRowsAsync(world)).ShouldBe(0);
+        // Same tenant, different project: the run the token could not reach must stay empty as well.
+        (await world.CountAsync("event", $"{OrgScope(world)} and run_id = '{otherRun.RunId:D}'")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ D9: the producer slot
@@ -485,7 +495,7 @@ public sealed class IngestEventBatchTests
         var accepted = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
 
         accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
-        (await world.ScalarAsync<string>("select bound_token_jti from public.producer_slot"))
+        (await world.ScalarAsync<string>($"select bound_token_jti from public.producer_slot where {Scope(world)}"))
             .ShouldBe(IngestTestWorld.Jti);
         (await EventRowsAsync(world)).ShouldBe(1);
 
@@ -555,7 +565,7 @@ public sealed class IngestEventBatchTests
 
         // The whole batch is rejected: no event row and no capability row.
         (await EventRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("adapter_capability")).ShouldBe(0);
+        (await world.CountAsync("adapter_capability", OrgScope(world))).ShouldBe(0);
     }
 
     [Fact]
@@ -572,9 +582,9 @@ public sealed class IngestEventBatchTests
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         answer.Body.GetProperty("accepted").GetInt32().ShouldBe(2);
         (await EventRowsAsync(world)).ShouldBe(2);
-        (await world.CountAsync("adapter_capability")).ShouldBe(1);
-        (await world.ScalarAsync<string>("select name from public.adapter_capability")).ShouldBe("playwright");
-        (await world.ScalarAsync<int>("select protocol_major from public.adapter_capability")).ShouldBe(1);
+        (await world.CountAsync("adapter_capability", OrgScope(world))).ShouldBe(1);
+        (await world.ScalarAsync<string>($"select name from public.adapter_capability where {OrgScope(world)}")).ShouldBe("playwright");
+        (await world.ScalarAsync<int>($"select protocol_major from public.adapter_capability where {OrgScope(world)}")).ShouldBe(1);
 
         // S-1: the org-level adapter_capability write of a first-send batch is audited with the handler's audited
         // action, naming the capability row it registered (the ordinary-batch suppression is lifted for it).
@@ -593,7 +603,7 @@ public sealed class IngestEventBatchTests
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
 
         // An ordinary batch carries no security decision: its event_batch row is the record, so no audit row.
-        (await world.ScalarAsync<long>("select count(*) from public.audit_log where action = 'event.batch.ingest'"))
+        (await world.ScalarAsync<long>($"select count(*) from public.audit_log where {OrgScope(world)} and action = 'event.batch.ingest'"))
             .ShouldBe(0);
     }
 
@@ -648,7 +658,7 @@ public sealed class IngestEventBatchTests
                 })));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        var payload = await world.ScalarAsync<string>("select payload::text from public.event");
+        var payload = await world.ScalarAsync<string>($"select payload::text from public.event where {Scope(world)}");
         payload.ShouldNotContain("super-secret-token-value");
         payload.ShouldNotContain("hunter2");
         payload.ShouldNotContain("Bearer abcdef");
@@ -674,11 +684,11 @@ public sealed class IngestEventBatchTests
                 ext: new { schema = "playwright/1", xfail = true, normalized = "timed_out" })));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        (await world.CountAsync("case_attempt")).ShouldBe(1);
-        (await world.ScalarAsync<string>("select raw_status from public.case_attempt")).ShouldBe("failed");
-        (await world.ScalarAsync<string>("select normalized_status from public.case_attempt")).ShouldBe("passed");
-        (await world.ScalarAsync<int>("select duration_ms from public.case_attempt")).ShouldBe(1200);
-        (await world.ScalarAsync<Guid>("select case_id from public.case_attempt"))
+        (await world.CountAsync("case_attempt", Scope(world))).ShouldBe(1);
+        (await world.ScalarAsync<string>($"select raw_status from public.case_attempt where {Scope(world)}")).ShouldBe("failed");
+        (await world.ScalarAsync<string>($"select normalized_status from public.case_attempt where {Scope(world)}")).ShouldBe("passed");
+        (await world.ScalarAsync<int>($"select duration_ms from public.case_attempt where {Scope(world)}")).ShouldBe(1200);
+        (await world.ScalarAsync<Guid>($"select case_id from public.case_attempt where {Scope(world)}"))
             .ShouldBe(world.Plan.Executions[0].CaseId);
     }
 
@@ -698,7 +708,7 @@ public sealed class IngestEventBatchTests
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await EventRowsAsync(world)).ShouldBe(0);
         (await BatchRowsAsync(world)).ShouldBe(0);
-        (await world.CountAsync("case_attempt")).ShouldBe(0);
+        (await world.CountAsync("case_attempt", Scope(world))).ShouldBe(0);
     }
 
     [Fact]
@@ -722,12 +732,12 @@ public sealed class IngestEventBatchTests
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
 
         // Only the failed setup's own attempt is written; the dependant is neither blocked nor attempted.
-        (await world.CountAsync("case_attempt")).ShouldBe(1);
+        (await world.CountAsync("case_attempt", Scope(world))).ShouldBe(1);
         (await world.ScalarAsync<string>(
-            $"select normalized_status from public.case_attempt where run_id = '{world.RunId:D}' and execution_key = '{failed.ExecutionKey}'"))
+            $"select normalized_status from public.case_attempt where {Scope(world)} and execution_key = '{failed.ExecutionKey}'"))
             .ShouldBe("failed");
-        (await world.CountAsync("case_attempt", where: $"execution_key = '{dependant.ExecutionKey}'")).ShouldBe(0);
-        (await world.CountAsync("case_attempt", where: "normalized_status = 'blocked'")).ShouldBe(0);
+        (await world.CountAsync("case_attempt", where: $"{Scope(world)} and execution_key = '{dependant.ExecutionKey}'")).ShouldBe(0);
+        (await world.CountAsync("case_attempt", where: $"{Scope(world)} and normalized_status = 'blocked'")).ShouldBe(0);
     }
 
     [Fact]
@@ -749,15 +759,15 @@ public sealed class IngestEventBatchTests
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
 
-        (await world.CountAsync("case_attempt")).ShouldBe(2);
+        (await world.CountAsync("case_attempt", Scope(world))).ShouldBe(2);
         (await world.ScalarAsync<string>(
-            $"select normalized_status from public.case_attempt where execution_key = '{setup.ExecutionKey}' and attempt_no = 1"))
+            $"select normalized_status from public.case_attempt where {Scope(world)} and execution_key = '{setup.ExecutionKey}' and attempt_no = 1"))
             .ShouldBe("failed");
         (await world.ScalarAsync<string>(
-            $"select normalized_status from public.case_attempt where execution_key = '{setup.ExecutionKey}' and attempt_no = 2"))
+            $"select normalized_status from public.case_attempt where {Scope(world)} and execution_key = '{setup.ExecutionKey}' and attempt_no = 2"))
             .ShouldBe("passed");
-        (await world.CountAsync("case_attempt", where: $"execution_key = '{dependant.ExecutionKey}'")).ShouldBe(0);
-        (await world.CountAsync("case_attempt", where: "normalized_status = 'blocked'")).ShouldBe(0);
+        (await world.CountAsync("case_attempt", where: $"{Scope(world)} and execution_key = '{dependant.ExecutionKey}'")).ShouldBe(0);
+        (await world.CountAsync("case_attempt", where: $"{Scope(world)} and normalized_status = 'blocked'")).ShouldBe(0);
     }
 
     [Fact]
@@ -772,16 +782,18 @@ public sealed class IngestEventBatchTests
 
         var first = await PostEventsAsync(world, body);
         first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
-        (await world.CountAsync("case_attempt")).ShouldBe(1);
-        var version = await world.ScalarAsync<int>("select version from public.producer_slot where producer_id = 'shard-1'");
+        (await world.CountAsync("case_attempt", Scope(world))).ShouldBe(1);
+        var version = await world.ScalarAsync<int>(
+            $"select version from public.producer_slot where {Scope(world)} and producer_id = 'shard-1'");
 
         var resend = await PostEventsAsync(world, body);
         resend.Status.ShouldBe(HttpStatusCode.OK, resend.ErrorMessage);
         resend.Body.GetProperty("duplicates").GetInt32().ShouldBe(1);
 
-        (await world.CountAsync("case_attempt")).ShouldBe(1);
+        (await world.CountAsync("case_attempt", Scope(world))).ShouldBe(1);
         (await EventRowsAsync(world)).ShouldBe(1);
-        (await world.ScalarAsync<int>("select version from public.producer_slot where producer_id = 'shard-1'"))
+        (await world.ScalarAsync<int>(
+            $"select version from public.producer_slot where {Scope(world)} and producer_id = 'shard-1'"))
             .ShouldBe(version);
     }
 
@@ -800,9 +812,9 @@ public sealed class IngestEventBatchTests
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
 
-        (await world.ScalarAsync<string?>("select normalized_status from public.event where type = 'test.step'"))
+        (await world.ScalarAsync<string?>($"select normalized_status from public.event where {Scope(world)} and type = 'test.step'"))
             .ShouldBeNull();
-        (await world.ScalarAsync<string>("select normalized_status from public.event where type = 'test.finished'"))
+        (await world.ScalarAsync<string>($"select normalized_status from public.event where {Scope(world)} and type = 'test.finished'"))
             .ShouldBe("failed");
     }
 

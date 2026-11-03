@@ -64,39 +64,33 @@ public sealed class EvidenceCompleteRaceTests(PostgresTenancyFixture fixture, Se
     {
         public string Database => Owned.Name;
 
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await Host.DisposeAsync();
-            await Api.DisposeAsync();
-            await Owned.DisposeAsync();
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Host, Api);
     }
 
     private static RequestPrincipal Writer(string jti = Jti) =>
         RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
 
-    private async Task<World> StartAsync(RequestPrincipal principal)
-    {
-        var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        Guid user;
-        Guid org;
-        Guid project;
-
-        using (var setup = api.CreateClient())
+    private Task<World> StartAsync(RequestPrincipal principal) =>
+        _fixture.StartDedicatedAsync(async owned =>
         {
-            user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
-        }
+            var database = owned.Name;
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            Guid user;
+            Guid org;
+            Guid project;
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database), org, project, principal, _store.Configuration());
+            using (var setup = api.CreateClient())
+            {
+                user = Guid.CreateVersion7();
+                org = await CreateOrgAsync(setup, user, "acme");
+                project = await CreateProjectAsync(setup, user, org, "checkout");
+            }
 
-        return new World(api, host, host.CreateClient(), owned, user, org, project);
-    }
+            var host = TenancyApiFactory.WithPrincipal(
+                _fixture.AppConnectionString(database), org, project, principal, _store.Configuration());
+
+            return new World(api, host, host.CreateClient(), owned, user, org, project);
+        });
 
     private async Task<Guid> SeedRunAsync(World world)
     {

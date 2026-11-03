@@ -33,12 +33,7 @@ public sealed class SuiteDiffTests
     {
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await Api.DisposeAsync();
-            await Dedicated.DisposeAsync();
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Dedicated, Api);
     }
 
     /// <summary>A second tenant of the same host and database: its own user, org, project, cases and suite.</summary>
@@ -58,24 +53,26 @@ public sealed class SuiteDiffTests
     // ------------------------------------------------------------------ helpers
 
     /// <summary>An org with a project, <paramref name="cases"/> registered cases (one revision each) and an empty suite.</summary>
-    private async Task<World> StartAsync(int cases = 4)
-    {
-        // Private database: the suite_revision/suite_member counts are asserted unfiltered for the whole database.
-        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
-        var revisions = await SeedCasesAsync(api, org, project, database, cases, 0);
+    /// <remarks>
+    /// Private database: the suite_revision/suite_member counts are asserted unfiltered for the whole database.
+    /// </remarks>
+    private Task<World> StartAsync(int cases = 4) =>
+        _fixture.StartDedicatedAsync(async dedicated =>
+        {
+            var database = dedicated.Name;
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
+            var revisions = await SeedCasesAsync(api, org, project, database, cases, 0);
 
-        var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
-        var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
-        suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
+            var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
+            var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
+            suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
 
-        return new World(api, client, database, user, org, project, suite.Id(), revisions, dedicated);
-    }
+            return new World(api, client, database, user, org, project, suite.Id(), revisions, dedicated);
+        });
 
     /// <summary>A second org on the same host and database, ready to take revisions of its own.</summary>
     private async Task<Rival> StartRivalAsync(World world, string slug = "rival")

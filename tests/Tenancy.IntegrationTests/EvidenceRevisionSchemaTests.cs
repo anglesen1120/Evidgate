@@ -96,7 +96,10 @@ public sealed class EvidenceRevisionSchemaTests
             .SqlState.ShouldBe("42501");
         (await CaptureAppErrorAsync(world, world.Org, "delete from public.evidence_revision")).SqlState.ShouldBe("42501");
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.evidence_revision")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.evidence_revision where org_id = '{world.Org}' and run_id = '{runId}'"))
+            .ShouldBe(1);
 
         // The operator keeps read only and the scheduler holds nothing (no policy until 02.8.1, TL T76/D1).
         (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_operator", "evidence_revision", "select")).ShouldBeTrue();
@@ -247,7 +250,10 @@ public sealed class EvidenceRevisionSchemaTests
         foreignRunRef.SqlState.ShouldBe("23503");
         foreignRunRef.ConstraintName.ShouldBe("evidence_revision_run_fk");
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.evidence_revision")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.evidence_revision where org_id = '{world.Org}' and run_id = '{runId}'"))
+            .ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ (e) T5.2: the pointer
@@ -488,7 +494,9 @@ public sealed class EvidenceRevisionSchemaTests
             world.Database,
             $"select current_evidence_revision_id is null from public.run where id = '{runId:D}'"))
             .ShouldBeTrue("the owner's erasure step clears the pointer");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.evidence_revision"))
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.evidence_revision where org_id = '{world.Org}' and run_id = '{runId:D}'"))
             .ShouldBe(1, "clearing the pointer never touches the append-only revision row");
     }
 
@@ -508,7 +516,9 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task EvidenceRevision_RunIndex_ServesTheCurrentRevisionLookup()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        // Dedicated: the plan needs this database's unique key dropped and seqscan off, both table-wide.
+        await using var db = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: db.Name);
         var runId = await CreateRunAsync(world);
         for (var revisionNo = 1; revisionNo <= 3; revisionNo++)
         {
@@ -550,7 +560,9 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task EvidenceRevision_MigrationReRun_KeepsTableForeignKeyGrantsAndTriggers()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        // Dedicated: the re-run applies migration DDL to the whole database and counts its single revision table-wide.
+        await using var db = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: db.Name);
         var runId = await CreateRunAsync(world);
         var existing = await AppendRevisionAsync(world, world.Org, runId, revisionNo: 1);
 
@@ -603,8 +615,9 @@ public sealed class EvidenceRevisionSchemaTests
     private static async Task<Guid> CreateSecondTenantAsync(RunCreationTests.World world, string slug)
     {
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(world.Client, user, slug);
-        await CreateProjectAsync(world.Client, user, org, slug + "-project");
+        var unique = Unique.Slug(slug);
+        var org = await CreateOrgAsync(world.Client, user, unique);
+        await CreateProjectAsync(world.Client, user, org, unique + "-project");
 
         return org;
     }

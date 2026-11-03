@@ -64,13 +64,17 @@ public sealed class RunCreationQaExtraTests
 
     private static string Astral(int runes) => string.Concat(Enumerable.Repeat(char.ConvertFromUtf32(0x1F600), runes));
 
+    /// <summary>No run of the world's project exists, and its tenant wrote no plan, slot or outbox row.</summary>
     private async Task AssertNoRunRowsAsync(RunCreationTests.World world)
     {
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.planned_execution")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.producer_slot")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.outbox")).ShouldBe(0);
+        (await CountAsync(world, "run", $"project_id = '{world.Project:D}'")).ShouldBe(0);
+        (await CountAsync(world, "planned_execution", $"org_id = '{world.Org:D}'")).ShouldBe(0);
+        (await CountAsync(world, "producer_slot", $"org_id = '{world.Org:D}'")).ShouldBe(0);
+        (await CountAsync(world, "outbox", $"org_id = '{world.Org:D}'")).ShouldBe(0);
     }
+
+    private Task<long> CountAsync(RunCreationTests.World world, string table, string where) =>
+        _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{table} where {where}");
 
     // ------------------------------------------------------------------ body shape (422 request_invalid, no write)
 
@@ -289,6 +293,6 @@ public sealed class RunCreationQaExtraTests
         answers.ShouldAllBe(a => a.Status == HttpStatusCode.Created);
         var ids = answers.Select(a => JsonNode.Parse(a.Text)!["run_id"]!.GetValue<string>()).ToArray();
         ids[0].ShouldNotBe(ids[1]);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run")).ShouldBe(2);
+        (await CountAsync(world, "run", $"project_id = '{world.Project:D}'")).ShouldBe(2);
     }
 }

@@ -17,10 +17,13 @@ public sealed class RunCreationIdempotencyQaTests
     public RunCreationIdempotencyQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
     private Task<long> RecordCountAsync(RunCreationTests.World world) =>
-        _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.idempotency_record where operation = 'run:create'");
+        _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.idempotency_record where operation = 'run:create' and org_id = '{world.Org:D}'");
 
     private Task<long> RunCountAsync(RunCreationTests.World world) =>
-        _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.run");
+        _fixture.ScalarAsync<long>(
+            world.Database, $"select count(*) from public.run where project_id = '{world.Project:D}'");
 
     [Fact]
     public async Task Key_WhitespaceOnly_Is400_AndWritesNoRecord()
@@ -152,7 +155,8 @@ public sealed class RunCreationIdempotencyQaTests
 
         var seconds = await _fixture.ScalarAsync<long>(
             world.Database,
-            "select extract(epoch from (expires_at - created_at))::bigint from public.idempotency_record where operation = 'run:create'");
+            "select extract(epoch from (expires_at - created_at))::bigint from public.idempotency_record "
+            + $"where operation = 'run:create' and org_id = '{world.Org:D}'");
 
         seconds.ShouldBeGreaterThanOrEqualTo(86_400L);
     }
