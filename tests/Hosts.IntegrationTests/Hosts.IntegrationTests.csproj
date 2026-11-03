@@ -27,4 +27,9 @@
     <!-- The anonymous JSON probe the transport suites (correlation, envelope, endpoint filters) POST to. -->
     <Compile Include="..\Shared\TransportProbeStartupFilter.cs" Link="TransportProbeStartupFilter.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Bounded class-level parallelism, the same bound as the Tenancy suite: four workers
+         overloaded the Postgres container VM (copy timeouts, guard trips). -->
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

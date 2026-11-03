@@ -18,7 +18,6 @@ namespace Identity.IntegrationTests.Login.Persistence;
 /// identity is taken from another account only when that account has no membership and no live
 /// session, and a refusal changes nothing.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class LinkResolverTests : SessionTestBase
 {
@@ -26,8 +25,10 @@ public sealed class LinkResolverTests : SessionTestBase
 
     private static readonly string[] PlatformTables = ["session", "user_identity", "user"];
 
+    // Own database: one case drops 0041's session_expiry_check to arrange a state only the absolute
+    // deadline can produce, and the whole-table counts below must see no other case's rows.
     public LinkResolverTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 
@@ -102,8 +103,8 @@ public sealed class LinkResolverTests : SessionTestBase
         }
         finally
         {
-            // One database per assembly and the reset empties rows only: the row that violates the check
-            // goes before the check comes back, or the re-add would refuse to validate.
+            // The database is this test's own: the row that violates the check goes before the check
+            // comes back, or the re-add would refuse to validate.
             await OwnerExecuteAsync(
                 "delete from public.session where cookie_hmac = @cookie_hmac",
                 ("cookie_hmac", cookie));

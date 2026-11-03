@@ -23,10 +23,10 @@ namespace Identity.IntegrationTests.Sessions.Privilege;
 /// this file's namespace <c>Identity.IntegrationTests.Sessions.Privilege</c> is inside that wildcard.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PrivilegeRollbackTests : SessionHardeningTestBase
 {
+    /// <summary>Shares the run's database: the one session row it reads is addressed by id.</summary>
     public PrivilegeRollbackTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -40,7 +40,7 @@ public sealed class PrivilegeRollbackTests : SessionHardeningTestBase
     public async Task Require_Rotation_Rolls_Back_With_The_Callers_Transaction_And_Sticks_On_Commit()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var member = await SeedUserAsync("require-rotation-rollback@example.com");
+        var member = await SeedUserAsync(Unique.Email("require-rotation-rollback"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(member, clock);
 

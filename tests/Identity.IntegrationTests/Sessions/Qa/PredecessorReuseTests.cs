@@ -32,10 +32,10 @@ namespace Identity.IntegrationTests.Sessions.Qa;
 /// this file's namespace <c>Identity.IntegrationTests.Sessions.Qa</c> is inside that wildcard.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PredecessorReuseTests : SessionHardeningTestBase
 {
+    /// <summary>Shares the run's database: the rows it counts belong to the account it seeded.</summary>
     public PredecessorReuseTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -49,7 +49,7 @@ public sealed class PredecessorReuseTests : SessionHardeningTestBase
     [Fact]
     public async Task Two_Concurrent_Logins_On_One_Predecessor_Both_Succeed_And_Link_Only_One()
     {
-        var userId = await SeedUserAsync("reused-predecessor@example.com");
+        var userId = await SeedUserAsync(Unique.Email("reused-predecessor"));
         var clock = ClockAt();
         var predecessor = await CreateSessionAsync(userId, clock);
         var store = CreateStore(clock);

@@ -27,7 +27,6 @@ namespace Hosts.IntegrationTests;
 /// trace, and a client value that is not a request id is replaced instead of exported
 /// (00 §9.1, NFR-10-1).
 /// </summary>
-[Collection(PostgresSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CorrelationTraceTests
 {
@@ -91,7 +90,7 @@ public sealed class CorrelationTraceTests
     [Fact]
     public async Task Operator_Query_Joins_The_Request_Trace_Through_Npgsql()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         var exported = new List<Activity>();
 
         await using var factory = new EvidgateApiFactory(

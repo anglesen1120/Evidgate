@@ -14,7 +14,6 @@ namespace Hosts.IntegrationTests;
 /// real migrated database, so the observed thing is the process's own exit code and
 /// its own boot line — the two facts an operator has after a deploy.
 /// </summary>
-[Collection(PostgresSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class IsolationSelfCheckBootTests
 {
@@ -38,7 +37,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_MissingPolicy_FailsStartup()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         await DropProjectTenantPolicyAsync(connectionString);
 
         var apiPort = HostLocator.FreePort();
@@ -160,7 +159,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_TenantPolicyForAnotherRole_Fails()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         Assert.True((await RunSelfCheckAsync(connectionString)).Passed, "the migrated database must pass before the mutation");
 
         await ExecuteAsOwnerAsync(
@@ -190,7 +189,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_TenantPolicyWithOpenUsing_Fails()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         Assert.True((await RunSelfCheckAsync(connectionString)).Passed, "the migrated database must pass before the mutation");
 
         await ExecuteAsOwnerAsync(
@@ -245,7 +244,7 @@ public sealed class IsolationSelfCheckBootTests
         string expectedCode,
         string because)
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         Assert.True((await RunSelfCheckAsync(connectionString)).Passed, "the migrated database must pass before the mutation");
 
         await ExecuteAsOwnerAsync(
@@ -279,7 +278,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_TenantPolicyWithExtraAndedCondition_Passes()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         Assert.True((await RunSelfCheckAsync(connectionString)).Passed, "the migrated database must pass before the mutation");
 
         await ExecuteAsOwnerAsync(
@@ -309,7 +308,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_TenantPolicyNotForAllCommands_Fails()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         Assert.True((await RunSelfCheckAsync(connectionString)).Passed, "the migrated database must pass before the mutation");
 
         await ExecuteAsOwnerAsync(
@@ -336,7 +335,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_ExtraPermissiveUnscopedPolicy_Fails()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         Assert.True((await RunSelfCheckAsync(connectionString)).Passed, "the migrated database must pass before the mutation");
 
         await ExecuteAsOwnerAsync(
@@ -369,7 +368,7 @@ public sealed class IsolationSelfCheckBootTests
     [InlineData("public.role_permission")]
     public async Task SelfCheck_CatalogueTableWithExtraPermissiveUnscopedPolicy_Fails(string table)
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         Assert.True((await RunSelfCheckAsync(connectionString)).Passed, "the migrated database must pass before the mutation");
 
         await ExecuteAsOwnerAsync(
@@ -398,7 +397,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_CatalogueTables_UnmodifiedSchema_Passes()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
 
         var report = await RunSelfCheckAsync(connectionString);
 
@@ -419,7 +418,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_OrganizationPolicyWithOpenUsing_Fails()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         Assert.True((await RunSelfCheckAsync(connectionString)).Passed, "the migrated database must pass before the mutation");
 
         await ExecuteAsOwnerAsync(
@@ -442,7 +441,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_Passes_OnMigratedDatabase_AndApiServes()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         var port = HostLocator.FreePort();
 
         using var process = ProcessRunner.Start(
@@ -464,10 +463,7 @@ public sealed class IsolationSelfCheckBootTests
         }
         finally
         {
-            if (!process.HasExited)
-            {
-                process.Kill();
-            }
+            await ProcessRunner.StopAsync(process);
         }
     }
 
@@ -479,7 +475,7 @@ public sealed class IsolationSelfCheckBootTests
     [Fact]
     public async Task SelfCheck_Disabled_IsAnnounced()
     {
-        var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         await DropProjectTenantPolicyAsync(connectionString);
 
         var port = HostLocator.FreePort();
@@ -501,10 +497,7 @@ public sealed class IsolationSelfCheckBootTests
         }
         finally
         {
-            if (!process.HasExited)
-            {
-                process.Kill();
-            }
+            await ProcessRunner.StopAsync(process);
         }
     }
 
@@ -585,11 +578,7 @@ public sealed class IsolationSelfCheckBootTests
         }
         catch (OperationCanceledException) when (!TestContext.Current.CancellationToken.IsCancellationRequested)
         {
-            if (!process.HasExited)
-            {
-                process.Kill();
-            }
-
+            await ProcessRunner.StopAsync(process);
             throw new TimeoutException($"{fileName} did not exit within 60 s of a refused boot");
         }
     }

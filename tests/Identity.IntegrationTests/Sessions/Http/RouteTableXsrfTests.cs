@@ -31,9 +31,8 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// </para>
 /// </remarks>
 /// <param name="fixture">The migrated harness database.</param>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class RouteTableXsrfTests(DatabaseFixture fixture) : HarnessTest(fixture)
+public sealed class RouteTableXsrfTests(DatabaseFixture fixture) : TenantTest(fixture)
 {
     /// <summary>
     /// The ONE documented exemption (02.3.2 §10 T1.2 Notes; <c>SessionXsrfPolicy.ExemptRoutePatterns</c>):

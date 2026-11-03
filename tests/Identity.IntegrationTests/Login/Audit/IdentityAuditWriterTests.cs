@@ -27,15 +27,14 @@ namespace Identity.IntegrationTests.Login.Audit;
 /// key to <c>user</c> — so these suites test the writer alone, not the login that calls it.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class IdentityAuditWriterTests : HarnessTest
+public sealed class IdentityAuditWriterTests : TenantTest
 {
     /// <summary>The buffer every write records through; one instance per test, as the host has one per process.</summary>
     private readonly AuditTrail _audit = new();
 
     public IdentityAuditWriterTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

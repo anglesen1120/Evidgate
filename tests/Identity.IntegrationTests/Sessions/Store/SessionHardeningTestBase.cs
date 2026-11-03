@@ -39,23 +39,9 @@ public abstract class SessionHardeningTestBase : SessionTestBase
     /// <summary>The retired pepper as configuration carries it.</summary>
     protected static string RetiredPepperBase64 => Convert.ToBase64String(RetiredPepper);
 
-    protected SessionHardeningTestBase(DatabaseFixture fixture)
-        : base(fixture)
+    protected SessionHardeningTestBase(DatabaseFixture fixture, DatabaseIsolation isolation = DatabaseIsolation.Shared)
+        : base(fixture, isolation)
     {
-    }
-
-    /// <summary>
-    /// Resets the harness database, then restores the migration-seeded permission catalogue.
-    /// </summary>
-    /// <remarks>
-    /// These suites arrange memberships with a built-in role (<c>tenant_admin</c>, <c>viewer</c>) and custom
-    /// roles carrying <c>membership:write</c>, so the catalogue rows Respawn's blanket truncate removes have to
-    /// be back before the test body runs — the same step <see cref="CatalogueTestBase"/> takes for its suites.
-    /// </remarks>
-    public override async ValueTask InitializeAsync()
-    {
-        await Fixture.ResetAsync(Token);
-        await CatalogueSeed.ApplyAsync(Fixture, Token);
     }
 
     /// <summary>A clock the test owns and moves, so every deadline is provable without waiting.</summary>

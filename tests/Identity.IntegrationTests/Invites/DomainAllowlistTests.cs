@@ -17,7 +17,6 @@ namespace Identity.IntegrationTests.Invites;
 /// <c>pending</c>). GitHub identities are never gated, so the same off-list org binds them.
 /// </remarks>
 [Trait("Category", "Docker")]
-[Collection(HarnessSuite.Name)]
 public sealed class DomainAllowlistTests : BindTestBase
 {
     public DomainAllowlistTests(DatabaseFixture fixture)
@@ -36,15 +35,16 @@ public sealed class DomainAllowlistTests : BindTestBase
         var restricted = await SeedOrgAsync(autobindVerifiedDomain: true);
         var unrestricted = await SeedOrgAsync(autobindVerifiedDomain: true);
         await SetAllowedDomainsAsync(restricted, ["partner.example"]);
-        var restrictedInvite = await SeedInviteAsync(restricted, "invitee@example.com");
-        var unrestrictedInvite = await SeedInviteAsync(unrestricted, "invitee@example.com");
+        var address = Unique.Email("invitee");
+        var restrictedInvite = await SeedInviteAsync(restricted, address);
+        var unrestrictedInvite = await SeedInviteAsync(unrestricted, address);
         var userId = await SeedUserAsync();
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
                 userId,
                 "google",
-                "invitee@example.com",
+                address,
                 EmailVerified: true,
                 InviteToken: null,
                 HostedDomain: "example.com"),
@@ -68,7 +68,7 @@ public sealed class DomainAllowlistTests : BindTestBase
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: false);
         await SetAllowedDomainsAsync(org, ["example.com"]);
-        var invite = await SeedInviteAsync(org, "invitee@example.com");
+        var invite = await SeedInviteAsync(org, Unique.Email("invitee"));
         var userId = await SeedUserAsync();
 
         var result = await CreateBinder().BindAsync(
@@ -91,7 +91,7 @@ public sealed class DomainAllowlistTests : BindTestBase
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
         await SetAllowedDomainsAsync(org, ["example.com"]);
-        var invite = await SeedInviteAsync(org, "invitee@sub.example.com");
+        var invite = await SeedInviteAsync(org, Unique.Text("invitee") + "@sub.example.com");
 
         var refused = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
@@ -130,14 +130,15 @@ public sealed class DomainAllowlistTests : BindTestBase
         var nullList = await SeedOrgAsync(autobindVerifiedDomain: true);
         var emptyList = await SeedOrgAsync(autobindVerifiedDomain: true);
         await SetAllowedDomainsAsync(emptyList, []);
-        var nullListInvite = await SeedInviteAsync(nullList, "invitee@example.com");
-        var emptyListInvite = await SeedInviteAsync(emptyList, "invitee@example.com");
+        var address = Unique.Email("invitee");
+        var nullListInvite = await SeedInviteAsync(nullList, address);
+        var emptyListInvite = await SeedInviteAsync(emptyList, address);
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
                 await SeedUserAsync(),
                 "google",
-                "invitee@example.com",
+                address,
                 EmailVerified: true,
                 InviteToken: null,
                 HostedDomain: "example.com"),
@@ -158,8 +159,8 @@ public sealed class DomainAllowlistTests : BindTestBase
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
         await SetAllowedDomainsAsync(org, ["partner.example"]);
-        var githubInvite = await SeedInviteAsync(org, "invitee@example.com");
-        var googleInvite = await SeedInviteAsync(org, "other@example.com");
+        var githubInvite = await SeedInviteAsync(org, Unique.Email("invitee"));
+        var googleInvite = await SeedInviteAsync(org, Unique.Email("other"));
 
         var github = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(await SeedUserAsync(), "github", githubInvite.Email, EmailVerified: true, githubInvite.Token, HostedDomain: null),
@@ -186,7 +187,7 @@ public sealed class DomainAllowlistTests : BindTestBase
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
         await SetAllowedDomainsAsync(org, ["  Example.COM  ", "Partner.Example"]);
-        var invite = await SeedInviteAsync(org, "Invitee@Example.com");
+        var invite = await SeedInviteAsync(org, Unique.Text("Invitee") + "@Example.com");
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
@@ -211,7 +212,7 @@ public sealed class DomainAllowlistTests : BindTestBase
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
         await SetAllowedDomainsAsync(org, ["Example.com."]);
-        var invite = await SeedInviteAsync(org, "invitee@example.com");
+        var invite = await SeedInviteAsync(org, Unique.Email("invitee"));
         var userId = await SeedUserAsync();
 
         var result = await CreateBinder().BindAsync(
@@ -242,7 +243,7 @@ public sealed class DomainAllowlistTests : BindTestBase
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
         await SetAllowedDomainsAsync(org, ["."]);
-        var invite = await SeedInviteAsync(org, "invitee@example.com");
+        var invite = await SeedInviteAsync(org, Unique.Email("invitee"));
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(

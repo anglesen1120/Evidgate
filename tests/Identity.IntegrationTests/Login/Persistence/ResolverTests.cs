@@ -17,7 +17,6 @@ namespace Identity.IntegrationTests.Login.Persistence;
 /// <c>permission denied</c> rather than zero rows — an empty result would look like a tenant scope that
 /// simply matched nothing.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ResolverTests : SessionTestBase
 {
@@ -36,17 +35,20 @@ public sealed class ResolverTests : SessionTestBase
     [Fact]
     public async Task AppRoleCannotSelectPlatformTables()
     {
-        var userId = await SeedUserAsync("denied@example.com");
+        var userId = await SeedUserAsync(Unique.Email("denied"));
+        var subject = Unique.Text("subject");
         await OwnerExecuteAsync(
-            "insert into public.user_identity (id, user_id, provider, subject) values (@id, @user_id, 'github', '1')",
+            "insert into public.user_identity (id, user_id, provider, subject) "
+            + "values (@id, @user_id, 'github', @subject)",
             ("id", Guid.CreateVersion7()),
-            ("user_id", userId));
+            ("user_id", userId),
+            ("subject", subject));
         await OwnerExecuteAsync(
             "insert into public.session (id, user_id, cookie_hmac, pepper_version, expires_at, absolute_expires_at) "
             + "values (@id, @user_id, @cookie_hmac, 1, now() + interval '1 hour', now() + interval '2 hours')",
             ("id", Guid.CreateVersion7()),
             ("user_id", userId),
-            ("cookie_hmac", ExpectedHmac("seed")));
+            ("cookie_hmac", ExpectedHmac(Unique.Text("seed"))));
 
         foreach (var table in PlatformTables)
         {
@@ -80,8 +82,8 @@ public sealed class ResolverTests : SessionTestBase
             + "@provider, @subject, @email, @display_name, @user_id, @identity_id)"))
         {
             login.Parameters.AddWithValue("provider", "google");
-            login.Parameters.AddWithValue("subject", "sub-42");
-            login.Parameters.AddWithValue("email", "resolver@example.com");
+            login.Parameters.AddWithValue("subject", Unique.Text("sub"));
+            login.Parameters.AddWithValue("email", Unique.Email("resolver"));
             login.Parameters.AddWithValue("display_name", "Resolver");
             login.Parameters.AddWithValue("user_id", userId);
             login.Parameters.AddWithValue("identity_id", Guid.CreateVersion7());
@@ -99,7 +101,7 @@ public sealed class ResolverTests : SessionTestBase
         {
             session.Parameters.AddWithValue("session_id", sessionId);
             session.Parameters.AddWithValue("user_id", userId);
-            session.Parameters.AddWithValue("cookie_hmac", ExpectedHmac("resolver"));
+            session.Parameters.AddWithValue("cookie_hmac", ExpectedHmac(Unique.Text("resolver")));
             session.Parameters.AddWithValue("pepper_version", PepperVersion);
             session.Parameters.AddWithValue("ip", "203.0.113.9");
             session.Parameters.AddWithValue("user_agent", "xunit");
@@ -129,7 +131,7 @@ public sealed class ResolverTests : SessionTestBase
     [Fact]
     public async Task SessionCredentialShapeIsEnforcedByTheDatabase()
     {
-        var userId = await SeedUserAsync("shape@example.com");
+        var userId = await SeedUserAsync(Unique.Email("shape"));
 
         var shortHash = await OwnerRefusalAsync(
             "insert into public.session (id, user_id, cookie_hmac, pepper_version, expires_at, absolute_expires_at) "
@@ -145,7 +147,7 @@ public sealed class ResolverTests : SessionTestBase
             + "values (@id, @user_id, @cookie_hmac, 0, now(), now())",
             ("id", Guid.CreateVersion7()),
             ("user_id", userId),
-            ("cookie_hmac", ExpectedHmac("zero")));
+            ("cookie_hmac", ExpectedHmac(Unique.Text("zero"))));
         pepperVersion.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
         pepperVersion.ConstraintName.ShouldBe("session_pepper_version_check");
 
@@ -154,11 +156,11 @@ public sealed class ResolverTests : SessionTestBase
             + "values (@id, @user_id, @cookie_hmac, null, now(), now())",
             ("id", Guid.CreateVersion7()),
             ("user_id", userId),
-            ("cookie_hmac", ExpectedHmac("null-version")));
+            ("cookie_hmac", ExpectedHmac(Unique.Text("null-version"))));
         nullVersion.SqlState.ShouldBe(PostgresErrorCodes.NotNullViolation);
         nullVersion.ColumnName.ShouldBe("pepper_version");
 
-        var hmac = ExpectedHmac("duplicate");
+        var hmac = ExpectedHmac(Unique.Text("duplicate"));
         await OwnerExecuteAsync(
             "insert into public.session (id, user_id, cookie_hmac, pepper_version, expires_at, absolute_expires_at) "
             + "values (@id, @user_id, @cookie_hmac, 1, now(), now())",

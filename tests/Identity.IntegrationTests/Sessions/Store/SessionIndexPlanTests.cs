@@ -23,12 +23,15 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// must be a heap-only update; a request inside the 60 s window must not update at all.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SessionIndexPlanTests : SessionHardeningTestBase
 {
+    /// <summary>
+    /// A database of its own: the planner and HOT assertions must read a table nobody else is writing, or
+    /// another test's rows and dead tuples decide the plan.
+    /// </summary>
     public SessionIndexPlanTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

@@ -41,15 +41,59 @@ internal static class WorkerHostFactory
         return builder;
     }
 
-    /// <summary>Creates and starts a Worker host; the caller owns disposal (StopAsync/DisposeAsync).</summary>
-    public static async Task<IHost> StartAsync(
+}
+
+/// <summary>
+/// A started Worker host that stops its hosted services when disposed, so a test
+/// database is never dropped under a still-running poll loop; a host that fails
+/// mid-start is stopped and disposed instead of leaked.
+/// </summary>
+internal sealed class RunningWorker : IAsyncDisposable
+{
+    private readonly IHost _host;
+
+    private RunningWorker(IHost host) => _host = host;
+
+    /// <summary>The worker's root service provider, for composition assertions.</summary>
+    public IServiceProvider Services => _host.Services;
+
+    public static async Task<RunningWorker> StartAsync(
         string connectionString,
         int healthPort,
         CaptureLoggerProvider? capture = null,
         CancellationToken cancellationToken = default)
     {
-        var host = Create(connectionString, healthPort, capture).Build();
-        await host.StartAsync(cancellationToken);
-        return host;
+        var host = WorkerHostFactory.Create(connectionString, healthPort, capture).Build();
+        try
+        {
+            await host.StartAsync(cancellationToken);
+        }
+        catch
+        {
+            await StopAsync(host);
+            host.Dispose();
+            throw;
+        }
+
+        return new RunningWorker(host);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync(_host);
+        _host.Dispose();
+    }
+
+    /// <summary>Hosted services stop within the host's own shutdown window; an overrun must not fail the test.</summary>
+    private static async Task StopAsync(IHost host)
+    {
+        try
+        {
+            await host.StopAsync(CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+            // ShutdownTimeout elapsed; DisposeAsync still cancels the hosted services.
+        }
     }
 }

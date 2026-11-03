@@ -21,7 +21,6 @@ namespace Identity.IntegrationTests.Invites;
 /// the harness's owner seam (00 §5.5 C3) and read back the same way, so a refused command cannot hide
 /// a row it wrote anyway.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class InviteLifecycleTests : CatalogueTestBase
 {

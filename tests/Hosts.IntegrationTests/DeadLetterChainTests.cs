@@ -30,7 +30,6 @@ namespace Hosts.IntegrationTests;
 /// clock. The permitted operator gate is the same test double those suites use
 /// (the real <c>platform_operator</c> check lands with 02.x).
 /// </remarks>
-[Collection(PostgresSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class DeadLetterChainTests
 {
@@ -54,7 +53,7 @@ public sealed class DeadLetterChainTests
     [Fact]
     public async Task PoisonTask_DeadLetters_AtTheCap_AndTheOperatorListReturnsIt()
     {
-        var appConnectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var appConnectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(appConnectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
         var taskId = await SeedTaskAsync(admin, Queue, DeadLetterChainHandler.HandlerTaskType, maxAttempts: 2);
@@ -120,7 +119,7 @@ public sealed class DeadLetterChainTests
     [Fact]
     public async Task ReplayChain_OperatorReplay_ReExecutesTheTask()
     {
-        var appConnectionString = await _postgres.CreateMigratedDatabaseAsync();
+        await using var appConnectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(appConnectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
         var taskId = await SeedTaskAsync(

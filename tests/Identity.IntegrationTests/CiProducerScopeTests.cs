@@ -40,7 +40,6 @@ namespace Identity.IntegrationTests;
 /// therefore never authenticate one.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CiProducerScopeTests(DatabaseFixture fixture) : CatalogueTestBase(fixture)
 {

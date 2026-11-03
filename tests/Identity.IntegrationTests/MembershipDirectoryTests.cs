@@ -13,7 +13,6 @@ namespace Identity.IntegrationTests;
 /// Both services read through the ambient <c>ITenantDb</c>, so the assertions also pin
 /// that their answers are bounded by row level security rather than by their SQL.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class MembershipDirectoryTests : CatalogueTestBase
 {

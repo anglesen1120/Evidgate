@@ -15,7 +15,6 @@ namespace Identity.IntegrationTests.Invites;
 /// simultaneous logins.
 /// </summary>
 [Trait("Category", "Docker")]
-[Collection(HarnessSuite.Name)]
 public sealed class BindQuotaTests : BindTestBase
 {
     public BindQuotaTests(DatabaseFixture fixture)

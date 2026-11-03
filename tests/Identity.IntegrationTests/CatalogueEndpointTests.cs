@@ -14,7 +14,6 @@ namespace Identity.IntegrationTests;
 /// the cursor-page shape, under the C2 pipeline — and refuses without a permission or
 /// with an out-of-contract parameter.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CatalogueEndpointTests : CatalogueTestBase
 {

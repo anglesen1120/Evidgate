@@ -16,12 +16,11 @@ namespace Identity.IntegrationTests.Login.Completion;
 /// <c>Set-Cookie</c> header the deployment wrote, attribute by attribute, rather than the
 /// <c>CookieOptions</c> a unit test could have invented.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SessionCookieAttributeTests : CatalogueTestBase
 {
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container and migrated database.</param>
     public SessionCookieAttributeTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -31,7 +30,8 @@ public sealed class SessionCookieAttributeTests : CatalogueTestBase
     [Fact]
     public async Task The_Session_Cookie_Carries_The_Host_Prefix_Attribute_Set()
     {
-        using var host = LoginCompletionTestHost.Start(Fixture, LoginCompletionTestHost.GoogleProvider());
+        var subject = Unique.Text("google-subject");
+        using var host = LoginCompletionTestHost.Start(Fixture, LoginCompletionTestHost.GoogleProvider(subject));
         using var client = host.CreateLoginClient();
 
         await LoginCompletionTestHost.EstablishMemberAsync(
@@ -39,7 +39,7 @@ public sealed class SessionCookieAttributeTests : CatalogueTestBase
             host,
             client,
             LoginCompletionTestHost.Google,
-            LoginCompletionTestHost.GoogleSubject);
+            subject);
 
         using var completed = await host.SignInAsync(client);
         completed.StatusCode.ShouldBe(HttpStatusCode.Found);

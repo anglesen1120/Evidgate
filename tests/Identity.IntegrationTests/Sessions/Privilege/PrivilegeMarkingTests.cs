@@ -35,10 +35,10 @@ namespace Identity.IntegrationTests.Sessions.Privilege;
 /// comment.
 /// </para>
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PrivilegeMarkingTests : CatalogueTestBase
 {
+    /// <summary>Shares the run's database: each case seeds its own org, members and session matrix.</summary>
     public PrivilegeMarkingTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -52,8 +52,8 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Grant_Role_Marks_Only_The_Changed_Users_Live_Session()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
-        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, "member@example.com", "viewer");
+        var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
+        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, Unique.Email("member"), "viewer");
         var releaseApproverId = await RoleIdAsync("release_approver");
         var matrix = await SeedSessionMatrixAsync(memberUserId);
 
@@ -77,10 +77,10 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Revoke_Role_Marks_Only_The_Changed_Users_Live_Session()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
+        var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
         var (memberId, memberUserId) = await SeedActiveMemberAsync(
             org,
-            "member@example.com",
+            Unique.Email("member"),
             "viewer",
             "release_approver");
         var releaseApproverId = await RoleIdAsync("release_approver");
@@ -105,8 +105,8 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Update_Membership_Marks_Only_The_Changed_Users_Live_Session()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
-        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, "member@example.com", "viewer");
+        var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
+        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, Unique.Email("member"), "viewer");
         var version = await ScalarAsync<int>("select version from public.membership where id = @id", ("id", memberId));
         var matrix = await SeedSessionMatrixAsync(memberUserId);
 
@@ -129,8 +129,8 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Remove_Member_Marks_Only_The_Changed_Users_Live_Session()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
-        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, "member@example.com", "viewer");
+        var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
+        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, Unique.Email("member"), "viewer");
         var matrix = await SeedSessionMatrixAsync(memberUserId);
 
         await using var factory = IdentityApiFactory.Start(Fixture, org);
@@ -152,8 +152,8 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Grant_Role_Refused_For_An_Unknown_Role_Leaves_Every_Flag_Null()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
-        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, "member@example.com", "viewer");
+        var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
+        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, Unique.Email("member"), "viewer");
         var matrix = await SeedSessionMatrixAsync(memberUserId);
 
         await using var factory = IdentityApiFactory.Start(Fixture, org);
@@ -176,8 +176,8 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Revoke_Role_Not_Granted_Leaves_Every_Flag_Null()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
-        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, "member@example.com", "viewer");
+        var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
+        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, Unique.Email("member"), "viewer");
         var releaseApproverId = await RoleIdAsync("release_approver");
         var matrix = await SeedSessionMatrixAsync(memberUserId);
 
@@ -204,8 +204,8 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Update_Membership_Stale_Version_Leaves_Every_Flag_Null()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
-        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, "member@example.com", "viewer");
+        var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
+        var (memberId, memberUserId) = await SeedActiveMemberAsync(org, Unique.Email("member"), "viewer");
         var version = await ScalarAsync<int>("select version from public.membership where id = @id", ("id", memberId));
         var matrix = await SeedSessionMatrixAsync(memberUserId);
 
@@ -231,7 +231,7 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Remove_Last_Admin_Leaves_Every_Flag_Null()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var (adminId, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
+        var (adminId, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
         var matrix = await SeedSessionMatrixAsync(adminUserId);
 
         await using var factory = IdentityApiFactory.Start(Fixture, org);

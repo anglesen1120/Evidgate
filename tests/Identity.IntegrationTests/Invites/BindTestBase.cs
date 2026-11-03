@@ -10,9 +10,9 @@ namespace Identity.IntegrationTests.Invites;
 
 /// <summary>
 /// The shared arrangement of the 02.1.2-T2 bind suites: the migrated database from the
-/// harness, reset between tests, the real invite key material and a <c>MembershipBinder</c>
-/// over the app role — so every case runs the production resolvers, the production tenant
-/// scope and the production single-use update.
+/// harness (isolated by tenant unless the suite asks for a private copy), the real invite
+/// key material and a <c>MembershipBinder</c> over the app role — so every case runs the
+/// production resolvers, the production tenant scope and the production single-use update.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -39,8 +39,8 @@ public abstract class BindTestBase : InviteTestBase
 
     private InviteSecrets? _secrets;
 
-    protected BindTestBase(DatabaseFixture fixture)
-        : base(fixture)
+    protected BindTestBase(DatabaseFixture fixture, DatabaseIsolation isolation = DatabaseIsolation.Shared)
+        : base(fixture, isolation)
     {
     }
 

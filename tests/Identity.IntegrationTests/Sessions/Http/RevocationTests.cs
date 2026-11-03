@@ -28,9 +28,8 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// stay live, which is what "before any handler" means here.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class RevocationTests : HarnessTest
+public sealed class RevocationTests : TenantTest
 {
     /// <summary>The single-session route of AC6.</summary>
     private const string SessionsPath = "/v1/auth/sessions";
@@ -41,24 +40,13 @@ public sealed class RevocationTests : HarnessTest
     /// <summary>The logout route of AC8.</summary>
     private const string LogoutPath = "/v1/auth/logout";
 
+    /// <summary>
+    /// Shares the run's database: every case acts on the orgs its own sign-ins created, and the built-in roles the
+    /// administrative half needs are the migration-seeded catalogue rows the database keeps.
+    /// </summary>
     public RevocationTests(DatabaseFixture fixture)
         : base(fixture)
     {
-    }
-
-    /// <summary>
-    /// Resets the harness database, then restores the migration-seeded permission catalogue.
-    /// </summary>
-    /// <remarks>
-    /// The administrative half of AC6 signs a <c>tenant_admin</c> in and revokes a member's session, so the
-    /// built-in roles and their grant rows — which Respawn's blanket truncate removes with every other table —
-    /// must be back before the test body runs. <see cref="CatalogueSeed"/> is the same step the store suites and
-    /// <see cref="CatalogueTestBase"/> take.
-    /// </remarks>
-    public override async ValueTask InitializeAsync()
-    {
-        await Fixture.ResetAsync(Token);
-        await CatalogueSeed.ApplyAsync(Fixture, Token);
     }
 
     /// <summary>

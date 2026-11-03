@@ -18,7 +18,6 @@ namespace Identity.IntegrationTests.Invites;
 /// refusal that keeps the alias from being written in the first place.
 /// </summary>
 [Trait("Category", "Docker")]
-[Collection(HarnessSuite.Name)]
 public sealed class AliasCeilingTests : BindTestBase
 {
     public AliasCeilingTests(DatabaseFixture fixture)

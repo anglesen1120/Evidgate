@@ -29,14 +29,13 @@ namespace Identity.IntegrationTests.DevLogin;
 /// same owner connection (the app role holds no privilege on the identity tables).
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class DevSessionTests : CatalogueTestBase
 {
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container; this class gets a private database dropped after each test.</param>
     public DevSessionTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

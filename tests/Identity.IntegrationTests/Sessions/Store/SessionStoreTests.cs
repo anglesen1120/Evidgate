@@ -11,12 +11,15 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// value stored only as a hash, the predecessor dies in the same statement, and the login callback's
 /// forwarded cookie becomes <c>rotated_from</c> only when it belongs to the same account.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SessionStoreTests : SessionHardeningTestBase
 {
+    /// <summary>
+    /// A database of its own: several cases assert an exact whole-table session count (0, 1, 2), which a shared
+    /// database cannot keep.
+    /// </summary>
     public SessionStoreTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

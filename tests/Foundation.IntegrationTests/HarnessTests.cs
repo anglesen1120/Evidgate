@@ -12,9 +12,8 @@ namespace Foundation.IntegrationTests;
 /// the real <c>Evidgate.Migrator</c>, and hands the tests the app role — never the
 /// owner, never the container superuser.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class HarnessTests : HarnessTest
+public sealed class HarnessTests : TenantTest
 {
     public HarnessTests(DatabaseFixture fixture)
         : base(fixture)

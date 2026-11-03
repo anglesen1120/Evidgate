@@ -22,8 +22,8 @@ namespace Identity.IntegrationTests;
 /// </remarks>
 public abstract class InviteTestBase : CatalogueTestBase
 {
-    protected InviteTestBase(DatabaseFixture fixture)
-        : base(fixture)
+    protected InviteTestBase(DatabaseFixture fixture, DatabaseIsolation isolation = DatabaseIsolation.Shared)
+        : base(fixture, isolation)
     {
     }
 
@@ -228,12 +228,11 @@ public abstract class InviteTestBase : CatalogueTestBase
 /// the transition directly. These tests therefore pin behaviour, not DDL that does not
 /// exist.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class InviteSchemaTests : InviteTestBase
 {
     public InviteSchemaTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 
@@ -463,7 +462,6 @@ public sealed class InviteSchemaTests : InviteTestBase
 /// <c>(org_id, membership_id)</c> pair, only for a row that can still bind, and works with
 /// no tenant setting while the same app role cannot read the row directly.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class InviteBySecretTests : InviteTestBase
 {
@@ -591,7 +589,7 @@ public sealed class InviteBySecretTests : InviteTestBase
     [Fact]
     public async Task Autobind_Candidates_Require_The_Opt_In_And_An_Active_Org()
     {
-        const string Email = "auto@example.com";
+        var email = Unique.Email("auto");
         var live = DateTimeOffset.UtcNow.AddDays(7);
 
         var optedIn = await SeedOrgAsync(autobindVerifiedDomain: true);
@@ -599,18 +597,18 @@ public sealed class InviteBySecretTests : InviteTestBase
         var suspended = await SeedOrgAsync(autobindVerifiedDomain: true, status: "suspended");
 
         var expected = await SeedMembershipAsync(
-            optedIn, Email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
-        await SeedMembershipAsync(optedOut, Email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
-        await SeedMembershipAsync(suspended, Email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
+            optedIn, email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
+        await SeedMembershipAsync(optedOut, email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
+        await SeedMembershipAsync(suspended, email, prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
         await SeedMembershipAsync(
-            optedIn, Email + ".other", prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
+            optedIn, email + ".other", prefix: Prefix(), hash: Hash(), pepperVersion: 1, expiresAt: live);
         await SeedMembershipAsync(
             optedIn, "past-due@example.com", prefix: Prefix(), hash: Hash(), pepperVersion: 1,
             expiresAt: DateTimeOffset.UtcNow.AddMinutes(-5));
         await SeedMembershipAsync(optedIn, "revoked@example.com", status: "revoked", prefix: Prefix(), hash: Hash(),
             pepperVersion: 1, expiresAt: live);
 
-        var candidates = await AutobindCandidatesAsync(Email);
+        var candidates = await AutobindCandidatesAsync(email);
         candidates.Count.ShouldBe(1, "exactly the opted-in, active org's pending invite");
         candidates[0].ShouldBe((optedIn, expected));
     }
@@ -623,18 +621,19 @@ public sealed class InviteBySecretTests : InviteTestBase
     [Fact]
     public async Task Autobind_Candidates_Match_The_Exact_Normalised_Address()
     {
+        var email = Unique.Email("auto");
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
         var membershipId = await SeedMembershipAsync(
-            org, "auto@example.com", prefix: Prefix(), hash: Hash(), pepperVersion: 1,
+            org, email, prefix: Prefix(), hash: Hash(), pepperVersion: 1,
             expiresAt: DateTimeOffset.UtcNow.AddDays(7));
 
-        var candidates = await AutobindCandidatesAsync("auto@example.com");
+        var candidates = await AutobindCandidatesAsync(email);
         candidates.Count.ShouldBe(1);
         candidates[0].ShouldBe((org, membershipId));
-        (await AutobindCandidatesAsync("AUTO@example.com")).ShouldBeEmpty("the function does not lowercase");
-        (await AutobindCandidatesAsync(" auto@example.com")).ShouldBeEmpty("the function does not trim");
-        (await AutobindCandidatesAsync("auto@example.com ")).ShouldBeEmpty();
-        (await AutobindCandidatesAsync("other@example.com")).ShouldBeEmpty();
+        (await AutobindCandidatesAsync(email.ToUpperInvariant())).ShouldBeEmpty("the function does not lowercase");
+        (await AutobindCandidatesAsync(" " + email)).ShouldBeEmpty("the function does not trim");
+        (await AutobindCandidatesAsync(email + " ")).ShouldBeEmpty();
+        (await AutobindCandidatesAsync("other-" + email)).ShouldBeEmpty();
         (await AutobindCandidatesAsync(string.Empty)).ShouldBeEmpty();
     }
 }

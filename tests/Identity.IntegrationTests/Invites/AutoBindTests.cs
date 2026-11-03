@@ -13,7 +13,6 @@ namespace Identity.IntegrationTests.Invites;
 /// result, never an error that tells the caller which condition failed.
 /// </summary>
 [Trait("Category", "Docker")]
-[Collection(HarnessSuite.Name)]
 public sealed class AutoBindTests : BindTestBase
 {
     public AutoBindTests(DatabaseFixture fixture)
@@ -30,7 +29,7 @@ public sealed class AutoBindTests : BindTestBase
     public async Task EmailAlone_NeverBinds_WithoutTheOptIn()
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: false);
-        var invite = await SeedInviteAsync(org, "invitee@example.com");
+        var invite = await SeedInviteAsync(org, Unique.Email("invitee"));
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
@@ -57,15 +56,16 @@ public sealed class AutoBindTests : BindTestBase
     {
         var optedIn = await SeedOrgAsync(autobindVerifiedDomain: true);
         var notOptedIn = await SeedOrgAsync(autobindVerifiedDomain: false);
-        var invite = await SeedInviteAsync(optedIn, "invitee@example.com");
-        var otherOrgInvite = await SeedInviteAsync(notOptedIn, "invitee@example.com");
+        var address = Unique.Email("invitee");
+        var invite = await SeedInviteAsync(optedIn, address);
+        var otherOrgInvite = await SeedInviteAsync(notOptedIn, address);
         var userId = await SeedUserAsync();
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
                 userId,
                 "google",
-                "Invitee@Example.com",
+                address.ToUpperInvariant(),
                 EmailVerified: true,
                 InviteToken: null,
                 HostedDomain: "Example.com"),
@@ -92,7 +92,7 @@ public sealed class AutoBindTests : BindTestBase
     public async Task HostedDomainMismatch_NonGoogleProvider_MissingHd_And_Unverified_StayPending()
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
-        var invite = await SeedInviteAsync(org, "invitee@example.com");
+        var invite = await SeedInviteAsync(org, Unique.Email("invitee"));
         var binder = CreateBinder();
         var userId = await SeedUserAsync();
 
@@ -132,18 +132,19 @@ public sealed class AutoBindTests : BindTestBase
     public async Task OptIn_DoesNotBind_AnotherAddress_OrAnInviteWithoutAToken()
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
-        var invite = await SeedInviteAsync(org, "invitee@example.com");
-        var tokenless = await SeedPendingInviteWithoutTokenAsync(org, "tokenless@example.com");
+        var invite = await SeedInviteAsync(org, Unique.Email("invitee"));
+        var tokenlessAddress = Unique.Email("tokenless");
+        var tokenless = await SeedPendingInviteWithoutTokenAsync(org, tokenlessAddress);
         var binder = CreateBinder();
 
         var anotherAddress = await binder.BindAsync(
-            new BindPendingMembershipsRequest(await SeedUserAsync(), "google", "colleague@example.com", EmailVerified: true, InviteToken: null, HostedDomain: "example.com"),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "google", Unique.Email("colleague"), EmailVerified: true, InviteToken: null, HostedDomain: "example.com"),
             Token);
 
         anotherAddress.Value.Bound.ShouldBeEmpty();
 
         var tokenlessResult = await binder.BindAsync(
-            new BindPendingMembershipsRequest(await SeedUserAsync(), "google", "tokenless@example.com", EmailVerified: true, InviteToken: null, HostedDomain: "example.com"),
+            new BindPendingMembershipsRequest(await SeedUserAsync(), "google", tokenlessAddress, EmailVerified: true, InviteToken: null, HostedDomain: "example.com"),
             Token);
 
         tokenlessResult.Value.Bound.ShouldBeEmpty("an invite without a minted expiry is not a candidate");

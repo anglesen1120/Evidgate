@@ -67,6 +67,28 @@ internal static class ProcessRunner
     }
 
     /// <summary>
+    /// Kills a host that outlived its test and waits (bounded) for it to exit, so
+    /// teardown is observable before the test's database is dropped.
+    /// </summary>
+    public static async Task StopAsync(Process process)
+    {
+        if (!process.HasExited)
+        {
+            process.Kill();
+        }
+
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            await process.WaitForExitAsync(deadline.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // A child that ignores SIGKILL must not hang the suite; its database drop uses (force).
+        }
+    }
+
+    /// <summary>
     /// Starts a host, waits for a probe URL to answer 200, sends SIGTERM and
     /// reports the time to exit (measured with a monotonic clock, not
     /// <see cref="Process.ExitTime"/>, whose wall-clock resolution is far too

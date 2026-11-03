@@ -11,7 +11,6 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// session signed with it still authenticates and is re-hashed to the current pepper in the same statement;
 /// once the window closes the same cookie is unknown, which is the retirement step's whole point.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PepperRotationTests : SessionHardeningTestBase
 {
@@ -23,6 +22,7 @@ public sealed class PepperRotationTests : SessionHardeningTestBase
 
     private static string NextPepperBase64 => Convert.ToBase64String(NextPepper);
 
+    /// <summary>Shares the run's database: every read is the row the case minted.</summary>
     public PepperRotationTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -35,7 +35,7 @@ public sealed class PepperRotationTests : SessionHardeningTestBase
     [Fact]
     public async Task A_Previous_Pepper_Session_Verifies_And_Is_Rehashed_To_The_Current_Pepper()
     {
-        var userId = await SeedUserAsync("rotation-window@example.com");
+        var userId = await SeedUserAsync(Unique.Email("rotation-window"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
 
@@ -70,7 +70,7 @@ public sealed class PepperRotationTests : SessionHardeningTestBase
     [Fact]
     public async Task Removing_The_Previous_Pepper_Makes_The_Old_Cookie_Unknown()
     {
-        var userId = await SeedUserAsync("rotation-retired@example.com");
+        var userId = await SeedUserAsync(Unique.Email("rotation-retired"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
 
@@ -96,7 +96,7 @@ public sealed class PepperRotationTests : SessionHardeningTestBase
     [Fact]
     public async Task A_Revoked_Session_Is_Not_Rehashed()
     {
-        var userId = await SeedUserAsync("rotation-revoked@example.com");
+        var userId = await SeedUserAsync(Unique.Email("rotation-revoked"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
         await OwnerExecuteAsync(

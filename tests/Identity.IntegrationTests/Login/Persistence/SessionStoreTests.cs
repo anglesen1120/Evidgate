@@ -16,12 +16,13 @@ namespace Identity.IntegrationTests.Login.Persistence;
 /// <c>public.session</c> (0041); the write itself always runs as <c>evidgate_app</c> through
 /// <c>evidgate_resolve.session_create</c>.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SessionStoreTests : SessionTestBase
 {
+    // Own database: three refusals assert a whole-table count of zero rows, which a shared database
+    // could not prove while another class is writing sessions.
     public SessionStoreTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

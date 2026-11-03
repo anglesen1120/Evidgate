@@ -17,9 +17,8 @@ namespace Identity.IntegrationTests;
 /// (<c>role:read</c>) so the assertion is about the pipeline, not about a handler, and
 /// the cases that need no membership rows run against the module's REAL evaluator.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class DenyPathTests(DatabaseFixture fixture) : HarnessTest(fixture)
+public sealed class DenyPathTests(DatabaseFixture fixture) : TenantTest(fixture)
 {
     /// <summary>The project the token of a service principal is scoped to.</summary>
     private static readonly Guid ScopedProject = Guid.Parse("44444444-4444-7444-8444-444444444444");

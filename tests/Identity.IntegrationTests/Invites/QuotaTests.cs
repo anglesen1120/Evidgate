@@ -15,7 +15,6 @@ namespace Identity.IntegrationTests.Invites;
 /// the Tenancy-shaped 429 <c>quota_exceeded</c>, a NULL limit means unlimited, and a resend — which
 /// re-mints an existing row and therefore consumes no seat — still succeeds at the boundary.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class QuotaTests : CatalogueTestBase
 {

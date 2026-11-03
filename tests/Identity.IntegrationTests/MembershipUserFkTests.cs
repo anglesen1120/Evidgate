@@ -15,17 +15,16 @@ namespace Identity.IntegrationTests;
 /// <remarks>
 /// The orphan case is exercised the way 0031's is: drop the key, seed the orphan the check guards
 /// against, then re-run the migration file itself as the migration role and read the refusal. The
-/// harness shares one database per assembly and its reset truncates rows but never DDL, so the test
-/// restores both the key and the row in a <c>finally</c>; the assertion after it proves the restore.
+/// database is this test's own (dropped after it), and the test still restores the key and the row in a
+/// <c>finally</c>: the assertion after it proves the restore, not only the refusal.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class MembershipUserFkTests : SessionTestBase
 {
     private const string MigrationFile = "0044_identity_login_linking.sql";
 
     public MembershipUserFkTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

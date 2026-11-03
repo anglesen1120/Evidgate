@@ -30,7 +30,6 @@ namespace Identity.IntegrationTests;
 /// DDL text.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class UserShapeTests : CatalogueTestBase
 {
@@ -124,20 +123,22 @@ public sealed class UserShapeTests : CatalogueTestBase
     public async Task Identity_Binding_Is_Unique_Per_Provider_And_Subject()
     {
         var userId = await SeedUserAsync("bound@example.com");
+        var subject = Unique.Text("subject");
 
-        await SeedIdentityAsync(userId, "github", "424242");
+        await SeedIdentityAsync(userId, "github", subject);
 
         var duplicate = await RefusalAsync(
-            "insert into public.user_identity (id, user_id, provider, subject) values (@id, @user_id, 'github', '424242')",
+            "insert into public.user_identity (id, user_id, provider, subject) values (@id, @user_id, 'github', @subject)",
             ("id", Guid.CreateVersion7()),
-            ("user_id", userId));
+            ("user_id", userId),
+            ("subject", subject));
 
         duplicate.SqlState.ShouldBe(PostgresErrorCodes.UniqueViolation);
         duplicate.ConstraintName.ShouldBe("user_identity_provider_subject_key");
 
         // Non-vacuity of the boundary: the same subject at the other provider is a
         // different human as far as V1 knows (AC6), so it must be accepted.
-        await SeedIdentityAsync(userId, "google", "424242");
+        await SeedIdentityAsync(userId, "google", subject);
 
         (await OwnerScalarAsync<long>(
             "select count(*) from public.user_identity where user_id = @user_id",
@@ -276,7 +277,7 @@ public sealed class UserShapeTests : CatalogueTestBase
     public async Task Owner_Can_Read_And_Write_All_Three_Tables()
     {
         var userId = await SeedUserAsync("owner@example.com");
-        await SeedIdentityAsync(userId, "google", "subject-1");
+        await SeedIdentityAsync(userId, "google", Unique.Text("subject"));
         await SeedSessionAsync(userId);
 
         (await OwnerScalarAsync<string>(
@@ -301,11 +302,13 @@ public sealed class UserShapeTests : CatalogueTestBase
     [Fact]
     public async Task Email_Index_Is_Plain_And_Non_Unique()
     {
-        await SeedUserAsync("shared@example.com");
-        await SeedUserAsync("SHARED@example.com");
+        var email = Unique.Email("shared");
+        await SeedUserAsync(email);
+        await SeedUserAsync(email.ToUpperInvariant());
 
         (await OwnerScalarAsync<long>(
-            "select count(*) from public.\"user\" where lower(email) = 'shared@example.com'"))
+            "select count(*) from public.\"user\" where lower(email) = @email",
+            ("email", email)))
             .ShouldBe(2, "the lower(email) index must not be unique (D3/T6: email is not an identity key)");
 
         var definition = await OwnerScalarAsync<string>(

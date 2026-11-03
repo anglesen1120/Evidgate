@@ -36,7 +36,6 @@ namespace Identity.IntegrationTests;
 /// here rather than agreeing with itself.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class SensitivePermissionTests : CatalogueTestBase
 {

@@ -15,7 +15,6 @@ namespace Identity.IntegrationTests.Invites;
 /// the product, not a flaky test.
 /// </summary>
 [Trait("Category", "Docker")]
-[Collection(HarnessSuite.Name)]
 public sealed class InviteQaTests : BindTestBase
 {
     public InviteQaTests(DatabaseFixture fixture)
@@ -179,7 +178,7 @@ public sealed class InviteQaTests : BindTestBase
     public async Task Revoked_Invite_NeverAutoBinds_Even_With_The_OptIn()
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
-        var invite = await SeedInviteAsync(org, "invitee@example.com", status: MembershipStatus.Revoked);
+        var invite = await SeedInviteAsync(org, Unique.Email("invitee"), status: MembershipStatus.Revoked);
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(await SeedUserAsync(), "google", invite.Email, EmailVerified: true, null, HostedDomain: "example.com"),

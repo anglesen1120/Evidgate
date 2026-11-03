@@ -16,12 +16,12 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// observed on the row, not on the result: <c>last_seen_at</c> moving (or not) is exactly what the throttle
 /// promises.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ExpiryTests : SessionHardeningTestBase
 {
     private static readonly TimeSpan Idle = TimeSpan.FromHours(8);
 
+    /// <summary>Shares the run's database: every deadline is observed on the row the test created.</summary>
     public ExpiryTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -31,7 +31,7 @@ public sealed class ExpiryTests : SessionHardeningTestBase
     [Fact]
     public async Task Idle_Activity_Inside_The_Throttle_Window_Writes_Nothing()
     {
-        var userId = await SeedUserAsync("slide-throttled@example.com");
+        var userId = await SeedUserAsync(Unique.Email("slide-throttled"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
 
@@ -56,7 +56,7 @@ public sealed class ExpiryTests : SessionHardeningTestBase
     [Fact]
     public async Task Idle_Activity_Slides_Once_And_Then_Throttles()
     {
-        var userId = await SeedUserAsync("slide@example.com");
+        var userId = await SeedUserAsync(Unique.Email("slide"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
 
@@ -98,7 +98,7 @@ public sealed class ExpiryTests : SessionHardeningTestBase
     [Fact]
     public async Task Absolute_Expiry_Caps_The_Idle_Slide()
     {
-        var userId = await SeedUserAsync("cap@example.com");
+        var userId = await SeedUserAsync(Unique.Email("cap"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
 
@@ -126,7 +126,7 @@ public sealed class ExpiryTests : SessionHardeningTestBase
     [Fact]
     public async Task A_Session_Past_Its_Absolute_Deadline_Is_Expired()
     {
-        var userId = await SeedUserAsync("absolute@example.com");
+        var userId = await SeedUserAsync(Unique.Email("absolute"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
 
@@ -154,7 +154,7 @@ public sealed class ExpiryTests : SessionHardeningTestBase
     [Fact]
     public async Task A_Session_Past_Its_Idle_Deadline_Is_Expired()
     {
-        var userId = await SeedUserAsync("idle@example.com");
+        var userId = await SeedUserAsync(Unique.Email("idle"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
 
@@ -176,7 +176,7 @@ public sealed class ExpiryTests : SessionHardeningTestBase
     [Fact]
     public async Task A_Revoked_Session_Is_Revoked_And_Outranks_Expiry()
     {
-        var userId = await SeedUserAsync("revoked@example.com");
+        var userId = await SeedUserAsync(Unique.Email("revoked"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
 
@@ -196,7 +196,7 @@ public sealed class ExpiryTests : SessionHardeningTestBase
     [Fact]
     public async Task A_Disabled_Accounts_Live_Session_Is_Disabled()
     {
-        var userId = await SeedUserAsync("disabled-later@example.com");
+        var userId = await SeedUserAsync(Unique.Email("disabled-later"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
         await OwnerExecuteAsync("update public.\"user\" set status = 'disabled' where id = @id", ("id", userId));
@@ -214,7 +214,7 @@ public sealed class ExpiryTests : SessionHardeningTestBase
     [Fact]
     public async Task Unknown_Missing_And_Overlong_Values_Are_Unknown_And_Write_Nothing()
     {
-        var userId = await SeedUserAsync("unknown@example.com");
+        var userId = await SeedUserAsync(Unique.Email("unknown"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
         var created = clock.UtcNow;
