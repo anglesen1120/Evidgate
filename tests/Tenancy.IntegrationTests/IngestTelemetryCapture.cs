@@ -44,6 +44,26 @@ internal static class IngestTelemetryCapture
         return listener;
     }
 
+    /// <summary>
+    /// Listens to every source, so the request's own server span (ASP.NET Core) and the application's
+    /// module spans are captured alike.
+    /// </summary>
+    internal static ActivityListener AllSpans(out ConcurrentQueue<Activity> spans)
+    {
+        var queue = new ConcurrentQueue<Activity>();
+        spans = queue;
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = _ => true,
+            Sample = (ref ActivityCreationOptions<ActivityContext> options) => ActivitySamplingResult.AllDataAndRecorded,
+            SampleUsingParentId = (ref ActivityCreationOptions<string> options) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = queue.Enqueue,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        return listener;
+    }
+
     /// <summary>Listens on the application's activity source and collects every stopped span.</summary>
     internal static ActivityListener ModuleSpans(out ConcurrentQueue<Activity> spans)
     {

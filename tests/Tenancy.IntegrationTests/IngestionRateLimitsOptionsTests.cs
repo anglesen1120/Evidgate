@@ -32,6 +32,7 @@ public sealed class IngestionRateLimitsOptionsTests
         var defaults = new IngestionRateLimits();
 
         defaults.PermitLimit.ShouldBe(120);
+        defaults.ProjectPermitLimit.ShouldBe(480);
         defaults.WindowSeconds.ShouldBe(60);
         defaults.MaxPartitions.ShouldBe(10_000);
         Validate(defaults).ShouldBeEmpty();
@@ -43,7 +44,9 @@ public sealed class IngestionRateLimitsOptionsTests
     [InlineData(100_000)]
     public void PermitLimit_InsideTheBounds_IsAccepted(int limit)
     {
-        Validate(new IngestionRateLimits { PermitLimit = limit }).ShouldBeEmpty();
+        // The project budget is raised with it: a project budget below the token budget is its own refusal.
+        Validate(new IngestionRateLimits { PermitLimit = limit, ProjectPermitLimit = Math.Max(limit, 480) })
+            .ShouldBeEmpty();
     }
 
     [Theory]
@@ -54,6 +57,36 @@ public sealed class IngestionRateLimitsOptionsTests
     {
         Validate(new IngestionRateLimits { PermitLimit = limit })
             .ShouldContain(message => message.Contains("EVIDGATE__INGESTION__RATELIMIT__PERMITLIMIT", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(480)]
+    [InlineData(400_000)]
+    public void ProjectPermitLimit_InsideTheBounds_IsAccepted(int limit)
+    {
+        Validate(new IngestionRateLimits { PermitLimit = 1, ProjectPermitLimit = limit }).ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(400_001)]
+    public void ProjectPermitLimit_OutsideTheBounds_IsRejected(int limit)
+    {
+        Validate(new IngestionRateLimits { PermitLimit = 1, ProjectPermitLimit = limit })
+            .ShouldContain(message => message.Contains("EVIDGATE__INGESTION__RATELIMIT__PROJECTPERMITLIMIT", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ProjectPermitLimit_BelowTheTokenBudget_IsRejected()
+    {
+        // A project budget under the token budget would cap one token at the project's rate, which is what
+        // the two budgets exist to avoid.
+        Validate(new IngestionRateLimits { PermitLimit = 120, ProjectPermitLimit = 119 })
+            .ShouldContain(message => message.Contains("EVIDGATE__INGESTION__RATELIMIT__PROJECTPERMITLIMIT", StringComparison.Ordinal));
+
+        Validate(new IngestionRateLimits { PermitLimit = 120, ProjectPermitLimit = 120 }).ShouldBeEmpty();
     }
 
     [Theory]
@@ -76,7 +109,7 @@ public sealed class IngestionRateLimitsOptionsTests
     }
 
     [Theory]
-    [InlineData(1)]
+    [InlineData(2)]
     [InlineData(10_000)]
     [InlineData(100_000)]
     public void MaxPartitions_InsideTheBounds_IsAccepted(int partitions)
@@ -86,7 +119,7 @@ public sealed class IngestionRateLimitsOptionsTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(-1)]
+    [InlineData(1)]
     [InlineData(100_001)]
     public void MaxPartitions_OutsideTheBounds_IsRejected(int partitions)
     {
@@ -101,12 +134,14 @@ public sealed class IngestionRateLimitsOptionsTests
             .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Ingestion:RateLimit:PermitLimit"] = "5",
+                ["EVIDGATE:Ingestion:RateLimit:ProjectPermitLimit"] = "20",
                 ["EVIDGATE:Ingestion:RateLimit:WindowSeconds"] = "30",
                 ["EVIDGATE:Ingestion:RateLimit:MaxPartitions"] = "500",
             })
             .Build());
 
         bound.PermitLimit.ShouldBe(5);
+        bound.ProjectPermitLimit.ShouldBe(20);
         bound.WindowSeconds.ShouldBe(30);
         bound.MaxPartitions.ShouldBe(500);
     }
@@ -154,6 +189,32 @@ public sealed class IngestionRateLimitsOptionsTests
         var failure = Should.Throw<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<IngestionRateLimits>>().Value);
         failure.Message.ShouldContain("EVIDGATE__INGESTION__RATELIMIT__WINDOWSECONDS");
+    }
+
+    [Fact]
+    public void Project_budget_under_the_token_budget_fails_boot_naming_the_key()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["EVIDGATE:Ingestion:RateLimit:ProjectPermitLimit"] = "60",
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services
+            .AddOptions<IngestionRateLimits>()
+            .BindConfiguration(IngestionRateLimits.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        using var provider = services.BuildServiceProvider();
+
+        // The default token budget is 120, so a project budget of 60 would cap one token at the project's rate.
+        var failure = Should.Throw<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<IngestionRateLimits>>().Value);
+        failure.Message.ShouldContain("EVIDGATE__INGESTION__RATELIMIT__PROJECTPERMITLIMIT");
     }
 
     /// <summary>Binds the section exactly as the module registers it.</summary>

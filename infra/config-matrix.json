@@ -1291,7 +1291,31 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "burst budget of `POST /v1/runs/{r}/events`: accepted batch requests per authenticated project and token id inside one fixed window. Over it is 429 `rate_limited` with `Retry-After`, refused before a byte of the body is read and with no write. The window state is per process, so the platform-wide burst is this value times the replica count. Option default 120; the range 1..100000 keeps a deployment from switching the limiter off."
+      "note": "burst budget of `POST /v1/runs/{r}/events`: accepted batch requests of one token id inside one fixed window. Over it is 429 `rate_limited` with `Retry-After`, refused before a byte of the body is read and with no write. The window state is per process, so the platform-wide burst is this value times the replica count. Option default 120; the range 1..100000 keeps a deployment from switching the limiter off."
+    },
+    {
+      "key": "EVIDGATE__INGESTION__RATELIMIT__PROJECTPERMITLIMIT",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion/Application/IngestionRateLimits.cs",
+      "constraints": {
+        "min": 1,
+        "max": 400000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "project-wide burst budget of `POST /v1/runs/{r}/events`: accepted batch requests of every token of one project inside one fixed window, so minting producer tokens cannot raise what a project may send. It must be at least `PERMITLIMIT`, or boot fails naming this key: one token is capped below the project's budget and its siblings keep a share. Option default 480 (4 × the default 120); the range 1..400000 bounds it, and a deployment that raises `PERMITLIMIT` past the default must raise this row with it."
     },
     {
       "key": "EVIDGATE__INGESTION__RATELIMIT__WINDOWSECONDS",
@@ -1325,7 +1349,7 @@
       "requiredAtBoot": false,
       "requiredBy": "src/Modules/Evidgate.Modules.Ingestion/Application/IngestionRateLimits.cs",
       "constraints": {
-        "min": 1,
+        "min": 2,
         "max": 100000
       },
       "secret": false,
@@ -1339,7 +1363,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "resident rate-limit partitions (project + token) before ended windows are swept. A new identity that arrives while every partition is live is refused with 429 rather than growing the map without bound. Option default 10000; the range 1..100000 bounds the map's memory."
+      "note": "resident rate-limit partitions before ended windows are swept. One request needs two: its project's partition and its token's, so the floor is 2 — a smaller map would refuse every request. A token that arrives while every partition is live is charged to the project's budget alone rather than growing the map without bound; a project that cannot get a partition is refused with 429. Option default 10000; the range 2..100000 bounds the map's memory."
     },
     {
       "key": "EVIDGATE__RUNS__DEFAULTCOLLECTIONTIMEOUT",

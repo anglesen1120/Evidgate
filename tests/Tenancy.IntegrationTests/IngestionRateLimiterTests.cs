@@ -1,6 +1,6 @@
-// The fixed-window arithmetic of IngestionRateLimiter, driven directly with a controlled clock: the
-// partition key, the bounded map, the reset at a window boundary and the eviction pass cannot hand one
-// identity a second budget. A host-level HTTP test cannot prove this, because every host owns its limiter.
+// The fixed-window arithmetic of IngestionRateLimiter, driven directly with a controlled clock: the two
+// budgets one request is charged to, the bounded and swept map, and the reset at a window boundary. A
+// host-level HTTP test cannot prove this, because every host owns its limiter.
 using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Endpoints;
 using Microsoft.Extensions.Options;
@@ -22,132 +22,181 @@ public sealed class IngestionRateLimiterTests
     private static readonly DateTimeOffset Start = DateTimeOffset.UnixEpoch;
 
     [Fact]
-    public void Acquire_SameProjectDifferentTokens_HaveSeparateBudgets()
+    public void AcquireBoth_TokenBudgetIsNarrowerThanTheProjectBudget()
     {
         var clock = new IngestRateLimitClock(Start);
-        var limiter = Limiter(permitLimit: 2, windowSeconds: 60, maxPartitions: 10, clock);
+        var limiter = Limiter(permitLimit: 1, projectPermitLimit: 3, windowSeconds: 60, maxPartitions: 10, clock);
 
-        // token-a spends its own budget, then the project's shared budget runs out for everyone.
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeFalse("the token's own budget is spent");
+        // One token is capped on its own budget long before the project's is spent, so its siblings keep a share.
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeFalse("the token's own budget is spent, the project's is not");
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-c").Allowed.ShouldBeTrue();
 
-        clock.Advance(TimeSpan.FromSeconds(61));
+        var fourth = limiter.AcquireBoth(Project, "token-d");
 
-        // A second token has a budget of its own and is admitted on it.
-        limiter.Acquire(Project, "token-b").Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, "token-b").Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, "token-b").Allowed.ShouldBeFalse();
+        fourth.Allowed.ShouldBeFalse("the project, not the token, refuses the fourth sibling");
+        fourth.RetryAfterSeconds.ShouldBe(60);
     }
 
     [Fact]
-    public void Acquire_ProjectBudgetCapsEveryTokenOfThatProject()
+    public void AcquireBoth_ProjectBudgetCapsEveryTokenOfThatProject()
     {
         var clock = new IngestRateLimitClock(Start);
-        var limiter = Limiter(permitLimit: 2, windowSeconds: 60, maxPartitions: 10, clock);
+        var limiter = Limiter(permitLimit: 2, projectPermitLimit: 2, windowSeconds: 60, maxPartitions: 10, clock);
 
-        limiter.Acquire(Project, tokenId: null).Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, tokenId: null).Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
 
         // The project's budget is what a token minting spree runs into: a brand-new token still cannot write.
-        limiter.Acquire(Project, "token-brand-new").Allowed.ShouldBeFalse("the project budget is shared");
-        limiter.Acquire(Project, tokenId: null).Allowed.ShouldBeFalse();
+        var fresh = limiter.AcquireBoth(Project, "token-brand-new");
+
+        fresh.Allowed.ShouldBeFalse("the project budget is shared");
+        fresh.RetryAfterSeconds.ShouldBe(60);
 
         // Another project is untouched.
-        limiter.Acquire(OtherProject, "token-brand-new").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(OtherProject, "token-brand-new").Allowed.ShouldBeTrue();
     }
 
     [Fact]
-    public void Acquire_SameTokenDifferentProjects_HaveSeparateBudgets()
+    public void AcquireBoth_RefusedTokenChargesNothingToTheProject()
     {
         var clock = new IngestRateLimitClock(Start);
-        var limiter = Limiter(permitLimit: 1, windowSeconds: 60, maxPartitions: 10, clock);
+        var limiter = Limiter(permitLimit: 1, projectPermitLimit: 2, windowSeconds: 60, maxPartitions: 10, clock);
 
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeFalse();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeFalse("the token's own budget is spent");
+
+        // Both budgets are charged in one step: had the refusal spent the project's budget as well,
+        // token-b would already be over it.
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeTrue("the refusal charged neither budget");
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeFalse("token-b's own budget is spent");
+        limiter.AcquireBoth(Project, "token-c").Allowed.ShouldBeFalse("the project budget is now spent");
+    }
+
+    [Fact]
+    public void AcquireBoth_SameTokenDifferentProjects_HaveSeparateBudgets()
+    {
+        var clock = new IngestRateLimitClock(Start);
+        var limiter = Limiter(permitLimit: 1, projectPermitLimit: 1, windowSeconds: 60, maxPartitions: 10, clock);
+
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeFalse();
 
         // The partition names the project too, so the same token in another project has its own budget.
-        limiter.Acquire(OtherProject, "token-a").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(OtherProject, "token-a").Allowed.ShouldBeTrue();
     }
 
     [Fact]
-    public void Acquire_AfterTheWindowEnds_ResetsTheBudget()
+    public void AcquireBoth_AfterTheWindowEnds_ResetsBothBudgets()
     {
         var clock = new IngestRateLimitClock(Start);
-        var limiter = Limiter(permitLimit: 1, windowSeconds: 60, maxPartitions: 10, clock);
+        var limiter = Limiter(permitLimit: 1, projectPermitLimit: 1, windowSeconds: 60, maxPartitions: 10, clock);
 
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeFalse();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeFalse();
 
         clock.Advance(TimeSpan.FromSeconds(61));
 
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeFalse();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeFalse();
     }
 
     [Fact]
-    public void Acquire_FullMap_RefusesANewIdentity()
+    public void AcquireBoth_FullMap_ChargesANewTokenToTheProjectOnly()
     {
         var clock = new IngestRateLimitClock(Start);
-        var limiter = Limiter(permitLimit: 5, windowSeconds: 60, maxPartitions: 1, clock);
+        var limiter = Limiter(permitLimit: 1, projectPermitLimit: 3, windowSeconds: 60, maxPartitions: 2, clock);
 
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
+        // Both partitions of the map belong to this project: its own and token-a's.
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
 
-        var refused = limiter.Acquire(Project, "token-b");
+        // There is no room for a token partition, so the project's budget alone admits the request.
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeTrue("the project budget still admits without a token window");
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeTrue();
 
-        refused.Allowed.ShouldBeFalse();
-        refused.RetryAfterSeconds.ShouldBe(60, "a full map refuses for one whole window");
-    }
+        var spent = limiter.AcquireBoth(Project, "token-b");
 
-    [Fact]
-    public void Acquire_ResetWindowIsNotEvictedByAFullMap()
-    {
-        var clock = new IngestRateLimitClock(Start);
-        var limiter = Limiter(permitLimit: 1, windowSeconds: 60, maxPartitions: 1, clock);
+        spent.Allowed.ShouldBeFalse("the project budget is spent");
+        spent.RetryAfterSeconds.ShouldBe(60);
 
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
-
-        // The window ends and this caller's next request resets it: that fresh budget must survive the
-        // eviction pass a new identity triggers, or the same identity would end up with two.
+        // A full map is not a leak: the ended windows are swept, so the next window admits again.
         clock.Advance(TimeSpan.FromSeconds(61));
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
-
-        limiter.Acquire(Project, "token-b").Allowed.ShouldBeFalse("token-a's window is live, so nothing is swept");
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeFalse("a live window is spent once, not twice");
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeTrue();
     }
 
     [Fact]
-    public void Acquire_ExpiredPartitionIsEvictedThenAdmittedOnce()
+    public void AcquireBoth_FullMapRefusesANewProject()
     {
         var clock = new IngestRateLimitClock(Start);
-        var limiter = Limiter(permitLimit: 1, windowSeconds: 60, maxPartitions: 1, clock);
+        var limiter = Limiter(permitLimit: 5, projectPermitLimit: 5, windowSeconds: 60, maxPartitions: 2, clock);
 
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
+
+        // A project that cannot get a partition has no counter to be charged to, so it is refused rather
+        // than admitted unbounded.
+        var refused = limiter.AcquireBoth(OtherProject, "token-a");
+
+        refused.Allowed.ShouldBeFalse("a new project with no partition of its own fails closed");
+        refused.RetryAfterSeconds.ShouldBe(60);
+
+        // Positive control: the refusal was map pressure, not a permanent deny.
+        clock.Advance(TimeSpan.FromSeconds(61));
+        limiter.AcquireBoth(OtherProject, "token-a").Allowed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void AcquireBoth_ExpiredPartitionIsEvictedThenAdmittedOnce()
+    {
+        var clock = new IngestRateLimitClock(Start);
+        var limiter = Limiter(permitLimit: 1, projectPermitLimit: 4, windowSeconds: 60, maxPartitions: 2, clock);
+
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
 
         clock.Advance(TimeSpan.FromSeconds(61));
 
-        // The expired partition is swept, so the new identity is admitted exactly once.
-        limiter.Acquire(Project, "token-b").Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, "token-b").Allowed.ShouldBeFalse();
+        // token-a's expired partition is swept, which is the only way token-b gets a window of its own.
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeTrue("the expired partition was evicted");
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeFalse("token-b's replacement window is live and spent");
 
-        // The evicted identity starts again from one fresh budget, not from a surviving second one.
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeFalse();
+        // An ended window admits the same identity once more, never the evicted one's leftovers.
+        clock.Advance(TimeSpan.FromSeconds(61));
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void AcquireBoth_SweepKeepsALiveResetWindow()
+    {
+        var clock = new IngestRateLimitClock(Start);
+        var limiter = Limiter(permitLimit: 1, projectPermitLimit: 3, windowSeconds: 60, maxPartitions: 2, clock);
+
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
+
+        // The window ends and this caller's next request resets both of its windows: those fresh budgets
+        // must survive the eviction pass a new identity triggers, or the same identity would get two.
+        clock.Advance(TimeSpan.FromSeconds(61));
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
+
+        // Full map: token-b is charged to the project alone and triggers the sweep.
+        limiter.AcquireBoth(Project, "token-b").Allowed.ShouldBeTrue();
+
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeFalse("a live window is spent once, not twice");
     }
 
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(59)]
-    public void Acquire_Refusal_CarriesAWholeSecondDelayInsideTheWindow(int secondsElapsed)
+    public void AcquireBoth_Refusal_CarriesAWholeSecondDelayInsideTheWindow(int secondsElapsed)
     {
         var clock = new IngestRateLimitClock(Start);
-        var limiter = Limiter(permitLimit: 1, windowSeconds: 60, maxPartitions: 10, clock);
+        var limiter = Limiter(permitLimit: 1, projectPermitLimit: 1, windowSeconds: 60, maxPartitions: 10, clock);
 
-        limiter.Acquire(Project, "token-a").Allowed.ShouldBeTrue();
+        limiter.AcquireBoth(Project, "token-a").Allowed.ShouldBeTrue();
         clock.Advance(TimeSpan.FromSeconds(secondsElapsed));
 
-        var refused = limiter.Acquire(Project, "token-a");
+        var refused = limiter.AcquireBoth(Project, "token-a");
 
         refused.Allowed.ShouldBeFalse();
         refused.RetryAfterSeconds.ShouldBeGreaterThanOrEqualTo(1);
@@ -155,11 +204,17 @@ public sealed class IngestionRateLimiterTests
         refused.RetryAfterSeconds.ShouldBe(60 - secondsElapsed);
     }
 
-    private static IngestionRateLimiter Limiter(int permitLimit, int windowSeconds, int maxPartitions, TimeProvider clock) =>
+    private static IngestionRateLimiter Limiter(
+        int permitLimit,
+        int projectPermitLimit,
+        int windowSeconds,
+        int maxPartitions,
+        TimeProvider clock) =>
         new(
             Options.Create(new IngestionRateLimits
             {
                 PermitLimit = permitLimit,
+                ProjectPermitLimit = projectPermitLimit,
                 WindowSeconds = windowSeconds,
                 MaxPartitions = maxPartitions,
             }),

@@ -1,17 +1,21 @@
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Microsoft.Extensions.Logging;
 
 namespace Evidgate.Modules.Ingestion.Application;
 
 /// <summary>
-/// The single place a 04.1.1-T3 limit refusal is counted and logged (04.1.1 §5/§8, DECISIONS §8.1 D-A8).
-/// Every refusal of the events route passes through <see cref="Record"/> exactly once, so the counter and
-/// the log line stay in step and no rejection is counted twice.
+/// The single place an events-route rejection is counted and logged (04.1.1 §5/§8, DECISIONS §8.1 D-A8).
+/// Every refusal passes through <see cref="Record"/> exactly once, so the counter and the log line stay
+/// in step and no rejection is counted twice.
 /// <para>
-/// The reason vocabulary is closed: <see cref="BodyTooLarge"/>, <see cref="EventCount"/>,
-/// <see cref="ExpandedTooLarge"/>, <see cref="RatioExceeded"/>, <see cref="EncodingUnsupported"/> and
-/// <see cref="GzipInvalid"/>. Neither the counter nor the log ever carries the body, a header value or any
-/// other tenant-controlled text — only the echoed request id, the route's run id and byte counts.
+/// The reason vocabulary is closed: the edge's caps (<see cref="BodyTooLarge"/>, <see cref="EventCount"/>,
+/// <see cref="ExpandedTooLarge"/>, <see cref="RatioExceeded"/>, <see cref="EncodingUnsupported"/>,
+/// <see cref="GzipInvalid"/>, <see cref="RateLimited"/>) and the handler's own outcomes, mapped from the
+/// stable error code by <see cref="ReasonFor"/>. Neither the counter nor the log ever carries the body, a
+/// header value or any other tenant-controlled text — only the echoed request id, the route's run id and
+/// byte counts.
 /// </para>
 /// </summary>
 internal static partial class IngestBatchRejection
@@ -36,6 +40,45 @@ internal static partial class IngestBatchRejection
 
     /// <summary>The project and token exceeded their fixed-window burst budget, so the body was never read.</summary>
     public const string RateLimited = "rate_limited";
+
+    /// <summary>The batch's events were refused by the contract or the run's plan (422).</summary>
+    public const string EventInvalid = "event_invalid";
+
+    /// <summary>The caller may not ingest here: a missing permission, a project outside its scope or a suspended project (403).</summary>
+    public const string Forbidden = "forbidden";
+
+    /// <summary>The run no longer accepts events (409 <c>run_closed</c>).</summary>
+    public const string RunClosed = "run_closed";
+
+    /// <summary>The addressed run does not exist for this tenant (404).</summary>
+    public const string NotFound = "not_found";
+
+    /// <summary>No authenticated producer could be resolved (401).</summary>
+    public const string Unauthenticated = "unauthenticated";
+
+    /// <summary>A rejection the vocabulary above does not name; the code itself never becomes a label.</summary>
+    public const string Other = "other";
+
+    /// <summary>
+    /// The closed reason of a handler or pipeline failure, so one rejection is counted once under a
+    /// bounded label: the wire code stays on the response, never on the metric.
+    /// </summary>
+    /// <param name="error">The failure the pipeline or handler returned.</param>
+    public static string ReasonFor(Error error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+
+        return error.Code switch
+        {
+            ApiErrorCode.EventInvalid or ApiErrorCode.UnknownExecutionKey or ApiErrorCode.SequenceReused => EventInvalid,
+            ApiErrorCode.Forbidden or ApiErrorCode.ProjectScopeMismatch or ApiErrorCode.NoMembership
+                or ApiErrorCode.OrgSuspended => Forbidden,
+            ApiErrorCode.RunClosed => RunClosed,
+            ApiErrorCode.NotFound => NotFound,
+            ApiErrorCode.Unauthenticated => Unauthenticated,
+            _ => Other,
+        };
+    }
 
     /// <summary>
     /// Counts and logs one refusal. <paramref name="requestId"/> is the effective <c>X-Request-Id</c>

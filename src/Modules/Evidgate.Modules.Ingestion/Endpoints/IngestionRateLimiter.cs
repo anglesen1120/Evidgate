@@ -11,21 +11,27 @@ namespace Evidgate.Modules.Ingestion.Endpoints;
 /// design: replicas do not share a counter, so the effective limit multiplies by
 /// the replica count (a shared store is a separate task).
 /// <para>
-/// Lookup, window reset, eviction and the increment happen under one lock, so an
-/// expired window can never be removed between a caller's reset and its increment —
-/// which would hand the same identity two budgets. The map is bounded: when it is
-/// full the expired windows are swept first, and a new identity that still finds no
-/// room is refused rather than admitted into an unbounded map.
+/// Lookup, window reset, eviction and both increments happen under one lock, and a
+/// request that either budget refuses is charged to neither: see <see cref="AcquireBoth"/>.
+/// The map is bounded, so a token that finds no room is charged to the project's
+/// budget alone rather than growing the map; only a project that cannot get a
+/// partition of its own is refused.
 /// </para>
 /// </summary>
 internal sealed class IngestionRateLimiter
 {
+    /// <summary>Smallest gap between two eviction passes, so a flooded map cannot pay a full scan per request.</summary>
+    private static readonly TimeSpan SweepInterval = TimeSpan.FromSeconds(1);
+
     private readonly Dictionary<Partition, Window> _windows = new();
     private readonly object _sync = new();
     private readonly TimeSpan _window;
     private readonly int _permitLimit;
+    private readonly int _projectPermitLimit;
     private readonly int _maxPartitions;
     private readonly TimeProvider _clock;
+
+    private DateTimeOffset _lastSweep = DateTimeOffset.MinValue;
 
     public IngestionRateLimiter(IOptions<IngestionRateLimits> options, TimeProvider clock)
     {
@@ -33,67 +39,115 @@ internal sealed class IngestionRateLimiter
         ArgumentNullException.ThrowIfNull(clock);
 
         _permitLimit = options.Value.PermitLimit;
+        _projectPermitLimit = options.Value.ProjectPermitLimit;
         _window = TimeSpan.FromSeconds(options.Value.WindowSeconds);
         _maxPartitions = options.Value.MaxPartitions;
         _clock = clock;
     }
 
     /// <summary>
-    /// Counts one request against the budget of <paramref name="projectId"/> and, when
-    /// <paramref name="tokenId"/> is given, of that token in it; returns whether it is admitted plus the
-    /// whole seconds to wait when it is not. A null token id charges the project's whole budget.
+    /// Counts one request against the token's budget and the project's budget in one
+    /// step and admits it only when both allow: a refusal charges neither window, so a
+    /// token that is over its own limit cannot spend the budget its siblings share.
     /// </summary>
-    public RateLimitDecision Acquire(Guid projectId, string? tokenId)
+    /// <param name="projectId">The project scope of the authenticated caller.</param>
+    /// <param name="tokenId">The caller's credential id; its budget is always narrower than the project's.</param>
+    /// <returns>The verdict plus the refusing window's whole-second <c>Retry-After</c> value.</returns>
+    public RateLimitDecision AcquireBoth(Guid projectId, string tokenId)
     {
-        if (tokenId is not null)
-        {
-            ArgumentException.ThrowIfNullOrEmpty(tokenId);
-        }
+        ArgumentException.ThrowIfNullOrEmpty(tokenId);
 
         var now = _clock.GetUtcNow();
-        var partition = new Partition(projectId, tokenId);
+        var projectPartition = new Partition(projectId, TokenId: null);
+        var tokenPartition = new Partition(projectId, tokenId);
 
         lock (_sync)
         {
-            if (!_windows.TryGetValue(partition, out var window))
+            // A project that cannot get a partition of its own is refused: admitting it
+            // without a counter would hand it an unbounded rate.
+            if (FindOrCreate(projectPartition, now) is not { } projectWindow)
             {
-                if (_windows.Count >= _maxPartitions)
+                return new RateLimitDecision(false, (int)_window.TotalSeconds);
+            }
+
+            ResetIfExpired(projectWindow, now);
+            if (projectWindow.Count >= _projectPermitLimit)
+            {
+                return Refuse(projectWindow, now);
+            }
+
+            // A token window that is live and spent refuses the request outright; one that
+            // finds no room in a full map is charged to the project alone, so the request
+            // keeps its rate limit (the project's) instead of failing shut on map pressure.
+            var tokenWindow = FindOrCreate(tokenPartition, now);
+            if (tokenWindow is not null)
+            {
+                ResetIfExpired(tokenWindow, now);
+                if (tokenWindow.Count >= _permitLimit)
                 {
-                    Sweep(now);
-                    if (_windows.Count >= _maxPartitions)
-                    {
-                        // No room for a new identity: refuse for one full window instead of growing the map.
-                        return new RateLimitDecision(false, (int)_window.TotalSeconds);
-                    }
+                    return Refuse(tokenWindow, now);
                 }
-
-                window = new Window(now);
-                _windows[partition] = window;
             }
 
-            if (now - window.Start >= _window)
+            projectWindow.Count++;
+            if (tokenWindow is not null)
             {
-                window.Start = now;
-                window.Count = 0;
+                tokenWindow.Count++;
             }
-
-            if (window.Count >= _permitLimit)
-            {
-                return new RateLimitDecision(false, SecondsUntil(window.Start + _window, now));
-            }
-
-            window.Count++;
 
             return new RateLimitDecision(true, 0);
         }
     }
 
     /// <summary>
-    /// Drops windows whose fixed window has ended. Only called with <see cref="_sync"/> held and only
-    /// when the map is full, so a live budget is never evicted and no caller can hold a removed window.
+    /// The resident window of <paramref name="partition"/>, a new one when the map has
+    /// room, or null when it has none. Only runs with <see cref="_sync"/> held, so the
+    /// eviction pass it may trigger cannot race a caller's increment.
     /// </summary>
-    private void Sweep(DateTimeOffset now)
+    private Window? FindOrCreate(Partition partition, DateTimeOffset now)
     {
+        if (_windows.TryGetValue(partition, out var window))
+        {
+            return window;
+        }
+
+        if (_windows.Count >= _maxPartitions)
+        {
+            SweepIfDue(now);
+            if (_windows.Count >= _maxPartitions)
+            {
+                return null;
+            }
+        }
+
+        window = new Window(now);
+        _windows[partition] = window;
+
+        return window;
+    }
+
+    private void ResetIfExpired(Window window, DateTimeOffset now)
+    {
+        if (now - window.Start >= _window)
+        {
+            window.Start = now;
+            window.Count = 0;
+        }
+    }
+
+    /// <summary>
+    /// Drops windows whose fixed window has ended, at most once per <see cref="SweepInterval"/>.
+    /// A live budget is never evicted, and no caller can hold a removed window because the
+    /// whole pass runs under <see cref="_sync"/>.
+    /// </summary>
+    private void SweepIfDue(DateTimeOffset now)
+    {
+        if (now - _lastSweep < SweepInterval)
+        {
+            return;
+        }
+
+        _lastSweep = now;
         List<Partition>? expired = null;
 
         foreach (var entry in _windows)
@@ -114,6 +168,9 @@ internal sealed class IngestionRateLimiter
             _windows.Remove(partition);
         }
     }
+
+    private RateLimitDecision Refuse(Window window, DateTimeOffset now) =>
+        new(false, SecondsUntil(window.Start + _window, now));
 
     private int SecondsUntil(DateTimeOffset end, DateTimeOffset now)
     {
@@ -136,7 +193,7 @@ internal sealed class IngestionRateLimiter
     /// </summary>
     private readonly record struct Partition(Guid ProjectId, string? TokenId);
 
-    /// <summary>The verdict of <see cref="Acquire"/>.</summary>
+    /// <summary>The verdict of <see cref="AcquireBoth"/>.</summary>
     /// <param name="Allowed">Whether the request may proceed.</param>
     /// <param name="RetryAfterSeconds">Whole seconds of the <c>Retry-After</c> header; 0 when admitted.</param>
     internal readonly record struct RateLimitDecision(bool Allowed, int RetryAfterSeconds);
