@@ -136,7 +136,7 @@ public sealed class ObservabilityTests
             requestId);
 
     /// <summary>The tag value of <paramref name="span"/> under <paramref name="key"/>, as the exporter would read it.</summary>
-    private static string? Tag(Activity span, string key) => span.GetTagItem(key) as string;
+    private static string? Tag(Activity span, string key) => span.GetTagItem(key)?.ToString();
 
     /// <summary>Waits for the stopped span of the given operation; the listener reports on stop, so a short poll is enough.</summary>
     private static Task<Activity?> WaitForSpanAsync(ConcurrentQueue<Activity> spans, string operation) =>
