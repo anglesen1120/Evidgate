@@ -1,6 +1,6 @@
+using System.Buffers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
@@ -12,6 +12,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
 using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
@@ -41,7 +42,7 @@ internal sealed record CreateEnvironmentRevisionCommand(
 /// </summary>
 [AuditedAction("environment_revision.create")]
 [Permission(Permissions.Environment.Write)]
-internal sealed partial class CreateEnvironmentRevisionCommandHandler(
+internal sealed class CreateEnvironmentRevisionCommandHandler(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
@@ -60,7 +61,7 @@ internal sealed partial class CreateEnvironmentRevisionCommandHandler(
             return Result.Failure<EnvironmentRevisionCreated>(mismatch);
         }
 
-        if (!EnvironmentKey().IsMatch(command.EnvironmentKey))
+        if (!IsEnvironmentKey(command.EnvironmentKey))
         {
             return Result.Failure<EnvironmentRevisionCreated>(OrchestratorErrors.EnvironmentRevisionInvalid(
                 "the environment key must be lower-case letters, digits, '_' or '-' (at most 64)",
@@ -74,7 +75,7 @@ internal sealed partial class CreateEnvironmentRevisionCommandHandler(
 
         var request = JsonSerializer.Deserialize<CreateEnvironmentRevisionRequest>(command.Body.Span, RequestJson)!;
         var name = request.Name?.Trim();
-        if (name is { Length: 0 } || (name is not null && (name.Any(char.IsControl) || Evidgate.BuildingBlocks.SharedKernel.Security.SecretShape.ValueLooksSecret(name))))
+        if (name is { Length: 0 } || (name is not null && (name.Any(char.IsControl) || SecretShape.ValueLooksSecret(name))))
         {
             return Result.Failure<EnvironmentRevisionCreated>(OrchestratorErrors.EnvironmentRevisionInvalid(
                 "the name must be printable, secret-free text",
@@ -202,8 +203,15 @@ internal sealed partial class CreateEnvironmentRevisionCommandHandler(
         }
     }
 
-    [GeneratedRegex("^[a-z0-9][a-z0-9_-]{0,63}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex EnvironmentKey();
+    /// <summary><c>[a-z0-9_-]</c>, the class of the environment key's later characters.</summary>
+    private static readonly SearchValues<char> KeyTail = SearchValues.Create("abcdefghijklmnopqrstuvwxyz0123456789_-");
+
+    /// <summary>
+    /// The environment-key grammar: <c>[a-z0-9][a-z0-9_-]{0,63}</c>, one forward pass and no wall-clock setting, so a
+    /// slow host cannot turn a refusal into an exception. A trailing newline is refused (the <c>\z</c> reading).
+    /// </summary>
+    internal static bool IsEnvironmentKey(string? key) =>
+        AsciiShape.IsMatch(key, 1, 64, AsciiShape.LowerAlnum, KeyTail);
 
     private sealed class EnvironmentRow
     {

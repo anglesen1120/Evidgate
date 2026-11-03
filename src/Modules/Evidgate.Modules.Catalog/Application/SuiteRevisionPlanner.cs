@@ -40,7 +40,7 @@ internal sealed record SuiteRevisionPlan(
 /// documents, secret-shape rules, variant normalisation, cross-project membership, the dependency DAG, and the
 /// content hash. Read-only, so the create command and the dry-run preview share it and cannot disagree.
 /// </summary>
-internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schemaSet)
+internal sealed class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schemaSet)
 {
     internal const int MaxMembers = 10_000;
     internal const int MaxEdges = 50_000;
@@ -125,7 +125,7 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
             var member = members[index];
             var reference = string.IsNullOrEmpty(member.Ref) ? "_" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) : member.Ref;
 
-            if (!RefShape.IsMatch(reference) || !refs.Add(reference))
+            if (!IsValidRef(reference) || !refs.Add(reference))
             {
                 return Fail(SuiteErrors.Invalid(
                     "member refs must be unique names of 1-64 letters, digits, '_', '.' or '-'",
@@ -398,8 +398,6 @@ internal sealed partial class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schem
 
     private static Result<SuiteRevisionPlan> Fail(Error error) => Result.Failure<SuiteRevisionPlan>(error);
 
-    [System.Text.RegularExpressions.GeneratedRegex("^[A-Za-z0-9_.-]{1,64}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial System.Text.RegularExpressions.Regex RefShapeRegex();
-
-    private static System.Text.RegularExpressions.Regex RefShape => RefShapeRegex();
+    /// <summary>Member refs: 1-64 ASCII letters, digits, <c>_</c>, <c>.</c> or <c>-</c>.</summary>
+    internal static bool IsValidRef(string reference) => AsciiShape.IsMatch(reference, 1, 64, AsciiShape.AlnumDotDash, AsciiShape.AlnumDotDash);
 }

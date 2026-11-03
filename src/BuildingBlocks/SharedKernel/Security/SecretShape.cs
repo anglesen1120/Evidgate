@@ -142,6 +142,16 @@ public static partial class SecretShape
             && Entropy(trimmed) >= 3.7;
     }
 
+    /// <summary>
+    /// True when <paramref name="value"/> is the wire shape of a reference, <c>secret:</c> and 1–64 characters of
+    /// <c>[A-Za-z0-9_.-]</c>. A reference is not a licence to carry a token: its name still has to pass
+    /// <see cref="SecretNameLooksLikeValue"/>. Anchored at both ends, so a trailing newline is refused.
+    /// </summary>
+    /// <param name="value">The candidate reference.</param>
+    public static bool IsReference(ReadOnlySpan<char> value) =>
+        value.StartsWith("secret:", StringComparison.Ordinal)
+        && AsciiShape.IsMatch(value[7..], 1, 64, AsciiShape.AlnumDotDash, AsciiShape.AlnumDotDash);
+
     /// <summary>Shannon entropy in bits per character.</summary>
     /// <param name="text">The text.</param>
     public static double Entropy(string text)

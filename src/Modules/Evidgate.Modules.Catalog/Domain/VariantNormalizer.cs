@@ -1,7 +1,7 @@
+using System.Buffers;
 using Evidgate.BuildingBlocks.SharedKernel.Security;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Canonicalization;
 
 namespace Evidgate.Modules.Catalog.Domain;
@@ -22,7 +22,7 @@ internal sealed record VariantProblem(string Path, string Reason);
 /// variant, and a parameter set that carries a secret-shaped key or value never becomes one. Parameters are flat:
 /// scalars and short arrays of scalars (nested objects are refused so a secret cannot hide one level down).
 /// </summary>
-internal static partial class VariantNormalizer
+internal static class VariantNormalizer
 {
     /// <summary>Keys allowed per variant.</summary>
     internal const int MaxKeys = 32;
@@ -35,6 +35,9 @@ internal static partial class VariantNormalizer
 
     private const int MaxStringChars = 256;
     private const int MaxArrayItems = 32;
+
+    /// <summary>A variant key's first character: an ASCII letter or <c>_</c>.</summary>
+    private static readonly SearchValues<char> KeyFirst = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_");
 
     /// <summary>Keys that describe a variant for humans and say nothing about what it runs: dropped before hashing.</summary>
     private static readonly HashSet<string> NonIdentifying = new(StringComparer.OrdinalIgnoreCase)
@@ -80,7 +83,7 @@ internal static partial class VariantNormalizer
 
                 // A rejected key is named by its position, never echoed: it may itself be the secret.
                 var path = basePath + "/#" + count.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                if (!KeyShape().IsMatch(member.Name) || !TextRules.IsClean(member.Name))
+                if (!IsValidKey(member.Name) || !TextRules.IsClean(member.Name))
                 {
                     problems.Add(new VariantProblem(path, "invalid_key"));
                     continue;
@@ -232,6 +235,6 @@ internal static partial class VariantNormalizer
         return JsonValue.Create(EnumLike.Contains(key) ? text.Trim().ToLowerInvariant() : text);
     }
 
-    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_.-]{0,63}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex KeyShape();
+    /// <summary>Variant keys: 1-64 characters, the first an ASCII letter or <c>_</c>, the rest also digits, <c>.</c> and <c>-</c>.</summary>
+    internal static bool IsValidKey(string key) => AsciiShape.IsMatch(key, 1, 64, KeyFirst, AsciiShape.AlnumDotDash);
 }
