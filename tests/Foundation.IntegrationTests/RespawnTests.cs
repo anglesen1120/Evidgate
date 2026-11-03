@@ -5,13 +5,12 @@ using Xunit;
 namespace Foundation.IntegrationTests;
 
 /// <summary>
-/// 01.6.1-T2.2 (AC2): Respawn empties every application table of a database, and the
-/// migration journal survives the reset.
+/// Respawn empties every application table of a database, and the migration journal
+/// survives the reset.
 /// <para>
-/// The class runs on a private copy of the migrated template: the assertions below are
-/// about the reset and a whole-database census, which another test's rows would change.
-/// A copy therefore starts empty for every test — the reset is exercised explicitly
-/// where it is asserted, instead of being the between-test isolation.
+/// The class runs on a private copy of the migrated template: the assertions are about the
+/// reset and a whole-database census that another test's rows would change, so each test
+/// starts empty and the reset is asserted instead of being the between-test isolation.
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
@@ -59,12 +58,9 @@ public sealed class RespawnTests : TenantTest
     }
 
     /// <summary>
-    /// The outcome of the reset rather than its mechanism: Respawn builds one
-    /// truncate plan from the catalog when the harness starts, so a table it did not
-    /// cover would keep a previous test's rows. The census is read through a
-    /// superuser, the only role whose view is not filtered by row level security, and
-    /// it is asserted non-empty before the reset so an always-empty census cannot
-    /// pass this test by accident.
+    /// The outcome of the reset rather than its mechanism: Respawn builds one truncate plan
+    /// from the catalog at harness start, so an uncovered table would keep a previous test's
+    /// rows; the superuser census (RLS hides them from other roles) is asserted non-empty first.
     /// </summary>
     [Fact]
     public async Task Respawn_LeavesNoRowInAnyApplicationTable()
@@ -105,8 +101,8 @@ public sealed class RespawnTests : TenantTest
         (await Fixture.CountProbeRowsAsync(cancellationToken: Token)).ShouldBe(0L);
 
         // ...and the Migrator's journal is not: a reset that truncated
-        // public.schema_migration would take the readiness state (01.1.2-T1.3) with
-        // it, and every later test of this project would fail as "behind head".
+        // public.schema_migration would take the readiness state with it, and every
+        // later test of this project would fail as "behind head".
         (await Fixture.JournalHeadAsync(Token)).ShouldBe(headBefore);
         (await Fixture.JournalCountAsync(Token)).ShouldBe(countBefore);
     }

@@ -3,14 +3,13 @@ using Evidgate.Testing;
 namespace Identity.IntegrationTests;
 
 /// <summary>
-/// Base of the catalogue suites (02.2.1-T1): the assembly's migrated database, where a
-/// test arranges its own organization and reads only its own tenant.
+/// Base of the catalogue suites: the assembly's migrated database, where a test arranges its
+/// own organization and reads only its own tenant.
 /// </summary>
 /// <remarks>
-/// The built-in permission catalogue (<c>permission</c>, <c>role</c>,
-/// <c>role_permission</c>) is migration-owned reference data (built-ins are never
-/// deleted, 02 §8). It is written once, when the database is migrated, so a test reads
-/// it as it is — no suite re-applies the seed and nothing truncates these tables.
+/// The built-in catalogue (<c>permission</c>, <c>role</c>, <c>role_permission</c>) is
+/// migration-owned reference data (built-ins are never deleted) written once at migration
+/// time, so a test reads it as it is and no suite re-applies the seed.
 /// </remarks>
 public abstract class CatalogueTestBase : TenantTest
 {

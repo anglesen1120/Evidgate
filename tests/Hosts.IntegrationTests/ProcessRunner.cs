@@ -72,10 +72,7 @@ internal static class ProcessRunner
     /// </summary>
     public static async Task StopAsync(Process process)
     {
-        if (!process.HasExited)
-        {
-            process.Kill();
-        }
+        KillIfRunning(process);
 
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         try
@@ -111,7 +108,7 @@ internal static class ProcessRunner
         }
         catch
         {
-            process.Kill();
+            KillIfRunning(process);
             throw;
         }
 
@@ -126,7 +123,7 @@ internal static class ProcessRunner
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            process.Kill();
+            KillIfRunning(process);
             throw new TimeoutException($"{fileName} did not exit within 30 s of SIGTERM");
         }
 
@@ -171,5 +168,22 @@ internal static class ProcessRunner
     {
         using var kill = Process.Start("kill", ["-TERM", process.Id.ToString(CultureInfo.InvariantCulture)])!;
         await kill.WaitForExitAsync(cancellationToken);
+    }
+
+    /// <summary>Kills a host that is still running; one that exited before the kill needs nothing.</summary>
+    /// <param name="process">The host process.</param>
+    private static void KillIfRunning(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill();
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // The host exited between the check and the kill, so there is nothing to stop.
+        }
     }
 }

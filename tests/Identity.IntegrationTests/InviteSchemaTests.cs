@@ -6,19 +6,14 @@ using Xunit;
 namespace Identity.IntegrationTests;
 
 /// <summary>
-/// Shared arrangement and call seams of the invite-flow schema suite (02.1.2-T2, W1):
-/// seeding rows as the owner (00 §5.5 C3 — arranging rows is the one job a test may not
-/// do through the tenant path) and calling the two <c>evidgate_resolve</c> lookups and
-/// the <c>evidgate</c> sweep through the roles that are allowed to call them.
+/// Shared arrangement and call seams of the invite-flow schema suite: seeding rows as the
+/// owner (arranging rows is the one job a test may not do through the tenant path) and calling
+/// the <c>evidgate_resolve</c> lookups and the <c>evidgate</c> sweep through their allowed roles.
 /// </summary>
 /// <remarks>
-/// The resolver calls go through <see cref="DatabaseFixture.AppDataSource"/> with no
-/// tenant setting at all, which is the pre-tenant situation the functions exist for: the
-/// app role must be able to resolve an invite without being able to read the matching
-/// <c>public.membership</c> row directly (T75, 00 §5.4.8). The sweep is called through a
-/// superuser connection switched to <c>evidgate_worker_sched</c>, because the harness has
-/// no password for that role and the point of the test is the real grant, not a
-/// substitute one.
+/// The resolver calls use <see cref="DatabaseFixture.AppDataSource"/> with no tenant setting, so
+/// the app role must resolve an invite without reading the matching <c>public.membership</c> row;
+/// the sweep runs as a superuser switched to <c>evidgate_worker_sched</c>, which owns the grant.
 /// </remarks>
 public abstract class InviteTestBase : CatalogueTestBase
 {
@@ -27,7 +22,7 @@ public abstract class InviteTestBase : CatalogueTestBase
     {
     }
 
-    /// <summary>A 12-character public prefix, the shape 02.1.2-T2's mint produces.</summary>
+    /// <summary>A 12-character public prefix, the shape the mint produces.</summary>
     protected static string Prefix() => Guid.NewGuid().ToString("N")[..12];
 
     /// <summary>A stand-in digest of the requested length (the real one is an HMAC-SHA256).</summary>
@@ -42,7 +37,7 @@ public abstract class InviteTestBase : CatalogueTestBase
         return bytes;
     }
 
-    /// <summary>Seeds an org with the AC8 opt-in and the status the resolver filters on.</summary>
+    /// <summary>Seeds an org with the autobind opt-in and the status the resolver filters on.</summary>
     protected async Task<Guid> SeedOrgAsync(bool autobindVerifiedDomain, string status = "active")
     {
         var id = Guid.CreateVersion7();
@@ -192,7 +187,7 @@ public abstract class InviteTestBase : CatalogueTestBase
         return rows;
     }
 
-    /// <summary>Opens a connection switched to <c>evidgate_worker_sched</c> (the T80 sweep role).</summary>
+    /// <summary>Opens a connection switched to <c>evidgate_worker_sched</c>, the sweep role.</summary>
     protected async Task<NpgsqlConnection> OpenSweepConnectionAsync()
     {
         var database = new NpgsqlConnectionStringBuilder(Fixture.AppConnectionString).Database!;

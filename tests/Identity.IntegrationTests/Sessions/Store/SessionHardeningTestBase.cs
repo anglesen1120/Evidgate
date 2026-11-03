@@ -13,15 +13,14 @@ using Xunit;
 namespace Identity.IntegrationTests.Sessions.Store;
 
 /// <summary>
-/// The shared arrangement of the 02.3.2-T1.1 store suites (AC1-AC4, AC7): a session store, the cookie
-/// authenticator and the revocation store, each over the app-role data source with a clock the test moves,
-/// plus the pepper windows a rotation test needs.
+/// The shared arrangement of the store suites: a session store, the cookie authenticator and
+/// the revocation store, each over the app-role data source with a clock the test moves, plus
+/// the pepper windows a rotation test needs.
 /// </summary>
 /// <remarks>
 /// Every credential assertion reads the row through the owner connection (<c>evidgate_app</c> holds no
-/// privilege on <c>public.session</c>, 0041) while the write under test always runs as the app role through the
-/// <c>evidgate_resolve</c> definers. The sessions are created by the real <c>SessionStore</c>, so the cookie
-/// values are the ones production mints.
+/// privilege on <c>public.session</c>, 0041) while the write runs as the app role through the
+/// <c>evidgate_resolve</c> definers; sessions come from the real store, so the cookies are production's.
 /// </remarks>
 [Trait("Category", "Docker")]
 public abstract class SessionHardeningTestBase : SessionTestBase

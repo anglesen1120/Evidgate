@@ -47,7 +47,13 @@ public abstract class TenantTest : IAsyncLifetime
     /// The database of this test: the assembly's shared one, or this test's private copy
     /// once <see cref="InitializeAsync"/> has run.
     /// </summary>
-    protected DatabaseFixture Fixture => _dedicated ?? _root;
+    /// <exception cref="InvalidOperationException">A dedicated test asks before its copy exists.</exception>
+    protected DatabaseFixture Fixture =>
+        _isolation == DatabaseIsolation.Shared
+            ? _root
+            : _dedicated ?? throw new InvalidOperationException(
+                "this test's private database does not exist until InitializeAsync has run; "
+                + "access Fixture after base.InitializeAsync()");
 
     /// <summary>Cancellation token of the current test (xUnit1051).</summary>
     protected static CancellationToken Token => TestContext.Current.CancellationToken;

@@ -3,6 +3,7 @@ extern alias migrator;
 #endif
 
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Npgsql;
 
 #if EVIDGATE_MIGRATOR_ALIASED
@@ -26,7 +27,7 @@ namespace Evidgate.Testing;
 /// connection this type opens is unpooled. The copy gate serializes concurrent
 /// copies from the same template, which would otherwise fail transiently with 55006.
 /// </remarks>
-internal sealed class TemplateDatabase : IDisposable
+internal sealed partial class TemplateDatabase : IDisposable
 {
     private const string OwnerRole = "evidgate_owner";
     private const string MaintenanceDatabase = "postgres";
@@ -89,6 +90,7 @@ internal sealed class TemplateDatabase : IDisposable
     internal async Task DropDatabaseAsync(string database)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(database);
+        EnsureGeneratedName(database, nameof(database));
 
         try
         {
@@ -107,6 +109,7 @@ internal sealed class TemplateDatabase : IDisposable
     internal async Task<string> CreateDatabaseAsync(string database)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(database);
+        EnsureGeneratedName(database, nameof(database));
 
         var template = await EnsureTemplateAsync().ConfigureAwait(false);
 
@@ -123,6 +126,22 @@ internal sealed class TemplateDatabase : IDisposable
         }
 
         return database;
+    }
+
+    // Every name this type splices into SQL is generated, so only that ASCII shape is accepted.
+    // \A…\z, not ^…$: $ also matches before a terminal newline.
+    [GeneratedRegex(@"\A[A-Za-z0-9_]+\z")]
+    private static partial Regex GeneratedName();
+
+    /// <summary>Refuses any name that is not the generated shape, before SQL is built from it.</summary>
+    private static void EnsureGeneratedName(string database, string parameterName)
+    {
+        if (!GeneratedName().IsMatch(database))
+        {
+            throw new ArgumentException(
+                $"'{database}' is not a generated database name: letters, digits and '_' only.",
+                parameterName);
+        }
     }
 
     private Task<string> EnsureTemplateAsync()

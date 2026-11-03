@@ -138,6 +138,9 @@ public sealed class BindAuditTests : BindTestBase
         (await ScalarOwnerAsync<long>(
             "select count(*) from public.audit_log where org_id = @org_id",
             ("org_id", org))).ShouldBe(0, "a rolled-back bind leaves no audit row");
+        (await ScalarOwnerAsync<long>(
+            "select count(*) from public.audit_log where object_id = @object_id",
+            ("object_id", invite.MembershipId.ToString("D")))).ShouldBe(0, "nor one filed under any other org");
 
         (await MembershipStateAsync(org, invite.MembershipId)).Status.ShouldBe(MembershipStatus.Pending);
     }

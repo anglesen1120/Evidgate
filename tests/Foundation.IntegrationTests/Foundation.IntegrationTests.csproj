@@ -29,7 +29,6 @@
     <Compile Include="..\Shared\TenantTest.cs" Link="Shared/TenantTest.cs" />
     <Compile Include="..\Shared\TenantTestScope.cs" Link="Shared/TenantTestScope.cs" />
     <Compile Include="..\Shared\Unique.cs" Link="Shared/Unique.cs" />
-    <Compile Include="..\Shared\HarnessTest.cs" Link="Shared/HarnessTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Bounded class-level parallelism; the shared database isolates tests by tenant. -->

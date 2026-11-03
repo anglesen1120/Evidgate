@@ -10,10 +10,9 @@ using Xunit;
 namespace Identity.IntegrationTests.Login.Persistence;
 
 /// <summary>
-/// The shared arrangement of the 02.3.1-T1.4 persistence suites: the migrated database from the harness
-/// (isolated by tenant unless the suite asks for a private copy), with the two connections a persistence test
-/// needs — the app role the stores really use, and the owner that arranges and reads rows — plus the fixed
-/// pepper and the store factories.
+/// The shared arrangement of the persistence suites: the harness database (isolated by
+/// tenant unless the suite asks for a private copy), the app-role and owner connections a
+/// persistence test needs, the fixed pepper and the store factories.
 /// </summary>
 /// <remarks>
 /// Every assertion about a credential goes through the owner connection on purpose: <c>evidgate_app</c> holds

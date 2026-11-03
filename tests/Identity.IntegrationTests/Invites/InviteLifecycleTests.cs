@@ -226,6 +226,10 @@ public sealed class InviteLifecycleTests : CatalogueTestBase
 
         (await ScalarAsync<long>("select count(*) from public.outbox where org_id = @org", ("org", org)))
             .ShouldBe(0, "neither refusal enqueued anything");
+        (await ScalarAsync<long>(
+            "select count(*) from public.outbox where aggregate_id in (@active, @expired)",
+            ("active", activeId), ("expired", expiredId)))
+            .ShouldBe(0, "nor a row filed under any other org");
     }
 
     /// <summary>
@@ -242,7 +246,9 @@ public sealed class InviteLifecycleTests : CatalogueTestBase
         await using var factory = IdentityApiFactory.Start(Fixture, org);
         using var client = factory.CreateClient();
 
-        foreach (var membershipId in new[] { Guid.CreateVersion7(), foreignId })
+        var unknownId = Guid.CreateVersion7();
+
+        foreach (var membershipId in new[] { unknownId, foreignId })
         {
             var resend = await PostAsync(
                 client,
@@ -266,6 +272,10 @@ public sealed class InviteLifecycleTests : CatalogueTestBase
         (await TextAsync("select status from public.membership where id = @id", ("id", foreignId)))
             .ShouldBe(MembershipStatus.Pending, "the other org's invite is not cancelled by a 404");
         (await ScalarAsync<long>("select count(*) from public.outbox where org_id = @org", ("org", org))).ShouldBe(0);
+        (await ScalarAsync<long>(
+            "select count(*) from public.outbox where aggregate_id in (@unknown, @foreign)",
+            ("unknown", unknownId), ("foreign", foreignId)))
+            .ShouldBe(0, "nor a row filed under any other org");
     }
 
     /// <summary>
@@ -295,6 +305,8 @@ public sealed class InviteLifecycleTests : CatalogueTestBase
         (await TextAsync("select status from public.membership where id = @id", ("id", inviteId)))
             .ShouldBe(MembershipStatus.Pending);
         (await ScalarAsync<long>("select count(*) from public.outbox where org_id = @org", ("org", org))).ShouldBe(0);
+        (await ScalarAsync<long>("select count(*) from public.outbox where aggregate_id = @id", ("id", inviteId)))
+            .ShouldBe(0, "nor a row filed under any other org");
     }
 
     /// <summary>

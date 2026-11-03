@@ -33,9 +33,9 @@ namespace Evidgate.Testing;
 /// template, dropped when the test ends.
 /// </para>
 /// <para>
-/// <see cref="ResetAsync"/> is still the isolation mechanism of the reset-based
-/// suites (<c>tests/Isolation.Tests</c> through <c>HarnessTest</c>, and dedicated
-/// copies), which serialise themselves through <see cref="HarnessSuite"/>.
+/// Foundation and Identity share that database with a tenant per test, or take a
+/// dedicated copy; only <c>tests/Isolation.Tests</c> resets between tests through
+/// <see cref="HarnessSuite"/>.
 /// </para>
 /// </summary>
 public sealed class DatabaseFixture : IAsyncLifetime
@@ -352,29 +352,15 @@ public sealed class DatabaseFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Stops the clock, prints the assembly wall time, and fails the run when the
-    /// suite overran <see cref="SuiteBudget"/> (AC3). Disposal happens after every
-    /// test, so the elapsed value is the suite wall time the NFR-01-1 budget speaks
-    /// about.
+    /// Stops the clock, reports the suite wall time and fails the run when it overran
+    /// <see cref="SuiteBudget"/>; a dedicated copy only closes its services and drops its
+    /// database.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        // A dedicated copy owns no container and no clock: close its services, then drop
-        // its database. The drop is idempotent and swallows connection errors, so a
-        // failed teardown never turns a test result into an error.
         if (_parent is not null)
         {
-            if (_services is not null)
-            {
-                await _services.DisposeAsync();
-            }
-
-            if (_appDataSource is not null)
-            {
-                await _appDataSource.DisposeAsync();
-            }
-
-            await _parent.DropDatabaseAsync(_database).ConfigureAwait(false);
+            await DisposeDedicatedAsync().ConfigureAwait(false);
             return;
         }
 
@@ -387,6 +373,42 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 $"[evidgate harness] suite wall time {elapsed.TotalSeconds:F1}s of a {SuiteBudget.TotalMinutes:F0} min budget "
                 + $"after {_resets} Respawn reset(s); database '{_database}'."));
 
+        await DisposeSharedAsync().ConfigureAwait(false);
+
+        if (elapsed > SuiteBudget)
+        {
+            throw new InvalidOperationException(
+                $"the harness suite took {elapsed.TotalMinutes:F1} min, over the {SuiteBudget.TotalMinutes:F0} min budget "
+                + "(01.6.1-T2.4 AC3, NFR-01-1).");
+        }
+    }
+
+    /// <summary>
+    /// Closes the services of a dedicated copy and drops its database. The drop is
+    /// idempotent and swallows connection errors, so a failed teardown never turns a
+    /// test result into an error.
+    /// </summary>
+    private async Task DisposeDedicatedAsync()
+    {
+        if (_services is not null)
+        {
+            await _services.DisposeAsync();
+        }
+
+        if (_appDataSource is not null)
+        {
+            await _appDataSource.DisposeAsync();
+        }
+
+        await _parent!.DropDatabaseAsync(_database).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Releases the container and the template of the shared fixture: only once a start
+    /// ran, because an assembly that never needed the database created nothing.
+    /// </summary>
+    private async Task DisposeSharedAsync()
+    {
         Task? start;
 
         lock (_startLock)
@@ -396,41 +418,36 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
         // Never started (no test needed the database): nothing to tear down. A
         // start that failed already surfaced to the tests that asked for it.
-        if (start is not null)
+        if (start is null)
         {
-            try
-            {
-                await start.ConfigureAwait(false);
-            }
-            catch (Exception)
-            {
-                // Already reported through the accessor that triggered it; disposal
-                // below still releases whatever was created.
-            }
-
-            if (_services is not null)
-            {
-                await _services.DisposeAsync();
-            }
-
-            if (_appDataSource is not null)
-            {
-                await _appDataSource.DisposeAsync();
-            }
-
-            _template?.Dispose();
-
-            if (_container is not null)
-            {
-                await _container.DisposeAsync();
-            }
+            return;
         }
 
-        if (elapsed > SuiteBudget)
+        try
         {
-            throw new InvalidOperationException(
-                $"the harness suite took {elapsed.TotalMinutes:F1} min, over the {SuiteBudget.TotalMinutes:F0} min budget "
-                + "(01.6.1-T2.4 AC3, NFR-01-1).");
+            await start.ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Already reported through the accessor that triggered it; disposal
+            // below still releases whatever was created.
+        }
+
+        if (_services is not null)
+        {
+            await _services.DisposeAsync();
+        }
+
+        if (_appDataSource is not null)
+        {
+            await _appDataSource.DisposeAsync();
+        }
+
+        _template?.Dispose();
+
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
         }
     }
 
@@ -759,13 +776,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
 }
 
 /// <summary>
-/// The collection of the reset-based suites (01.6.1-T2.2): a class that shares the
-/// database and resets it between tests (<c>tests/Isolation.Tests</c> through
-/// <c>HarnessTest</c>) joins it, and <c>DisableParallelization</c> keeps those
-/// classes from overlapping — two of them at once would delete each other's rows.
-/// Tenant-isolated classes (<see cref="TenantTest"/>) do not join it: they isolate
-/// by organization instead, and xUnit's default collection per class lets them run
-/// in parallel. The rules are written down in <c>tests/README.md</c>.
+/// The collection of the reset-based suites: <c>tests/Isolation.Tests</c> is the only
+/// member, and <c>DisableParallelization</c> keeps its classes from resetting over one
+/// another — the tenant-per-test suites run in parallel without it.
 /// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class HarnessSuite
