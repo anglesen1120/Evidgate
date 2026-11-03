@@ -131,6 +131,64 @@ esac
 echo "/, /vi, /en and an unprefixed path redirect with a relative Location"'
 compose run --rm --no-deps --entrypoint /bin/sh web -c "$redirect_probe_script"
 
+review_step 'hashed assets: only a successful body is long-lived, every error is no-store'
+# A shared cache keeps an error that carries a year-long immutable lifetime, so
+# the 401 of a lazy chunk once blanked the login page for every visitor. Raw nc
+# requests against nginx in a one-shot container, in both auth modes.
+if ! asset_hash="$(openssl passwd -apr1 sentinel 2>/dev/null)" || [ -z "$asset_hash" ]; then
+  review_die 'openssl could not mint an apr1 hash, so the asset cache-control case cannot run'
+fi
+asset_basic="$(printf 'reviewer:sentinel' | openssl base64 -A)"
+# shellcheck disable=SC2016 # the container shell expands these, not this one
+asset_probe_script='set -e
+mkdir -p /tmp/evidgate
+if [ "$PROBE_AUTH" = on ]; then
+  printf "auth_basic \"Evidgate review\";\nauth_basic_user_file /tmp/evidgate/htpasswd;\n" > /tmp/evidgate/auth.conf
+  printf "reviewer:%s\n" "$PROBE_HASH" > /tmp/evidgate/htpasswd
+  printf "proxy_set_header Authorization \"\";\n" > /tmp/evidgate/proxy-auth.conf
+else
+  printf "auth_basic off;\n" > /tmp/evidgate/auth.conf
+  printf "# auth off\n" > /tmp/evidgate/proxy-auth.conf
+fi
+asset=$(cd /usr/share/nginx/html && ls vi/*.js | head -n 1)
+[ -n "$asset" ] || { echo "FAIL: the vi bundle has no hashed .js file"; exit 1; }
+nginx
+i=0
+while [ "$i" -lt 40 ]; do
+  if wget -qO- http://127.0.0.1:8080/nginx-health >/dev/null 2>&1; then break; fi
+  i=$((i + 1)); sleep 0.25
+done
+# get PATH EXPECTED_STATUS EXPECTED_CACHE_CONTROL [Basic credential] [extra header line]
+get() {
+  hdrs="Host: review.example.test"
+  [ -z "${4:-}" ] || hdrs="$hdrs\r\nAuthorization: Basic $4"
+  [ -z "${5:-}" ] || hdrs="$hdrs\r\n$5"
+  resp=$(printf "GET /%s HTTP/1.0\r\n$hdrs\r\n\r\n" "$1" | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
+  status=$(printf "%s\n" "$resp" | sed -n "1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p")
+  cc=$(printf "%s\n" "$resp" | sed -n "s/^[Cc]ache-[Cc]ontrol: //p")
+  [ "$status" = "$2" ] && [ "$cc" = "$3" ] || { echo "FAIL: GET /$1 [$PROBE_AUTH ${5:-}] gave $status with Cache-Control [$cc], expected $2 with [$3] (one header, no duplicate)"; exit 1; }
+  echo "GET /$1 [$PROBE_AUTH${4:+, credentials}${5:+, $5}] -> $status Cache-Control: $cc"
+}
+imm="max-age=31536000, immutable"
+if [ "$PROBE_AUTH" = on ]; then
+  get "$asset" 401 "no-store"
+  get "vi/missing-ABCDEFGH.js" 401 "no-store"
+  get "$asset" 200 "private, $imm" "$PROBE_BASIC"
+  get "vi/missing-ABCDEFGH.js" 404 "no-store" "$PROBE_BASIC"
+  get "$asset" 304 "private, $imm" "$PROBE_BASIC" "If-None-Match: *"
+  get "$asset" 200 "private, $imm" "$PROBE_BASIC" "Range: bytes=999999999-"
+else
+  get "$asset" 200 "public, $imm"
+  get "vi/missing-ABCDEFGH.js" 404 "no-store"
+  get "$asset" 304 "public, $imm" "" "If-None-Match: *"
+  get "$asset" 200 "public, $imm" "" "Range: bytes=999999999-"
+  get "$asset" 200 "public, $imm" "" "Range: bytes=0-9"
+fi'
+for mode in off on; do
+  compose run --rm --no-deps -e "PROBE_AUTH=$mode" -e "PROBE_HASH=$asset_hash" \
+    -e "PROBE_BASIC=$asset_basic" --entrypoint /bin/sh web -c "$asset_probe_script"
+done
+
 review_step 'both locale bundles exist'
 # shellcheck disable=SC2016 # $locale must reach the container unexpanded
 compose run --rm --no-deps --entrypoint /bin/sh web -c \
