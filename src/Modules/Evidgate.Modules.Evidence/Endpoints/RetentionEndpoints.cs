@@ -75,6 +75,14 @@ public static class RetentionEndpoints
         HttpContext context,
         CancellationToken cancellationToken)
     {
+        if (!context.Request.HasJsonContentType())
+        {
+            return (default, new Error(
+                ApiErrorCode.RequestInvalid,
+                "the request body must be application/json",
+                StatusCodes.Status415UnsupportedMediaType));
+        }
+
         var buffer = new byte[MaxBodyBytes + 1];
         var read = 0;
 

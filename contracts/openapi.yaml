@@ -2739,7 +2739,10 @@ paths:
         `additional_properties` with the member's JSON pointer for an unknown one, `invalid_json` for a member given
         twice; a member name that is not valid text, or is longer than 64 characters, answers `additional_properties`
         at the fixed pointer `/<invalid-member-name>` because echoing it could throw again or split a character). An
-        out-of-range answer therefore reads `{"error":{"code":"retention_out_of_range",
+        empty or unparsable body is `400 request_invalid`; a body over the 4096-byte cap is `413
+        payload_too_large` before parsing, and a `Content-Type` that is neither `application/json` nor a `+json`
+        media type is `415 request_invalid` before the body is read. An out-of-range answer therefore reads
+        `{"error":{"code":"retention_out_of_range",
         "message":"artifact_days must be between 1 and 90","request_id":"…","retryable":false,
         "details":[{"path":"artifact_days","reason":"below_min_artifact_days"},
         {"path":"retention_limits.min_artifact_days","reason":"1"}]}}` — the detail paths carry no leading
@@ -2769,12 +2772,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RetentionPolicy'
+        '400':
+          description: 400 request_invalid — the request body is empty or is not valid JSON
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          description: 413 payload_too_large — the request body exceeds the 4096-byte cap, checked before parsing
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '415':
+          description: >-
+            415 request_invalid — `Content-Type` must be `application/json` or a `+json` media type such as
+            `application/vnd.evidgate+json`, with optional parameters such as `charset=utf-8`; the body is not
+            read or parsed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':

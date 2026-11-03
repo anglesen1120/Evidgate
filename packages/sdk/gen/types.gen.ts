@@ -5078,6 +5078,10 @@ export type SetRetentionPolicyData = {
 
 export type SetRetentionPolicyErrors = {
     /**
+     * 400 request_invalid — the request body is empty or is not valid JSON
+     */
+    400: ErrorEnvelope;
+    /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
@@ -5089,6 +5093,14 @@ export type SetRetentionPolicyErrors = {
      * 404 not found — also for other-tenant ids (00 §9.2)
      */
     404: ErrorEnvelope;
+    /**
+     * 413 payload_too_large — the request body exceeds the 4096-byte cap, checked before parsing
+     */
+    413: ErrorEnvelope;
+    /**
+     * 415 request_invalid — `Content-Type` must be `application/json` or a `+json` media type such as `application/vnd.evidgate+json`, with optional parameters such as `charset=utf-8`; the body is not read or parsed
+     */
+    415: ErrorEnvelope;
     /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
      */
