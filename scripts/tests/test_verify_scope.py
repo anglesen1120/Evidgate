@@ -100,6 +100,11 @@ class Selection(unittest.TestCase):
         self.assertEqual(tier, "no-dotnet")
         self.assertEqual(stages, ["tsc-build", "vitest", "image-pins"])
 
+    def test_a_review_infra_tier_runs_exactly_its_stages(self):
+        tier, stages, _ = select("tier: review-infra\nstages: prettier check-review-infra image-pins\n")
+        self.assertEqual(tier, "review-infra")
+        self.assertEqual(stages, ["prettier", "check-review-infra", "image-pins"])
+
     def test_a_full_tier_runs_every_stage_whatever_its_list_says(self):
         # The tier decides, not the list: a `full` tier that listed two stages
         # would otherwise run a gate nobody asked it to narrow.

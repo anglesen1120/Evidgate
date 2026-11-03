@@ -33,6 +33,7 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[OPEN]` gate not built
    - Prefer extending an existing type over adding a parallel one.
 3. **Before saying "done"**
    - Run `scripts/verify.sh --stage <stages for the layers you touched>` (`--list-stages` lists them). A bare `scripts/verify.sh` picks the `docs`, `no-dotnet` or `full` tier from the changed paths (01.2.1-T7) and prints one `== gate scope:` line naming the tier, the reason and the base. It runs the .NET stages whenever the change set holds any path outside the allow-lists — a `*.cs` or build file anywhere, `src/`, `tests/`, `fixtures/`, `migrations/`, `contracts/`, `infra/`, a gate file, `docs/security/audit-and-deletion-rule.md`, a story file the change deletes — and also when a base does not resolve or the classifier fails; `docs/engineering/omp-setup.md` Step 4a lists the exceptions. Run `EVIDGATE_GATE_SCOPE=full` or name the stages when you need the whole gate.
+   - Tiers (01.2.1-T7): `docs`, `review-infra` (a diff confined to `infra/review/**` that is not a Dockerfile, `scripts/review/**` and docs; adds the `check-review-infra` stage), `no-dotnet`, `full`.
    - Re-read your diff against [`REVIEW.md`](../../REVIEW.md).
    - In the PR, state what you could not run or verify. "Tests pass" without the command and its output is not evidence.
 4. **When a reviewer finds a new class of defect**

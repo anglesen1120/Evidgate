@@ -327,13 +327,14 @@ print_scope_line() {
   for note in ${scope_notes[@]+"${scope_notes[@]}"}; do echo "   note: ${note}"; done
 }
 
-# Turn the parsed report into the run list. Only a `docs` or `no-dotnet` tier
-# with a non-empty list of known stages may narrow a bare run; an unknown tier,
-# an empty or invented stage list, or a missing key is the full gate.
+# Turn the parsed report into the run list. Only a `docs`, `review-infra` or
+# `no-dotnet` tier with a non-empty list of known stages may narrow a bare run;
+# an unknown tier, an empty or invented stage list, or a missing key is the full
+# gate.
 plan_selection() {
   local name narrowed="" candidates=() reported_full=""
   case "$scope_tier" in
-  docs | no-dotnet) if [[ -n "$scope_stages" ]]; then narrowed=1; fi ;;
+  docs | review-infra | no-dotnet) if [[ -n "$scope_stages" ]]; then narrowed=1; fi ;;
   esac
   if [[ -n "$narrowed" ]]; then
     read -r -a candidates <<<"$scope_stages" || true
