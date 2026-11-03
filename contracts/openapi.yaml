@@ -2624,9 +2624,12 @@ paths:
         is `422 retention_out_of_range` with two `error.details[]` entries naming the offending field and the bound it
         broke (`below_min_artifact_days`/`above_max_artifact_days`/`below_min_metadata_days`/`above_max_metadata_days`/
         `below_artifact_days`, then `retention_limits.<property>` with the configured bound as its `reason`), and no
-        row is written; a body that is not a closed JSON object of two integers is `422 request_invalid` (`required` for
-        a missing member, `invalid_type` for a non-integer, `additional_properties` with the member's JSON pointer for an
-        unknown one). An out-of-range answer therefore reads `{"error":{"code":"retention_out_of_range",
+        row is written; a body that parses but is not a closed JSON object of two integers is
+        `422 request_invalid` (`required` for a missing member, `invalid_type` for a non-integer,
+        `additional_properties` with the member's JSON pointer for an unknown one, `invalid_json` for a member given
+        twice; a member name that is not valid text, or is longer than 64 characters, answers `additional_properties`
+        at the fixed pointer `/<invalid-member-name>` because echoing it could throw again or split a character). An
+        out-of-range answer therefore reads `{"error":{"code":"retention_out_of_range",
         "message":"artifact_days must be between 1 and 90","request_id":"…","retryable":false,
         "details":[{"path":"artifact_days","reason":"below_min_artifact_days"},
         {"path":"retention_limits.min_artifact_days","reason":"1"}]}}` — the detail paths carry no leading

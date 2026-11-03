@@ -443,6 +443,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/cases"] = $"/v1/projects/{project}/cases",
             ["/v1/projects/{p}/suites"] = $"/v1/projects/{project}/suites",
             ["/v1/projects/{p}/waivers"] = $"/v1/projects/{project}/waivers",
+            // The retention windows: a project with no `retention_policy` row answers the configured platform
+            // defaults, so the route is callable here like the lists above (two integers, no secret).
+            ["/v1/projects/{p}/retention"] = $"/v1/projects/{project}/retention",
             ["/v1/projects/{p}/quarantine"] = $"/v1/projects/{project}/quarantine",
             ["/v1/projects/{p}/runs"] = $"/v1/projects/{project}/runs",
             // 13.1.1-T2's three authoring lists: one page each, empty for a project with no authoring rows, so the
