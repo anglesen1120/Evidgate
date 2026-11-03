@@ -13,7 +13,7 @@ namespace Tenancy.IntegrationTests;
 /// <c>producer_slot.last_sequence</c> column grant the 0029 header handed to this task.
 /// <para>
 /// The fixture is this project's own <see cref="PostgresTenancyFixture"/> — one digest-pinned
-/// PostgreSQL 18 container per assembly, a fresh database per test brought to head by the real
+/// PostgreSQL 18 container per assembly, a database brought to head by the real
 /// <c>Evidgate.Migrator</c> — the 05.2.1-T1 / 05.3.3-T1 precedent for a new table in this suite.
 /// </para>
 /// </summary>

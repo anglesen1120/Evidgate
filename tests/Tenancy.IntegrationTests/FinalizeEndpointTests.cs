@@ -105,7 +105,7 @@ public sealed class FinalizeEndpointTests
         TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database), world.Org, world.Project, principal);
 
-    // ------------------------------------------------------------------ reads (superuser: one database per test)
+    // ------------------------------------------------------------------ reads (superuser: shared database, own tenant)
 
     /// <summary>The run's manifest hash, through <c>run.manifest_id</c> (same tenant).</summary>
     private static Task<string> ManifestHashAsync(IngestTestWorld world, Guid? runId = null) =>

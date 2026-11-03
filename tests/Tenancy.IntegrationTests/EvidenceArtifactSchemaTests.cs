@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 /// the EF write model built through the production path (00 §5.5 C4, §7; TL T2, T3, T17, T19, T20).
 /// <para>
 /// The fixture is this project's own <see cref="PostgresTenancyFixture"/> — one digest-pinned PostgreSQL 18 container
-/// per assembly, a fresh database per test brought to head by the real <c>Evidgate.Migrator</c> — which is the
+/// per assembly, a database brought to head by the real <c>Evidgate.Migrator</c> — which is the
 /// precedent for a new table in this suite (<c>PolicyRevisionImmutabilityTests</c>). The Respawn harness in
 /// <c>tests/Shared/DatabaseFixture.cs</c> is not linked into this project (its csproj links only
 /// <c>tests/Shared/ContainerImages.cs</c>), so no new fixture was added.

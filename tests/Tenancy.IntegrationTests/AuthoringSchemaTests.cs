@@ -18,7 +18,7 @@ namespace Tenancy.IntegrationTests;
 /// unique index, the format check and the insert default).
 /// <para>
 /// The fixture is this suite's own <see cref="PostgresTenancyFixture"/> — one digest-pinned
-/// PostgreSQL 18 container per assembly, a fresh database per test brought to head by the real
+/// PostgreSQL 18 container per assembly, a database brought to head by the real
 /// <c>Evidgate.Migrator</c> (the 05.2.1-T1 / 05.3.3-T1 precedent for a new table in this suite).
 /// The two backfill cases go one step further: they bring a database to the **previous** head
 /// (every file lexically before 0039), seed the rows the backfill has to name, and only then apply

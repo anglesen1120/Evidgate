@@ -99,9 +99,9 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
     /// The shared database with this test's own org and a project created through the real registry routes, plus
     /// a host whose requests carry <paramref name="principal"/> and the object-store configuration.
     /// </summary>
-    private async Task<World> StartAsync(RequestPrincipal principal)
+    private async Task<World> StartAsync(RequestPrincipal principal, string? database = null)
     {
-        var database = await _fixture.SharedDatabaseAsync();
+        database ??= await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -345,7 +345,9 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
     [Fact]
     public async Task Complete_StagingDelete_OnlyAfterCommit()
     {
-        await using var world = await StartAsync(Writer());
+        // The dispatcher claims undispatched outbox rows of every tenant, so this test needs a database of its own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(Writer(), dedicated.Name);
         var runId = await SeedRunAsync(world);
         await InsertKindPolicyAsync(world);
 

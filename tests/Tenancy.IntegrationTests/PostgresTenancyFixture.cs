@@ -117,6 +117,12 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
         Task<string> shared;
         lock (_startLock)
         {
+            // A failed creation is dropped so the next test retries instead of inheriting the failure.
+            if (_shared is { IsFaulted: true } or { IsCanceled: true })
+            {
+                _shared = null;
+            }
+
             shared = _shared ??= CreateSharedAsync();
         }
 
@@ -406,11 +412,9 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
             Database = database,
             Username = username,
             Password = password,
-            // One database per test makes every connection string a distinct pool
-            // key, and a pooled connector stays open (visible in pg_stat_activity)
-            // until the test process exits — enough databases exhaust the
-            // container's connection slots. Pooling off closes the physical
-            // connection on dispose, so the suite retains ~0 connections per test.
+            // Each dedicated database is a distinct pool key, and a pooled connector stays open
+            // until the test process exits — enough of them exhaust the container's connection
+            // slots. Pooling off closes the physical connection on dispose.
             Pooling = false,
         };
 

@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// <para>
 /// The fixture is this project's own <see cref="PostgresTenancyFixture"/> — one digest-pinned PostgreSQL 18
-/// container per assembly, a fresh database per test brought to head by the real <c>Evidgate.Migrator</c> — the
+/// container per assembly, a database brought to head by the real <c>Evidgate.Migrator</c> — the
 /// 07.3.1-T2 / 06.1.1-T1 precedent for a migration in this suite (<c>QuarantineSchemaTests</c>). These assertions
 /// read as the superuser because the catalogue is platform reference data (<c>org_id is null</c>, 02 §4.5); the
 /// tenant-visible read of the same rows is <c>SeedMatrixTests</c>' (the app role under RLS).
