@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -15,18 +15,8 @@ namespace Evidgate.Modules.Tenancy.Application;
 /// the D-A1 slug grammar, name and list limits. The migrations hold the same checks;
 /// these exist so a bad value is a 422 with a field path, not a 23514 turned into 500.
 /// </summary>
-internal static partial class TenancyRules
+internal static class TenancyRules
 {
-    /// <summary>DECISIONS §8.1 D-A1, identical to the 0012 check constraints.</summary>
-    internal const string SlugPattern = "^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$";
-
-    /// <summary>
-    /// The case-code prefix grammar of <c>project_case_prefix_format</c> (0039:176, OI-13-101): one leading capital and
-    /// 1–7 more capitals or digits. <c>\z</c> and not <c>$</c>: in .NET <c>$</c> also matches before a trailing newline,
-    /// so <c>"SHOP\n"</c> would pass here and be refused by the database as a 23514 turned into a 500.
-    /// </summary>
-    internal const string CasePrefixPattern = @"^[A-Z][A-Z0-9]{1,7}\z";
-
     /// <summary>Name length cap of 0004/0005 (<c>char_length(name) between 1 and 128</c>).</summary>
     internal const int MaxNameLength = 128;
 
@@ -39,11 +29,14 @@ internal static partial class TenancyRules
     /// <summary>Upper bound of a retention period in days (ten years; plan 06/10 enforce the real policy).</summary>
     internal const int MaxRetentionDays = 3650;
 
-    /// <summary>True when <paramref name="slug"/> matches the D-A1 grammar.</summary>
-    internal static bool IsSlug(string? slug) => slug is not null && Slug().IsMatch(slug);
+    /// <summary>True when <paramref name="slug"/> matches the D-A1 grammar <c>[a-z0-9][a-z0-9-]{0,61}[a-z0-9]</c>, identical to the 0012 check constraints.</summary>
+    internal static bool IsSlug(string? slug) => AsciiShape.IsMatch(slug, 2, 63, AsciiShape.LowerAlnum, AsciiShape.LowerAlnumDash, AsciiShape.LowerAlnum);
 
-    /// <summary>True when <paramref name="casePrefix"/> matches <c>project_case_prefix_format</c>.</summary>
-    internal static bool IsCasePrefix(string? casePrefix) => casePrefix is not null && CasePrefix().IsMatch(casePrefix);
+    /// <summary>
+    /// True when <paramref name="casePrefix"/> matches <c>project_case_prefix_format</c>: one capital then 1-7 capitals
+    /// or digits. A trailing newline is refused (the old <c>$</c> would have let it through to a 23514 turned into a 500).
+    /// </summary>
+    internal static bool IsCasePrefix(string? casePrefix) => AsciiShape.IsMatch(casePrefix, 2, 8, AsciiShape.UpperAlpha, AsciiShape.UpperAlnum);
 
     /// <summary>
     /// True when <paramref name="name"/> is 1–128 characters after trimming and holds no
@@ -58,19 +51,29 @@ internal static partial class TenancyRules
 
     /// <summary>A lowercase DNS name with at least one dot (an allowlist entry, FR-02-3).</summary>
     internal static bool IsDomain(string? domain) =>
-        domain is not null && domain.Length <= MaxDomainLength && Domain().IsMatch(domain);
+        domain is not null && domain.Length <= MaxDomainLength && IsDomainShape(domain);
 
-    [GeneratedRegex(SlugPattern, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex Slug();
+    // Same grammar as the 0012 slug check, which also bounds one DNS label (1-63).
+    private static bool IsLabel(ReadOnlySpan<char> label) =>
+        label.Length == 1
+            ? AsciiShape.LowerAlnum.Contains(label[0])
+            : AsciiShape.IsMatch(label, 2, 63, AsciiShape.LowerAlnum, AsciiShape.LowerAlnumDash, AsciiShape.LowerAlnum);
 
-    [GeneratedRegex(CasePrefixPattern, RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex CasePrefix();
+    private static bool IsDomainShape(ReadOnlySpan<char> domain)
+    {
+        var labels = 0;
+        foreach (var range in domain.Split('.'))
+        {
+            if (!IsLabel(domain[range]))
+            {
+                return false;
+            }
 
-    [GeneratedRegex(
-        "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$",
-        RegexOptions.CultureInvariant,
-        matchTimeoutMilliseconds: 100)]
-    private static partial Regex Domain();
+            labels++;
+        }
+
+        return labels >= 2;
+    }
 }
 
 /// <summary>The 00 §9.2 errors of the registry routes, one definition each.</summary>

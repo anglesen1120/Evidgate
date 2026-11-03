@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.Modules.Catalog.Contracts;
 using Evidgate.Modules.Catalog.Domain;
 
@@ -19,7 +20,7 @@ internal sealed class TestRevisionStore(ITenantDb db, ITenantScopeAccessor scope
         ArgumentNullException.ThrowIfNull(content);
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Catalog, nameof(AppendAsync));
 
-        if (!System.Text.RegularExpressions.Regex.IsMatch(content.CommitSha ?? string.Empty, "^[0-9a-f]{7,64}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))
+        if (!AsciiShape.IsMatch(content.CommitSha ?? string.Empty, 7, 64, AsciiShape.LowerHex, AsciiShape.LowerHex)
             || !RepoPath.IsValid(content.FilePath)
             || !TextRules.IsClean(content.Framework) || content.Framework.Length is 0 or > 64
             || (content.Language is not null && (!TextRules.IsClean(content.Language) || content.Language.Length is 0 or > 64))

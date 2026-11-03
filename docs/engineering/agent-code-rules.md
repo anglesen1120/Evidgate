@@ -146,6 +146,7 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[OPEN]` gate not built
 | Error envelope | `ErrorEnvelope`, `Result`, `ResultFactory` | `src/BuildingBlocks/SharedKernel/{Api,Results}/` |
 | Canonical JSON and hash (RFC 8785) | `JsonCanonicalizer`, `CanonicalHash` | `src/BuildingBlocks/Canonicalization/` |
 | Secret-reference shape | `SecretShape` | `src/BuildingBlocks/SharedKernel/Security/SecretShape.cs` |
+| Identifier shape (first/rest/last character sets, length bounds, no regex timeout) | `AsciiShape` | `src/BuildingBlocks/SharedKernel/Security/AsciiShape.cs` |
 | Secrets | `ISecretProvider`, `SecretNames` | `src/BuildingBlocks/SharedKernel/Secrets/` |
 | Log redaction | `SecretRedactor` (the copy in `src/Evidgate.Migrator/SecretRedactor.cs` is to be removed) | `src/BuildingBlocks/Observability/Redaction/` |
 | Tenant-scoped Dapper | `ITenantDb` | `src/BuildingBlocks/Persistence/Tenancy/ITenantDb.cs` |

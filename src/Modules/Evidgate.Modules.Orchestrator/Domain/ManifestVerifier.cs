@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Security;
 
@@ -30,7 +29,7 @@ internal sealed record ManifestRefusal(string Reason, IReadOnlyList<ErrorDetail>
 /// literal in any variant's parameters, and a planned-execution list and shard plan that cover the declared matrix
 /// exactly. The database checks (unknown case/suite/environment revision) are the handler's.
 /// </summary>
-internal static partial class ManifestVerifier
+internal static class ManifestVerifier
 {
     /// <summary>Most details one refusal carries (the envelope stays small whatever the manifest's size).</summary>
     internal const int MaxDetails = 50;
@@ -177,7 +176,7 @@ internal static partial class ManifestVerifier
         if (value.StartsWith("secret:", StringComparison.Ordinal))
         {
             // The name of a reference must still be a name: `secret:ghp_…` carries the token in the reference itself.
-            return !SecretReference().IsMatch(value) || SecretShape.SecretNameLooksLikeValue(value[7..]) || SecretShape.ValueLooksSecret(value[7..]);
+            return !SecretShape.IsReference(value) || SecretShape.SecretNameLooksLikeValue(value[7..]) || SecretShape.ValueLooksSecret(value[7..]);
         }
 
         return SecretShape.KeyLooksSecret(key) || SecretShape.ValueLooksSecret(key) || SecretShape.ValueLooksSecret(value);
@@ -323,7 +322,4 @@ internal static partial class ManifestVerifier
 
         return key.ToString();
     }
-
-    [GeneratedRegex("^secret:[A-Za-z0-9_.-]{1,64}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex SecretReference();
 }

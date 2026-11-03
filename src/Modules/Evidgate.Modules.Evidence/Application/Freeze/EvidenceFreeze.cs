@@ -1,8 +1,9 @@
+using System.Buffers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
@@ -30,11 +31,20 @@ namespace Evidgate.Modules.Evidence.Application.Freeze;
 /// </summary>
 /// <param name="db">The Dapper path over the ambient scope; it demands an active scope before it touches the database.</param>
 /// <param name="scopes">The tenant-scope accessor; <c>Require()</c> is the guard that throws before any statement.</param>
-internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor scopes) : IEvidenceFreeze
+internal sealed class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor scopes) : IEvidenceFreeze
 {
-    /// <summary>The <c>missing[]</c> code shape: a lower_snake code of 1..64 characters.</summary>
-    [GeneratedRegex("\\A[a-z][a-z0-9_]{0,63}\\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex ReasonCodeShape();
+    /// <summary><c>[a-z]</c>, the one-character class the reason code starts with.</summary>
+    private static readonly SearchValues<char> LowerAlpha = SearchValues.Create("abcdefghijklmnopqrstuvwxyz");
+
+    /// <summary><c>[a-z0-9_]</c>, the class of the reason code's later characters.</summary>
+    private static readonly SearchValues<char> LowerSnake = SearchValues.Create("abcdefghijklmnopqrstuvwxyz0123456789_");
+
+    /// <summary>
+    /// The <c>missing[]</c> code shape, <c>[a-z][a-z0-9_]{0,63}</c>, in one forward pass. No wall-clock setting: a slow
+    /// host must never turn this refusal into an exception. A trailing newline is refused, as <c>\z</c> refuses it.
+    /// </summary>
+    internal static bool IsReasonCode(string? reasonCode) =>
+        AsciiShape.IsMatch(reasonCode, 1, 64, LowerAlpha, LowerSnake);
 
     /// <inheritdoc />
     public async Task<FreezeResult> FreezeAsync(FreezeRequest request, CancellationToken cancellationToken)
@@ -332,7 +342,7 @@ internal sealed partial class EvidenceFreeze(ITenantDb db, ITenantScopeAccessor 
                     nameof(request));
             }
 
-            if (spec.ReasonCode is null || !ReasonCodeShape().IsMatch(spec.ReasonCode))
+            if (!IsReasonCode(spec.ReasonCode))
             {
                 throw new ArgumentException(
                     $"request.Required[{index}].ReasonCode is not the lower_snake shape (^[a-z][a-z0-9_]{{0,63}}$).",

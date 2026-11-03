@@ -106,7 +106,7 @@ const ENUM_LIKE: Record<string, true> = {
   viewport: true,
 };
 
-/** VariantNormalizer.KeyShape: `^[A-Za-z_][A-Za-z0-9_.-]{0,63}$`, culture-invariant. */
+/** VariantNormalizer.IsValidKey: `^[A-Za-z_][A-Za-z0-9_.-]{0,63}$`, culture-invariant. */
 const KEY_SHAPE = /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/;
 
 /** TextRules.IsClean: control (Cc) and format (Cf) characters are refused, as is a lone surrogate. */
@@ -133,7 +133,7 @@ function isClean(text: string): boolean {
 }
 
 /**
- * VariantNormalizer.KeyShape().IsMatch. The trailing `$` of a JavaScript regex also matches
+ * VariantNormalizer.IsValidKey().IsMatch. The trailing `$` of a JavaScript regex also matches
  * before a final line terminator, so the match must span the whole key (a key ending in
  * U+2028/U+2029 is not a control or format character and would otherwise slip through).
  */
