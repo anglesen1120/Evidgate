@@ -38,6 +38,8 @@ var IDEMPOTENCY_EXEMPT = {
     'naturally idempotent: the session row is revoked once and replaying the old cookie is 401 session_revoked, so a key could not change the outcome (02.3.2-T2.1 §5, AC8)',
   'post /dev/session':
     'no resource is created: the route sets the session cookies of one fixed development user, so a repeat only replaces the caller own session (Development-only route)',
+  'patch /me':
+    'the body sets one column to one of two values, so a repeat writes the same state, and the If-Match version makes a replay of the already-applied version answer 412 precondition_failed instead of applying twice (02.3.1-T3)',
 };
 
 module.exports = function evgIdempotency(targetVal, opts, ctx) {

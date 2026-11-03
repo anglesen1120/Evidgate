@@ -679,6 +679,12 @@ internal static class RouteRequests
             new(HttpMethod.Post, "/v1/auth/sessions/revoke-all"));
         Add("POST", "/v1/auth/logout", _ => new(HttpMethod.Post, "/v1/auth/logout"));
 
+        // ---- The account's own profile (02.3.1-T3: pre-tenant, x-permission 'none') --------------------------
+        // Neither template carries an id, so the builders are shape-only: the read names nothing, and the write
+        // sends one locale with a version the route would reject before any body member is judged.
+        Add("GET", "/v1/me", _ => new(HttpMethod.Get, "/v1/me"));
+        Add("PATCH", "/v1/me", _ => new(HttpMethod.Patch, "/v1/me"));
+
         // ---- Catalog -----------------------------------------------------------------------------------------
         Add("GET", "/v1/projects/{p}/cases", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/cases"));
         Add("GET", "/v1/cases/{c}", ctx => new(HttpMethod.Get, $"/v1/cases/{ctx.CaseId}"));

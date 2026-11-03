@@ -229,10 +229,11 @@ public sealed class TenantResolutionTests
 
     /// <summary>
     /// A route marked <c>TenantlessEndpointMetadata</c> skips tenant resolution, so the
-    /// set is pinned: only the two pre-tenant org routes may carry it (02.6.2 §3).
+    /// set is pinned to the org collection (02.6.2 §3) and to the caller's own
+    /// session-derived profile, which has no tenant a header could select.
     /// </summary>
     [Fact]
-    public async Task OnlyTheOrgCollectionRoutes_AreTenantless()
+    public async Task OnlyTheOrgCollectionAndOwnProfileRoutes_AreTenantless()
     {
         var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
@@ -247,7 +248,7 @@ public sealed class TenantResolutionTests
             .Order()
             .ToList();
 
-        tenantless.ShouldBe(["GET /v1/orgs", "POST /v1/orgs"]);
+        tenantless.ShouldBe(["GET /v1/me", "GET /v1/orgs", "PATCH /v1/me", "POST /v1/orgs"]);
     }
 
     private static async Task<Guid> CreateOrgAsync(HttpClient client, Guid user, string slug)

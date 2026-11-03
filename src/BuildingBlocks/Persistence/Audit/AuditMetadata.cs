@@ -52,6 +52,8 @@ public static partial class AuditMetadata
         // 02.3.1-T2: login/link/bind rows record which provider authenticated the identity and how an invite bound (names, never an address or subject).
         "provider",
         "via",
+        // 02.3.1-T3: the own-profile write records which language the account chose (`vi` / `en`), never free text.
+        "locale",
         // F55 (02.3.2-T2.1 AC6): the administrative session revoke records whose session it ended — the member's user id, never the session's credential.
         "target_user_id",
     };

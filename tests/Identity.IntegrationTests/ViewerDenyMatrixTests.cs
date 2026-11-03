@@ -50,24 +50,26 @@ public sealed class ViewerDenyMatrixTests(DatabaseFixture fixture) : CatalogueTe
     private static readonly Dictionary<(string Method, string Template), string> ExcludedMutating =
         new()
         {
-            [("POST", "/v1/orgs")] =
-                "x-permission is 'authenticated' (the org creator is any authenticated caller, 02.1.1 §5)",
-            [("POST", "/v1/ci/token")] =
-                "x-permission is 'none' (pre-tenant credential exchange, 02.4.1)",
-            [("POST", "/v1/auth/invite-token")] =
-                "x-permission is 'none' (pre-tenant invite staging, 02.3.1-T2: the browser holds no session yet)",
-            [("POST", "/v1/auth/link/{provider}")] =
-                "x-permission is 'none' (the link start acts only on the caller's own session cookie, 02.3.1-T2)",
             [("DELETE", "/v1/auth/link/pending")] =
                 "x-permission is 'none' (discarding the caller's own staged link, 02.3.1-T2)",
-            [("POST", "/v1/auth/link/confirm")] =
-                "x-permission is 'none' (confirming the caller's own staged link, 02.3.1-T2)",
             [("DELETE", "/v1/auth/sessions/{s}")] =
                 "x-permission is 'none' (revoking a session acts on the caller's own credential; the admin path needs membership:write inside the definer, 02.3.2-T2)",
-            [("POST", "/v1/auth/sessions/revoke-all")] =
-                "x-permission is 'none' (revoking the caller's own sessions, 02.3.2-T2)",
+            [("PATCH", "/v1/me")] =
+                "x-permission is 'none' (updating only the caller's own session-derived profile; no catalogue permission exists for it)",
+            [("POST", "/v1/auth/invite-token")] =
+                "x-permission is 'none' (pre-tenant invite staging, 02.3.1-T2: the browser holds no session yet)",
+            [("POST", "/v1/auth/link/confirm")] =
+                "x-permission is 'none' (confirming the caller's own staged link, 02.3.1-T2)",
+            [("POST", "/v1/auth/link/{provider}")] =
+                "x-permission is 'none' (the link start acts only on the caller's own session cookie, 02.3.1-T2)",
             [("POST", "/v1/auth/logout")] =
                 "x-permission is 'none' (logout revokes the caller's own session row, 02.3.2-T2)",
+            [("POST", "/v1/auth/sessions/revoke-all")] =
+                "x-permission is 'none' (revoking the caller's own sessions, 02.3.2-T2)",
+            [("POST", "/v1/ci/token")] =
+                "x-permission is 'none' (pre-tenant credential exchange, 02.4.1)",
+            [("POST", "/v1/orgs")] =
+                "x-permission is 'authenticated' (the org creator is any authenticated caller, 02.1.1 §5)",
         };
 
     /// <summary>

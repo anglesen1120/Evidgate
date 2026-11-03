@@ -55,6 +55,10 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate_resolve.session_revoke_one"] = ["status"],
         ["evidgate_resolve.session_revoke_others"] = ["status", "revoked_count"],
         ["evidgate_resolve.login_link_identity"] = ["outcome", "moved_from_user_id"],
+        ["evidgate_resolve.user_profile_read"] =
+            ["status", "user_id", "email", "display_name", "preferred_locale", "version"],
+        ["evidgate_resolve.user_profile_update"] =
+            ["status", "user_id", "email", "display_name", "preferred_locale", "version"],
     };
 
     /// <summary>
@@ -68,7 +72,9 @@ public sealed class ResolverTests : HarnessTest
     /// history (its first column is the session id, never a tenant) and the three route writes answer a status —
     /// the one cross-tenant act, an admin ending a member's session, is authorized INSIDE
     /// <c>session_revoke_one</c> against <c>p_org_id</c> and still answers a status, not a tenant tuple. Their
-    /// documented tuple above is still pinned exactly, and every other resolver keeps the rule.
+    /// documented tuple above is still pinned exactly, and every other resolver keeps the rule. The own-profile
+    /// pair (migration 0061) is the same shape: the caller is the presented cookie, so the answer is
+    /// a status plus that account's own row, never a tenant tuple.
     /// </summary>
     private static readonly HashSet<string> PlatformScopeResolvers = new(StringComparer.Ordinal)
     {
@@ -83,6 +89,8 @@ public sealed class ResolverTests : HarnessTest
         "evidgate_resolve.session_revoke_one",
         "evidgate_resolve.session_revoke_others",
         "evidgate_resolve.login_link_identity",
+        "evidgate_resolve.user_profile_read",
+        "evidgate_resolve.user_profile_update",
     };
 
     /// <summary>
