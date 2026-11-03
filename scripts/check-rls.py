@@ -142,6 +142,16 @@ DEFINER_AUDIT_EXEMPT = {
         "created 0048_identity_session_routes.sql:138 (bytea[], timestamptz): pre-tenant and read-only, no org chain "
         "to write into — the caller's own sign-in history, projected from the presented cookie hash"
     ),
+    "evidgate_resolve.user_profile_read": (
+        "created 0061_identity_user_profile.sql:115 (bytea[], timestamptz): pre-tenant and read-only, no org chain to "
+        "write into — the caller's own profile, projected from the presented cookie hash"
+    ),
+    "evidgate_resolve.user_profile_update": (
+        "created 0061_identity_user_profile.sql:167 (bytea[], text, integer, timestamptz): pre-tenant, no org chain to "
+        "write into — a person's language choice belongs to no org; the org-scoped `user.locale_changed` row is "
+        "written after it by `IdentityAuditWriter` (src/Modules/Evidgate.Modules.Identity/Login/Audit/"
+        "IdentityAuditWriter.cs), called from Profile/UpdateMyProfileCommand.cs"
+    ),
     "evidgate_resolve.session_revoke_current": (
         "created 0048_identity_session_routes.sql:206 (bytea[], timestamptz): no per-call audit row by owner decision "
         "D-S102-Q3 — a self revoke is every caller's own logout, and logout / self revoke / revoke-all will emit a "

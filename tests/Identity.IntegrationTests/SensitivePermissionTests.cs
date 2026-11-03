@@ -87,6 +87,11 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // answers 401 `unauthenticated` with no body. Its refusals and its own body are asserted in
         // Sessions/Http/SessionListTests.
         "/v1/auth/sessions",
+
+        // 02.3.1-T3's own profile is the same form: it authenticates as the session cookie only, so a
+        // service-token request answers 401 `unauthenticated` with no body. Its refusals and its own body are
+        // asserted in Profile/MyProfileTests.
+        "/v1/me",
     ];
 
     /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>

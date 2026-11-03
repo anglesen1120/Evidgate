@@ -153,6 +153,10 @@ otherwise the envelope filter's default `60` (00 §9.2).
   dead row, a repeat of `revoke-all` the same `204`, and a replay of a logged-out
   cookie is `401 session_revoked` — so a key could change nothing the second time
   (02.3.2-T2.1 §5, AC4/AC8).
+- `PATCH /v1/me` — the body sets one column (`preferred_locale`) to one of two
+  values, so a replay would write the same state, and the `If-Match` version makes
+  a retry that re-sends the already-applied version answer `412
+  precondition_failed` instead of applying twice (02.3.1-T3).
 
 ## Validation corpus (`fixtures/contracts/`, 01.3.2-T2)
 

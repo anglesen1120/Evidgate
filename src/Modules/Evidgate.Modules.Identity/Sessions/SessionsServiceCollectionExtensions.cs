@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Identity.Login;
 using Evidgate.Modules.Identity.Login.Persistence;
+using Evidgate.Modules.Identity.Profile;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -80,6 +81,12 @@ internal static class SessionsServiceCollectionExtensions
         // harmlessly, and a Worker that calls `AddEvidgateTasks` keeps its own instance through TryAdd.
         services.TryAddSingleton<IWorkerSchedDataSource, WorkerSchedDataSource>();
         services.TryAddSingleton<ISessionRoutesStore, SessionRoutesStore>();
+
+        // The own-profile read and write: one singleton store over the app role (the definer resolves the
+        // acting user from the session proof), and the two request-scoped use cases over it.
+        services.TryAddSingleton<IMyProfileStore, NpgsqlMyProfileStore>();
+        services.TryAddScoped<GetMyProfileQuery>();
+        services.TryAddScoped<UpdateMyProfileCommand>();
 
         return services;
     }

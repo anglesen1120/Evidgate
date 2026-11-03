@@ -53,6 +53,11 @@ const EXPECTED = [
   ['/auth/sessions/{s}', 'delete', 'none', 'v1'],
   ['/auth/sessions/revoke-all', 'post', 'none', 'v1'],
   ['/auth/logout', 'post', 'none', 'v1'],
+  // The account's own profile (02.3.1-T3, 02 §5): the same pre-tenant browser form as the session surface —
+  // the caller is the session the cookie proves, resolved inside the definer, so no catalogue permission is
+  // carried and no route value or body member names a user.
+  ['/me', 'get', 'none', 'v1'],
+  ['/me', 'patch', 'none', 'v1'],
   ['/projects/{p}/manifests', 'post', 'run:create', 'v1'],
   ['/projects/{p}/runs', 'post', 'run:create', 'v1'],
   ['/runs/{r}', 'get', 'run:read', 'v1'],
@@ -256,7 +261,9 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // the invite staging writes only a short-lived cookie (no resource), and the link surface is
 // driven by one staged-link cookie that one confirmation spends, so a replay cannot write twice; the session
 // routes of 02.3.2-T2 = revocation is a row state (`revoked_at` set once) and every answer is the same on a
-// repeat, so a key could change nothing the second time.
+// repeat, so a key could change nothing the second time; the own-profile write of 02.3.1-T3 = the body sets one
+// column to one of two values, so a replay would write the same state, and the `If-Match` version makes the
+// retry that re-sends the already-applied version answer 412 instead of applying twice.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ci-bindings',
@@ -275,6 +282,7 @@ const IDEM_EXEMPT = new Set([
   'post /auth/sessions/revoke-all',
   'post /auth/logout',
   'post /dev/session',
+  'patch /me',
 ]);
 for (const { path, method, op } of ops) {
   for (const prm of op.parameters ?? []) {

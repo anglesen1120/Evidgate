@@ -1822,6 +1822,38 @@ export type RevokeAllSessionsRequest = {
 };
 
 /**
+ * The signed-in account's own profile (02.3.1-T3), as `GET /v1/me` and both answers of `PATCH /v1/me` carry it. Only the account's own values are ever in it: the row is resolved from the session, so no field here can describe another user. The row's `version` is NOT a member — it travels as the response's `ETag` and comes back as `If-Match`, so a client cannot believe it wrote with a version it never read.
+ */
+export type UserProfileDto = {
+    /**
+     * The account's user id — the row itself, never a value the caller sent.
+     */
+    id: string;
+    /**
+     * The provider-verified address on the account, as the provider gave it.
+     */
+    email: string;
+    /**
+     * The provider profile name, or `null` when the provider supplied none.
+     */
+    display_name: string | null;
+    /**
+     * The chosen language, or `null` until the account has chosen one. The only member `PATCH /v1/me` writes; the column's check constraint carries the same two values.
+     */
+    preferred_locale: 'vi' | 'en' | null;
+};
+
+/**
+ * Body of `PATCH /v1/me` (02.3.1-T3). Exactly one member: any other name is 422 `field_not_patchable` with the member named in `error.details`, even when a valid locale travels beside it, and an empty, non-JSON or non-object body is 422 `request_invalid`.
+ */
+export type UpdateUserProfileRequest = {
+    /**
+     * The language to store. Anything else is 422 `locale_invalid`.
+     */
+    preferred_locale: 'vi' | 'en';
+};
+
+/**
  * One row of the version timeline (13.1.1 §5 route 22, AC9): the entity, the change kind, the source, the content digest and who wrote it. The list projection carries no `content`.
  */
 export type AuthoringVersionListItemDto = {
@@ -3089,6 +3121,94 @@ export type ConfirmProviderLinkResponses = {
 };
 
 export type ConfirmProviderLinkResponse = ConfirmProviderLinkResponses[keyof ConfirmProviderLinkResponses];
+
+export type GetMyProfileData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/me';
+};
+
+export type GetMyProfileErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetMyProfileError = GetMyProfileErrors[keyof GetMyProfileErrors];
+
+export type GetMyProfileResponses = {
+    /**
+     * The caller's own profile, its version in the ETag.
+     */
+    200: UserProfileDto;
+};
+
+export type GetMyProfileResponse = GetMyProfileResponses[keyof GetMyProfileResponses];
+
+export type UpdateMyProfileData = {
+    body: UpdateUserProfileRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/me';
+};
+
+export type UpdateMyProfileErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UpdateMyProfileError = UpdateMyProfileErrors[keyof UpdateMyProfileErrors];
+
+export type UpdateMyProfileResponses = {
+    /**
+     * The profile in its new state, its new version in the ETag.
+     */
+    200: UserProfileDto;
+};
+
+export type UpdateMyProfileResponse = UpdateMyProfileResponses[keyof UpdateMyProfileResponses];
 
 export type ListSessionsData = {
     body?: never;

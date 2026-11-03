@@ -327,4 +327,16 @@ public static class ApiErrorCode
     /// antiforgery pair, so it is refused before the handler (02.3.2 AC5, T38).
     /// </summary>
     public const string CsrfFailed = "csrf_failed";
+
+    /// <summary>
+    /// 422: <c>PATCH /v1/me</c> carried a <c>preferred_locale</c> that is not <c>vi</c> or <c>en</c> — the two
+    /// languages the contract names — so nothing is written (02.3.1 AC9).
+    /// </summary>
+    public const string LocaleInvalid = "locale_invalid";
+
+    /// <summary>
+    /// 422: <c>PATCH /v1/me</c> carried a member the own-profile contract does not patch (any name besides
+    /// <c>preferred_locale</c>), so nothing is written (02.3.1 AC9).
+    /// </summary>
+    public const string FieldNotPatchable = "field_not_patchable";
 }
