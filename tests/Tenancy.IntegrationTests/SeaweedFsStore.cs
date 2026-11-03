@@ -2,9 +2,9 @@
 // One digest-pinned container per test assembly (an xUnit assembly fixture) and one bucket per test class
 // on it, emptied and dropped when that class fixture releases, so the class-level seam (endpoint,
 // credentials, Configuration()) is unchanged while the suite no longer starts a container per class.
-// xUnit starts the assembly fixture on every run of this assembly, S3 classes or not; that is accepted
-// because it is one start per assembly instead of one per class, and because a lazy start would put
-// start-up synchronisation back inside the tests that need it — the flake this file already guards.
+// The fixture itself starts nothing: the first Docker-category SeaweedFsStore starts the one container
+// through a single shared start task, so a run that selects only non-Docker tests (the clean-build
+// smoke) never opens a Docker socket.
 // Only the container-start logic of tests/ObjectStorage.IntegrationTests' SeaweedFsFixture is copied (the
 // digest-pinned image, the mounted local-only identity file, the S3 gateway command and the HTTP
 // readiness probe).
@@ -37,9 +37,13 @@ public sealed class SeaweedFsServer : IAsyncLifetime
     private readonly FileInfo _configFile = new(
         Path.Combine(RepositoryRoot(), "infra", "seaweedfs", "s3-config.json"));
 
+    private readonly object _startLock = new();
+
     private IContainer? _container;
 
-    /// <summary>The started gateway; xUnit runs the assembly fixture before any class fixture.</summary>
+    private Task? _start;
+
+    /// <summary>The assembly fixture instance; its gateway starts with the first store that needs one.</summary>
     internal static SeaweedFsServer? Current { get; private set; }
 
     /// <summary>The container's S3 endpoint, e.g. <c>http://127.0.0.1:49153</c>.</summary>
@@ -49,10 +53,33 @@ public sealed class SeaweedFsServer : IAsyncLifetime
 
     internal string SecretKey { get; private set; } = null!;
 
-    public async ValueTask InitializeAsync()
+    /// <summary>
+    /// Starts nothing: xUnit runs this fixture even when the category filter selects no Docker test, so
+    /// the first <see cref="SeaweedFsStore"/> starts the shared gateway through <see cref="EnsureStartedAsync"/>.
+    /// </summary>
+    public ValueTask InitializeAsync()
+    {
+        Current = this;
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// The one start task: every store that needs the gateway awaits the same task, so concurrent first
+    /// classes start one container and a failed start reaches each of them as that same failure.
+    /// </summary>
+    internal Task EnsureStartedAsync()
+    {
+        lock (_startLock)
+        {
+            return _start ??= Task.Run(StartAsync);
+        }
+    }
+
+    private async Task StartAsync()
     {
         var identity = ReadFirstIdentity(_configFile);
 
+        // Assigned before the start so teardown also disposes a container whose start failed.
         _container = new ContainerBuilder(ContainerImages.SeaweedFs)
             .WithResourceMapping(_configFile, new FileInfo(ContainerConfigPath))
             .WithCommand("server", "-s3", $"-s3.port={S3Port}", $"-s3.config={ContainerConfigPath}")
@@ -68,7 +95,6 @@ public sealed class SeaweedFsServer : IAsyncLifetime
         Endpoint = $"http://{_container.Hostname}:{_container.GetMappedPublicPort(S3Port)}";
         AccessKey = identity.AccessKey;
         SecretKey = identity.SecretKey;
-        Current = this;
     }
 
     public async ValueTask DisposeAsync()
@@ -76,6 +102,7 @@ public sealed class SeaweedFsServer : IAsyncLifetime
         Current = null;
         if (_container is not null)
         {
+            // A failed start still leaves the built container here, so teardown disposes it too.
             await _container.DisposeAsync();
         }
     }
@@ -175,10 +202,10 @@ public sealed class SeaweedFsStore : IAsyncLifetime
     /// <summary>This class's bucket on the shared gateway.</summary>
     internal string BucketName => _bucketName;
 
-    /// <summary>The shared gateway; it started before this class fixture was created.</summary>
+    /// <summary>The assembly fixture instance; it starts the gateway on this class's first use.</summary>
     private static SeaweedFsServer Server => SeaweedFsServer.Current
         ?? throw new InvalidOperationException(
-            "the SeaweedFS assembly fixture has not started; xUnit starts it before any class fixture");
+            "the SeaweedFS assembly fixture is not active; xUnit starts it before any class fixture");
 
     /// <summary>The shared container's S3 endpoint, e.g. <c>http://127.0.0.1:49153</c>.</summary>
     internal string Endpoint { get; private set; } = null!;
@@ -204,9 +231,12 @@ public sealed class SeaweedFsStore : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        Endpoint = Server.Endpoint;
-        AccessKey = Server.AccessKey;
-        SecretKey = Server.SecretKey;
+        var server = Server;
+        await server.EnsureStartedAsync();
+
+        Endpoint = server.Endpoint;
+        AccessKey = server.AccessKey;
+        SecretKey = server.SecretKey;
 
         // Both first S3 calls of a class run under this retry, and until F59 neither was protected:
         // the bucket creation had no retry and the warm-up that followed retried only AmazonServiceException.
