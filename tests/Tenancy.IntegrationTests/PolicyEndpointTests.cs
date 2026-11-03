@@ -20,7 +20,6 @@ namespace Tenancy.IntegrationTests;
 /// The routes, status codes, wire names, error codes and headers are the 07.1.1-T3 contract (s9-plan); the tests
 /// drive the HTTP surface only, so they do not depend on the module's internal type names.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyEndpointTests
 {

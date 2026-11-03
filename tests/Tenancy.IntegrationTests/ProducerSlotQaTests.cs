@@ -17,7 +17,6 @@ namespace Tenancy.IntegrationTests;
 /// against the plan contract (AC2 per-shard registration, AC3 first-write binding, AC4 unknown producer,
 /// T9/T54/T88 in plans/features/README.md), not against the implementation's internals.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ProducerSlotQaTests
 {

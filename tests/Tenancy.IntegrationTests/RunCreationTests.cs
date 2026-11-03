@@ -25,7 +25,6 @@ namespace Tenancy.IntegrationTests;
 /// 05.2.1-T1 AC1–AC12 through the real host and a real PostgreSQL: one tenant transaction writes the run, its planned
 /// executions, one producer slot per manifest shard and the outbox row, or nothing at all.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunCreationTests
 {

@@ -6,6 +6,8 @@ using Shouldly;
 using Testcontainers.PostgreSql;
 using Xunit;
 
+[assembly: AssemblyFixture(typeof(Tenancy.IntegrationTests.PostgresTenancyFixture))]
+
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
@@ -16,25 +18,17 @@ namespace Tenancy.IntegrationTests;
 /// (migration 0001 creates the three application roles) and then hands
 /// <c>evidgate_app</c> and <c>evidgate_operator</c> their LOGIN + credential —
 /// exactly the split <c>scripts/dev/db-init.sh</c> performs (01 §6).
+/// The container starts with the first test that needs a database, so a run that selects only
+/// non-Docker tests never opens a Docker socket: xUnit initializes an assembly fixture even when
+/// the filter excludes every Docker test.
 /// </summary>
 public sealed class PostgresTenancyFixture : IAsyncLifetime
 {
     private const string DatabaseOwnerRole = "evidgate_owner";
 
-    // One fresh database per test, copied from one migrated template, lives in this single container;
-    // PostgreSQL's cumulative-statistics shared memory (posix DSA in /dev/shm) grows by doubling with
-    // the database count and, at the Docker default of 64 MB, fails with 53100 "could not resize shared
-    // memory segment" once the suite passes ~750 databases.
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(ContainerImages.Postgres)
-        .WithDatabase("evidgate")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .WithCreateParameterModifier(parameters =>
-        {
-            ArgumentNullException.ThrowIfNull(parameters.HostConfig);
-            parameters.HostConfig.ShmSize = 512L * 1024 * 1024;
-        })
-        .Build();
+    private readonly object _startLock = new();
+    private PostgreSqlContainer? _container;
+    private Task? _start;
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
@@ -53,11 +47,36 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
             [MigratorOptions.ConnectionStringVariable] = "Host=127.0.0.1;Database=evidgate;Username=evidgate_owner",
         }).MigrationsPath;
 
-    public async ValueTask InitializeAsync()
+    // Assembly fixtures initialize even when the filter excludes every Docker test.
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    private Task EnsureStartedAsync()
     {
+        lock (_startLock)
+        {
+            return _start ??= StartAsync();
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        // Cumulative statistics outgrow Docker's default 64 MB shared memory around 750 databases.
+        _container = new PostgreSqlBuilder(ContainerImages.Postgres)
+            .WithDatabase("evidgate")
+            .WithUsername("postgres")
+            .WithPassword("postgres")
+            .WithCreateParameterModifier(parameters =>
+            {
+                ArgumentNullException.ThrowIfNull(parameters.HostConfig);
+                parameters.HostConfig.ShmSize = 512L * 1024 * 1024;
+            })
+            .Build();
+
         await _container.StartAsync().ConfigureAwait(false);
 
-        await using var connection = await OpenSuperuserAsync("postgres").ConfigureAwait(false);
+        // Bootstrap must not await the public connection helper's own startup task.
+        await using var connection = new NpgsqlConnection(SuperuserConnectionString("postgres"));
+        await connection.OpenAsync().ConfigureAwait(false);
         await ExecuteAsync(
             connection,
             $"create role {DatabaseOwnerRole} login createrole password '{_ownerPassword}'").ConfigureAwait(false);
@@ -75,7 +94,12 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         _template?.Dispose();
-        await _container.DisposeAsync().ConfigureAwait(false);
+
+        // Built before any await in StartAsync, so a failed or still-starting fixture is disposed too.
+        if (_container is not null)
+        {
+            await _container.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>Creates a database owned by the migration role, without applying anything.</summary>
@@ -101,6 +125,8 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     /// <summary>Creates a database at head (copied from the migrated template) and enables the application logins.</summary>
     public async Task<string> CreateDatabaseAsync()
     {
+        await EnsureStartedAsync().ConfigureAwait(false);
+
         var database = "tenancy_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
 
         await Template.CreateDatabaseAsync(database).ConfigureAwait(false);
@@ -139,6 +165,8 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     /// <summary>Opens a superuser connection (bootstrap and catalog assertions only).</summary>
     public async Task<NpgsqlConnection> OpenSuperuserAsync(string database)
     {
+        await EnsureStartedAsync().ConfigureAwait(false);
+
         var connection = new NpgsqlConnection(SuperuserConnectionString(database));
         await connection.OpenAsync().ConfigureAwait(false);
         return connection;
@@ -179,6 +207,8 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     /// <summary>The journal, ordered by name, read as the migration role.</summary>
     public async Task<IReadOnlyList<JournalRow>> ReadJournalAsync(string database)
     {
+        await EnsureStartedAsync().ConfigureAwait(false);
+
         await using var connection = new NpgsqlConnection(OwnerConnectionString(database));
         await connection.OpenAsync().ConfigureAwait(false);
 
@@ -321,7 +351,8 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
 
     private string Build(string username, string password, string database)
     {
-        var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        var container = _container ?? throw new InvalidOperationException("the fixture has not started its container");
+        var builder = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
         {
             Database = database,
             Username = username,
@@ -355,9 +386,9 @@ public sealed record MigrationRun(MigrationRunResult Result, string Transcript)
 /// <param name="DurationMs">Script duration recorded by the Migrator.</param>
 public sealed record JournalRow(string Name, string Checksum, DateTimeOffset AppliedAt, int? DurationMs);
 
-/// <summary>Binds the container fixture to every test class that needs it (one container per assembly).</summary>
-[CollectionDefinition(Name)]
-public sealed class TenancySuite : ICollectionFixture<PostgresTenancyFixture>
+/// <summary>Runs cluster-wide and timing-sensitive tests without overlapping other collections.</summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ExclusiveTenancySuite
 {
-    public const string Name = "postgres-tenancy";
+    public const string Name = "postgres-tenancy-exclusive";
 }

@@ -28,7 +28,6 @@ namespace Tenancy.IntegrationTests;
 /// 06.1.2-T2 (AC5, 06.4.4 AC2) review fixes: the <c>artifact.complete</c> audit row a stored-state no-op still
 /// records (C-F2) and the project-status re-guard the writer applies inside its own transaction (S-F3).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCompleteAuditTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

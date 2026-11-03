@@ -13,7 +13,6 @@ namespace Tenancy.IntegrationTests;
 /// 03.1.3 AC1–AC5 through the real host and a real PostgreSQL: append-only revisions keyed by content hash, reuse across
 /// renames and re-syncs, immutability at the database, the store contract and the revisions route.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CatalogRevisionTests
 {

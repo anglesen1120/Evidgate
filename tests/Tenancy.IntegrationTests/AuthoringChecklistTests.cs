@@ -18,7 +18,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>version_no</c> chain, AC5) only holds for rows the writer created, so seeding an item with SQL would test a state
 /// the product cannot produce.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringChecklistTests
 {

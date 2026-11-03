@@ -11,7 +11,6 @@ namespace Tenancy.IntegrationTests;
 /// tenant_admin in <c>contracts/permissions.json</c>), grammar-checked as 422, unique per org as 409, free in another
 /// org, and a change never rewrites an existing manual case <c>code</c>.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ProjectCasePrefixTests
 {

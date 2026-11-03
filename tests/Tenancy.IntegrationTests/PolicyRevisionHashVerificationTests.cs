@@ -19,7 +19,6 @@ namespace Tenancy.IntegrationTests;
 /// key order — still verifies. The mutation cases write as the owner role with the immutability trigger disabled,
 /// which is the only way a stored revision can change at all (the app role holds no <c>UPDATE</c> grant).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyRevisionHashVerificationTests
 {

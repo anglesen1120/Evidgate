@@ -10,6 +10,7 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>Pure tests of the CI authentication building blocks (02.4.1, 02.4.2): no database, no host.</summary>
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class CiUnitTests
 {
     // ------------------------------------------------------------ RefGlob

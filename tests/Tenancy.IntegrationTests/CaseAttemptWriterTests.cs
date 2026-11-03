@@ -13,7 +13,6 @@ namespace Tenancy.IntegrationTests;
 /// (<see cref="AttemptScope"/>) and owns the commit, so the writer's "never opens, never commits"
 /// contract is what AC5's visibility checks pin.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CaseAttemptWriterTests
 {

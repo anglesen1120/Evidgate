@@ -25,7 +25,7 @@ namespace Tenancy.IntegrationTests;
 /// 0039 — the deploy path, not a from-scratch run.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
+[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringSchemaTests
 {

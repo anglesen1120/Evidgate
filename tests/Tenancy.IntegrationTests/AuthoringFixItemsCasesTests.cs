@@ -19,7 +19,6 @@ namespace Tenancy.IntegrationTests;
 /// the code-allocation case — items in states no route can produce); everything the routes do produce starts from their
 /// own endpoints, so the version chain and the code counter are the ones the product writes.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringFixItemsCasesTests
 {

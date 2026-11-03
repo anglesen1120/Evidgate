@@ -56,4 +56,8 @@
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
     <Compile Include="..\Shared\TemplateDatabase.cs" Link="TemplateDatabase.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Bounded class-level parallelism: 4 workers match the container VM's 4 vCPUs. -->
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

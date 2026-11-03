@@ -13,7 +13,6 @@ namespace Tenancy.IntegrationTests;
 /// run has none. The stored rows are arranged by the case rather than by the evaluator, because this route reads what the
 /// evaluation command wrote.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class RunDecisionApiTests
 {

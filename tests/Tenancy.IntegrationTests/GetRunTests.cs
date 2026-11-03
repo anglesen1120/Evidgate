@@ -15,7 +15,6 @@ namespace Tenancy.IntegrationTests;
 /// purpose. The read is one Dapper statement over the ambient tenant scope, so another tenant's run is the same 404
 /// <c>not_found</c> as an unknown id (00 §5.4: no existence oracle).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class GetRunTests
 {

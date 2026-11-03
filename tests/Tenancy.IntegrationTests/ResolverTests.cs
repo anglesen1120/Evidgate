@@ -11,7 +11,6 @@ namespace Tenancy.IntegrationTests;
 /// the T1 tuple, take parameters only and cannot be redirected by the caller's
 /// <c>search_path</c> (TL T80).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ResolverTests
 {

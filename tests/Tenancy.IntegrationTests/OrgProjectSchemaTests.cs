@@ -12,7 +12,6 @@ namespace Tenancy.IntegrationTests;
 /// task declares them (00 §5.4, §7, DECISIONS F5). The `TO evidgate_operator`
 /// policy is absent by design: it is 02.8.1's grant-gated policy (TL T76).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class OrgProjectSchemaTests
 {

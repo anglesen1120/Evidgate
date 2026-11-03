@@ -14,7 +14,6 @@ namespace Tenancy.IntegrationTests;
 /// the handler's own statements (<see cref="ListRunsSql"/>, reached through <c>InternalsVisibleTo</c>) with the
 /// handler's parameters bound, so the assertion follows the served query and not a copy of it.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ListRunsIndexPlanTests
 {

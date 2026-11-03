@@ -11,7 +11,6 @@ namespace Tenancy.IntegrationTests;
 /// rows, and a cross-tenant write is rejected by the <c>WITH CHECK</c> side of the
 /// policy rather than by application code.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ProjectRlsTests
 {

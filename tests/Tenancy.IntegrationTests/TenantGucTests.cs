@@ -12,7 +12,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>set_config</c> a fail-closed read instead of an open one, and the seeded rows
 /// are proven visible under a set tenant so the zero cannot come from an empty table.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class TenantGucTests
 {

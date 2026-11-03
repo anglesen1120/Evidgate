@@ -23,7 +23,6 @@ namespace Tenancy.IntegrationTests;
 /// the slot bind against the unknown-execution-key answer (T9/T10): a foreign token must never learn
 /// which execution keys the run plans.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class BindingCiRunRefTests
 {

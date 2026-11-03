@@ -11,7 +11,6 @@ namespace Tenancy.IntegrationTests;
 /// across two batches inside one transaction, microsecond truncation of the duplicate payload, the
 /// validation boundaries, and a mixed batch that writes one row and still refuses.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CaseAttemptWriterQaTests
 {

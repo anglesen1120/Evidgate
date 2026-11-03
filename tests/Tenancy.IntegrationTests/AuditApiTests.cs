@@ -7,7 +7,7 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>02.7.1-T3.1 (AC4, AC5): the audit list and export through the real pipeline.</summary>
-[Collection(TenancySuite.Name)]
+[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuditApiTests
 {

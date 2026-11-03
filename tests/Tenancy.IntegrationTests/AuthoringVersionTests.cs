@@ -22,7 +22,7 @@ namespace Tenancy.IntegrationTests;
 /// Every call runs through the module seam (<c>AddAuthoringModule</c>) over a real <c>ITenantScopeFactory</c>, so the
 /// statements run on the app role inside a tenant transaction and RLS scopes them — the production path, not a stub.
 /// </remarks>
-[Collection(TenancySuite.Name)]
+[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class AuthoringVersionTests
 {

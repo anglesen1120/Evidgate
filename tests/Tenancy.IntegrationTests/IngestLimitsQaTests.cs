@@ -13,7 +13,6 @@ using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class IngestLimitsQaTests
 {

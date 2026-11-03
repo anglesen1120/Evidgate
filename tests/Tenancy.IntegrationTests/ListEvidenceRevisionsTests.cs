@@ -21,7 +21,6 @@ namespace Tenancy.IntegrationTests;
 /// another tenant's run and a sibling project's run are the one 404
 /// <c>not_found</c> of <c>GET /v1/runs/{r}</c> (00 §5.4: no existence oracle).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class ListEvidenceRevisionsTests
 {

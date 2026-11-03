@@ -12,7 +12,6 @@ namespace Tenancy.IntegrationTests;
 /// 02.1.1-T3.1: the <see cref="ITenantLimits"/> surface plan 12 reads, resolved from the
 /// real Api composition and run inside a tenant scope like a handler would.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class TenantLimitsTests
 {

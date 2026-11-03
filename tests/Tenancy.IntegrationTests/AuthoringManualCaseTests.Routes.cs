@@ -17,7 +17,6 @@ namespace Tenancy.IntegrationTests;
 /// project as the owner and then calls the routes as a granted caller of that org. The domain rules that need no host
 /// (the steps corpus) live in the existing partial file.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class AuthoringManualCaseTests
 {

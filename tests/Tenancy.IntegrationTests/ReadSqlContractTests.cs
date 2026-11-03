@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// renamed in the SQL or the migration would otherwise reach production as a DTO
 /// field silently left at its default.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ReadSqlContractTests
 {

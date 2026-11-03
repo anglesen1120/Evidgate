@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// no-tenant RLS read. Written against the real host and a real PostgreSQL; it pins the HTTP/DB
 /// contract, never internals.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class WaiverQaTests
 {

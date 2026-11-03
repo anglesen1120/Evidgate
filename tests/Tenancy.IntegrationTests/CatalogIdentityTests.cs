@@ -13,7 +13,6 @@ namespace Tenancy.IntegrationTests;
 /// 03.1.1 AC1–AC7 through the real host and a real PostgreSQL: the registration service (rename, conflicts, warnings,
 /// missing), the database-level immutability, RLS, and the catalog routes with their 00 §9 envelope.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CatalogIdentityTests
 {

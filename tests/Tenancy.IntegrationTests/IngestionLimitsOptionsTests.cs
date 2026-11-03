@@ -18,6 +18,7 @@ namespace Tenancy.IntegrationTests;
 /// The two gzip-decode caps of 04.1.1-T3: their defaults, their range validation, the section they bind
 /// from and the environment variable that overrides them.
 /// </summary>
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class IngestionLimitsOptionsTests
 {
     [Fact]

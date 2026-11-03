@@ -21,7 +21,6 @@ namespace Tenancy.IntegrationTests;
 /// 00 §9.1 keyset over that pair, and an unknown run, another tenant's run and a sibling project's run are the one
 /// 404 <c>not_found</c> of <c>GET /v1/runs/{r}</c> (00 §5.4: no existence oracle).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ListRunAttemptsTests
 {

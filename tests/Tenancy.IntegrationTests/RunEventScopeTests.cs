@@ -15,7 +15,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>FOR UPDATE</c> on the same run waits for this transaction to end — together with the project's state, the
 /// run's state and the subset of the caller's keys that are planned executions of the run.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunEventScopeTests
 {

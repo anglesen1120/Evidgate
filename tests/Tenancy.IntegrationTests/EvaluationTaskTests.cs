@@ -21,7 +21,6 @@ namespace Tenancy.IntegrationTests;
 /// Every call therefore starts on a clean flow, exactly as two processes would.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class EvaluationTaskTests
 {

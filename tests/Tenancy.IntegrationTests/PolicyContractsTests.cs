@@ -28,7 +28,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>PolicyActivationTests</c> drives over HTTP), and the read goes through the module's registered
 /// <see cref="IPolicyContracts"/>, so both halves are the production ones.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyContractsTests
 {

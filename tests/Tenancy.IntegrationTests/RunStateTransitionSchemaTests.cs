@@ -20,7 +20,6 @@ namespace Tenancy.IntegrationTests;
 /// pointer's own behaviour — latest revision of the same run only, never cleared by the app role (the migration role erasure sweep is the exception) — is 0049's and is covered
 /// by <see cref="EvidenceRevisionSchemaTests"/>.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunStateTransitionSchemaTests
 {

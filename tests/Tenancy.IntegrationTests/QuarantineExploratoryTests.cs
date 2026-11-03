@@ -15,7 +15,6 @@ namespace Tenancy.IntegrationTests;
 /// on both mutations, re-quarantine after removal, and a malformed entry id. Helpers are copied from
 /// <c>QuarantineTests</c> because those are private there.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class QuarantineExploratoryTests
 {

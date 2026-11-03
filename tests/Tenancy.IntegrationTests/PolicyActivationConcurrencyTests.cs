@@ -25,7 +25,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>WaitAsync</c>: a deadlock surfaces as a timeout rather than a hung test. Each task is a real request or a
 /// real store/contracts call on its own connection, so the locks are the production ones.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyActivationConcurrencyTests
 {

@@ -34,7 +34,6 @@ namespace Tenancy.IntegrationTests;
 /// wins, and no rows at all resolve to <c>shadow</c>").
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class HealingSwitchSchemaTests
 {

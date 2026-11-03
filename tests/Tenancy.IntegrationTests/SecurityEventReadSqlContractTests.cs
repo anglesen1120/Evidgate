@@ -19,7 +19,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>"{}"</c> defaults instead of failing. The keyset walk is the second half: the same
 /// <c>(created_at, id)</c> ordering the API pages on, with no repeat and no gap.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SecurityEventReadSqlContractTests
 {

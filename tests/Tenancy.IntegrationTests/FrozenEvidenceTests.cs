@@ -11,7 +11,6 @@ namespace Tenancy.IntegrationTests;
 /// frozen revision row, and the latest attempt each execution key had at or before that revision's own
 /// <c>created_at</c>. Every test names the predicate whose removal or narrowing makes it fail.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class FrozenEvidenceTests
 {

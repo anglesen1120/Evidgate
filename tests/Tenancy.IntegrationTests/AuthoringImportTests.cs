@@ -21,7 +21,6 @@ namespace Tenancy.IntegrationTests;
 /// The file builders and the raw-body request helpers live in <see cref="AuthoringImportCalls"/>; the export projection
 /// is <see cref="AuthoringImportExportTests"/>'s, because round-trip equality is the only place it is needed.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringImportTests
 {

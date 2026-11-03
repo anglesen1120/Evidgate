@@ -12,7 +12,7 @@ namespace Tenancy.IntegrationTests;
 /// 02.4.1-T2/T3 and 02.4.2 through the real host: GitHub OIDC exchange against a local JWKS, binding challenge,
 /// replay arbiter, minted <c>ci_producer</c> scope, and ingest-token create/exchange/rotate/revoke.
 /// </summary>
-[Collection(TenancySuite.Name)]
+[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CiAuthTests
 {

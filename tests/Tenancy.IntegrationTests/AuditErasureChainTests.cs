@@ -27,7 +27,6 @@ namespace Tenancy.IntegrationTests;
 /// test erases only the <c>"user"</c> row's personal fields and proves the chain never carried any.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuditErasureChainTests
 {

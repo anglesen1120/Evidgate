@@ -17,7 +17,6 @@ namespace Tenancy.IntegrationTests;
 /// 07.1.1-T1.1/T1.2 through a real PostgreSQL: the migration's table with FORCE RLS, immutability at the database
 /// (app-role grants and the trigger), the append-only store's dedupe and numbering, and the tenant boundary.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyRevisionImmutabilityTests
 {

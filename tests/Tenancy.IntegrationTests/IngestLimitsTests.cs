@@ -26,7 +26,6 @@ namespace Tenancy.IntegrationTests;
 /// every decode refusal of a gzip body is 422 <c>request_invalid</c>, and each one bumps the single
 /// <c>evidgate_ingest_batch_rejected_total</c> counter once with a closed-set reason.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class IngestLimitsTests
 {

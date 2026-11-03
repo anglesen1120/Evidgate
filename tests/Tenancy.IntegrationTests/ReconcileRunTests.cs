@@ -32,8 +32,8 @@ using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed partial class ReconcileRunTests
 {
     /// <summary>The producer id of the seeded shard (05.2.1 registers <c>shard-N</c> per manifest shard).</summary>

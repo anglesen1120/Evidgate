@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// 05.2.1-T1 QA extras: body-shape, rune and byte boundaries, cross-project scope, and concurrent creates, all through
 /// the real host and a real PostgreSQL.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunCreationQaExtraTests
 {

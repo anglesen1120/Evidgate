@@ -16,7 +16,6 @@ namespace Tenancy.IntegrationTests;
 /// (<see cref="ICatalogContracts.GetCaseIdsAsync"/>) and the variant hash of each planned execution's parameters
 /// (<see cref="ICatalogContracts.NormalizeVariantHashes"/>) — over a real PostgreSQL and the real host.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CatalogRunPlanningReadsTests
 {

@@ -22,7 +22,6 @@ namespace Tenancy.IntegrationTests;
 /// The run world, the run-create call and the manifest seeding are reused from <see cref="RunCreationTests"/>, so the
 /// pin is read from the same row the 05.2.1 suite writes.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class PolicyRunPinningTests
 {

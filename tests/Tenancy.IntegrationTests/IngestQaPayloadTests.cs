@@ -8,7 +8,6 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>The payload/text/number boundaries of <c>POST /v1/runs/{r}/events</c> over a real PostgreSQL.</summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class IngestQaPayloadTests
 {

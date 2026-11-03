@@ -32,7 +32,7 @@ namespace Tenancy.IntegrationTests;
 /// kind, never a per-row loop", and a per-row path would multiply the count by the row count.
 /// </para>
 /// </remarks>
-[Collection(TenancySuite.Name)]
+[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringImporterTests
 {

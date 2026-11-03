@@ -23,7 +23,6 @@ namespace Tenancy.IntegrationTests;
 /// tenant and a service principal holding <c>event:write</c> published for the flow —
 /// the same stages the future ingest entry point (04.1.1-T1) will drive.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AdapterCapabilityTests
 {

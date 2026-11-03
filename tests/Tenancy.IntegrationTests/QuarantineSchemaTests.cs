@@ -17,7 +17,6 @@ namespace Tenancy.IntegrationTests;
 /// HTTP surface is 07.3.1-T2.2's.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class QuarantineSchemaTests
 {

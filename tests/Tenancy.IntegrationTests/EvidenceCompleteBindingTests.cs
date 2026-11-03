@@ -23,7 +23,6 @@ namespace Tenancy.IntegrationTests;
 /// after the project is deleted answers the stored 200 while a still-pending row is refused 409
 /// <c>project_deleting</c>.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

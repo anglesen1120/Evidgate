@@ -21,7 +21,6 @@ namespace Tenancy.IntegrationTests;
 /// also names a release is <c>replay_release_not_allowed</c> (AC9). Both are 422 refusals that write nothing and leave
 /// the <c>Idempotency-Key</c> free; the regular path is unchanged and stores <c>purpose = 'regular'</c>.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunCreationReplayTests
 {

@@ -17,7 +17,6 @@ namespace Tenancy.IntegrationTests;
 /// 07.2.2 — so any other value is 422 <c>request_invalid</c> rather than a silently empty page, and
 /// <c>completeness</c> is null (never a fabricated <c>incomplete</c>) while a run has no evidence revision.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class ListRunsFilterTests
 {

@@ -29,7 +29,6 @@ namespace Tenancy.IntegrationTests;
 /// become evidence. The table now covers zip, PNG, JPEG and MP4 as well as the XML/HTML/JSON families, so the
 /// sibling complete suites declare a real zip signature.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>

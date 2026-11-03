@@ -22,7 +22,6 @@ namespace Tenancy.IntegrationTests;
 /// tenant-visible read of the same rows is <c>SeedMatrixTests</c>' (the app role under RLS).
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringPermissionSeedTests
 {

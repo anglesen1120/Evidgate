@@ -32,7 +32,6 @@ namespace Tenancy.IntegrationTests;
 /// of one run queue on <c>run</c> instead of deadlocking.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceRevisionSchemaTests
 {

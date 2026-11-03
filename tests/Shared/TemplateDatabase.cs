@@ -23,10 +23,8 @@ namespace Evidgate.Testing;
 /// </summary>
 /// <remarks>
 /// PostgreSQL refuses to copy a template that has open connections, so every
-/// connection this type opens is unpooled. The copy gate is a defensive guard:
-/// each fixture is one xUnit collection whose classes run serially, so copies do
-/// not overlap today, but a concurrent <c>create database</c> from one template
-/// fails transiently with 55006.
+/// connection this type opens is unpooled. The copy gate serializes concurrent
+/// copies from the same template, which would otherwise fail transiently with 55006.
 /// </remarks>
 internal sealed class TemplateDatabase : IDisposable
 {

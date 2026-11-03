@@ -22,7 +22,6 @@ namespace Tenancy.IntegrationTests;
 /// (<c>ITenantScopeFactory.BeginAsync(readOnlyTransaction: true)</c>), so row level security and the NFC-stored text are
 /// the production ones.
 /// </remarks>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuthoringExporterTests
 {

@@ -25,7 +25,6 @@ namespace Tenancy.IntegrationTests;
 /// <c>Content-Length</c> (the endpoint refuses without reading) or streamed the body chunked / without a length
 /// (the counting stream trips at the byte that passes the limit).
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixture)
 {

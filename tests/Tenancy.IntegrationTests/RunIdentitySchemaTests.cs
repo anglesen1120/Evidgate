@@ -21,7 +21,6 @@ namespace Tenancy.IntegrationTests;
 /// app role, exactly like <c>RunSchemaTests</c>.
 /// </para>
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class RunIdentitySchemaTests
 {

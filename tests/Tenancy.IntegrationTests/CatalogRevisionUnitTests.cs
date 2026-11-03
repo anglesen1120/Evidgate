@@ -9,6 +9,7 @@ namespace Tenancy.IntegrationTests;
 /// 03.1.3-T1.2 without a database: assertion extraction (AC4), revision hashing (AC1, AC3) and the text rules that
 /// keep a customer's strings out of trouble.
 /// </summary>
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class CatalogRevisionUnitTests
 {
     private static IReadOnlyList<string> Assertions(string framework, string source, string? language = null) => AssertionExtractor.Extract(framework, source, language).Descriptors;

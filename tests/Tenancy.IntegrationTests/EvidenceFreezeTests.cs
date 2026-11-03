@@ -26,7 +26,6 @@ namespace Tenancy.IntegrationTests;
 /// <see cref="MissingSource.Requirement"/> gaps distinct from the unresolved-pair orphans, and the
 /// <see cref="FreezeResult.ArtifactSetHash"/> is the canonical digest of the ready set.
 /// </summary>
-[Collection(TenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EvidenceFreezeTests
 {
