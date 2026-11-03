@@ -13,28 +13,25 @@ using Xunit;
 namespace Identity.IntegrationTests.Sessions.Privilege;
 
 /// <summary>
-/// AC7 / D5b at command level: the four privilege-changing handlers mark the changed
-/// user's live session for rotation in the same transaction as their write, through
-/// the real pipeline and the real <c>ISessionPrivilegeChange</c>, over the harness
-/// database as <c>evidgate_app</c> under RLS. Commands are dispatched through the host
-/// mediator with the tenant and principal published the way the HTTP request filter
-/// publishes them, so the C2 behaviours (validation, authorization, idempotency,
-/// tenant transaction) run exactly as in production.
-///
-/// <para>
-/// Each path asserts the same four-row session matrix on <c>public.session</c>, read on
-/// the owner connection after the command returns:
-/// the changed user's live session is marked (<c>rotation_required_at</c> NOT NULL),
-/// and the changed user's revoked row, the changed user's expired row, and another
-/// user's live row stay NULL.
-/// </para>
-///
-/// <para>
-/// Each path also has a refused command whose trigger leaves the write undone, and
-/// every row in the matrix must stay NULL. The trigger is named in each test's doc
-/// comment.
-/// </para>
+/// AC7 / D5b and AC3 at command level: role changes (<c>grant</c>, <c>revoke-role</c>) mark the
+/// changed user's live session for rotation in the same transaction as their write, while membership
+/// removal (<c>remove</c>, <c>update status=removed</c>) revokes that user's live sessions in it.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Every path runs through the real pipeline and the real session seams over the harness database as
+/// <c>evidgate_app</c> under RLS: the tenant and principal are published the way the HTTP request filter
+/// publishes them, so the C2 behaviours (validation, authorization, idempotency, tenant transaction) run
+/// exactly as in production.
+/// </para>
+/// <para>
+/// Each path asserts the same four-row session matrix on <c>public.session</c>, read on the owner
+/// connection after the command returns: the changed user's live session is flagged or revoked exactly
+/// as the command requires, an expired-but-unrevoked row of that user is stamped only by a removal, and
+/// that user's already-revoked row plus another user's live row stay untouched. Each path also has a
+/// refused command whose trigger leaves the write undone, and every row in the matrix must stay as it was.
+/// </para>
+/// </remarks>
 [Trait("Category", "Docker")]
 public sealed class PrivilegeMarkingTests : CatalogueTestBase
 {
@@ -45,8 +42,8 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     }
 
     /// <summary>
-    /// <c>GrantRoleCommandHandler</c> marks the grantee on a new grant. The handler marks
-    /// only when the pair was not already granted.
+    /// <c>GrantRoleCommandHandler</c> marks the grantee on a new grant and leaves the session live:
+    /// only the rotation flag changes. The handler marks only when the pair was not already granted.
     /// </summary>
     [Fact]
     public async Task Grant_Role_Marks_Only_The_Changed_Users_Live_Session()
@@ -65,13 +62,13 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
             new GrantRoleCommand(org, memberId, releaseApproverId, "grant-privilege-1"));
 
         result.IsSuccess.ShouldBeTrue();
-        await AssertRotationFlagsAsync(matrix, changedUserLiveFlagged: true);
+        await AssertRotationFlagsAsync(matrix, changedUserLiveFlagged: true, changedUserRevoked: false);
     }
 
     /// <summary>
-    /// <c>RevokeRoleCommandHandler</c> marks the holder after the grant row is removed. The
-    /// revoked role is <c>release_approver</c>, not <c>tenant_admin</c>, so the last-admin
-    /// guard does not apply.
+    /// <c>RevokeRoleCommandHandler</c> marks the holder after the grant row is removed and leaves the
+    /// session live: only the rotation flag changes. The revoked role is <c>release_approver</c>, not
+    /// <c>tenant_admin</c>, so the last-admin guard does not apply.
     /// </summary>
     [Fact]
     public async Task Revoke_Role_Marks_Only_The_Changed_Users_Live_Session()
@@ -94,15 +91,15 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
             new RevokeRoleCommand(org, memberId, releaseApproverId, "revoke-privilege-1"));
 
         result.IsSuccess.ShouldBeTrue();
-        await AssertRotationFlagsAsync(matrix, changedUserLiveFlagged: true);
+        await AssertRotationFlagsAsync(matrix, changedUserLiveFlagged: true, changedUserRevoked: false);
     }
 
     /// <summary>
-    /// <c>UpdateMembershipCommandHandler</c> marks the user after <c>active → removed</c>.
+    /// <c>UpdateMembershipCommandHandler</c> revokes sessions after <c>active → removed</c>.
     /// The version is read from the row, so the precondition is real.
     /// </summary>
     [Fact]
-    public async Task Update_Membership_Marks_Only_The_Changed_Users_Live_Session()
+    public async Task Update_Membership_Revokes_Only_The_Changed_Users_Live_Session()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
         var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
@@ -118,15 +115,15 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
             new UpdateMembershipCommand(org, memberId, MembershipStatus.Removed, version, "update-privilege-1"));
 
         result.IsSuccess.ShouldBeTrue();
-        await AssertRotationFlagsAsync(matrix, changedUserLiveFlagged: true);
+        await AssertRotationFlagsAsync(matrix, changedUserLiveFlagged: false, changedUserRevoked: true);
     }
 
     /// <summary>
-    /// <c>RemoveMemberCommandHandler</c> marks the user after <c>active → removed</c>. The
+    /// <c>RemoveMemberCommandHandler</c> revokes sessions after <c>active → removed</c>. The
     /// member holds no admin role, so the last-admin guard does not apply.
     /// </summary>
     [Fact]
-    public async Task Remove_Member_Marks_Only_The_Changed_Users_Live_Session()
+    public async Task Remove_Member_Revokes_Only_The_Changed_Users_Live_Session()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
         var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
@@ -141,7 +138,7 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
             new RemoveMemberCommand(org, memberId, "remove-privilege-1"));
 
         result.IsSuccess.ShouldBeTrue();
-        await AssertRotationFlagsAsync(matrix, changedUserLiveFlagged: true);
+        await AssertRotationFlagsAsync(matrix, changedUserLiveFlagged: false, changedUserRevoked: true);
     }
 
     /// <summary>
@@ -284,10 +281,15 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     }
 
     /// <summary>
-    /// Asserts the matrix after a command. The changed user's live session is flagged only
-    /// when the command should have marked it. The other three rows are never flagged.
+    /// Asserts the matrix after a command. The changed user's live session is flagged or
+    /// revoked exactly when the command should have done so; a removal also stamps that
+    /// user's expired-but-unrevoked row, while a role change leaves it alone. Another
+    /// user's live session is never flagged or revoked.
     /// </summary>
-    private async Task AssertRotationFlagsAsync(SessionMatrix matrix, bool changedUserLiveFlagged)
+    private async Task AssertRotationFlagsAsync(
+        SessionMatrix matrix,
+        bool changedUserLiveFlagged,
+        bool changedUserRevoked = false)
     {
         (await RotationRequiredAsync(matrix.Live)).ShouldBe(
             changedUserLiveFlagged,
@@ -298,7 +300,21 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
             "an expired session is never marked");
         (await RotationRequiredAsync(matrix.OtherUserLive)).ShouldBeFalse(
             "another user's live session is never marked");
+
+        (await RevokedAsync(matrix.Live)).ShouldBe(
+            changedUserRevoked,
+            "the changed user's live session is ended exactly when the command removes the membership");
+        (await RevokedAsync(matrix.Expired)).ShouldBe(
+            changedUserRevoked,
+            "the revoke-all stamps an expired-but-unrevoked row too, while a role change leaves it alone");
+        (await RevokedAsync(matrix.OtherUserLive)).ShouldBeFalse(
+            "another user's live session is never revoked");
     }
+
+    private Task<bool> RevokedAsync(Guid sessionId) =>
+        ScalarAsync<bool>(
+            "select revoked_at is not null from public.session where id = @id",
+            ("id", sessionId));
 
     private Task<bool> RotationRequiredAsync(Guid sessionId) =>
         ScalarAsync<bool>(

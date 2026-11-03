@@ -36,11 +36,8 @@ internal sealed record RemoveMemberCommand(Guid OrgId, Guid MembershipId, string
 /// <c>last_admin</c>, AC4), then the write.
 /// </summary>
 /// <remarks>
-/// 02.1.2-T3.2 adds the <c>ISessionRevocation.RevokeAllForUserAsync</c> call inside
-/// this same transaction, which is what makes removal end live sessions immediately
-/// (AC3). The interface is defined by 02.1.2-T1.3; the <c>session</c> table behind it
-/// does not exist yet (02.3.2-T1), so the call is recorded as deferred in the feature
-/// plan §3 rather than stubbed.
+/// <c>ISessionRevocation.RevokeAllForUserAsync</c> runs inside this same transaction, which is
+/// what makes removal end live sessions immediately (AC3).
 /// </remarks>
 [AuditedAction("membership.remove")]
 [Permission(Permissions.Membership.Write)]
@@ -49,7 +46,7 @@ internal sealed class RemoveMemberCommandHandler(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IAuditTrail audit,
-    ISessionPrivilegeChange privilegeChanges)
+    ISessionRevocation sessions)
     : ICommandHandler<RemoveMemberCommand, Result>
 {
     /// <inheritdoc />
@@ -128,13 +125,12 @@ internal sealed class RemoveMemberCommandHandler(
 
         audit.Describe(new AuditObject("membership", membership.Id.ToString("D")));
 
-        // 02.3.2-T1 (AC7, D5b): losing the membership is a privilege change, so the user's live sessions are
-        // flagged for rotation here and now. Revoking them (the real kill) stays with 02.1.2-T3, which wires
-        // ISessionRevocation.RevokeAllForUserAsync into this same path — that call is deliberately NOT added
-        // by this story.
-        if (membership.UserId is { } changedUser)
+        // Losing the membership ends every live session of the user in this same transaction (AC3): a
+        // failed revocation rolls the removal back with it. Sessions belong to the user, not to an org, so
+        // the revocation covers the user's sessions in every org.
+        if (membership.UserId is { } removedUser)
         {
-            _ = await privilegeChanges.RequireRotationForUserAsync(changedUser, cancellationToken)
+            _ = await sessions.RevokeAllForUserAsync(removedUser, cancellationToken)
                 .ConfigureAwait(false);
         }
 
