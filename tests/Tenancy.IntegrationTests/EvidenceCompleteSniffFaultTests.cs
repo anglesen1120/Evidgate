@@ -97,7 +97,7 @@ public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixtu
     /// </summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -106,8 +106,8 @@ public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixtu
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         var storage = new FaultInjectingObjectStorage();

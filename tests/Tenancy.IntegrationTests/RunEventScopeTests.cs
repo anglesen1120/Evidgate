@@ -95,12 +95,12 @@ public sealed class RunEventScopeTests
     /// <summary>One migrated database with an org and its first project, created through the real registry routes.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }
@@ -109,8 +109,8 @@ public sealed class RunEventScopeTests
     private static async Task<(Guid Org, Guid Project)> CreateOtherTenantAsync(World world, string slug)
     {
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(world.Client, user, slug);
-        var project = await CreateProjectAsync(world.Client, user, org, slug + "-project");
+        var org = await CreateOrgAsync(world.Client, user, Unique.Slug(slug));
+        var project = await CreateProjectAsync(world.Client, user, org, Unique.Slug(slug + "-project"));
 
         return (org, project);
     }

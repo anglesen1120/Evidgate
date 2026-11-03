@@ -35,22 +35,23 @@ public sealed class OrchestratorEvaluationPlanTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }
 
-    /// <summary>A second tenant through the real routes, for the isolation cases.</summary>
+    /// <summary>A second tenant through the real routes, for the isolation cases; the slug is suffixed here.</summary>
     private static async Task<Guid> CreateOtherTenantAsync(World world, string slug)
     {
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(world.Client, user, slug);
-        await CreateProjectAsync(world.Client, user, org, slug + "-project");
+        var unique = Unique.Slug(slug);
+        var org = await CreateOrgAsync(world.Client, user, unique);
+        await CreateProjectAsync(world.Client, user, org, unique + "-project");
 
         return org;
     }

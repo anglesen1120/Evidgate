@@ -33,8 +33,8 @@ public sealed class AuthoringVersionImmutabilityTests
     [Fact]
     public async Task AppUpdateAndDelete_Refused_OwnerDeletePathWorks()
     {
-        var database = await _fixture.CreateDatabaseAsync();
-        var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
+        var database = await _fixture.SharedDatabaseAsync();
+        var (org, project) = await SeedTenantAsync(database, Unique.Slug("acme"), Unique.Slug("checkout"));
         var node = Guid.CreateVersion7();
         var versionId = Guid.CreateVersion7();
 

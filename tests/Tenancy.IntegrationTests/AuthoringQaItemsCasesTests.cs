@@ -52,11 +52,11 @@ public sealed class AuthoringQaItemsCasesTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "qa-items");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("qa-items"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
         var asFounder = TenancyApiFactory.Resolved(user: user, orgHeader: org);
         var nodes = $"/v1/projects/{project}/authoring/nodes";

@@ -47,7 +47,8 @@ public sealed class PolicyActivationConcurrencyTests
         Guid Project,
         Guid Case,
         Guid Maintainer,
-        Guid MaintainerMembership) : IAsyncDisposable
+        Guid MaintainerMembership,
+        DedicatedDatabase Dedicated) : IAsyncDisposable
     {
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
@@ -57,12 +58,15 @@ public sealed class PolicyActivationConcurrencyTests
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Dedicated.DisposeAsync();
         }
     }
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Private database: the 60 s race budget and the unfiltered metered counters need a quiet host.
+        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -70,7 +74,7 @@ public sealed class PolicyActivationConcurrencyTests
         var project = await CreateProjectAsync(client, user, org, "checkout");
         var (caseId, maintainer, membership) = await SeedCaseAndMaintainerAsync(database, client, user, org, project);
 
-        return new World(api, client, database, user, org, project, caseId, maintainer, membership);
+        return new World(api, client, database, user, org, project, caseId, maintainer, membership, dedicated);
     }
 
     /// <summary>One catalog case and an active <c>test_maintainer</c> membership (the only role holding <c>quarantine:write</c>).</summary>

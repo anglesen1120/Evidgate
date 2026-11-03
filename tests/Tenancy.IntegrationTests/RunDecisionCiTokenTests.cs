@@ -64,7 +64,7 @@ public sealed class RunDecisionCiTokenTests
 
         // A foreign org's run, read with the first project's token.
         var foreignUser = Guid.CreateVersion7();
-        var foreignOrg = await CreateOrgAsync(world.Client, foreignUser, "rival");
+        var foreignOrg = await CreateOrgAsync(world.Client, foreignUser, Unique.Slug("rival"));
         await CreateProjectAsync(world.Client, foreignUser, foreignOrg, "rival-project");
         var foreign = (await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, foreignOrg, 1)).RunId;
         var crossOrg = await GetAsync(world.Client, foreign, Bearer(token));
@@ -98,12 +98,12 @@ public sealed class RunDecisionCiTokenTests
     /// <summary>One migrated database, an org and its project, for a host that mints real CI tokens.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.Ci(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }

@@ -30,11 +30,11 @@ public sealed class AdapterCapabilityQaTests(PostgresTenancyFixture fixture)
 
     private async Task<World> StartAsync()
     {
-        var database = await fixture.CreateDatabaseAsync();
+        var database = await fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "qa");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("qa"));
         return new World(api, client, database, user, org);
     }
 
@@ -89,7 +89,7 @@ public sealed class AdapterCapabilityQaTests(PostgresTenancyFixture fixture)
         document["protocol"]![field] = JsonNode.Parse(number);
         var result = await RegisterAsync(world, document.ToJsonString());
         Invalid(result.Error);
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.adapter_capability")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     [Theory]
@@ -156,7 +156,7 @@ public sealed class AdapterCapabilityQaTests(PostgresTenancyFixture fixture)
         second.IsSuccess.ShouldBeTrue(second.Error?.Message);
         second.Value.Id.ShouldBe(first.Value.Id);
         second.Value.Created.ShouldBeFalse();
-        (await fixture.ScalarAsync<string>(world.Database, "select array_to_string(platforms, ',') from public.adapter_capability")).ShouldBe("linux-arm64,linux-x64");
+        (await fixture.ScalarAsync<string>(world.Database, $"select array_to_string(platforms, ',') from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe("linux-arm64,linux-x64");
     }
 
     [Theory]
@@ -181,8 +181,8 @@ public sealed class AdapterCapabilityQaTests(PostgresTenancyFixture fixture)
         result.Error!.Code.ShouldBe(ApiErrorCode.CapabilityConflict);
         result.Error.Status.ShouldBe(409);
         result.Error.Retryable.ShouldBeFalse();
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.adapter_capability")).ShouldBe(1);
-        (await fixture.ScalarAsync<string>(world.Database, "select engine_family || '|' || mode || '|' || (supports ->> 'retry') || '|' || array_to_string(platforms, ',') from public.adapter_capability")).ShouldBe("playwright|full|true|linux-arm64,linux-x64");
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe(1);
+        (await fixture.ScalarAsync<string>(world.Database, $"select engine_family || '|' || mode || '|' || (supports ->> 'retry') || '|' || array_to_string(platforms, ',') from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe("playwright|full|true|linux-arm64,linux-x64");
     }
 
     [Fact]
@@ -195,20 +195,20 @@ public sealed class AdapterCapabilityQaTests(PostgresTenancyFixture fixture)
         results.ShouldAllBe(result => result.IsSuccess);
         results[0].Value.Id.ShouldBe(results[1].Value.Id);
         results.Count(result => result.Value.Created).ShouldBe(1);
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.adapter_capability")).ShouldBe(1);
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     [Fact]
     public async Task SameNaturalKeyInTwoTenants_TwoIsolatedRows()
     {
         await using var world = await StartAsync();
-        var other = await CreateOrgAsync(world.Client, world.User, "other");
+        var other = await CreateOrgAsync(world.Client, world.User, Unique.Slug("other"));
         var a = await RegisterAsync(world, Document().ToJsonString());
         var b = await RegisterAsync(world, Document().ToJsonString(), other);
         a.IsSuccess.ShouldBeTrue(a.Error?.Message);
         b.IsSuccess.ShouldBeTrue(b.Error?.Message);
         a.Value.Id.ShouldNotBe(b.Value.Id);
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.adapter_capability")).ShouldBe(2);
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.adapter_capability where org_id in ('{world.Org}', '{other}')")).ShouldBe(2);
         foreach (var org in new[] { world.Org, other })
         {
             await using var scope = await TenantScope.BeginAsync(fixture.AppConnectionString(world.Database), org);
@@ -262,7 +262,7 @@ public sealed class AdapterCapabilityQaTests(PostgresTenancyFixture fixture)
         var result = await FirstSendAsync(world, envelope);
         Invalid(result.Error);
         result.Error!.Details!.ShouldContain(detail => detail.Reason == "body_too_large");
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.adapter_capability")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -274,6 +274,6 @@ public sealed class AdapterCapabilityQaTests(PostgresTenancyFixture fixture)
         var result = await FirstSendAsync(world, Carrier("playwright/1", document.ToJsonString()));
         Invalid(result.Error);
         result.Error!.Details!.ShouldContain(detail => detail.Reason == "body_too_large");
-        (await fixture.ScalarAsync<long>(world.Database, "select count(*) from public.adapter_capability")).ShouldBe(0);
+        (await fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe(0);
     }
 }

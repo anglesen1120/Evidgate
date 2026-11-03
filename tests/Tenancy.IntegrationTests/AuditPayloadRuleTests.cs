@@ -90,11 +90,11 @@ public sealed class AuditPayloadRuleTests
         }).ShouldNotBeNull();
         AuditMetadata.EnsureNoForbiddenKeys(new Dictionary<string, string> { ["email_domain"] = "example.test", ["slug"] = "acme" });
 
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
 
         // The org creation wrote seq 1; that is the chain head the rejected payload must leave alone.
         var before = await CheckpointAsync(database, org);
@@ -145,11 +145,11 @@ public sealed class AuditPayloadRuleTests
     [Fact]
     public async Task AuditPayload_MutatedAfterDescribe_RefusedAtFlush()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
 
         // The org creation wrote seq 1; that is the chain head this unit must leave alone.
         var before = await CheckpointAsync(database, org);

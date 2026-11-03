@@ -214,16 +214,18 @@ public sealed class VersionConcurrencyTests
     /// <summary>One organization and one project, inserted as the migration role with fixed timestamps.</summary>
     private async Task<(string Database, Guid OrgId, Guid ProjectId)> SeedRegistryAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var orgId = Guid.CreateVersion7();
         var projectId = Guid.CreateVersion7();
+        var orgSlug = Unique.Slug("acme");
         var createdAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
         await scope.ExecuteAsync(
             "insert into public.organization (id, name, slug, created_at, updated_at) "
-            + "values (@id, 'Acme', 'acme', @at, @at)",
+            + "values (@id, 'Acme', @slug, @at, @at)",
             ("id", orgId),
+            ("slug", orgSlug),
             ("at", createdAt));
         await scope.ExecuteAsync(
             "insert into public.project (id, org_id, name, slug, created_at, updated_at) "

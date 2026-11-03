@@ -168,7 +168,7 @@ public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, Se
 
     private async Task<World> StartAsync(bool outOfProcess)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid org;
         Guid project;
@@ -176,8 +176,8 @@ public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, Se
         using (var setup = api.CreateClient())
         {
             var user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         var configuration = _store.Configuration();

@@ -43,7 +43,7 @@ public sealed class EvidenceKindDefaultsExploratoryTests(PostgresTenancyFixture 
 
     private async Task<World> StartAsync()
     {
-        var database = await fixture.CreateDatabaseAsync();
+        var database = await fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -52,8 +52,8 @@ public sealed class EvidenceKindDefaultsExploratoryTests(PostgresTenancyFixture 
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         var host = TenancyApiFactory.WithPrincipal(
@@ -120,7 +120,7 @@ public sealed class EvidenceKindDefaultsExploratoryTests(PostgresTenancyFixture 
         world.Client.SendAsync(HttpMethod.Post, "/v1/artifacts/upload-url", _ => { }, body, idempotencyKey);
 
     private Task<long> ArtifactRowsAsync(World world) =>
-        fixture.ScalarAsync<long>(world.Database, "select count(*) from public.artifact");
+        fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.artifact where org_id = '{world.Org:D}'");
 
     // ------------------------------------------------------------------ media-type grammar (RFC 9110 §8.3.1)
 

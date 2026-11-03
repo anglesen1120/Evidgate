@@ -31,11 +31,11 @@ public sealed class BlockedAttemptTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -277,7 +277,7 @@ public sealed class BlockedAttemptTests
         var plan = await SeedPlanAsync(world, 2, [(0, 1)]);
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         var otherPlan = await SeedPlanAsync(world, 2, [(0, 1)], org: otherOrg);
 

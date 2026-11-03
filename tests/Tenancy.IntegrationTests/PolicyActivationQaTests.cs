@@ -28,7 +28,13 @@ public sealed class PolicyActivationQaTests
 
     public PolicyActivationQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
+    private sealed record World(
+        TenancyApiFactory Api,
+        HttpClient Client,
+        DedicatedDatabase Database,
+        Guid User,
+        Guid Org,
+        Guid Project) : IAsyncDisposable
     {
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
@@ -36,12 +42,14 @@ public sealed class PolicyActivationQaTests
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Database.DisposeAsync();
         }
     }
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // The counters below are database-wide, so this class needs a private migrated database of its own.
+        var database = await _fixture.CreateDedicatedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();

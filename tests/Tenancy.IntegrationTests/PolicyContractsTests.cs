@@ -57,12 +57,12 @@ public sealed class PolicyContractsTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }
@@ -198,7 +198,7 @@ public sealed class PolicyContractsTests
 
         (await ReadAsync(world, world.Project)).ShouldBeNull();
         // The pointer row is untouched; the read's project guard is what answers null.
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_activation")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_activation where org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ the values
@@ -244,7 +244,7 @@ public sealed class PolicyContractsTests
     public async Task NeverReturnsAnotherProjectsRevision()
     {
         await using var world = await StartAsync();
-        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("other"));
         var (mine, _) = await CreateRevisionAsync(world, """{"flaky_budget":3}""");
         await ActivateAsync(world, mine);
 
@@ -274,7 +274,7 @@ public sealed class PolicyContractsTests
     public async Task PointerToAnotherProjectsRevision_ReturnsNull()
     {
         await using var world = await StartAsync();
-        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("other"));
 
         // This project owns the revision; the other project's pointer is made to name it directly.
         var (mine, _) = await CreateRevisionAsync(world, """{"flaky_budget":3}""");
@@ -295,7 +295,7 @@ public sealed class PolicyContractsTests
 
         // The pointer is org-valid but project-mismatched, so the other project has no active policy.
         (await ReadAsync(world, otherProject)).ShouldBeNull();
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_activation")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_activation where org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ the required artifact kinds
@@ -362,8 +362,8 @@ public sealed class PolicyContractsTests
     public async Task RequiredArtifactKinds_AreEmpty_ForAnotherTenantsRevision()
     {
         await using var world = await StartAsync();
-        var otherOrg = await CreateOrgAsync(world.Client, world.User, "other");
-        var otherProject = await CreateProjectAsync(world.Client, world.User, otherOrg, "checkout");
+        var otherOrg = await CreateOrgAsync(world.Client, world.User, Unique.Slug("other"));
+        var otherProject = await CreateProjectAsync(world.Client, world.User, otherOrg, Unique.Slug("checkout"));
         var other = world with { Org = otherOrg, Project = otherProject };
         var (theirs, _) = await CreateRevisionAsync(other, """{"required_artifacts":["trace"]}""");
 
@@ -425,8 +425,8 @@ public sealed class PolicyContractsTests
         (await ReadLiveAsync(world, otherRun.RunId, [first])).ShouldBeEmpty();
 
         // And so does another tenant asking about the real run.
-        var otherOrg = await CreateOrgAsync(world.Client, world.User, "other");
-        var otherProject = await CreateProjectAsync(world.Client, world.User, otherOrg, "checkout");
+        var otherOrg = await CreateOrgAsync(world.Client, world.User, Unique.Slug("other"));
+        var otherProject = await CreateProjectAsync(world.Client, world.User, otherOrg, Unique.Slug("checkout"));
         (await ReadLiveAsync(world with { Org = otherOrg, Project = otherProject }, runId, [first])).ShouldBeEmpty();
         // The owning tenant still reads it, so the empty answer is the boundary and not a broken read.
         (await ReadLiveAsync(world, runId, [first])).ShouldHaveSingleItem();

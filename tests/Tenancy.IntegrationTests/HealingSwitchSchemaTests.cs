@@ -35,7 +35,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class HealingSwitchSchemaTests
+public sealed class HealingSwitchSchemaTests : IAsyncLifetime
 {
     /// <summary>The operator definer and its exact signature (the one the migration grants EXECUTE on).</summary>
     private const string Definer = "evidgate.healing_switch_set_system(text, text, uuid)";
@@ -43,15 +43,27 @@ public sealed class HealingSwitchSchemaTests
     private const string Table = "healing_switch";
 
     private readonly PostgresTenancyFixture _fixture;
+    private DedicatedDatabase? _dedicated;
 
     public HealingSwitchSchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+
+    // The one system row and the unfiltered counts are per database, so each test owns one.
+    public async ValueTask InitializeAsync() => _dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dedicated is not null)
+        {
+            await _dedicated.DisposeAsync();
+        }
+    }
 
     /// <summary>Two migrated tenants, each with one project, and the ids that address them.</summary>
     private sealed record World(string Database, Guid OrgA, Guid OrgB, Guid ProjectA, Guid ProjectB);
 
     private async Task<World> SeedTenantsAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = _dedicated!.Name;
         var world = new World(
             database,
             Guid.CreateVersion7(),

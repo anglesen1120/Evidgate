@@ -18,7 +18,7 @@ namespace Tenancy.IntegrationTests;
 /// unique index, the format check and the insert default).
 /// <para>
 /// The fixture is this suite's own <see cref="PostgresTenancyFixture"/> — one digest-pinned
-/// PostgreSQL 18 container per assembly, a fresh database per test brought to head by the real
+/// PostgreSQL 18 container per assembly, a database brought to head by the real
 /// <c>Evidgate.Migrator</c> (the 05.2.1-T1 / 05.3.3-T1 precedent for a new table in this suite).
 /// The two backfill cases go one step further: they bring a database to the **previous** head
 /// (every file lexically before 0039), seed the rows the backfill has to name, and only then apply
@@ -60,7 +60,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task TenancyKeys_And_CompositeForeignKeys()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         foreach (var table in Tables)
         {
@@ -137,7 +137,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task DeclaredIndexes_Exist()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         // Live siblings only, `nulls not distinct` so two NULL-parented roots compare equal.
         var nodeIndexes = (await _fixture.IndexesAsync(database, "feature_node")).Select(Unquoted).ToList();
@@ -177,7 +177,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task ImmutableColumns_Update_RefusedForApp()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var node = Guid.CreateVersion7();
 
@@ -227,7 +227,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task ForceRls_AndOwnerPolicyOnEveryTable()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         foreach (var table in Tables)
         {
@@ -252,7 +252,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task SiblingPosition_UniqueForRootAndChild()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         var root = Guid.CreateVersion7();
@@ -311,7 +311,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_Backfill_IsUniqueAndWellFormed()
     {
-        var database = await BringToPreviousHeadAsync();
+        await using var database = await BringToPreviousHeadAsync();
         var first = await SeedOrgAsync(database, "acme");
         var second = await SeedOrgAsync(database, "globex");
 
@@ -381,7 +381,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_Backfill_DedupesAcrossStems()
     {
-        var database = await BringToPreviousHeadAsync();
+        await using var database = await BringToPreviousHeadAsync();
         var org = await SeedOrgAsync(database, "acme");
 
         var fixtures = new (string Slug, string Expected)[]
@@ -429,7 +429,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_InsertDefault_IsUniquePerOrg()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var acme = await SeedOrgAsync(database, "acme");
         var globex = await SeedOrgAsync(database, "globex");
 
@@ -476,7 +476,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_EfProjectInsert_ReadsTriggerValue()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, _) = await SeedTenantAsync(database, "acme", "checkout");
 
         await using var source = NpgsqlDataSource.Create(_fixture.AppConnectionString(database));
@@ -525,7 +525,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_InsertExplicit_IsKeptVerbatim()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var org = await SeedOrgAsync(database, "acme");
 
         await using (var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
@@ -566,7 +566,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_ConcurrentInserts_GetDistinctPrefixes()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var org = await SeedOrgAsync(database, "acme");
         var connectionString = _fixture.OwnerConnectionString(database);
         var token = TestContext.Current.CancellationToken;
@@ -678,9 +678,9 @@ public sealed class AuthoringSchemaTests
     }
 
     /// <summary>A database brought to the head **before** 0039, so the backfill sees pre-existing rows.</summary>
-    private async Task<string> BringToPreviousHeadAsync()
+    private async Task<DedicatedDatabase> BringToPreviousHeadAsync()
     {
-        var database = await _fixture.CreateEmptyDatabaseAsync();
+        var database = await _fixture.CreateEmptyDedicatedDatabaseAsync();
 
         // Every migration file lexically before the one under test: the real expand path, and it
         // keeps working when later migrations are added to the repository.

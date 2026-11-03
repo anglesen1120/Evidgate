@@ -347,8 +347,8 @@ public sealed class ListRunAttemptsTests
         await using var world = await StartAsync();
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
-        await CreateProjectAsync(world.Client, otherUser, otherOrg, "rival-project");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
+        await CreateProjectAsync(world.Client, otherUser, otherOrg, Unique.Slug("rival-project"));
         var foreign = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, otherOrg, 1);
 
         var foreignAnswer = await GetAsync(world, foreign.RunId);
@@ -396,15 +396,15 @@ public sealed class ListRunAttemptsTests
 
     // ------------------------------------------------------------------ seeding
 
-    /// <summary>One migrated database with an org and its project, created through the real registry routes.</summary>
+    /// <summary>One shared migrated database with its own org and project, created through the real registry routes.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }

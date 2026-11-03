@@ -29,7 +29,7 @@ public sealed class RlsRoleTests
     [Fact]
     public async Task AppRole_HasNoBypassRls_AndOwnsNoTables()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // 1. No role in the split carries an attribute that bypasses a policy:
         //    BYPASSRLS skips every policy and SUPERUSER skips them too (DECISIONS F5).

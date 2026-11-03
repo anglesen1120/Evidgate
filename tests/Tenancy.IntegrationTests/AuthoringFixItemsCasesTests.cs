@@ -275,7 +275,7 @@ public sealed class AuthoringFixItemsCasesTests
     /// <summary>One org and one project with a single <c>category</c> node, seeded as the owner.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();

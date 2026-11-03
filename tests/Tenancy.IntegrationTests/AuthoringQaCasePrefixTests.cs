@@ -54,11 +54,11 @@ public sealed class AuthoringQaCasePrefixTests
     [MemberData(nameof(RefusedPrefixes))]
     public async Task Patch_RefusesEveryValueOutsideTheGrammar(string prefix)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, founder, "qa-prefix");
+        var org = await CreateOrgAsync(client, founder, Unique.Slug("qa-prefix"));
         var project = await CreateProjectAsync(client, founder, org, "shop");
         var asFounder = TenancyApiFactory.Resolved(user: founder, orgHeader: org);
 
@@ -84,11 +84,11 @@ public sealed class AuthoringQaCasePrefixTests
     [Fact]
     public async Task Patch_AcceptsTheGrammarEdges_AndRefusesADuplicate()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, founder, "qa-prefix-edges");
+        var org = await CreateOrgAsync(client, founder, Unique.Slug("qa-prefix-edges"));
         var first = await CreateProjectAsync(client, founder, org, "shop");
         var second = await CreateProjectAsync(client, founder, org, "warehouse");
         var asFounder = TenancyApiFactory.Resolved(user: founder, orgHeader: org);
@@ -121,11 +121,11 @@ public sealed class AuthoringQaCasePrefixTests
     [Fact]
     public async Task Patch_RefusesAViewer()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, founder, "qa-prefix-viewer");
+        var org = await CreateOrgAsync(client, founder, Unique.Slug("qa-prefix-viewer"));
         var project = await CreateProjectAsync(client, founder, org, "shop");
         var asFounder = TenancyApiFactory.Resolved(user: founder, orgHeader: org);
         var (before, etag) = await ReadAsync(client, asFounder, project);

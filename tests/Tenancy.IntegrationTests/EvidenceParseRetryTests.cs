@@ -57,7 +57,8 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
     [Fact]
     public async Task WorkerKilledMidParse_NoOrphanChild_TaskRetried_ParsedOnce()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = owned.Name;
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid org;
         Guid project;

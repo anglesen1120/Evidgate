@@ -71,7 +71,7 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
         TenancyApiFactory Api,
         TenancyApiFactory Host,
         HttpClient Client,
-        string Database,
+        DedicatedDatabase Database,
         Guid User,
         Guid Org,
         Guid Project) : IAsyncDisposable
@@ -81,6 +81,7 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
             Client.Dispose();
             await Host.DisposeAsync();
             await Api.DisposeAsync();
+            await Database.DisposeAsync();
         }
     }
 
@@ -94,7 +95,8 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
     /// </summary>
     private async Task<World> StartAsync(RequestPrincipal? principal = null)
     {
-        var database = await fixture.CreateDatabaseAsync();
+        // The "no row minted" assertions count every artifact of the database, so each world owns one.
+        var database = await fixture.CreateDedicatedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         Guid user;
         Guid org;

@@ -40,7 +40,7 @@ public sealed class SecurityEventReadSqlContractTests
     [Fact]
     public async Task Page_ProjectsExactlyTheRowShape()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = Guid.CreateVersion7();
         var project = Guid.CreateVersion7();
         var at = new DateTimeOffset(2026, 2, 1, 9, 0, 0, TimeSpan.Zero);
@@ -75,7 +75,7 @@ public sealed class SecurityEventReadSqlContractTests
     [Fact]
     public async Task Page_WalksTheKeysetInOrder()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = Guid.CreateVersion7();
         var tie = new DateTimeOffset(2026, 3, 2, 10, 0, 0, TimeSpan.Zero);
         Seed[] seeds =

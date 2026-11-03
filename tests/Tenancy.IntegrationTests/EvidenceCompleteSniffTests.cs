@@ -105,13 +105,13 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
         RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
 
     /// <summary>
-    /// One migrated database with an org and a project created through the real registry routes, plus a host
-    /// whose requests carry the writer principal and the object-store configuration. A fresh database per test
-    /// keeps each policy row local (no shared policy leaks into a sibling test).
+    /// The shared database with this test's own org and a project created through the real registry routes, plus a host
+    /// whose requests carry the writer principal and the object-store configuration. The org is fresh, so the kind
+    /// policy row this test inserts stays local to it.
     /// </summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -120,8 +120,8 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         var host = TenancyApiFactory.WithPrincipal(

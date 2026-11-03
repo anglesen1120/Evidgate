@@ -83,7 +83,7 @@ public sealed class EvidenceCompleteAuditTests(PostgresTenancyFixture fixture, S
     /// </summary>
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -92,7 +92,7 @@ public sealed class EvidenceCompleteAuditTests(PostgresTenancyFixture fixture, S
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
             project = await CreateProjectAsync(setup, user, org, "checkout");
         }
 

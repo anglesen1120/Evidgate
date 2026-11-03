@@ -29,7 +29,16 @@ public sealed class ManifestTests
 
     public ManifestTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    internal sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project, Guid SuiteRevision, Guid[] Cases)
+    internal sealed record World(
+        TenancyApiFactory Api,
+        HttpClient Client,
+        string Database,
+        Guid User,
+        Guid Org,
+        Guid Project,
+        Guid SuiteRevision,
+        Guid[] Cases,
+        DedicatedDatabase Dedicated)
         : IAsyncDisposable
     {
         public Action<System.Net.Http.Headers.HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
@@ -38,13 +47,18 @@ public sealed class ManifestTests
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Dedicated.DisposeAsync();
         }
     }
 
-    /// <summary>An org with a project, <paramref name="cases"/> registered case revisions and a suite revision over them.</summary>
+    /// <summary>
+    /// An org with a project, <paramref name="cases"/> registered case revisions and a suite revision over them, in a
+    /// database private to the test: the suite reads the manifest table as a whole and watches the rejection meter.
+    /// </summary>
     internal static async Task<World> StartAsync(PostgresTenancyFixture fixture, int cases = 2, string slug = "acme")
     {
-        var database = await fixture.CreateDatabaseAsync();
+        var dedicated = await fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -63,7 +77,7 @@ public sealed class ManifestTests
             NewKey());
         revision.Status.ShouldBe(HttpStatusCode.Created, revision.ErrorMessage);
 
-        return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), revisions);
+        return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), revisions, dedicated);
     }
 
     internal static async Task<Guid[]> SeedCasesAsync(PostgresTenancyFixture fixture, TenancyApiFactory api, Guid org, Guid project, string database, int count)

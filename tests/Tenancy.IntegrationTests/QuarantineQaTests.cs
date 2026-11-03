@@ -49,12 +49,12 @@ public sealed class QuarantineQaTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
         var (cases, maintainer, membership) = await SeedCasesAndMaintainerAsync(database, client, user, org, project);
 
         return new World(api, client, database, user, org, project, cases, maintainer, membership);
@@ -185,7 +185,7 @@ public sealed class QuarantineQaTests
     }
 
     private async Task<long> AuditCountAsync(World world, string action) =>
-        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where action = '{action}'");
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where org_id = '{world.Org}' and action = '{action}'");
 
     private static (string Path, string Reason) Detail(ApiAnswer answer, int index = 0)
     {
@@ -226,7 +226,7 @@ public sealed class QuarantineQaTests
         var blank = await CreateAsync(world, Body(world, caseId: world.Cases[2], reason: "   "));
         blank.Status.ShouldBe(HttpStatusCode.Created, blank.ErrorMessage);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(3);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org}'")).ShouldBe(3);
     }
 
     [Fact]
@@ -238,7 +238,7 @@ public sealed class QuarantineQaTests
 
         nul.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         Detail(nul).ShouldBe(("reason", "invalid_value"));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -284,7 +284,7 @@ public sealed class QuarantineQaTests
         var remove = await RemoveAsync(world, id, service);
         remove.Status.ShouldBe(HttpStatusCode.Forbidden);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ the app role's grants and the guard
@@ -325,7 +325,7 @@ public sealed class QuarantineQaTests
             (await scope.CaptureErrorAsync($"delete from public.quarantine_entry where id = '{id}'")).SqlState.ShouldBe("42501");
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     [Fact]
@@ -407,7 +407,7 @@ public sealed class QuarantineQaTests
         (await CreateAsync(world, body, key: key)).Status.ShouldBe(HttpStatusCode.Created);
 
         (await AuditCountAsync(world, "quarantine.create")).ShouldBe(1);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ the keyset list
@@ -503,7 +503,7 @@ public sealed class QuarantineQaTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherMembership = await _fixture.ScalarAsync<Guid>(
             world.Database,
             $"select id from public.membership where org_id = '{otherOrg}' limit 1");

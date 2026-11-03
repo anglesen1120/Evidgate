@@ -22,7 +22,7 @@ public sealed class ProjectRlsTests
     [Fact]
     public async Task AppRoleSeesOnlyItsOwnTenant()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var orgA = Guid.CreateVersion7();
         var orgB = Guid.CreateVersion7();
         var projectA = Guid.CreateVersion7();
@@ -34,12 +34,12 @@ public sealed class ProjectRlsTests
                 "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
                 ("id", orgA),
                 ("name", "Acme"),
-                ("slug", "acme"));
+                ("slug", Unique.Slug("acme")));
             await setup.ExecuteAsync(
                 "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
                 ("id", orgB),
                 ("name", "Globex"),
-                ("slug", "globex"));
+                ("slug", Unique.Slug("globex")));
             await setup.ExecuteAsync(
                 "insert into public.project (id, org_id, name, slug) values (@id, @org_id, @name, @slug)",
                 ("id", projectA),
@@ -111,7 +111,7 @@ public sealed class ProjectRlsTests
     [Fact]
     public async Task UnsetTenantSettingReturnsZeroRows()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         await using (var setup = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
@@ -119,7 +119,7 @@ public sealed class ProjectRlsTests
                 "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
                 ("id", Guid.CreateVersion7()),
                 ("name", "Acme"),
-                ("slug", "acme"));
+                ("slug", Unique.Slug("acme")));
             await setup.CommitAsync();
         }
 

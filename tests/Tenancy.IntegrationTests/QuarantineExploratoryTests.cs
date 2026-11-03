@@ -46,12 +46,12 @@ public sealed class QuarantineExploratoryTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         var caseId = Guid.CreateVersion7();
         var maintainer = Guid.CreateVersion7();
@@ -171,7 +171,7 @@ public sealed class QuarantineExploratoryTests
         var answer = await CreateAsync(world, Body(world, owner: owner));
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ reason length
@@ -189,7 +189,7 @@ public sealed class QuarantineExploratoryTests
         var answer = await CreateAsync(world, Body(world, reason: Emoji(2000)));
 
         answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry where char_length(reason) = 2000")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where char_length(reason) = 2000 and org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     /// <summary>Control: 1000 emoji is 2000 units and 1000 characters, accepted under both counts.</summary>
@@ -239,7 +239,7 @@ public sealed class QuarantineExploratoryTests
 
         var status = (int)response.StatusCode;
         (status is 400 or 422).ShouldBeTrue(text);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ expires_at offset
@@ -257,7 +257,7 @@ public sealed class QuarantineExploratoryTests
         var answer = await CreateAsync(world, Body(world, expiresAt: expires));
 
         answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
-        var stored = await _fixture.ScalarAsync<DateTime>(world.Database, "select expires_at from public.quarantine_entry");
+        var stored = await _fixture.ScalarAsync<DateTime>(world.Database, $"select expires_at from public.quarantine_entry where org_id = '{world.Org:D}'");
         stored.ShouldBe(expires.UtcDateTime);
     }
 
@@ -274,7 +274,7 @@ public sealed class QuarantineExploratoryTests
 
         answer.Status.ShouldBe(HttpStatusCode.BadRequest);
         answer.Body.GetRawText().ShouldContain("Idempotency-Key");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 
     /// <summary>The same rule on DELETE: no key is 400, and the active entry is left active.</summary>
@@ -310,8 +310,8 @@ public sealed class QuarantineExploratoryTests
         var second = await CreateAsync(world, Body(world));
 
         second.Status.ShouldBe(HttpStatusCode.Created, second.ErrorMessage);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry where state = 'active'")).ShouldBe(1);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry where state = 'removed'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where state = 'active' and org_id = '{world.Org:D}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where state = 'removed' and org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ malformed input
@@ -358,7 +358,7 @@ public sealed class QuarantineExploratoryTests
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("critical_case_not_quarantinable");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 
     /// <summary>A critical item that is not a UUID never parses, so it never matches and the write is allowed.</summary>
@@ -384,18 +384,20 @@ public sealed class QuarantineExploratoryTests
     [Fact]
     public async Task Remove_ByAServicePrincipalWithoutUserId_Is403()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
         var user = Guid.CreateVersion7();
+        var slug = Unique.Slug("acme");
         var orgAnswer = await client.SendAsync(
-            HttpMethod.Post, "/v1/orgs", TenancyApiFactory.Caller(user: user, email: "acme@example.test"), new { name = "acme", slug = "acme" }, NewKey());
+            HttpMethod.Post, "/v1/orgs", TenancyApiFactory.Caller(user: user, email: "acme@example.test"), new { name = slug, slug }, NewKey());
         orgAnswer.Status.ShouldBe(HttpStatusCode.Created, orgAnswer.ErrorMessage);
         var org = orgAnswer.Id();
 
+        var projectSlug = Unique.Slug("checkout");
         var projectAnswer = await client.SendAsync(
-            HttpMethod.Post, $"/v1/orgs/{org}/projects", TenancyApiFactory.Caller(org: org, user: user), new { name = "checkout", slug = "checkout" }, NewKey());
+            HttpMethod.Post, $"/v1/orgs/{org}/projects", TenancyApiFactory.Caller(org: org, user: user), new { name = projectSlug, slug = projectSlug }, NewKey());
         projectAnswer.Status.ShouldBe(HttpStatusCode.Created, projectAnswer.ErrorMessage);
         var project = projectAnswer.Id();
 

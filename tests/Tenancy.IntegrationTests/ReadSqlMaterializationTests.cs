@@ -39,16 +39,18 @@ public sealed class ReadSqlMaterializationTests
     [Fact]
     public async Task OrganizationByIdMaterializesEveryField()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var orgId = Guid.CreateVersion7();
+        var orgSlug = Unique.Slug("acme");
 
         await using (var seeding = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
             await seeding.ExecuteAsync(
                 "insert into public.organization "
                 + "(id, name, slug, status, retention_default_days, allowed_email_domains, created_at, updated_at, version) "
-                + "values (@id, 'Acme', 'acme', 'suspended', 30, array['acme.example'], @created_at, @updated_at, 7)",
+                + "values (@id, 'Acme', @slug, 'suspended', 30, array['acme.example'], @created_at, @updated_at, 7)",
                 ("id", orgId),
+                ("slug", orgSlug),
                 ("created_at", CreatedAt.UtcDateTime),
                 ("updated_at", UpdatedAt.UtcDateTime));
             await seeding.CommitAsync();
@@ -66,7 +68,7 @@ public sealed class ReadSqlMaterializationTests
         dto.ShouldSatisfyAllConditions(
             materialized => materialized.Id.ShouldBe(orgId),
             materialized => materialized.Name.ShouldBe("Acme"),
-            materialized => materialized.Slug.ShouldBe("acme"),
+            materialized => materialized.Slug.ShouldBe(orgSlug),
             materialized => materialized.Status.ShouldBe("suspended"),
             materialized => materialized.RetentionDefaultDays.ShouldBe(30),
             materialized => materialized.AllowedEmailDomains.ShouldBe(["acme.example"]),
@@ -81,7 +83,7 @@ public sealed class ReadSqlMaterializationTests
     [Fact]
     public async Task ProjectByIdMaterializesEveryField()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var orgId = Guid.CreateVersion7();
         var projectId = Guid.CreateVersion7();
         var environmentId = Guid.CreateVersion7();
@@ -90,8 +92,9 @@ public sealed class ReadSqlMaterializationTests
         await using (var seeding = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
             await seeding.ExecuteAsync(
-                "insert into public.organization (id, name, slug) values (@id, 'Acme', 'acme')",
-                ("id", orgId));
+                "insert into public.organization (id, name, slug) values (@id, 'Acme', @slug)",
+                ("id", orgId),
+                ("slug", Unique.Slug("acme")));
             // project <-> environment is a foreign-key cycle (0024): one statement inserts both, and the
             // non-deferred checks run at its end.
             await seeding.ExecuteAsync(
@@ -158,14 +161,15 @@ public sealed class ReadSqlMaterializationTests
     [Fact]
     public async Task MissingRowMaterializesToNull()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var orgId = Guid.CreateVersion7();
 
         await using (var seeding = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
             await seeding.ExecuteAsync(
-                "insert into public.organization (id, name, slug) values (@id, 'Acme', 'acme')",
-                ("id", orgId));
+                "insert into public.organization (id, name, slug) values (@id, 'Acme', @slug)",
+                ("id", orgId),
+                ("slug", Unique.Slug("acme")));
             await seeding.CommitAsync();
         }
 

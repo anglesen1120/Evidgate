@@ -55,12 +55,12 @@ public sealed class AuthoringFixInputTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "fix-input");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("fix-input"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
         var asFounder = TenancyApiFactory.Resolved(user: user, orgHeader: org);
 
         var module = (await client.SendAsync(
@@ -114,7 +114,12 @@ public sealed class AuthoringFixInputTests
             .Replace('+', '-')
             .Replace('/', '_');
 
-    private Task<long> CountAsync(World world, string sql) => _fixture.ScalarAsync<long>(world.Database, sql);
+    /// <summary>Rows of one table in this test's own tenant: another test's rows never enter the count.</summary>
+    private Task<long> CountAsync(World world, string table, string condition = "") =>
+        _fixture.ScalarAsync<long>(
+            world.Database,
+            "select count(*) from public." + table + " where org_id = '" + world.Org.ToString("D") + "'"
+            + (condition.Length == 0 ? string.Empty : " and " + condition));
 
     private static void RefusedAt(ApiAnswer answer, string path, string reason)
     {
@@ -132,9 +137,9 @@ public sealed class AuthoringFixInputTests
     {
         await using var world = await StartAsync();
 
-        var nodesBefore = await CountAsync(world, "select count(*) from public.feature_node");
-        var itemsBefore = await CountAsync(world, "select count(*) from public.checklist_item");
-        var versionsBefore = await CountAsync(world, "select count(*) from public.authoring_version");
+        var nodesBefore = await CountAsync(world, "feature_node");
+        var itemsBefore = await CountAsync(world, "checklist_item");
+        var versionsBefore = await CountAsync(world, "authoring_version");
 
         var title = await RawAsync(world, HttpMethod.Post, world.Nodes, """{"kind":"module","title":"a\u0000b"}""");
         RefusedAt(title, "/title", "invalid_text");
@@ -157,9 +162,9 @@ public sealed class AuthoringFixInputTests
             $$"""{"node_id":"{{world.Category:D}}","title":"An\u0000item","priority":"high"}""");
         RefusedAt(itemTitle, "/title", "invalid_text");
 
-        (await CountAsync(world, "select count(*) from public.feature_node")).ShouldBe(nodesBefore, "no node row was written");
-        (await CountAsync(world, "select count(*) from public.checklist_item")).ShouldBe(itemsBefore, "no item row was written");
-        (await CountAsync(world, "select count(*) from public.authoring_version")).ShouldBe(versionsBefore, "no version row was written");
+        (await CountAsync(world, "feature_node")).ShouldBe(nodesBefore, "no node row was written");
+        (await CountAsync(world, "checklist_item")).ShouldBe(itemsBefore, "no item row was written");
+        (await CountAsync(world, "authoring_version")).ShouldBe(versionsBefore, "no version row was written");
     }
 
     /// <summary>
@@ -189,7 +194,7 @@ public sealed class AuthoringFixInputTests
             $$"""{"checklist_item_id":"{{itemId}}","title":"a\u0000b","steps":[{"no":1,"action":"a","expected":"shown"}],"priority":"high"}""");
         RefusedAt(title, "/title", "invalid_text");
 
-        (await CountAsync(world, "select count(*) from public.manual_test_case")).ShouldBe(0L, "neither refusal stored a case");
+        (await CountAsync(world, "manual_test_case")).ShouldBe(0L, "neither refusal stored a case");
 
         var created = await world.Client.SendAsync(
             HttpMethod.Post,
@@ -211,7 +216,7 @@ public sealed class AuthoringFixInputTests
         var reason = await RawAsync(world, HttpMethod.Delete, world.Case(caseId), """{"reason":"r\u0000r"}""", ifMatch: "1");
         RefusedAt(reason, "/reason", "invalid_text");
 
-        (await CountAsync(world, "select count(*) from public.manual_test_case where deleted_at is null"))
+        (await CountAsync(world, "manual_test_case", "deleted_at is null"))
             .ShouldBe(1L, "the refused delete wrote nothing");
     }
 

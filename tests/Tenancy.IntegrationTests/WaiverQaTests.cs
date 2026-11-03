@@ -36,11 +36,11 @@ public sealed class WaiverQaTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -131,7 +131,9 @@ public sealed class WaiverQaTests
     }
 
     private async Task<long> AuditCountAsync(World world, string action) =>
-        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where action = '{action}'");
+        await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.audit_log where org_id = '{world.Org}' and action = '{action}'");
 
     private static (string Path, string Reason) Detail(ApiAnswer answer, int index = 0)
     {
@@ -177,7 +179,7 @@ public sealed class WaiverQaTests
         var blank = await CreateAsync(world, Body(world, reason: "   "));
         blank.Status.ShouldBe(HttpStatusCode.Created, blank.ErrorMessage);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.waiver")).ShouldBe(3);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.waiver where org_id = '{world.Org}'")).ShouldBe(3);
     }
 
     [Fact]
@@ -247,7 +249,7 @@ public sealed class WaiverQaTests
         var approve = await ApproveAsync(world, id, service);
         approve.Status.ShouldBe(HttpStatusCode.Forbidden);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.waiver")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.waiver where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ concurrency and expiry
@@ -372,7 +374,7 @@ public sealed class WaiverQaTests
         (await CreateAsync(world, body, key: key)).Status.ShouldBe(HttpStatusCode.Created);
 
         (await AuditCountAsync(world, "waiver.create")).ShouldBe(1);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.waiver")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.waiver where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ the keyset list

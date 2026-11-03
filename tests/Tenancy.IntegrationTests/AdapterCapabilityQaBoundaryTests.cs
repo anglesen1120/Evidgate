@@ -21,10 +21,10 @@ public sealed class AdapterCapabilityQaBoundaryTests(PostgresTenancyFixture fixt
     [InlineData(int.MaxValue, 0, false)]
     public async Task CaptureControlFalseAndInt32Boundaries_AreNegotiated(int major, int minor, bool accepted)
     {
-        var database = await fixture.CreateDatabaseAsync();
+        var database = await fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         using var client = api.CreateClient();
-        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), "qa-boundary");
+        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("qa-boundary"));
         await using var scope = api.Services.CreateAsyncScope();
         var provider = scope.ServiceProvider;
         using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(org, null);
@@ -39,9 +39,9 @@ public sealed class AdapterCapabilityQaBoundaryTests(PostgresTenancyFixture fixt
         result.IsSuccess.ShouldBe(accepted);
         if (accepted)
         {
-            (await fixture.ScalarAsync<int>(database, "select protocol_minor from public.adapter_capability")).ShouldBe(minor);
-            (await fixture.ScalarAsync<bool>(database, "select (supports ->> 'capture_control')::boolean from public.adapter_capability")).ShouldBeFalse();
-            (await fixture.ScalarAsync<bool>(database, "select (supports ->> 'unknown_future')::boolean from public.adapter_capability")).ShouldBeFalse();
+            (await fixture.ScalarAsync<int>(database, $"select protocol_minor from public.adapter_capability where org_id = '{org}'")).ShouldBe(minor);
+            (await fixture.ScalarAsync<bool>(database, $"select (supports ->> 'capture_control')::boolean from public.adapter_capability where org_id = '{org}'")).ShouldBeFalse();
+            (await fixture.ScalarAsync<bool>(database, $"select (supports ->> 'unknown_future')::boolean from public.adapter_capability where org_id = '{org}'")).ShouldBeFalse();
         }
         else
         {
@@ -49,7 +49,7 @@ public sealed class AdapterCapabilityQaBoundaryTests(PostgresTenancyFixture fixt
             result.Error.Status.ShouldBe(422);
             result.Error.Retryable.ShouldBeFalse();
             result.Error.Details!.ShouldContain(detail => detail.Reason == "adapter_major=2147483647");
-            (await fixture.ScalarAsync<long>(database, "select count(*) from public.adapter_capability")).ShouldBe(0);
+            (await fixture.ScalarAsync<long>(database, $"select count(*) from public.adapter_capability where org_id = '{org}'")).ShouldBe(0);
         }
     }
 }

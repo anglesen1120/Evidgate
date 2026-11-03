@@ -39,8 +39,14 @@ public sealed class CatalogIdentityTests
 
     public CatalogIdentityTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project)
-        : IAsyncDisposable
+    private sealed record World(
+        TenancyApiFactory Api,
+        HttpClient Client,
+        string Database,
+        Guid User,
+        Guid Org,
+        Guid Project,
+        DedicatedDatabase Dedicated) : IAsyncDisposable
     {
         public Action<System.Net.Http.Headers.HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
@@ -48,19 +54,23 @@ public sealed class CatalogIdentityTests
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Dedicated.DisposeAsync();
         }
     }
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Dedicated: the identity resolver's annotation lookup and the cross-tenant assertions read
+        // rows no single tenant scope would own, so the class needs an empty database of its own.
+        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, "acme");
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, database, user, org, project);
+        return new World(api, client, database, user, org, project, dedicated);
     }
 
     private static SourceFile Annotated(string path, string id) => new(path, $"// evidgate.id: {id}\ntest('x', () => {{}});", "playwright", "typescript");

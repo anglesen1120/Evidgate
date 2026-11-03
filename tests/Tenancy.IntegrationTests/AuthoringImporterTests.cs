@@ -48,25 +48,29 @@ public sealed class AuthoringImporterTests
         string Database,
         Guid User,
         Guid Org,
-        Guid Project) : IAsyncDisposable
+        Guid Project,
+        DedicatedDatabase Dedicated) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Dedicated.DisposeAsync();
         }
     }
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Private database: the import timings are wall-clock thresholds that a busy shared host would trip.
+        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, "acme");
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, database, user, org, project);
+        return new World(api, client, database, user, org, project, dedicated);
     }
 
     /// <summary>Runs one import on the host's own object graph, inside one writable tenant scope of the world.</summary>

@@ -40,11 +40,11 @@ public sealed class CatalogRunPlanningReadsTests
     /// <summary>An org with a project, <paramref name="cases"/> registered cases (one revision each) and an empty suite.</summary>
     private async Task<World> StartAsync(int cases = 4)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
         var revisions = await SeedCasesAsync(api, org, project, database, cases, 0);
 
@@ -106,7 +106,9 @@ public sealed class CatalogRunPlanningReadsTests
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
 
         // What the suite-member path stored for that variant (03.2.1-T2.1).
-        var stored = await _fixture.ScalarAsync<string>(world.Database, "select variant_hash from public.variant");
+        var stored = await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select variant_hash from public.variant where org_id = '{world.Org}' and project_id = '{world.Project}'");
 
         await using var services = world.Api.Services.CreateAsyncScope();
         var contracts = services.ServiceProvider.GetRequiredService<ICatalogContracts>();
@@ -149,7 +151,7 @@ public sealed class CatalogRunPlanningReadsTests
         var siblingProject = await CreateProjectAsync(world.Client, world.User, world.Org, "billing");
         var siblingRevisions = await SeedCasesAsync(world.Api, world.Org, siblingProject, world.Database, 1, 0);
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         var otherRevisions = await SeedCasesAsync(world.Api, otherOrg, otherProject, world.Database, 1, 0);
 

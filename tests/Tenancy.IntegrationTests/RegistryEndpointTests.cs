@@ -31,20 +31,21 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task CreateOrganization_GrantsCreatorBothRoles()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealEvaluator(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var creator = Guid.CreateVersion7();
+        var slug = Unique.Slug("acme");
 
         var created = await client.SendAsync(
             HttpMethod.Post,
             "/v1/orgs",
             TenancyApiFactory.Caller(user: creator, email: "Founder@Example.test"),
-            new { name = "Acme", slug = "acme" },
+            new { name = "Acme", slug },
             NewKey());
 
         created.Status.ShouldBe(HttpStatusCode.Created);
-        created.Text("slug").ShouldBe("acme");
+        created.Text("slug").ShouldBe(slug);
         created.ETag.ShouldBe("\"1\"");
         var org = created.Id();
 
@@ -88,10 +89,10 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task CreateOrganization_RefusesCallersThatAreNotSignedInUsers()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealEvaluator(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
-        var body = new { name = "Acme", slug = "acme" };
+        var body = new { name = "Acme", slug = Unique.Slug("acme") };
 
         var anonymous = await client.SendAsync(HttpMethod.Post, "/v1/orgs", TenancyApiFactory.Caller(), body, NewKey());
         anonymous.Status.ShouldBe(HttpStatusCode.Unauthorized);
@@ -114,20 +115,22 @@ public sealed class RegistryEndpointTests
         noEmail.Status.ShouldBe(HttpStatusCode.Forbidden);
         noEmail.ErrorCode.ShouldBe("forbidden");
 
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.organization")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(database, $"select count(*) from public.organization where slug = '{body.slug}'")).ShouldBe(0);
     }
 
     /// <summary>AC2 for orgs: slugs are global, so a second org with a taken slug is 409 <c>slug_taken</c>.</summary>
     [Fact]
     public async Task CreateOrganization_TakenSlugIs409()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
-        (await CreateOrgAsync(client, "acme")).Status.ShouldBe(HttpStatusCode.Created);
+        var slug = Unique.Slug("acme");
 
-        var second = await CreateOrgAsync(client, "acme");
+        (await CreateOrgAsync(client, slug)).Status.ShouldBe(HttpStatusCode.Created);
+
+        var second = await CreateOrgAsync(client, slug);
         second.Status.ShouldBe(HttpStatusCode.Conflict);
         second.ErrorCode.ShouldBe("slug_taken");
     }
@@ -140,16 +143,17 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task CreateOrganization_IdempotencyKeyReplaysAndConflicts()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var key = NewKey();
         var caller = TenancyApiFactory.Caller(user: user, email: "a@example.test");
+        var slug = Unique.Slug("acme");
 
-        var first = await client.SendAsync(HttpMethod.Post, "/v1/orgs", caller, new { name = "Acme", slug = "acme" }, key);
-        var replay = await client.SendAsync(HttpMethod.Post, "/v1/orgs", caller, new { name = "Acme", slug = "acme" }, key);
-        var changed = await client.SendAsync(HttpMethod.Post, "/v1/orgs", caller, new { name = "Acme 2", slug = "acme" }, key);
+        var first = await client.SendAsync(HttpMethod.Post, "/v1/orgs", caller, new { name = "Acme", slug }, key);
+        var replay = await client.SendAsync(HttpMethod.Post, "/v1/orgs", caller, new { name = "Acme", slug }, key);
+        var changed = await client.SendAsync(HttpMethod.Post, "/v1/orgs", caller, new { name = "Acme 2", slug }, key);
 
         first.Status.ShouldBe(HttpStatusCode.Created);
         replay.Status.ShouldBe(HttpStatusCode.Created);
@@ -157,14 +161,14 @@ public sealed class RegistryEndpointTests
         changed.Status.ShouldBe(HttpStatusCode.Conflict);
         changed.ErrorCode.ShouldBe("idempotency_conflict");
 
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.organization")).ShouldBe(1);
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.membership")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(database, $"select count(*) from public.organization where slug = '{slug}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(database, $"select count(*) from public.membership where org_id = '{first.Id()}'")).ShouldBe(1);
 
         var otherUser = await client.SendAsync(
             HttpMethod.Post,
             "/v1/orgs",
             TenancyApiFactory.Caller(user: Guid.CreateVersion7(), email: "b@example.test"),
-            new { name = "Beta", slug = "beta" },
+            new { name = "Beta", slug = Unique.Slug("beta") },
             key);
         otherUser.Status.ShouldBe(HttpStatusCode.Created);
         otherUser.Id().ShouldNotBe(first.Id());
@@ -174,7 +178,7 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task Create_InvalidSlugOrNameIs422()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -208,14 +212,14 @@ public sealed class RegistryEndpointTests
         }
 
         (await CreateOrgAsync(client, "trailing-")).Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.project")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(database, $"select count(*) from public.project where org_id = '{org}'")).ShouldBe(0);
     }
 
     /// <summary>AC2: a slug is unique per org — 409 <c>slug_taken</c> in the same org, fine in another.</summary>
     [Fact]
     public async Task ProjectSlugIsUniquePerOrg()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var orgA = await SeedOrgAsync(database, "org-a");
@@ -238,7 +242,7 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task ProjectCreateReadPatchWithIfMatch()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -291,11 +295,13 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task OrganizationPatchWithIfMatch()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
-        await SeedOrgAsync(database, "taken");
+        var taken = await CreateOrgAsync(client, Unique.Slug("taken"));
+        taken.Status.ShouldBe(HttpStatusCode.Created);
+        var takenSlug = taken.Text("slug") ?? throw new InvalidOperationException("the created org carries its slug");
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
 
         var read = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}", caller);
@@ -312,15 +318,15 @@ public sealed class RegistryEndpointTests
         patched.Body.GetProperty("retention_default_days").GetInt32().ShouldBe(90);
         patched.Body.GetProperty("allowed_email_domains")[0].GetString().ShouldBe("acme.example");
 
-        var taken = await client.SendAsync(
+        var conflict = await client.SendAsync(
             HttpMethod.Patch,
             $"/v1/orgs/{org}",
             caller,
-            new { slug = "taken" },
+            new { slug = takenSlug },
             NewKey(),
             ifMatch: patched.ETag);
-        taken.Status.ShouldBe(HttpStatusCode.Conflict);
-        taken.ErrorCode.ShouldBe("slug_taken");
+        conflict.Status.ShouldBe(HttpStatusCode.Conflict);
+        conflict.ErrorCode.ShouldBe("slug_taken");
 
         var badDomain = await client.SendAsync(
             HttpMethod.Patch,
@@ -339,7 +345,7 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task OtherOrgIdsAre404()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var orgA = await SeedOrgAsync(database, "org-a");
@@ -372,7 +378,7 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task ProjectScopedTokenCannotAddressAnotherProject()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = await SeedOrgAsync(database, "acme");
         Guid projectA;
         Guid projectB;
@@ -415,7 +421,7 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task CreateProject_IdempotencyKeyReplaysAndConflicts()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -431,7 +437,7 @@ public sealed class RegistryEndpointTests
         replay.Id().ShouldBe(first.Id());
         changed.Status.ShouldBe(HttpStatusCode.Conflict);
         changed.ErrorCode.ShouldBe("idempotency_conflict");
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.project")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(database, $"select count(*) from public.project where org_id = '{org}'")).ShouldBe(1);
 
         var noKey = await client.SendAsync(HttpMethod.Post, $"/v1/orgs/{org}/projects", caller, new { name = "Web", slug = "web-3" });
         noKey.Status.ShouldBe(HttpStatusCode.BadRequest);
@@ -444,7 +450,7 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task MaxProjectsReachedIs429()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme", maxProjects: 2);
@@ -469,7 +475,7 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task ConcurrentCreatesNeverExceedMaxProjects()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme", maxProjects: 3);
@@ -479,14 +485,14 @@ public sealed class RegistryEndpointTests
 
         answers.Count(answer => answer.Status == HttpStatusCode.Created).ShouldBe(3);
         answers.Count(answer => answer.Status == HttpStatusCode.TooManyRequests).ShouldBe(5);
-        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.project")).ShouldBe(3);
+        (await _fixture.ScalarAsync<long>(database, $"select count(*) from public.project where org_id = '{org}'")).ShouldBe(3);
     }
 
     /// <summary>02.1.1 §6: a suspended org still reads, but its registry mutations are 409 <c>org_suspended</c>.</summary>
     [Fact]
     public async Task SuspendedOrgReadsButRefusesMutations()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -513,7 +519,7 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task ListProjectsWalksPages()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -561,7 +567,7 @@ public sealed class RegistryEndpointTests
     [Fact]
     public async Task ReadsStayInsideTheStatementBudget()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -609,10 +615,11 @@ public sealed class RegistryEndpointTests
     private async Task<Guid> SeedOrgAsync(string database, string slug, int? maxProjects = null)
     {
         var id = Guid.CreateVersion7();
+        var unique = Unique.Slug(slug);
         var limit = maxProjects is { } value ? value.ToString(CultureInfo.InvariantCulture) : "null";
         await _fixture.ExecuteAsync(
             database,
-            $"insert into public.organization (id, name, slug, max_projects) values ('{id}', '{slug} org', '{slug}', {limit})");
+            $"insert into public.organization (id, name, slug, max_projects) values ('{id}', '{unique} org', '{unique}', {limit})");
         return id;
     }
 }

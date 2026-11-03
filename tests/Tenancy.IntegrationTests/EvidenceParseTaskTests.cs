@@ -26,10 +26,10 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The <c>artifact_parse</c> task handler (06.3.6-T1.4) against one migrated database and one SeaweedFS container: a
-/// failed run becomes <c>rejected</c> with the mapped <c>parse_*</c> code, a run whose stream carries the child's own
-/// <c>rejected</c> record is rejected with that reason (D-S125-Q4), an object over the kind's cap is rejected
-/// <c>too_large</c>, a successful record stream and every no-op path write nothing, an infrastructure failure is
+/// The <c>artifact_parse</c> task handler (06.3.6-T1.4) against the shared migrated database and one SeaweedFS
+/// container: a failed run becomes <c>rejected</c> with the mapped <c>parse_*</c> code, a run whose stream carries
+/// the child's own <c>rejected</c> record is rejected with that reason (D-S125-Q4), an object over the kind's cap is
+/// rejected <c>too_large</c>, a successful record stream and every no-op path write nothing, an infrastructure failure is
 /// retried rather than judged, a lost race is retried instead of read as a verdict, a cancellation is never a verdict,
 /// a row whose key is not its minted final key is never read, only the redacted stderr excerpt is logged, and a
 /// rejection is written once whatever the number of attempts.
@@ -607,7 +607,7 @@ public sealed class EvidenceParseTaskTests(PostgresTenancyFixture fixture, Seawe
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -616,8 +616,8 @@ public sealed class EvidenceParseTaskTests(PostgresTenancyFixture fixture, Seawe
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         var host = TenancyApiFactory.WithPrincipal(
@@ -632,19 +632,23 @@ public sealed class EvidenceParseTaskTests(PostgresTenancyFixture fixture, Seawe
         return new World(host, database, org, project, runId);
     }
 
-    /// <summary>A second org with a project and one ready artifact, for the cross-tenant case.</summary>
+    /// <summary>
+    /// A second org in the shared database, with a project and one ready artifact, for the cross-tenant case. The slug is
+    /// suffixed here so sibling tests that ask for the same stem still get a distinct org.
+    /// </summary>
     private async Task<World> CreateOtherWorldAsync(string slug)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var unique = Unique.Slug(slug);
         Guid org;
         Guid project;
 
         using (var setup = api.CreateClient())
         {
             var user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, slug);
-            project = await CreateProjectAsync(setup, user, org, slug + "-project");
+            org = await CreateOrgAsync(setup, user, unique);
+            project = await CreateProjectAsync(setup, user, org, unique + "-project");
         }
 
         var host = TenancyApiFactory.WithPrincipal(

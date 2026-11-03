@@ -24,13 +24,13 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task AuditWriter_Commit_WritesBoth_AndRecordsTheActor()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
 
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         var rows = await RowsAsync(database, org);
         rows.Select(row => (row.Seq, row.Action, row.ActorType, row.ActorId, row.ObjectType, row.ObjectId)).ShouldBe(
@@ -49,12 +49,13 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task AuditWriter_BusinessRollback_LeavesNoAuditRow()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var projectSlug = Unique.Slug("checkout");
+        await CreateProjectAsync(client, user, org, projectSlug);
 
         // A duplicate slug fails inside the handler: the project insert rolls back, and so
         // must the audit row that would have described it.
@@ -62,7 +63,7 @@ public sealed class AuditTrailTests
             HttpMethod.Post,
             $"/v1/orgs/{org}/projects",
             TenancyApiFactory.Resolved(user: user),
-            new { name = "Again", slug = "checkout" },
+            new { name = "Again", slug = projectSlug },
             NewKey());
         duplicate.Status.ShouldBe(HttpStatusCode.Conflict);
 
@@ -81,11 +82,12 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task IdempotentReplay_DoesNotAuditTwice()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var projectSlug = Unique.Slug("once");
         var key = NewKey();
 
         for (var attempt = 0; attempt < 3; attempt++)
@@ -94,7 +96,7 @@ public sealed class AuditTrailTests
                 HttpMethod.Post,
                 $"/v1/orgs/{org}/projects",
                 TenancyApiFactory.Resolved(user: user),
-                new { name = "Once", slug = "once" },
+                new { name = "Once", slug = projectSlug },
                 key);
             answer.Status.ShouldBe(HttpStatusCode.Created);
         }
@@ -105,12 +107,12 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task EveryAuditedMutation_EmitsExactlyOneRow()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, founder, "acme");
-        var project = await CreateProjectAsync(client, founder, org, "checkout");
+        var org = await CreateOrgAsync(client, founder, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, founder, org, Unique.Slug("checkout"));
         var caller = TenancyApiFactory.Resolved(user: founder);
 
         (await client.SendAsync(HttpMethod.Patch, $"/v1/projects/{project}", TenancyApiFactory.Resolved(user: founder, orgHeader: org), new { name = "Renamed" }, NewKey(), "\"1\""))
@@ -119,7 +121,7 @@ public sealed class AuditTrailTests
             .Status.ShouldBe(HttpStatusCode.OK);
 
         var invited = await client.SendAsync(
-            HttpMethod.Post, $"/v1/orgs/{org}/memberships", caller, new { email = "new@example.test", roles = Array.Empty<string>() }, NewKey());
+            HttpMethod.Post, $"/v1/orgs/{org}/memberships", caller, new { email = $"invitee-{Guid.NewGuid():N}@example.test", roles = Array.Empty<string>() }, NewKey());
         invited.Status.ShouldBe(HttpStatusCode.Created);
         var membership = invited.Id();
 
@@ -145,11 +147,11 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task AuditChain_ConcurrentWriters_SingleUnbrokenSeq()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
 
         const int Writers = 12;
         var answers = await Task.WhenAll(Enumerable.Range(0, Writers).Select(i => client.SendAsync(
@@ -168,10 +170,10 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task AppRole_CannotUpdateOrDelete_AuditLog()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
-        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), "acme");
+        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("acme"));
 
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
         await connection.OpenAsync(TestContext.Current.CancellationToken);
@@ -202,10 +204,10 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task AppRole_CanOnlyExtendTheChainHonestly()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
-        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), "acme");
+        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("acme"));
 
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
         await connection.OpenAsync(TestContext.Current.CancellationToken);
@@ -237,11 +239,11 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task OtherOrgsRows_AreInvisible()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
-        var first = await CreateOrgAsync(client, Guid.CreateVersion7(), "first-org");
-        var second = await CreateOrgAsync(client, Guid.CreateVersion7(), "second-org");
+        var first = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("first-org"));
+        var second = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("second-org"));
 
         await using var scopeFactory = api.Services.CreateAsyncScope();
         var scopes = scopeFactory.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
@@ -257,11 +259,11 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task Verifier_DetectsModifiedDeletedAndRelinkedRows()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         for (var i = 0; i < 4; i++)
         {
             await CreateProjectAsync(client, user, org, $"proj-{i}");
@@ -292,7 +294,7 @@ public sealed class AuditTrailTests
     [Fact]
     public async Task ListQuery_UsesTheCoveringIndex()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         (await _fixture.ColumnAsync<string>(
             database,
             "select indexdef from pg_indexes where tablename = 'audit_log' and indexname = 'audit_log_org_created_id_idx'"))

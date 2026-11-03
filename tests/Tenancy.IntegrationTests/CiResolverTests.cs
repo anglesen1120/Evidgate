@@ -22,7 +22,7 @@ public sealed class CiResolverTests
     [Fact]
     public async Task ActiveBinding_IsUniquePerRepository_PlatformWide()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (orgA, projectA) = await SeedOrgAsync(database, "alpha");
         var (orgB, projectB) = await SeedOrgAsync(database, "bravo");
 
@@ -41,7 +41,7 @@ public sealed class CiResolverTests
     [Fact]
     public async Task ResolveBinding_PrefersActive_NamesPendingOnlyWhenProven_AndLeaksNoTenantOtherwise()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (orgA, projectA) = await SeedOrgAsync(database, "alpha");
         var (orgB, projectB) = await SeedOrgAsync(database, "bravo");
         var pending = await SeedBindingAsync(database, orgA, projectA, 11, "pending_verification", HashA);
@@ -75,7 +75,7 @@ public sealed class CiResolverTests
     [Fact]
     public async Task ResolveIngestToken_ReportsTheDerivedStatus_AndNothingForAnUnknownPrefix()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedOrgAsync(database, "alpha");
 
         var active = await SeedTokenAsync(database, org, project, "AAAAAAAAAAAA", "");
@@ -95,7 +95,7 @@ public sealed class CiResolverTests
     [Fact]
     public async Task TheAppRole_CannotReadTheCiTablesWithoutATenant_AndCannotEditIssuedRecords()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedOrgAsync(database, "alpha");
         await SeedBindingAsync(database, org, project, 5, "active");
         await SeedTokenAsync(database, org, project, "AAAAAAAAAAAA", "");
@@ -117,7 +117,7 @@ public sealed class CiResolverTests
     [Fact]
     public async Task IngestToken_CannotBeBothRotatedAndRevoked_AndRejectsBadShapes()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedOrgAsync(database, "alpha");
         var first = await SeedTokenAsync(database, org, project, "AAAAAAAAAAAA", "");
         var second = await SeedTokenAsync(database, org, project, "BBBBBBBBBBBB", "");

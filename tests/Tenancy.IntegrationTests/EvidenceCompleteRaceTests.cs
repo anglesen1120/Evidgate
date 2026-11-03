@@ -57,16 +57,19 @@ public sealed class EvidenceCompleteRaceTests(PostgresTenancyFixture fixture, Se
         TenancyApiFactory Api,
         TenancyApiFactory Host,
         HttpClient Client,
-        string Database,
+        DedicatedDatabase Owned,
         Guid User,
         Guid Org,
         Guid Project) : IAsyncDisposable
     {
+        public string Database => Owned.Name;
+
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
             await Host.DisposeAsync();
             await Api.DisposeAsync();
+            await Owned.DisposeAsync();
         }
     }
 
@@ -75,7 +78,8 @@ public sealed class EvidenceCompleteRaceTests(PostgresTenancyFixture fixture, Se
 
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = owned.Name;
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -91,7 +95,7 @@ public sealed class EvidenceCompleteRaceTests(PostgresTenancyFixture fixture, Se
         var host = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(database), org, project, principal, _store.Configuration());
 
-        return new World(api, host, host.CreateClient(), database, user, org, project);
+        return new World(api, host, host.CreateClient(), owned, user, org, project);
     }
 
     private async Task<Guid> SeedRunAsync(World world)

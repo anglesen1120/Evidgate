@@ -24,26 +24,35 @@ public sealed class ProducerSlotQaTests
 
     public ProducerSlotQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid Org) : IAsyncDisposable
+    private sealed record World(
+        TenancyApiFactory Api,
+        HttpClient Client,
+        string Database,
+        Guid Org,
+        DedicatedDatabase Dedicated) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Dedicated.DisposeAsync();
         }
     }
 
     /// <summary>One migrated database with an org and a project created through the real routes.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // The blocked-insert probe counts every transactionid wait in the current database, and the
+        // EXPLAIN cases pin an index on a three-row table: both need a database no other test touches.
+        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, database, org);
+        return new World(api, client, database, org, dedicated);
     }
 
     /// <summary>Runs one registry call in a fresh writable ambient tenant scope and commits it.</summary>

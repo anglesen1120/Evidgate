@@ -16,7 +16,7 @@ public sealed partial class AuthoringManualCaseTests
     [Fact]
     public async Task MoveBetweenItems_ReparentsWithOneUpdateVersion()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var (org, project, item, other) = await SeedTreeAsync(database);
@@ -74,7 +74,7 @@ public sealed partial class AuthoringManualCaseTests
     [Fact]
     public async Task MoveBetweenItems_Refusals_WriteNothing()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var (org, project, item, other) = await SeedTreeAsync(database);
@@ -171,7 +171,7 @@ public sealed partial class AuthoringManualCaseTests
     [Fact]
     public async Task MoveBetweenItems_Concurrent_412()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var (org, project, item, other) = await SeedTreeAsync(database);

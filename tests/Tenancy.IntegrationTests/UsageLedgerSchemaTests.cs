@@ -48,7 +48,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Migrations_ApplyOnAFreshDatabase_BothFilesJournalled()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         foreach (var table in UsageTables)
         {
@@ -65,7 +65,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Migrations_ApplyForward_OnADatabaseAlreadyHoldingData()
     {
-        var database = await _fixture.CreateEmptyDatabaseAsync();
+        await using var database = await _fixture.CreateEmptyDedicatedDatabaseAsync();
 
         // Every file lexically before 0046: the real expand path, which keeps working as later
         // migrations are added to the repository (AuthoringSchemaTests precedent).
@@ -113,7 +113,7 @@ public sealed class UsageLedgerSchemaTests
         (await _fixture.ScalarAsync<long>(database, "select count(*) from public.usage_ledger_entry")).ShouldBe(1);
 
         // The roles the new grants name exist and hold what 0046/0047 give them (a login is enabled by
-        // CreateDatabaseAsync only, so the catalogue is the readable proof on this path).
+        // the fixture's create path only, so the catalogue is the readable proof on this path).
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "usage_ledger_entry", "INSERT")).ShouldBeTrue();
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "usage_rollup", "INSERT")).ShouldBeTrue();
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "usage_rollup", "UPDATE"))
@@ -129,7 +129,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task UsageTables_DeclareThePlanColumnAndKeyContract()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         var ledgerColumns = await _fixture.ColumnsAsync(database, "usage_ledger_entry");
         foreach (var prefix in new[]
@@ -247,7 +247,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task UsageTables_HaveForcedRls_AndTheAppScopedTenantPolicies()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         foreach (var table in UsageTables)
         {
@@ -271,7 +271,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_UpdateDelete_Rejected()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var id = Guid.CreateVersion7();
 
@@ -337,7 +337,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_DuplicateBillingKey_RaisesUniqueViolation()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         await using var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org);
@@ -357,7 +357,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_DuplicateBillingKey_ConcurrentOnConflictInserts_LeaveOneRow()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         const int Writers = 8;
@@ -390,7 +390,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_Adjustment_LeavesTheOriginalIdentical_AndBothRowsAppear()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var originalId = Guid.CreateVersion7();
 
@@ -432,7 +432,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_Adjustment_CrossTenantParent_Rejected()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var (otherOrg, otherProject) = await SeedTenantAsync(database, "beta", "store");
         var foreignRow = Guid.CreateVersion7();
@@ -464,7 +464,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_Adjustment_RequiresAReason()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var originalId = Guid.CreateVersion7();
 
@@ -503,7 +503,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_CheckBoundaries_RejectUnknownMetricPeriodAndBillingKey()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         var cases = new (string Label, (string Sql, (string Name, object Value)[] Parameters) Insert, string Constraint)[]
@@ -553,7 +553,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_NegativeQuantity_OnlyOnAnAdjustmentRow()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         // F-B: a plain metering row cannot carry a negative quantity. The domain rule refuses it with
@@ -616,7 +616,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Ledger_Unit_BoundedToOneTo32Characters()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         var refused = new (string Label, string Unit)[]
@@ -667,7 +667,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Rollup_Uniqueness_CountsANullProjectAsOneScope()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         var firstId = Guid.CreateVersion7();
@@ -707,7 +707,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Rollup_Recompute_UpsertsOnTheCoalesceIndex()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         await using var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org);
@@ -785,7 +785,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task Rollup_AppRole_CannotDeleteTruncateOrRewriteTheKey()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         var rollupId = Guid.CreateVersion7();
@@ -826,7 +826,7 @@ public sealed class UsageLedgerSchemaTests
     [Fact]
     public async Task UsageTables_CrossTenantRead_ZeroRows()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var (otherOrg, _) = await SeedTenantAsync(database, "beta", "store");
 

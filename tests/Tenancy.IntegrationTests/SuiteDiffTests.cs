@@ -28,7 +28,7 @@ public sealed class SuiteDiffTests
 
     public SuiteDiffTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project, Guid Suite, Guid[] Revisions)
+    private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project, Guid Suite, Guid[] Revisions, DedicatedDatabase Dedicated)
         : IAsyncDisposable
     {
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
@@ -37,6 +37,7 @@ public sealed class SuiteDiffTests
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Dedicated.DisposeAsync();
         }
     }
 
@@ -59,7 +60,9 @@ public sealed class SuiteDiffTests
     /// <summary>An org with a project, <paramref name="cases"/> registered cases (one revision each) and an empty suite.</summary>
     private async Task<World> StartAsync(int cases = 4)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Private database: the suite_revision/suite_member counts are asserted unfiltered for the whole database.
+        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -71,7 +74,7 @@ public sealed class SuiteDiffTests
         var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
         suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
 
-        return new World(api, client, database, user, org, project, suite.Id(), revisions);
+        return new World(api, client, database, user, org, project, suite.Id(), revisions, dedicated);
     }
 
     /// <summary>A second org on the same host and database, ready to take revisions of its own.</summary>

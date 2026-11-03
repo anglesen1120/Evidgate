@@ -47,11 +47,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task Page_Keyset_TwoPages_NoDuplicateNoGap_AndTiesKeepOrder()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
 
         var tie = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
@@ -98,11 +98,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task Filters_NarrowAlone_AndCombined()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
         var projectA = await CreateProjectAsync(client, user, org, "alpha");
         var projectB = await CreateProjectAsync(client, user, org, "beta");
@@ -145,11 +145,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task FromIsInclusive_AndToIsExclusive()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
 
         var first = new DateTimeOffset(2026, 5, 1, 10, 0, 0, TimeSpan.Zero);
@@ -183,11 +183,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task Limit_DefaultsTo50_Accepts200_AndRefusesZeroAnd201()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
 
         var baseAt = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
@@ -233,11 +233,11 @@ public sealed class SecurityEventApiTests
     [InlineData("cursor=garbage", "cursor")]
     public async Task BadInput_Is422RequestInvalid_WithDetailsPath(string query, string path)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
 
         var answer = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}/security-events?{query}", caller);
@@ -254,13 +254,13 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task CursorMintedByAnotherOrg_ReturnsNoForeignRows()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var mineUser = Guid.CreateVersion7();
-        var mine = await CreateOrgAsync(client, mineUser, "acme");
+        var mine = await CreateOrgAsync(client, mineUser, Unique.Slug("acme"));
         var otherUser = Guid.CreateVersion7();
-        var other = await CreateOrgAsync(client, otherUser, "acme-2");
+        var other = await CreateOrgAsync(client, otherUser, Unique.Slug("acme-2"));
 
         var mineAt = new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
         Seed[] mineSeeds =
@@ -322,11 +322,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task MemberWithoutPermission_Is403_AndTenantAdminIs200()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, founder, "acme");
+        var org = await CreateOrgAsync(client, founder, Unique.Slug("acme"));
         await SeedAsync(database, org, [new Seed(Guid.CreateVersion7(), "auth_failure", "info", DateTimeOffset.UtcNow)]);
 
         // An active member with no role holds no permission.
@@ -354,13 +354,13 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task ForeignOrgInPath_IsRefused_AndNeverLeaksItsRows()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var mineUser = Guid.CreateVersion7();
-        var mine = await CreateOrgAsync(client, mineUser, "acme");
+        var mine = await CreateOrgAsync(client, mineUser, Unique.Slug("acme"));
         var otherUser = Guid.CreateVersion7();
-        var other = await CreateOrgAsync(client, otherUser, "acme-2");
+        var other = await CreateOrgAsync(client, otherUser, Unique.Slug("acme-2"));
         var otherSeed = new Seed(Guid.CreateVersion7(), "cross_tenant_probe", "critical", DateTimeOffset.UtcNow);
         await SeedAsync(database, other, [otherSeed]);
 
@@ -385,7 +385,7 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task PathOrgThatIsNotTheRequestTenant_Is404()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var user = Guid.CreateVersion7();
         Guid org;
         Guid project;
@@ -393,7 +393,7 @@ public sealed class SecurityEventApiTests
         await using (var setup = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database)))
         {
             using var setupClient = setup.CreateClient();
-            org = await CreateOrgAsync(setupClient, user, "acme");
+            org = await CreateOrgAsync(setupClient, user, Unique.Slug("acme"));
             project = await CreateProjectAsync(setupClient, user, org, "alpha");
         }
 
@@ -415,11 +415,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task UnknownProjectFilter_IsEmptyPage()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
         var project = await CreateProjectAsync(client, user, org, "alpha");
         await SeedAsync(database, org, [new Seed(Guid.CreateVersion7(), "auth_failure", "info", DateTimeOffset.UtcNow, project)]);
@@ -436,11 +436,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task Response_CarriesOnlyTheEightItemFields()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
         var project = await CreateProjectAsync(client, user, org, "alpha");
         var row = new Seed(
@@ -487,11 +487,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task ToBeforeFrom_IsAnEmptyPage()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
 
         var at = new DateTimeOffset(2026, 8, 1, 9, 0, 0, TimeSpan.Zero);
@@ -520,11 +520,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task PageExactlyEqualToLimit_AnswersNullCursor()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
 
         var at = new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero);
@@ -558,7 +558,7 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task NonUuidOrgInPath_IsTheFramework400()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
@@ -578,11 +578,11 @@ public sealed class SecurityEventApiTests
     [Fact]
     public async Task CursorReusedAfterChangingAFilter_AnswersNoErrorAndNoForeignRows()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var caller = TenancyApiFactory.Resolved(user: user);
 
         var baseAt = new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);

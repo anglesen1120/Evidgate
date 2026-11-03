@@ -20,7 +20,7 @@ namespace Tenancy.IntegrationTests;
 /// erasure sweep may clear it) and <c>guard_run_evidence_pointer_insert</c> (a fresh run starts NULL).
 /// <para>
 /// The fixture is this suite's own <see cref="PostgresTenancyFixture"/> — one digest-pinned PostgreSQL 18
-/// container per assembly, a fresh database per test brought to head by the real <c>Evidgate.Migrator</c>.
+/// container per assembly, a database brought to head by the real <c>Evidgate.Migrator</c>.
 /// Every write runs as <c>evidgate_app</c> inside a tenant-scoped transaction (00 §5.5 C3) unless a case
 /// deliberately speaks as the owner (the migration role, for a re-run, the row lock order or the erasure
 /// step that clears the pointer).
