@@ -46,16 +46,7 @@ public sealed partial class CaseAttemptSchemaTests
         Guid Project,
         DedicatedDatabase? Owned = null) : IAsyncDisposable
     {
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await Api.DisposeAsync();
-
-            if (Owned is not null)
-            {
-                await Owned.DisposeAsync();
-            }
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Api);
     }
 
     /// <summary>The parent rows a <c>case_attempt</c> row needs, seeded as the migration role.</summary>

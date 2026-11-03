@@ -180,9 +180,9 @@ public sealed partial class EventSchemaTests
         foreach (var name in new[]
                  {
                      "event_pkey", "event_org_id_key", "event_run_producer_sequence_key", "event_run_event_id_key",
-                     // No `event_run_fk`: the task file §4 defers the direct run key to 05.2.1 (0034's
-                     // header [DECISION]); `event_slot_fk` plus producer_slot's validated run key
-                     // already make a dangling or cross-org run impossible.
+                     // No `event_run_fk`: the direct run key is deliberately absent (0034's header
+                     // [DECISION]); `event_slot_fk` plus producer_slot's validated run key already
+                     // make a dangling or cross-org run impossible.
                      "event_slot_fk",
                      "event_producer_id_check", "event_sequence_check", "event_epoch_check",
                      "event_execution_key_check", "event_attempt_no_check", "event_type_check",

@@ -76,31 +76,18 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
         Guid Org,
         Guid Project) : IAsyncDisposable
     {
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            try
-            {
-                await Host.DisposeAsync();
-                await Api.DisposeAsync();
-            }
-            finally
-            {
-                // The database is this world's to drop even when the host's own disposal throws.
-                await Database.DisposeAsync();
-            }
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Database, Host, Api);
     }
 
     /// <summary>A service principal holding <c>artifact:write</c> and a token id (the slot-binding identity).</summary>
     private static RequestPrincipal Writer(string jti = Jti) =>
         RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
 
-    // The "no row minted" assertions count every artifact of the database, so each world owns one.
     /// <summary>
     /// One migrated database with an org and a project created through the real registry routes, plus a host
     /// whose requests carry <paramref name="principal"/> and the SeaweedFS container's object-store configuration.
     /// </summary>
+    /// <remarks>The "no row minted" assertions count every artifact of the database, so each world owns one.</remarks>
     private Task<World> StartAsync(RequestPrincipal? principal = null) =>
         fixture.StartDedicatedAsync(async database =>
         {

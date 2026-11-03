@@ -43,8 +43,7 @@ public sealed partial class EventSchemaTests
 
         // A run that does not exist has no registered slot either, so `event_slot_fk` is the key the
         // row violates: the run is guaranteed transitively (`event_slot_fk` -> `producer_slot` ->
-        // 0031's validated `producer_slot_run_fk` -> `run`), because the task file §4 defers the
-        // direct `event_run_fk` to 05.2.1 (0034's header [DECISION]).
+        // 0031's validated `producer_slot_run_fk` -> `run`), since `event` carries no direct run key.
         var error = await CaptureAppErrorAsync(world, world.Org, InsertEventSql(world.Org, unknownRun));
 
         error.SqlState.ShouldBe("23503");

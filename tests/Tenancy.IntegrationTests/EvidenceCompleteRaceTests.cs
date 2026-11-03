@@ -64,20 +64,7 @@ public sealed class EvidenceCompleteRaceTests(PostgresTenancyFixture fixture, Se
     {
         public string Database => Owned.Name;
 
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            try
-            {
-                await Host.DisposeAsync();
-                await Api.DisposeAsync();
-            }
-            finally
-            {
-                // The database is this world's to drop even when the host's own disposal throws.
-                await Owned.DisposeAsync();
-            }
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Host, Api);
     }
 
     private static RequestPrincipal Writer(string jti = Jti) =>

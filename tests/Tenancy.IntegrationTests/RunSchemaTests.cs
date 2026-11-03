@@ -40,16 +40,7 @@ public sealed class RunSchemaTests
         Guid Project,
         DedicatedDatabase? Owned = null) : IAsyncDisposable
     {
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await Api.DisposeAsync();
-
-            if (Owned is not null)
-            {
-                await Owned.DisposeAsync();
-            }
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Api);
     }
 
     /// <summary>The parent rows a <c>run</c> row needs, seeded as the migration role.</summary>

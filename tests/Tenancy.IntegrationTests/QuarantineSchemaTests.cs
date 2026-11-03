@@ -33,16 +33,7 @@ public sealed class QuarantineSchemaTests
         Guid Owner,
         DedicatedDatabase? Owned = null) : IAsyncDisposable
     {
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await Api.DisposeAsync();
-
-            if (Owned is not null)
-            {
-                await Owned.DisposeAsync();
-            }
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Api);
     }
 
     /// <summary>An org, a project, a catalog case and an active membership, on the shared database.</summary>

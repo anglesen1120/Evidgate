@@ -153,16 +153,7 @@ public sealed class RunIdentitySchemaTests
         Guid Project,
         DedicatedDatabase? Owned = null) : IAsyncDisposable
     {
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            await Api.DisposeAsync();
-
-            if (Owned is not null)
-            {
-                await Owned.DisposeAsync();
-            }
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Owned, Api);
     }
 
     /// <summary>

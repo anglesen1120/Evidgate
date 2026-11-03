@@ -33,19 +33,7 @@ public sealed class SuiteDiffTests
     {
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            try
-            {
-                await Api.DisposeAsync();
-            }
-            finally
-            {
-                // The database is this world's to drop even when the host's own disposal throws.
-                await Dedicated.DisposeAsync();
-            }
-        }
+        public ValueTask DisposeAsync() => WorldDisposal.DisposeAsync(Client, Dedicated, Api);
     }
 
     /// <summary>A second tenant of the same host and database: its own user, org, project, cases and suite.</summary>
@@ -64,8 +52,10 @@ public sealed class SuiteDiffTests
 
     // ------------------------------------------------------------------ helpers
 
-    // Private database: the suite_revision/suite_member counts are asserted unfiltered for the whole database.
     /// <summary>An org with a project, <paramref name="cases"/> registered cases (one revision each) and an empty suite.</summary>
+    /// <remarks>
+    /// Private database: the suite_revision/suite_member counts are asserted unfiltered for the whole database.
+    /// </remarks>
     private Task<World> StartAsync(int cases = 4) =>
         _fixture.StartDedicatedAsync(async dedicated =>
         {

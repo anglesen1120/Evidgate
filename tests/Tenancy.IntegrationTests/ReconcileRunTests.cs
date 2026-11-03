@@ -2300,9 +2300,7 @@ public sealed partial class ReconcileRunTests
                     RunReconcileContract.OutboxTaskType,
                     allowedReconcileEnqueues));
             });
-        await RecordPlanAttemptsAsync(world, skip: 1);
-
-        return world;
+        return await AnswerPlanOrDisposeAsync(world, skip: 1);
     }
 
     /// <summary>

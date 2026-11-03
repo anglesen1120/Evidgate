@@ -683,22 +683,30 @@ public sealed class AuthoringSchemaTests
     private async Task<DedicatedDatabase> BringToPreviousHeadAsync()
     {
         var database = await _fixture.CreateEmptyDedicatedDatabaseAsync();
+        try
+        {
+            // Every migration file lexically before the one under test: the real expand path, and it
+            // keeps working when later migrations are added to the repository.
+            var prefixes = Directory.EnumerateFiles(PostgresTenancyFixture.RepoMigrationsPath, "*.sql")
+                .Select(Path.GetFileName)
+                .Where(name => string.CompareOrdinal(name, MigrationFile) < 0)
+                .Select(name => name![..4])
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
 
-        // Every migration file lexically before the one under test: the real expand path, and it
-        // keeps working when later migrations are added to the repository.
-        var prefixes = Directory.EnumerateFiles(PostgresTenancyFixture.RepoMigrationsPath, "*.sql")
-            .Select(Path.GetFileName)
-            .Where(name => string.CompareOrdinal(name, MigrationFile) < 0)
-            .Select(name => name![..4])
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+            using var history = TempMigrationDirectory.CreateFrom(PostgresTenancyFixture.RepoMigrationsPath, prefixes);
+            var baselined = _fixture.ApplyMigrations(database, history.Path);
+            baselined.ExitCode.ShouldBe(MigratorExitCodes.Success, baselined.Transcript);
+            baselined.Result.AppliedNow.ShouldNotContain(MigrationFile);
 
-        using var history = TempMigrationDirectory.CreateFrom(PostgresTenancyFixture.RepoMigrationsPath, prefixes);
-        var baselined = _fixture.ApplyMigrations(database, history.Path);
-        baselined.ExitCode.ShouldBe(MigratorExitCodes.Success, baselined.Transcript);
-        baselined.Result.AppliedNow.ShouldNotContain(MigrationFile);
-
-        return database;
+            return database;
+        }
+        catch
+        {
+            // A failed arrange must not leave its scratch database behind for the rest of the run.
+            await database.DisposeAsync();
+            throw;
+        }
     }
 
     /// <summary>

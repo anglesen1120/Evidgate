@@ -26,6 +26,16 @@ public sealed class IngestRunStartQaTests
     private static Task<long> UsageOutboxRowsAsync(IngestTestWorld world) =>
         world.CountAsync("outbox", $"org_id = '{world.Org:D}' and task_type = 'usage.batch_accepted'");
 
+    private static Task<long> OwnOrgStateChangedOutboxRowsAsync(IngestTestWorld world) =>
+        world.CountAsync(
+            "outbox",
+            $"org_id = '{world.Org:D}' and task_type = 'orchestrator.run.state_changed'");
+
+    private static Task<long> OwnOrgStateChangedAuditRowsAsync(IngestTestWorld world) =>
+        world.CountAsync(
+            "audit_log",
+            $"org_id = '{world.Org:D}' and action = 'run.state_changed'");
+
     private static Task<string> RunStateAsync(IngestTestWorld world, Guid runId) =>
         world.ScalarAsync<string>($"select state from public.run where id = '{runId:D}'");
 
@@ -184,6 +194,8 @@ public sealed class IngestRunStartQaTests
         (await RunStateAsync(world, foreign.RunId)).ShouldBe("queued");
         (await StateChangedOutboxRowsAsync(world, foreign.RunId)).ShouldBe(0);
         (await StateChangedAuditRowsAsync(world, foreign.RunId)).ShouldBe(0);
+        (await OwnOrgStateChangedOutboxRowsAsync(world)).ShouldBe(0);
+        (await OwnOrgStateChangedAuditRowsAsync(world)).ShouldBe(0);
     }
 
     [Fact]
@@ -216,6 +228,10 @@ public sealed class IngestRunStartQaTests
         (await StateChangedOutboxRowsAsync(world, otherRun.RunId)).ShouldBe(0);
         (await StateChangedAuditRowsAsync(world, otherRun.RunId)).ShouldBe(0);
         (await world.CountAsync("event", $"run_id = '{otherRun.RunId:D}'")).ShouldBe(0);
+
+        // The refusal rolls the whole transaction back: not even the caller's own org keeps a trigger or audit row.
+        (await OwnOrgStateChangedOutboxRowsAsync(world)).ShouldBe(0);
+        (await OwnOrgStateChangedAuditRowsAsync(world)).ShouldBe(0);
     }
 
     // ------------------------------------------------------- boundary: concurrency
