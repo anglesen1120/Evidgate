@@ -4,8 +4,8 @@ namespace Tenancy.IntegrationTests;
 internal static class WorldDisposal
 {
     /// <summary>
-    /// Disposes the client and then the hosts, before the database: the database is this world's to drop even when a
-    /// host's own disposal throws, so a failed world never leaves a scratch database behind for the rest of the run.
+    /// Disposes the client and then the hosts, before the database: the database is this world's to drop even when the
+    /// client's or a host's own disposal throws, so a failed world never leaves a scratch database behind for the run.
     /// </summary>
     /// <param name="client">The world's HTTP client, disposed before its hosts.</param>
     /// <param name="owned">The private database, or null when the world runs on the shared database.</param>
