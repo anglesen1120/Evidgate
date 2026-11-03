@@ -241,8 +241,8 @@ public sealed class AuthoringChecklistTests
         var item = await CreateItemAsync(world, "Pay online");
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "other");
-        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "checkout");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("other"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, Unique.Slug("checkout"));
 
         var answer = await world.Client.SendAsync(
             HttpMethod.Patch,
@@ -363,12 +363,12 @@ public sealed class AuthoringChecklistTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         var module = Guid.CreateVersion7();
         var feature = Guid.CreateVersion7();

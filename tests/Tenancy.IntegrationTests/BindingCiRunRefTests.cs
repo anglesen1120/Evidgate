@@ -59,12 +59,12 @@ public sealed class BindingCiRunRefTests
     /// <summary>One migrated database with an org and a project created through the real routes.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, org);
     }
@@ -192,7 +192,7 @@ public sealed class BindingCiRunRefTests
 
         answer.Status.ShouldBe(HttpStatusCode.Forbidden, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("producer_slot_taken");
-        (await world.CountAsync("event")).ShouldBe(0);
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
     }
 
     /// <summary>
@@ -213,7 +213,7 @@ public sealed class BindingCiRunRefTests
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         answer.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
-        (await world.CountAsync("event")).ShouldBe(1);
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(1);
 
         await using var direct = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
         (await direct.ScalarAsync<string>(
@@ -261,7 +261,7 @@ public sealed class BindingCiRunRefTests
         answer.Status.ShouldBe(HttpStatusCode.Forbidden, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("producer_slot_taken");
         answer.ErrorCode.ShouldNotBe("unknown_execution_key");
-        (await world.CountAsync("event")).ShouldBe(0);
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
     }
 
     /// <summary>
@@ -285,6 +285,6 @@ public sealed class BindingCiRunRefTests
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("unknown_execution_key");
         IngestQaRequests.Details(answer).Select(IngestQaRequests.IndexOf).ShouldBe([1, 2]);
-        (await world.CountAsync("event")).ShouldBe(0);
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(0);
     }
 }

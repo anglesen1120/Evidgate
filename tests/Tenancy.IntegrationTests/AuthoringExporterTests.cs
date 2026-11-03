@@ -102,8 +102,8 @@ public sealed class AuthoringExporterTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
-        var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
+        var database = await _fixture.SharedDatabaseAsync();
+        var (org, project) = await SeedTenantAsync(database, Unique.Slug("acme"), "checkout");
 
         var dataSource = NpgsqlDataSource.Create(_fixture.AppConnectionString(database));
         var services = new ServiceCollection();
@@ -675,7 +675,7 @@ public sealed class AuthoringExporterTests
         sameTenant.Result.Error.Code.ShouldBe("not_found");
 
         // Another tenant's project: the project probe answers the same 404.
-        var (_, otherProject) = await SeedTenantAsync(world.Database, "globex", "billing");
+        var (_, otherProject) = await SeedTenantAsync(world.Database, Unique.Slug("globex"), "billing");
         var otherTenant = await ExportAsync(world, projectId: otherProject);
         otherTenant.Result.IsSuccess.ShouldBeFalse();
         otherTenant.Result.Error!.Status.ShouldBe(404);
@@ -697,7 +697,7 @@ public sealed class AuthoringExporterTests
         await using var world = await StartAsync();
         var mine = await SeedTreeAsync(world);
 
-        var (otherOrg, otherProject) = await SeedTenantAsync(world.Database, "globex", "billing");
+        var (otherOrg, otherProject) = await SeedTenantAsync(world.Database, Unique.Slug("globex"), "billing");
         var theirs = Guid.CreateVersion7();
 
         await ExecuteAsync(world, $"""

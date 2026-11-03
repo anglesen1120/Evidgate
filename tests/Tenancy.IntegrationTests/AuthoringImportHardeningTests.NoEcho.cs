@@ -91,17 +91,17 @@ public sealed partial class AuthoringImportHardeningTests
     /// <summary>Starts the world of the remark above: two orgs, three projects, one database.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
 
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "hardening-a");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("hardening-a"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
         var sibling = await CreateProjectAsync(client, user, org, "warehouse");
 
         var stranger = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(client, stranger, "hardening-b");
+        var otherOrg = await CreateOrgAsync(client, stranger, Unique.Slug("hardening-b"));
         var foreign = await CreateProjectAsync(client, stranger, otherOrg, "external");
 
         return new World(api, client, database, user, org, project, sibling, stranger, otherOrg, foreign);

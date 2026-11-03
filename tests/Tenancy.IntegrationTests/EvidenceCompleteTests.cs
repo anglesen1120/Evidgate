@@ -96,12 +96,12 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
         RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
 
     /// <summary>
-    /// One migrated database with an org and a project created through the real registry routes, plus
+    /// The shared database with this test's own org and a project created through the real registry routes, plus
     /// a host whose requests carry <paramref name="principal"/> and the object-store configuration.
     /// </summary>
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -110,8 +110,8 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         var host = TenancyApiFactory.WithPrincipal(
@@ -251,7 +251,9 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
             $"select payload::text from public.outbox where task_type = '{StagingDeleteTask}' and payload->>'artifact_id' = '{artifactId:D}'");
 
     private Task<long> TaskRowsAsync(World world, string taskType) =>
-        _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.task where task_type = '{taskType}'");
+        _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.task where task_type = '{taskType}' and org_id = '{world.Org:D}'");
 
     /// <summary>Runs one real outbox dispatch batch (01.5.1-T3) — the hop the API host itself never runs.</summary>
     private static async Task DispatchAsync(World world)
@@ -370,7 +372,8 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
         // so the row stays queued and `ready` never waits for the scan (T19).
         (await TaskRowsAsync(world, SecretScanTask)).ShouldBe(1);
         (await _fixture.ScalarAsync<string?>(
-            world.Database, $"select state from public.task where task_type = '{SecretScanTask}'"))
+            world.Database,
+            $"select state from public.task where task_type = '{SecretScanTask}' and org_id = '{world.Org:D}'"))
             .ShouldBe("queued");
 
         // ...and the task handler deletes it, idempotently, after the commit.
@@ -662,7 +665,7 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
     {
         // The route names no project: a project-scoped principal (the CI producer token) is required, and an
         // org-scoped service principal is refused with project_required before any storage work (T1 decision 10).
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -671,8 +674,8 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         using var client = api.CreateClient();

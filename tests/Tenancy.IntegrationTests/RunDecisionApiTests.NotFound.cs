@@ -33,7 +33,7 @@ public sealed partial class RunDecisionApiTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         await CreateProjectAsync(world.Client, otherUser, otherOrg, "rival-project");
         var foreign = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, otherOrg, 1);
 

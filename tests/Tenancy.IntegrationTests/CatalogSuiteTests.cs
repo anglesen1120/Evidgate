@@ -40,11 +40,11 @@ public sealed class CatalogSuiteTests
     /// <summary>An org with a project, <paramref name="cases"/> registered cases (one revision each) and an empty suite.</summary>
     private async Task<World> StartAsync(int cases = 4)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
         var revisions = await SeedCasesAsync(api, org, project, database, cases, 0);
 
@@ -150,7 +150,7 @@ public sealed class CatalogSuiteTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         var rival = TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg);
         var stranger = TenancyApiFactory.Resolved(user: Guid.CreateVersion7(), orgHeader: world.Org);
@@ -222,7 +222,7 @@ public sealed class CatalogSuiteTests
         revision.Body.GetProperty("environment_requirements").GetProperty("data_isolation").GetString().ShouldBe("shared");
 
         // The suite's head moved with the revision.
-        (await _fixture.ScalarAsync<Guid>(world.Database, "select head_revision_id from public.suite")).ShouldBe(created.Id("suite_revision_id"));
+        (await _fixture.ScalarAsync<Guid>(world.Database, $"select head_revision_id from public.suite where id = '{world.Suite}'")).ShouldBe(created.Id("suite_revision_id"));
     }
 
     [Fact]
@@ -251,7 +251,7 @@ public sealed class CatalogSuiteTests
         second.Status.ShouldBe(HttpStatusCode.OK, second.ErrorMessage);
         second.Id("suite_revision_id").ShouldBe(first.Id("suite_revision_id"));
         second.Body.GetProperty("created").GetBoolean().ShouldBeFalse();
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_revision")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.suite_revision where org_id = '{world.Org}'")).ShouldBe(1);
 
         // Another suite with the very same content has its own revision.
         var other = await world.Client.SendAsync(HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = "Other", slug = "other" }, NewKey());
@@ -278,7 +278,7 @@ public sealed class CatalogSuiteTests
 
         first.Status.ShouldBe(HttpStatusCode.Created);
         replay.Id("suite_revision_id").ShouldBe(first.Id("suite_revision_id"));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_revision")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.suite_revision where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ AC2 membership
@@ -296,7 +296,7 @@ public sealed class CatalogSuiteTests
         cross.Body.GetProperty("error").GetProperty("details").EnumerateArray().Single().GetProperty("path").GetString().ShouldBe("/members/stray");
 
         (await CreateRevisionAsync(world, new { members = new[] { Member(Guid.CreateVersion7()) } })).ErrorCode.ShouldBe("cross_project_member");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_revision")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.suite_revision where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -304,7 +304,7 @@ public sealed class CatalogSuiteTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         var foreign = (await SeedCasesAsync(world.Api, otherOrg, otherProject, world.Database, 1, 200))[0];
         var variant = Guid.CreateVersion7();
@@ -344,8 +344,8 @@ public sealed class CatalogSuiteTests
         self.ErrorCode.ShouldBe("dependency_cycle");
         self.Body.GetProperty("error").GetProperty("details").EnumerateArray().Select(detail => detail.GetProperty("reason").GetString()).ShouldBe(["b", "b"]);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_revision")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.variant")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.suite_revision where org_id = '{world.Org}'")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.variant where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -414,8 +414,8 @@ public sealed class CatalogSuiteTests
             answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().First().GetProperty("path").GetString().ShouldStartWith("/members/0/params/");
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.variant")).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_revision")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.variant where org_id = '{world.Org}'")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.suite_revision where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -425,8 +425,8 @@ public sealed class CatalogSuiteTests
         await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0], new { browser = "Chromium", retries = 1 }) } });
         await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0], new { retries = 1, browser = "chromium", note = "x" }), Member(world.Revisions[1], new { browser = "CHROMIUM", retries = 1 }) } });
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.variant")).ShouldBe(1);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(distinct variant_id) from public.suite_member")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.variant where org_id = '{world.Org}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(distinct variant_id) from public.suite_member where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     [Theory]
@@ -483,8 +483,8 @@ public sealed class CatalogSuiteTests
 
         answers.ShouldAllBe(answer => answer.Status == HttpStatusCode.Created);
         answers.Select(answer => answer.Body.GetProperty("revision_no").GetInt32()).Order().ShouldBe(Enumerable.Range(1, 8));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(distinct revision_no) from public.suite_revision")).ShouldBe(8);
-        (await _fixture.ScalarAsync<int>(world.Database, "select revision_no from public.suite_revision where id = (select head_revision_id from public.suite)")).ShouldBeInRange(1, 8);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(distinct revision_no) from public.suite_revision where org_id = '{world.Org}'")).ShouldBe(8);
+        (await _fixture.ScalarAsync<int>(world.Database, $"select revision_no from public.suite_revision where id = (select head_revision_id from public.suite where id = '{world.Suite}')")).ShouldBeInRange(1, 8);
     }
 
     [Fact]
@@ -497,7 +497,7 @@ public sealed class CatalogSuiteTests
 
         answers.Count(answer => answer.Status == HttpStatusCode.Created).ShouldBe(1);
         answers.Select(answer => answer.Id("suite_revision_id")).Distinct().Count().ShouldBe(1);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_revision")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.suite_revision where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ AC6 immutability
@@ -563,12 +563,12 @@ public sealed class CatalogSuiteTests
             await scope.CommitAsync(TestContext.Current.CancellationToken);
         }
 
-        (await _fixture.ScalarAsync<string>(world.Database, "select status from public.suite_revision")).ShouldBe("published");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select status from public.suite_revision where id = '{id}'")).ShouldBe("published");
         var read = await world.Client.SendAsync(HttpMethod.Get, $"/v1/suite-revisions/{id}", world.Admin);
         read.Text("status").ShouldBe("published");
 
         // Back to draft, or any other edit, is refused — even for the owner.
-        var back = await Should.ThrowAsync<PostgresException>(async () => await _fixture.ExecuteAsync(world.Database, "update public.suite_revision set status = 'draft'"));
+        var back = await Should.ThrowAsync<PostgresException>(async () => await _fixture.ExecuteAsync(world.Database, $"update public.suite_revision set status = 'draft' where id = '{id}'"));
         back.MessageText.ShouldContain("revision_immutable");
 
         // Re-creating identical content finds the published revision instead of making another.
@@ -581,7 +581,7 @@ public sealed class CatalogSuiteTests
     public async Task ArchivedSuite_TakesNoNewRevision()
     {
         await using var world = await StartAsync();
-        await _fixture.ExecuteAsync(world.Database, "update public.suite set status = 'archived'");
+        await _fixture.ExecuteAsync(world.Database, $"update public.suite set status = 'archived' where id = '{world.Suite}'");
 
         var answer = await CreateRevisionAsync(world, new { });
 
@@ -649,7 +649,7 @@ public sealed class CatalogSuiteTests
         await using var world = await StartAsync();
         var created = await CreateRevisionAsync(world, new { });
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var rival = TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg);
 
         (await world.Client.SendAsync(HttpMethod.Get, $"/v1/suite-revisions/{created.Id("suite_revision_id")}", rival)).Status.ShouldBe(HttpStatusCode.NotFound);
@@ -670,7 +670,7 @@ public sealed class CatalogSuiteTests
         preview.Body.GetProperty("suite_revision_id").ValueKind.ShouldBe(JsonValueKind.Null);
         foreach (var table in new[] { "suite_revision", "suite_member", "variant", "case_dependency" })
         {
-            (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{table}")).ShouldBe(0, table);
+            (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{table} where org_id = '{world.Org}'")).ShouldBe(0, table);
         }
 
         var real = await CreateRevisionAsync(world, body);
@@ -698,9 +698,9 @@ public sealed class CatalogSuiteTests
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var writes = world.Api.Statements.Snapshot().Where(statement => statement.Contains("public.", StringComparison.Ordinal)).ToList();
         writes.Count.ShouldBeLessThanOrEqualTo(15, string.Join(Environment.NewLine, writes));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_member")).ShouldBe(500);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.case_dependency")).ShouldBe(499);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.variant")).ShouldBe(7);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.suite_member where org_id = '{world.Org}'")).ShouldBe(500);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.case_dependency where org_id = '{world.Org}'")).ShouldBe(499);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.variant where org_id = '{world.Org}'")).ShouldBe(7);
     }
 
     [Fact]
@@ -709,7 +709,7 @@ public sealed class CatalogSuiteTests
         await using var world = await StartAsync();
         await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) } });
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
 
         await using var services = world.Api.Services.CreateAsyncScope();
         var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
@@ -753,7 +753,7 @@ public sealed class CatalogSuiteTests
         var answer = await CreateRevisionAsync(world, new { }, "?dry_run=maybe");
 
         answer.Status.ShouldBe(HttpStatusCode.BadRequest);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.suite_revision")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.suite_revision where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     [Fact]

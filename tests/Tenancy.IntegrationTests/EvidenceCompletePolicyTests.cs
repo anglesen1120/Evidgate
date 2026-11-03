@@ -76,13 +76,14 @@ public sealed class EvidenceCompletePolicyTests(PostgresTenancyFixture fixture, 
         RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
 
     /// <summary>
-    /// One migrated database with an org and a project created through the real registry routes, plus a
-    /// host whose requests carry the writer principal and the object-store configuration. A fresh database
-    /// per test is what keeps the policy edits local (no shared policy row leaks into a sibling test).
+    /// One database with an org and a project created through the real registry routes, plus a
+    /// host whose requests carry the writer principal and the object-store configuration. The
+    /// policy edits stay local because they target this world's own project, whose kind-policy row
+    /// no other test writes.
     /// </summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -91,7 +92,7 @@ public sealed class EvidenceCompletePolicyTests(PostgresTenancyFixture fixture, 
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
             project = await CreateProjectAsync(setup, user, org, "checkout");
         }
 

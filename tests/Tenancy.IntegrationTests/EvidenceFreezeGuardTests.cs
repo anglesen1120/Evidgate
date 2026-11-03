@@ -49,11 +49,11 @@ public sealed class EvidenceFreezeGuardTests
     /// <summary>One migrated database with an org and its first project, created through the real registry routes.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -62,9 +62,10 @@ public sealed class EvidenceFreezeGuardTests
     /// <summary>A second org with a project, through the real routes.</summary>
     private static async Task<(Guid Org, Guid Project)> CreateOtherTenantAsync(World world, string slug)
     {
+        var unique = Unique.Slug(slug);
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(world.Client, user, slug);
-        var project = await CreateProjectAsync(world.Client, user, org, slug + "-project");
+        var org = await CreateOrgAsync(world.Client, user, unique);
+        var project = await CreateProjectAsync(world.Client, user, org, unique + "-project");
 
         return (org, project);
     }
@@ -137,7 +138,7 @@ public sealed class EvidenceFreezeGuardTests
                    'org/{world.Org}/project/{world.Project}/run/{runId}/attempt/{executionKey}/1/' || gen.id,
                    'application/zip', 'sha256:' || lpad(to_hex(gen.n), 64, '0'),
                    '{ArtifactSensitivity.Normal}', 'clean', '{ArtifactState.Ready}'
-              from (select ('00000000-0000-0000-0000-' || lpad(to_hex(n), 12, '0'))::uuid as id, n
+              from (select gen_random_uuid() as id, n
                       from generate_series(1, {count}) as n) as gen
             """;
 

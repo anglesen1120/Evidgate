@@ -41,11 +41,11 @@ public sealed class AdapterCapabilityTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -139,7 +139,9 @@ public sealed class AdapterCapabilityTests
     }
 
     private async Task<long> RowsAsync(World world) =>
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.adapter_capability");
+        await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.adapter_capability where org_id = '{world.Org}'");
 
     // ------------------------------------------------------------------ registration
 
@@ -155,12 +157,12 @@ public sealed class AdapterCapabilityTests
         result.Value.Id.ShouldNotBe(Guid.Empty);
 
         (await RowsAsync(world)).ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, "select name from public.adapter_capability")).ShouldBe("playwright");
-        (await _fixture.ScalarAsync<string>(world.Database, "select mode from public.adapter_capability")).ShouldBe("full");
-        (await _fixture.ScalarAsync<int>(world.Database, "select protocol_major from public.adapter_capability")).ShouldBe(1);
-        (await _fixture.ScalarAsync<int>(world.Database, "select protocol_minor from public.adapter_capability")).ShouldBe(0);
-        (await _fixture.ScalarAsync<string>(world.Database, "select engine_family from public.adapter_capability")).ShouldBe("playwright");
-        (await _fixture.ScalarAsync<string>(world.Database, "select engine_version from public.adapter_capability")).ShouldBe("1.49.0");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select name from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe("playwright");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select mode from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe("full");
+        (await _fixture.ScalarAsync<int>(world.Database, $"select protocol_major from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<int>(world.Database, $"select protocol_minor from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe(0);
+        (await _fixture.ScalarAsync<string>(world.Database, $"select engine_family from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe("playwright");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select engine_version from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe("1.49.0");
     }
 
     [Fact]
@@ -192,9 +194,9 @@ public sealed class AdapterCapabilityTests
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
 
         // The unknown flag is stored verbatim in the supports jsonb and never evaluated (AC3).
-        var supports = await _fixture.ScalarAsync<string>(world.Database, "select supports::text from public.adapter_capability");
+        var supports = await _fixture.ScalarAsync<string>(world.Database, $"select supports::text from public.adapter_capability where org_id = '{world.Org}'");
         supports.ShouldContain("strict_mode");
-        (await _fixture.ScalarAsync<bool>(world.Database, "select (supports ->> 'strict_mode')::boolean from public.adapter_capability"))
+        (await _fixture.ScalarAsync<bool>(world.Database, $"select (supports ->> 'strict_mode')::boolean from public.adapter_capability where org_id = '{world.Org}'"))
             .ShouldBeTrue();
     }
 
@@ -283,7 +285,7 @@ public sealed class AdapterCapabilityTests
         // The stored row carries the mode the document declared — the input the gate-eligibility rule
         // reads (AC4). The rule itself is the pure AdapterModeRules function, covered by
         // ProtocolNegotiatorUnitTests.AdapterModeRules_IsGateEligible_TruthTable.
-        (await _fixture.ScalarAsync<string>(world.Database, "select mode from public.adapter_capability")).ShouldBe("ingest_only");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select mode from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe("ingest_only");
     }
 
     [Fact]
@@ -315,7 +317,7 @@ public sealed class AdapterCapabilityTests
         conflict.Error.Status.ShouldBe(409);
         // Capability rows are first-write facts: the stored row wins and is unchanged.
         (await RowsAsync(world)).ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, "select mode from public.adapter_capability")).ShouldBe("full");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select mode from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe("full");
     }
 
     [Fact]
@@ -412,7 +414,7 @@ public sealed class AdapterCapabilityTests
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         result.Value.Registered.ShouldBeTrue();
         result.Value.CapabilityId.ShouldNotBeNull();
-        (await _fixture.ScalarAsync<string>(world.Database, "select name from public.adapter_capability")).ShouldBe("playwright");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select name from public.adapter_capability where org_id = '{world.Org}'")).ShouldBe("playwright");
         (await RowsAsync(world)).ShouldBe(1);
     }
 

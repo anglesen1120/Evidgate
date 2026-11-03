@@ -45,11 +45,11 @@ public sealed class EvidenceCreateArtifactRecordTests
     /// <summary>One migrated database with an org and a project, created through the real registry routes.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -95,7 +95,7 @@ public sealed class EvidenceCreateArtifactRecordTests
     }
 
     private async Task<long> RowsAsync(World world) =>
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.artifact");
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.artifact where org_id = '{world.Org}'");
 
     /// <summary>One committed run row for <paramref name="world"/>'s org, so 0031's composite key is satisfied.</summary>
     private async Task<Guid> CreateRunAsync(World world) =>

@@ -52,12 +52,12 @@ public sealed class AuthoringQaNodesTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "qa-nodes");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("qa-nodes"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }
@@ -420,7 +420,7 @@ public sealed class AuthoringQaNodesTests
         // Another organization's node: an unreachable parent id is the ladder's own parent_not_found (AC1), and the tree
         // answers 404 for the same id (AC10) — a foreign id and a nonexistent one are indistinguishable.
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "qa-nodes-other");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("qa-nodes-other"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
         var otherAs = TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg);
         var foreignNode = (await world.Client.SendAsync(

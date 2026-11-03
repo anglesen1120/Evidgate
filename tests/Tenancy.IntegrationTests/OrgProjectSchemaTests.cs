@@ -27,7 +27,7 @@ public sealed class OrgProjectSchemaTests
     [Fact]
     public async Task OrganizationShape()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.ColumnsAsync(database, "organization")).ShouldBe(
         [
@@ -94,7 +94,7 @@ public sealed class OrgProjectSchemaTests
     [Fact]
     public async Task ProjectShape()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.ColumnsAsync(database, "project")).ShouldBe(
         [
@@ -166,9 +166,12 @@ public sealed class OrgProjectSchemaTests
     [Fact]
     public async Task ConstraintsAndKeysAreEnforced()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var orgA = Guid.CreateVersion7();
         var orgB = Guid.CreateVersion7();
+        // The org slug key is global, so the rows this test inserts carry slugs no sibling test can take.
+        var acme = Unique.Slug("acme");
+        var globex = Unique.Slug("globex");
 
         await using (var setup = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
@@ -176,12 +179,12 @@ public sealed class OrgProjectSchemaTests
                 "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
                 ("id", orgA),
                 ("name", "Acme"),
-                ("slug", "acme"));
+                ("slug", acme));
             await setup.ExecuteAsync(
                 "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
                 ("id", orgB),
                 ("name", "Globex"),
-                ("slug", "globex"));
+                ("slug", globex));
             await setup.ExecuteAsync(
                 "insert into public.project (id, org_id, name, slug) values (@id, @org_id, @name, @slug)",
                 ("id", Guid.CreateVersion7()),
@@ -192,7 +195,7 @@ public sealed class OrgProjectSchemaTests
         }
 
         // AC1: the global slug key, and the per-org project slug is not global.
-        (await InsertAsync(database, OrgInsert(orgA, "Acme2", "acme"))).ShouldNotBeNull()
+        (await InsertAsync(database, OrgInsert(orgA, "Acme2", acme))).ShouldNotBeNull()
             .SqlState.ShouldBe(PostgresErrorCodes.UniqueViolation);
         (await InsertAsync(database, OrgInsert(orgA, "Acme", "Acme"))).ShouldNotBeNull()
             .SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
@@ -202,8 +205,9 @@ public sealed class OrgProjectSchemaTests
             .SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
         (await InsertAsync(
                 database,
-                "insert into public.organization (id, name, slug, status) values (@id, 'Acme', 'acme-status', @status)",
+                "insert into public.organization (id, name, slug, status) values (@id, 'Acme', @slug, @status)",
                 ("id", Guid.CreateVersion7()),
+                ("slug", Unique.Slug("acme-status")),
                 ("status", "archived")))
             .ShouldNotBeNull().SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
 
@@ -242,7 +246,7 @@ public sealed class OrgProjectSchemaTests
     [Fact]
     public async Task DtoFieldsMatchSchemaColumns()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.ColumnsAsync(database, "organization"))
             .Select(column => column.Split(':')[0])
@@ -307,15 +311,16 @@ public sealed class OrgProjectSchemaTests
     [Fact]
     public async Task AppRoleCannotHardDeleteRegistryRows()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var orgId = Guid.CreateVersion7();
         var projectId = Guid.CreateVersion7();
 
         await using (var setup = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
             await setup.ExecuteAsync(
-                "insert into public.organization (id, name, slug) values (@id, 'Acme', 'acme')",
-                ("id", orgId));
+                "insert into public.organization (id, name, slug) values (@id, 'Acme', @slug)",
+                ("id", orgId),
+                ("slug", Unique.Slug("acme")));
             await setup.ExecuteAsync(
                 "insert into public.project (id, org_id, name, slug) values (@id, @org_id, 'Checkout', 'checkout')",
                 ("id", projectId),
@@ -353,7 +358,7 @@ public sealed class OrgProjectSchemaTests
         (await _fixture.ScalarAsync<long>(
             database,
             "select count(*) from public.organization o join public.project p on p.org_id = o.id "
-            + "where o.status = 'deleted' and p.status = 'deleted'"))
+            + $"where o.status = 'deleted' and p.status = 'deleted' and o.id = '{orgId:D}'"))
             .ShouldBe(1);
     }
 

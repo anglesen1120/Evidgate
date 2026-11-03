@@ -79,16 +79,16 @@ public sealed class AuthoringTimelineTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
         var sibling = await CreateProjectAsync(client, user, org, "returns");
 
         var stranger = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(client, stranger, "globex");
+        var otherOrg = await CreateOrgAsync(client, stranger, Unique.Slug("globex"));
         var otherProject = await CreateProjectAsync(client, stranger, otherOrg, "warehouse");
 
         // The founder's own membership: the only row the seeded `author_membership_id` foreign key accepts.

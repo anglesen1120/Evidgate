@@ -41,7 +41,7 @@ public sealed class HealingSwitchEndpointTests
         TenancyApiFactory Api,
         WebApplicationFactory<Program> Host,
         HttpClient Client,
-        string Database,
+        DedicatedDatabase Database,
         Guid User,
         Guid Org,
         Guid Project,
@@ -66,6 +66,7 @@ public sealed class HealingSwitchEndpointTests
             }
 
             await Api.DisposeAsync();
+            await Database.DisposeAsync();
         }
     }
 
@@ -91,7 +92,7 @@ public sealed class HealingSwitchEndpointTests
     /// </summary>
     private async Task<World> StartAsync(bool applyEnabled = false, bool permittingOperator = false)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.CreateDedicatedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
 
         WebApplicationFactory<Program> host = api;

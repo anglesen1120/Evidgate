@@ -31,7 +31,7 @@ public sealed class WriteModelMappingTests
     [Fact]
     public async Task ModelMatchesSchema()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         using var context = TenancyWriteModelContext.Create();
 
         var organization = context.Model.FindEntityType(typeof(Organization)).ShouldNotBeNull();

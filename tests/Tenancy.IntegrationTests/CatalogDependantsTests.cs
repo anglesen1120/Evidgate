@@ -40,12 +40,12 @@ public sealed class CatalogDependantsTests
     /// <summary>An org with a project, <paramref name="cases"/> registered cases (one revision each) and an empty suite.</summary>
     private async Task<World> StartAsync(int cases = 6)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
         var revisions = await SeedCasesAsync(api, org, project, database, cases, 0);
 
         var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
@@ -288,8 +288,8 @@ public sealed class CatalogDependantsTests
         });
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
-        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, Unique.Slug("theirs"));
         var otherRevisions = await SeedCasesAsync(world.Api, otherOrg, otherProject, world.Database, 2, 300);
         var otherAdmin = TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg);
         var otherSuite = await world.Client.SendAsync(HttpMethod.Post, $"/v1/projects/{otherProject}/suites", otherAdmin, new { name = "Rival", slug = "rival" }, NewKey());

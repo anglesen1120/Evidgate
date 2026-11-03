@@ -54,11 +54,11 @@ public sealed partial class RunDecisionApiTests
     /// <summary>One migrated database with an org and its project, created through the real registry routes.</summary>
     private async Task<World> StartAsync(IReadOnlyDictionary<string, string?>? configuration = null)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database), configuration);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);

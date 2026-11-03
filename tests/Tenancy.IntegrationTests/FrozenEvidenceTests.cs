@@ -38,11 +38,11 @@ public sealed class FrozenEvidenceTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -175,7 +175,7 @@ public sealed class FrozenEvidenceTests
     public async Task GetRevisionAsync_ReturnsNothingForAnotherTenantsRun()
     {
         await using var world = await StartAsync();
-        var (otherOrg, _) = await CreateOtherTenantAsync(world, "rival");
+        var (otherOrg, _) = await CreateOtherTenantAsync(world, Unique.Slug("rival"));
         var mine = await SeedPlanAsync(world, 1);
         var theirs = await SeedPlanAsync(world, 1, otherOrg);
         await SeedRevisionAsync(world, mine.RunId, 1, Base.AddMinutes(10));
@@ -193,7 +193,7 @@ public sealed class FrozenEvidenceTests
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 1);
-        var (otherOrg, _) = await CreateOtherTenantAsync(world, "rival");
+        var (otherOrg, _) = await CreateOtherTenantAsync(world, Unique.Slug("rival"));
         await SeedRevisionAsync(world, plan.RunId, 1, Base.AddMinutes(10));
 
         await using var caller = await ContractScope.BeginAsync(world.Api, world.Org);
@@ -296,7 +296,7 @@ public sealed class FrozenEvidenceTests
     public async Task GetLatestAttemptStatuses_ReturnsNothingForAnotherTenantsRun()
     {
         await using var world = await StartAsync();
-        var (otherOrg, _) = await CreateOtherTenantAsync(world, "rival");
+        var (otherOrg, _) = await CreateOtherTenantAsync(world, Unique.Slug("rival"));
         var mine = await SeedPlanAsync(world, 1);
         var theirs = await SeedPlanAsync(world, 1, otherOrg);
         var freeze = Base.AddMinutes(10);
@@ -321,7 +321,7 @@ public sealed class FrozenEvidenceTests
     {
         await using var world = await StartAsync();
         var plan = await SeedPlanAsync(world, 1);
-        var (otherOrg, _) = await CreateOtherTenantAsync(world, "rival");
+        var (otherOrg, _) = await CreateOtherTenantAsync(world, Unique.Slug("rival"));
         await SeedRevisionAsync(world, plan.RunId, 1, Base.AddMinutes(10));
         await SeedAttemptAsync(world, plan.RunId, plan.Executions[0], 1, "passed", Base);
 

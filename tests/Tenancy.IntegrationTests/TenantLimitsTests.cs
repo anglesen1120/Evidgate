@@ -26,12 +26,15 @@ public sealed class TenantLimitsTests
     [Fact]
     public async Task LimitsReadThroughTheTenantScope()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var orgA = Guid.CreateVersion7();
         var orgB = Guid.CreateVersion7();
         var overriding = Guid.CreateVersion7();
         var inheriting = Guid.CreateVersion7();
         var foreign = Guid.CreateVersion7();
+        var slugA = Unique.Slug("org-a");
+        var slugB = Unique.Slug("org-b");
+        var projectSlugs = (Overriding: Unique.Slug("p1"), Inheriting: Unique.Slug("p2"), Foreign: Unique.Slug("p3"));
 
         await _fixture.ExecuteAsync(
             database,
@@ -39,11 +42,11 @@ public sealed class TenantLimitsTests
                 CultureInfo.InvariantCulture,
                 $"""
                 insert into public.organization (id, name, slug, max_projects, max_seats, retention_default_days)
-                values ('{orgA}', 'A', 'org-a', 5, 12, 30), ('{orgB}', 'B', 'org-b', null, null, null);
+                values ('{orgA}', 'A', '{slugA}', 5, 12, 30), ('{orgB}', 'B', '{slugB}', null, null, null);
                 insert into public.project (id, org_id, name, slug, retention_days, monthly_run_quota)
-                values ('{overriding}', '{orgA}', 'P1', 'p1', 7, 500),
-                       ('{inheriting}', '{orgA}', 'P2', 'p2', null, null),
-                       ('{foreign}', '{orgB}', 'P3', 'p3', 1, 1);
+                values ('{overriding}', '{orgA}', 'P1', '{projectSlugs.Overriding}', 7, 500),
+                       ('{inheriting}', '{orgA}', 'P2', '{projectSlugs.Inheriting}', null, null),
+                       ('{foreign}', '{orgB}', 'P3', '{projectSlugs.Foreign}', 1, 1);
                 """));
 
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));

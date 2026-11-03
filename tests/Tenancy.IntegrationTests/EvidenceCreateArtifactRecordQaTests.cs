@@ -43,12 +43,12 @@ public sealed class EvidenceCreateArtifactRecordQaTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }
@@ -104,7 +104,7 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     }
 
     private Task<long> RowsAsync(World world) =>
-        _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.artifact");
+        _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.artifact where org_id = '{world.Org:D}'");
 
     /// <summary>One committed run row for <paramref name="org"/> (0031's composite key needs it on every write).</summary>
     private async Task<Guid> CreateRunAsync(World world, Guid org) =>
@@ -119,7 +119,7 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     public async Task ClientKey_OfAnyShape_IsRefused_WithObjectKeyNotAllowed_AndWritesNothing()
     {
         await using var world = await StartAsync();
-        var otherOrg = await CreateOrgAsync(world.Client, world.User, "globex");
+        var otherOrg = await CreateOrgAsync(world.Client, world.User, Unique.Slug("globex"));
 
         string[] clientKeys =
         [
@@ -355,9 +355,9 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     public async Task Sensitivity_PolicyRowOfAnotherProjectOrAnotherOrg_DoesNotLeak()
     {
         await using var world = await StartAsync();
-        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "shop");
-        var otherOrg = await CreateOrgAsync(world.Client, world.User, "globex");
-        var otherOrgProject = await CreateProjectAsync(world.Client, world.User, otherOrg, "shop");
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("shop"));
+        var otherOrg = await CreateOrgAsync(world.Client, world.User, Unique.Slug("globex"));
+        var otherOrgProject = await CreateProjectAsync(world.Client, world.User, otherOrg, Unique.Slug("shop"));
 
         await InsertKindPolicyAsync(world.Database, world.Org, otherProject, ArtifactKind.Video, ArtifactSensitivity.Sensitive);
         await InsertKindPolicyAsync(world.Database, otherOrg, otherOrgProject, ArtifactKind.Screenshot, ArtifactSensitivity.Sensitive);
@@ -443,7 +443,7 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     public async Task Principal_ScopedToAnotherProject_IsRefused403_ProjectScopeMismatch_AndWritesNothing()
     {
         await using var world = await StartAsync();
-        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "shop");
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("shop"));
 
         ShouldBeRefused(
             await SendAsync(world, world.Project, Writer(otherProject), Command()),

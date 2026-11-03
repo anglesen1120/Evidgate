@@ -437,23 +437,25 @@ public sealed class HealingLlmGatewayTests
 
     private async Task<World> StartAsync(Action<IServiceCollection>? configure = null)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = Guid.CreateVersion7();
         var project = Guid.CreateVersion7();
 
         await using (var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
+            var orgSlug = Unique.Slug("healing-llm");
+            var projectSlug = Unique.Slug("checkout");
             await seed.ExecuteAsync(
                 "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
                 ("id", org),
-                ("name", "healing-llm"),
-                ("slug", "healing-llm"));
+                ("name", orgSlug),
+                ("slug", orgSlug));
             await seed.ExecuteAsync(
                 "insert into public.project (id, org_id, name, slug) values (@id, @org_id, @name, @slug)",
                 ("id", project),
                 ("org_id", org),
-                ("name", "checkout"),
-                ("slug", "checkout"));
+                ("name", projectSlug),
+                ("slug", projectSlug));
             await seed.CommitAsync();
         }
 

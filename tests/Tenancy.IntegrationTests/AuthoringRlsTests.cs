@@ -38,14 +38,24 @@ public sealed class AuthoringRlsTests
     [Fact]
     public async Task TenantGuc_Unset_ReturnsZeroRows()
     {
-        var database = await _fixture.CreateDatabaseAsync();
-        var first = await SeedTenantWithRowsAsync(database, "acme", "checkout");
-        var second = await SeedTenantWithRowsAsync(database, "globex", "billing");
+        var database = await _fixture.SharedDatabaseAsync();
+        var first = await SeedTenantWithRowsAsync(database, Unique.Slug("acme"), "checkout");
+        var second = await SeedTenantWithRowsAsync(database, Unique.Slug("globex"), "billing");
 
-        // The rows exist: the superuser sees one per table per tenant.
+        // The rows exist, one per table per tenant: the superuser sees both tenants' rows.
         foreach (var table in Tables)
         {
-            (await _fixture.ScalarAsync<long>(database, $"select count(*) from public.{table}"))
+            (await _fixture.ScalarAsync<long>(
+                database,
+                $"select count(*) from public.{table} where org_id = '{first.Org}'"))
+                .ShouldBe(1, $"{table}: the first tenant is seeded");
+            (await _fixture.ScalarAsync<long>(
+                database,
+                $"select count(*) from public.{table} where org_id = '{second.Org}'"))
+                .ShouldBe(1, $"{table}: the second tenant is seeded");
+            (await _fixture.ScalarAsync<long>(
+                database,
+                $"select count(*) from public.{table} where org_id in ('{first.Org}', '{second.Org}')"))
                 .ShouldBe(2, $"{table}: both tenants are seeded");
         }
 

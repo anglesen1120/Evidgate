@@ -39,12 +39,12 @@ public sealed class ProducerSlotTests
     /// <summary>One migrated database with an org and a project, created through the real registry routes.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }
@@ -82,8 +82,9 @@ public sealed class ProducerSlotTests
     private static async Task<Guid> CreateOtherOrgAsync(World world, string slug)
     {
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(world.Client, user, slug);
-        await CreateProjectAsync(world.Client, user, org, slug + "-project");
+        var otherSlug = Unique.Slug(slug);
+        var org = await CreateOrgAsync(world.Client, user, otherSlug);
+        await CreateProjectAsync(world.Client, user, org, Unique.Slug($"{otherSlug}-project"));
 
         return org;
     }
@@ -121,7 +122,7 @@ public sealed class ProducerSlotTests
     [Fact]
     public async Task ProducerSlot_HasForcedRls()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.RowSecurityAsync(database, "producer_slot")).ShouldBe((true, true));
     }
@@ -129,7 +130,7 @@ public sealed class ProducerSlotTests
     [Fact]
     public async Task TenantPolicies_AreScopedToTheAppRole()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // A policy with no `to` clause applies to PUBLIC; the tenant policy must name evidgate_app
         // only, so the operator's SELECT grant reads zero rows (T76).
@@ -143,7 +144,7 @@ public sealed class ProducerSlotTests
     [Fact]
     public async Task TenantKey_AndRunScopedUniques_Exist()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         var constraints = await _fixture.ConstraintNamesAsync(database, "producer_slot");
 
@@ -157,7 +158,7 @@ public sealed class ProducerSlotTests
     [Fact]
     public async Task RunIndex_ExistsInPgIndexes()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.IndexesAsync(database, "producer_slot")).Any(index => index.StartsWith("producer_slot_run:", StringComparison.Ordinal)).ShouldBeTrue();
     }
@@ -165,7 +166,7 @@ public sealed class ProducerSlotTests
     [Fact]
     public async Task DeclaredColumns_ChecksAndUpdateGrants_Exist()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // Migration 0035 (04.1.2-T5) adds README T68's two declared-values columns as nullable: an open
         // slot declares nothing, and `CloseSlotAsync` writes them once with `closed_at`. The shape is the
@@ -257,7 +258,7 @@ public sealed class ProducerSlotTests
     [Fact]
     public async Task AppRole_HasNoDelete_AndOnlyTheGrantedUpdateColumns()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "producer_slot", "delete")).ShouldBeFalse();
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "producer_slot", "insert")).ShouldBeTrue();

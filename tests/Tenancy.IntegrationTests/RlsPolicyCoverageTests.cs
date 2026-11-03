@@ -37,7 +37,8 @@ public sealed class RlsPolicyCoverageTests
     [Fact]
     public async Task RlsPolicies_EveryBusinessTable_HasForcedRls()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = owned.Name;
         var exceptions = RlsExceptionFile.Read();
 
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
@@ -141,7 +142,8 @@ public sealed class RlsPolicyCoverageTests
     [Fact]
     public async Task CoverageRule_TenantPolicyScopedOnlyByItsWithCheck_IsRefused()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = owned.Name;
 
         await using var connection = new NpgsqlConnection(_fixture.OwnerConnectionString(database));
         await connection.OpenAsync(TestContext.Current.CancellationToken);
@@ -187,7 +189,8 @@ public sealed class RlsPolicyCoverageTests
     [Fact]
     public async Task SelfCheck_NamesScratchTableWithoutRls_AndAcceptsTheFix()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = owned.Name;
 
         await using var dataSource = NpgsqlDataSource.Create(_fixture.AppConnectionString(database));
         var check = new IsolationSelfCheck(dataSource, RlsExceptionFile.Read());

@@ -35,11 +35,11 @@ public sealed class PolicyRevisionImmutabilityTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -196,7 +196,7 @@ public sealed class PolicyRevisionImmutabilityTests
             await scope.CommitAsync();
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision where state = 'active'")).ShouldBe(2);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_revision where state = 'active' and org_id = '{world.Org}'")).ShouldBe(2);
     }
 
     // ------------------------------------------------------------------ (c) owner role: the trigger
@@ -266,7 +266,7 @@ public sealed class PolicyRevisionImmutabilityTests
         again.RevisionNo.ShouldBe(1);
         other.Created.ShouldBeTrue();
         other.RevisionNo.ShouldBe(2);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision")).ShouldBe(2);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_revision where org_id = '{world.Org}'")).ShouldBe(2);
     }
 
     [Fact]
@@ -288,7 +288,7 @@ public sealed class PolicyRevisionImmutabilityTests
         deleted.IsSuccess.ShouldBeFalse();
         deleted.Error!.Status.ShouldBe(404);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_revision where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ (e) no tenant context
@@ -331,7 +331,7 @@ public sealed class PolicyRevisionImmutabilityTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "beta");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("beta"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
@@ -344,7 +344,7 @@ public sealed class PolicyRevisionImmutabilityTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "beta");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("beta"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
@@ -428,7 +428,7 @@ public sealed class PolicyRevisionImmutabilityTests
         await Should.ThrowAsync<ArgumentException>(() => AppendAsync(world, "[1]"));
         await Should.ThrowAsync<ArgumentException>(() => AppendAsync(world, "not json"));
         await Should.ThrowAsync<ArgumentException>(() => AppendAsync(world, "{\"a\":1,\"a\":2}"));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_revision where org_id = '{world.Org}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -459,7 +459,7 @@ public sealed class PolicyRevisionImmutabilityTests
 
         results.ShouldAllBe(r => r.Created);
         results.Select(r => r.RevisionNo).OrderBy(no => no).ShouldBe(Enumerable.Range(1, 6));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_revision")).ShouldBe(6);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_revision where org_id = '{world.Org}'")).ShouldBe(6);
     }
 
     // ------------------------------------------------------------------ the EF write model

@@ -234,7 +234,8 @@ public sealed class ReadSqlContractTests
         int projectCount,
         bool withTimestamps)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // One shared database: the org and its projects are the test's own tenant, so the reads stay isolated by RLS.
+        var database = await _fixture.SharedDatabaseAsync();
         var orgId = Guid.CreateVersion7();
         var projectId = Guid.CreateVersion7();
 
@@ -243,12 +244,12 @@ public sealed class ReadSqlContractTests
             "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
             ("id", orgId),
             ("name", "Acme"),
-            ("slug", "acme"));
+            ("slug", Unique.Slug("acme")));
 
         for (var index = 0; index < projectCount; index++)
         {
             var id = index == 0 ? projectId : Guid.CreateVersion7();
-            var slug = "project-" + index.ToString(CultureInfo.InvariantCulture);
+            var slug = Unique.Slug("project-" + index.ToString(CultureInfo.InvariantCulture));
 
             if (withTimestamps)
             {

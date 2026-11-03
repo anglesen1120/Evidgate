@@ -40,12 +40,12 @@ public sealed class CatalogRevisionTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }
@@ -66,7 +66,9 @@ public sealed class CatalogRevisionTests
         return outcome.Report!;
     }
 
-    private Task<long> RevisionCount(World world) => _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.test_revision");
+    /// <summary>The revisions of this test's own tenant: the shared database also holds other tests' rows.</summary>
+    private Task<long> RevisionCount(World world) =>
+        _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.test_revision where org_id = '{world.Org:D}'");
 
     // ------------------------------------------------------------------ AC1 / AC3
 
@@ -80,9 +82,9 @@ public sealed class CatalogRevisionTests
         report.Revisions.ShouldBe(1);
         (await _fixture.ScalarAsync<string>(
             world.Database,
-            "select commit_sha || '|' || file_path || '|' || framework || '|' || language || '|' || (metadata->>'assertion_count') || '|' || (metadata->>'assertions_extracted') from public.test_revision"))
+            $"select commit_sha || '|' || file_path || '|' || framework || '|' || language || '|' || (metadata->>'assertion_count') || '|' || (metadata->>'assertions_extracted') from public.test_revision where org_id = '{world.Org:D}'"))
             .ShouldBe($"{Commit1}|a.spec.ts|playwright|typescript|1|true");
-        (await _fixture.ScalarAsync<string>(world.Database, "select revision_hash || content_sha256 || assertion_hash || metadata::text from public.test_revision"))
+        (await _fixture.ScalarAsync<string>(world.Database, $"select revision_hash || content_sha256 || assertion_hash || metadata::text from public.test_revision where org_id = '{world.Org:D}'"))
             .ShouldNotContain("hunter2");
 
         // No column can hold the source (S3).
@@ -120,7 +122,7 @@ public sealed class CatalogRevisionTests
 
         (report.Renamed, report.Revisions).ShouldBe((1, 0));
         (await RevisionCount(world)).ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, "select file_path from public.test_revision")).ShouldBe("old/a.spec.ts");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select file_path from public.test_revision where org_id = '{world.Org:D}'")).ShouldBe("old/a.spec.ts");
     }
 
     [Fact]
@@ -128,7 +130,7 @@ public sealed class CatalogRevisionTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA, "expect(a).toBe(1);"));
-        var original = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_revision");
+        var original = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_revision where org_id = '{world.Org:D}'");
 
         (await RegisterAsync(world, Commit2, Test("a.spec.ts", IdA, "expect(a).toBe(2);"))).Revisions.ShouldBe(1);
         (await RevisionCount(world)).ShouldBe(2);
@@ -146,8 +148,8 @@ public sealed class CatalogRevisionTests
         await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA, "expect(a).toBe(1);"));
         await RegisterAsync(world, Commit2, Test("a.spec.ts", IdA, "expect(a).toBe(1); expect(b).toBe(2);"));
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(distinct assertion_hash) from public.test_revision")).ShouldBe(2);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(distinct revision_hash) from public.test_revision")).ShouldBe(2);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(distinct assertion_hash) from public.test_revision where org_id = '{world.Org:D}'")).ShouldBe(2);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(distinct revision_hash) from public.test_revision where org_id = '{world.Org:D}'")).ShouldBe(2);
     }
 
     [Fact]
@@ -157,7 +159,7 @@ public sealed class CatalogRevisionTests
 
         await RegisterAsync(world, Commit1, new SourceFile("a_spec.rb", $"# evidgate.id: {IdA}\nit 'x' do end", "rspec", "ruby"));
 
-        (await _fixture.ScalarAsync<string>(world.Database, "select (metadata->>'assertions_extracted') || (metadata->>'assertion_count') from public.test_revision")).ShouldBe("false0");
+        (await _fixture.ScalarAsync<string>(world.Database, $"select (metadata->>'assertions_extracted') || (metadata->>'assertion_count') from public.test_revision where org_id = '{world.Org:D}'")).ShouldBe("false0");
     }
 
     // ------------------------------------------------------------------ AC2 immutability
@@ -198,7 +200,7 @@ public sealed class CatalogRevisionTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org:D}'");
         var hash = "sha256:" + new string('b', 64);
 
         string Insert(string revisionHash, Guid org) =>
@@ -220,7 +222,7 @@ public sealed class CatalogRevisionTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org:D}'");
 
         await using var services = world.Api.Services.CreateAsyncScope();
         var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
@@ -252,7 +254,7 @@ public sealed class CatalogRevisionTests
         await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA, "expect(a).toBe(1);"));
         await RegisterAsync(world, Commit2, Test("a.spec.ts", IdA, "expect(a).toBe(2);"));
         await RegisterAsync(world, Commit3, Test("a.spec.ts", IdA, "expect(a).toBe(3);"));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org:D}'");
 
         var page1 = await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseId}/revisions?limit=2", world.Admin);
         page1.Status.ShouldBe(HttpStatusCode.OK);
@@ -277,10 +279,10 @@ public sealed class CatalogRevisionTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
-        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, Unique.Slug("theirs"));
         await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA));
-        var mine = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var mine = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org:D}'");
 
         var rival = new World(world.Api, world.Client, world.Database, otherUser, otherOrg, otherProject);
         (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{mine}/revisions", rival.Admin)).Status.ShouldBe(HttpStatusCode.NotFound);
@@ -293,14 +295,14 @@ public sealed class CatalogRevisionTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org:D}'");
 
         world.Api.Statements.Clear();
         (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseId}/revisions", world.Admin)).Status.ShouldBe(HttpStatusCode.OK);
         world.Api.Statements.Snapshot().Count(statement => statement.Contains("from public.test_revision", StringComparison.Ordinal)).ShouldBe(1);
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         await using var services = world.Api.Services.CreateAsyncScope();
         var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
         var db = services.ServiceProvider.GetRequiredService<ITenantDb>();
@@ -330,8 +332,8 @@ public sealed class CatalogRevisionTests
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA), new SourceFile("b_spec.rb", $"# evidgate.id: {IdB}\nit 'x' do end", "rspec", "ruby"));
 
-        var caseA = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where annotation_id = '{IdA}'");
-        var caseB = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where annotation_id = '{IdB}'");
+        var caseA = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org:D}' and annotation_id = '{IdA}'");
+        var caseB = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org:D}' and annotation_id = '{IdB}'");
 
         var a = (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseA}/revisions", world.Admin)).Body.GetProperty("items")[0];
         var b = (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseB}/revisions", world.Admin)).Body.GetProperty("items")[0];
@@ -345,7 +347,7 @@ public sealed class CatalogRevisionTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Test("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org:D}'");
 
         await using var services = world.Api.Services.CreateAsyncScope();
         var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
@@ -375,7 +377,7 @@ public sealed class CatalogRevisionTests
         await RegisterAsync(world, Commit2, Test("a.spec.ts", IdA, "expect(a).toBe(2);"));
 
         // Written with clock_timestamp(), after the project lock: the later sync's row has the later timestamp.
-        (await _fixture.ScalarAsync<string>(world.Database, "select commit_sha from public.test_revision order by created_at desc, id desc limit 1")).ShouldBe(Commit2);
+        (await _fixture.ScalarAsync<string>(world.Database, $"select commit_sha from public.test_revision where org_id = '{world.Org:D}' order by created_at desc, id desc limit 1")).ShouldBe(Commit2);
     }
 
     [Fact]

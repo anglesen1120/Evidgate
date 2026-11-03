@@ -31,7 +31,7 @@ public sealed class SecurityEventSchemaTests
     [Fact]
     public async Task Table_DeclaresTheContractShape()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.TableExistsAsync(database, Table)).ShouldBeTrue();
 
@@ -132,7 +132,7 @@ public sealed class SecurityEventSchemaTests
     [Fact]
     public async Task Query_WithoutTenantContext_IsScopedPerPolicy()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var mine = Guid.CreateVersion7();
         var theirs = Guid.CreateVersion7();
 
@@ -178,10 +178,14 @@ public sealed class SecurityEventSchemaTests
         }
 
         // FORCE applies to the owner too, which is exactly why the house backfill policy exists: it is the path a
-        // migration or fixture write takes, and it reaches every tenant's rows.
+        // migration or fixture write takes, and it reaches every tenant's rows — the two seeded orgs here.
         await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
         {
-            (await owner.ScalarAsync<long>("select count(*) from public.security_event")).ShouldBe(2);
+            (await owner.ScalarAsync<long>(
+                    "select count(*) from public.security_event where org_id = @mine or org_id = @theirs",
+                    ("mine", mine),
+                    ("theirs", theirs)))
+                .ShouldBe(2);
         }
 
         // Each tenant sees its own row and only its own.
@@ -204,7 +208,7 @@ public sealed class SecurityEventSchemaTests
     [Fact]
     public async Task OwnerBackfill_UpdateBumpsVersionThroughTheConventionTrigger()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = Guid.CreateVersion7();
         var id = Guid.CreateVersion7();
 
@@ -259,7 +263,7 @@ public sealed class SecurityEventSchemaTests
     [Fact]
     public async Task AppRole_CanInsertAndReadButNotRewrite()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", Table, "select")).ShouldBeTrue();
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", Table, "insert")).ShouldBeTrue();
@@ -313,7 +317,7 @@ public sealed class SecurityEventSchemaTests
     [Fact]
     public async Task Page_IsIndexOrderedWithoutASort()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = Guid.CreateVersion7();
         var project = Guid.CreateVersion7();
 

@@ -70,7 +70,7 @@ public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, Seaw
 
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -79,8 +79,8 @@ public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, Seaw
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         var host = TenancyApiFactory.WithPrincipal(

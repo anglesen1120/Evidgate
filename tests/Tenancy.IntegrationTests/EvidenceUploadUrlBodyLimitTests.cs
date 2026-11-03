@@ -63,7 +63,7 @@ public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixtu
 
     private async Task<World> StartAsync()
     {
-        var database = await fixture.CreateDatabaseAsync();
+        var database = await fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -72,8 +72,8 @@ public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixtu
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         var host = TenancyApiFactory.WithPrincipal(
@@ -181,7 +181,8 @@ public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixtu
     }
 
     private Task<long> ArtifactRowsAsync(World world) =>
-        fixture.ScalarAsync<long>(world.Database, "select count(*) from public.artifact");
+        fixture.ScalarAsync<long>(
+            world.Database, $"select count(*) from public.artifact where org_id = '{world.Org:D}'");
 
     private Task<string?> SlotBindingAsync(World world, Guid runId) =>
         fixture.ScalarAsync<string?>(world.Database, $"select bound_token_jti from public.producer_slot where run_id = '{runId:D}'");

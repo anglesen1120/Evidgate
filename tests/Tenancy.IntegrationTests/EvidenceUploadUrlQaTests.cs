@@ -63,7 +63,7 @@ public sealed class EvidenceUploadUrlQaTests
 
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -72,8 +72,8 @@ public sealed class EvidenceUploadUrlQaTests
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
+            project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
         var host = TenancyApiFactory.WithPrincipal(
@@ -142,7 +142,8 @@ public sealed class EvidenceUploadUrlQaTests
         world.Client.SendAsync(HttpMethod.Post, "/v1/artifacts/upload-url", _ => { }, body, idempotencyKey);
 
     private Task<long> ArtifactRowsAsync(World world) =>
-        _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.artifact");
+        _fixture.ScalarAsync<long>(
+            world.Database, $"select count(*) from public.artifact where org_id = '{world.Org:D}'");
 
     private Task<string?> SlotBindingAsync(World world, Guid runId) =>
         _fixture.ScalarAsync<string?>(world.Database, $"select bound_token_jti from public.producer_slot where run_id = '{runId:D}'");

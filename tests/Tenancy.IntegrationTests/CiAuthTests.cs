@@ -14,7 +14,7 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class CiAuthTests
+public sealed class CiAuthTests : IAsyncLifetime
 {
     private const long RepoId = 4242;
     private static readonly string[] EventOnly = ["event:write"];
@@ -23,8 +23,20 @@ public sealed class CiAuthTests
     private const string Workflow = "acme/web/.github/workflows/ci.yml@refs/heads/main";
 
     private readonly PostgresTenancyFixture _fixture;
+    private DedicatedDatabase? _dedicated;
 
     public CiAuthTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+
+    // This class asserts on unfiltered CI tables, so each test owns a migrated database.
+    public async ValueTask InitializeAsync() => _dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dedicated is not null)
+        {
+            await _dedicated.DisposeAsync();
+        }
+    }
 
     // ---------------------------------------------------------------- bindings (admin)
 
@@ -280,7 +292,7 @@ public sealed class CiAuthTests
     [Fact]
     public async Task Exchange_ExplicitDeniedEventNamesOverride_ReplacesTheDefault()
     {
-        _database = await _fixture.CreateDatabaseAsync();
+        _database = _dedicated!.Name;
         var overrides = new Dictionary<string, string?>(StringComparer.Ordinal) { ["EVIDGATE:Ci:DeniedEventNames"] = "schedule" };
         var api = TenancyApiFactory.Ci(_fixture.AppConnectionString(_database), overrides);
         await using var _ = api;
@@ -388,7 +400,7 @@ public sealed class CiAuthTests
     [Fact]
     public async Task Exchange_WhenCiAuthIsNotConfigured_Is503()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = _dedicated!.Name;
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
@@ -399,7 +411,7 @@ public sealed class CiAuthTests
     [Fact]
     public async Task Exchange_IsRateLimited_WithRetryAfter()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = _dedicated!.Name;
         await using var api = TenancyApiFactory.Ci(
             _fixture.AppConnectionString(database),
             new Dictionary<string, string?> { ["EVIDGATE:Ci:ExchangeBurstLimit"] = "3" });
@@ -542,7 +554,7 @@ public sealed class CiAuthTests
     [Fact]
     public async Task IngestToken_RetiredPepperVersion_FailsLikeAnUnknownToken()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = _dedicated!.Name;
         string secret;
         Guid org;
         Guid project;
@@ -665,7 +677,7 @@ public sealed class CiAuthTests
 
     private async Task<(TenancyApiFactory Api, HttpClient Client, Guid User, Guid Org, Guid Project)> StartAsync()
     {
-        _database = await _fixture.CreateDatabaseAsync();
+        _database = _dedicated!.Name;
         var api = TenancyApiFactory.Ci(_fixture.AppConnectionString(_database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();

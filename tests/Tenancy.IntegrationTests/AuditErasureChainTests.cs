@@ -37,18 +37,21 @@ public sealed class AuditErasureChainTests
     [Fact]
     public async Task Erasure_ThenChainVerify_Ok_CheckpointsUnchanged()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
         // The person's record, as the identity module stores it (email + provider display name only).
         var user = Guid.CreateVersion7();
+        var personEmail = $"person-{user:N}@example.test";
         await _fixture.ExecuteAsync(
             database,
-            $"insert into public.\"user\" (id, email, display_name) values ('{user}', 'person@example.test', 'Person Name')");
+            $"insert into public.\"user\" (id, email, display_name) values ('{user}', '{personEmail}', 'Person Name')");
 
-        var org = await CreateOrgAsync(client, user, "acme");
-        await CreateProjectAsync(client, user, org, "checkout");
+        // The database is shared, so this tenant's slugs and address are random: no other class can hold them.
+        var orgSlug = Unique.Slug("acme");
+        var org = await CreateOrgAsync(client, user, orgSlug);
+        await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         var before = await CheckpointAsync(database, org);
         before.Count.ShouldBe(2);
@@ -58,7 +61,7 @@ public sealed class AuditErasureChainTests
         // Before erasure the chain already carries no personal data — nothing personal is summed into the
         // entry hash (audit-and-deletion-rule.md §3), which is exactly why erasure has nothing to rewrite
         // (§5). The values are the ones written above and in CreateOrgAsync's resolved claim.
-        (await PersonalDataInAuditAsync(database, org, "person@example.test", "acme@example.test", "Person Name"))
+        (await PersonalDataInAuditAsync(database, org, personEmail, orgSlug + "@example.test", "Person Name"))
             .ShouldBe(0, "no audit row of the org may carry the person's address or display name before erasure");
 
         // Erasure: the personal fields go, the id stays as the tombstone (11.9.2 AC8/AC9) — no audit row
@@ -78,7 +81,7 @@ public sealed class AuditErasureChainTests
 
         // And the chain is exactly as clean after the erasure: erasure writes and removes no audit row, so
         // the negative-content count must not have moved either.
-        (await PersonalDataInAuditAsync(database, org, "person@example.test", "acme@example.test", "Person Name"))
+        (await PersonalDataInAuditAsync(database, org, personEmail, orgSlug + "@example.test", "Person Name"))
             .ShouldBe(0, "erasure leaves the chain without the person's address or display name, as it was before");
 
         (await VerifyAsync(api, org)).ShouldBeNull();

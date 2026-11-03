@@ -21,7 +21,10 @@ public sealed class ResolverTests
     [Fact]
     public async Task MemberOrgs_ReturnsOnlyTheUsersActiveMemberships_AsTheContractTuple()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Dedicated: these tests seed clusters of organisations and read the resolver's own catalog
+        // level answers, so they must not share a database with a parallel class.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var user = Guid.CreateVersion7();
         var other = Guid.CreateVersion7();
         var orgA = await SeedOrgAsync(database, "alpha", "active");
@@ -54,7 +57,10 @@ public sealed class ResolverTests
     [Fact]
     public async Task MemberOrg_PointLookup_IsNotTruncatedByTheListLimit()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Dedicated: these tests seed clusters of organisations and read the resolver's own catalog
+        // level answers, so they must not share a database with a parallel class.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var user = Guid.CreateVersion7();
         var other = Guid.CreateVersion7();
 
@@ -85,7 +91,10 @@ public sealed class ResolverTests
     [Fact]
     public async Task MemberOrgs_UnknownUser_ReturnsNothing()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Dedicated: these tests seed clusters of organisations and read the resolver's own catalog
+        // level answers, so they must not share a database with a parallel class.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var org = await SeedOrgAsync(database, "alpha", "active");
         await SeedMembershipAsync(database, org, Guid.CreateVersion7(), "active");
 
@@ -97,7 +106,10 @@ public sealed class ResolverTests
     [Fact]
     public async Task MemberOrganizations_ReturnsSlugAndName_BoundedByTheLimit()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Dedicated: these tests seed clusters of organisations and read the resolver's own catalog
+        // level answers, so they must not share a database with a parallel class.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var user = Guid.CreateVersion7();
         for (var i = 0; i < 5; i++)
         {
@@ -122,7 +134,10 @@ public sealed class ResolverTests
     [Fact]
     public async Task Resolver_Immune_ToSearchPathHijack()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Dedicated: these tests seed clusters of organisations and read the resolver's own catalog
+        // level answers, so they must not share a database with a parallel class.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var user = Guid.CreateVersion7();
         var real = await SeedOrgAsync(database, "real", "active");
         await SeedMembershipAsync(database, real, user, "active");
@@ -160,7 +175,10 @@ public sealed class ResolverTests
     [Fact]
     public async Task EveryResolver_IsOwnerOwnedDefiner_WithEmptySearchPath_ExecutableOnlyByTheAppRole()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Dedicated: these tests seed clusters of organisations and read the resolver's own catalog
+        // level answers, so they must not share a database with a parallel class.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
 
         var functions = await _fixture.ColumnAsync<string>(
             database,
@@ -207,7 +225,10 @@ public sealed class ResolverTests
     [Fact]
     public async Task AppRole_CannotReadMembershipsOfOtherOrgs_Directly()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // Dedicated: these tests seed clusters of organisations and read the resolver's own catalog
+        // level answers, so they must not share a database with a parallel class.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var user = Guid.CreateVersion7();
         var org = await SeedOrgAsync(database, "alpha", "active");
         await SeedMembershipAsync(database, org, user, "active");

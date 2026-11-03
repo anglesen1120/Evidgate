@@ -42,11 +42,11 @@ public sealed class AuthoringTreeTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -349,7 +349,7 @@ public sealed class AuthoringTreeTests
         forbidden.Status.ShouldBe(HttpStatusCode.Forbidden);
 
         // Another tenant's project id is a 404, never a 403 (AC10).
-        var otherOrg = await CreateOrgAsync(world.Client, world.User, "other");
+        var otherOrg = await CreateOrgAsync(world.Client, world.User, Unique.Slug("other"));
         var crossTenant = await AuthoringCalls.SendAsync(
             world.Client,
             TenancyApiFactory.Resolved(user: world.User, orgHeader: otherOrg),

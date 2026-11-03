@@ -45,12 +45,12 @@ public sealed class PolicyActivationTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         return new World(api, client, database, user, org, project);
     }
@@ -127,12 +127,12 @@ public sealed class PolicyActivationTests
     private async Task<long> ActiveCountAsync(World world) =>
         await _fixture.ScalarAsync<long>(
             world.Database,
-            "select count(*) from public.policy_revision where state = 'active'");
+            $"select count(*) from public.policy_revision where state = 'active' and org_id = '{world.Org:D}'");
 
     private async Task<long> ActivationAuditRowsAsync(World world) =>
         await _fixture.ScalarAsync<long>(
             world.Database,
-            "select count(*) from public.audit_log where action = 'policy.activate'");
+            $"select count(*) from public.audit_log where action = 'policy.activate' and org_id = '{world.Org:D}'");
 
     private async Task<Guid> PointerAsync(World world) =>
         await _fixture.ScalarAsync<Guid>(
@@ -143,12 +143,13 @@ public sealed class PolicyActivationTests
     private async Task<Guid> AddMemberAsync(World world, string roleCode)
     {
         var user = Guid.CreateVersion7();
+        var email = $"{roleCode}-{user:N}@example.test";
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
-            insert into public."user" (id, email) values ('{user}', '{roleCode}@example.test');
+            insert into public."user" (id, email) values ('{user}', '{email}');
             insert into public.membership (id, org_id, user_id, invited_email, status)
-            values (gen_random_uuid(), '{world.Org}', '{user}', '{roleCode}@example.test', 'active');
+            values (gen_random_uuid(), '{world.Org}', '{user}', '{email}', 'active');
             insert into public.membership_role (id, org_id, membership_id, role_id)
             select gen_random_uuid(), '{world.Org}', m.id, r.id
               from public.membership m, public.role r
@@ -279,7 +280,7 @@ public sealed class PolicyActivationTests
     {
         await using var world = await StartAsync();
         var revision = await CreateRevisionAsync(world, BodyA);
-        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("other"));
 
         (await ActivateAsync(world, Guid.CreateVersion7())).Status.ShouldBe(HttpStatusCode.NotFound);
         (await ActivateAsync(world, revision, project: otherProject)).Status.ShouldBe(HttpStatusCode.NotFound);
@@ -375,7 +376,7 @@ public sealed class PolicyActivationTests
 
         // A second org's admin: the same project id and the same revision id are the same 404 (RLS scopes both reads).
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "other-org");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("other-org"));
         var outsider = TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg);
 
         var refused = await ActivateAsync(world, revision, caller: outsider);
@@ -397,7 +398,7 @@ public sealed class PolicyActivationTests
         refused.ErrorCode.ShouldBe("request_invalid");
         (await StateAsync(world, revision)).ShouldBe("draft");
         (await ActivationAuditRowsAsync(world)).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_activation")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_activation where org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -419,7 +420,7 @@ public sealed class PolicyActivationTests
         (await ActivationAuditRowsAsync(world)).ShouldBe(1);
         (await _fixture.ScalarAsync<long>(
             world.Database,
-            "select count(*) from public.idempotency_record where operation = 'policy:activate'")).ShouldBe(1);
+            $"select count(*) from public.idempotency_record where operation = 'policy:activate' and org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     [Fact]
@@ -462,6 +463,6 @@ public sealed class PolicyActivationTests
         refused.ErrorCode.ShouldBe("forbidden");
         (await StateAsync(world, revision)).ShouldBe("draft");
         (await ActivationAuditRowsAsync(world)).ShouldBe(0);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_activation")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.policy_activation where org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 }

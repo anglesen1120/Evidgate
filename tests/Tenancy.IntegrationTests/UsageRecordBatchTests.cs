@@ -76,14 +76,14 @@ public sealed class UsageRecordBatchTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         var connectionString = _fixture.AppConnectionString(database);
         var api = TenancyApiFactory.RealResolver(connectionString);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         // The write path's host: the evaluator is not what this suite tests.
         var commands = TenancyApiFactory.GrantAll(connectionString);
@@ -263,7 +263,7 @@ public sealed class UsageRecordBatchTests
     public async Task RecordUsageBatch_SameBillingKeyInTwoOrgs_BothInsert()
     {
         await using var world = await StartAsync();
-        var otherOrg = await CreateOrgAsync(world.Client, world.User, "globex");
+        var otherOrg = await CreateOrgAsync(world.Client, world.User, Unique.Slug("globex"));
 
         var mine = await RecordAsync(
             world,
@@ -474,7 +474,7 @@ public sealed class UsageRecordBatchTests
         (await LedgerCountAsync(world, world.Org)).ShouldBe(1, "the replayed request inserted nothing");
         (await _fixture.ScalarAsync<long>(
             world.Database,
-            "select count(*) from public.idempotency_record where operation = 'usage:record_batch'"))
+            $"select count(*) from public.idempotency_record where org_id = '{world.Org:D}' and operation = 'usage:record_batch'"))
             .ShouldBe(1);
 
         // The same key with a different payload is a conflict, and it writes nothing either.
@@ -536,7 +536,7 @@ public sealed class UsageRecordBatchTests
 
         // Another organization's project, made by its own user: the id is real, and row security hides it from this org.
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "globex");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("globex"));
         var foreignProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
 
         // The service path: the foreign project is invisible under RLS, so it is a refused entry, not a 23503 that the

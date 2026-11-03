@@ -30,19 +30,20 @@ public sealed partial class AuthoringVersionTests
 
     public AuthoringVersionTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private sealed record World(string Database, Guid Org, Guid Project, NpgsqlDataSource DataSource, ServiceProvider Provider)
+    private sealed record World(DedicatedDatabase Database, Guid Org, Guid Project, NpgsqlDataSource DataSource, ServiceProvider Provider)
         : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             await Provider.DisposeAsync();
             await DataSource.DisposeAsync();
+            await Database.DisposeAsync();
         }
     }
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedAsync(database, "acme", "checkout");
         var (dataSource, provider) = Module(database);
 

@@ -22,7 +22,8 @@ public sealed class TenantGucTests
     [Fact]
     public async Task TenantGuc_Unset_OrEmpty_ReturnsZeroRows()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var orgId = Guid.CreateVersion7();
         var projectId = Guid.CreateVersion7();
 

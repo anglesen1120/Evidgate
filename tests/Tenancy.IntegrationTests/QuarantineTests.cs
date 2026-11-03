@@ -46,12 +46,12 @@ public sealed class QuarantineTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
         var (cases, maintainer, membership) = await SeedCasesAndMaintainerAsync(database, client, user, org, project);
 
         return new World(api, client, database, user, org, project, cases, maintainer, membership);
@@ -185,7 +185,7 @@ public sealed class QuarantineTests
     }
 
     private async Task<long> AuditCountAsync(World world, string action) =>
-        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where action = '{action}'");
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.audit_log where action = '{action}' and org_id = '{world.Org:D}'");
 
     private static (string Path, string Reason) Detail(ApiAnswer answer, int index = 0)
     {
@@ -206,7 +206,7 @@ public sealed class QuarantineTests
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         refused.ErrorCode.ShouldBe("critical_case_not_quarantinable");
         Detail(refused).ShouldBe(("case_id", "critical"));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(0);
         (await AuditCountAsync(world, "quarantine.create")).ShouldBe(0);
     }
 
@@ -220,7 +220,7 @@ public sealed class QuarantineTests
 
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         refused.ErrorCode.ShouldBe("critical_case_not_quarantinable");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 
     [Fact]
@@ -322,7 +322,7 @@ public sealed class QuarantineTests
         answers.Count(answer => answer.Status == HttpStatusCode.Created).ShouldBe(1);
         answers.Count(answer => answer.Status == HttpStatusCode.Conflict).ShouldBe(1);
         answers.Single(answer => answer.Status == HttpStatusCode.Conflict).ErrorCode.ShouldBe("quarantine_conflict");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     [Fact]
@@ -395,8 +395,8 @@ public sealed class QuarantineTests
         var id = (await CreateAsync(world, Body(world))).Id();
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
-        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, Unique.Slug("theirs"));
 
         // The rival must hold quarantine:write or the route answers 403 before the tenant check, and the isolation
         // claim is the 404 that follows the permission gate. The org founder holds tenant_admin + release_approver
@@ -420,7 +420,7 @@ public sealed class QuarantineTests
     public async Task UnknownOrOtherProjectCase_Is404()
     {
         await using var world = await StartAsync();
-        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("other"));
 
         var unknown = await CreateAsync(world, Body(world, caseId: Guid.CreateVersion7()));
         unknown.Status.ShouldBe(HttpStatusCode.NotFound);
@@ -438,7 +438,7 @@ public sealed class QuarantineTests
         crossProject.Status.ShouldBe(HttpStatusCode.NotFound);
         crossProject.ErrorCode.ShouldBe("not_found");
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ validation
@@ -468,7 +468,7 @@ public sealed class QuarantineTests
         unknownProject.Status.ShouldBe(HttpStatusCode.NotFound);
         unknownProject.ErrorCode.ShouldBe("not_found");
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(0);
     }
 
     // ------------------------------------------------------------------ idempotency
@@ -489,7 +489,7 @@ public sealed class QuarantineTests
         replay.Id().ShouldBe(first.Id());
         conflict.Status.ShouldBe(HttpStatusCode.Conflict);
         conflict.ErrorCode.ShouldBe("idempotency_conflict");
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.quarantine_entry where org_id = '{world.Org:D}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ the list

@@ -1,3 +1,4 @@
+using Evidgate.Migrator;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -45,13 +46,13 @@ public sealed class EventSchemaTests
     }
 
     /// <summary>One migrated database with an org and a project, created through the real registry routes.</summary>
-    private async Task<World> StartAsync()
+    private async Task<World> StartAsync(string? database = null)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        database ??= await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -141,7 +142,7 @@ public sealed class EventSchemaTests
     [Fact]
     public async Task EventAndEventBatch_HaveForcedRls()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.TableExistsAsync(database, "event")).ShouldBeTrue();
         (await _fixture.TableExistsAsync(database, "event_batch")).ShouldBeTrue();
@@ -152,7 +153,7 @@ public sealed class EventSchemaTests
     [Fact]
     public async Task TenantPolicies_AreScopedToTheAppRole()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // A policy with no `to` clause applies to PUBLIC; the tenant policy must name evidgate_app only,
         // so the operator's SELECT grant reads zero rows (T76).
@@ -171,7 +172,7 @@ public sealed class EventSchemaTests
     [Fact]
     public async Task EventAndEventBatch_ConstraintsAndIndex_Exist()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         var eventConstraints = await _fixture.ConstraintNamesAsync(database, "event");
         foreach (var name in new[]
@@ -209,7 +210,7 @@ public sealed class EventSchemaTests
     [Fact]
     public async Task AppRole_HasOnlySelectInsert_OnEventAndEventBatch()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in new[] { "event", "event_batch" })
         {
@@ -299,7 +300,7 @@ public sealed class EventSchemaTests
         var runId = await SeedRunAsync(world, world.Org);
         await SeedSlotAsync(world, world.Org, runId);
         await SeedEventAsync(world, world.Org, runId);
-        var otherOrg = await CreateOtherTenantAsync(world, "beta");
+        var otherOrg = await CreateOtherTenantAsync(world, Unique.Slug("beta"));
 
         // 1. No tenant setting: the policy reads NULL and both tables are empty.
         await using (var unset = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database)))
@@ -410,7 +411,7 @@ public sealed class EventSchemaTests
             await scope.CommitAsync();
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select last_sequence from public.producer_slot")).ShouldBe(7);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select last_sequence from public.producer_slot where run_id = '{runId}'")).ShouldBe(7);
 
         // Every other column stays outside the app role's grants: `closed_at` and the two declared values
         // are 0035's (04.1.2-T5's `CloseSlotAsync` names exactly those three columns), `version` is the
@@ -476,7 +477,11 @@ public sealed class EventSchemaTests
     [Fact]
     public async Task Migration_ReRun_KeepsAValidEventRow()
     {
-        await using var world = await StartAsync();
+        // The file drops and recreates policies and grants, so the re-run needs a database of its own.
+        await using var dedicated = await _fixture.CreateEmptyDedicatedDatabaseAsync();
+        var migrated = _fixture.ApplyMigrations(dedicated.Name);
+        migrated.ExitCode.ShouldBe(MigratorExitCodes.Success, migrated.Transcript);
+        await using var world = await StartAsync(dedicated.Name);
         var runId = await SeedRunAsync(world, world.Org);
         await SeedSlotAsync(world, world.Org, runId);
         await SeedEventAsync(world, world.Org, runId);
@@ -485,8 +490,8 @@ public sealed class EventSchemaTests
         // every statement is guarded — the rows survive and the grant is still in place.
         await ReRunMigrationAsync(world.Database);
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.event")).ShouldBe(1);
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.event_batch")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.event where org_id = '{world.Org}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.event_batch where org_id = '{world.Org}'")).ShouldBe(1);
         (await _fixture.ScalarAsync<bool>(
             world.Database,
             "select has_column_privilege('evidgate_app', 'public.producer_slot', 'last_sequence', 'update')"))

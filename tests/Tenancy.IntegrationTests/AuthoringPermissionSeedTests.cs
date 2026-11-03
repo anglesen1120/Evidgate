@@ -49,7 +49,7 @@ public sealed class AuthoringPermissionSeedTests
     [Fact]
     public async Task SeedFourCodes_MappedPer00S2()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // (a) The four catalogue rows: `resource:action == code` (the catalogue file's own rule), never `sensitive`
         // (none of them gates secret-adjacent data), never `reserved` (each has a named V1 consumer, 13.3.1/13.5.1,

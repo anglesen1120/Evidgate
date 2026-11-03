@@ -29,7 +29,9 @@ public sealed class MigrationTests
     [Fact]
     public async Task ApplyIdentityTenancy()
     {
-        var database = await _fixture.CreateEmptyDatabaseAsync();
+        // The migration itself is the subject: nothing may be applied before the baselined run.
+        await using var dedicated = await _fixture.CreateEmptyDedicatedDatabaseAsync();
+        var database = dedicated.Name;
 
         // An existing database already at the foundation head: only the two new
         // files are pending, and 0005 (the FK to `organization`) runs after 0004.

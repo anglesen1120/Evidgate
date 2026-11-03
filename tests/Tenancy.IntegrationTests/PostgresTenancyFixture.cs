@@ -11,8 +11,9 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// One digest-pinned PostgreSQL 18 container per test assembly and a fresh
-/// database per test, each copied from one database brought to head once by the
+/// One digest-pinned PostgreSQL 18 container per test assembly and one shared database
+/// (tests isolate by tenant), plus dropped-after-use dedicated databases for tests that cannot
+/// share, all copied from one database brought to head once by the
 /// real <c>Evidgate.Migrator</c> as <c>evidgate_owner</c> (02.1.1-T1.4): the
 /// superuser bootstrap creates only the owner role with LOGIN + CREATEROLE
 /// (migration 0001 creates the three application roles) and then hands
@@ -35,6 +36,7 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     private readonly string _operatorPassword = "operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
     private TemplateDatabase? _template;
+    private Task<string>? _shared;
 
     /// <summary>
     /// Repository <c>migrations/</c>, resolved by the Migrator's own default-path
@@ -103,41 +105,87 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
         }
     }
 
-    /// <summary>Creates a database owned by the migration role, without applying anything.</summary>
-    public async Task<string> CreateEmptyDatabaseAsync()
-    {
-        var database = "tenancy_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
-
-        await using var connection = await OpenSuperuserAsync("postgres").ConfigureAwait(false);
-        await ExecuteAsync(connection, $"create database \"{database}\" owner {DatabaseOwnerRole}").ConfigureAwait(false);
-
-        // The host's stand-in session seeds the `user` row a signed-in caller implies (0044's
-        // membership_user_fk); it can only do that through this owner seam, so the connection is
-        // registered as the database is minted.
-        SessionUserSeed.Register(database, OwnerConnectionString(database));
-
-        return database;
-    }
-
-    /// <summary>The migrated template every per-test database is copied from.</summary>
-    private TemplateDatabase Template =>
-        _template ?? throw new InvalidOperationException("the fixture has not started its container");
-
-    /// <summary>Creates a database at head (copied from the migrated template) and enables the application logins.</summary>
-    public async Task<string> CreateDatabaseAsync()
+    /// <summary>
+    /// The one database of the run, at head with the application logins enabled. A test using it creates
+    /// its own organisation with unique identifiers (<see cref="Unique"/>) and reads only its own tenant;
+    /// it never counts, drops or alters anything cluster- or database-wide.
+    /// </summary>
+    public async Task<string> SharedDatabaseAsync()
     {
         await EnsureStartedAsync().ConfigureAwait(false);
 
-        var database = "tenancy_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
+        Task<string> shared;
+        lock (_startLock)
+        {
+            shared = _shared ??= CreateSharedAsync();
+        }
 
+        return await shared.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A private database at head for a test that cannot share (global rows, schema or role changes,
+    /// unfiltered counts); it is dropped when the returned scope is disposed.
+    /// </summary>
+    public async Task<DedicatedDatabase> CreateDedicatedDatabaseAsync()
+    {
+        await EnsureStartedAsync().ConfigureAwait(false);
+
+        var database = NewDatabaseName();
         await Template.CreateDatabaseAsync(database).ConfigureAwait(false);
+        SessionUserSeed.Register(database, OwnerConnectionString(database));
 
-        // The host's stand-in session seeds the `user` row a signed-in caller implies
-        // (0044's membership_user_fk), so the database must be registered here.
+        return new DedicatedDatabase(this, database);
+    }
+
+    /// <summary>A private database owned by the migration role with nothing applied, dropped on dispose.</summary>
+    public async Task<DedicatedDatabase> CreateEmptyDedicatedDatabaseAsync()
+    {
+        var database = NewDatabaseName();
+
+        await using (var connection = await OpenSuperuserAsync("postgres").ConfigureAwait(false))
+        {
+            await ExecuteAsync(connection, $"create database \"{database}\" owner {DatabaseOwnerRole}").ConfigureAwait(false);
+        }
+
+        // The host's stand-in session seeds the `user` row a signed-in caller implies (0044's
+        // membership_user_fk); it can only do that through this owner seam.
+        SessionUserSeed.Register(database, OwnerConnectionString(database));
+
+        return new DedicatedDatabase(this, database);
+    }
+
+    private async Task<string> CreateSharedAsync()
+    {
+        var database = NewDatabaseName();
+        await Template.CreateDatabaseAsync(database).ConfigureAwait(false);
         SessionUserSeed.Register(database, OwnerConnectionString(database));
 
         return database;
     }
+
+    private static string NewDatabaseName() =>
+        "tenancy_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
+
+    internal async Task DropDatabaseAsync(string database)
+    {
+        try
+        {
+            await using var connection = new NpgsqlConnection(SuperuserConnectionString("postgres"));
+            await connection.OpenAsync(CancellationToken.None).ConfigureAwait(false);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"drop database if exists \"{database}\" with (force)";
+            await command.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (NpgsqlException)
+        {
+            // A leftover scratch database never fails a run; the container is discarded whole.
+        }
+    }
+
+    /// <summary>The migrated template every dedicated database is copied from.</summary>
+    private TemplateDatabase Template =>
+        _template ?? throw new InvalidOperationException("the fixture has not started its container");
 
     /// <summary>Runs <c>Evidgate.Migrator --apply</c> in process and returns its result and transcript.</summary>
     /// <param name="database">Target database (owner role).</param>
@@ -368,6 +416,38 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
 
         return builder.ConnectionString;
     }
+}
+
+/// <summary>A private test database that is dropped on dispose.</summary>
+public sealed class DedicatedDatabase : IAsyncDisposable
+{
+    private readonly PostgresTenancyFixture _fixture;
+
+    internal DedicatedDatabase(PostgresTenancyFixture fixture, string name)
+    {
+        _fixture = fixture;
+        Name = name;
+    }
+
+    public string Name { get; }
+
+    public static implicit operator string(DedicatedDatabase database)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        return database.Name;
+    }
+
+    public override string ToString() => Name;
+
+    public ValueTask DisposeAsync() => new(_fixture.DropDatabaseAsync(Name));
+}
+
+/// <summary>Random identifiers so tests sharing one database never collide on a slug or name.</summary>
+public static class Unique
+{
+    /// <summary>A lowercase slug <c>{stem}-{8 hex}</c>.</summary>
+    public static string Slug(string stem) =>
+        stem + "-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8];
 }
 
 /// <summary>One Migrator run: the structured result plus the console transcript.</summary>

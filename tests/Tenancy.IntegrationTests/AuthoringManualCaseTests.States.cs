@@ -16,7 +16,7 @@ public sealed partial class AuthoringManualCaseTests
     [Fact]
     public async Task StateMatrix_AllowsOnlyTheFourEdges()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
@@ -89,7 +89,7 @@ public sealed partial class AuthoringManualCaseTests
     [Fact]
     public async Task RetireWithoutReason_422()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
@@ -123,7 +123,7 @@ public sealed partial class AuthoringManualCaseTests
     [Fact]
     public async Task RetiredCase_RefusesEveryEdit()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
@@ -170,7 +170,7 @@ public sealed partial class AuthoringManualCaseTests
     [Fact]
     public async Task Delete_SoftDeletesAndAnswers204()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);

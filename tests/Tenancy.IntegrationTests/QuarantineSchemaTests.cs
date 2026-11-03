@@ -27,7 +27,7 @@ public sealed class QuarantineSchemaTests
     private sealed record World(
         TenancyApiFactory Api,
         HttpClient Client,
-        string Database,
+        DedicatedDatabase Database,
         Guid Org,
         Guid Project,
         Guid Case,
@@ -37,13 +37,15 @@ public sealed class QuarantineSchemaTests
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Database.DisposeAsync();
         }
     }
 
     /// <summary>One migrated database with an org, a project, a catalog case and an active membership.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // The unfiltered counts and the index plan below read the whole database, so each world owns one.
+        var database = await _fixture.CreateDedicatedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -144,7 +146,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task QuarantineEntry_HasForcedRls_AndTheTenantKey()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         (await _fixture.TableExistsAsync(database, "quarantine_entry")).ShouldBeTrue();
 
@@ -162,7 +164,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task CompositeForeignKeys_Exist()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var constraints = await _fixture.ConstraintsAsync(database, "quarantine_entry");
 
         constraints.ShouldContain(
@@ -291,7 +293,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task TenantPolicy_IsScopedToTheAppRole()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         // A policy with no `to` clause applies to PUBLIC; the tenant policy must name evidgate_app only,
         // so the operator's SELECT grant reads zero rows (F1).
@@ -307,7 +309,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task AppRole_HasNoTableLevelInsertUpdateOrDelete_AndOnlyStateUpdate()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "quarantine_entry", "SELECT")).ShouldBeTrue();
         // A column-level GRANT is independent of the table-level one, so the table-level INSERT/UPDATE
@@ -500,7 +502,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task PermissionSeed_GrantsQuarantineWriteToTestMaintainerOnly()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         // The permission row exists with the D1 fields, exactly as contracts/permissions.json declares them.
         (await _fixture.ScalarAsync<string>(

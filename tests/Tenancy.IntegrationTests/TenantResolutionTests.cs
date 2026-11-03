@@ -31,11 +31,11 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task Session_RevokedMembership_NextRequestForbidden()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
 
         (await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}", TenancyApiFactory.Resolved(user: user)))
             .Status.ShouldBe(HttpStatusCode.OK);
@@ -53,10 +53,10 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task NonMember_GetsTheSame403_ForARealAndAnUnknownOrg()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
-        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), "acme");
+        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("acme"));
         var stranger = Guid.CreateVersion7();
 
         var real = await client.SendAsync(HttpMethod.Get, $"/v1/orgs/{org}", TenancyApiFactory.Resolved(user: stranger));
@@ -71,7 +71,7 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task Unauthenticated_TenantRoute_Is401_AndNothingIsPublished()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
@@ -85,20 +85,22 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task ListOrganizations_ReturnsOnlyTheCallersActiveOrgs()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var other = Guid.CreateVersion7();
 
-        var first = await CreateOrgAsync(client, user, "first-org");
-        var second = await CreateOrgAsync(client, user, "second-org");
-        await CreateOrgAsync(client, other, "not-mine");
+        var firstSlug = Unique.Slug("first-org");
+        var secondSlug = Unique.Slug("second-org");
+        var first = await CreateOrgAsync(client, user, firstSlug);
+        var second = await CreateOrgAsync(client, user, secondSlug);
+        await CreateOrgAsync(client, other, Unique.Slug("not-mine"));
 
         var list = await client.SendAsync(HttpMethod.Get, "/v1/orgs", TenancyApiFactory.Resolved(user: user));
         list.Status.ShouldBe(HttpStatusCode.OK);
         var items = list.Body.GetProperty("items").EnumerateArray().ToList();
-        items.Select(item => item.GetProperty("slug").GetString()).Order().ShouldBe(["first-org", "second-org"]);
+        items.Select(item => item.GetProperty("slug").GetString()).Order().ShouldBe(new[] { firstSlug, secondSlug }.Order());
         items.Select(item => item.GetProperty("id").GetGuid()).Order().ShouldBe(new[] { first, second }.Order());
         items.ShouldAllBe(item => item.GetProperty("status").GetString() == "active");
 
@@ -115,7 +117,7 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task ListOrganizations_ServiceToken_Is403()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
@@ -130,13 +132,13 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task ProjectRoute_NamesItsOrgByHeader_AndTheHeaderIsCheckedAgainstMembership()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
-        var elsewhere = await CreateOrgAsync(client, Guid.CreateVersion7(), "elsewhere");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
+        var elsewhere = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("elsewhere"));
 
         // No org named: 422, not a guess at "the user's only org".
         (await client.SendAsync(HttpMethod.Get, $"/v1/projects/{project}", TenancyApiFactory.Resolved(user: user)))
@@ -153,11 +155,11 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task ServiceToken_RunsOnlyInItsOwnOrg_AndNeedsAnOrgClaim()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
-        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), "acme");
-        var elsewhere = await CreateOrgAsync(client, Guid.CreateVersion7(), "elsewhere");
+        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("acme"));
+        var elsewhere = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("elsewhere"));
 
         var token = TenancyApiFactory.Resolved(serviceOrg: org, servicePermissions: RunCreate);
 
@@ -183,12 +185,12 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task ServiceToken_ClaimingTenantAdminCodes_IsDenied_ByTheServiceRoleCeiling()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         var token = TenancyApiFactory.Resolved(serviceOrg: org, serviceProject: project, servicePermissions: ProjectRead);
 
@@ -200,10 +202,10 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task ServicePrincipal_StaffOnlyCode_DeniedEndToEnd()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
-        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), "acme");
+        var org = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("acme"));
 
         var answer = await client.SendAsync(
             HttpMethod.Get,
@@ -216,7 +218,7 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task MalformedOrgRoute_IsLeftToTheFramework400()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
@@ -232,7 +234,7 @@ public sealed class TenantResolutionTests
     [Fact]
     public async Task OnlyTheOrgCollectionRoutes_AreTenantless()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 

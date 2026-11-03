@@ -99,7 +99,7 @@ public sealed class EvidenceUploadUrlTests
     /// </summary>
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -108,7 +108,7 @@ public sealed class EvidenceUploadUrlTests
         using (var setup = api.CreateClient())
         {
             user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
+            org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
             project = await CreateProjectAsync(setup, user, org, "checkout");
         }
 
@@ -218,7 +218,7 @@ public sealed class EvidenceUploadUrlTests
         world.Client.SendAsync(HttpMethod.Post, "/v1/artifacts/upload-url", _ => { }, body, idempotencyKey);
 
     private Task<long> ArtifactRowsAsync(World world) =>
-        _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.artifact");
+        _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.artifact where org_id = '{world.Org}'");
 
     private Task<string> ArtifactColumnAsync(World world, Guid artifactId, string column) =>
         _fixture.ScalarAsync<string>(world.Database, $"select {column} from public.artifact where id = '{artifactId:D}'");
@@ -350,7 +350,7 @@ public sealed class EvidenceUploadUrlTests
     public async Task UploadUrl_CrossTenantRun_404_NoArtifactRow()
     {
         await using var world = await StartAsync(Writer());
-        var (otherOrg, _) = await CreateOtherOrgAsync(world, "globex");
+        var (otherOrg, _) = await CreateOtherOrgAsync(world, Unique.Slug("globex"));
         var otherRun = await SeedRunAsync(world, ExecutionKey, org: otherOrg);
         await InsertKindPolicyAsync(world, "trace");
 

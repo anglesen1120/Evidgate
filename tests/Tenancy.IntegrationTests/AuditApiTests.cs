@@ -7,7 +7,6 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>02.7.1-T3.1 (AC4, AC5): the audit list and export through the real pipeline.</summary>
-[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class AuditApiTests
 {
@@ -18,7 +17,7 @@ public sealed class AuditApiTests
     [Fact]
     public async Task GetAuditPage_Keyset_NoDuplicatesAcrossPages_AndRowsCarryTheChain()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -55,7 +54,7 @@ public sealed class AuditApiTests
     [Fact]
     public async Task GetAuditPage_Filters_Narrow_AndBadInputIs422()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -80,7 +79,7 @@ public sealed class AuditApiTests
     [Fact]
     public async Task GetAuditPage_WithoutAuditRead_Is403_AndAnotherOrgIs403Not404Leak()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
@@ -107,7 +106,7 @@ public sealed class AuditApiTests
     [Fact]
     public async Task ExportAudit_Jsonl_MatchesList_AndWritesItsOwnRow()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -133,7 +132,7 @@ public sealed class AuditApiTests
     [Fact]
     public async Task ExportAudit_Csv_HasHeaderAndRows_AndRefusesBadFormatAndWideRange()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -183,15 +182,16 @@ public sealed class AuditApiTests
 
     private static async Task<Guid> SeedAsync(HttpClient client, Guid user, int projects, string slug = "acme")
     {
+        var orgSlug = Unique.Slug(slug);
         var created = await client.SendAsync(
-            HttpMethod.Post, "/v1/orgs", TenancyApiFactory.Resolved(user: user, email: $"{slug}@example.test"), new { name = slug, slug }, NewKey());
+            HttpMethod.Post, "/v1/orgs", TenancyApiFactory.Resolved(user: user, email: $"{orgSlug}@example.test"), new { name = orgSlug, slug = orgSlug }, NewKey());
         created.Status.ShouldBe(HttpStatusCode.Created);
         var org = created.Id();
 
         for (var i = 0; i < projects; i++)
         {
             (await client.SendAsync(
-                HttpMethod.Post, $"/v1/orgs/{org}/projects", TenancyApiFactory.Resolved(user: user), new { name = $"P{i}", slug = $"proj-{i}" }, NewKey()))
+                HttpMethod.Post, $"/v1/orgs/{org}/projects", TenancyApiFactory.Resolved(user: user), new { name = $"P{i}", slug = Unique.Slug($"proj-{i}") }, NewKey()))
                 .Status.ShouldBe(HttpStatusCode.Created);
         }
 

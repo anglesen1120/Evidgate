@@ -56,11 +56,11 @@ public sealed class PolicyActivationReadTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -192,17 +192,24 @@ public sealed class PolicyActivationReadTests
     private async Task<IReadOnlyList<string>> ActivationAuditRowsAsync(World world) =>
         await _fixture.ColumnAsync<string>(
             world.Database,
-            """
+            $"""
             select action || '|' || object_type || '|' || object_id || '|' || coalesce(metadata ->> 'outcome', '-')
                    || '|' || coalesce(metadata ->> 'previous_id', '-') || '|' || coalesce(metadata ->> 'mode', '-')
                    || '|' || encode(after_hash, 'hex') || '|' || actor_type || '|' || actor_id
               from public.audit_log
-             where action = 'policy.activate'
+             where action = 'policy.activate' and org_id = '{world.Org}'
              order by seq
             """);
 
-    private async Task<long> PointerCountAsync(World world) =>
-        await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.policy_activation");
+    private async Task<long> PointerCountAsync(World world, params Guid[] orgs)
+    {
+        var scope = orgs.Length == 0 ? [world.Org] : orgs;
+        var filter = string.Join(", ", scope.Select(org => $"'{org:D}'"));
+
+        return await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.policy_activation where org_id in ({filter})");
+    }
 
     // ------------------------------------------------------------------------------ GET policy-activation
 
@@ -309,7 +316,7 @@ public sealed class PolicyActivationReadTests
 
         // Another tenant's project, activated by its own admin: the 404 must not be the never-activated answer.
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var outsider = TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg);
         var rival = await CreateProjectAsync(world.Client, otherUser, otherOrg, "rival-checkout");
         var rivalRevision = await CreateRevisionAsync(world, BodyC, rival, outsider);
@@ -333,7 +340,7 @@ public sealed class PolicyActivationReadTests
         shapes.Count.ShouldBe(1, "the five unreadable-project cases must share one error body: " + string.Join(" / ", shapes));
 
         // Both stored pointers are still there: the reads hid them, they did not delete them.
-        (await PointerCountAsync(world)).ShouldBe(2);
+        (await PointerCountAsync(world, world.Org, otherOrg)).ShouldBe(2);
     }
 
     /// <summary>
@@ -567,7 +574,7 @@ public sealed class PolicyActivationReadTests
         await _fixture.ExecuteAsync(world.Database, $"update public.project set status = 'deleted' where id = '{deleted}'");
 
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var outsider = TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg);
 
         var noRevisions = await GetAsync(world, HeadUrl(world, empty));

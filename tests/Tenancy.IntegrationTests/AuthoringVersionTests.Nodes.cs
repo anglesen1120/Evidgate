@@ -17,7 +17,7 @@ public sealed partial class AuthoringVersionTests
     private sealed record NodeWorld(
         TenancyApiFactory Api,
         HttpClient Client,
-        string Database,
+        DedicatedDatabase Database,
         Guid User,
         Guid Org,
         Guid Project) : IAsyncDisposable
@@ -30,12 +30,13 @@ public sealed partial class AuthoringVersionTests
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Database.DisposeAsync();
         }
     }
 
     private async Task<NodeWorld> StartNodeWorldAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.CreateDedicatedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();

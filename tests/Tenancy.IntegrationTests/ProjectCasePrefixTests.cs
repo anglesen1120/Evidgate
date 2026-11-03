@@ -22,7 +22,7 @@ public sealed class ProjectCasePrefixTests
     [Fact]
     public async Task Patch_ChangesTheCasePrefix_AndTheProjectDtoShowsIt()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -61,11 +61,11 @@ public sealed class ProjectCasePrefixTests
     [Fact]
     public async Task Patch_RefusesAMemberWithoutProjectWrite()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, founder, "acme");
+        var org = await CreateOrgAsync(client, founder, Unique.Slug("acme"));
         var project = await RegistryApi.CreateProjectAsync(client, founder, org, "shop");
         var admin = TenancyApiFactory.Resolved(user: founder, orgHeader: org);
 
@@ -92,7 +92,7 @@ public sealed class ProjectCasePrefixTests
     [Fact]
     public async Task Patch_RefusesABadGrammarAs422()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -121,7 +121,7 @@ public sealed class ProjectCasePrefixTests
     [Fact]
     public async Task Patch_RefusesAPrefixAnotherProjectOfTheOrgHolds()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -143,7 +143,7 @@ public sealed class ProjectCasePrefixTests
     [Fact]
     public async Task Patch_AcceptsAPrefixAnotherOrgHolds()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var orgA = await SeedOrgAsync(database, "acme");
@@ -179,7 +179,7 @@ public sealed class ProjectCasePrefixTests
     [Fact]
     public async Task Patch_DoesNotRewriteAnExistingManualCaseCode()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
@@ -201,9 +201,10 @@ public sealed class ProjectCasePrefixTests
     private async Task<Guid> SeedOrgAsync(string database, string slug)
     {
         var id = Guid.CreateVersion7();
+        var unique = Unique.Slug(slug);
         await _fixture.ExecuteAsync(
             database,
-            $"insert into public.organization (id, name, slug) values ('{id}', '{slug} org', '{slug}')");
+            $"insert into public.organization (id, name, slug) values ('{id}', '{unique} org', '{unique}')");
 
         return id;
     }

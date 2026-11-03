@@ -94,7 +94,7 @@ public sealed class HealingLlmSchemaTests
 
     private async Task<World> SeedTenantsAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var world = new World(
             database,
             Guid.CreateVersion7(),
@@ -107,8 +107,8 @@ public sealed class HealingLlmSchemaTests
         await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
         foreach (var (org, project, slug) in new[]
         {
-            (world.OrgA, world.ProjectA, "llm-a"),
-            (world.OrgB, world.ProjectB, "llm-b"),
+            (world.OrgA, world.ProjectA, Unique.Slug("llm-a")),
+            (world.OrgB, world.ProjectB, Unique.Slug("llm-b")),
         })
         {
             await owner.ExecuteAsync(
@@ -199,7 +199,7 @@ public sealed class HealingLlmSchemaTests
     [Fact]
     public async Task Tables_DeclareTheContractShape()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.TableExistsAsync(database, CallTable)).ShouldBeTrue();
         (await _fixture.TableExistsAsync(database, BudgetTable)).ShouldBeTrue();
@@ -407,7 +407,7 @@ public sealed class HealingLlmSchemaTests
             error.ConstraintName.ShouldBe("healing_llm_call_purpose_check", purpose);
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{CallTable}"))
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{CallTable} where org_id = '{world.OrgA}'"))
             .ShouldBe(0, "a refused attempt writes nothing");
     }
 
@@ -774,12 +774,12 @@ public sealed class HealingLlmSchemaTests
                 .SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, "the app role cannot remove an attempt");
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{CallTable}"))
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{CallTable} where org_id = '{world.OrgA}'"))
             .ShouldBe(1, "the refused statements left the ledger alone");
 
         // The convention token is inert on this table: the recorder's insert left it at the default and
         // nothing the app role can issue moves it (there is no UPDATE grant at all).
-        (await _fixture.ScalarAsync<int>(world.Database, $"select version from public.{CallTable}"))
+        (await _fixture.ScalarAsync<int>(world.Database, $"select version from public.{CallTable} where org_id = '{world.OrgA}'"))
             .ShouldBe(1, "the 00 §7 token stays at the column default 0054 gives it");
     }
 
@@ -821,7 +821,8 @@ public sealed class HealingLlmSchemaTests
         // `version` to NEW, and PostgreSQL checks the columns a statement names, not a trigger's writes.
         (await _fixture.ScalarAsync<string>(
                 world.Database,
-                $"select used_cost::text || ':' || used_tokens || ':' || version from public.{BudgetTable}"))
+                $"select used_cost::text || ':' || used_tokens || ':' || version from public.{BudgetTable} "
+                + $"where org_id = '{world.OrgA}' and project_id = '{world.ProjectA}'"))
             .ShouldBe("0.000250:12:2", "the trigger moved version on the consume, as 0004 does");
 
         // Everything else is outside the grant: the caps (raising one is exactly the ceiling escape this
@@ -930,7 +931,7 @@ public sealed class HealingLlmSchemaTests
             error.SqlState.ShouldBe(PostgresErrorCodes.NotNullViolation, "no app-role statement can provision a budget row");
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{BudgetTable}"))
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{BudgetTable} where org_id = '{world.OrgA}'"))
             .ShouldBe(0, "the refused statements left no counter row behind");
     }
 
@@ -998,7 +999,9 @@ public sealed class HealingLlmSchemaTests
                     ("org_id", world.OrgB))).ShouldBe(1);
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{CallTable}"))
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.{CallTable} where org_id in ('{world.OrgA}', '{world.OrgB}')"))
             .ShouldBe(2, "both tenants' rows are there; only the policy hides them");
     }
 

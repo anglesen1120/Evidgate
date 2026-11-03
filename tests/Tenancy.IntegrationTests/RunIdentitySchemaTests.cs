@@ -145,12 +145,13 @@ public sealed class RunIdentitySchemaTests
 
     public RunIdentitySchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
+    private sealed record World(TenancyApiFactory Api, HttpClient Client, DedicatedDatabase Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
             await Api.DisposeAsync();
+            await Database.DisposeAsync();
         }
     }
 
@@ -164,7 +165,7 @@ public sealed class RunIdentitySchemaTests
     /// <summary>One migrated database with an org and a project, created through the real registry routes.</summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.CreateDedicatedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -306,7 +307,7 @@ public sealed class RunIdentitySchemaTests
     [Fact]
     public async Task Identity_ConstraintsFunctionAndTrigger_Exist()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         var constraints = await _fixture.ConstraintNamesAsync(database, "run");
 
@@ -332,7 +333,7 @@ public sealed class RunIdentitySchemaTests
     [Fact]
     public async Task Run_KeepsItsForcedRls()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         // 0037 adds columns, a function and a trigger to `run`; the table-scoped policy and the two
         // row-security flags 0031 set are untouched (00 §5.4, DECISIONS F5).
@@ -342,7 +343,7 @@ public sealed class RunIdentitySchemaTests
     [Fact]
     public async Task CiTokenIssueRunIndex_ExistsOnTheRunReferenceKeys_AndSurvivesTheReRun()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         async Task<string> DefinitionAsync() =>
             (await _fixture.IndexesAsync(database, "ci_token_issue"))

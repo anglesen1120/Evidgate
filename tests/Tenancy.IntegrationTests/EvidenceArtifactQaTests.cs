@@ -29,12 +29,12 @@ public sealed class EvidenceArtifactQaTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "qa-org");
-        var project = await CreateProjectAsync(client, user, org, "qa-project");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("qa-org"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("qa-project"));
         return new World(api, client, database, user, org, project, Guid.CreateVersion7());
     }
 
@@ -108,8 +108,8 @@ public sealed class EvidenceArtifactQaTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "other-org");
-        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other-project");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("other-org"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, Unique.Slug("other-project"));
         var id = Guid.CreateVersion7();
         // The row is otherwise valid: first prove it can be committed under its own tenant.
         await using (var ownScope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), otherOrg))
@@ -181,7 +181,7 @@ public sealed class EvidenceArtifactQaTests
     public async Task KindPolicy_DifferentKindOrProject_IsAllowed()
     {
         await using var world = await StartAsync();
-        var secondProject = await CreateProjectAsync(world.Client, world.User, world.Org, "second-project");
+        var secondProject = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("second-project"));
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
         await InsertAsync(scope, "artifact_kind_policy", Guid.CreateVersion7(), world.Org, world.Project, Guid.CreateVersion7());
         await InsertAsync(scope, "artifact_kind_policy", Guid.CreateVersion7(), world.Org, world.Project, Guid.CreateVersion7(), "video");
@@ -194,8 +194,8 @@ public sealed class EvidenceArtifactQaTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "other-org");
-        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other-project");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("other-org"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, Unique.Slug("other-project"));
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
         var error = await scope.CaptureErrorAsync(
             """

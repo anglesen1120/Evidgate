@@ -87,17 +87,17 @@ public sealed class AuthoringImportExportTests
     /// </summary>
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
 
         var source = Guid.CreateVersion7();
-        var sourceOrg = await CreateOrgAsync(client, source, "roundtrip-a");
-        var sourceProject = await CreateProjectAsync(client, source, sourceOrg, "checkout");
+        var sourceOrg = await CreateOrgAsync(client, source, Unique.Slug("roundtrip-a"));
+        var sourceProject = await CreateProjectAsync(client, source, sourceOrg, Unique.Slug("checkout"));
 
         var mirror = Guid.CreateVersion7();
-        var mirrorOrg = await CreateOrgAsync(client, mirror, "roundtrip-b");
-        var mirrorProject = await CreateProjectAsync(client, mirror, mirrorOrg, "mirror");
+        var mirrorOrg = await CreateOrgAsync(client, mirror, Unique.Slug("roundtrip-b"));
+        var mirrorProject = await CreateProjectAsync(client, mirror, mirrorOrg, Unique.Slug("mirror"));
 
         var prefix = await _fixture.ScalarAsync<string>(
             database, $"select case_prefix from public.project where id = '{sourceProject:D}'");

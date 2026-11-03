@@ -44,19 +44,28 @@ public sealed class RunCreationTests
         Guid ManifestId,
         Guid[] Cases) : IAsyncDisposable
     {
+        /// <summary>The private database this world was started on; dropped when the world is disposed.</summary>
+        internal DedicatedDatabase? DatabaseScope { get; init; }
+
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
             await Api.DisposeAsync();
+
+            if (DatabaseScope is { } scope)
+            {
+                await scope.DisposeAsync();
+            }
         }
     }
 
     /// <summary>An org with a project, cases, a suite revision, an environment revision and one uploaded manifest.</summary>
     internal static async Task<World> StartAsync(PostgresTenancyFixture fixture, int cases = 2, string slug = "acme")
     {
-        var database = await fixture.CreateDatabaseAsync();
+        // The "no rows" assertions of this class count the whole database, so each world owns a migrated database.
+        var database = await fixture.CreateDedicatedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
@@ -87,7 +96,10 @@ public sealed class RunCreationTests
         manifest["environment_revision_id"] = environment.Id("revision_id").ToString();
         var manifestId = await UploadAsync(client, admin, project, manifest);
 
-        return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), environment.Id("revision_id"), manifestId, revisions);
+        return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), environment.Id("revision_id"), manifestId, revisions)
+        {
+            DatabaseScope = database,
+        };
     }
 
     internal static JsonObject Manifest(Guid suite, Guid[] cases, int variants, int shards) => ManifestUnitTests.Build(

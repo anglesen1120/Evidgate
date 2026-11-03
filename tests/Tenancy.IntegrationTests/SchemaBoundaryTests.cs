@@ -28,7 +28,8 @@ public sealed class SchemaBoundaryTests
     [Fact]
     public async Task SlugGrammarBoundaries()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        // The boundary slugs are fixed and the table is shared, so this class owns a migrated database.
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
 
         var accepted = new[]
         {
@@ -76,7 +77,7 @@ public sealed class SchemaBoundaryTests
     [Fact]
     public async Task NameLengthBoundaries()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var slug = 0;
 
         foreach (var (name, expectAccepted) in new[]
@@ -108,7 +109,8 @@ public sealed class SchemaBoundaryTests
     [Fact]
     public async Task EmptyTenantSettingReturnsZeroRows()
     {
-        var (database, _, _) = await SeedTwoTenantsAsync();
+        var seeded = await SeedTwoTenantsAsync();
+        await using var database = seeded.Database;
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(database));
         await scope.SetAsync("evidgate.org_id", string.Empty);
@@ -128,7 +130,9 @@ public sealed class SchemaBoundaryTests
     [Fact]
     public async Task CrossTenantWritesAffectNoRows()
     {
-        var (database, tenantA, tenantB) = await SeedTwoTenantsAsync();
+        var seeded = await SeedTwoTenantsAsync();
+        await using var database = seeded.Database;
+        var (tenantA, tenantB) = (seeded.TenantA, seeded.TenantB);
 
         await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), tenantA.OrgId))
         {
@@ -175,7 +179,9 @@ public sealed class SchemaBoundaryTests
     [Fact]
     public async Task WithCheckRejectsWritesIntoAnotherTenant()
     {
-        var (database, tenantA, tenantB) = await SeedTwoTenantsAsync();
+        var seeded = await SeedTwoTenantsAsync();
+        await using var database = seeded.Database;
+        var (tenantA, tenantB) = (seeded.TenantA, seeded.TenantB);
 
         // Re-parenting an own project into B: the USING side matches the row, the
         // WITH CHECK side rejects the new value.
@@ -227,9 +233,9 @@ public sealed class SchemaBoundaryTests
         }
     }
 
-    private async Task<(string Database, TenantRow TenantA, TenantRow TenantB)> SeedTwoTenantsAsync()
+    private async Task<(DedicatedDatabase Database, TenantRow TenantA, TenantRow TenantB)> SeedTwoTenantsAsync()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.CreateDedicatedDatabaseAsync();
         var tenantA = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
         var tenantB = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
         var index = 0;

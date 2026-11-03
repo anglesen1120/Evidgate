@@ -23,13 +23,13 @@ public sealed class AuthoringConcurrencyTests
     [Fact]
     public async Task NodePatch_TwoWriters_SecondGets412()
     {
-        var database = await _fixture.CreateDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
         Action<HttpRequestHeaders> asUser = TenancyApiFactory.Resolved(user: user, orgHeader: org);
 
         var created = await AuthoringCalls.CreateNodeAsync(client, asUser, project, null, "module", "Checkout");
