@@ -25,16 +25,17 @@ namespace Evidgate.Testing;
 /// least-privilege role of 00 §5.4.3, so every test runs under RLS instead of
 /// around it (AC1, AC3).
 /// <para>
-/// The database is shared, so <see cref="ResetAsync"/> is what isolates one test
-/// from the next (01.6.1-T2.2, AC2) and the harness collection is serialised — see
-/// <see cref="HarnessSuite"/> and <c>tests/README.md</c>.
+/// Tests that share the database isolate themselves by tenant: each creates its own
+/// organization with unique identifiers and reads only its own rows, so classes can
+/// run in parallel (<c>TenantTest</c> and <c>tests/README.md</c>). A class
+/// that cannot share — whole-table counts, DDL, migration re-runs, catalog sweeps —
+/// asks <see cref="CreateDedicatedAsync"/> for a private copy of the migrated
+/// template, dropped when the test ends.
 /// </para>
 /// <para>
-/// It differs from the sibling fixtures that read <see cref="ContainerImages"/>
-/// (<c>tests/Persistence.IntegrationTests</c>, <c>tests/Tasks.IntegrationTests</c>)
-/// in one way only: those copy a migrated template into a fresh database per test
-/// — no reset risk — while this harness keeps one database and resets with Respawn
-/// between tests.
+/// Foundation and Identity share that database with a tenant per test, or take a
+/// dedicated copy; only <c>tests/Isolation.Tests</c> resets between tests through
+/// <see cref="HarnessSuite"/>.
 /// </para>
 /// </summary>
 public sealed class DatabaseFixture : IAsyncLifetime
@@ -53,6 +54,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
     private const string DatabaseOwnerRole = "evidgate_owner";
     private const string ApplicationRole = "evidgate_app";
     private const string HarnessDatabase = "evidgate_harness";
+    private const string DedicatedDatabasePrefix = "evidgate_ded_";
 
     // Built inside the lazy start, not here: building a container resolves the Docker
     // endpoint and throws when there is no daemon, which would fail the assembly
@@ -66,9 +68,50 @@ public sealed class DatabaseFixture : IAsyncLifetime
     private NpgsqlDataSource? _appDataSource;
     private ServiceProvider? _services;
     private RespawnCheckpoint? _checkpoint;
+    private Task<RespawnCheckpoint>? _lazyCheckpoint;
     private readonly object _startLock = new();
     private Task? _start;
     private int _resets;
+
+    /// <summary>The database this instance reads and writes; a dedicated copy is not the shared one.</summary>
+    private readonly string _database;
+
+    /// <summary>The shared fixture a dedicated copy belongs to, or null for the shared fixture itself.</summary>
+    private readonly DatabaseFixture? _parent;
+
+    /// <summary>The migrated template dedicated copies are made from; built on first use.</summary>
+    private TemplateDatabase? _template;
+
+    /// <summary>
+    /// The assembly fixture. Its container, roles and shared database start lazily, on
+    /// the first accessor or reset that needs them.
+    /// </summary>
+    public DatabaseFixture()
+        : this(null, HarnessDatabase)
+    {
+    }
+
+    /// <summary>
+    /// A private copy of the migrated template on the parent's container: same roles,
+    /// same app-role registration, its own database — made by
+    /// <see cref="CreateDedicatedAsync"/> and dropped by <see cref="DisposeAsync"/>.
+    /// </summary>
+    private DatabaseFixture(DatabaseFixture? parent, string database)
+    {
+        _parent = parent;
+        _database = database;
+
+        if (parent is not null)
+        {
+            _container = parent._container;
+            _ownerPassword = parent._ownerPassword;
+            _appPassword = parent._appPassword;
+
+            // The copy exists: there is nothing left to start.
+            _start = Task.CompletedTask;
+            ConfigureServices();
+        }
+    }
 
     /// <summary>
     /// Repository <c>migrations/</c>, resolved by the Migrator's own default-path
@@ -94,7 +137,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         get
         {
             EnsureStarted();
-            return Build(ApplicationRole, _appPassword, HarnessDatabase);
+            return Build(ApplicationRole, _appPassword, _database);
         }
     }
 
@@ -104,7 +147,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         get
         {
             EnsureStarted();
-            return Build(DatabaseOwnerRole, _ownerPassword, HarnessDatabase);
+            return Build(DatabaseOwnerRole, _ownerPassword, _database);
         }
     }
 
@@ -135,7 +178,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
     public TenantCommandInterceptor Interceptor =>
         StartedServices().GetRequiredService<TenantCommandInterceptor>();
 
-    /// <summary>How many <see cref="ResetAsync"/> calls this assembly has made.</summary>
+    /// <summary>How many <see cref="ResetAsync"/> calls this database has made.</summary>
     public int Resets => _resets;
 
     /// <summary>
@@ -188,7 +231,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// script does (LOGIN + CREATEROLE, never SUPERUSER/BYPASSRLS — DECISIONS F5),
     /// creates the harness database owned by that role, migrates it to head through
     /// the real <c>Evidgate.Migrator</c>, then enables the app login. Once per
-    /// assembly, so the per-test cost is a Respawn reset, not a migration run.
+    /// assembly: a sharing test then costs its own rows, not a migration run, and a
+    /// dedicated copy costs one template copy.
     /// </summary>
     private async Task StartAsync()
     {
@@ -213,7 +257,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 cancellationToken);
             await ExecuteAsync(
                 connection,
-                $"create database \"{HarnessDatabase}\" owner {DatabaseOwnerRole}",
+                $"create database \"{_database}\" owner {DatabaseOwnerRole}",
                 cancellationToken);
         }
 
@@ -223,7 +267,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         var outcome = MigratorRunner.Run(
             new MigratorOptions
             {
-                ConnectionString = Build(DatabaseOwnerRole, _ownerPassword, HarnessDatabase),
+                ConnectionString = Build(DatabaseOwnerRole, _ownerPassword, _database),
                 MigrationsPath = MigrationsPath,
             },
             MigrationCommand.Apply,
@@ -232,11 +276,11 @@ public sealed class DatabaseFixture : IAsyncLifetime
         if (outcome.ExitCode != MigratorExitCodes.Success)
         {
             throw new InvalidOperationException(
-                $"the harness could not reach head on '{HarnessDatabase}' (exit {outcome.ExitCode}): "
+                $"the harness could not reach head on '{_database}' (exit {outcome.ExitCode}): "
                 + string.Join(" | ", outcome.Messages));
         }
 
-        await using (var connection = await OpenSuperuserCoreAsync(HarnessDatabase, cancellationToken).ConfigureAwait(false))
+        await using (var connection = await OpenSuperuserCoreAsync(_database, cancellationToken).ConfigureAwait(false))
         {
             await ExecuteAsync(
                 connection,
@@ -244,31 +288,82 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 cancellationToken);
         }
 
-        _appDataSource = NpgsqlDataSource.Create(Build(ApplicationRole, _appPassword, HarnessDatabase));
-
-        // The production registration under test (00 §5.5 C3, 01.4.2): the scope
-        // factory and the Dapper path over the app-role data source, exactly as
-        // Evidgate.Api/Evidgate.Worker wire them.
-        var services = new ServiceCollection();
-        services.AddSingleton(_appDataSource);
-        services.AddEvidgateTenancy();
-        _services = services.BuildServiceProvider();
+        ConfigureServices();
 
         // Respawn is set up once (it reads the FK graph then); resets only replay the
         // delete plan.
         _checkpoint = await RespawnCheckpoint.CreateAsync(
-            Build(DatabaseOwnerRole, _ownerPassword, HarnessDatabase),
+            Build(DatabaseOwnerRole, _ownerPassword, _database),
             cancellationToken).ConfigureAwait(false);
+
+        // Dedicated copies come from this template; it migrates itself on the first
+        // copy, so an assembly that never asks for one pays nothing for it.
+        _template = new TemplateDatabase(
+            SuperuserConnectionString,
+            database => Build(DatabaseOwnerRole, _ownerPassword, database),
+            MigrationsPath,
+            []);
     }
 
     /// <summary>
-    /// Stops the clock, prints the assembly wall time, and fails the run when the
-    /// suite overran <see cref="SuiteBudget"/> (AC3). Disposal happens after every
-    /// test, so the elapsed value is the suite wall time the NFR-01-1 budget speaks
-    /// about.
+    /// A private, migrated database on the same container for a test that cannot share
+    /// the harness database (whole-table counts, DDL, migration re-runs, catalog
+    /// sweeps), copied from one migrated template and dropped when the returned
+    /// fixture is disposed. Roles and their passwords are cluster-wide, so the copy
+    /// needs no bootstrap of its own.
+    /// </summary>
+    public async Task<DatabaseFixture> CreateDedicatedAsync(CancellationToken cancellationToken = default)
+    {
+        // A dedicated copy can only make more copies through the shared fixture.
+        if (_parent is { } root)
+        {
+            return await root.CreateDedicatedAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await EnsureStartedAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        var database = DedicatedDatabasePrefix
+            + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
+        await Template.CreateDatabaseAsync(database).ConfigureAwait(false);
+
+        return new DatabaseFixture(this, database);
+    }
+
+    /// <summary>Drops a dedicated copy; a name is generated per call, so this is called once.</summary>
+    private Task DropDatabaseAsync(string database) =>
+        _template?.DropDatabaseAsync(database) ?? Task.CompletedTask;
+
+    private TemplateDatabase Template =>
+        _template ?? throw new InvalidOperationException("the harness has not started its template");
+
+    /// <summary>
+    /// The production registration under test (00 §5.5 C3, 01.4.2): the scope factory
+    /// and the Dapper path over this database's app-role data source, exactly as
+    /// Evidgate.Api/Evidgate.Worker wire them.
+    /// </summary>
+    private void ConfigureServices()
+    {
+        _appDataSource = NpgsqlDataSource.Create(Build(ApplicationRole, _appPassword, _database));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(_appDataSource);
+        services.AddEvidgateTenancy();
+        _services = services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Stops the clock, reports the suite wall time and fails the run when it overran
+    /// <see cref="SuiteBudget"/>; a dedicated copy only closes its services and drops its
+    /// database.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
+        if (_parent is not null)
+        {
+            await DisposeDedicatedAsync().ConfigureAwait(false);
+            return;
+        }
+
         _suiteClock.Stop();
         var elapsed = _suiteClock.Elapsed;
 
@@ -276,8 +371,44 @@ public sealed class DatabaseFixture : IAsyncLifetime
             string.Create(
                 CultureInfo.InvariantCulture,
                 $"[evidgate harness] suite wall time {elapsed.TotalSeconds:F1}s of a {SuiteBudget.TotalMinutes:F0} min budget "
-                + $"after {_resets} Respawn reset(s); database '{HarnessDatabase}'."));
+                + $"after {_resets} Respawn reset(s); database '{_database}'."));
 
+        await DisposeSharedAsync().ConfigureAwait(false);
+
+        if (elapsed > SuiteBudget)
+        {
+            throw new InvalidOperationException(
+                $"the harness suite took {elapsed.TotalMinutes:F1} min, over the {SuiteBudget.TotalMinutes:F0} min budget "
+                + "(01.6.1-T2.4 AC3, NFR-01-1).");
+        }
+    }
+
+    /// <summary>
+    /// Closes the services of a dedicated copy and drops its database. The drop is
+    /// idempotent and swallows connection errors, so a failed teardown never turns a
+    /// test result into an error.
+    /// </summary>
+    private async Task DisposeDedicatedAsync()
+    {
+        if (_services is not null)
+        {
+            await _services.DisposeAsync();
+        }
+
+        if (_appDataSource is not null)
+        {
+            await _appDataSource.DisposeAsync();
+        }
+
+        await _parent!.DropDatabaseAsync(_database).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Releases the container and the template of the shared fixture: only once a start
+    /// ran, because an assembly that never needed the database created nothing.
+    /// </summary>
+    private async Task DisposeSharedAsync()
+    {
         Task? start;
 
         lock (_startLock)
@@ -287,39 +418,36 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
         // Never started (no test needed the database): nothing to tear down. A
         // start that failed already surfaced to the tests that asked for it.
-        if (start is not null)
+        if (start is null)
         {
-            try
-            {
-                await start.ConfigureAwait(false);
-            }
-            catch (Exception)
-            {
-                // Already reported through the accessor that triggered it; disposal
-                // below still releases whatever was created.
-            }
-
-            if (_services is not null)
-            {
-                await _services.DisposeAsync();
-            }
-
-            if (_appDataSource is not null)
-            {
-                await _appDataSource.DisposeAsync();
-            }
-
-            if (_container is not null)
-            {
-                await _container.DisposeAsync();
-            }
+            return;
         }
 
-        if (elapsed > SuiteBudget)
+        try
         {
-            throw new InvalidOperationException(
-                $"the harness suite took {elapsed.TotalMinutes:F1} min, over the {SuiteBudget.TotalMinutes:F0} min budget "
-                + "(01.6.1-T2.4 AC3, NFR-01-1).");
+            await start.ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Already reported through the accessor that triggered it; disposal
+            // below still releases whatever was created.
+        }
+
+        if (_services is not null)
+        {
+            await _services.DisposeAsync();
+        }
+
+        if (_appDataSource is not null)
+        {
+            await _appDataSource.DisposeAsync();
+        }
+
+        _template?.Dispose();
+
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
         }
     }
 
@@ -338,8 +466,35 @@ public sealed class DatabaseFixture : IAsyncLifetime
     public async Task ResetAsync(CancellationToken cancellationToken = default)
     {
         await EnsureStartedAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
-        await _checkpoint!.ResetAsync(cancellationToken).ConfigureAwait(false);
+        var checkpoint = await CheckpointAsync().ConfigureAwait(false);
+        await checkpoint.ResetAsync(cancellationToken).ConfigureAwait(false);
         _resets++;
+    }
+
+    /// <summary>
+    /// The truncate plan of this database. The shared fixture builds it during the lazy
+    /// start; a dedicated copy builds its own on the first reset, because most copies
+    /// never reset at all.
+    /// </summary>
+    private Task<RespawnCheckpoint> CheckpointAsync()
+    {
+        if (_checkpoint is not null)
+        {
+            return Task.FromResult(_checkpoint);
+        }
+
+        lock (_startLock)
+        {
+            // A failed build is retried by the next reset instead of failing forever.
+            if (_lazyCheckpoint is { IsFaulted: true } or { IsCanceled: true })
+            {
+                _lazyCheckpoint = null;
+            }
+
+            return _lazyCheckpoint ??= RespawnCheckpoint.CreateAsync(
+                Build(DatabaseOwnerRole, _ownerPassword, _database),
+                CancellationToken.None);
+        }
     }
 
     /// <summary>
@@ -504,7 +659,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
     public async Task<IReadOnlyList<string>> NonEmptyApplicationTablesAsync(
         CancellationToken cancellationToken = default)
     {
-        await using var connection = await OpenSuperuserAsync(HarnessDatabase, cancellationToken);
+        await using var connection = await OpenSuperuserAsync(_database, cancellationToken);
 
         var tables = new List<string>();
         await using (var command = connection.CreateCommand())
@@ -621,13 +776,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
 }
 
 /// <summary>
-/// The harness collection (01.6.1-T2.2): every Docker-backed test class of the
-/// assembly joins it, and <c>DisableParallelization</c> keeps classes from
-/// overlapping. That is not a preference but a consequence of the design — one
-/// database per assembly reset by Respawn between tests means two classes running
-/// at once would delete each other's rows. Parallelism lives across assemblies
-/// instead (each <c>*.IntegrationTests</c> project boots its own container), and
-/// the rules are written down in <c>tests/README.md</c>.
+/// The collection of the reset-based suites: <c>tests/Isolation.Tests</c> is the only
+/// member, and <c>DisableParallelization</c> keeps its classes from resetting over one
+/// another — the tenant-per-test suites run in parallel without it.
 /// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class HarnessSuite

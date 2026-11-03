@@ -27,6 +27,7 @@ namespace Hosts.IntegrationTests;
 /// not declared as a constant trips the inventory assertion, and a tag key outside the allowlist trips
 /// the measurement assertion.
 /// </remarks>
+[Collection(ProcessGlobalTelemetrySuite.Name)]
 public sealed class MetricCardinalityTests
 {
     /// <summary>

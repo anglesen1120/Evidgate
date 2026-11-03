@@ -16,7 +16,6 @@ namespace Identity.IntegrationTests.Invites;
 /// <c>seq = 1</c> is the whole chain, so "exactly one entry" is also "the first entry".
 /// </remarks>
 [Trait("Category", "Docker")]
-[Collection(HarnessSuite.Name)]
 public sealed class BindAuditTests : BindTestBase
 {
     public BindAuditTests(DatabaseFixture fixture)
@@ -91,7 +90,7 @@ public sealed class BindAuditTests : BindTestBase
     public async Task VerifiedDomainBind_RecordsItsOwnVia()
     {
         var org = await SeedOrgAsync(autobindVerifiedDomain: true);
-        var invite = await SeedInviteAsync(org, "invitee@example.com");
+        var invite = await SeedInviteAsync(org, Unique.Email("invitee"));
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
@@ -139,6 +138,9 @@ public sealed class BindAuditTests : BindTestBase
         (await ScalarOwnerAsync<long>(
             "select count(*) from public.audit_log where org_id = @org_id",
             ("org_id", org))).ShouldBe(0, "a rolled-back bind leaves no audit row");
+        (await ScalarOwnerAsync<long>(
+            "select count(*) from public.audit_log where object_id = @object_id",
+            ("object_id", invite.MembershipId.ToString("D")))).ShouldBe(0, "nor one filed under any other org");
 
         (await MembershipStateAsync(org, invite.MembershipId)).Status.ShouldBe(MembershipStatus.Pending);
     }
@@ -152,14 +154,15 @@ public sealed class BindAuditTests : BindTestBase
     {
         var first = await SeedOrgAsync(autobindVerifiedDomain: true);
         var second = await SeedOrgAsync(autobindVerifiedDomain: true);
-        var firstInvite = await SeedInviteAsync(first, "invitee@example.com");
-        var secondInvite = await SeedInviteAsync(second, "invitee@example.com");
+        var address = Unique.Email("invitee");
+        var firstInvite = await SeedInviteAsync(first, address);
+        var secondInvite = await SeedInviteAsync(second, address);
 
         var result = await CreateBinder().BindAsync(
             new BindPendingMembershipsRequest(
                 await SeedUserAsync(),
                 "google",
-                "invitee@example.com",
+                address,
                 EmailVerified: true,
                 InviteToken: null,
                 HostedDomain: "example.com"),

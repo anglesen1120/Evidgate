@@ -13,7 +13,6 @@ namespace Identity.IntegrationTests;
 /// which is the shape the flagged custom-role commands of 02.2.1-T2 need. Every probe
 /// runs through a real tenant scope as <c>evidgate_app</c>.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class CatalogueRlsTests : CatalogueTestBase
 {

@@ -21,7 +21,6 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// the 0042 column list — the shape every pre-0045 row has — and authenticating with it. The catalog
 /// assertions pin what the migration decided, because a regression there is invisible in the store tests.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class MigrationTests : SessionHardeningTestBase
 {
@@ -48,8 +47,9 @@ public sealed class MigrationTests : SessionHardeningTestBase
     /// <summary>The spellings the catalogue may keep for the writer's 2000 ms bounded wait.</summary>
     private static readonly string[] BoundedWaitSettings = ["2000", "2000ms", "2s"];
 
+    /// <summary>Own database: the cases re-apply migration files, restarting the <c>evidgate_resolve</c> functions.</summary>
     public MigrationTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

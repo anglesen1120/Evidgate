@@ -10,9 +10,9 @@ using Xunit;
 namespace Identity.IntegrationTests.Login.Persistence;
 
 /// <summary>
-/// The shared arrangement of the 02.3.1-T1.4 persistence suites: the migrated database from the harness,
-/// reset between tests, with the two connections a persistence test needs — the app role the stores really
-/// use, and the owner that arranges and reads rows — plus the fixed pepper and the store factories.
+/// The shared arrangement of the persistence suites: the harness database (isolated by
+/// tenant unless the suite asks for a private copy), the app-role and owner connections a
+/// persistence test needs, the fixed pepper and the store factories.
 /// </summary>
 /// <remarks>
 /// Every assertion about a credential goes through the owner connection on purpose: <c>evidgate_app</c> holds
@@ -20,7 +20,7 @@ namespace Identity.IntegrationTests.Login.Persistence;
 /// that can look at what was actually stored. The write path under test is always the app role's.
 /// </remarks>
 [Trait("Category", "Docker")]
-public abstract class SessionTestBase : HarnessTest
+public abstract class SessionTestBase : TenantTest
 {
     /// <summary>The pepper every store in these suites hashes with.</summary>
     protected static readonly byte[] Pepper = Enumerable.Range(0, 32).Select(index => (byte)index).ToArray();
@@ -28,8 +28,8 @@ public abstract class SessionTestBase : HarnessTest
     /// <summary>The pepper version stored beside each hash.</summary>
     protected const int PepperVersion = 7;
 
-    protected SessionTestBase(DatabaseFixture fixture)
-        : base(fixture)
+    protected SessionTestBase(DatabaseFixture fixture, DatabaseIsolation isolation = DatabaseIsolation.Shared)
+        : base(fixture, isolation)
     {
     }
 

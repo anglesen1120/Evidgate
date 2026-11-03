@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
-using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Hosts.IntegrationTests;
@@ -14,7 +13,6 @@ namespace Hosts.IntegrationTests;
 /// dropped at the exchange deadline. The host is built through the real
 /// <see cref="WorkerHostFactory"/> (same composition as the entry point).
 /// </summary>
-[Collection(PostgresSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class WorkerReadinessTests
 {
@@ -25,8 +23,8 @@ public sealed class WorkerReadinessTests
     [Fact]
     public async Task Ready_200_At_Head()
     {
-        var connectionString = await _postgres.CreateDatabaseAtHeadAsync(PostgresFixture.ExpectedHead);
-        using var worker = await StartWorkerAsync(connectionString, out var port);
+        await using var connectionString = await _postgres.CreateDatabaseAtHeadAsync(PostgresFixture.ExpectedHead);
+        await using var worker = await StartWorkerAsync(connectionString, out var port);
 
         using var response = await GetAsync(port, "/internal/health/ready");
 
@@ -39,8 +37,8 @@ public sealed class WorkerReadinessTests
     [Fact]
     public async Task Ready_503_When_Journal_Behind()
     {
-        var connectionString = await _postgres.CreateDatabaseAtHeadAsync("0000_behind.sql");
-        using var worker = await StartWorkerAsync(connectionString, out var port);
+        await using var connectionString = await _postgres.CreateDatabaseAtHeadAsync("0000_behind.sql");
+        await using var worker = await StartWorkerAsync(connectionString, out var port);
 
         using var response = await GetAsync(port, "/internal/health/ready");
 
@@ -55,8 +53,8 @@ public sealed class WorkerReadinessTests
     [Fact]
     public async Task Trickling_Client_Does_Not_Block_Concurrent_Probe()
     {
-        var connectionString = await _postgres.CreateDatabaseAtHeadAsync(PostgresFixture.ExpectedHead);
-        using var worker = await StartWorkerAsync(connectionString, out var port);
+        await using var connectionString = await _postgres.CreateDatabaseAtHeadAsync(PostgresFixture.ExpectedHead);
+        await using var worker = await StartWorkerAsync(connectionString, out var port);
 
         // A client that opens the connection and never finishes the request head
         // (1 byte every 500 ms) must not hold the listener (D2).
@@ -108,10 +106,10 @@ public sealed class WorkerReadinessTests
         }
     }
 
-    private static Task<IHost> StartWorkerAsync(string connectionString, out int port)
+    private static Task<RunningWorker> StartWorkerAsync(string connectionString, out int port)
     {
         port = HostLocator.FreePort();
-        return WorkerHostFactory.StartAsync(
+        return RunningWorker.StartAsync(
             connectionString,
             port,
             cancellationToken: TestContext.Current.CancellationToken);

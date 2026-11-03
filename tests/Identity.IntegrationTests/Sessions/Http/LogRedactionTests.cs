@@ -33,9 +33,8 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// None may appear anywhere in the captured text or in a tag.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class LogRedactionTests : HarnessTest
+public sealed class LogRedactionTests : TenantTest
 {
     /// <summary>The route the authenticated cases drive (it needs a member and answers their orgs).</summary>
     private const string OrgsPath = "/v1/orgs";
@@ -93,8 +92,9 @@ public sealed class LogRedactionTests : HarnessTest
     private static readonly Action<ILogger, string, Exception?> Probe =
         LoggerMessage.Define<string>(LogLevel.Warning, new EventId(1, nameof(Probe)), "log capture probe {Canary}");
 
+    /// <summary>Own database: a case counts every organization row and another installs an <c>audit_log</c> trigger.</summary>
     public LogRedactionTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 
@@ -263,10 +263,6 @@ public sealed class LogRedactionTests : HarnessTest
     [Fact]
     public async Task An_Admin_Revoke_Keeps_Its_Credential_And_Its_Audit_Row_Out_Of_Logs_And_Metrics()
     {
-        // The administrative path needs `tenant_admin`'s `membership:write`, so the migration-seeded catalogue is
-        // restored for this case only (a reset empties it); every other case of this file arranges no role.
-        await SeedCatalogueAsync();
-
         using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
@@ -306,8 +302,6 @@ public sealed class LogRedactionTests : HarnessTest
     [Fact]
     public async Task A_Faulted_Admin_Revoke_Keeps_Its_Credential_And_Its_Audit_Row_Out_Of_Logs_And_Metrics()
     {
-        await SeedCatalogueAsync();
-
         using var host = SessionTestHost.Start(Fixture, logProvider: new CapturingLogProvider());
         var logs = LogsOf(host);
         var metrics = new ConcurrentQueue<Measurement>();
@@ -397,13 +391,6 @@ public sealed class LogRedactionTests : HarnessTest
 
         return host.Services.GetServices<ILoggerProvider>().OfType<CapturingLogProvider>().ShouldHaveSingleItem();
     }
-
-    /// <summary>
-    /// Restores the migration-seeded permission catalogue this file's administrative cases need (the reset empties
-    /// <c>permission</c> / <c>role</c> / <c>role_permission</c>, so <c>tenant_admin</c> would otherwise carry no
-    /// <c>membership:write</c>).
-    /// </summary>
-    private Task SeedCatalogueAsync() => CatalogueSeed.ApplyAsync(Fixture, Token);
 
     /// <summary>One <c>DELETE /v1/auth/sessions/{s}</c> as <paramref name="caller"/>'s browser sends it.</summary>
     /// <param name="client">A client of the host.</param>

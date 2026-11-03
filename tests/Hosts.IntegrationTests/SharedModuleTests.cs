@@ -31,7 +31,7 @@ public sealed class SharedModuleTests
 
         var apiEvaluator = factory.Services.GetRequiredService<IPermissionEvaluator>();
 
-        using var worker = await WorkerHostFactory.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
+        await using var worker = await RunningWorker.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
         var workerEvaluator = worker.Services.GetRequiredService<IPermissionEvaluator>();
 
         Assert.IsType<PermissionEvaluator>(apiEvaluator);
@@ -51,7 +51,7 @@ public sealed class SharedModuleTests
 
         var apiRegistry = factory.Services.GetRequiredService<IProducerRegistry>();
 
-        using var worker = await WorkerHostFactory.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
+        await using var worker = await RunningWorker.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
         var workerRegistry = worker.Services.GetRequiredService<IProducerRegistry>();
 
         Assert.NotNull(apiRegistry);
@@ -71,7 +71,7 @@ public sealed class SharedModuleTests
 
         var apiLedger = factory.Services.GetRequiredService<IUsageLedger>();
 
-        using var worker = await WorkerHostFactory.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
+        await using var worker = await RunningWorker.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
         var workerLedger = worker.Services.GetRequiredService<IUsageLedger>();
 
         Assert.NotNull(apiLedger);
@@ -93,7 +93,7 @@ public sealed class SharedModuleTests
         Assert.Null(factory.Services.GetService<IQuotaGate>());
         _ = Assert.Throws<InvalidOperationException>(() => factory.Services.GetRequiredService<IQuotaGate>());
 
-        using var worker = await WorkerHostFactory.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
+        await using var worker = await RunningWorker.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Null(worker.Services.GetService<IQuotaGate>());
         _ = Assert.Throws<InvalidOperationException>(() => worker.Services.GetRequiredService<IQuotaGate>());

@@ -1,11 +1,12 @@
 using System.Globalization;
-using System.IO;
 using Evidgate.BuildingBlocks.Persistence.Readiness;
 using Evidgate.Migrator;
 using Evidgate.Testing;
 using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;
+
+[assembly: AssemblyFixture(typeof(Hosts.IntegrationTests.PostgresFixture))]
 
 namespace Hosts.IntegrationTests;
 
@@ -23,6 +24,16 @@ namespace Hosts.IntegrationTests;
 /// journal — not the container superuser (D11): a lost grant is then a failing
 /// test rather than a production-only surprise. The superuser
 /// <see cref="ConnectionString"/> stays for the DDL and <c>GRANT</c>/<c>REVOKE</c>.
+/// </para>
+///
+/// <para>
+/// The container starts with the first test that needs a database, so a run that
+/// selects only non-Docker tests never opens a Docker socket: xUnit initializes an
+/// assembly fixture even when the filter excludes every Docker test. Every class
+/// that needs a database creates its own <see cref="TestDatabase"/> (none of them
+/// can share one: global journal state, schema-wide policy DDL, non-RLS tables), and
+/// disposing that scope drops the database, so a run leaves no scratch database
+/// behind.
 /// </para>
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
@@ -42,11 +53,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// <summary>Expected head of this build (the baked assembly value).</summary>
     public static string ExpectedHead => ExpectedMigrationHead.Value;
 
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(ContainerImages.Postgres)
-        .WithDatabase("evidgate")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private readonly object _startLock = new();
+    private PostgreSqlContainer? _container;
+    private Task? _start;
 
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
@@ -66,12 +75,32 @@ public sealed class PostgresFixture : IAsyncLifetime
         }).MigrationsPath;
 
     /// <summary>Superuser connection string for the container's default database (DDL and grants).</summary>
-    public string ConnectionString => _container.GetConnectionString();
+    public string ConnectionString => Container.GetConnectionString();
 
-    /// <inheritdoc />
-    public async ValueTask InitializeAsync()
+    // Assembly fixtures initialize even when the filter excludes every Docker test.
+    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+
+    private Task EnsureStartedAsync()
     {
+        lock (_startLock)
+        {
+            // Single-flight: every database test awaits the one container start of the run.
+            return _start ??= StartAsync();
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        _container = new PostgreSqlBuilder(ContainerImages.Postgres)
+            .WithDatabase("evidgate")
+            .WithUsername("postgres")
+            .WithPassword("postgres")
+            .Build();
+
         await _container.StartAsync();
+
+        // One bootstrap for the whole run: these statements never take the first test's token,
+        // or one cancelled test would fail every later database test.
         await EnsureAppRoleAsync();
         await EnsureOwnerRoleAsync();
 
@@ -82,40 +111,48 @@ public sealed class PostgresFixture : IAsyncLifetime
             [$"alter role {AppRoleName} noinherit"]);
     }
 
-    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         _template?.Dispose();
-        await _container.DisposeAsync();
+
+        // Built before any await in StartAsync, so a failed or still-starting fixture is disposed too.
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 
     /// <summary>
     /// A fresh database with the journal created, <c>SELECT</c> granted to the
-    /// application role and the head set to <paramref name="head"/>; returns the
-    /// <c>evidgate_app</c> connection string the hosts must use. The Api/Worker are
-    /// ready iff <paramref name="head"/> is at or beyond <see cref="ExpectedHead"/>.
+    /// application role and the head set to <paramref name="head"/>; the scope's
+    /// connection string is the <c>evidgate_app</c> one the hosts must use, and the
+    /// database is dropped when the scope is disposed. The Api/Worker are ready iff
+    /// <paramref name="head"/> is at or beyond <see cref="ExpectedHead"/>.
     /// </summary>
-    public async Task<string> CreateDatabaseAtHeadAsync(string head)
-    {
-        var database = "hosts_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
+    public Task<TestDatabase> CreateDatabaseAtHeadAsync(string head) =>
+        CreateScopedAsync(
+            "hosts_",
+            async database =>
+            {
+                await using (var connection = await OpenAsync(ConnectionString))
+                {
+                    await ExecuteAsync(
+                        connection, $"create database \"{database}\"", TestContext.Current.CancellationToken);
+                }
 
-        await using (var connection = await OpenAsync(ConnectionString))
-        {
-            await ExecuteAsync(connection, $"create database \"{database}\"");
-        }
+                var adminConnectionString = Builder(ConnectionString, database);
+                await using (var connection = await OpenAsync(adminConnectionString))
+                {
+                    await ExecuteAsync(connection, JournalDdl, TestContext.Current.CancellationToken);
+                    await ExecuteAsync(
+                        connection,
+                        $"grant select on public.schema_migration to {AppRoleName}",
+                        TestContext.Current.CancellationToken);
+                    await InsertJournalRowAsync(connection, head, "test-checksum");
+                }
 
-        var adminConnectionString = Builder(ConnectionString, database);
-        await using (var connection = await OpenAsync(adminConnectionString))
-        {
-            await ExecuteAsync(connection, JournalDdl);
-            await ExecuteAsync(
-                connection,
-                $"grant select on public.schema_migration to {AppRoleName}");
-            await InsertJournalRowAsync(connection, head, "test-checksum");
-        }
-
-        return Builder(adminConnectionString, database, AppRoleName, _appPassword);
-    }
+                return Builder(adminConnectionString, database, AppRoleName, _appPassword);
+            });
 
     /// <summary>
     /// Revokes the journal <c>SELECT</c> grant in the database
@@ -125,10 +162,13 @@ public sealed class PostgresFixture : IAsyncLifetime
     public static async Task RevokeJournalSelectAsync(string appConnectionString)
     {
         await using var connection = await OpenAsync(Builder(appConnectionString, admin: true));
-        await ExecuteAsync(connection, $"revoke select on public.schema_migration from {AppRoleName}");
+        await ExecuteAsync(
+            connection,
+            $"revoke select on public.schema_migration from {AppRoleName}",
+            TestContext.Current.CancellationToken);
     }
 
-    /// <summary>The migrated template every per-test database is copied from.</summary>
+    /// <summary>The migrated template every copied test database is copied from.</summary>
     private TemplateDatabase Template =>
         _template ?? throw new InvalidOperationException("the fixture has not started its container");
 
@@ -136,15 +176,47 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// A database copied from one template brought to head by the real
     /// <c>Evidgate.Migrator</c> — the same bootstrap tests/Tasks.IntegrationTests
     /// uses (01.4.1 §9). The Api connects as <c>evidgate_app</c>, whose credentials
-    /// were set on the cluster role; the returned string is that role's.
+    /// were set on the cluster role; the scope's connection string is that role's,
+    /// and the database is dropped when the scope is disposed.
     /// </summary>
-    public async Task<string> CreateMigratedDatabaseAsync()
+    public Task<TestDatabase> CreateMigratedDatabaseAsync() =>
+        CreateScopedAsync(
+            "migrated_",
+            async database =>
+            {
+                await Template.CreateDatabaseAsync(database);
+                return AppConnectionString(database);
+            });
+
+    /// <summary>
+    /// Creates one per-test database through <paramref name="create"/> and drops it again when the
+    /// arrange itself fails, so a failed test never leaves a scratch database for the rest of the run.
+    /// </summary>
+    private async Task<TestDatabase> CreateScopedAsync(string prefix, Func<string, Task<string>> create)
     {
-        var database = "migrated_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
+        ArgumentNullException.ThrowIfNull(create);
 
-        await Template.CreateDatabaseAsync(database);
+        await EnsureStartedAsync();
 
-        return AppConnectionString(database);
+        var database = prefix + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..10];
+        try
+        {
+            return new TestDatabase(this, database, await create(database));
+        }
+        catch
+        {
+            await DropDatabaseAsync(database);
+            throw;
+        }
+    }
+
+    /// <summary>Drops one test database; a leftover scratch database never fails a run.</summary>
+    internal async Task DropDatabaseAsync(string database)
+    {
+        if (_template is { } template)
+        {
+            await template.DropDatabaseAsync(database);
+        }
     }
 
     /// <summary>The <c>evidgate_owner</c> connection string for one test database (migrations, seeding).</summary>
@@ -165,6 +237,9 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     private static string Unpooled(string connectionString) =>
         new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString;
+
+    private PostgreSqlContainer Container =>
+        _container ?? throw new InvalidOperationException("the fixture has not started its container");
 
     private async Task EnsureAppRoleAsync()
     {
@@ -249,17 +324,46 @@ public sealed class PostgresFixture : IAsyncLifetime
         return connection;
     }
 
-    private static async Task ExecuteAsync(NpgsqlConnection connection, string sql)
+    private static async Task ExecuteAsync(
+        NpgsqlConnection connection,
+        string sql,
+        CancellationToken cancellationToken = default)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
-        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }
 
-/// <summary>Binds the container fixture to every test class that needs it (one container per assembly).</summary>
-[CollectionDefinition(Name)]
-public sealed class PostgresSuite : ICollectionFixture<PostgresFixture>
+/// <summary>
+/// A per-test database that is dropped when the scope is disposed. It is also the
+/// connection string the hosts connect with (<c>evidgate_app</c>), so a test passes
+/// the scope where a connection string is expected and cannot forget the cleanup.
+/// </summary>
+public sealed class TestDatabase : IAsyncDisposable
 {
-    public const string Name = "postgres-hosts";
+    private readonly PostgresFixture _fixture;
+
+    internal TestDatabase(PostgresFixture fixture, string name, string appConnectionString)
+    {
+        _fixture = fixture;
+        Name = name;
+        AppConnectionString = appConnectionString;
+    }
+
+    /// <summary>The database name, for the fixture's owner and admin connection-string helpers.</summary>
+    public string Name { get; }
+
+    /// <summary>The <c>evidgate_app</c> connection string for this database.</summary>
+    public string AppConnectionString { get; }
+
+    public static implicit operator string(TestDatabase database)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        return database.AppConnectionString;
+    }
+
+    public override string ToString() => AppConnectionString;
+
+    public ValueTask DisposeAsync() => new(_fixture.DropDatabaseAsync(Name));
 }

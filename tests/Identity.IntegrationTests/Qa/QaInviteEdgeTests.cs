@@ -21,12 +21,11 @@ namespace Identity.IntegrationTests.Qa;
 /// configured with the same pepper, so the deployment's own <c>MembershipBinder</c> verifies the hash the
 /// case minted.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class QaInviteEdgeTests : BindTestBase
 {
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container and the one migrated database the run shares.</param>
     public QaInviteEdgeTests(DatabaseFixture fixture)
         : base(fixture)
     {

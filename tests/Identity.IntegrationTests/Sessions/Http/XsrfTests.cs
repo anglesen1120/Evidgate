@@ -30,9 +30,8 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// </para>
 /// </remarks>
 /// <param name="fixture">The migrated harness database.</param>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class XsrfTests(DatabaseFixture fixture) : HarnessTest(fixture)
+public sealed class XsrfTests(DatabaseFixture fixture) : TenantTest(fixture)
 {
     /// <summary>The cookie-authenticated mutation the positive cases drive (02.3.1-T2's <c>DELETE pending</c>).</summary>
     private const string PendingPath = "/v1/auth/link/pending";

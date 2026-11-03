@@ -26,7 +26,6 @@ namespace Identity.IntegrationTests.DevLogin;
 /// same bytes that authenticated once must be refused with <c>session_revoked</c> afterwards.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class DevSessionLifecycleTests : CatalogueTestBase
 {
@@ -37,9 +36,9 @@ public sealed class DevSessionLifecycleTests : CatalogueTestBase
     private const string LogoutPath = "/v1/auth/logout";
 
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
-    /// <param name="fixture">The shared container, migrated database and reset seam.</param>
+    /// <param name="fixture">The shared container; this class gets a private database dropped after each test.</param>
     public DevSessionLifecycleTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

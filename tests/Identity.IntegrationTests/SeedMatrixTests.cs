@@ -15,7 +15,6 @@ namespace Identity.IntegrationTests;
 /// database through a tenant scope as the application role (never the owner), so
 /// what is asserted is exactly what a member's request would see under RLS.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SeedMatrixTests : CatalogueTestBase
 {

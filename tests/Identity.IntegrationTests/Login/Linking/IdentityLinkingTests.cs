@@ -32,9 +32,8 @@ namespace Identity.IntegrationTests.Login.Linking;
 /// already exists". A membership seeded through the harness's owner seam is what then mints the session.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class IdentityLinkingTests : HarnessTest
+public sealed class IdentityLinkingTests : TenantTest
 {
     /// <summary>The address both providers verify, which is the whole point of AC6: it never merges.</summary>
     private const string Email = "linked-member@example.test";
@@ -51,8 +50,10 @@ public sealed class IdentityLinkingTests : HarnessTest
     /// </summary>
     private const string MovableEmail = "movable@example.test";
 
+    // Own database: several cases count every user_identity row, which a shared database could not
+    // isolate from another class running at the same time.
     public IdentityLinkingTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

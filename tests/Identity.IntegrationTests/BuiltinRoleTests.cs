@@ -19,7 +19,6 @@ namespace Identity.IntegrationTests;
 /// catalogue refuses (T79). The writes travel the module's EF model, so a create
 /// that answers 201 has really inserted the role and its grants.
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class BuiltinRoleTests : CatalogueTestBase
 {

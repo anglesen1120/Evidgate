@@ -35,7 +35,6 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// the atomicity cases are seeded there, because a test may not arrange through the tenant path.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
 {
@@ -93,8 +92,9 @@ public sealed class SessionRevokeAuditDefinerTests : SessionHardeningTestBase
         "req-\"q\"-\\\\-<&>'+/",
     ];
 
+    /// <summary>Own database: the atomicity cases install an <c>audit_log</c> trigger and one case counts every row.</summary>
     public SessionRevokeAuditDefinerTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

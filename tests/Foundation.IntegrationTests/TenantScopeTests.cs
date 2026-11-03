@@ -15,9 +15,8 @@ namespace Foundation.IntegrationTests;
 /// and read back through the app role, so the arrangement is marked and the
 /// assertion is not (00 §5.5 C3).
 /// </summary>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class TenantScopeTests : HarnessTest
+public sealed class TenantScopeTests : TenantTest
 {
     public TenantScopeTests(DatabaseFixture fixture)
         : base(fixture)

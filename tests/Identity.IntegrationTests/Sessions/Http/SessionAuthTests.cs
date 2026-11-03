@@ -26,9 +26,8 @@ namespace Identity.IntegrationTests.Sessions.Http;
 /// host's clock, so an idle or absolute expiry is one <c>Advance</c> — never a wait.
 /// </para>
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class SessionAuthTests : HarnessTest
+public sealed class SessionAuthTests : TenantTest
 {
     /// <summary>The route that needs an authenticated member and answers the caller's orgs.</summary>
     private const string OrgsPath = "/v1/orgs";
@@ -39,8 +38,9 @@ public sealed class SessionAuthTests : HarnessTest
     /// <summary>The one statement the session path may cost per request (D3, P1/P3).</summary>
     private const string AuthStatement = "session_authenticate";
 
+    /// <summary>Own database: an unfiltered organization count proves no handler ran.</summary>
     public SessionAuthTests(DatabaseFixture fixture)
-        : base(fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
     {
     }
 

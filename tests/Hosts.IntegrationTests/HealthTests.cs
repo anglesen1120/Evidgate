@@ -10,7 +10,6 @@ namespace Hosts.IntegrationTests;
 /// journal) is 503 with a distinct reason, and "not ready" never creates the
 /// journal. The probe runs as the least-privilege <c>evidgate_app</c> role.
 /// </summary>
-[Collection(PostgresSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class HealthTests
 {
@@ -42,7 +41,7 @@ public sealed class HealthTests
     {
         // The head "0000_behind.sql" sorts before any real migration (foundations
         // own 0001+), so it is always behind the baked expected head.
-        var connectionString = await _postgres.CreateDatabaseAtHeadAsync("0000_behind.sql");
+        await using var connectionString = await _postgres.CreateDatabaseAtHeadAsync("0000_behind.sql");
 
         await using var factory = new EvidgateApiFactory(connectionString);
         using var client = factory.CreateClient();
@@ -60,7 +59,7 @@ public sealed class HealthTests
     {
         // A journal newer than this build is the normal state during/after an
         // expand/contract rollout (01.4.1 §11): the old code keeps serving (AC3).
-        var connectionString = await _postgres.CreateDatabaseAtHeadAsync("9999_foundation_future.sql");
+        await using var connectionString = await _postgres.CreateDatabaseAtHeadAsync("9999_foundation_future.sql");
 
         await using var factory = new EvidgateApiFactory(connectionString);
         using var client = factory.CreateClient();
@@ -79,7 +78,7 @@ public sealed class HealthTests
         // The database is reachable and the head matches, but the application role
         // cannot read the journal: that is a distinct, actionable reason (D8), not
         // "database_unreachable".
-        var connectionString = await _postgres.CreateDatabaseAtHeadAsync(PostgresFixture.ExpectedHead);
+        await using var connectionString = await _postgres.CreateDatabaseAtHeadAsync(PostgresFixture.ExpectedHead);
         await PostgresFixture.RevokeJournalSelectAsync(connectionString);
 
         await using var factory = new EvidgateApiFactory(connectionString);

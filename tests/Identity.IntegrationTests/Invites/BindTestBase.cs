@@ -9,24 +9,20 @@ using Microsoft.Extensions.Options;
 namespace Identity.IntegrationTests.Invites;
 
 /// <summary>
-/// The shared arrangement of the 02.1.2-T2 bind suites: the migrated database from the
-/// harness, reset between tests, the real invite key material and a <c>MembershipBinder</c>
-/// over the app role — so every case runs the production resolvers, the production tenant
-/// scope and the production single-use update.
+/// The shared arrangement of the bind suites: the harness database (isolated by tenant
+/// unless the suite asks for a private copy), the real invite key material and a
+/// <c>MembershipBinder</c> over the app role, so every case runs the production paths.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The rows themselves are arranged through <see cref="InviteTestBase"/>'s helpers, which is
-/// the one seeding convention of this feature (00 §5.5 C3: arranging rows is the one job a
-/// test may not do through the tenant path). Only what the bind suites need beyond that lives
-/// here: the pepper, a minted token per seeded invite, the org's seat limit, and the
-/// assertions' tenant-scope reads.
+/// The rows are arranged through <see cref="InviteTestBase"/>'s helpers, the one seeding
+/// convention, because arranging rows is the one job a test may not do through the tenant
+/// path; this base adds the pepper, a minted token per invite, the seat limit and scope reads.
 /// </para>
 /// <para>
 /// The pepper is built at runtime, never written as a literal
-/// (<c>scripts/check-no-secret-literals.sh</c>), and the invite secret of every seeded row is
-/// the one <see cref="InviteTokenFormat"/> minted for it — so a passing bind also proves the
-/// mint the command side performs and the verify the binder performs agree.
+/// (<c>scripts/check-no-secret-literals.sh</c>), and every seeded row carries the secret
+/// <see cref="InviteTokenFormat"/> minted for it, so a passing bind proves mint and verify agree.
 /// </para>
 /// </remarks>
 public abstract class BindTestBase : InviteTestBase
@@ -39,8 +35,8 @@ public abstract class BindTestBase : InviteTestBase
 
     private InviteSecrets? _secrets;
 
-    protected BindTestBase(DatabaseFixture fixture)
-        : base(fixture)
+    protected BindTestBase(DatabaseFixture fixture, DatabaseIsolation isolation = DatabaseIsolation.Shared)
+        : base(fixture, isolation)
     {
     }
 
@@ -97,7 +93,7 @@ public abstract class BindTestBase : InviteTestBase
         return new SeededInvite(membershipId, normalised, generated.Prefix, generated.Full);
     }
 
-    /// <summary>Seeds the plain pending invite of 02.1.2-T1: no token, so nothing can bind it.</summary>
+    /// <summary>Seeds the plain pending invite: no token, so nothing can bind it.</summary>
     /// <param name="orgId">The org.</param>
     /// <param name="email">The invited address.</param>
     protected Task<Guid> SeedPendingInviteWithoutTokenAsync(Guid orgId, string email) =>
@@ -127,11 +123,9 @@ public abstract class BindTestBase : InviteTestBase
     }
 
     /// <summary>
-    /// Seeds the <c>public."user"</c> row a <c>membership.user_id</c> now needs and returns the
-    /// id: 0044 adds and validates <c>membership_user_fk</c> (<c>membership.user_id →
-    /// public."user"</c>), so a bind — or any fixture that writes a bound user — fails 23503
-    /// unless the user row exists, exactly as in production, where the login upsert writes the
-    /// <c>user</c> before the binder writes the <c>user_id</c>.
+    /// Seeds the <c>public."user"</c> row a <c>membership.user_id</c> needs and returns the id:
+    /// 0044 validates <c>membership_user_fk</c>, so a bind that writes a bound user fails 23503
+    /// unless the row exists, as in production where the login upsert writes it first.
     /// </summary>
     /// <param name="userId">The id to seed, or null for a fresh UUIDv7.</param>
     protected async Task<Guid> SeedUserAsync(Guid? userId = null)

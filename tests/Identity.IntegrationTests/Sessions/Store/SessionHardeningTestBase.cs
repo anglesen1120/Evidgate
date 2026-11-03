@@ -13,15 +13,14 @@ using Xunit;
 namespace Identity.IntegrationTests.Sessions.Store;
 
 /// <summary>
-/// The shared arrangement of the 02.3.2-T1.1 store suites (AC1-AC4, AC7): a session store, the cookie
-/// authenticator and the revocation store, each over the app-role data source with a clock the test moves,
-/// plus the pepper windows a rotation test needs.
+/// The shared arrangement of the store suites: a session store, the cookie authenticator and
+/// the revocation store, each over the app-role data source with a clock the test moves, plus
+/// the pepper windows a rotation test needs.
 /// </summary>
 /// <remarks>
 /// Every credential assertion reads the row through the owner connection (<c>evidgate_app</c> holds no
-/// privilege on <c>public.session</c>, 0041) while the write under test always runs as the app role through the
-/// <c>evidgate_resolve</c> definers. The sessions are created by the real <c>SessionStore</c>, so the cookie
-/// values are the ones production mints.
+/// privilege on <c>public.session</c>, 0041) while the write runs as the app role through the
+/// <c>evidgate_resolve</c> definers; sessions come from the real store, so the cookies are production's.
 /// </remarks>
 [Trait("Category", "Docker")]
 public abstract class SessionHardeningTestBase : SessionTestBase
@@ -39,23 +38,9 @@ public abstract class SessionHardeningTestBase : SessionTestBase
     /// <summary>The retired pepper as configuration carries it.</summary>
     protected static string RetiredPepperBase64 => Convert.ToBase64String(RetiredPepper);
 
-    protected SessionHardeningTestBase(DatabaseFixture fixture)
-        : base(fixture)
+    protected SessionHardeningTestBase(DatabaseFixture fixture, DatabaseIsolation isolation = DatabaseIsolation.Shared)
+        : base(fixture, isolation)
     {
-    }
-
-    /// <summary>
-    /// Resets the harness database, then restores the migration-seeded permission catalogue.
-    /// </summary>
-    /// <remarks>
-    /// These suites arrange memberships with a built-in role (<c>tenant_admin</c>, <c>viewer</c>) and custom
-    /// roles carrying <c>membership:write</c>, so the catalogue rows Respawn's blanket truncate removes have to
-    /// be back before the test body runs — the same step <see cref="CatalogueTestBase"/> takes for its suites.
-    /// </remarks>
-    public override async ValueTask InitializeAsync()
-    {
-        await Fixture.ResetAsync(Token);
-        await CatalogueSeed.ApplyAsync(Fixture, Token);
     }
 
     /// <summary>A clock the test owns and moves, so every deadline is provable without waiting.</summary>

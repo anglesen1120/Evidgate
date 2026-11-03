@@ -19,10 +19,10 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// through the owner connection (<c>evidgate_app</c> holds no privilege on <c>public.session</c>, 0041)
 /// while every write under test runs as the app role.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
 {
+    /// <summary>Shares the run's database: the routes act on the accounts and session rows the case seeded.</summary>
     public SessionRoutesStoreTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -45,8 +45,8 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task List_Shows_Only_The_Callers_Live_Sessions_And_Flags_The_Current_One()
     {
         var clock = ClockAt();
-        var mine = await SeedUserAsync("list-mine@example.com");
-        var other = await SeedUserAsync("list-other@example.com");
+        var mine = await SeedUserAsync(Unique.Email("list-mine"));
+        var other = await SeedUserAsync(Unique.Email("list-other"));
 
         var current = await CreateSessionAsync(mine, clock);
         clock.Advance(TimeSpan.FromMinutes(1));
@@ -87,7 +87,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task List_Without_A_Proof_Is_Unauthenticated()
     {
         var clock = ClockAt();
-        var mine = await SeedUserAsync("list-unknown@example.com");
+        var mine = await SeedUserAsync(Unique.Email("list-unknown"));
         await CreateSessionAsync(mine, clock);
         var routes = CreateRoutes(clock);
 
@@ -108,7 +108,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task List_Of_An_Expired_Cookie_Is_Unauthenticated()
     {
         var clock = ClockAt();
-        var mine = await SeedUserAsync("list-expired@example.com");
+        var mine = await SeedUserAsync(Unique.Email("list-expired"));
         var ticket = await CreateSessionAsync(mine, clock);
 
         await OwnerExecuteAsync(
@@ -131,7 +131,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task Logout_Revokes_The_Current_Row_And_The_Old_Cookie_Stops_Resolving()
     {
         var clock = ClockAt();
-        var user = await SeedUserAsync("logout@example.com");
+        var user = await SeedUserAsync(Unique.Email("logout"));
         var ticket = await CreateSessionAsync(user, clock);
         var routes = CreateRoutes(clock);
 
@@ -156,7 +156,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task Revoking_Your_Own_Session_Ends_It()
     {
         var clock = ClockAt();
-        var user = await SeedUserAsync("self-revoke@example.com");
+        var user = await SeedUserAsync(Unique.Email("self-revoke"));
         var ticket = await CreateSessionAsync(user, clock);
         var keep = await CreateSessionAsync(user, clock);
 
@@ -180,8 +180,8 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task Revoking_Another_Users_Session_Is_NotFound_With_Or_Without_An_Org()
     {
         var clock = ClockAt();
-        var actor = await SeedUserAsync("revoke-actor@example.com");
-        var victim = await SeedUserAsync("revoke-victim@example.com");
+        var actor = await SeedUserAsync(Unique.Email("revoke-actor"));
+        var victim = await SeedUserAsync(Unique.Email("revoke-victim"));
         var actorTicket = await CreateSessionAsync(actor, clock);
         var victimTicket = await CreateSessionAsync(victim, clock);
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
@@ -296,9 +296,9 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
         var otherOrg = await Fixture.SeedOrgAsync(cancellationToken: Token);
 
         var localActor = await SeedMemberWithRoleAsync(
-            org, await SeedCustomRoleAsync(org, "session_writer_local"), "custom-role-local@example.com");
+            org, await SeedCustomRoleAsync(org, "session_writer_local"), Unique.Email("custom-role-local"));
         var foreignActor = await SeedMemberWithRoleAsync(
-            org, await SeedCustomRoleAsync(otherOrg, "session_writer_foreign"), "custom-role-foreign@example.com");
+            org, await SeedCustomRoleAsync(otherOrg, "session_writer_foreign"), Unique.Email("custom-role-foreign"));
 
         var localTarget = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
         var refusedTarget = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
@@ -394,7 +394,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task An_Unknown_Or_Expired_Session_Id_Is_NotFound_And_Stays_Untouched()
     {
         var clock = ClockAt();
-        var actor = await SeedUserAsync("revoke-unknown@example.com");
+        var actor = await SeedUserAsync(Unique.Email("revoke-unknown"));
         var actorTicket = await CreateSessionAsync(actor, clock);
         var expired = await CreateSessionAsync(actor, clock);
 
@@ -424,8 +424,8 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task Revoke_Others_Keeps_The_Current_Session_And_Counts_The_Rest()
     {
         var clock = ClockAt();
-        var user = await SeedUserAsync("revoke-others@example.com");
-        var bystander = await SeedUserAsync("revoke-others-bystander@example.com");
+        var user = await SeedUserAsync(Unique.Email("revoke-others"));
+        var bystander = await SeedUserAsync(Unique.Email("revoke-others-bystander"));
 
         var current = await CreateSessionAsync(user, clock);
         var second = await CreateSessionAsync(user, clock);
@@ -458,7 +458,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task Revoke_Others_Can_End_The_Current_Session_Too()
     {
         var clock = ClockAt();
-        var user = await SeedUserAsync("revoke-others-all@example.com");
+        var user = await SeedUserAsync(Unique.Email("revoke-others-all"));
         var current = await CreateSessionAsync(user, clock);
         await CreateSessionAsync(user, clock);
 
@@ -477,7 +477,7 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     public async Task Revoke_Others_Without_A_Proof_Is_Unauthenticated_And_Revokes_Nothing()
     {
         var clock = ClockAt();
-        var user = await SeedUserAsync("revoke-others-anon@example.com");
+        var user = await SeedUserAsync(Unique.Email("revoke-others-anon"));
         var ticket = await CreateSessionAsync(user, clock);
 
         var (status, revoked) = await CreateRoutes(clock).RevokeOthersAsync([], keepCurrent: false, Token);

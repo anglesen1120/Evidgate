@@ -23,7 +23,6 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// timing threshold; the eight requests share one clock instant, so no interleaving can produce a
 /// different row or a different count.
 /// </remarks>
-[Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class SessionSlideConcurrencyTests : SessionHardeningTestBase
 {
@@ -33,6 +32,7 @@ public sealed class SessionSlideConcurrencyTests : SessionHardeningTestBase
     /// <summary>The default idle lifetime (<c>SessionOptions.IdleSeconds</c>, 28 800 s).</summary>
     private static readonly TimeSpan Idle = TimeSpan.FromHours(8);
 
+    /// <summary>Shares the run's database: the batch slides the one row the case minted.</summary>
     public SessionSlideConcurrencyTests(DatabaseFixture fixture)
         : base(fixture)
     {
@@ -46,7 +46,7 @@ public sealed class SessionSlideConcurrencyTests : SessionHardeningTestBase
     [Fact]
     public async Task Eight_Concurrent_Requests_On_One_Idle_Session_Slide_It_Once()
     {
-        var userId = await SeedUserAsync("slide-race@example.com");
+        var userId = await SeedUserAsync(Unique.Email("slide-race"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
         clock.Advance(TimeSpan.FromSeconds(90));
@@ -122,7 +122,7 @@ public sealed class SessionSlideConcurrencyTests : SessionHardeningTestBase
     [Fact]
     public async Task Exactly_One_Concurrent_Statement_Reports_The_Slide()
     {
-        var userId = await SeedUserAsync("slide-race-slid@example.com");
+        var userId = await SeedUserAsync(Unique.Email("slide-race-slid"));
         var clock = ClockAt();
         var session = await CreateSessionAsync(userId, clock);
         clock.Advance(TimeSpan.FromSeconds(90));
