@@ -59,24 +59,31 @@ public sealed class PolicyEndpointTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Dedicated.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Dedicated.DisposeAsync();
+            }
         }
     }
 
-    private async Task<World> StartAsync()
-    {
-        // Private database: this class asserts unfiltered policy_revision counts across the whole database.
-        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+    // Private database: this class asserts unfiltered policy_revision counts across the whole database.
+    private Task<World> StartAsync() =>
+        _fixture.StartDedicatedAsync(async dedicated =>
+        {
+            var database = dedicated.Name;
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, database, user, org, project, dedicated);
-    }
+            return new World(api, client, database, user, org, project, dedicated);
+        });
 
     private static Task<ApiAnswer> CreateAsync(
         World world,

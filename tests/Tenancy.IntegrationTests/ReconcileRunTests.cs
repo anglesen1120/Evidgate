@@ -89,12 +89,8 @@ public sealed partial class ReconcileRunTests
     {
         var world = await IngestTestWorld.StartAsync(
             _fixture, IngestTestWorld.Writer(), slots: slots, services: services, database: database);
-        if (attempts)
-        {
-            await RecordPlanAttemptsAsync(world);
-        }
 
-        return world;
+        return attempts ? await AnswerPlanOrDisposeAsync(world) : world;
     }
 
     /// <summary>
@@ -122,9 +118,27 @@ public sealed partial class ReconcileRunTests
                         provider.GetRequiredService<ITenantScopeAccessor>()),
                     provider.GetRequiredService<ReconcileCallCounter>()));
             });
-        await RecordPlanAttemptsAsync(world, attemptsSkip);
+        await AnswerPlanOrDisposeAsync(world, attemptsSkip);
 
         return world;
+    }
+
+    /// <summary>
+    /// Answers the seeded plan and returns the same world. A failure here disposes the world before the error
+    /// escapes, because the caller's <c>await using</c> never binds a world a factory did not return.
+    /// </summary>
+    private static async Task<IngestTestWorld> AnswerPlanOrDisposeAsync(IngestTestWorld world, int skip = 0)
+    {
+        try
+        {
+            await RecordPlanAttemptsAsync(world, skip);
+            return world;
+        }
+        catch
+        {
+            await world.DisposeAsync();
+            throw;
+        }
     }
 
     /// <summary>

@@ -60,35 +60,47 @@ public sealed class RunCreationTests
         database ??= await fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, Unique.Slug(slug));
-        var project = await CreateProjectAsync(client, user, org, "checkout");
-        var revisions = await ManifestTests.SeedCasesAsync(fixture, api, org, project, database, cases);
-        var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
 
-        var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
-        suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
-        var revision = await client.SendAsync(
-            HttpMethod.Post,
-            $"/v1/suites/{suite.Id()}/revisions",
-            admin,
-            new { members = revisions.Select(id => new { case_revision_id = id }).ToArray() },
-            NewKey());
-        revision.Status.ShouldBe(HttpStatusCode.Created, revision.ErrorMessage);
+        try
+        {
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, Unique.Slug(slug));
+            var project = await CreateProjectAsync(client, user, org, "checkout");
+            var revisions = await ManifestTests.SeedCasesAsync(fixture, api, org, project, database, cases);
+            var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
 
-        var environment = await client.SendAsync(
-            HttpMethod.Post,
-            $"/v1/projects/{project}/environments/staging/revisions",
-            admin,
-            new { base_urls = new { web = "https://staging.example.test" }, dependency_versions = new { postgres = "18.0" } },
-            NewKey());
-        environment.Status.ShouldBe(HttpStatusCode.Created, environment.ErrorMessage);
+            var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
+            suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
+            var revision = await client.SendAsync(
+                HttpMethod.Post,
+                $"/v1/suites/{suite.Id()}/revisions",
+                admin,
+                new { members = revisions.Select(id => new { case_revision_id = id }).ToArray() },
+                NewKey());
+            revision.Status.ShouldBe(HttpStatusCode.Created, revision.ErrorMessage);
 
-        var manifest = Manifest(revision.Id("suite_revision_id"), revisions, variants: 2, shards: 2);
-        manifest["environment_revision_id"] = environment.Id("revision_id").ToString();
-        var manifestId = await UploadAsync(client, admin, project, manifest);
+            var environment = await client.SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/environments/staging/revisions",
+                admin,
+                new { base_urls = new { web = "https://staging.example.test" }, dependency_versions = new { postgres = "18.0" } },
+                NewKey());
+            environment.Status.ShouldBe(HttpStatusCode.Created, environment.ErrorMessage);
 
-        return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), environment.Id("revision_id"), manifestId, revisions);
+            var manifest = Manifest(revision.Id("suite_revision_id"), revisions, variants: 2, shards: 2);
+            manifest["environment_revision_id"] = environment.Id("revision_id").ToString();
+            var manifestId = await UploadAsync(client, admin, project, manifest);
+
+            return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), environment.Id("revision_id"), manifestId, revisions);
+        }
+        catch
+        {
+            // A world that never returns owns nothing: the host it was built on is disposed here, so a failed
+            // arrange does not leave a server and its connections behind for the rest of the run.
+            client.Dispose();
+            await api.DisposeAsync();
+            throw;
+        }
     }
 
     internal static JsonObject Manifest(Guid suite, Guid[] cases, int variants, int shards) => ManifestUnitTests.Build(

@@ -31,23 +31,30 @@ public sealed class WaiverTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Owned.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Owned.DisposeAsync();
+            }
         }
     }
 
-    private async Task<World> StartAsync()
-    {
-        var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = owned.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+    private Task<World> StartAsync() =>
+        _fixture.StartDedicatedAsync(async owned =>
+        {
+            var database = owned.Name;
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, owned, user, org, project);
-    }
+            return new World(api, client, owned, user, org, project);
+        });
 
     // ------------------------------------------------------------------ helpers
 

@@ -78,8 +78,15 @@ public sealed partial class AuthoringVersionTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Database.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Database.DisposeAsync();
+            }
         }
     }
 
@@ -814,17 +821,17 @@ public sealed partial class AuthoringVersionTests
         [.. answer.Body.GetProperty("error").GetProperty("details").EnumerateArray()
             .Select(detail => detail.TryGetProperty("path", out var path) ? path.GetString() : null)];
 
-    private async Task<RestoreWorld> StartRestoreAsync()
-    {
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+    private Task<RestoreWorld> StartRestoreAsync() =>
+        _fixture.StartDedicatedAsync(async database =>
+        {
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new RestoreWorld(api, client, database, user, org, project);
-    }
+            return new RestoreWorld(api, client, database, user, org, project);
+        });
 
     /// <summary>One restore request: <c>Idempotency-Key</c> always, <c>If-Match</c> when the route declares one.</summary>
     private static Task<ApiAnswer> SendAsync(RestoreWorld world, string url, string? ifMatch) =>

@@ -11,10 +11,9 @@ namespace Tenancy.IntegrationTests;
 /// catalogue permission it seeds (07.3.1 §4/§6, D1/D3; TL T3, T23, T58).
 /// <para>
 /// The fixture is this project's own <see cref="PostgresTenancyFixture"/> — one digest-pinned
-/// PostgreSQL 18 container per assembly, a fresh database per test brought to head by the real
-/// <c>Evidgate.Migrator</c> — the 06.1.1-T1 / 04.1.2-T4 precedent for a new table in this suite.
-/// These tests pin the database contract (grants, guard, RLS, indexes, seed), never internals; the
-/// HTTP surface is 07.3.1-T2.2's.
+/// PostgreSQL 18 container per assembly and one database for the run (tests isolate by tenant), with a
+/// private database only for the index-plan case. These tests pin the database contract (grants, guard,
+/// RLS, indexes, seed), never internals; the HTTP surface is 07.3.1-T2.2's.
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
@@ -27,33 +26,38 @@ public sealed class QuarantineSchemaTests
     private sealed record World(
         TenancyApiFactory Api,
         HttpClient Client,
-        DedicatedDatabase Database,
+        string Database,
         Guid Org,
         Guid Project,
         Guid Case,
-        Guid Owner) : IAsyncDisposable
+        Guid Owner,
+        DedicatedDatabase? Owned = null) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
             await Api.DisposeAsync();
-            await Database.DisposeAsync();
+
+            if (Owned is not null)
+            {
+                await Owned.DisposeAsync();
+            }
         }
     }
 
-    /// <summary>One migrated database with an org, a project, a catalog case and an active membership.</summary>
-    private async Task<World> StartAsync()
+    /// <summary>An org, a project, a catalog case and an active membership, on the shared database.</summary>
+    /// <param name="dedicated">A private database for the index-plan case; the world drops it.</param>
+    private async Task<World> StartAsync(DedicatedDatabase? dedicated = null)
     {
-        // The unfiltered counts and the index plan below read the whole database, so each world owns one.
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated?.Name ?? await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
         var (caseId, owner) = await SeedCaseAndMemberAsync(database, org, project);
 
-        return new World(api, client, database, org, project, caseId, owner);
+        return new World(api, client, database, org, project, caseId, owner, dedicated);
     }
 
     /// <summary>A catalog case and an active membership in the org, seeded as the owner (the migration role).</summary>
@@ -86,8 +90,9 @@ public sealed class QuarantineSchemaTests
     private async Task<(Guid Org, Guid Project, Guid Case, Guid Owner)> CreateOtherTenantAsync(World world)
     {
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(world.Client, user, "beta");
-        var project = await CreateProjectAsync(world.Client, user, org, "beta-project");
+        var slug = Unique.Slug("beta");
+        var org = await CreateOrgAsync(world.Client, user, slug);
+        var project = await CreateProjectAsync(world.Client, user, org, slug + "-project");
         var (caseId, owner) = await SeedCaseAndMemberAsync(world.Database, org, project);
 
         return (org, project, caseId, owner);
@@ -146,7 +151,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task QuarantineEntry_HasForcedRls_AndTheTenantKey()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.TableExistsAsync(database, "quarantine_entry")).ShouldBeTrue();
 
@@ -164,7 +169,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task CompositeForeignKeys_Exist()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var constraints = await _fixture.ConstraintsAsync(database, "quarantine_entry");
 
         constraints.ShouldContain(
@@ -246,7 +251,9 @@ public sealed class QuarantineSchemaTests
             await scope.CommitAsync();
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(2);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.quarantine_entry where org_id = '{world.Org}'")).ShouldBe(2);
     }
 
     // ------------------------------------------------------------------ (d) RLS isolation
@@ -293,7 +300,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task TenantPolicy_IsScopedToTheAppRole()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // A policy with no `to` clause applies to PUBLIC; the tenant policy must name evidgate_app only,
         // so the operator's SELECT grant reads zero rows (F1).
@@ -309,7 +316,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task AppRole_HasNoTableLevelInsertUpdateOrDelete_AndOnlyStateUpdate()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "quarantine_entry", "SELECT")).ShouldBeTrue();
         // A column-level GRANT is independent of the table-level one, so the table-level INSERT/UPDATE
@@ -334,7 +341,9 @@ public sealed class QuarantineSchemaTests
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
         (await scope.CaptureErrorAsync($"delete from public.quarantine_entry where id = '{id}'")).SqlState.ShouldBe("42501");
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.quarantine_entry")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.quarantine_entry where org_id = '{world.Org}'")).ShouldBe(1);
     }
 
     [Fact]
@@ -446,7 +455,9 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task ListAndDueQueries_UseTheirIndexes()
     {
-        await using var world = await StartAsync();
+        // Dedicated: it seeds 4100 rows, ANALYZEs and disables sequential scans for its own plan.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(dedicated);
 
         // 2100 cases in the target project: 100 due (past expiry) and 2000 future, one active entry each
         // (the partial unique index allows one active entry per case); 2000 removed entries give the list
@@ -502,7 +513,7 @@ public sealed class QuarantineSchemaTests
     [Fact]
     public async Task PermissionSeed_GrantsQuarantineWriteToTestMaintainerOnly()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // The permission row exists with the D1 fields, exactly as contracts/permissions.json declares them.
         (await _fixture.ScalarAsync<string>(

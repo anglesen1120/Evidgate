@@ -60,7 +60,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task TenancyKeys_And_CompositeForeignKeys()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in Tables)
         {
@@ -137,7 +137,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task DeclaredIndexes_Exist()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // Live siblings only, `nulls not distinct` so two NULL-parented roots compare equal.
         var nodeIndexes = (await _fixture.IndexesAsync(database, "feature_node")).Select(Unquoted).ToList();
@@ -177,7 +177,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task ImmutableColumns_Update_RefusedForApp()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
         var node = Guid.CreateVersion7();
 
@@ -227,7 +227,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task ForceRls_AndOwnerPolicyOnEveryTable()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in Tables)
         {
@@ -252,7 +252,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task SiblingPosition_UniqueForRootAndChild()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedTenantAsync(database, "acme", "checkout");
 
         var root = Guid.CreateVersion7();
@@ -429,7 +429,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_InsertDefault_IsUniquePerOrg()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var acme = await SeedOrgAsync(database, "acme");
         var globex = await SeedOrgAsync(database, "globex");
 
@@ -461,7 +461,8 @@ public sealed class AuthoringSchemaTests
 
         (await _fixture.ScalarAsync<long>(
             database,
-            $"select count(*) from public.project where case_prefix is null or case_prefix !~ '{PrefixFormat}'"))
+            $"select count(*) from public.project where org_id in ('{acme}', '{globex}') "
+            + $"and (case_prefix is null or case_prefix !~ '{PrefixFormat}')"))
             .ShouldBe(0);
     }
 
@@ -476,7 +477,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_EfProjectInsert_ReadsTriggerValue()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, _) = await SeedTenantAsync(database, "acme", "checkout");
 
         await using var source = NpgsqlDataSource.Create(_fixture.AppConnectionString(database));
@@ -525,7 +526,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_InsertExplicit_IsKeptVerbatim()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = await SeedOrgAsync(database, "acme");
 
         await using (var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database)))
@@ -566,7 +567,7 @@ public sealed class AuthoringSchemaTests
     [Fact]
     public async Task CasePrefix_ConcurrentInserts_GetDistinctPrefixes()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = await SeedOrgAsync(database, "acme");
         var connectionString = _fixture.OwnerConnectionString(database);
         var token = TestContext.Current.CancellationToken;
@@ -646,17 +647,18 @@ public sealed class AuthoringSchemaTests
         return (org, project);
     }
 
-    /// <summary>One organization row, written as the migration role.</summary>
+    /// <summary>One organization row, written as the migration role; the slug is unique per run.</summary>
     private async Task<Guid> SeedOrgAsync(string database, string slug)
     {
         var org = Guid.CreateVersion7();
+        var unique = Unique.Slug(slug);
 
         await using var seed = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
         await seed.ExecuteAsync(
             "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
             ("id", org),
             ("name", slug),
-            ("slug", slug));
+            ("slug", unique));
         await seed.CommitAsync();
 
         return org;

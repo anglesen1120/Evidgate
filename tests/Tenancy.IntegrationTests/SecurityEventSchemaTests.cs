@@ -317,7 +317,9 @@ public sealed class SecurityEventSchemaTests
     [Fact]
     public async Task Page_IsIndexOrderedWithoutASort()
     {
-        var database = await _fixture.SharedDatabaseAsync();
+        // Dedicated: the plan is decided by this database's ANALYZE statistics, which no parallel class reshapes.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
         var org = Guid.CreateVersion7();
         var project = Guid.CreateVersion7();
 

@@ -79,9 +79,16 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Host.DisposeAsync();
-            await Api.DisposeAsync();
-            await Database.DisposeAsync();
+            try
+            {
+                await Host.DisposeAsync();
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Database.DisposeAsync();
+            }
         }
     }
 
@@ -89,31 +96,31 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
     private static RequestPrincipal Writer(string jti = Jti) =>
         RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: jti);
 
+    // The "no row minted" assertions count every artifact of the database, so each world owns one.
     /// <summary>
     /// One migrated database with an org and a project created through the real registry routes, plus a host
     /// whose requests carry <paramref name="principal"/> and the SeaweedFS container's object-store configuration.
     /// </summary>
-    private async Task<World> StartAsync(RequestPrincipal? principal = null)
-    {
-        // The "no row minted" assertions count every artifact of the database, so each world owns one.
-        var database = await fixture.CreateDedicatedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
-        Guid user;
-        Guid org;
-        Guid project;
-
-        using (var setup = api.CreateClient())
+    private Task<World> StartAsync(RequestPrincipal? principal = null) =>
+        fixture.StartDedicatedAsync(async database =>
         {
-            user = Guid.CreateVersion7();
-            org = await CreateOrgAsync(setup, user, "acme");
-            project = await CreateProjectAsync(setup, user, org, "checkout");
-        }
+            var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+            Guid user;
+            Guid org;
+            Guid project;
 
-        var host = TenancyApiFactory.WithPrincipal(
-            fixture.AppConnectionString(database), org, project, principal ?? Writer(), store.Configuration());
+            using (var setup = api.CreateClient())
+            {
+                user = Guid.CreateVersion7();
+                org = await CreateOrgAsync(setup, user, "acme");
+                project = await CreateProjectAsync(setup, user, org, "checkout");
+            }
 
-        return new World(api, host, host.CreateClient(), database, user, org, project);
-    }
+            var host = TenancyApiFactory.WithPrincipal(
+                fixture.AppConnectionString(database), org, project, principal ?? Writer(), store.Configuration());
+
+            return new World(api, host, host.CreateClient(), database, user, org, project);
+        });
 
     /// <summary>
     /// One committed run, one planned execution and one producer slot for the world's org — the parents the

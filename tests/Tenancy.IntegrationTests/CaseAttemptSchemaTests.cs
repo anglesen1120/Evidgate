@@ -14,9 +14,8 @@ namespace Tenancy.IntegrationTests;
 /// indexes) plus the deferred composite attempt key on <c>artifact</c> (0028).
 /// <para>
 /// The fixture is this project's own <see cref="PostgresTenancyFixture"/> — one digest-pinned
-/// PostgreSQL 18 container per assembly, one migrated database for the run, and a private database copied
-/// from it for each test of this suite because the suite re-runs the migration under test and reads the
-/// table's shape as a whole — the precedent for a new table in this suite.
+/// PostgreSQL 18 container per assembly and one migrated database for the run (tests isolate by tenant);
+/// only the plan-reading and migration re-run cases copy a private database.
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
@@ -45,31 +44,32 @@ public sealed partial class CaseAttemptSchemaTests
         Guid User,
         Guid Org,
         Guid Project,
-        DedicatedDatabase Dedicated) : IAsyncDisposable
+        DedicatedDatabase? Owned = null) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
             await Api.DisposeAsync();
-            await Dedicated.DisposeAsync();
+
+            if (Owned is not null)
+            {
+                await Owned.DisposeAsync();
+            }
         }
     }
 
     /// <summary>The parent rows a <c>case_attempt</c> row needs, seeded as the migration role.</summary>
     private sealed record Parents(Guid SuiteRevisionId, Guid EnvironmentRevisionId, Guid ManifestId, Guid CaseId, Guid TestRevisionId);
 
-    /// <summary>
-    /// One migrated database private to the test: the suite re-runs the 0032 migration and reads the table's shape as a
-    /// whole, so a shared database would see (and disturb) other tests' rows and policies.
-    /// </summary>
-    private async Task<World> StartAsync()
+    /// <summary>An org and a project on the shared database, created through the real registry routes.</summary>
+    /// <param name="dedicated">A private database for the EXPLAIN and migration re-run cases; the world drops it.</param>
+    private async Task<World> StartAsync(DedicatedDatabase? dedicated = null)
     {
-        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
+        var database = dedicated?.Name ?? await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project, dedicated);
@@ -79,8 +79,9 @@ public sealed partial class CaseAttemptSchemaTests
     private static async Task<(Guid Org, Guid Project)> CreateOtherTenantAsync(World world, string slug)
     {
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(world.Client, user, slug);
-        var project = await CreateProjectAsync(world.Client, user, org, slug + "-project");
+        var unique = Unique.Slug(slug);
+        var org = await CreateOrgAsync(world.Client, user, unique);
+        var project = await CreateProjectAsync(world.Client, user, org, unique + "-project");
 
         return (org, project);
     }
@@ -238,8 +239,7 @@ public sealed partial class CaseAttemptSchemaTests
     [Fact]
     public async Task CaseAttempt_HasForcedRls()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.TableExistsAsync(database, "case_attempt")).ShouldBeTrue();
         (await _fixture.RowSecurityAsync(database, "case_attempt")).ShouldBe((true, true));
@@ -248,8 +248,7 @@ public sealed partial class CaseAttemptSchemaTests
     [Fact]
     public async Task TenantPolicies_AreScopedToTheAppRole()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         // A policy with no `to` clause applies to PUBLIC; the tenant policy must name evidgate_app
         // only, so the operator's SELECT grant reads zero rows (T76).
@@ -263,8 +262,7 @@ public sealed partial class CaseAttemptSchemaTests
     [Fact]
     public async Task CaseAttempt_Constraints_Exist()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         var constraints = await _fixture.ConstraintNamesAsync(database, "case_attempt");
 
@@ -284,8 +282,7 @@ public sealed partial class CaseAttemptSchemaTests
     [Fact]
     public async Task CaseAttemptIndexes_ExistInPgIndexes()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         var indexes = await _fixture.IndexesAsync(database, "case_attempt");
         indexes.Any(index => index.StartsWith("case_attempt_run_status_idx:", StringComparison.Ordinal)).ShouldBeTrue();
@@ -298,8 +295,7 @@ public sealed partial class CaseAttemptSchemaTests
     [Fact]
     public async Task ArtifactAttemptKey_ExistsAndIsValidated()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         // The key 0028 deferred: added `not valid`, orphan-checked, then validated.
         (await _fixture.ScalarAsync<bool>(
@@ -313,8 +309,7 @@ public sealed partial class CaseAttemptSchemaTests
     [Fact]
     public async Task AppRole_HasOnlySelectInsert_OnCaseAttempt()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "case_attempt", "select")).ShouldBeTrue();
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", "case_attempt", "insert")).ShouldBeTrue();
@@ -577,8 +572,10 @@ public sealed partial class CaseAttemptSchemaTests
         await scope.CommitAsync();
 
         await using var read = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        (await read.ScalarAsync<string>("select raw_status from public.case_attempt")).ShouldBe(string.Empty);
-        (await read.ScalarAsync<string>("select normalized_status from public.case_attempt")).ShouldBe("error");
+        (await read.ScalarAsync<string>(
+            $"select raw_status from public.case_attempt where org_id = '{world.Org}'")).ShouldBe(string.Empty);
+        (await read.ScalarAsync<string>(
+            $"select normalized_status from public.case_attempt where org_id = '{world.Org}'")).ShouldBe("error");
     }
 
     // ------------------------------------------------------------------ (f) index coverage (AC6)
@@ -586,7 +583,9 @@ public sealed partial class CaseAttemptSchemaTests
     [Fact]
     public async Task CaseAttempt_ListByRunAndStatus_UsesIndex()
     {
-        await using var world = await StartAsync();
+        // Dedicated: it seeds 40 rows, ANALYZEs and reads the plan with sequential scans disabled.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(dedicated);
         var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
         var runId = await SeedRunAndPlanAsync(world, parents);
 
@@ -603,7 +602,9 @@ public sealed partial class CaseAttemptSchemaTests
     [Fact]
     public async Task CaseAttempt_HistoryByCaseAndTime_UsesIndex()
     {
-        await using var world = await StartAsync();
+        // Dedicated: it seeds 40 rows, ANALYZEs and reads the plan with sequential scans disabled.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(dedicated);
         var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
         var runId = await SeedRunAndPlanAsync(world, parents);
 
@@ -652,7 +653,9 @@ public sealed partial class CaseAttemptSchemaTests
     [Fact]
     public async Task Migration_ReRun_KeepsAValidAttemptRow()
     {
-        await using var world = await StartAsync();
+        // Dedicated: it re-applies the migration and counts the table whole, so it owns the database.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(dedicated);
         var parents = await SeedParentsAsync(world.Database, world.Org, world.Project);
         var runId = await SeedRunAndPlanAsync(world, parents);
 

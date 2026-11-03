@@ -53,25 +53,32 @@ public sealed class CatalogIdentityTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Dedicated.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Dedicated.DisposeAsync();
+            }
         }
     }
 
-    private async Task<World> StartAsync()
-    {
-        // Dedicated: the identity resolver's annotation lookup and the cross-tenant assertions read
-        // rows no single tenant scope would own, so the class needs an empty database of its own.
-        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+    // Dedicated: the identity resolver's annotation lookup and the cross-tenant assertions read
+    // rows no single tenant scope would own, so the class needs an empty database of its own.
+    private Task<World> StartAsync() =>
+        _fixture.StartDedicatedAsync(async dedicated =>
+        {
+            var database = dedicated.Name;
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, database, user, org, project, dedicated);
-    }
+            return new World(api, client, database, user, org, project, dedicated);
+        });
 
     private static SourceFile Annotated(string path, string id) => new(path, $"// evidgate.id: {id}\ntest('x', () => {{}});", "playwright", "typescript");
 

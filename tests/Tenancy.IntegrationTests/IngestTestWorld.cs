@@ -119,11 +119,23 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         var host = TenancyApiFactory.WithPrincipal(
             fixture.AppConnectionString(database), org, project, principal, services: services);
 
-        var plan = await PlannedExecutionSeeder.SeedPlanAsync(fixture, database, org, planCount ?? planned, edges: edges);
-        await SeedSlotsAsync(fixture, database, org, plan.RunId, slots, boundJti);
+        try
+        {
+            var plan = await PlannedExecutionSeeder.SeedPlanAsync(fixture, database, org, planCount ?? planned, edges: edges);
+            await SeedSlotsAsync(fixture, database, org, plan.RunId, slots, boundJti);
 
-        return new IngestTestWorld(
-            fixture, api, host, host.CreateClient(), database, user, org, project, plan.RunId, plan);
+            return new IngestTestWorld(
+                fixture, api, host, host.CreateClient(), database, user, org, project, plan.RunId, plan);
+        }
+        catch
+        {
+            // A world that never returns owns nothing: the host graph it built is disposed here, so a failed
+            // arrange does not leave a server and its connections behind for the rest of the run. The database
+            // is the caller's (its `await using` drops it, or it was never dedicated at all).
+            await host.DisposeAsync();
+            await api.DisposeAsync();
+            throw;
+        }
     }
 
     /// <summary>One committed producer slot per shard, written as the app role inside a tenant scope.</summary>
@@ -192,8 +204,15 @@ internal sealed class IngestTestWorld : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         Client.Dispose();
-        await Host.DisposeAsync();
-        await Api.DisposeAsync();
+        try
+        {
+            await Host.DisposeAsync();
+        }
+        finally
+        {
+            // The registry host is disposed even when the principal host's own disposal throws.
+            await Api.DisposeAsync();
+        }
     }
 }
 

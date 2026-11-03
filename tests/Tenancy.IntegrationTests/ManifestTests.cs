@@ -46,8 +46,15 @@ public sealed class ManifestTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Dedicated.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Dedicated.DisposeAsync();
+            }
         }
     }
 
@@ -55,30 +62,30 @@ public sealed class ManifestTests
     /// An org with a project, <paramref name="cases"/> registered case revisions and a suite revision over them, in a
     /// database private to the test: the suite reads the manifest table as a whole and watches the rejection meter.
     /// </summary>
-    internal static async Task<World> StartAsync(PostgresTenancyFixture fixture, int cases = 2, string slug = "acme")
-    {
-        var dedicated = await fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, slug);
-        var project = await CreateProjectAsync(client, user, org, "checkout");
-        var revisions = await SeedCasesAsync(fixture, api, org, project, database, cases);
-        var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
+    internal static Task<World> StartAsync(PostgresTenancyFixture fixture, int cases = 2, string slug = "acme") =>
+        fixture.StartDedicatedAsync(async dedicated =>
+        {
+            var database = dedicated.Name;
+            var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, slug);
+            var project = await CreateProjectAsync(client, user, org, "checkout");
+            var revisions = await SeedCasesAsync(fixture, api, org, project, database, cases);
+            var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
 
-        var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
-        suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
-        var revision = await client.SendAsync(
-            HttpMethod.Post,
-            $"/v1/suites/{suite.Id()}/revisions",
-            admin,
-            new { members = revisions.Select(id => new { case_revision_id = id }).ToArray() },
-            NewKey());
-        revision.Status.ShouldBe(HttpStatusCode.Created, revision.ErrorMessage);
+            var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
+            suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
+            var revision = await client.SendAsync(
+                HttpMethod.Post,
+                $"/v1/suites/{suite.Id()}/revisions",
+                admin,
+                new { members = revisions.Select(id => new { case_revision_id = id }).ToArray() },
+                NewKey());
+            revision.Status.ShouldBe(HttpStatusCode.Created, revision.ErrorMessage);
 
-        return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), revisions, dedicated);
-    }
+            return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), revisions, dedicated);
+        });
 
     internal static async Task<Guid[]> SeedCasesAsync(PostgresTenancyFixture fixture, TenancyApiFactory api, Guid org, Guid project, string database, int count)
     {

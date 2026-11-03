@@ -54,24 +54,31 @@ public sealed class AuthoringImporterTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Dedicated.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Dedicated.DisposeAsync();
+            }
         }
     }
 
-    private async Task<World> StartAsync()
-    {
-        // Private database: the import timings are wall-clock thresholds that a busy shared host would trip.
-        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
+    // Private database: the import timings are wall-clock thresholds that a busy shared host would trip.
+    private Task<World> StartAsync() =>
+        _fixture.StartDedicatedAsync(async dedicated =>
+        {
+            var database = dedicated.Name;
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
 
-        return new World(api, client, database, user, org, project, dedicated);
-    }
+            return new World(api, client, database, user, org, project, dedicated);
+        });
 
     /// <summary>Runs one import on the host's own object graph, inside one writable tenant scope of the world.</summary>
     /// <param name="world">The world.</param>

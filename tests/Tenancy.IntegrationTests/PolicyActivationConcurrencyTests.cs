@@ -57,25 +57,32 @@ public sealed class PolicyActivationConcurrencyTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            await Api.DisposeAsync();
-            await Dedicated.DisposeAsync();
+            try
+            {
+                await Api.DisposeAsync();
+            }
+            finally
+            {
+                // The database is this world's to drop even when the host's own disposal throws.
+                await Dedicated.DisposeAsync();
+            }
         }
     }
 
-    private async Task<World> StartAsync()
-    {
-        // Private database: the 60 s race budget and the unfiltered metered counters need a quiet host.
-        var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-        var client = api.CreateClient();
-        var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
-        var project = await CreateProjectAsync(client, user, org, "checkout");
-        var (caseId, maintainer, membership) = await SeedCaseAndMaintainerAsync(database, client, user, org, project);
+    // Private database: the 60 s race budget and the unfiltered metered counters need a quiet host.
+    private Task<World> StartAsync() =>
+        _fixture.StartDedicatedAsync(async dedicated =>
+        {
+            var database = dedicated.Name;
+            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+            var client = api.CreateClient();
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, "acme");
+            var project = await CreateProjectAsync(client, user, org, "checkout");
+            var (caseId, maintainer, membership) = await SeedCaseAndMaintainerAsync(database, client, user, org, project);
 
-        return new World(api, client, database, user, org, project, caseId, maintainer, membership, dedicated);
-    }
+            return new World(api, client, database, user, org, project, caseId, maintainer, membership, dedicated);
+        });
 
     /// <summary>One catalog case and an active <c>test_maintainer</c> membership (the only role holding <c>quarantine:write</c>).</summary>
     private async Task<(Guid Case, Guid User, Guid Membership)> SeedCaseAndMaintainerAsync(

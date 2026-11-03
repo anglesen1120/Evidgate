@@ -38,7 +38,7 @@ public sealed class EvidenceArtifactSchemaTests
     private sealed record World(
         TenancyApiFactory Api,
         HttpClient Client,
-        DedicatedDatabase Database,
+        string Database,
         Guid User,
         Guid Org,
         Guid Project) : IAsyncDisposable
@@ -47,19 +47,17 @@ public sealed class EvidenceArtifactSchemaTests
         {
             Client.Dispose();
             await Api.DisposeAsync();
-            await Database.DisposeAsync();
         }
     }
 
-    /// <summary>One migrated database with an org and a project, created through the real registry routes.</summary>
+    /// <summary>An org and a project on the shared database, created through the real registry routes.</summary>
     private async Task<World> StartAsync()
     {
-        // One case counts every artifact row of the database, so each world owns a migrated database.
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(client, user, "acme");
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
 
         return new World(api, client, database, user, org, project);
@@ -134,8 +132,9 @@ public sealed class EvidenceArtifactSchemaTests
     private static async Task<(Guid Org, Guid Project)> CreateOtherTenantAsync(World world, string slug)
     {
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(world.Client, user, slug);
-        var project = await CreateProjectAsync(world.Client, user, org, slug + "-project");
+        var unique = Unique.Slug(slug);
+        var org = await CreateOrgAsync(world.Client, user, unique);
+        var project = await CreateProjectAsync(world.Client, user, org, unique + "-project");
 
         return (org, project);
     }
@@ -145,7 +144,7 @@ public sealed class EvidenceArtifactSchemaTests
     [Fact]
     public async Task Artifact_AndKindPolicy_HaveForcedRls()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in new[] { "artifact", "artifact_kind_policy" })
         {
@@ -203,7 +202,12 @@ public sealed class EvidenceArtifactSchemaTests
             await scope.CommitAsync();
         }
 
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.artifact")).ShouldBe(2);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.artifact where org_id = '{world.Org}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.artifact where org_id = '{otherOrg}'")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ (c) AC4: unique (org_id, id)
@@ -211,7 +215,7 @@ public sealed class EvidenceArtifactSchemaTests
     [Fact]
     public async Task TenantKey_UniqueOrgIdId_Exists()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var (table, name) in new[] { ("artifact", "artifact_org_id_key"), ("artifact_kind_policy", "artifact_kind_policy_org_id_key") })
         {
@@ -274,7 +278,7 @@ public sealed class EvidenceArtifactSchemaTests
     [Fact]
     public async Task TenantPolicies_AreScopedToTheAppRole()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         // A policy with no `to` clause applies to PUBLIC; the tenant policies must name evidgate_app
         // only, so the operator's SELECT grant reads zero rows (F1).
@@ -485,7 +489,7 @@ public sealed class EvidenceArtifactSchemaTests
     [Fact]
     public async Task ArtifactIndexes_ExistInPgIndexes()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var indexes = await _fixture.IndexesAsync(database, "artifact");
 
         indexes.ShouldContain(
@@ -507,7 +511,7 @@ public sealed class EvidenceArtifactSchemaTests
     [Fact]
     public async Task AppRole_HasNoDelete_AndOnlyTheContractUpdateColumns()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in new[] { "artifact", "artifact_kind_policy" })
         {
