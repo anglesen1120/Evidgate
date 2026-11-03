@@ -58,30 +58,34 @@ public sealed class CiProducerScopeTests(DatabaseFixture fixture) : CatalogueTes
     private static readonly Dictionary<(string Method, string Template), string> Excluded =
         new()
         {
-            [("POST", "/v1/ci/token")] =
-                "x-permission is 'none' (the pre-tenant credential exchange itself, 02.4.1)",
-            [("GET", "/v1/auth/oidc/{provider}/start")] =
-                "x-permission is 'none' (pre-tenant login start, 02.3.1-T1.1: no tenant, no principal, no session yet)",
-            [("GET", "/v1/auth/oidc/{provider}/callback")] =
-                "x-permission is 'none' (pre-tenant login callback, 02.3.1-T1.1: the browser holds only the pending-login cookie)",
-            [("POST", "/v1/auth/invite-token")] =
-                "x-permission is 'none' (pre-tenant invite staging, 02.3.1-T2: no session, no principal, no tenant yet)",
-            [("POST", "/v1/auth/link/{provider}")] =
-                "x-permission is 'none' (the link start acts only on the caller's own session cookie, 02.3.1-T2: no catalogue permission exists for it)",
-            [("GET", "/v1/auth/link/pending")] =
-                "x-permission is 'none' (the staged link is the caller's own session state, 02.3.1-T2: no catalogue permission exists for it)",
             [("DELETE", "/v1/auth/link/pending")] =
                 "x-permission is 'none' (discarding the caller's own staged link, 02.3.1-T2: no catalogue permission exists for it)",
-            [("POST", "/v1/auth/link/confirm")] =
-                "x-permission is 'none' (confirming the caller's own staged link, 02.3.1-T2: it writes no tenant row and holds no catalogue permission)",
-            [("GET", "/v1/auth/sessions")] =
-                "x-permission is 'none' (the caller's own live sessions, resolved from the session cookie, 02.3.2-T2: no catalogue permission exists for a pre-tenant read)",
             [("DELETE", "/v1/auth/sessions/{s}")] =
                 "x-permission is 'none' (revoking a session acts on the caller's own credential; the admin path needs membership:write, checked inside the definer, 02.3.2-T2)",
-            [("POST", "/v1/auth/sessions/revoke-all")] =
-                "x-permission is 'none' (revoking the caller's own sessions, 02.3.2-T2: no catalogue permission exists for it)",
+            [("GET", "/v1/auth/link/pending")] =
+                "x-permission is 'none' (the staged link is the caller's own session state, 02.3.1-T2: no catalogue permission exists for it)",
+            [("GET", "/v1/auth/oidc/{provider}/callback")] =
+                "x-permission is 'none' (pre-tenant login callback, 02.3.1-T1.1: the browser holds only the pending-login cookie)",
+            [("GET", "/v1/auth/oidc/{provider}/start")] =
+                "x-permission is 'none' (pre-tenant login start, 02.3.1-T1.1: no tenant, no principal, no session yet)",
+            [("GET", "/v1/auth/sessions")] =
+                "x-permission is 'none' (the caller's own live sessions, resolved from the session cookie, 02.3.2-T2: no catalogue permission exists for a pre-tenant read)",
+            [("GET", "/v1/me")] =
+                "x-permission is 'none' (reading only the caller's own session-derived profile; a service token cannot authenticate this route)",
+            [("PATCH", "/v1/me")] =
+                "x-permission is 'none' (updating only the caller's own session-derived profile; a service token cannot authenticate this route)",
+            [("POST", "/v1/auth/invite-token")] =
+                "x-permission is 'none' (pre-tenant invite staging, 02.3.1-T2: no session, no principal, no tenant yet)",
+            [("POST", "/v1/auth/link/confirm")] =
+                "x-permission is 'none' (confirming the caller's own staged link, 02.3.1-T2: it writes no tenant row and holds no catalogue permission)",
+            [("POST", "/v1/auth/link/{provider}")] =
+                "x-permission is 'none' (the link start acts only on the caller's own session cookie, 02.3.1-T2: no catalogue permission exists for it)",
             [("POST", "/v1/auth/logout")] =
                 "x-permission is 'none' (logout revokes the caller's own session row, 02.3.2-T2: no catalogue permission exists for it)",
+            [("POST", "/v1/auth/sessions/revoke-all")] =
+                "x-permission is 'none' (revoking the caller's own sessions, 02.3.2-T2: no catalogue permission exists for it)",
+            [("POST", "/v1/ci/token")] =
+                "x-permission is 'none' (the pre-tenant credential exchange itself, 02.4.1)",
         };
 
     /// <summary>AC4: a valid <c>ci_producer</c> token calling <c>membership:write</c> is 403 <c>forbidden</c>.</summary>
