@@ -97,14 +97,14 @@ alter table public."user"
 
 -- NULL passes (the account has not chosen yet); anything else must be one of the two
 -- languages the contract names, so a writer that skips the route cannot store a third.
--- Added `not valid` and validated in the same file (the 0056 shape): the row scan is its own
--- statement, so a failure would name the phase — it cannot fail here, because the column is new
--- and every existing row is NULL.
+-- Plain `add constraint`: the column was added above, so every existing row is NULL and the
+-- scan is trivial; splitting NOT VALID and VALIDATE into two migrations would buy no lock
+-- benefit on this small platform table.
 alter table public."user"
   add constraint user_preferred_locale_check
-  check (preferred_locale in ('vi', 'en')) not valid;
+  check (preferred_locale in ('vi', 'en'));
 
-alter table public."user" validate constraint user_preferred_locale_check;
+-- (profile columns and their check are in place; the trigger follows)
 
 drop trigger if exists user_set_updated_at_and_version on public."user";
 create trigger user_set_updated_at_and_version
