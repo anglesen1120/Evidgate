@@ -85,6 +85,10 @@ public static class IdentityEndpoints
             .Produces<RoleView>(StatusCodes.Status200OK)
             .WithSummary("Rename a custom role and/or add grants to it (flagged, 02)");
 
+        // The signed-in account's own profile: pre-tenant, resolved from the session cookie alone, so it
+        // sits on `/v1` beside the tenant routes without ever entering one.
+        MyProfileEndpoints.Map(group);
+
         return group;
     }
 

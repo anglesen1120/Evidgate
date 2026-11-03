@@ -668,6 +668,32 @@ public static class IsolationRouteCases
                 UnauthenticatedCode)),
         ]),
 
+        // 02.3.1-T3's own profile (02.3.1 §5): the caller is the session the presented cookie proves, resolved
+        // inside the definer from its HMAC, so org B's member headers cannot select a tenant on either route and
+        // neither template carries a user id. Without a session cookie the request authenticator answers 401
+        // `unauthenticated` before the handler runs, and the write adds nothing of its own: the antiforgery
+        // middleware does not apply without a session cookie, so it reaches the same 401 as the read.
+        Case("GET", "/v1/me", (route, w) =>
+        [
+            new(route, "own profile stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "own profile stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Get, "/v1/me"),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
+        ]),
+        Case("PATCH", "/v1/me", (route, w) =>
+        [
+            new(route, "own profile write stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "own profile write stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Patch, "/v1/me", new JsonObject { ["preferred_locale"] = "en" }, "\"1\""),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
+        ]),
+
         // ---- Catalog (CatalogEndpoints.cs:39-83) ---------------------------------------------------------------
         ProjectCase("GET", "/v1/projects/{p}/cases", p => new(HttpMethod.Get, $"/v1/projects/{p}/cases"), list: true),
         ObjectCase("GET", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}"), ownControl: true),

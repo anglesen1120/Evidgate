@@ -40,6 +40,8 @@ public sealed class PlatformScopeTests(ApiIsolationFixture fixture)
     /// the presented cookie's HMAC, no route value or body ever names a user or a session of another account, and
     /// the admin path of the revoke route needs an active <c>membership:write</c> in the org named by
     /// <c>X-Evidgate-Org</c> (02 §4.2, 02.3.2 §5) — so they are self-service, not tenant scope.
+    /// The two profile routes are the same shape for the same reason: the session cookie alone identifies the
+    /// account, so <c>/v1/me</c> takes no user id and one caller can never read or update another's row.
     /// </summary>
     private static readonly Dictionary<ApiRoute, string> PlatformScopeRoutes = new()
     {
@@ -51,6 +53,10 @@ public sealed class PlatformScopeTests(ApiIsolationFixture fixture)
             "every live session of the caller only, the acting user resolved from the cookie",
         [new ApiRoute("POST", "/v1/auth/logout")] =
             "the one row the presented cookie proves",
+        [new ApiRoute("GET", "/v1/me")] =
+            "the caller's own profile, resolved from the presented session cookie; no route or body user id can select another account",
+        [new ApiRoute("PATCH", "/v1/me")] =
+            "updates only the caller's own profile, resolved from the presented session cookie; no route or body user id can select another account",
     };
 
     /// <summary>

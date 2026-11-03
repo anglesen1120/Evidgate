@@ -37,10 +37,15 @@ public sealed class UserShapeTests : CatalogueTestBase
     /// The exact column list of <c>public."user"</c> in ordinal order. A column
     /// added without review fails here on purpose: every column of an identity
     /// table is a privacy decision (02.3.1 §8), so the list is the contract, not
-    /// a "contains" check.
+    /// a "contains" check. <c>preferred_locale</c> is the language the account
+    /// chose and <c>version</c> the optimistic-concurrency token of the profile
+    /// write (migration 0061); both are appended because the ALTER added them last.
     /// </summary>
     private static readonly string[] UserColumns =
-        ["id", "email", "display_name", "status", "last_login_at", "created_at", "updated_at"];
+    [
+        "id", "email", "display_name", "status", "last_login_at", "created_at", "updated_at",
+        "preferred_locale", "version",
+    ];
 
     /// <summary>The exact column list of <c>user_identity</c> (02.3.1 §4, T6).</summary>
     private static readonly string[] UserIdentityColumns =

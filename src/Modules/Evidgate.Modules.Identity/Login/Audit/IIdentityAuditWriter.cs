@@ -49,9 +49,15 @@ internal interface IIdentityAuditWriter
 }
 
 /// <summary>What one identity audit entry says (02.3.1-T2.2, Q5).</summary>
-/// <param name="Action">One of <see cref="IdentityAuditActions"/>: <c>auth.login</c>, <c>auth.link</c> or <c>auth.link_move</c>.</param>
+/// <param name="Action">
+/// One of <see cref="IdentityAuditActions"/>: a federated login, a link, a link move, or the account's own
+/// language change.
+/// </param>
 /// <param name="UserId">The user whose chain participation is recorded; it is also the row's object id.</param>
-/// <param name="Provider">The provider name (<c>google</c>, <c>github</c>) — a name, never an address or a subject.</param>
+/// <param name="Provider">
+/// The provider name (<c>google</c>, <c>github</c>) — a name, never an address or a subject — or null for a row
+/// that no provider took part in (an own-profile change), which then carries no <c>provider</c> key at all.
+/// </param>
 /// <param name="ExtraMetadata">
 /// Further allowlisted context (for a move, the user the identity came from). Keys must be on
 /// <see cref="Evidgate.BuildingBlocks.Persistence.Audit.AuditMetadata"/>'s allowlist or the write
@@ -60,7 +66,7 @@ internal interface IIdentityAuditWriter
 internal sealed record IdentityAuditEvent(
     string Action,
     Guid UserId,
-    string Provider,
+    string? Provider,
     IReadOnlyDictionary<string, string>? ExtraMetadata = null);
 
 /// <summary>The action strings the identity audit rows carry (Q5). Each is at most 128 characters, the database's bound.</summary>
@@ -74,4 +80,7 @@ internal static class IdentityAuditActions
 
     /// <summary>A second provider identity was moved from one user to another (explicit confirm only).</summary>
     internal const string LinkMove = "auth.link_move";
+
+    /// <summary>The account changed its own preferred language: the actor and the object are the same user.</summary>
+    internal const string LocaleChanged = "user.locale_changed";
 }

@@ -119,7 +119,10 @@ internal sealed class IdentityAuditWriter : IIdentityAuditWriter
             }
         }
 
-        metadata[ProviderMetadataKey] = auditEvent.Provider;
+        if (auditEvent.Provider is { Length: > 0 } provider)
+        {
+            metadata[ProviderMetadataKey] = provider;
+        }
 
         // Refuses an unknown key or a credential-shaped value here, before the first scope opens.
         return AuditMetadata.Validate(metadata)!;
