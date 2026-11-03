@@ -30,7 +30,7 @@ public static class AsciiShape
     /// <summary>
     /// True when <paramref name="value"/> has <paramref name="minLength"/>..<paramref name="maxLength"/> characters,
     /// starts with a <paramref name="first"/> character, every later character is in <paramref name="rest"/>, and,
-    /// when <paramref name="last"/> is given, the final character is in <paramref name="last"/>. Anchored at both ends:
+    /// when <paramref name="last"/> is given, the value has at least two characters and the final one is in <paramref name="last"/>. Anchored at both ends:
     /// a trailing newline is refused (the <c>\z</c> semantics, not <c>$</c>).
     /// </summary>
     public static bool IsMatch(
@@ -46,12 +46,12 @@ public static class AsciiShape
             return false;
         }
 
-        if (last is not null && !last.Contains(value[^1]))
+        if (last is not null && (value.Length < 2 || !last.Contains(value[^1])))
         {
             return false;
         }
 
-        var body = last is null ? value[1..] : value.Length >= 2 ? value[1..^1] : default;
+        var body = last is null ? value[1..] : value[1..^1];
         return body.IndexOfAnyExcept(rest) < 0;
     }
 }
