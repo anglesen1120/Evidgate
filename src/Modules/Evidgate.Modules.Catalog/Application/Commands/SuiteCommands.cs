@@ -10,6 +10,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.Modules.Catalog.Contracts;
 using Evidgate.Modules.Catalog.Domain;
 using Evidgate.Modules.Catalog.Infrastructure.Persistence;
@@ -37,7 +38,7 @@ internal sealed class CreateSuiteCommandValidator : AbstractValidator<CreateSuit
             .Must(name => !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= 128 && TextRules.IsClean(name))
             .WithErrorCode("invalid_length");
         RuleFor(command => command.Slug)
-            .Must(slug => slug is not null && System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$", System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
+            .Must(slug => slug is not null && AsciiShape.IsMatch(slug, 2, 63, AsciiShape.LowerAlnum, AsciiShape.LowerAlnumDash, AsciiShape.LowerAlnum))
             .WithErrorCode("invalid_format");
     }
 }

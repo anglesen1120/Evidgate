@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Security;
@@ -21,7 +20,7 @@ internal sealed record EnvironmentConfiguration(string BaseUrlsJson, string Depe
 /// position, never its text. The hash covers exactly what is stored, so two revisions with the same content share a hash
 /// whatever their field order or their display name.
 /// </summary>
-internal static partial class EnvironmentRevisionRules
+internal static class EnvironmentRevisionRules
 {
     internal const string SecretValueDetected = "secret_value_detected";
     internal const string InvalidUrl = "invalid_url";
@@ -73,7 +72,7 @@ internal static partial class EnvironmentRevisionRules
         {
             var reference = refs[index];
             if (reference is null
-                || !Reference().IsMatch(reference)
+                || !SecretShape.IsReference(reference)
                 || SecretShape.SecretNameLooksLikeValue(reference[7..])
                 || SecretShape.ValueLooksSecret(reference[7..]))
             {
@@ -169,7 +168,4 @@ internal static partial class EnvironmentRevisionRules
             details.Add(new ErrorDetail(path, reason));
         }
     }
-
-    [GeneratedRegex("^secret:[A-Za-z0-9_.-]{1,64}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex Reference();
 }

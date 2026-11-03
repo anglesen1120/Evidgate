@@ -1,8 +1,8 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.Modules.Catalog.Contracts;
 using Evidgate.Modules.Catalog.Domain;
 using Evidgate.Modules.Catalog.Infrastructure.Persistence;
@@ -17,7 +17,7 @@ namespace Evidgate.Modules.Catalog.Application;
 /// bump for a concurrent PATCH). Syncs of one project queue behind a transaction-scoped advisory lock, which removes
 /// the insert race and the lock-order deadlocks of two overlapping syncs.
 /// </summary>
-internal sealed partial class CaseIdentityService(
+internal sealed class CaseIdentityService(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     CaseDiscovery discovery) : ICaseIdentityService
@@ -107,7 +107,7 @@ internal sealed partial class CaseIdentityService(
         ArgumentNullException.ThrowIfNull(files);
         ArgumentException.ThrowIfNullOrEmpty(commitSha);
 
-        if (!CommitPattern().IsMatch(commitSha))
+        if (!AsciiShape.IsMatch(commitSha, 7, 64, AsciiShape.LowerHex, AsciiShape.LowerHex))
         {
             throw new ArgumentException("the commit must be 7-64 lower-case hex characters", nameof(commitSha));
         }
@@ -299,9 +299,6 @@ internal sealed partial class CaseIdentityService(
     // The tenant Dapper path is read-only and refuses array parameters (see StringArrayTypeHandler), so lists travel
     // as JSON text and are unpacked in SQL: one parameter, one plan, whatever the tree's size.
     private static string Json<T>(IEnumerable<T> values) => JsonSerializer.Serialize(values, Snake);
-
-    [GeneratedRegex("^[0-9a-f]{7,64}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
-    private static partial Regex CommitPattern();
 
     private sealed record NewCase(Guid Id, Guid AnnotationId, string Name, string Framework, string? Language, string FilePath);
 

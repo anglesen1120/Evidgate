@@ -84,7 +84,7 @@ function serverNumberLength(value: number): number {
 /**
  * The byte count the server measures for `too_large`: `Encoding.UTF8.GetByteCount` of
  * `JsonSerializer.Serialize(result)`, where `result` is the `SortedDictionary<string, JsonNode?>`
- * of normalised parameters. Keys are ASCII-only (`KeyShape`) and sorted ordinal, which the default
+ * of normalised parameters. Keys are ASCII-only (`VariantNormalizer.IsValidKey`) and sorted ordinal, which the default
  * `Array.prototype.sort` order matches; the serialised text is pure ASCII, so its length is its
  * UTF-8 byte count.
  */
