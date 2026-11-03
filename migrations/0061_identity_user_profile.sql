@@ -76,8 +76,8 @@
 --
 -- Locking: both `add column` statements are catalog-only (a NULL column with no
 -- default, and a NOT NULL column whose default is catalogue metadata since
--- PostgreSQL 11), so nothing is rewritten and no backfill runs; the CHECK is added
--- `not valid` and then validated, and that validation scans every existing row — a
+-- PostgreSQL 11), so nothing is rewritten and no backfill runs; the CHECK scans
+-- every existing row (all NULL), which is the only statement here that touches every row — a
 -- full read of the identity table, small, and the one statement here that touches
 -- every row. PostgreSQL takes ACCESS EXCLUSIVE on the table for the length of this
 -- file's transaction, so `set local lock_timeout` below bounds every lock this
