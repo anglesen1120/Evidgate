@@ -4,6 +4,7 @@ using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Application.Commands;
 using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Ingestion.Domain;
+using Evidgate.Modules.Ingestion.Endpoints;
 using Evidgate.Modules.Ingestion.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -44,6 +45,16 @@ internal static class IngestionModule
             .BindConfiguration(IngestionLimits.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        // The events route's burst budget: one bound group for both entry points, one
+        // resident limiter per process (the partition map is bounded, see the limiter).
+        services
+            .AddOptions<IngestionRateLimits>()
+            .BindConfiguration(IngestionRateLimits.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IngestionRateLimiter>();
 
         // 04.1.2-T4.1: the EF write model of producer slots (00 §5.5 C4).
         services.AddEvidgateDbContext<IngestionDbContext>(typeof(IngestionDbContext).Assembly);

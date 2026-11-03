@@ -1469,7 +1469,11 @@ paths:
         `Content-Encoding`, reason `unsupported`) and a malformed, multi-member
         or trailing-data gzip is 422 `request_invalid` (same path, reason
         `invalid_gzip`) — a body is never silently ignored or partly decoded.
-        All `retryable: false`.
+        A burst above the per-project, per-token budget
+        (`EVIDGATE__INGESTION__RATELIMIT__*`, default 120 requests per 60 s) is
+        429 `rate_limited` with an integer `Retry-After`, refused before the body
+        is read and with no write; it is the one retryable answer here. All the
+        rejections above are `retryable: false`.
       x-permission: event:write
       x-version: v1
       parameters:

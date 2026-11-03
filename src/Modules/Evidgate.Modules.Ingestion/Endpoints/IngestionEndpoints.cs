@@ -75,6 +75,36 @@ public static class IngestionEndpoints
         var limits = context.RequestServices.GetRequiredService<IOptions<IngestionLimits>>().Value;
         var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(IngestionEndpoints));
 
+        // The burst limit runs before a byte of the body is read, keyed by the authenticated
+        // project and token id only: no header or body value moves a caller into another
+        // partition, and a caller without both values is refused rather than sharing one.
+        if (!TryRatePartition(principals.Current, out var partition))
+        {
+            return Result.Failure<BatchAckResult>(Error.Forbidden(
+                "the events route requires a project-scoped producer token"));
+        }
+
+        var limiter = context.RequestServices.GetRequiredService<IngestionRateLimiter>();
+
+        // Two partitions per request: the project's own budget, so a producer that mints tokens cannot
+        // multiply the project's rate, then the token's budget. Both are charged before any byte is read.
+        var projectAdmission = limiter.Acquire(partition.ProjectId, tokenId: null);
+        var admission = projectAdmission.Allowed
+            ? limiter.Acquire(partition.ProjectId, partition.TokenId)
+            : projectAdmission;
+
+        if (!admission.Allowed)
+        {
+            context.Response.Headers.RetryAfter = RetryAfterHeader.Format(admission.RetryAfterSeconds);
+            IngestBatchRejection.Record(logger, IngestBatchRejection.RateLimited, context.TraceIdentifier, r, 0, 0);
+
+            return Result.Failure<BatchAckResult>(new Error(
+                ApiErrorCode.RateLimited,
+                "the project's event ingest rate was exceeded",
+                StatusCodes.Status429TooManyRequests,
+                Retryable: true));
+        }
+
         // Content-Encoding must be exactly one of gzip/identity (case-insensitive). Anything else — an
         // unknown coding or a stacked list — is refused at the header: the 00 §9.2 envelope has no code for
         // an unsupported encoding, so the detail names it (04.1.1-T3; no new wire code).
@@ -143,6 +173,26 @@ public static class IngestionEndpoints
             // The buffer held the tenant's request body, so it is cleared before it is pooled.
             ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
         }
+    }
+
+    /// <summary>
+    /// The limiter partition of the authenticated caller: the token's project scope and its
+    /// credential id. Only a service principal carries both; any other shape has no budget to
+    /// charge, so the route refuses it instead of inventing a shared key.
+    /// </summary>
+    private static bool TryRatePartition(IRequestPrincipal? principal, out (Guid ProjectId, string TokenId) partition)
+    {
+        if (principal is { Kind: PrincipalKind.ServicePrincipal, ProjectScope: { } projectId }
+            && !string.IsNullOrEmpty(principal.CredentialId))
+        {
+            partition = (projectId, principal.CredentialId);
+
+            return true;
+        }
+
+        partition = default;
+
+        return false;
     }
 
     /// <summary>

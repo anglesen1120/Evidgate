@@ -104,7 +104,13 @@ A third kind of row is a non-secret **tunable safety cap**: the ingestion limit 
 ordinary bound integers with a safe default (8 MiB expanded, 20:1 gzip ratio), so no environment provides
 them — every row is `source: default`, `required: false`, `requiredAtBoot: false` — while the matrix still
 records the option's `[Range]` bounds (1 MiB..64 MiB and 1..1000), which the lint derives from the
-attributes.
+attributes. The same shape covers the events route's burst budget
+(`EVIDGATE__INGESTION__RATELIMIT__PERMITLIMIT`, `…__WINDOWSECONDS`, `…__MAXPARTITIONS`): defaults of 120
+requests per 60 s per project and token, at most 10,000 resident partitions. A request is charged to the
+token's own budget and to one project-wide budget, so minting more producer tokens cannot raise what a
+project may send. Both budgets are held per
+process, so the platform-wide burst a project may send is the permit limit times the replica count; a
+deployment that needs one shared budget must move the counter to a shared store first.
 
 One more shape is a feature that stays **absent until it is configured**: the federated-login rows
 (`EVIDGATE__LOGIN__*`, `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.1/T1.2, and `EVIDGATE__OAUTH__GITHUB__*`,

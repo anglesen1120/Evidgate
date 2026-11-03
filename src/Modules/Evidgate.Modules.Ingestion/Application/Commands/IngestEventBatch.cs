@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Observability.Correlation;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -161,6 +162,11 @@ internal sealed class IngestEventBatchHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Ingestion, nameof(IngestEventBatch));
 
+        // The ids a trace needs exist before parsing, so a refused batch is still attributable
+        // without carrying any body value; producer and event count follow the parse.
+        activity?.SetTag(CorrelationNames.RunId, command.RunId);
+        activity?.SetTag(CorrelationNames.RequestId, command.RequestId);
+
         // (a) The edge cap comes from the schema itself (event-envelope.v1's x-max-bytes), so the limit has
         // one home. It bounds the body as sent, not the decoded size: a gzip body may legitimately inflate
         // past 1 MiB up to the 04.1.1-T3 expanded cap, so the comparison uses BytesIn. The parser enforces
@@ -209,6 +215,8 @@ internal sealed class IngestEventBatchHandler(
         }
 
         var producerId = events[0].ProducerId;
+        activity?.SetTag(EvidgateTelemetry.ProducerIdTag, producerId);
+        activity?.SetTag(EvidgateTelemetry.EventCountTag, events.Count);
         var orgId = scopes.Require().OrgId;
 
         // (b1) Lock order (04.1.1-T4, ruling T13 + the 05.3.1 lock-order rule; see the class doc): the first

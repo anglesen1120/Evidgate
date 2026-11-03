@@ -34,6 +34,9 @@ internal static partial class IngestBatchRejection
     /// <summary>The <c>Content-Encoding: gzip</c> body is not one well-formed gzip member (bad header, CRC, truncation, multi-member or trailing bytes).</summary>
     public const string GzipInvalid = "gzip_invalid";
 
+    /// <summary>The project and token exceeded their fixed-window burst budget, so the body was never read.</summary>
+    public const string RateLimited = "rate_limited";
+
     /// <summary>
     /// Counts and logs one refusal. <paramref name="requestId"/> is the effective <c>X-Request-Id</c>
     /// (<c>HttpContext.TraceIdentifier</c>), <paramref name="bytesIn"/> the as-sent body size and

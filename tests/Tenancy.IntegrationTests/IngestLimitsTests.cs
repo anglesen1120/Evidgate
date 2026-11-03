@@ -358,33 +358,6 @@ public sealed class IngestLimitsTests
     }
 
     /// <summary>The <c>reason</c> tags of every <c>evidgate_ingest_batch_rejected_total</c> measurement.</summary>
-    private static MeterListener RejectionListener(out ConcurrentBag<string> reasons)
-    {
-        var bag = new ConcurrentBag<string>();
-        reasons = bag;
-        var listener = new MeterListener
-        {
-            InstrumentPublished = (instrument, meterListener) =>
-            {
-                if (instrument.Meter.Name == EvidgateTelemetry.MeterName
-                    && instrument.Name == EvidgateTelemetry.IngestBatchRejectedMetricName)
-                {
-                    meterListener.EnableMeasurementEvents(instrument);
-                }
-            },
-        };
-        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
-        {
-            foreach (var tag in tags)
-            {
-                if (tag.Key == "reason" && tag.Value is string reason)
-                {
-                    bag.Add(reason);
-                }
-            }
-        });
-        listener.Start();
-
-        return listener;
-    }
+    private static MeterListener RejectionListener(out ConcurrentBag<string> reasons) =>
+        IngestTelemetryCapture.RejectedBatches(out reasons);
 }
