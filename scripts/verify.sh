@@ -76,6 +76,7 @@ ALL_STAGES=(
   check-permissions-drift
   check-rls
   check-review-blockers
+  check-review-infra
   check-gate-scope
   image-pins
   images
@@ -102,8 +103,10 @@ usage: scripts/verify.sh [--stage <name>]... | --list-stages
 
 Runs the full local gate (FR-01-1). With no --stage the stages run in the order
 below, narrowed to the ones the change set can fail: a documentation-only change
-runs the formatter and the check stages, a web/script-only change also skips the
-.NET and Docker stages, and anything else still runs everything (the tier is
+runs the formatter and the check stages, a change confined to the review
+deployment (infra/review, scripts/review) adds that stack's own checks, a
+web/script-only change also skips the .NET and Docker stages, and anything else
+still runs everything (the tier is
 computed by scripts/gate_scope.py, fail closed; EVIDGATE_GATE_SCOPE may widen it,
 never narrow it). An explicit --stage list is never narrowed.
 CI (01.7.1) passes --stage explicitly so both run one command list.
@@ -371,6 +374,15 @@ run_stage() {
     # depend on import order or fail outright.
     PYTHONPATH="${ROOT}/scripts:${ROOT}/scripts/tests${PYTHONPATH:+:${PYTHONPATH}}" \
       PYTHONDONTWRITEBYTECODE=1 python3 -m unittest "${blockers_fixtures[@]}"
+    ;;
+  check-review-infra)
+    # The review deployment's own checks, none of which needs Docker: the nginx
+    # header generator and web-start tests, the pin, inlined-file, nginx-phase,
+    # restart and container-policy checks (`--static-only` leaves out the two
+    # that render compose with docker), then the deploy scripts' offline suite.
+    stage "check-review-infra"
+    bash infra/review/check.sh --static-only
+    bash scripts/review/tests/run.sh
     ;;
   check-gate-scope)
     # The path-scoped tier classifier's fixtures (test_gate_scope.py): which

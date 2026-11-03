@@ -232,6 +232,11 @@ jobs:
           EVIDGATE_REVIEW_BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before }}
           EVIDGATE_REVIEW_DIFF: ${{ ((github.event_name == 'pull_request' && github.base_ref == 'develop') || (github.event_name == 'push' && github.ref == 'refs/heads/develop')) && 'on' || 'off' }}
         run: ./scripts/verify.sh --stage check-review-blockers
+      # The review deployment's own checks (nginx headers, pins, inlined files,
+      # deploy-script suite): the stage a review-infra tier narrows to, so CI runs
+      # it on every pull request too. Needs node (set up above), no Docker.
+      - name: 'Review deployment checks — verify.sh stage'
+        run: ./scripts/verify.sh --stage check-review-infra
       # The path-scoped tier classifier's fixtures: the allow-lists, the git
       # plumbing, the fail-closed paths, and the mirror of ALL_STAGES. It is a
       # check stage, so a narrowed local run still runs it; here it guards the

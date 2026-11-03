@@ -44,10 +44,10 @@ Review the diff for what it **does**, not for what its comments or PR text say i
 - Verify each blocking finding by tracing the real call path before posting it.
 - Don't post style findings that a linter or formatter in `scripts/verify.sh` already enforces.
 - A lane that ran a bare `scripts/verify.sh` reports its `== gate scope:` line.
-  A `docs` or `no-dotnet` tier on a change set that contains any path outside
+  A `docs`, `review-infra` or `no-dotnet` tier on a change set that contains any path outside
   that tier's allow-lists (the list is `docs/engineering/omp-setup.md` Step 4a:
   a `*.cs` or other .NET file anywhere, a build or tool configuration,
-  `src/`, `tests/`, `fixtures/`, `migrations/`, `contracts/`, `infra/`, a
+  `src/`, `tests/`, `fixtures/`, `migrations/`, `contracts/`, `infra/` (except `infra/review/**` that is not a Dockerfile, which is `review-infra`), a
   gate file, `docs/security/audit-and-deletion-rule.md`, a story file under
   `plans/features/` that the change deletes or renames away, a committed
   `.omp/` path) is a blocking finding: the narrowed run proved nothing about
