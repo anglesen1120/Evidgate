@@ -1,22 +1,5 @@
-// 09.1.1-T5.1 (plan 09.1.1 §10 T5.1; D-S98-Q2; contracts/openapi.yaml `/v1/auth/oidc/{provider}/…`):
-// the post-login landing. The API's OIDC callback sets the session cookie and 302s here with
-// `?returnUrl=<validated target>`; this page re-reads the session from the server and forwards the
-// caller to that target.
-//
-// Two rules the page keeps, and why they are structural rather than a convention:
-//
-// 1. It NEVER reads, logs or renders `code` or `state`. The OAuth exchange belongs to the API (the
-//    provider calls the API's own callback), so those parameters do not even belong to this app; this
-//    page reads exactly one query parameter (`returnUrl`) and nothing else. A `code` that reaches this
-//    URL is a misconfigured provider registration, not something a client can finish.
-// 2. It never stays on screen. Every outcome is a `replaceUrl` redirect — the target when a session
-//    exists, `/login?reason=failed` when the probe says anonymous, `/login?reason=unavailable` when
-//    the probe could not be completed — so the callback address is not left in the history and a
-//    reload of it cannot replay a stale sign-in.
-//
-// The target is validated again here (not only where it was built): the value arrives in a URL a
-// browser or a person can edit, and a tampered value becomes `/` (the landing guard then resolves the
-// first org/project from the server's own lists).
+// The API owns the OAuth exchange. This landing reads only the validated return destination,
+// reloads the session and replaces history with the destination or a sign-in failure notice.
 
 import { ChangeDetectionStrategy, Component, inject, type OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -27,14 +10,25 @@ import { validateReturnUrl } from '../../../core/routing/return-url';
 
 @Component({
   selector: 'app-auth-callback',
-  standalone: true,
   imports: [LoadingPatternComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../../../shared/ui/states/state-panel.css', './callback.page.css'],
+  host: { class: 'block min-w-0' },
   template: `
-    <main class="callback" aria-labelledby="auth-callback-heading">
-      <h1 id="auth-callback-heading">{{ heading }}</h1>
-      <p class="callback__explanation">{{ explanation }}</p>
+    <main
+      class="callback box-border grid min-h-dvh content-center justify-items-center gap-(--eg-space-4) bg-card px-(--eg-space-5) py-(--eg-space-8) text-center font-sans text-foreground [overflow-wrap:anywhere]"
+      aria-labelledby="auth-callback-heading"
+    >
+      <h1
+        class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
+        id="auth-callback-heading"
+      >
+        {{ heading }}
+      </h1>
+      <p
+        class="callback__explanation m-0 max-w-[calc(2*var(--eg-rail-width))] text-sm text-muted-foreground"
+      >
+        {{ explanation }}
+      </p>
       <app-loading-pattern [label]="loadingLabel" />
     </main>
   `,

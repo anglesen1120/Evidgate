@@ -1,4 +1,7 @@
 import { DOCUMENT } from '@angular/common';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -29,11 +32,22 @@ import { ThemeService } from './theme.service';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, NavComponent, ScopeSwitcherComponent, ShellIconComponent],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    NavComponent,
+    ScopeSwitcherComponent,
+    ShellIconComponent,
+    HlmButton,
+    HlmCard,
+    CdkTrapFocus,
+  ],
   templateUrl: './shell.component.html',
-  styleUrl: './shell.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '(window:resize)': 'onResize()' },
+  host: {
+    class: 'block bg-background font-sans text-sm text-foreground',
+    '(window:resize)': 'onResize()',
+  },
 })
 export class ShellComponent {
   readonly session = inject(SessionStore);
@@ -68,6 +82,7 @@ export class ShellComponent {
   private hasNavigated = this.router.navigated;
   /** Path (no query, no fragment) of the previous NavigationEnd, for the focus handoff. */
   private lastPath: string | null = null;
+  private focusRequest = 0;
 
   constructor() {
     this.router.events
@@ -83,6 +98,7 @@ export class ShellComponent {
         this.hasNavigated = true;
         this.lastPath = path;
         this.drawerOpen.set(false);
+        if (moveFocus) this.focusRequest++;
         afterNextRender(
           () => {
             const main = this.main()?.nativeElement;
@@ -132,58 +148,50 @@ export class ShellComponent {
     this.focusWhenUnblocked('drawer');
   }
 
-  closeDrawer(): void {
+  closeDrawer(restoreOpener = true): void {
     this.drawerOpen.set(false);
-    this.focusWhenUnblocked('opener');
+    if (restoreOpener) this.focusWhenUnblocked('opener');
+    else this.focusRequest++;
+  }
+
+  onNavigationSelected(link: readonly string[]): void {
+    if (!this.mobile()) return;
+    const destination = this.router.serializeUrl(this.router.createUrlTree(link));
+    this.closeDrawer(this.pathOf(destination) === this.pathOf(this.router.url));
   }
 
   /**
-   * Moves focus once the render that flips `inert` has committed.
-   *
-   * The two focus targets sit on opposite sides of the drawer's `inert` boundary, so the browser
-   * refuses `focus()` until the attribute change is in the DOM: a real browser silently ignores it
-   * while the subtree is still inert and leaves focus on `body` — the visitor then has to tab from
-   * the top of the page, and the drawer's trap never engages. `afterNextRender` is the first attempt
-   * (it is already after change detection in the browser), and the frame retry covers the case where
-   * the attribute is still the previous one at that moment.
+   * Focus after the inert boundary has rendered, with bounded frame retries if the browser
+   * has not made the control focusable yet. The close button disables Helm's transition-all:
+   * otherwise inherited visibility remains hidden at the start of its reveal transition.
+   * Navigation and newer drawer actions invalidate pending retries instead of stealing focus.
    */
   private focusWhenUnblocked(target: 'drawer' | 'opener'): void {
-    afterNextRender(
-      () => {
-        const element =
-          target === 'drawer'
-            ? this.closeButton()?.nativeElement
-            : this.toggleButton()?.nativeElement;
-        if (element === undefined) return;
-        element.focus();
-        if (this.document.activeElement === element) return;
-        this.document.defaultView?.requestAnimationFrame(() => element.focus());
-      },
-      { injector: this.injector },
-    );
+    const request = ++this.focusRequest;
+    const focus = (framesLeft: number): void => {
+      if (request !== this.focusRequest) return;
+      if (target === 'drawer' ? !this.mobile() || !this.drawerOpen() : this.drawerOpen()) return;
+      const element =
+        target === 'drawer'
+          ? this.closeButton()?.nativeElement
+          : this.toggleButton()?.nativeElement;
+      if (!element?.isConnected) return;
+      if (!element.closest('[inert]')) element.focus();
+      if (this.document.activeElement !== element && framesLeft > 0) {
+        this.document.defaultView?.requestAnimationFrame(() => focus(framesLeft - 1));
+      }
+    };
+    afterNextRender(() => focus(3), { injector: this.injector });
   }
 
   onDrawerKeydown(event: KeyboardEvent): void {
-    if (!this.mobile() || !this.drawerOpen()) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.closeDrawer();
-    } else if (event.key === 'Tab') {
-      const controls = Array.from(
-        this.aside()?.nativeElement.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), a[href], select:not(:disabled), [tabindex="0"]',
-        ) ?? [],
-      );
-      const first = controls[0];
-      const last = controls.at(-1);
-      if (event.shiftKey && this.document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && this.document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    }
+    if (!this.mobile() || !this.drawerOpen() || event.key !== 'Escape' || event.defaultPrevented)
+      return;
+    // The scope popup owns Escape before the containing navigation drawer does.
+    if (this.aside()?.nativeElement.querySelector('[role="combobox"][aria-expanded="true"]'))
+      return;
+    event.preventDefault();
+    this.closeDrawer();
   }
 
   /**

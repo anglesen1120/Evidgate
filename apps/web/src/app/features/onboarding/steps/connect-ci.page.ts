@@ -16,6 +16,11 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
@@ -49,11 +54,7 @@ import {
   type DismissedReasons,
 } from './server-reasons';
 
-/**
- * The create-binding form's two list fields, named once so the validators, the error copy and
- * the boundary tests read the same number. They mirror the contract (`allowed_ref_patterns` and
- * `allowed_workflow_refs` carry `maxItems: 32`).
- */
+/** Both OIDC list fields mirror the contract's maxItems limit. */
 const MAX_REF_ENTRIES = 32;
 
 /** The ingest-token name limit in Unicode code points (contract `name` `maxLength: 128`). */
@@ -69,11 +70,16 @@ const MAX_TOKEN_NAME_LENGTH = 128;
     ConnectionHealthComponent,
     CliQuickstartComponent,
     ErrorPatternComponent,
+    HlmAlertImports,
+    HlmButton,
+    HlmCardImports,
+    HlmInput,
+    HlmLabel,
   ],
   providers: [RevealSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './connect-ci.page.html',
-  styleUrls: ['../../../shared/ui/states/state-panel.css', './connect-ci.page.css'],
+  host: { class: 'block min-w-0' },
 })
 export class ConnectCiPage {
   readonly orgId = input.required<string>();

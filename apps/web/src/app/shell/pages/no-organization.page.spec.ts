@@ -16,6 +16,12 @@ describe('NoOrganizationPage', () => {
     expect(root.querySelector('h1')?.textContent).toBe('No organization yet');
     expect(root.querySelectorAll('a')).toHaveLength(1);
     expect(root.querySelector('a')?.getAttribute('href')).toBe('/');
+    expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
+      root.querySelector('h1')?.id,
+    );
+    expect(root.querySelector('a')?.hasAttribute('hlmBtn')).toBe(true);
+    expect(root.querySelector('a')?.tabIndex).toBe(0);
     expect(root.querySelector('form')).toBeNull();
   });
 });

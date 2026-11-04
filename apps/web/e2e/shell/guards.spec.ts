@@ -6,6 +6,7 @@
 // The not-found case is the security-relevant one: a foreign organization, a foreign project, an
 // unknown path and a phase-hidden entry must be indistinguishable. One spec compares all four.
 import { expect, test } from '@playwright/test';
+import { scopeControl, scopeOption } from './scope-controls';
 
 import {
   LIMITED_GRANTS,
@@ -123,10 +124,12 @@ test.describe('an address that resolves to nothing (AC4, 00 §9.2)', () => {
     // The shell is around it, with the navigation the session is allowed to use.
     await expect(page.locator('app-shell')).toHaveCount(1);
     // The corpus lists two organizations; a foreign id never renames the session's own scope.
-    const orgSwitcher = page.locator('app-scope-switcher select').first();
+    const orgSwitcher = scopeControl(page, 0);
     await expect(orgSwitcher).toBeEnabled();
-    expect(await orgSwitcher.locator('option').count()).toBeGreaterThanOrEqual(3);
-    expect(await orgSwitcher.locator(`option[value="${ORG_LUMEN}"]`).count()).toBe(1);
+    await orgSwitcher.click();
+    await expect(page.getByRole('option')).toHaveCount(2);
+    await expect(scopeOption(page, ORG_LUMEN)).toHaveCount(1);
+    await page.keyboard.press('Escape');
   });
 
   test('the same unknown path inside a locale bundle renders that locale’s not-found copy', async ({

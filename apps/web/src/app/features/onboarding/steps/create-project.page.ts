@@ -12,6 +12,10 @@ import {
 import { FormsModule, type NgForm } from '@angular/forms';
 import { Router } from '@angular/router';
 import type { CreateProjectRequest } from '@evidgate/sdk';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { createIntentRunner } from '../../../core/http/retry';
@@ -34,95 +38,21 @@ import {
 
 @Component({
   selector: 'app-onboarding-create-project',
-  imports: [FormsModule, RequestStateComponent],
+  imports: [FormsModule, RequestStateComponent, HlmAlertImports, HlmButton, HlmInput, HlmLabel],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../../../shared/ui/states/state-panel.css'],
-  styles: `
-    form {
-      display: grid;
-      gap: var(--eg-space-5);
-      min-inline-size: var(--eg-space-0);
-    }
-    .field {
-      display: grid;
-      gap: var(--eg-space-3);
-      min-inline-size: var(--eg-space-0);
-    }
-    label {
-      color: var(--eg-text);
-      font-size: var(--eg-text-sm);
-      font-weight: var(--eg-weight-semibold);
-    }
-    input {
-      box-sizing: border-box;
-      inline-size: 100%;
-      min-inline-size: var(--eg-space-0);
-      min-block-size: var(--eg-control-lg);
-      padding: var(--eg-space-3) var(--eg-space-4);
-      border: var(--eg-border-width) solid var(--eg-border-control);
-      border-radius: var(--eg-radius-sm);
-      background: var(--eg-surface);
-      color: var(--eg-text);
-      font: inherit;
-    }
-    input:focus-visible {
-      outline: var(--eg-focus-width) solid var(--eg-focus);
-      outline-offset: var(--eg-focus-offset);
-    }
-    input:disabled {
-      background: var(--eg-neutral-bg);
-      color: var(--eg-text-muted);
-    }
-    p {
-      margin: var(--eg-space-0);
-      color: var(--eg-text-muted);
-      font-size: var(--eg-text-sm);
-      line-height: var(--eg-leading-sm);
-    }
-    .validation {
-      color: var(--eg-danger-fg);
-    }
-    .busy-status:focus-visible,
-    .failure__heading:focus-visible {
-      outline: var(--eg-focus-width) solid var(--eg-focus);
-      outline-offset: var(--eg-focus-offset);
-    }
-    .failure__heading {
-      font-size: var(--eg-text-md);
-      font-weight: var(--eg-weight-semibold);
-    }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--eg-space-3);
-    }
-    .primary:not(:disabled) {
-      border-color: var(--eg-accent);
-      background: var(--eg-accent);
-      color: var(--eg-on-accent);
-    }
-    .primary:hover:not(:disabled),
-    .primary:active:not(:disabled) {
-      box-shadow: inset var(--eg-space-0) var(--eg-space-0) var(--eg-space-0) var(--eg-border-width)
-        var(--eg-on-accent);
-    }
-    app-request-state {
-      display: block;
-      margin-block-start: var(--eg-space-5);
-    }
-    @media (pointer: coarse) {
-      input,
-      .primary {
-        min-block-size: var(--eg-control-touch);
-      }
-    }
-  `,
+  host: { class: 'grid min-w-0 gap-(--eg-space-5)' },
   template: `
-    <form #form="ngForm" ngNativeValidate (ngSubmit)="submit(form)" [attr.aria-busy]="busy()">
+    <form
+      class="grid min-w-0 gap-(--eg-space-5) text-sm text-muted-foreground [&_p]:m-0"
+      #form="ngForm"
+      ngNativeValidate
+      (ngSubmit)="submit(form)"
+      [attr.aria-busy]="busy()"
+    >
       <!-- The request disables both fields and the submit, so the pressed control cannot keep
            focus: the page moves it here first, which is also where the waiting state is spoken. -->
       <p
-        class="busy-status"
+        class="min-h-(--eg-leading-sm) focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
         role="status"
         tabindex="-1"
         #busyStatus
@@ -132,11 +62,13 @@ import {
           {{ creatingLabel }}
         }
       </p>
-      <div class="field">
+      <div class="grid min-w-0 gap-(--eg-space-3)">
         @let nameError =
           (nameField.touched || submitted()) && !name().trim() ? nameRequired : serverNameError();
-        <label for="onboarding-project-name">{{ nameLabel }}</label>
+        <label hlmLabel for="onboarding-project-name">{{ nameLabel }}</label>
         <input
+          hlmInput
+          class="min-h-(--eg-control-touch)"
           id="onboarding-project-name"
           data-testid="onboarding-project-name"
           name="name"
@@ -149,8 +81,9 @@ import {
           (input)="dismissServerReason('name')"
           (invalid)="submitted.set(true)"
           [disabled]="busy() || !permitted()"
+          [forceInvalid]="nameError !== null"
           [attr.aria-invalid]="nameError === null ? null : 'true'"
-          [attr.aria-describedby]="
+          [aria-describedby]="
             describedBy(
               'onboarding-project-name-help',
               nameError === null ? null : 'onboarding-project-name-error'
@@ -162,7 +95,7 @@ import {
              the same sentence. When no alert renders (forbidden, not_found), the field keeps it. -->
         <p
           id="onboarding-project-name-error"
-          class="validation"
+          class="text-destructive"
           [attr.aria-live]="serverNameError() !== null && showsEnvelopeDetails() ? null : 'polite'"
         >
           @if (nameError !== null) {
@@ -170,11 +103,13 @@ import {
           }
         </p>
       </div>
-      <div class="field">
+      <div class="grid min-w-0 gap-(--eg-space-3)">
         @let slugError =
           (slugField.touched || submitted()) && !slug().trim() ? slugRequired : serverSlugError();
-        <label for="onboarding-project-slug">{{ slugLabel }}</label>
+        <label hlmLabel for="onboarding-project-slug">{{ slugLabel }}</label>
         <input
+          hlmInput
+          class="min-h-(--eg-control-touch)"
           id="onboarding-project-slug"
           name="slug"
           type="text"
@@ -188,8 +123,9 @@ import {
           (input)="dismissServerReason('slug')"
           (invalid)="submitted.set(true)"
           [disabled]="busy() || !permitted()"
+          [forceInvalid]="slugError !== null"
           [attr.aria-invalid]="slugError === null ? null : 'true'"
-          [attr.aria-describedby]="
+          [aria-describedby]="
             describedBy(
               'onboarding-project-slug-help',
               slugError === null ? null : 'onboarding-project-slug-error'
@@ -199,7 +135,7 @@ import {
         <p id="onboarding-project-slug-help">{{ slugHint }}</p>
         <p
           id="onboarding-project-slug-error"
-          class="validation"
+          class="text-destructive"
           [attr.aria-live]="serverSlugError() !== null && showsEnvelopeDetails() ? null : 'polite'"
         >
           @if (slugError !== null) {
@@ -210,9 +146,10 @@ import {
       @if (!permitted()) {
         <p id="onboarding-project-permission">{{ permissionReason }}</p>
       }
-      <div class="actions">
+      <div class="flex flex-wrap gap-(--eg-space-3)">
         <button
-          class="state-panel__action primary"
+          hlmBtn
+          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
           data-testid="onboarding-project-submit"
           type="submit"
           [disabled]="submitDisabled()"
@@ -231,11 +168,14 @@ import {
         (retry)="retry()"
       />
       @if (showsEnvelopeDetails()) {
-        <section class="failure" data-testid="onboarding-project-failure">
+        <section
+          class="grid min-w-0 gap-(--eg-space-3) text-sm [&_p]:m-0"
+          data-testid="onboarding-project-failure"
+        >
           <!-- Outside the alerts below: a refusal that replaced the submit hands focus here, and
                focusing an alert would read its body a second time. -->
           <h3
-            class="failure__heading"
+            class="m-0 text-lg text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
             id="onboarding-project-failure-heading"
             tabindex="-1"
             #failureHeadingEl
@@ -246,16 +186,20 @@ import {
             failure.kind === 'rate_limited' ||
             (failure.kind === 'unavailable' && failure.retryAfterSeconds !== null)
           ) {
-            <p class="validation">{{ failure.message }}</p>
+            <p class="text-destructive">{{ failure.message }}</p>
           }
           @if (details().length > 0) {
             <div
+              hlmAlert
+              [variant]="'destructive'"
               role="alert"
               data-testid="onboarding-project-details"
               aria-labelledby="onboarding-project-details-label"
             >
-              <p id="onboarding-project-details-label" class="validation">{{ detailsLabel }}</p>
-              <ul class="validation">
+              <p id="onboarding-project-details-label" class="text-destructive">
+                {{ detailsLabel }}
+              </p>
+              <ul class="text-destructive">
                 @for (detail of details(); track $index) {
                   <li>{{ detail.path }} {{ detail.reason }}</li>
                 }

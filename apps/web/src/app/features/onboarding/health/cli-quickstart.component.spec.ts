@@ -1,3 +1,5 @@
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { Mock } from 'vitest';
@@ -6,6 +8,12 @@ import { CliQuickstartComponent, buildQuickstartSnippet } from './cli-quickstart
 
 const token = { name: 'ci-main', prefix: 'egt_ab12cd' };
 const binding = { repository_full_name: 'example/widgets' };
+
+class QuickstartHarness extends ComponentHarness {
+  static hostSelector = 'app-cli-quickstart';
+  readonly copyButton = this.locatorFor('[data-testid="cli-quickstart-copy"]');
+  readonly snippet = this.locatorFor('pre');
+}
 
 // Default/empty: metadata or setup guidance; busy: guarded Copy; error: manual copy;
 // success: polite confirmation; overflow: wrapping, selectable pre/code in both themes.
@@ -38,6 +46,20 @@ describe('CliQuickstartComponent', () => {
     fixture.detectChanges();
     root = fixture.nativeElement as HTMLElement;
     await fixture.whenStable();
+  });
+
+  it('keeps both commands and the copy action reachable by keyboard focus', async () => {
+    const harness = await TestbedHarnessEnvironment.harnessForFixture(fixture, QuickstartHarness);
+    const commands = await harness.snippet();
+    await commands.focus();
+    expect(await commands.isFocused()).toBe(true);
+    const action = await harness.copyButton();
+    await action.focus();
+    expect(await action.isFocused()).toBe(true);
+    expect(await action.getAttribute('type')).toBe('button');
+    await action.click();
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(status().textContent).toContain('CLI quickstart commands copied.');
   });
 
   afterEach(() => {
@@ -185,6 +207,13 @@ describe('CliQuickstartComponent', () => {
     expect(snippet().tagName).toBe('CODE');
     expect(snippet().parentElement?.tagName).toBe('PRE');
     expect(snippet().parentElement?.tabIndex).toBe(0);
+    expect(section.getAttribute('data-slot')).toBe('card');
+    expect(copy().getAttribute('data-slot')).toBe('button');
+    expect(snippet().parentElement?.getAttribute('aria-labelledby')).toBe(heading.id);
+    const hintId = snippet().parentElement?.getAttribute('aria-describedby');
+    expect(hintId ? root.querySelector(`[id="${hintId}"]`)?.textContent : '').toContain(
+      'metadata only',
+    );
   });
 
   it('guards concurrent copies without moving focus or disabling the native button', async () => {

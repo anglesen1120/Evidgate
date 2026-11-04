@@ -2,6 +2,7 @@
 // narrow layouts expose those same choices in the modal navigation drawer.
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
+import { expectScopeValue, exploreScope, scopeControl } from './scope-controls';
 
 import {
   activeElement,
@@ -29,39 +30,6 @@ async function settle(page: Page): Promise<void> {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       }),
   );
-}
-
-/**
- * Steps a focused, closed native `<select>` to `value`.
- *
- * The step is this file's ONE synthetic interaction, and the reason is measured, not assumed. In
- * the engine this suite launches (`channel: 'chrome'`, Chrome 156.0.8078.48 on macOS, probed
- * headless AND headed on 2026-10-28) a real `page.keyboard.press` of `ArrowDown`, `ArrowUp`, `Home`
- * or `End` on a focused, closed select leaves the value on its option: the page sees the `keydown`
- * and nothing else — no `input`, no `change` — and a following real `Enter` steps nothing either.
- * Playwright's `selectOption` would fire the events but is not a keyboard interaction, and a
- * printable key IS a keyboard interaction but is a typeahead pick, which
- * `ScopeSwitcherComponent.onChange` commits at once instead of holding it.
- *
- * The same probe against this app's own switcher — the project select on the overview route,
- * reached by the Tab walk this file uses, in the same `chrome` project — leaves the value on its
- * option after one real `ArrowDown`, after two, and after the `Enter` that follows: the URL stays
- * on the overview, so no step and no commit happened either.
- *
- * So this helper delivers the `keydown` the switcher's `onKeydown` holds a step on (a real key
- * press produces that same event, and without it the `change` below would commit immediately) and
- * then the value write with the `input`/`change` pair the browser fires for a step on the platforms
- * that support it. Every other interaction in this file — the Tabs that reach the select, the Enter
- * that commits the held step, the Tab and Shift+Tab that leave it — is a real key press.
- */
-async function stepSelect(select: Locator, value: string): Promise<void> {
-  await select.evaluate((element: HTMLSelectElement, next: string) => {
-    element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    element.value = next;
-    element.dispatchEvent(new Event('input', { bubbles: true }));
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-  }, value);
-  await expect(select).toHaveValue(value);
 }
 
 /** Desktop stops in document and visual order. */
@@ -187,21 +155,21 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     const orgSelect = page.getByRole('combobox', { name: 'Organization' });
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, orgSelect);
-    await expect(orgSelect).toHaveValue(ORG_ACME);
-    // The disabled placeholder is one of the three rows: a blank scope is never a choice.
-    expect(await orgSelect.locator('option').count()).toBe(3);
+    await expectScopeValue(orgSelect, ORG_ACME);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('option')).toHaveCount(2);
+    await page.keyboard.press('Escape');
 
     const projectSelect = page.getByRole('combobox', { name: 'Project' });
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, projectSelect);
-    await expect(projectSelect).toHaveValue(PROJECT_STOREFRONT);
+    await expectScopeValue(projectSelect, PROJECT_STOREFRONT);
     const themeToggle = page.locator('button.theme-toggle');
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, themeToggle);
     await expect(themeToggle).toHaveAttribute('aria-pressed', /^(true|false)$/);
 
-    // Traversing the switcher is not a commitment: only a step plus Enter, or a blur, commits, and
-    // no step was taken (WCAG 3.2.2 — no change on focus or on tabbing through a control).
+    // Traversing the switcher is not a commitment; only activating an option navigates.
     expect(new URL(page.url()).pathname).toBe(startPath);
 
     // The keyboard order IS the visual order here: four stops, one row, left to right.
@@ -241,7 +209,7 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     // Reached the way a keyboard visitor reaches it — Tab from the skip link, every stop's identity
     // asserted, no `locator.focus()` — then the step is held until Enter commits it.
     await walkTopbar(page, 'project', 'desktop');
-    await stepSelect(projectSelect, PROJECT_CHECKOUT);
+    await exploreScope(page, projectSelect, PROJECT_CHECKOUT);
     await settle(page);
     expect(new URL(page.url()).pathname).not.toBe(CHECKOUT_OVERVIEW);
 
@@ -264,13 +232,13 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     // select, the step held, then Enter.
     const orgSelect = page.getByRole('combobox', { name: 'Organization' });
     await walkTopbar(page, 'organization', 'desktop');
-    await stepSelect(orgSelect, ORG_LUMEN);
+    await exploreScope(page, orgSelect, ORG_LUMEN);
     await page.keyboard.press('Enter');
 
     await expect.poll(() => new URL(page.url()).pathname).toBe('/en/forbidden');
     await expect(page.locator('#main-content h1')).toHaveText('Not authorized');
     // The scope did move: the organization is LUMEN and no project of it is offered.
-    await expect(orgSelect).toHaveValue(ORG_LUMEN);
+    await expectScopeValue(orgSelect, ORG_LUMEN);
     await expect(page.getByRole('combobox', { name: 'Project' })).toBeDisabled();
     await expect.poll(async () => (await activeElement(page)).id).toBe('main-content');
   });
@@ -302,8 +270,8 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
 
     const stops = [
       page.locator('button.nav-toggle'),
-      page.locator('app-scope-switcher select').nth(0),
-      page.locator('app-scope-switcher select').nth(1),
+      scopeControl(page, 0),
+      scopeControl(page, 1),
       page.locator('button.theme-toggle'),
     ];
     for (const stop of stops) {
@@ -325,8 +293,8 @@ for (const width of [360, 390]) {
       await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
       await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
       await expect(page.locator('#shell-navigation')).toHaveAttribute('inert', '');
-      await expect(page.locator('header.topbar select')).toHaveCount(0);
-      await expect(page.locator('#shell-navigation select')).toHaveCount(2);
+      await expect(page.locator('header.topbar [role="combobox"]')).toHaveCount(0);
+      await expect(page.locator('#shell-navigation [role="combobox"]')).toHaveCount(2);
       await walkTopbar(page, 'navigation', 'compact');
       const navToggle = page.locator('button.nav-toggle');
       const themeToggle = page.locator('button.theme-toggle');
@@ -362,6 +330,15 @@ for (const width of [360, 390]) {
       await page.keyboard.press('Tab');
       await expectFocusVisible(page, aside.locator('a.brand'));
       await page.keyboard.press('Tab');
+      await expectFocusVisible(page, aside.getByRole('combobox', { name: 'Organization' }));
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('listbox', { name: 'Organization' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(aside.getByRole('combobox', { name: 'Organization' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+      await expect(aside).toHaveAttribute('aria-modal', 'true');
       await expectFocusVisible(page, aside.getByRole('combobox', { name: 'Organization' }));
       await page.keyboard.press('Tab');
       await expectFocusVisible(page, aside.getByRole('combobox', { name: 'Project' }));

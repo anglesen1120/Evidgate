@@ -34,6 +34,9 @@ import type {
   PolicyActivationStateDto,
   PolicyRevisionDto,
 } from '@evidgate/sdk';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import type { Intent } from '../../../core/http/intent';
@@ -70,10 +73,17 @@ interface AppendedRevision {
 
 @Component({
   selector: 'app-onboarding-enable-collection',
-  imports: [DatePipe, ErrorPatternComponent, FormsModule],
+  imports: [
+    DatePipe,
+    ErrorPatternComponent,
+    FormsModule,
+    HlmAlertImports,
+    HlmButton,
+    HlmCardImports,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './enable-collection.page.html',
-  styleUrls: ['../../../shared/ui/states/state-panel.css', './enable-collection.page.css'],
+  host: { class: 'block min-w-0' },
 })
 export class EnableCollectionPage {
   readonly orgId = input.required<string>();

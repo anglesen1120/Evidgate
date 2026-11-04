@@ -22,7 +22,12 @@ import { HlmSelectScrollUp } from './hlm-select-scroll-up';
       <hlm-select-scroll-up />
     }
 
-    <div brnSelectList [class]="_computedListboxClasses()">
+    <div
+      brnSelectList
+      [class]="_computedListboxClasses()"
+      [attr.aria-label]="ariaLabel()"
+      [attr.aria-labelledby]="ariaLabelledby()"
+    >
       <ng-content />
     </div>
 
@@ -35,6 +40,10 @@ export class HlmSelectContent {
   protected readonly _computedListboxClasses = computed(() => hlm('flex flex-col'));
 
   public readonly showScroll = input<boolean, BooleanInput>(false, { transform: booleanAttribute });
+  public readonly ariaLabel = input<string | undefined>(undefined, { alias: 'aria-label' });
+  public readonly ariaLabelledby = input<string | undefined>(undefined, {
+    alias: 'aria-labelledby',
+  });
 
   constructor() {
     classes(

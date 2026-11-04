@@ -25,6 +25,11 @@ describe('ServiceUnavailablePage', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelectorAll('h1')).toHaveLength(1);
     expect(root.querySelectorAll('button')).toHaveLength(1);
+    expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
+      root.querySelector('h1')?.id,
+    );
+    expect(root.querySelector('button')?.hasAttribute('hlmBtn')).toBe(true);
     await fixture.componentInstance.retry();
     expect(session.reload).toHaveBeenCalledOnce();
     expect(navigate).toHaveBeenCalledWith('/');
@@ -56,5 +61,6 @@ describe('ServiceUnavailablePage', () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(root.querySelector('button')?.disabled).toBe(false);
     expect(root.querySelector('[role="status"]')?.textContent).toContain('still unavailable');
+    expect(root.querySelector('section')?.getAttribute('aria-busy')).toBe('false');
   });
 });
