@@ -123,20 +123,21 @@ public sealed class IngestLimitsTests
         using var listener = RejectionListener(out var reasons);
 
         // Exactly the cap: decoded and accepted by both caps. The decoded bytes are not a valid batch, so the
-        // route answers 422 event_invalid — never 413, and the limit counter is not touched.
+        // route answers 422 event_invalid — never 413 — and the only refusal counted is the schema one: no
+        // limit reason fires at the boundary.
         var atCap = await PostGzipAsync(client, world.RunId, GzipOf(RepetitiveText(ExpandedCap)));
 
         atCap.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, atCap.ErrorMessage);
         atCap.ErrorCode.ShouldBe("event_invalid");
-        reasons.ShouldBeEmpty();
+        reasons.ShouldBe([IngestBatchRejection.EventInvalid], ignoreOrder: true);
         (await EventRowsAsync(world)).ShouldBe(0);
 
-        // One decoded byte over the cap: 413 expanded_too_large, one counter measurement, zero rows.
+        // One decoded byte over the cap: 413 expanded_too_large, one more counter measurement, zero rows.
         var overCap = await PostGzipAsync(client, world.RunId, GzipOf(RepetitiveText(ExpandedCap + 1)));
 
         overCap.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge, overCap.ErrorMessage);
         overCap.ErrorCode.ShouldBe("batch_too_large");
-        reasons.ShouldHaveSingleItem().ShouldBe(IngestBatchRejection.ExpandedTooLarge);
+        reasons.ShouldBe([IngestBatchRejection.EventInvalid, IngestBatchRejection.ExpandedTooLarge], ignoreOrder: true);
         (await EventRowsAsync(world)).ShouldBe(0);
         (await BatchRowsAsync(world)).ShouldBe(0);
     }
@@ -358,33 +359,6 @@ public sealed class IngestLimitsTests
     }
 
     /// <summary>The <c>reason</c> tags of every <c>evidgate_ingest_batch_rejected_total</c> measurement.</summary>
-    private static MeterListener RejectionListener(out ConcurrentBag<string> reasons)
-    {
-        var bag = new ConcurrentBag<string>();
-        reasons = bag;
-        var listener = new MeterListener
-        {
-            InstrumentPublished = (instrument, meterListener) =>
-            {
-                if (instrument.Meter.Name == EvidgateTelemetry.MeterName
-                    && instrument.Name == EvidgateTelemetry.IngestBatchRejectedMetricName)
-                {
-                    meterListener.EnableMeasurementEvents(instrument);
-                }
-            },
-        };
-        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
-        {
-            foreach (var tag in tags)
-            {
-                if (tag.Key == "reason" && tag.Value is string reason)
-                {
-                    bag.Add(reason);
-                }
-            }
-        });
-        listener.Start();
-
-        return listener;
-    }
+    private static MeterListener RejectionListener(out ConcurrentBag<string> reasons) =>
+        IngestTelemetryCapture.RejectedBatches(out reasons);
 }

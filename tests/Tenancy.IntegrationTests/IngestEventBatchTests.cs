@@ -499,9 +499,11 @@ public sealed class IngestEventBatchTests
             .ShouldBe(IngestTestWorld.Jti);
         (await EventRowsAsync(world)).ShouldBe(1);
 
+        // The foreign credential is scoped to the same project on purpose: this case is about the producer
+        // slot, and an unscoped token would be refused by the route's budget partition before it.
         await using var foreign = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database), world.Org, world.Project,
-            IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti));
+            IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti, projectScope: world.Project));
         using var foreignClient = foreign.CreateClient();
 
         var refused = await PostEventsAsync(
