@@ -447,16 +447,18 @@ test.describe('at 360px the page does not scroll sideways', () => {
     await expect(caption).toHaveCSS('display', 'block');
     const captionBox = await caption.boundingBox();
     const tableBox = await region.locator('table').boundingBox();
-    expect(captionBox).not.toBeNull();
-    expect(tableBox).not.toBeNull();
-    expect(captionBox!.width).toBeCloseTo(tableBox!.width, 0);
+    if (captionBox === null || tableBox === null)
+      throw new Error('audit caption or table has no box');
+    expect(captionBox.width).toBeCloseTo(tableBox.width, 0);
     for (const row of FLAGGED_ROWS) {
       const supportRow = page.locator(AUDIT_ROWS, {
         has: page.locator(`time[datetime="${row.created_at}"]`),
       });
       const description = supportRow.locator('.support-access + span');
       await expect(description).toBeVisible();
-      await expect(description).toContainText(supportMarker(row)!.grantId!);
+      const grantId = supportMarker(row)?.grantId;
+      if (grantId === undefined || grantId === null) throw new Error('flagged row has no grant id');
+      await expect(description).toContainText(grantId);
     }
 
     // Keyboard users can still reach the overflow: the region is focusable and reports itself as a

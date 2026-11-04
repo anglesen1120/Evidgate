@@ -99,10 +99,11 @@ describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
     expect(root.querySelector('table')?.classList.contains('table-fixed')).toBe(true);
     expect(root.querySelector('#members-status')?.classList.contains('w-1/6')).toBe(true);
     const actions = root.querySelector('[data-members-edit-open]')?.parentElement;
-    expect(actions?.classList.contains('flex-wrap')).toBe(true);
-    expect(actions?.parentElement?.tagName).toBe('TD');
-    expect(actions?.querySelectorAll('button')).toHaveLength(4);
-    for (const button of actions!.querySelectorAll('button')) {
+    if (actions === null || actions === undefined) throw new Error('row actions not rendered');
+    expect(actions.classList.contains('flex-wrap')).toBe(true);
+    expect(actions.parentElement?.tagName).toBe('TD');
+    expect(actions.querySelectorAll('button')).toHaveLength(4);
+    for (const button of actions.querySelectorAll('button')) {
       expect(button.classList.contains('whitespace-normal')).toBe(true);
       expect(button.classList.contains('max-w-full')).toBe(true);
     }

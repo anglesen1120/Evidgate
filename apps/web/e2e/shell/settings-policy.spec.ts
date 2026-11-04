@@ -75,11 +75,11 @@ for (const locale of LOCALES) {
     await visit(page, locale);
     const field = await page.locator('#policy-revision-id').boundingBox();
     const action = await page.locator('[data-policy-open]').boundingBox();
-    expect(field).not.toBeNull();
-    expect(action).not.toBeNull();
-    expect(field!.y + field!.height).toBeCloseTo(action!.y + action!.height, 0);
-    expect(field!.x + field!.width).toBeLessThan(action!.x);
-    expect(field!.width).toBeGreaterThan(action!.width);
+    if (field === null || action === null)
+      throw new Error('policy revision field or action has no box');
+    expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
+    expect(field.x + field.width).toBeLessThan(action.x);
+    expect(field.width).toBeGreaterThan(action.width);
   });
   // AC3: the served list, its head marking, the mode chip and the diff panel's own state.
   test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) => {
