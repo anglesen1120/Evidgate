@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Application.Commands;
@@ -62,6 +63,11 @@ internal static class IngestionModule
         // 04.1.2-T4.2: the producer registry 05's run-create, 06.1.2's upload-url and 05.3.2-T1's
         // finalize call (T9/T54/T85).
         services.TryAddScoped<IProducerRegistry, ProducerRegistry>();
+
+        // The accepted-batch metering task reads its batch and meters it through the Usage ledger, so the ingest commit's
+        // outbox row reaches a handler in every host that composes this module.
+        services.TryAddScoped<IMeterEventBatchReader, MeterEventBatchStore>();
+        services.AddTaskHandler<MeterEventBatchPayload, MeterEventBatchTaskHandler>();
 
         // The capability body validates against contracts/adapter/capability.v1.json; the compiled set is built on
         // first use, so a host that never registers a capability pays nothing at start-up.
