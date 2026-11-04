@@ -4,6 +4,7 @@ import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import type { ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import type { Mock } from 'vitest';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { ScopeSwitcherComponent } from './scope-switcher.component';
 import { NavigationEnd, Router, provideRouter } from '@angular/router';
@@ -99,6 +100,20 @@ describe('ShellComponent', () => {
     const scope = topbar.querySelector<HTMLElement>('app-scope-switcher')!;
     expect(scope.classList.contains('compact')).toBe(true);
     expect(scope.compareDocumentPosition(theme) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('measures the topbar so the focus scroll offset follows its wrapped height', () => {
+    // The stylesheet's `scroll-margin-top` reads `--eg-topbar-height`; the shell is what publishes
+    // it, because the bar's height is a layout result (it wraps) rather than a token.
+    const header = root.querySelector<HTMLElement>('header.topbar')!;
+    const observers = vi
+      .mocked(ResizeObserver)
+      .mock.results.map((result) => result.value as ResizeObserver);
+    const watching = observers.filter((observer) => {
+      const observe = Reflect.get(observer, 'observe') as Mock;
+      return observe.mock.calls.some((call) => call[0] === header);
+    });
+    expect(watching).toHaveLength(1);
   });
 
   it.each([360, 390, 767])('moves scope controls into the drawer at %ipx', async (width) => {

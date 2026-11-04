@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import runDetail from '../../../../fixtures/web-api/run-detail/input.json';
+import { runDetailPath } from './run-detail.support';
 import {
   localePath,
   ORG_ACME,
@@ -24,20 +24,12 @@ function listPath(variant: 'runs' | '250-rows'): string {
 }
 
 function detailPath(revision = 3, revisions: 'ok' | 'empty' | 'unavailable' = 'ok'): string {
-  return withVariants(
-    localePath(
-      'en',
-      `/dev/run-detail/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/runs/${runDetail.body.run_id}`,
-    ),
-    [
-      GRANT,
-      '?fixture.variant.getRun=detail-ready',
-      '?fixture.variant.listRunAttempts=ok',
-      '?fixture.variant.getRunDecision=evaluated-fail-missing-shard',
-      `?fixture.variant.listEvidenceRevisions=${revisions}`,
-      `?evidence_revision=${revision}`,
-    ],
-  );
+  return runDetailPath({
+    decision: 'evaluated-fail-missing-shard',
+    attempts: 'ok',
+    revisions,
+    evidenceRevision: revision,
+  });
 }
 
 async function navigatePin(page: Page, revision: number): Promise<void> {

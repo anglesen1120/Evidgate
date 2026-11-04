@@ -14,6 +14,8 @@ import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 
+import cliManifest from '../../../../../../../packages/cli/package.json';
+
 interface QuickstartInput {
   projectRef: string | null;
   token: Pick<IngestTokenView, 'name' | 'prefix'> | null;
@@ -21,13 +23,24 @@ interface QuickstartInput {
 }
 
 // Metadata only: deliberately pick individual fields rather than serializing credentials.
+// Control and bidi characters are dropped from shell data (a newline would end the line inside
+// the quotes) and flattened in comments (whoever pastes them should not run an escape sequence).
+const UNSAFE_TEXT = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
+
+function shellQuote(value: string): string {
+  return `'${value.replace(UNSAFE_TEXT, '').replace(/'/g, `'"'"'`)}'`;
+}
+
+function comment(value: string): string {
+  return value.replace(UNSAFE_TEXT, ' ');
+}
+
 export function buildQuickstartSnippet({ projectRef, token, binding }: QuickstartInput): string {
-  const project = (projectRef ?? '<project-slug>').replace(/'/g, `'"'"'`);
-  const comment = (value: string) => value.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, ' ');
+  const project = shellQuote(projectRef ?? '<project-slug>');
   const lines = [
     `# ${$localize`:@@onboarding.quickstart.variables:Set EVIDGATE_API_URL and EVIDGATE_PROJECT as non-secret CI variables.`}`,
     `export EVIDGATE_API_URL='<your-evidgate-api-url>'`,
-    `export EVIDGATE_PROJECT='${project}'`,
+    `export EVIDGATE_PROJECT=${project}`,
     '',
   ];
 
@@ -53,8 +66,8 @@ export function buildQuickstartSnippet({ projectRef, token, binding }: Quickstar
 
   lines.push(
     '',
-    'npx --yes --package @evidgate/cli -- evidgate auth login',
-    'npx --yes --package @evidgate/cli -- evidgate quickstart --write .github/workflows/evidgate.yml',
+    `npx --yes --package @evidgate/cli@${cliManifest.version} -- evidgate auth login`,
+    `npx --yes --package @evidgate/cli@${cliManifest.version} -- evidgate quickstart --write .github/workflows/evidgate.yml`,
   );
   return lines.join('\n');
 }

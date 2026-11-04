@@ -1,12 +1,29 @@
 // The store the onboarding shell reads, in the shape its template and its focus passes bind.
 // Shared by the shell's specs, so a case drives one concern — focus, routing, the scope a create
 // opened — without a progress read behind it.
-import { computed, signal, type Signal, type WritableSignal } from '@angular/core';
+import {
+  Component,
+  computed,
+  input,
+  output,
+  provideZonelessChangeDetection,
+  signal,
+  type Signal,
+  type WritableSignal,
+} from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
 import { vi, type Mock } from 'vitest';
 import type { PolicyActivationStateDto } from '@evidgate/sdk';
+import { BehaviorSubject, Subject } from 'rxjs';
 
 import type { StepNumber } from '../data/step-derivation';
 import type { OnboardingProgress } from '../data/onboarding-progress.service';
+import { OnboardingStore } from '../onboarding.store';
+import { ConnectCiPage } from '../steps/connect-ci.page';
+import { CreateProjectPage } from '../steps/create-project.page';
+import { EnableCollectionPage } from '../steps/enable-collection.page';
+import { OnboardingShellComponent } from './onboarding-shell.component';
 
 /** The scope a stub store reports as the one-shot create marker. */
 export interface StubScope {
@@ -102,4 +119,100 @@ export function shellStore(options: ShellStoreOptions = {}): ShellStore {
       if (viewStep() > 1) showStep((viewStep() - 1) as StepNumber);
     }),
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The mounted shell. The stubs, the finished router and the TestBed wiring are shared: a spec that
+// only reads one contract (the stepper's marker, the focus pass) still needs the same stub tree.
+// ---------------------------------------------------------------------------------------------
+
+@Component({ selector: 'app-onboarding-create-project', template: '' })
+export class CreateProjectStub {
+  readonly orgId = input.required<string>();
+}
+
+@Component({
+  selector: 'app-onboarding-connect-ci',
+  template: '<div data-testid="connect-ci-page">{{ orgId() }} {{ projectId() }}</div>',
+})
+export class ConnectCiStub {
+  readonly orgId = input.required<string>();
+  readonly projectId = input.required<string>();
+}
+
+@Component({
+  selector: 'app-onboarding-enable-collection',
+  template: '<div data-testid="enable-collection-page">{{ orgId() }} {{ projectId() }}</div>',
+})
+export class EnableCollectionStub {
+  readonly orgId = input.required<string>();
+  readonly projectId = input.required<string>();
+  readonly activationConfirmed = output<PolicyActivationStateDto>();
+}
+
+/**
+ * The router the shell reads for its navigation handoff. These cases arrive with the navigation
+ * already finished, so no event is in flight and none waits for the created step's handoff.
+ */
+export function finishedRouter(): { events: Subject<unknown>; currentNavigation: () => unknown } {
+  return { events: new Subject<unknown>(), currentNavigation: () => null };
+}
+
+export interface MountOptions {
+  /** The scope the stub store reports as the one-shot create marker; nothing by default. */
+  readonly created?: () => StubScope | null;
+  /** The project address the route carries; the org root by default. */
+  readonly projectId?: string;
+  /**
+   * The focus token the store already carries when the shell is built — a revisit inheriting a
+   * step moved in an earlier activation.
+   */
+  readonly focusToken?: number;
+}
+
+export interface MountedShell {
+  readonly fixture: ComponentFixture<OnboardingShellComponent>;
+  readonly root: HTMLElement;
+  readonly store: ShellStore;
+  /** The route param streams a case drives to change the address. */
+  readonly orgParams: BehaviorSubject<ParamMap>;
+  readonly childParams: BehaviorSubject<ParamMap>;
+}
+
+/**
+ * Builds the shell over a fresh stub store. The shell consults the create marker once, when its
+ * route subscription first answers, so a case that changes what the store holds or what the route
+ * carries passes it here rather than after the component exists.
+ */
+export async function mountShell(options: MountOptions = {}): Promise<MountedShell> {
+  TestBed.resetTestingModule();
+  const store = shellStore({
+    createdScope: options.created ?? (() => null),
+    focusToken: options.focusToken ?? 0,
+  });
+  const orgParams = new BehaviorSubject(convertToParamMap({ orgId: 'org-1' }));
+  const childParams = new BehaviorSubject(
+    convertToParamMap(options.projectId === undefined ? {} : { projectId: options.projectId }),
+  );
+  await TestBed.configureTestingModule({
+    imports: [OnboardingShellComponent],
+    providers: [
+      provideZonelessChangeDetection(),
+      { provide: OnboardingStore, useValue: store },
+      { provide: Router, useValue: finishedRouter() },
+      {
+        provide: ActivatedRoute,
+        useValue: { pathFromRoot: [{ paramMap: orgParams }, { paramMap: childParams }] },
+      },
+    ],
+  })
+    .overrideComponent(OnboardingShellComponent, {
+      remove: { imports: [CreateProjectPage, ConnectCiPage, EnableCollectionPage] },
+      add: { imports: [CreateProjectStub, ConnectCiStub, EnableCollectionStub] },
+    })
+    .compileComponents();
+  const fixture = TestBed.createComponent(OnboardingShellComponent);
+  const root = fixture.nativeElement as HTMLElement;
+  await fixture.whenStable();
+  return { fixture, root, store, orgParams, childParams };
 }
