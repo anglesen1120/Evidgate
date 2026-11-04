@@ -8,9 +8,8 @@
     tabindex="-1"
     data-testid="suite-composition-state"
     class="m-0 font-[family-name:var(--eg-font-display)] text-xl leading-[var(--eg-leading-2xl)] md:text-2xl focus:outline-[length:var(--eg-focus-width)] focus:outline-ring focus:outline-offset-[var(--eg-focus-offset)]"
-  >
-    {{ state().title }}
-  </h1>
+    [textContent]="state().title"
+  ></h1>
   @if (store.status() !== 'ready') {
     <p hlmAlert role="status">{{ state().body }}</p>
     @if (store.status() === 'idle' || store.status() === 'loading') {
