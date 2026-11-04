@@ -15,7 +15,7 @@
 // this adapter, or the arrow would point both ways and npm workspaces would have a cycle.
 // Comments in the CLI may name the reporter (it ports the writer lock and reads the spool);
 // an IMPORT SPECIFIER may not — the CLI half of this pair lives in
-// `packages/cli/src/attachmentUpload.test.ts` ("keeps_the_production_sources_free_of_adapter_imports")
+// `packages/cli/src/attachmentUpload.imports.test.ts` ("keeps_the_production_sources_free_of_adapter_imports")
 // with the same regex, so the two specs cannot drift apart.
 import { readFileSync, readdirSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
