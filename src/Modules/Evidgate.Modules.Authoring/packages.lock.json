@@ -275,6 +275,9 @@
       "evidgate.modules.authoring.contracts": {
         "type": "Project"
       },
+      "evidgate.modules.catalog.contracts": {
+        "type": "Project"
+      },
       "evidgate.modules.evidence.contracts": {
         "type": "Project",
         "dependencies": {

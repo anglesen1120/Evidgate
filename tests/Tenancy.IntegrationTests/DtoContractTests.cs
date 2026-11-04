@@ -188,11 +188,12 @@ public sealed class DtoContractTests
         var nodeId = Guid.Parse("018f0000-0000-7000-8000-000000000202");
 
         JsonSerializer.Serialize(
-                new ManualCaseListItemDto(caseId, "CHEC-001", itemId, nodeId, "Pay by card", "critical", "draft", 2),
+                new ManualCaseListItemDto(
+                    caseId, "CHEC-001", itemId, nodeId, "Pay by card", "critical", "draft", 2, 1, [Guid.Parse("018f0000-0000-7000-8000-000000000301")]),
                 SnakeCase)
             .ShouldBe(
                 """
-                {"case_id":"018f0000-0000-7000-8000-000000000301","code":"CHEC-001","checklist_item_id":"018f0000-0000-7000-8000-000000000201","node_id":"018f0000-0000-7000-8000-000000000202","title":"Pay by card","priority":"critical","state":"draft","version":2}
+                {"case_id":"018f0000-0000-7000-8000-000000000301","code":"CHEC-001","checklist_item_id":"018f0000-0000-7000-8000-000000000201","node_id":"018f0000-0000-7000-8000-000000000202","title":"Pay by card","priority":"critical","state":"draft","version":2,"linked_live_count":1,"linked_case_ids":["018f0000-0000-7000-8000-000000000301"]}
                 """);
 
         var detail = new ManualCaseDetailDto(

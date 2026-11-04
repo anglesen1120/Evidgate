@@ -538,6 +538,7 @@ public sealed class SchemaConventionAllowListTests
                 ("public.evaluation", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.project_ai_settings", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.ai_settings_template", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+                ("public.manual_case_link", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
             ]);
 
         // Every exclusion carries its reason: an exemption without one is a silencer,

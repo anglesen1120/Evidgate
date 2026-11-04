@@ -565,6 +565,16 @@ public sealed class TenantGucTests
             ("project_id", projectId),
             ("checklist_item_id", checklistItemId));
         await scope.ExecuteAsync(
+            """
+            insert into public.manual_case_link (id, org_id, project_id, manual_test_case_id, test_case_id)
+            values (@id, @org_id, @project_id, @manual_test_case_id, @test_case_id)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("manual_test_case_id", manualTestCaseId),
+            ("test_case_id", caseId));
+        await scope.ExecuteAsync(
             "insert into public.authoring_code_counter (id, org_id, project_id) values (@id, @org_id, @project_id)",
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),

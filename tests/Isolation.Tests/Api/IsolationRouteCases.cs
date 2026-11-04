@@ -450,6 +450,13 @@ public static class IsolationRouteCases
                 IfMatch: VersionTag(p.AuthoringDeletedManualCaseVersion))),
         ProjectCase("GET", "/v1/projects/{p}/authoring/versions", p => new(HttpMethod.Get,
             $"/v1/projects/{p}/authoring/versions?limit=1"), list: true, ownControl: true),
+        // 13.1.1-T4: the manual-case link pair (routes 20, 21). A foreign org's case id is 404 like every other
+        // object id; the body names a live catalog case of the same project, the shape the seeder links.
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/links", p => [("case", p.AuthoringManualCaseId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}/links",
+                new JsonObject { ["test_case_id"] = p.CaseIds[0].ToString("D") }), (_, _) => []),
+        ObjectCaseWith("DELETE", "/v1/projects/{p}/authoring/manual-cases/{m}/links/{c}", p => [("case", p.AuthoringManualCaseId)],
+            (id, p) => new(HttpMethod.Delete, $"/v1/projects/{p.Id}/authoring/manual-cases/{id}/links/{p.CaseIds[0]}"), (_, _) => []),
         ObjectCaseWith("GET", "/v1/projects/{p}/authoring/versions/{v}", p => [("version", p.AuthoringVersionId)],
             (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/versions/{id}"), (_, _) => [],
             own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/versions/{p.AuthoringVersionId}")),

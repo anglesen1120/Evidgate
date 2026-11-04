@@ -762,6 +762,9 @@ internal static class ManualCaseBody
     /// <summary>The members <c>POST …/manual-cases/{m}/item</c> accepts.</summary>
     internal static readonly string[] MoveMembers = ["checklist_item_id", "reason"];
 
+    /// <summary>The members <c>POST …/manual-cases/{m}/links</c> accepts.</summary>
+    internal static readonly string[] LinkMembers = ["test_case_id"];
+
     /// <summary>A required uuid member.</summary>
     /// <param name="body">The request body.</param>
     /// <param name="member">The member name.</param>
