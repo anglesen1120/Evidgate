@@ -4,7 +4,7 @@ Legend: ✅ verified with link · ⚠️ unverified · `[INFERENCE]` · `[DECISI
 
 ## Status
 
-accepted — owner decision for the foundation lane; acceptance evidence below is not a claim that the integration gate has passed.
+accepted
 
 ## Date
 
