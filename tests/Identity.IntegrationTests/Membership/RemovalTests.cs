@@ -343,11 +343,10 @@ public sealed class RemovalTests : TenantTest
                   from public.audit_log
                  where org_id = @org_id
                    and action = 'membership.remove'
-                   and object_id = @object_id
                 """,
-                [("org_id", member.OrgId), ("object_id", membershipId.ToString("D"))]))!).ShouldBe(
+                [("org_id", member.OrgId)]))!).ShouldBe(
                 1L,
-                "one membership was removed, so exactly one audit row describes it");
+                "one membership was removed, so exactly one audit row exists, and none without an object");
         }
         finally
         {

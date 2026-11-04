@@ -264,8 +264,8 @@ public sealed class LastAdminTests : CatalogueTestBase
         // commands need (NpgsqlCommand.Transaction is NpgsqlTransaction, not DbTransaction).
         await using var holder = (NpgsqlTransaction)await connection.BeginTransactionAsync(Token);
 
-        (await LockAdminsAsync(connection, holder, org)).ShouldBe(
-            2, "the holder must hold both admin rows, or the DELETE below is free to run");
+        (await LockAdminsAsync(connection, holder, org, keptAdminId)).ShouldBe(
+            1, "the holder locks only the kept admin's rows, which the DELETE itself never updates");
 
         var pending = DeleteAsync(client, $"/v1/orgs/{org}/memberships/{targetAdminId}", "lock-remove-1");
         await Task.Delay(PendingDelayMilliseconds, Token);
@@ -291,7 +291,8 @@ public sealed class LastAdminTests : CatalogueTestBase
     private static async Task<int> LockAdminsAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
-        Guid orgId)
+        Guid orgId,
+        Guid membershipId)
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -304,12 +305,14 @@ public sealed class LastAdminTests : CatalogueTestBase
                and membership_role.membership_id = membership.id
               join public.role on role.id = membership_role.role_id
              where membership.org_id = @org_id
+               and membership.id = @membership_id
                and membership.status = 'active'
                and role.code = 'tenant_admin'
              order by membership.id
                for update of membership, membership_role
             """;
         command.Parameters.AddWithValue("org_id", orgId);
+        command.Parameters.AddWithValue("membership_id", membershipId);
 
         await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
         var locked = 0;
