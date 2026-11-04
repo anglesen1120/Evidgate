@@ -81,6 +81,7 @@ import permissionsListSettingsNoTab from '../../../../../../fixtures/web-api/per
 import permissionsListSettingsPolicyReadonly from '../../../../../../fixtures/web-api/permissions-list-settings-policy-readonly/input.json';
 import permissionsListSettingsPolicyWrite from '../../../../../../fixtures/web-api/permissions-list-settings-policy-write/input.json';
 import permissionsListSettingsSecretsWrite from '../../../../../../fixtures/web-api/permissions-list-settings-secrets-write/input.json';
+import permissionsListUsageRead from '../../../../../../fixtures/web-api/permissions-list-usage-read/input.json';
 import policyActivationForbidden from '../../../../../../fixtures/web-api/policy-activation-forbidden/input.json';
 import policyActivationInvalidTransition from '../../../../../../fixtures/web-api/policy-activation-invalid-transition/input.json';
 import policyActivationOk from '../../../../../../fixtures/web-api/policy-activation-ok/input.json';
@@ -740,6 +741,7 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
     name: 'permissions-list-settings-secrets-write',
     document: permissionsListSettingsSecretsWrite,
   },
+  { name: 'permissions-list-usage-read', document: permissionsListUsageRead },
   { name: 'policy-activation-forbidden', document: policyActivationForbidden },
   { name: 'policy-activation-invalid-transition', document: policyActivationInvalidTransition },
   { name: 'policy-activation-ok', document: policyActivationOk },

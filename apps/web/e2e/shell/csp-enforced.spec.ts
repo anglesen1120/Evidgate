@@ -12,6 +12,7 @@ import adminGrants from '../../../../fixtures/web-api/permissions-list-settings-
 import policyGrants from '../../../../fixtures/web-api/permissions-list-settings-policy-readonly/input.json';
 import secretsGrants from '../../../../fixtures/web-api/permissions-list-settings-secrets-write/input.json';
 import noTabGrants from '../../../../fixtures/web-api/permissions-list-settings-no-tab/input.json';
+import usageGrants from '../../../../fixtures/web-api/permissions-list-usage-read/input.json';
 import runFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import suiteFixture from '../../../../fixtures/web-api/suite-revision/input.json';
 
@@ -27,6 +28,7 @@ import {
   SECRETS_LIST,
   SETTINGS_ADMIN_GRANTS,
   SETTINGS_NO_TAB_GRANTS,
+  USAGE_READ_GRANTS,
   localePath,
   overviewPath,
   withVariants,
@@ -99,8 +101,8 @@ function grantedCodes(catalogue: PermissionCatalogue): readonly string[] {
 }
 
 /**
- * The corpus sessions a visit may pick from. `usage:read` is in none of them, which is why that
- * one entry is asserted as a refusal instead of a rendered page.
+ * The corpus sessions a visit may pick from; every gated route has one that grants its codes, so
+ * each surface is walked as a rendered page.
  */
 const GRANTS: readonly GrantSet[] = [
   { query: '', codes: grantedCodes(defaultGrants) },
@@ -115,6 +117,7 @@ const GRANTS: readonly GrantSet[] = [
     query: '?fixture.variant.listPermissions=settings-secrets-write',
     codes: grantedCodes(secretsGrants),
   },
+  { query: USAGE_READ_GRANTS, codes: grantedCodes(usageGrants) },
 ];
 
 const SURFACES: readonly Surface[] = surfacesInRouteTable();
@@ -245,10 +248,10 @@ test('the walk covers the route table and names every surface', () => {
     expect(READY[surface.component], `${surface.path} renders ${surface.component}`).toBeDefined();
     expect(fillParams(surface.path, IDS), `${surface.path} has no corpus id`).not.toMatch(/:/);
   }
-  // One entry's code no corpus session holds, so it can only be asserted as a refusal. A second
-  // uncovered entry must fail here rather than drop out of the walk.
+  // A surface whose codes no corpus session holds could only be asserted as a refusal; it must
+  // fail here rather than drop out of the walk.
   const uncovered = WALK.filter(({ grant }) => grant === undefined);
-  expect(uncovered.map(({ surface }) => surface.path)).toEqual(['/orgs/:orgId/usage']);
+  expect(uncovered.map(({ surface }) => surface.path)).toEqual([]);
   // The Settings index is a surface of its own when the session holds no tab, and it is the one
   // surface whose session cannot be derived from its guards.
   const noTabs = WALK.filter(({ surface }) => surface.component === 'SettingsNoTabsPage');
@@ -272,7 +275,6 @@ for (const locale of LOCALES) {
         `the document of ${path} carries the policy`,
       ).toContain("require-trusted-types-for 'script'");
 
-      // A refused route proves the guard ran; every other surface proves its component mounted.
       const ready = grant === undefined ? 'app-forbidden-page' : READY[surface.component];
       if (ready === undefined) throw new Error(`No readiness contract for ${surface.component}`);
       await expect(page.locator(ready), path).toBeVisible();

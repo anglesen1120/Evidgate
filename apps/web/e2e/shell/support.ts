@@ -286,6 +286,9 @@ export const SETTINGS_AUDIT_ONLY_GRANTS = '?fixture.variant.listPermissions=sett
 /** `?fixture.variant.listPermissions=settings-no-tab` — `organization:read` alone, so no tab. */
 export const SETTINGS_NO_TAB_GRANTS = '?fixture.variant.listPermissions=settings-no-tab';
 
+/** `?fixture.variant.listPermissions=usage-read` — `organization:read` and `usage:read`, the Usage page's one grant. */
+export const USAGE_READ_GRANTS = '?fixture.variant.listPermissions=usage-read';
+
 /**
  * `?fixture.variant.listPermissions=settings-members-readonly` — `membership:read`,
  * `organization:read` and `role:read`, so the Members tab opens while `membership:write` is absent.
