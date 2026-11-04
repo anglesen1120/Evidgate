@@ -1,4 +1,8 @@
-<section class="connect" data-testid="connect-ci-page" [attr.aria-busy]="busy()">
+<section
+  class="grid min-w-0 gap-(--eg-space-5) text-sm text-muted-foreground wrap-anywhere [&_p]:m-0 [&_h4]:m-0 [&_h4]:text-sm [&_h4]:font-(weight:--eg-weight-semibold) [&_h4]:text-foreground [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-2) [&_dl>div]:grid [&_dl>div]:gap-(--eg-space-2) [&_dt]:font-(weight:--eg-weight-semibold) [&_dt]:text-foreground [&_dd]:m-0 [&_code]:font-mono"
+  data-testid="connect-ci-page"
+  [attr.aria-busy]="busy()"
+>
   <p>{{ intro }}</p>
   <p data-testid="connect-reveal-status" role="status" [attr.aria-live]="'polite'">
     @if (slot.current()) {
@@ -19,7 +23,9 @@
     </div>
   }
   @if (overlapEndsAt(); as overlap) {
-    <p class="notice">
+    <p
+      class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg)"
+    >
       {{ overlapLabel }}
       <time [attr.datetime]="overlap">{{ overlap | date: 'medium' : '+0000' }}</time>
     </p>
@@ -29,7 +35,7 @@
       <!-- The press disabled the control it was made with, so this heading — outside both alerts —
            is where the visitor's place goes; the pattern's own title drops one level below it. -->
       <h3
-        class="connect__failure-heading"
+        class="connect__failure-heading m-0 text-lg text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
         id="connect-failure-heading"
         tabindex="-1"
         #failureHeadingEl
@@ -40,9 +46,15 @@
       @if (details().length > 0) {
         <!-- The envelope's field rows as the second, labelled alert: without it a `path`-level
              reason is never spoken, only printed. -->
-        <div role="alert" data-testid="connect-ci-details" aria-labelledby="connect-details-label">
-          <p id="connect-details-label" class="validation">{{ detailsLabel }}</p>
-          <ul class="validation">
+        <div
+          hlmAlert
+          [variant]="'destructive'"
+          role="alert"
+          data-testid="connect-ci-details"
+          aria-labelledby="connect-details-label"
+        >
+          <p id="connect-details-label" class="text-destructive">{{ detailsLabel }}</p>
+          <ul class="text-destructive">
             @for (detail of details(); track $index) {
               <li>{{ detail.path }} {{ detail.reason }}</li>
             }
@@ -51,16 +63,27 @@
       }
     </section>
     @if (responseUncertain()) {
-      <p class="notice" data-testid="connect-ci-response-uncertain">{{ uncertainLabel }}</p>
+      <p
+        class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg)"
+        data-testid="connect-ci-response-uncertain"
+      >
+        {{ uncertainLabel }}
+      </p>
     }
   }
   @if (store.refreshFailure()) {
-    <section class="notice" data-testid="connect-ci-refresh-failed" role="status">
+    <section
+      class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg)"
+      data-testid="connect-ci-refresh-failed"
+      role="status"
+    >
       <p>{{ refreshFailedLabel }}</p>
       <!-- Not natively disabled while the re-read runs: the press must keep the focus it was made
            with, and `refresh()` itself refuses a second press. -->
       <button
-        class="state-panel__action"
+        hlmBtn
+        [variant]="'outline'"
+        class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere aria-disabled:pointer-events-auto aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground"
         type="button"
         [attr.aria-disabled]="busy() || refreshing() ? 'true' : null"
         (click)="refresh()"
@@ -69,32 +92,55 @@
       </button>
     </section>
   }
-  <p class="busy-status" role="status" tabindex="-1" #busyStatus data-testid="connect-ci-busy">
+  <p
+    class="min-h-(--eg-leading-sm) focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+    role="status"
+    tabindex="-1"
+    #busyStatus
+    data-testid="connect-ci-busy"
+  >
     @if (busy()) {
       {{ busyLabel }}
     }
   </p>
   <app-connection-health
+    class="block min-w-0"
     [health]="health()"
     [tokens]="store.tokens()"
     [bindingsTruncated]="store.bindingsTruncated()"
     [tokensTruncated]="store.tokensTruncated()"
   />
   <app-cli-quickstart
+    class="block min-w-0"
     [projectRef]="quickstartProjectRef()"
     [token]="quickstartToken()"
     [binding]="quickstartBinding()"
   />
-  <div class="panels">
-    <section class="panel" data-testid="connect-oidc-panel" aria-labelledby="connect-oidc-heading">
-      <h3 #bindingHeading id="connect-oidc-heading" tabindex="-1">{{ oidcTitle }}</h3>
+  <div class="grid min-w-0 gap-(--eg-space-5) min-[1280px]:grid-cols-2 min-[1280px]:items-start">
+    <section
+      hlmCard
+      class="min-w-0 gap-(--eg-space-5) overflow-visible p-(--eg-space-4) min-[768px]:p-(--eg-space-5)"
+      data-testid="connect-oidc-panel"
+      aria-labelledby="connect-oidc-heading"
+    >
+      <h3
+        hlmCardTitle
+        class="m-0 text-lg text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+        #bindingHeading
+        id="connect-oidc-heading"
+        tabindex="-1"
+      >
+        {{ oidcTitle }}
+      </h3>
       <p>{{ oidcHint }}</p>
       <p>{{ workflowHint }}</p>
-      <form (ngSubmit)="createBinding()">
-        <div class="field">
+      <form class="grid min-w-0 gap-(--eg-space-5)" (ngSubmit)="createBinding()">
+        <div class="grid min-w-0 gap-(--eg-space-3)">
           @let repoIdShown = (oidcSubmitted() && repoIdInvalid()) || serverRepoIdError() !== null;
-          <label for="connect-oidc-repo-id">{{ repoIdLabel }}</label>
+          <label hlmLabel for="connect-oidc-repo-id">{{ repoIdLabel }}</label>
           <input
+            hlmInput
+            class="min-h-(--eg-control-touch)"
             id="connect-oidc-repo-id"
             data-testid="connect-oidc-repo-id"
             name="repositoryId"
@@ -104,12 +150,13 @@
             [(ngModel)]="repositoryId"
             (input)="dismissServerReason('repository_id')"
             [disabled]="busy() || !bindingPermitted()"
+            [forceInvalid]="repoIdShown"
             [attr.aria-invalid]="repoIdShown ? 'true' : null"
-            [attr.aria-describedby]="describedBy(repoIdShown ? 'connect-repo-id-error' : null)"
+            [aria-describedby]="describedBy(repoIdShown ? 'connect-repo-id-error' : null)"
           />
           <p
             id="connect-repo-id-error"
-            class="validation"
+            class="text-destructive"
             [attr.aria-live]="serverRepoIdError() === null ? 'polite' : null"
           >
             @if (oidcSubmitted() && repoIdInvalid()) {
@@ -119,11 +166,13 @@
             }
           </p>
         </div>
-        <div class="field">
+        <div class="grid min-w-0 gap-(--eg-space-3)">
           @let repoNameShown =
             (oidcSubmitted() && repoNameInvalid()) || serverRepoNameError() !== null;
-          <label for="connect-oidc-repo-name">{{ repoNameLabel }}</label>
+          <label hlmLabel for="connect-oidc-repo-name">{{ repoNameLabel }}</label>
           <input
+            hlmInput
+            class="min-h-(--eg-control-touch)"
             id="connect-oidc-repo-name"
             data-testid="connect-oidc-repo-name"
             name="repositoryName"
@@ -134,12 +183,13 @@
             [(ngModel)]="repositoryName"
             (input)="dismissServerReason('repository_full_name')"
             [disabled]="busy() || !bindingPermitted()"
+            [forceInvalid]="repoNameShown"
             [attr.aria-invalid]="repoNameShown ? 'true' : null"
-            [attr.aria-describedby]="describedBy(repoNameShown ? 'connect-repo-name-error' : null)"
+            [aria-describedby]="describedBy(repoNameShown ? 'connect-repo-name-error' : null)"
           />
           <p
             id="connect-repo-name-error"
-            class="validation"
+            class="text-destructive"
             [attr.aria-live]="serverRepoNameError() === null ? 'polite' : null"
           >
             @if (oidcSubmitted() && repoNameInvalid()) {
@@ -149,10 +199,12 @@
             }
           </p>
         </div>
-        <div class="field">
+        <div class="grid min-w-0 gap-(--eg-space-3)">
           @let refsShown = (oidcSubmitted() && refsInvalid()) || serverRefsError() !== null;
-          <label for="connect-oidc-refs">{{ refsLabel }}</label>
+          <label hlmLabel for="connect-oidc-refs">{{ refsLabel }}</label>
           <textarea
+            hlmInput
+            class="h-auto min-h-(--eg-control-touch) resize-y"
             id="connect-oidc-refs"
             data-testid="connect-oidc-refs"
             name="refs"
@@ -162,15 +214,16 @@
             [(ngModel)]="refs"
             (input)="dismissServerReason('allowed_ref_patterns')"
             [disabled]="busy() || !bindingPermitted()"
+            [forceInvalid]="refsShown"
             [attr.aria-invalid]="refsShown ? 'true' : null"
-            [attr.aria-describedby]="
+            [aria-describedby]="
               describedBy('connect-refs-hint', refsShown ? 'connect-refs-error' : null)
             "
           ></textarea>
           <p id="connect-refs-hint">{{ refsHint }}</p>
           <p
             id="connect-refs-error"
-            class="validation"
+            class="text-destructive"
             [attr.aria-live]="serverRefsError() === null ? 'polite' : null"
           >
             @if (oidcSubmitted() && refsInvalid()) {
@@ -180,11 +233,13 @@
             }
           </p>
         </div>
-        <div class="field">
+        <div class="grid min-w-0 gap-(--eg-space-3)">
           @let workflowsShown =
             (oidcSubmitted() && workflowsInvalid()) || serverWorkflowsError() !== null;
-          <label for="connect-oidc-workflows">{{ workflowsLabel }}</label>
+          <label hlmLabel for="connect-oidc-workflows">{{ workflowsLabel }}</label>
           <textarea
+            hlmInput
+            class="h-auto min-h-(--eg-control-touch) resize-y"
             id="connect-oidc-workflows"
             data-testid="connect-oidc-workflows"
             name="workflows"
@@ -194,8 +249,9 @@
             [(ngModel)]="workflows"
             (input)="dismissServerReason('allowed_workflow_refs')"
             [disabled]="busy() || !bindingPermitted()"
+            [forceInvalid]="workflowsShown"
             [attr.aria-invalid]="workflowsShown ? 'true' : null"
-            [attr.aria-describedby]="
+            [aria-describedby]="
               describedBy(
                 'connect-workflows-hint',
                 workflowsShown ? 'connect-workflows-error' : null
@@ -205,7 +261,7 @@
           <p id="connect-workflows-hint">{{ workflowsHint }}</p>
           <p
             id="connect-workflows-error"
-            class="validation"
+            class="text-destructive"
             [attr.aria-live]="serverWorkflowsError() === null ? 'polite' : null"
           >
             @if (oidcSubmitted() && workflowsInvalid()) {
@@ -219,7 +275,8 @@
           <p id="connect-binding-permission">{{ bindingPermission }}</p>
         }
         <button
-          class="state-panel__action"
+          hlmBtn
+          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
           data-testid="connect-oidc-submit"
           type="submit"
           [disabled]="busy() || !bindingPermitted()"
@@ -229,7 +286,9 @@
         </button>
       </form>
       <h4>{{ bindingsLabel }}</h4>
-      <ul class="metadata">
+      <ul
+        class="m-0 grid min-w-0 list-none gap-(--eg-space-4) p-0 [&>li]:grid [&>li]:min-w-0 [&>li]:gap-(--eg-space-3) [&>li]:border-t [&>li]:border-solid [&>li]:border-border [&>li]:py-(--eg-space-3) [&_strong]:text-foreground"
+      >
         @for (binding of store.bindings(); track binding.id) {
           <li data-testid="connect-binding-row" [attr.data-status]="binding.status">
             <strong>{{ binding.repository_full_name }}</strong>
@@ -254,22 +313,38 @@
         }
       </ul>
       @if (store.bindingsTruncated()) {
-        <p class="notice" data-testid="connect-bindings-truncated">{{ truncatedLabel }}</p>
+        <p
+          class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg)"
+          data-testid="connect-bindings-truncated"
+        >
+          {{ truncatedLabel }}
+        </p>
       }
     </section>
     <section
-      class="panel"
+      hlmCard
+      class="min-w-0 gap-(--eg-space-5) overflow-visible p-(--eg-space-4) min-[768px]:p-(--eg-space-5)"
       data-testid="connect-token-panel"
       aria-labelledby="connect-token-heading"
     >
-      <h3 #tokenHeading id="connect-token-heading" tabindex="-1">{{ tokenTitle }}</h3>
+      <h3
+        hlmCardTitle
+        class="m-0 text-lg text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+        #tokenHeading
+        id="connect-token-heading"
+        tabindex="-1"
+      >
+        {{ tokenTitle }}
+      </h3>
       <p>{{ tokenHint }}</p>
-      <form (ngSubmit)="createToken()">
-        <div class="field">
+      <form class="grid min-w-0 gap-(--eg-space-5)" (ngSubmit)="createToken()">
+        <div class="grid min-w-0 gap-(--eg-space-3)">
           @let tokenNameShown =
             (tokenSubmitted() && tokenNameInvalid()) || serverTokenNameError() !== null;
-          <label for="connect-token-name">{{ tokenNameLabel }}</label>
+          <label hlmLabel for="connect-token-name">{{ tokenNameLabel }}</label>
           <input
+            hlmInput
+            class="min-h-(--eg-control-touch)"
             id="connect-token-name"
             data-testid="connect-token-name"
             name="tokenName"
@@ -278,14 +353,13 @@
             [(ngModel)]="tokenName"
             (input)="dismissServerReason('name')"
             [disabled]="busy() || !tokenPermitted()"
+            [forceInvalid]="tokenNameShown"
             [attr.aria-invalid]="tokenNameShown ? 'true' : null"
-            [attr.aria-describedby]="
-              describedBy(tokenNameShown ? 'connect-token-name-error' : null)
-            "
+            [aria-describedby]="describedBy(tokenNameShown ? 'connect-token-name-error' : null)"
           />
           <p
             id="connect-token-name-error"
-            class="validation"
+            class="text-destructive"
             [attr.aria-live]="serverTokenNameError() === null ? 'polite' : null"
           >
             @if (tokenSubmitted() && tokenNameInvalid()) {
@@ -299,7 +373,9 @@
           <p id="connect-token-permission">{{ tokenPermission }}</p>
         }
         <button
-          class="state-panel__action"
+          hlmBtn
+          [variant]="'outline'"
+          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
           data-testid="connect-token-submit"
           type="submit"
           [disabled]="busy() || !tokenPermitted()"
@@ -309,7 +385,9 @@
         </button>
       </form>
       <h4>{{ tokensLabel }}</h4>
-      <ul class="metadata">
+      <ul
+        class="m-0 grid min-w-0 list-none gap-(--eg-space-4) p-0 [&>li]:grid [&>li]:min-w-0 [&>li]:gap-(--eg-space-3) [&>li]:border-t [&>li]:border-solid [&>li]:border-border [&>li]:py-(--eg-space-3) [&_strong]:text-foreground"
+      >
         @for (token of store.tokens(); track token.id) {
           <li data-testid="connect-token-row" [attr.data-status]="token.status">
             <strong [id]="'connect-token-name-' + token.id">{{ token.name }}</strong>
@@ -352,7 +430,9 @@
             </dl>
             @if (token.status === 'active') {
               <button
-                class="state-panel__action"
+                hlmBtn
+                [variant]="'outline'"
+                class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
                 type="button"
                 data-testid="connect-token-rotate"
                 [attr.aria-label]="rotateNamed(token.name)"
@@ -373,7 +453,12 @@
         }
       </ul>
       @if (store.tokensTruncated()) {
-        <p class="notice" data-testid="connect-tokens-truncated">{{ truncatedLabel }}</p>
+        <p
+          class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg)"
+          data-testid="connect-tokens-truncated"
+        >
+          {{ truncatedLabel }}
+        </p>
       }
     </section>
   </div>

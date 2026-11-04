@@ -1,26 +1,36 @@
-<!--
-  A group is a labelled `role="group"`, not a `<section>` (review L5): a named section is a
-  `region` landmark, so five groups inside this navigation landmark added five landmarks a screen
-  reader must cycle past to reach the content. The `<h2>` and the `<ul>` keep the structure and
-  `aria-labelledby` still names the group.
--->
+<!-- Groups are named without adding redundant region landmarks. -->
 <nav [attr.aria-label]="navigationLabel">
   @for (group of groups(); track group.id) {
     @if (group.items.length > 0) {
-      <div class="nav-group" role="group" [attr.aria-labelledby]="'nav-group-' + group.id">
-        <h2 [id]="'nav-group-' + group.id">{{ group.label }}</h2>
-        <ul>
+      <div
+        class="nav-group border-0 border-t-(length:--eg-border-width) border-solid border-border py-(--eg-space-3) first:border-t-0"
+        role="group"
+        [attr.aria-labelledby]="'nav-group-' + group.id"
+      >
+        <h2
+          class="m-0 px-(--eg-space-3) py-(--eg-space-2) text-xs font-(weight:--eg-weight-semibold) text-muted-foreground [overflow-wrap:anywhere] group-data-[collapsed=true]/nav:sr-only"
+          [id]="'nav-group-' + group.id"
+        >
+          {{ group.label }}
+        </h2>
+        <ul class="m-0 grid list-none gap-(--eg-space-1) p-0">
           @for (item of group.items; track item.id) {
-            <li>
+            <li class="min-w-0">
               <a
+                hlmBtn
+                [variant]="'ghost'"
+                class="h-auto min-h-(--eg-control-touch) w-full min-w-0 justify-start gap-(--eg-space-3) whitespace-normal px-(--eg-space-3) py-(--eg-space-1) text-left [overflow-wrap:anywhere] aria-[current=page]:bg-accent aria-[current=page]:font-(weight:--eg-weight-semibold) aria-[current=page]:text-accent-foreground group-data-[collapsed=true]/nav:justify-center group-data-[collapsed=true]/nav:px-0"
                 [routerLink]="item.link"
                 [routerLinkActive]="'active'"
                 [ariaCurrentWhenActive]="'page'"
                 [attr.aria-label]="item.label"
-                (click)="itemSelected.emit()"
+                [attr.title]="collapsed() ? item.label : null"
+                (click)="itemSelected.emit(item.link)"
               >
                 <app-shell-icon [name]="item.icon" />
-                <span>{{ item.label }}</span>
+                <span class="min-w-0 group-data-[collapsed=true]/nav:sr-only">{{
+                  item.label
+                }}</span>
               </a>
             </li>
           }

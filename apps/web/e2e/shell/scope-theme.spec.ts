@@ -3,6 +3,7 @@
 // choice (which persists, and whose ABSENCE must stay visible to CSS). Both are properties of the
 // real browser: `localStorage`, `matchMedia` and history all behave differently in jsdom.
 import { expect, test } from '@playwright/test';
+import { chooseScope, expectScopeValue, scopeControl, scopeOption } from './scope-controls';
 
 import {
   currentTheme,
@@ -28,11 +29,11 @@ test.describe('scope switcher (AC4)', () => {
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
     await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
 
-    const projectSelect = page.locator('app-scope-switcher select').nth(1);
+    const projectSelect = scopeControl(page, 1);
     await expect(projectSelect).toBeEnabled();
-    await expect(projectSelect).toHaveValue(PROJECT_STOREFRONT);
+    await expectScopeValue(projectSelect, PROJECT_STOREFRONT);
 
-    await projectSelect.selectOption(PROJECT_CHECKOUT);
+    await chooseScope(page, projectSelect, PROJECT_CHECKOUT);
     await expect
       .poll(() => new URL(page.url()).pathname)
       .toBe(`/en/orgs/${ORG_ACME}/projects/${PROJECT_CHECKOUT}/overview`);
@@ -48,9 +49,9 @@ test.describe('scope switcher (AC4)', () => {
     await page.goto(withVariant(localePath('en', `/orgs/${ORG_ACME}/audit`), LIMITED_GRANTS));
     await expect(page.locator('#main-content h1')).toBeVisible();
 
-    const projectSelect = page.locator('app-scope-switcher select').nth(1);
+    const projectSelect = scopeControl(page, 1);
     await expect(projectSelect).toBeEnabled();
-    await projectSelect.selectOption(PROJECT_CHECKOUT);
+    await chooseScope(page, projectSelect, PROJECT_CHECKOUT);
 
     // No project segment existed to rewrite, so the switcher navigates to the entry screen.
     await expect
@@ -61,13 +62,12 @@ test.describe('scope switcher (AC4)', () => {
   test('choosing an organization moves the session into that organization', async ({ page }) => {
     await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
 
-    const orgSelect = page.locator('app-scope-switcher select').first();
+    const orgSelect = scopeControl(page, 0);
     await expect(orgSelect).toBeEnabled();
-    await expect(orgSelect).toHaveValue(ORG_ACME);
-    // The switcher lists exactly the organizations the session read, no more.
-    expect(await orgSelect.locator('option[value]:not([value=""])').count()).toBe(2);
-
-    await orgSelect.selectOption(ORG_LUMEN);
+    await expectScopeValue(orgSelect, ORG_ACME);
+    await orgSelect.click();
+    await expect(page.getByRole('option')).toHaveCount(2);
+    await scopeOption(page, ORG_LUMEN).click();
 
     // What the switcher owns is the attempt: the address now names the organization that was
     // chosen. The landing address is the org's own: the store publishes only the project rows the
@@ -79,9 +79,9 @@ test.describe('scope switcher (AC4)', () => {
     // 403 pattern. The scope itself did move, which is what this case is about.
     await expect.poll(() => new URL(page.url()).pathname).toBe('/en/forbidden');
     await expect(page.locator('#main-content h1')).toHaveText('Not authorized');
-    await expect(orgSelect).toHaveValue(ORG_LUMEN);
+    await expectScopeValue(orgSelect, ORG_LUMEN);
     // No project of another organization is offered for this org.
-    expect(await page.locator('app-scope-switcher select').nth(1).isDisabled()).toBe(true);
+    await expect(scopeControl(page, 1)).toBeDisabled();
   });
 });
 

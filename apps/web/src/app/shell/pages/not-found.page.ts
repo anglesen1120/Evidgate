@@ -6,9 +6,9 @@ import { NotFoundPatternComponent } from '../../shared/ui/states';
   selector: 'app-not-found-page',
   imports: [NotFoundPatternComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: '../layout/route-pattern-page.css',
+  host: { class: 'block min-w-0' },
   template: `
-    <h1 i18n="@@shared.states.not-found.heading">Not found</h1>
+    <h1 class="sr-only" i18n="@@shared.states.not-found.heading">Not found</h1>
     <app-not-found-pattern />
   `,
 })

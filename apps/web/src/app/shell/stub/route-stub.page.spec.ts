@@ -38,6 +38,11 @@ describe('RouteStubPage', () => {
     const root = renderFor(entry.id);
 
     expect(root.querySelector('h1')?.textContent?.trim()).toBe(entry.label);
+    expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
+      root.querySelector('h1')?.id,
+    );
+    expect(root.querySelector('.eyebrow')?.getAttribute('data-slot')).toBe('badge');
   });
 
   it('says the screen is not built yet and shows no feature content', () => {

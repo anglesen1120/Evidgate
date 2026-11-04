@@ -17,5 +17,12 @@ describe('StepPendingComponent', () => {
     expect(root.textContent).toContain('Viewing a step does not complete it.');
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b|enabled and collecting/i);
     expect(root.querySelector('button, input, [role="button"]')).toBeNull();
+    const panel = root.querySelector('[data-testid="onboarding-step-pending"]');
+    expect(panel?.getAttribute('data-slot')).toBe('alert');
+    expect(panel?.getAttribute('role')).toBe('note');
+    expect(root.querySelector('[data-slot="alert-title"]')?.textContent).toContain(
+      'not available yet',
+    );
+    expect(root.querySelector('[tabindex]')).toBeNull();
   });
 });

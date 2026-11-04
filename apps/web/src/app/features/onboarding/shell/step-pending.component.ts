@@ -1,30 +1,15 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { HlmAlertImports } from '@evidgate/ui/alert';
 
 @Component({
   selector: 'app-onboarding-step-pending',
+  imports: [HlmAlertImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pending" data-testid="onboarding-step-pending">
-      <p>{{ unavailable }}</p>
-      <p>{{ retained }}</p>
+    <section hlmAlert role="note" class="border-dashed" data-testid="onboarding-step-pending">
+      <p hlmAlertTitle>{{ unavailable }}</p>
+      <p hlmAlertDescription>{{ retained }}</p>
     </section>
-  `,
-  styles: `
-    .pending {
-      padding: var(--eg-space-7);
-      border: var(--eg-border-width) dashed var(--eg-border);
-      border-radius: var(--eg-radius-md);
-      background: var(--eg-surface);
-      color: var(--eg-text-muted);
-      font-size: var(--eg-text-sm);
-      line-height: var(--eg-leading-sm);
-    }
-    p {
-      margin: var(--eg-space-0);
-    }
-    p + p {
-      margin-block-start: var(--eg-space-3);
-    }
   `,
 })
 export class StepPendingComponent {

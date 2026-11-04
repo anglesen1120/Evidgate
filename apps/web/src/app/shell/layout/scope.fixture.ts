@@ -1,4 +1,24 @@
 import type { OrganizationSummaryDto, ProjectDto } from '@evidgate/sdk';
+import { vi } from 'vitest';
+
+/** Match the shared observer-spy and run-detail scroll stubs for browser APIs absent in jsdom. */
+export function stubScopeBrowserApis(): () => void {
+  vi.stubGlobal(
+    'ResizeObserver',
+    vi.fn(function (): ResizeObserver {
+      return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+    }),
+  );
+  const originalScroll = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: vi.fn(),
+  });
+  return () => {
+    if (originalScroll === undefined) Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+    else Object.defineProperty(Element.prototype, 'scrollIntoView', originalScroll);
+  };
+}
 
 export const SCOPE_ORGANIZATIONS = [
   { id: 'org-one', name: 'Lotus Commerce', slug: 'lotus', status: 'active' },

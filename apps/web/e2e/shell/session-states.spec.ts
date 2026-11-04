@@ -83,7 +83,7 @@ test.describe('a session that cannot be read (AC5)', () => {
     await expect(page.locator('#main-content [role="status"]')).toHaveText('');
     await expect(page.locator('#main-content section')).toHaveAttribute('aria-busy', 'false');
     // Nothing of the workspace leaked into the failure: no scope, no navigation rows, no project.
-    await expect(page.locator('app-scope-switcher select').first()).toBeDisabled();
+    await expect(page.locator('app-scope-switcher [role="combobox"]').first()).toBeDisabled();
     expect(await mainText(page)).not.toContain('Storefront web');
   });
 
