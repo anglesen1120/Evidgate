@@ -1,14 +1,19 @@
 import { ChangeDetectionStrategy, Component, effect, input, signal } from '@angular/core';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { escapeFormatChars } from '../list/ref-name-display';
 import type { ManifestSummary } from './manifest-summary';
 
 @Component({
   selector: 'app-manifest-panel',
-  imports: [StatusPillComponent],
+  imports: [StatusPillComponent, HlmButton, HlmCard, HlmCardTitle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manifest-panel.component.html',
-  styleUrl: './run-detail-metadata.css',
+  host: {
+    class:
+      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-2 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full [&_bdi]:font-mono',
+  },
 })
 export class ManifestPanelComponent {
   readonly summary = input.required<ManifestSummary>();

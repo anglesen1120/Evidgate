@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { stubLayoutApis } from '../../../shared/testing/layout.testing';
 import { ManifestPanelComponent } from './manifest-panel.component';
 import type { RunStateDto } from '@evidgate/sdk';
 import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
@@ -14,12 +15,14 @@ const manifest: ManifestSummary = {
   producers: [1, 2, 3],
 };
 describe('ManifestPanelComponent', () => {
-  beforeEach(() =>
+  // Brain's card/tab observers construct a ResizeObserver, which jsdom does not implement.
+  beforeEach(() => {
+    stubLayoutApis();
     TestBed.configureTestingModule({
       imports: [ManifestPanelComponent],
       providers: [provideZonelessChangeDetection()],
-    }),
-  );
+    });
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     TestBed.resetTestingModule();
@@ -46,6 +49,16 @@ describe('ManifestPanelComponent', () => {
       'shard-3',
     ]);
     expect(root.querySelector('app-status-pill')).toBeNull();
+  });
+  it('labels its Helm card and keeps the full hash selectable with polite copy feedback', async () => {
+    const { root } = await render(manifest);
+    const panel = root.querySelector('section');
+    expect(panel?.getAttribute('data-slot')).toBe('card');
+    expect(panel?.getAttribute('aria-labelledby')).toBe('manifest-title');
+    expect(root.querySelector('#manifest-title')?.textContent).toBe('Manifest summary');
+    expect(root.querySelector('[data-manifest-hash] bdi')?.textContent).toBe(manifest.manifestHash);
+    expect(root.querySelector('[role="status"]')?.getAttribute('aria-live')).toBe('polite');
+    expect(root.querySelector('button')?.classList.contains('whitespace-normal')).toBe(true);
   });
   it('renders the getRun fixture manifest verbatim, shard names as declared on the wire', async () => {
     const run = ready.body as RunStateDto;
@@ -132,6 +145,9 @@ describe('ManifestPanelComponent', () => {
     // must stay focusable: `disabled` here would drop focus to `body` for the rest of the copy.
     expect(writeText).toHaveBeenCalledTimes(1);
     expect(button.disabled).toBe(false);
+    await fixture.whenStable();
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button.getAttribute('data-slot')).toBe('button');
     expect(document.activeElement).toBe(button);
 
     // A second activation starts nothing; that guard is the handler's, not the attribute's.
@@ -142,6 +158,7 @@ describe('ManifestPanelComponent', () => {
     settle();
     await fixture.whenStable();
     expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied');
+    expect(button.getAttribute('aria-busy')).toBe('false');
     expect(document.activeElement).toBe(button);
   });
   it('escapes format characters in the displayed hash but copies the exact raw hash', async () => {

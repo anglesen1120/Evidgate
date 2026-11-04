@@ -1,6 +1,16 @@
-<header class="page-header">
-  <h1>{{ copy.title }}</h1>
-  <a routerLink=".." [queryParamsHandling]="'preserve'">{{ copy.back }}</a>
+<header class="mb-(--eg-space-5) flex flex-wrap items-center justify-between gap-(--eg-space-3)">
+  <h1
+    class="m-0 font-(family-name:--eg-font-display) text-[clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))] leading-(--eg-leading-2xl)"
+    [textContent]="copy.title"
+  ></h1>
+  <a
+    hlmBtn
+    [variant]="'outline'"
+    class="min-h-(--eg-control-touch) text-foreground visited:text-foreground hover:text-foreground"
+    routerLink=".."
+    [queryParamsHandling]="'preserve'"
+    >{{ copy.back }}</a
+  >
 </header>
 <app-request-state
   [status]="requestStatus()"
@@ -9,54 +19,92 @@
   (retry)="reload()"
 >
   @if (store.run(); as run) {
-    <app-run-header
-      [run]="run"
-      [runCompleteness]="store.latestRevisionCompleteness()"
-      (viewEvidence)="showEvidence()"
-    />
-    <app-attempts-table
-      [attempts]="store.attempts()"
-      [status]="attemptsStatus()"
-      [error]="store.attemptsError()"
-      [hasMore]="store.hasMoreAttempts()"
-      [loadingMore]="store.attemptsLoadingMore()"
-      (retry)="retryAttempts()"
-      (loadMore)="loadMoreAttempts()"
-    />
-    <div class="evidence-regions">
-      <app-evidence-panel
-        [decision]="store.decision()"
-        [pinnedRevision]="store.pinnedRevision()"
-        [pinned]="store.selectedRevision()"
-        [revisions]="store.revisions()"
-        [revisionsStatus]="revisionsStatus()"
-        [revisionsError]="store.revisionsError()"
-        [revisionsHasMore]="store.hasMoreRevisions()"
-        [revisionsLoadingMore]="store.revisionsLoadingMore()"
-        [newerRevisionExists]="store.newerRevisionExists()"
-        [latestRevisionNo]="store.latestRevisionNo()"
-        [retryEligible]="revisionsRetryEligible()"
-        (selectRevision)="selectRevision($event)"
-        (loadOlder)="loadOlderRevisions()"
-        (viewLatest)="viewLatestRevision()"
-        (retry)="retryRevisions()"
+    <div class="grid min-w-0 gap-(--eg-space-6)">
+      <app-run-header
+        [run]="run"
+        [runCompleteness]="store.latestRevisionCompleteness()"
+        (viewEvidence)="showEvidence()"
       />
-      <app-decision-view
-        [decision]="store.decision()"
-        [pinnedRevision]="store.pinnedRevision()"
-        [updating]="store.decisionStatus() === 'loading'"
-        [shadowIgnored]="store.shadowIgnored()"
-        [error]="store.decisionError()"
-        [retryEligible]="decisionRetryEligible()"
-        (retry)="retryDecision()"
-        (viewDecisionEvidence)="viewDecisionEvidence($event)"
+      <app-attempts-table
+        [attempts]="store.attempts()"
+        [status]="attemptsStatus()"
+        [error]="store.attemptsError()"
+        [hasMore]="store.hasMoreAttempts()"
+        [loadingMore]="store.attemptsLoadingMore()"
+        (retry)="retryAttempts()"
+        (loadMore)="loadMoreAttempts()"
       />
+      <div
+        hlmTabs
+        [tab]="detailTab()"
+        (tabActivated)="detailTab.set($event)"
+        class="min-w-0 gap-(--eg-space-4)"
+      >
+        <div
+          hlmTabsList
+          [variant]="'line'"
+          [attr.aria-label]="copy.title"
+          class="h-auto w-full flex-wrap justify-start"
+        >
+          <button
+            type="button"
+            [hlmTabsTrigger]="'evidence'"
+            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+          >
+            {{ copy.evidence }}
+          </button>
+          <button
+            type="button"
+            [hlmTabsTrigger]="'decision'"
+            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+          >
+            {{ copy.decision }}
+          </button>
+        </div>
+        <div
+          [hlmTabsContent]="'evidence'"
+          class="min-w-0 focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
+        >
+          <app-evidence-panel
+            [decision]="store.decision()"
+            [pinnedRevision]="store.pinnedRevision()"
+            [pinned]="store.selectedRevision()"
+            [revisions]="store.revisions()"
+            [revisionsStatus]="revisionsStatus()"
+            [revisionsError]="store.revisionsError()"
+            [revisionsHasMore]="store.hasMoreRevisions()"
+            [revisionsLoadingMore]="store.revisionsLoadingMore()"
+            [newerRevisionExists]="store.newerRevisionExists()"
+            [latestRevisionNo]="store.latestRevisionNo()"
+            [retryEligible]="revisionsRetryEligible()"
+            (selectRevision)="selectRevision($event)"
+            (loadOlder)="loadOlderRevisions()"
+            (viewLatest)="viewLatestRevision()"
+            (retry)="retryRevisions()"
+          />
+        </div>
+        <div
+          [hlmTabsContent]="'decision'"
+          class="min-w-0 focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
+        >
+          <app-decision-view
+            [decision]="store.decision()"
+            [pinnedRevision]="store.pinnedRevision()"
+            [updating]="store.decisionStatus() === 'loading'"
+            [shadowIgnored]="store.shadowIgnored()"
+            [error]="store.decisionError()"
+            [retryEligible]="decisionRetryEligible()"
+            (retry)="retryDecision()"
+            (viewDecisionEvidence)="viewDecisionEvidence($event)"
+          />
+        </div>
+      </div>
+      <app-run-header
+        [run]="run"
+        [runCompleteness]="store.latestRevisionCompleteness()"
+        [view]="'context'"
+      />
+      <app-manifest-panel [summary]="store.manifest()" />
     </div>
-    <app-run-header
-      [run]="run"
-      [runCompleteness]="store.latestRevisionCompleteness()"
-      [view]="'context'"
-    />
-    <app-manifest-panel [summary]="store.manifest()" />
   }
 </app-request-state>
