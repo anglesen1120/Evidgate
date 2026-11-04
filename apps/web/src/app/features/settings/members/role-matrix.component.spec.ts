@@ -43,6 +43,11 @@ describe('RoleMatrixComponent responsive records', () => {
 
   it('keeps server role names intact in headers and labelled narrow records', async () => {
     const { root } = await render();
+    expect(root.querySelector('table[hlmTable]')).not.toBeNull();
+    expect(root.querySelector('[hlmTableContainer]')?.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelector('[hlmTableContainer]')?.getAttribute('aria-label')).toBe(
+      'Organization-wide role matrix',
+    );
     const cells = Array.from(root.querySelectorAll('tbody td'));
     expect(cells).toHaveLength(2);
     for (const [index, cell] of cells.entries()) {

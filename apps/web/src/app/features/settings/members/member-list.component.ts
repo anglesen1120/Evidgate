@@ -1,4 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { HlmTableImports } from '@evidgate/ui/table';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmBadge } from '@evidgate/ui/badge';
 import type { MembershipView } from '@evidgate/sdk';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 
@@ -72,59 +75,91 @@ export const MEMBERS_COPY = {
 
 @Component({
   selector: 'app-member-list',
-  imports: [StatusPillComponent],
+  imports: [StatusPillComponent, HlmTableImports, HlmButton, HlmBadge],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './members.page.css',
+  host: { class: 'block min-w-0' },
   template: `
-    <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="copy.directory">
-      <table>
-        <caption>
+    <div
+      hlmTableContainer
+      class="table-scroll min-w-0 max-w-full rounded-md border border-solid border-border bg-card max-md:overflow-visible focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="copy.directory"
+    >
+      <table
+        hlmTable
+        class="caption-top border-collapse max-md:block [&_tbody]:max-md:block [&_tr]:max-md:block [&_thead]:max-md:sr-only [&_th]:break-normal [&_td]:break-normal [&_tbody_th]:max-md:grid [&_tbody_td]:max-md:grid [&_tbody_th]:max-md:gap-1 [&_tbody_td]:max-md:gap-1 [&_tbody_th]:max-md:whitespace-normal [&_tbody_td]:max-md:whitespace-normal [&_tbody_th]:max-md:wrap-anywhere [&_tbody_td]:max-md:wrap-anywhere [&_tbody_th]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_td]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_tr]:max-md:border-t"
+      >
+        <caption hlmCaption class="m-0 p-3 text-start font-semibold text-foreground max-md:block">
           {{
             copy.directory
           }}
         </caption>
-        <thead>
-          <tr>
-            <th scope="col" id="members-member">{{ copy.member }}</th>
-            <th scope="col" id="members-status">{{ copy.status }}</th>
-            <th scope="col" id="members-roles">{{ copy.roles }}</th>
+        <thead hlmTHead class="bg-secondary">
+          <tr hlmTr>
+            <th hlmTh scope="col" id="members-member">{{ copy.member }}</th>
+            <th hlmTh scope="col" id="members-status">{{ copy.status }}</th>
+            <th hlmTh scope="col" id="members-roles">{{ copy.roles }}</th>
             @if (canWrite()) {
-              <th scope="col" class="mutation">{{ copy.actions }}</th>
+              <th hlmTh scope="col" class="mutation max-md:hidden! md:table-cell">
+                {{ copy.actions }}
+              </th>
             }
           </tr>
         </thead>
-        <tbody>
+        <tbody hlmTBody>
           @for (member of members(); track member.id) {
             <tr
+              hlmTr
               data-members-row
               [attr.data-membership-id]="member.id"
               [attr.data-members-status]="member.status"
             >
-              <th scope="row" class="member-identity" [id]="'member-' + member.id">
-                <span class="record-label" aria-hidden="true">{{ copy.member }}</span>
+              <th hlmTh scope="row" class="member-identity px-3 py-2" [id]="'member-' + member.id">
+                <span
+                  class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
+                  aria-hidden="true"
+                  >{{ copy.member }}</span
+                >
                 <span>{{ member.invited_email }}</span>
               </th>
-              <td [attr.headers]="'member-' + member.id + ' members-status'">
-                <span class="record-label" aria-hidden="true">{{ copy.status }}</span>
+              <td hlmTd [attr.headers]="'member-' + member.id + ' members-status'">
+                <span
+                  class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
+                  aria-hidden="true"
+                  >{{ copy.status }}</span
+                >
                 <app-status-pill
                   [tone]="member.status === 'active' ? 'success' : 'neutral'"
                   [label]="statusLabel(member.status)"
                 />
               </td>
-              <td [attr.headers]="'member-' + member.id + ' members-roles'">
-                <span class="record-label" aria-hidden="true">{{ copy.roles }}</span>
+              <td hlmTd [attr.headers]="'member-' + member.id + ' members-roles'">
+                <span
+                  class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
+                  aria-hidden="true"
+                  >{{ copy.roles }}</span
+                >
                 <span>
                   @for (role of member.roles; track role.id) {
-                    <span class="role-name">{{ role.name }}</span>
+                    <span
+                      hlmBadge
+                      [variant]="'secondary'"
+                      class="role-name m-1 whitespace-normal"
+                      >{{ role.name }}</span
+                    >
                   } @empty {
                     {{ copy.noRoles }}
                   }
                 </span>
               </td>
               @if (canWrite()) {
-                <td class="mutation">
+                <td hlmTd class="mutation max-md:hidden! md:table-cell">
                   @if (member.status === 'active' || member.status === 'pending') {
                     <button
+                      hlmBtn
+                      [variant]="'outline'"
+                      class="m-1 min-h-[var(--eg-control-touch)]"
                       type="button"
                       data-members-edit-open
                       (click)="requestEditRoles(member, $event)"
@@ -134,6 +169,9 @@ export const MEMBERS_COPY = {
                   }
                   @if (member.status === 'pending') {
                     <button
+                      hlmBtn
+                      [variant]="'outline'"
+                      class="m-1 min-h-[var(--eg-control-touch)]"
                       type="button"
                       data-members-resend-open
                       (click)="requestResend(member, $event)"
@@ -141,6 +179,9 @@ export const MEMBERS_COPY = {
                       {{ copy.resend }}
                     </button>
                     <button
+                      hlmBtn
+                      [variant]="'outline'"
+                      class="m-1 min-h-[var(--eg-control-touch)]"
                       type="button"
                       data-members-cancel-invite-open
                       (click)="requestCancelInvite(member, $event)"
@@ -150,6 +191,9 @@ export const MEMBERS_COPY = {
                   }
                   @if (member.status !== 'removed') {
                     <button
+                      hlmBtn
+                      [variant]="'outline'"
+                      class="m-1 min-h-[var(--eg-control-touch)]"
                       type="button"
                       data-members-remove
                       (click)="requestRemove(member, $event)"

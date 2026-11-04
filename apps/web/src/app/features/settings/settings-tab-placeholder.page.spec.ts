@@ -1,4 +1,3 @@
-// 09.7.1-T1.1 (D-S68-Q3): the placeholder identifies a destination and never fabricates one.
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
@@ -23,7 +22,9 @@ describe('SettingsTabPlaceholderPage', () => {
   it('takes the destination id and the heading from the route data', async () => {
     const root = await render('secrets');
     expect(root.getAttribute('data-settings-tab-body')).toBe('secrets');
-    expect(root.querySelector('h2')?.textContent?.trim()).toBeTruthy();
+    expect(root.querySelector('h2[hlmCardTitle]')?.textContent?.trim()).toBeTruthy();
+    expect(root.querySelector('section[hlmCard]')).not.toBeNull();
+    expect(root.querySelector('[hlmCardDescription]')?.textContent).toContain('This tab arrives');
     // A body hook without a resource behind it: no control invites an action that cannot work.
     expect(root.querySelector('input, button')).toBeNull();
   });

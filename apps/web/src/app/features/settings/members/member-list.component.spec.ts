@@ -85,6 +85,10 @@ describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
     expect(root.querySelectorAll('th[scope="col"]')).toHaveLength(3);
     expect(root.querySelector('[data-members-remove]')).toBeNull();
     expect(root.querySelector('[data-members-edit-open]')).toBeNull();
+    expect(root.querySelector('table[hlmTable]')).not.toBeNull();
+    const region = root.querySelector('[hlmTableContainer]');
+    expect(region?.getAttribute('tabindex')).toBe('0');
+    expect(region?.getAttribute('aria-label')).toBe('Members and invitations');
   });
 
   it.each(['active', 'pending'] as const)(
@@ -98,6 +102,8 @@ describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
       fixture.detectChanges();
       const opener = root.querySelector<HTMLButtonElement>('[data-members-edit-open]')!;
       expect(opener.closest('.mutation')).not.toBeNull();
+      expect(opener.hasAttribute('hlmBtn')).toBe(true);
+      expect(opener.getAttribute('type')).toBe('button');
       opener.click();
       expect(editRoles).toHaveBeenCalledWith({ member: membership, opener });
     },

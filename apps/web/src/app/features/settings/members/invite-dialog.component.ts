@@ -1,4 +1,9 @@
-import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmCheckbox } from '@evidgate/ui/checkbox';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmAlertImports } from '@evidgate/ui/alert';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -17,97 +22,131 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { MembersStore } from './members.store';
 import { MEMBERS_COPY } from './member-list.component';
-import { wrapDialogFocus } from './dialog-focus-wrap';
 import { RoleScopePreviewComponent } from './role-scope-preview.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { InviteRevealComponent } from './invite-reveal.component';
 
 @Component({
   selector: 'app-invite-dialog',
-  imports: [CdkTrapFocus, RoleScopePreviewComponent, RetryAfterComponent, InviteRevealComponent],
+  imports: [
+    HlmCheckbox,
+    HlmLabel,
+    HlmInput,
+    HlmDialogImports,
+    HlmButton,
+    HlmAlertImports,
+    RoleScopePreviewComponent,
+    RetryAfterComponent,
+    InviteRevealComponent,
+  ],
   providers: [RevealSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './members.page.css',
   template: `
-    <dialog
-      #dialog
-      tabindex="-1"
-      [attr.data-members-dialog]="'invite'"
-      [attr.aria-labelledby]="revealing() ? null : 'members-invite-title'"
-      [attr.aria-label]="revealing() ? copy.revealTitle : null"
-      (cancel)="cancel($event)"
-      (keydown.tab)="wrapFocus($event)"
-      (keydown.shift.tab)="wrapFocus($event)"
-      [cdkTrapFocus]="opened()"
+    <hlm-dialog
+      [state]="opened() ? 'open' : 'closed'"
+      [closeOnOutsidePointerEvents]="false"
+      [disableClose]="true"
+      [restoreFocus]="false"
+      [aria-modal]="true"
+      [aria-label]="revealing() ? copy.revealTitle : copy.invite"
     >
-      @if (revealing()) {
-        <app-invite-reveal (dismissed)="close()" />
-      } @else {
-        <form #form (submit)="submit($event, form)">
-          <header>
-            <h2 id="members-invite-title">{{ copy.invite }}</h2>
-          </header>
-          <div class="dialog-body" [attr.aria-busy]="busy()">
-            <label for="members-invite-email">{{ copy.email }}</label>
-            <input
-              #emailInput
-              id="members-invite-email"
-              name="email"
-              type="email"
-              maxlength="320"
-              required
-              autocomplete="email"
-              [value]="email()"
-              [disabled]="locked()"
-              (input)="updateEmail($event)"
-            />
-            <fieldset [disabled]="locked()">
-              <legend>{{ copy.optionalRoles }}</legend>
-              @for (role of store.roles(); track role.id) {
-                <label class="role-option"
-                  ><input
-                    type="checkbox"
-                    [value]="role.id"
-                    [checked]="selected().has(role.id)"
-                    (focus)="previewId.set(role.id)"
-                    (change)="toggle(role.id, $event)"
-                  />{{ role.name }}</label
+      <hlm-dialog-content
+        *hlmDialogPortal
+        #dialog
+        [attr.data-members-dialog]="'invite'"
+        [showCloseButton]="false"
+        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere [&_p]:m-0 [&_code]:font-mono"
+        (keydown.escape)="cancel($event)"
+      >
+        @if (revealing()) {
+          <app-invite-reveal (dismissed)="close()" />
+        } @else {
+          <form #form (submit)="submit($event, form)">
+            <header hlmDialogHeader>
+              <h2 hlmDialogTitle id="members-invite-title">{{ copy.invite }}</h2>
+            </header>
+            <div class="dialog-body grid min-w-0 gap-3 text-sm" [attr.aria-busy]="busy()">
+              <label hlmLabel for="members-invite-email">{{ copy.email }}</label>
+              <input
+                hlmInput
+                #emailInput
+                id="members-invite-email"
+                name="email"
+                type="email"
+                maxlength="320"
+                required
+                autocomplete="email"
+                [value]="email()"
+                [disabled]="locked()"
+                [attr.aria-describedby]="store.inviteState().error ? 'members-invite-error' : null"
+                (input)="updateEmail($event)"
+              />
+              <fieldset
+                class="m-0 min-w-0 rounded-md border border-solid border-border p-2"
+                [disabled]="locked()"
+              >
+                <legend>{{ copy.optionalRoles }}</legend>
+                @for (role of store.roles(); track role.id) {
+                  <label
+                    hlmLabel
+                    class="role-option flex min-h-[var(--eg-control-touch)] items-center gap-2"
+                    [for]="'invite-role-' + role.id"
+                  >
+                    <hlm-checkbox
+                      [inputId]="'invite-role-' + role.id"
+                      data-members-role-option
+                      [attr.data-role-id]="role.id"
+                      [disabled]="locked()"
+                      [checked]="selected().has(role.id)"
+                      (focusin)="previewId.set(role.id)"
+                      (checkedChange)="toggle(role.id, $event)"
+                    />{{ role.name }}
+                  </label>
+                }
+              </fieldset>
+              <app-role-scope-preview [preview]="store.preview(previewId())" />
+              @if (store.inviteState().error; as error) {
+                <div
+                  hlmAlert
+                  [variant]="'destructive'"
+                  id="members-invite-error"
+                  class="grid gap-2 whitespace-pre-wrap"
+                  data-members-error
+                  role="alert"
                 >
+                  <p>{{ error.message }}</p>
+                  <code data-members-error-code>{{ error.code }}</code>
+                </div>
+                @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
+                  <app-retry-after
+                    [kind]="error.kind"
+                    [retryAfterSeconds]="error.retryAfterSeconds"
+                    [retryEligible]="retryReady() && error.retryable"
+                    [busy]="busy()"
+                    [code]="error.code"
+                    [requestId]="error.requestId"
+                    (retry)="submit($event, form)"
+                  />
+                }
               }
-            </fieldset>
-            <app-role-scope-preview [preview]="store.preview(previewId())" />
-            @if (store.inviteState().error; as error) {
-              <div data-members-error role="alert">
-                <p>{{ error.message }}</p>
-                <code data-members-error-code>{{ error.code }}</code>
-              </div>
-              @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
-                <app-retry-after
-                  [kind]="error.kind"
-                  [retryAfterSeconds]="error.retryAfterSeconds"
-                  [retryEligible]="retryReady() && error.retryable"
-                  [busy]="busy()"
-                  [code]="error.code"
-                  [requestId]="error.requestId"
-                  (retry)="submit($event, form)"
-                />
-              }
-            }
-          </div>
-          <footer>
-            <button type="button" (click)="close()">{{ copy.cancel }}</button
-            ><button
-              class="primary"
-              type="submit"
-              data-members-submit
-              [disabled]="busy() || !retryReady() || !session.has('membership:write')"
-            >
-              {{ busy() ? copy.submitting : copy.send }}
-            </button>
-          </footer>
-        </form>
-      }
-    </dialog>
+            </div>
+            <footer hlmDialogFooter class="mt-4">
+              <button hlmBtn [variant]="'outline'" type="button" (click)="close()">
+                {{ copy.cancel }}</button
+              ><button
+                hlmBtn
+                [variant]="'default'"
+                type="submit"
+                data-members-submit
+                [disabled]="busy() || !retryReady() || !session.has('membership:write')"
+              >
+                {{ busy() ? copy.submitting : copy.send }}
+              </button>
+            </footer>
+          </form>
+        }
+      </hlm-dialog-content>
+    </hlm-dialog>
   `,
 })
 export class InviteDialogComponent {
@@ -130,7 +169,9 @@ export class InviteDialogComponent {
   protected readonly locked = computed(
     () => this.busy() || this.store.inviteState().phase === 'failed',
   );
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly dialog = viewChild<unknown, ElementRef<HTMLElement>>('dialog', {
+    read: ElementRef,
+  });
   private readonly emailInput = viewChild<ElementRef<HTMLInputElement>>('emailInput');
   private opener: HTMLElement | null = null;
   private intent: Intent | null = null;
@@ -168,7 +209,6 @@ export class InviteDialogComponent {
     this.slot.clear();
     this.revealing.set(false);
     this.opened.set(true);
-    this.dialog().nativeElement.showModal();
     this.emailInput()?.nativeElement.focus();
   }
 
@@ -176,13 +216,12 @@ export class InviteDialogComponent {
     this.generation++;
     this.slot.clear();
     this.dialog()
-      .nativeElement.querySelectorAll<HTMLInputElement>('input[readonly]')
+      ?.nativeElement.querySelectorAll<HTMLInputElement>('input[readonly]')
       .forEach((control) => {
         control.value = '';
       });
     this.revealing.set(false);
     this.opened.set(false);
-    this.dialog().nativeElement.close();
     this.intent = null;
     if (this.opener?.isConnected) this.opener.focus();
     this.opener = null;
@@ -193,18 +232,13 @@ export class InviteDialogComponent {
     this.close();
   }
 
-  /** Tab/Shift+Tab wrap at the dialog's edges; see `wrapDialogFocus`. */
-  protected wrapFocus(event: Event): void {
-    wrapDialogFocus(event, this.dialog().nativeElement);
-  }
-
   protected updateEmail(event: Event): void {
     if (event.target instanceof HTMLInputElement) this.email.set(event.target.value);
   }
-  protected toggle(id: string, event: Event): void {
-    if (!(event.target instanceof HTMLInputElement)) return;
+  protected toggle(id: string, checked: boolean): void {
+    if (this.locked()) return;
     const roles = new Set(this.selected());
-    if (event.target.checked) roles.add(id);
+    if (checked) roles.add(id);
     else roles.delete(id);
     this.selected.set(roles);
     this.previewId.set(id);

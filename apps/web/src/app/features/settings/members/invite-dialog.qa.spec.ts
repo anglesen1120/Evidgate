@@ -92,11 +92,6 @@ class FakeData {
 }
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-const showModalDescriptor = Object.getOwnPropertyDescriptor(
-  HTMLDialogElement.prototype,
-  'showModal',
-);
-const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 
 describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   let data: FakeData;
@@ -108,18 +103,6 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
 
   beforeEach(async () => {
     data = new FakeData();
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
@@ -135,7 +118,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     await store.load('org1');
     fixture = TestBed.createComponent(InviteDialogComponent);
     fixture.detectChanges();
-    root = fixture.nativeElement as HTMLElement;
+    root = document.body;
     opener = document.createElement('button');
     document.body.append(opener);
     completed = 0;
@@ -145,12 +128,6 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
     opener.remove();
-    if (showModalDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModalDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (closeDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'close', closeDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
 
@@ -164,25 +141,28 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     if (!value) throw new Error('submit button missing');
     return value;
   }
-  function open(): void {
+  async function open(): Promise<void> {
     fixture.componentInstance.open(opener);
     fixture.detectChanges();
+    await fixture.whenStable();
   }
   function setEmail(value: string): void {
     input().value = value;
     input().dispatchEvent(new Event('input'));
   }
   function toggleRole(id: string, checked: boolean): void {
-    const box = root.querySelector<HTMLInputElement>(`input[type="checkbox"][value="${id}"]`);
+    const box = root.querySelector<HTMLButtonElement>(
+      `hlm-checkbox button[id="invite-role-${id}"][role="checkbox"]`,
+    );
     if (!box) throw new Error(`role checkbox ${id} missing`);
-    box.checked = checked;
-    box.dispatchEvent(new Event('change'));
+    if ((box.getAttribute('aria-checked') === 'true') !== checked) box.click();
+    fixture.detectChanges();
   }
 
   it('a second press while the first invitation is pending sends one request and one completion', async () => {
     let release!: () => void;
     data.outcomes.push(() => new Promise((resolve) => (release = () => resolve(ISSUED))));
-    open();
+    await open();
     setEmail('new@example.test');
     submitButton().click();
     submitButton().click();
@@ -192,14 +172,14 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     await flush();
     expect(data.invites).toHaveLength(1);
     expect(completed).toBe(1);
-    expect(root.querySelector('dialog')?.open).toBe(true);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(true);
   });
 
   it('a retry after a 503 unavailable replays the same Idempotency-Key and the same body', async () => {
     data.outcomes.push(() =>
       Promise.reject(refusal('unavailable', 503, 'unavailable', 'Try again shortly.', true)),
     );
-    open();
+    await open();
     setEmail('new@example.test');
     toggleRole('role-a', true);
     submitButton().click();
@@ -220,12 +200,12 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     data.outcomes.push(() =>
       Promise.reject(refusal('unavailable', 503, 'unavailable', 'Try again shortly.', true)),
     );
-    open();
+    await open();
     setEmail('new@example.test');
     submitButton().click();
     await flush();
     fixture.componentInstance.close();
-    open();
+    await open();
     setEmail('new@example.test');
     submitButton().click();
     await flush();
@@ -239,14 +219,14 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
         refusal('conflict', 409, 'invite_exists', 'An invitation is already pending.', false),
       ),
     );
-    open();
+    await open();
     setEmail('new@example.test');
     submitButton().click();
     await flush();
     fixture.detectChanges();
     expect(input().disabled).toBe(true);
     expect(
-      root.querySelector<HTMLInputElement>('input[value="role-a"]')?.matches(':disabled'),
+      root.querySelector<HTMLButtonElement>('hlm-checkbox button[role="checkbox"]')?.disabled,
     ).toBe(true);
   });
 
@@ -262,7 +242,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
         ),
       ),
     );
-    open();
+    await open();
     setEmail('new@example.test');
     submitButton().click();
     await flush();
@@ -277,7 +257,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   });
 
   it('a role ticked and then unticked is not sent: the body is { email } only', async () => {
-    open();
+    await open();
     setEmail('new@example.test');
     toggleRole('role-a', true);
     toggleRole('role-a', false);
@@ -289,7 +269,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   });
 
   it('two ticked roles are sent in the order of the checkboxes, as ids', async () => {
-    open();
+    await open();
     setEmail('new@example.test');
     toggleRole('role-b', true);
     toggleRole('role-a', true);
@@ -301,7 +281,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   it.each(['not-an-address', 'a@', '@example.test', ' '])(
     'the malformed address %j never reaches the store',
     async (value) => {
-      open();
+      await open();
       setEmail(value);
       submitButton().click();
       await flush();
@@ -311,7 +291,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   );
 
   it('revoking membership:write while the dialog is open blocks the submit', async () => {
-    open();
+    await open();
     setEmail('new@example.test');
     data.granted.set(false);
     fixture.detectChanges();
@@ -327,9 +307,9 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     vi.spyOn(data, 'remove').mockReturnValue(pendingRemove);
     void store.remove('m-x', { key: 'k' } as unknown as Intent);
     await flush();
-    open();
-    const dialog = root.querySelector('dialog');
-    expect(dialog?.open).toBe(false);
+    await open();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog]');
+    expect(dialog).toBeNull();
     release();
     await flush();
   });
@@ -340,7 +320,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   it('closing while an invitation is in flight still announces its completion', async () => {
     let release!: () => void;
     data.outcomes.push(() => new Promise((resolve) => (release = () => resolve(ISSUED))));
-    open();
+    await open();
     setEmail('new@example.test');
     submitButton().click();
     fixture.componentInstance.close();
@@ -351,7 +331,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   it.each(['dismiss', 'escape', 'destroy'] as const)(
     'reveals once, then clears the slot and DOM on %s',
     async (exit) => {
-      open();
+      await open();
       setEmail('new@example.test');
       submitButton().click();
       await fixture.whenStable();
@@ -368,7 +348,11 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
       const slot = fixture.debugElement.injector.get(RevealSlot);
       if (exit === 'destroy') fixture.destroy();
       else if (exit === 'escape')
-        root.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
+        root
+          .querySelector<HTMLElement>('[data-members-dialog]')!
+          .dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+          );
       else root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')!.click();
       if (exit !== 'destroy') fixture.detectChanges();
       expect(slot.current()).toBeNull();
@@ -383,7 +367,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
 
   it('an idempotency replay offers Resend guidance without mounting an empty reveal', async () => {
     data.outcomes.push(() => Promise.resolve({ ...CREATED, invite_token: null }));
-    open();
+    await open();
     setEmail('new@example.test');
     submitButton().click();
     await fixture.whenStable();
@@ -391,13 +375,13 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     expect(root.querySelector('app-connect-step-reveal')).toBeNull();
     expect(root.querySelector('[data-members-invite-replay]')?.textContent).toContain('Use Resend');
     expect(root.querySelector('form')).toBeNull();
-    expect(root.querySelector('dialog')?.open).toBe(true);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(true);
   });
 
   it('an EMPTY served invite_token takes the same replay path, never an empty reveal', async () => {
     // F2: `''` is absence; the store normalises it, so this dialog must offer Resend guidance.
     data.outcomes.push(() => Promise.resolve({ ...CREATED, invite_token: '' }));
-    open();
+    await open();
     setEmail('new@example.test');
     submitButton().click();
     await fixture.whenStable();
@@ -405,14 +389,14 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     expect(root.querySelector('app-connect-step-reveal')).toBeNull();
     expect(root.querySelector('[data-testid="reveal-value"]')).toBeNull();
     expect(root.querySelector('[data-members-invite-replay]')?.textContent).toContain('Use Resend');
-    expect(root.querySelector('dialog')?.open).toBe(true);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(true);
   });
 
   it('a 422 validation refusal preserves the exact message and code', async () => {
     data.outcomes.push(() =>
       Promise.reject(refusal('validation', 422, 'invalid_email', 'Use a valid <email>.', false)),
     );
-    open();
+    await open();
     setEmail('new@example.test');
     submitButton().click();
     await fixture.whenStable();

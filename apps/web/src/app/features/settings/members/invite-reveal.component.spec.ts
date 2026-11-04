@@ -35,6 +35,8 @@ describe('InviteRevealComponent', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('app-connect-step-reveal')).toBeNull();
     expect(root.querySelector('[role="status"]')?.textContent).toContain('Use Resend');
+    expect(root.querySelector('h2')?.getAttribute('tabindex')).toBe('-1');
+    expect(root.querySelector('button[hlmBtn]')?.getAttribute('type')).toBe('button');
     const dismissed = vi.fn();
     fixture.componentInstance.dismissed.subscribe(dismissed);
     root.querySelector<HTMLButtonElement>('button')!.click();

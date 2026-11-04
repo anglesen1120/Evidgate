@@ -41,6 +41,7 @@ import {
   seedStoredTheme,
   settingsTabPath,
   THEMES,
+  waitForDialogAnimations,
   withVariants,
 } from './support';
 
@@ -155,7 +156,7 @@ test.describe('AC2: the last-admin refusal is the server text, never a client pr
       await expect(row.locator('[data-members-remove]')).toHaveCount(1);
       await row.locator('[data-members-remove]').click();
 
-      const dialog = page.locator('[data-members-dialog="remove"]');
+      const dialog = page.locator('[data-members-dialog="remove"][data-state="open"]');
       await expect(dialog).toBeVisible();
       await dialog.locator('[data-members-submit]').click();
 
@@ -212,7 +213,7 @@ test.describe('removal: the 204 closes the dialog and announces the change', () 
 
       const row = page.locator(`${MEMBER_ROWS}[data-membership-id="${target.id}"]`);
       await row.locator('[data-members-remove]').click();
-      const dialog = page.locator('[data-members-dialog="remove"]');
+      const dialog = page.locator('[data-members-dialog="remove"][data-state="open"]');
       await expect(dialog).toBeVisible();
       await dialog.locator('[data-members-submit]').click();
 
@@ -242,7 +243,7 @@ test.describe('a membership:read session never sees an action it may not use', (
       // (00 §5.6 W5, the same rule the tab strip follows).
       await expect(page.locator('app-members-page [data-members-invite-open]')).toHaveCount(0);
       await expect(page.locator('app-members-page [data-members-remove]')).toHaveCount(0);
-      await expect(page.locator('app-members-page [data-members-dialog]')).toHaveCount(0);
+      await expect(page.locator('[data-members-dialog]')).toHaveCount(0);
       await expect(page.locator('app-members-page [data-role-preview]')).toHaveCount(0);
     });
   }
@@ -260,7 +261,7 @@ test.describe('invite: the 201 reveals the token then closes, the 409 invite_exi
       await expect(opener).toBeVisible();
       await opener.click();
 
-      const dialog = page.locator('[data-members-dialog="invite"]');
+      const dialog = page.locator('[data-members-dialog="invite"][data-state="open"]');
       await expect(dialog).toBeVisible();
       // The address field is the dialog's own email input; its type is the product's contract and
       // no localized label is consulted.
@@ -268,8 +269,9 @@ test.describe('invite: the 201 reveals the token then closes, the 409 invite_exi
 
       // The role scope preview is part of the invite path: selecting a built-in role names what it
       // grants, joined from the contract's role grants and the live catalogue (T2.2).
-      const roleSelector = `input[type="checkbox"][value="${TENANT_ADMIN_ROLE_ID}"]`;
-      await dialog.locator(roleSelector).check();
+      const roleSelector = `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE_ID}"] button[role="checkbox"]`;
+      await dialog.locator(roleSelector).click();
+      await expect(dialog.locator(roleSelector)).toBeChecked();
       await expect(dialog.locator('[data-role-preview]')).toHaveAttribute(
         'data-preview-kind',
         'ready',
@@ -297,7 +299,7 @@ test.describe('invite: the 201 reveals the token then closes, the 409 invite_exi
       await expectMembersReady(page);
 
       await page.locator('app-members-page [data-members-invite-open]').click();
-      const dialog = page.locator('[data-members-dialog="invite"]');
+      const dialog = page.locator('[data-members-dialog="invite"][data-state="open"]');
       await expect(dialog).toBeVisible();
       // The address that is already `pending` in the corpus: exactly the collision `invite_exists`
       // describes, so the case reads as the real scenario it is.
@@ -346,7 +348,7 @@ test.describe('a pending invitation is cancelled, not removed', () => {
       }
       const row = page.locator(`${MEMBER_ROWS}[data-membership-id="${pending.id}"]`);
       await row.locator('[data-members-remove]').click();
-      const dialog = page.locator('[data-members-dialog="remove"]');
+      const dialog = page.locator('[data-members-dialog="remove"][data-state="open"]');
       await expect(dialog).toBeVisible();
       await dialog.locator('[data-members-submit]').click();
 
@@ -378,7 +380,10 @@ test.describe('the Members tab is WCAG 2.2 AA clean (00 §5.6 W9)', () => {
       // covers: a modal that is clean alone and broken over the table would otherwise pass.
       if (theme === 'light') {
         await page.locator('app-members-page [data-members-invite-open]').click();
-        await expect(page.locator('[data-members-dialog="invite"]')).toBeVisible();
+        await expect(
+          page.locator('[data-members-dialog="invite"][data-state="open"]'),
+        ).toBeVisible();
+        await waitForDialogAnimations(page, '[data-members-dialog="invite"][data-state="open"]');
         await expectNoA11yViolations(page, 'members invite dialog en/light');
       }
     });

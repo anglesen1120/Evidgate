@@ -59,6 +59,9 @@ describe('RoleScopePreviewComponent', () => {
     expect(root.querySelector('li')?.textContent).toContain('<img src=x>Read members');
     expect(root.querySelector('img')).toBeNull();
     expect(root.querySelector('.sensitive')?.textContent).toContain('Sensitive');
+    expect(root.querySelector('[data-role-preview][hlmCard]')).not.toBeNull();
+    expect(root.querySelector('.sensitive[hlmBadge]')).not.toBeNull();
+    expect(root.querySelector('[data-role-preview]')?.getAttribute('aria-live')).toBe('polite');
     expect(root.textContent).toContain('live catalogue: 2');
   });
 });
