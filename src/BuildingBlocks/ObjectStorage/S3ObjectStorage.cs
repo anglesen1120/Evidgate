@@ -112,6 +112,35 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
     }
 
     /// <inheritdoc />
+    public PresignedGet PresignGet(string objectKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ValidateObjectKey(objectKey, nameof(objectKey));
+
+        var options = _options.Value;
+        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(options.PresignExpirySeconds);
+
+        var presign = new GetPreSignedUrlRequest
+        {
+            BucketName = options.Bucket,
+            Key = objectKey,
+            Verb = HttpVerb.GET,
+            Protocol = ProtocolFor(options.Endpoint),
+        };
+
+        var client = _client.Value;
+
+        // Signed against the same skew-corrected clock as PresignPut, so the signed lifetime is exactly the
+        // configured seconds whatever an emulator's clock reports.
+        var endpoint = client.Config
+            .DetermineServiceOperationEndpoint(new ServiceOperationEndpointParameters(presign)).URL;
+        presign.Expires = CorrectClockSkew.GetCorrectedUtcNowForEndpoint(endpoint)
+            .AddSeconds(options.PresignExpirySeconds);
+
+        return new PresignedGet(new Uri(client.GetPreSignedURL(presign), UriKind.Absolute), expiresAt);
+    }
+
+    /// <inheritdoc />
     public async Task<ObjectHead?> HeadAsync(string objectKey, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

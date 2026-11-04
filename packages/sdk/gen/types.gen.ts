@@ -1428,6 +1428,64 @@ export type RetentionPolicy = {
 };
 
 /**
+ * The `200` answer of `GET /v1/artifacts/{a}`. `sensitivity` is the effective classification every content path enforces; `content_gated` is true when the caller holds `artifact:read` but not `artifact:read_sensitive`, and `object_key`, `checksum` and `bytes` are then absent from the document rather than null, so a redacted field can never be mistaken for a value.
+ */
+export type ArtifactMetadata = {
+    artifact_id: string;
+    project_id: string;
+    run_id: string;
+    kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+    media_type: string;
+    state: 'pending_upload' | 'uploaded' | 'ready' | 'rejected' | 'pending_delete' | 'deleted';
+    sensitivity: 'normal' | 'sensitive';
+    scan_state: 'pending' | 'clean' | 'flagged' | null;
+    /**
+     * The stored length; absent when `content_gated` is true.
+     */
+    bytes?: number | null;
+    /**
+     * The content address; absent when `content_gated` is true.
+     */
+    checksum?: string | null;
+    /**
+     * The server-chosen storage key; absent when `content_gated` is true.
+     */
+    object_key?: string | null;
+    /**
+     * True when the content-bearing members were withheld from this caller.
+     */
+    content_gated: boolean;
+    created_at: string;
+};
+
+/**
+ * The `200` answer of `GET /v1/artifacts/{a}/download-url`. `download_url` is a bearer credential: it is returned once and never logged or audited.
+ */
+export type ArtifactDownloadUrl = {
+    artifact_id: string;
+    download_url: string;
+    expires_at: string;
+};
+
+/**
+ * The request and the `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored capture policy for one kind. Every member is required — the row's knobs are written as a whole. The answer adds `kind`, so a client can render what the server committed without a second read.
+ */
+export type ArtifactKindPolicy = {
+    /**
+     * The kind the row belongs to; present on the answer only (the request names it in the path).
+     */
+    kind?: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+    /**
+     * The largest artifact of the kind the project accepts.
+     */
+    max_bytes: number;
+    media_types: Array<string>;
+    default_sensitivity: 'normal' | 'sensitive';
+    capture_enabled: boolean;
+    reject_on_secret: boolean;
+};
+
+/**
  * One feature-tree node (13.1.1 §4); 13.1.1-T2. `child_count` and `item_count` count live children and live checklist items and are always returned (§5 route 1).
  */
 export type NodeDto = {
@@ -5212,6 +5270,49 @@ export type GetReleaseDecisionResponses = {
 
 export type GetReleaseDecisionResponse = GetReleaseDecisionResponses[keyof GetReleaseDecisionResponses];
 
+export type GetArtifactMetadataData = {
+    body?: never;
+    path: {
+        a: string;
+    };
+    query?: never;
+    url: '/artifacts/{a}';
+};
+
+export type GetArtifactMetadataErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetArtifactMetadataError = GetArtifactMetadataErrors[keyof GetArtifactMetadataErrors];
+
+export type GetArtifactMetadataResponses = {
+    /**
+     * The artifact's metadata, with the content-bearing members absent when the caller may not see them
+     */
+    200: ArtifactMetadata;
+};
+
+export type GetArtifactMetadataResponse = GetArtifactMetadataResponses[keyof GetArtifactMetadataResponses];
+
 export type GetArtifactDownloadUrlData = {
     body?: never;
     path: {
@@ -5235,6 +5336,10 @@ export type GetArtifactDownloadUrlErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * `artifact_state_conflict` — the artifact is not `ready`, so its final key holds no verified bytes.
+     */
+    409: ErrorEnvelope;
+    /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
@@ -5248,14 +5353,71 @@ export type GetArtifactDownloadUrlError = GetArtifactDownloadUrlErrors[keyof Get
 
 export type GetArtifactDownloadUrlResponses = {
     /**
-     * Short-lived download URL
+     * The presigned download URL and its expiry
      */
-    200: {
-        download_url: string;
-    };
+    200: ArtifactDownloadUrl;
 };
 
 export type GetArtifactDownloadUrlResponse = GetArtifactDownloadUrlResponses[keyof GetArtifactDownloadUrlResponses];
+
+export type SetArtifactKindPolicyOverrideData = {
+    body: ArtifactKindPolicy;
+    path: {
+        p: string;
+        /**
+         * One of the closed-list artifact kinds.
+         */
+        kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+    };
+    query?: never;
+    url: '/projects/{p}/artifact-kind-policy/{kind}';
+};
+
+export type SetArtifactKindPolicyOverrideErrors = {
+    /**
+     * `request_invalid` — the body is not a JSON object of the five members. Every member is required: a body that omits `capture_enabled` or `reject_on_secret` is refused here rather than defaulting the switch to `false`, so an incomplete body can never silently disable an existing policy control, and no row is written. A body over the 8192-byte cap is `413 payload_too_large` before parsing.
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * `project_deleting` — the project is being deleted, so its policy is not written.
+     */
+    409: ErrorEnvelope;
+    /**
+     * `kind_unknown` for a kind outside the closed list, or `request_invalid` for a member that breaks the column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a sensitivity that is neither `normal` nor `sensitive`).
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type SetArtifactKindPolicyOverrideError = SetArtifactKindPolicyOverrideErrors[keyof SetArtifactKindPolicyOverrideErrors];
+
+export type SetArtifactKindPolicyOverrideResponses = {
+    /**
+     * The stored policy of the kind
+     */
+    200: ArtifactKindPolicy;
+};
+
+export type SetArtifactKindPolicyOverrideResponse = SetArtifactKindPolicyOverrideResponses[keyof SetArtifactKindPolicyOverrideResponses];
 
 export type GetRetentionPolicyData = {
     body?: never;

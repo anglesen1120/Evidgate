@@ -212,6 +212,8 @@ public static partial class ApiHost
         app.MapEvidenceEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 06.4.1: the per-project retention settings of the evidence area, same filters.
         app.MapRetentionEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        // The per-kind capture-policy override of the evidence area, same filters.
+        app.MapArtifactKindPolicyEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         app.MapIngestionEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 07.1.1-T3: the policy revision routes, same filters.
         app.MapPolicyEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();

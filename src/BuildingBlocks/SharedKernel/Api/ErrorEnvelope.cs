@@ -290,6 +290,9 @@ public static class ApiErrorCode
     /// <summary>409: the artifact's state does not allow the requested transition (06.1.2-T2 §6).</summary>
     public const string ArtifactStateConflict = "artifact_state_conflict";
 
+    /// <summary>403: the artifact's content is sensitive and the caller holds no <c>artifact:read_sensitive</c>.</summary>
+    public const string SensitivityForbidden = "sensitivity_forbidden";
+
     /// <summary>422: a requested retention window is outside the deployment's configured range, or shorter than the artifact window; <c>details</c> names the member and the bound.</summary>
     public const string RetentionOutOfRange = "retention_out_of_range";
 

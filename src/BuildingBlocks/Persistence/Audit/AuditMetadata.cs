@@ -58,6 +58,8 @@ public static partial class AuditMetadata
         "target_user_id",
         // The append-only version chain records which version the audited save produced; a number, never content.
         "version_no",
+        // 06.2.1: the kind-policy override records the sensitivity the row carried before the write.
+        "previous_default_sensitivity",
     };
 
     /// <summary>

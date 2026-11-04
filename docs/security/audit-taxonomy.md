@@ -72,7 +72,7 @@ Legend: ✅ verified with a file:line or link · ⚠️ unverified · `[INFERENC
 ### 2.6 Metadata allowlist
 
 - 16 keys maximum, 256 characters per value, and a credential-shaped value is refused when the entry is built (`AuditMetadata.cs:13,16,45-76`) by the regex at `AuditMetadata.cs:79`.
-- The allowlist is `email_domain`, `role_code`, `role_id`, `membership_id`, `slug`, `status`, `fields`, `count`, `format`, `range_days`, `reason`, `outcome`, `previous_id`, `mode`, `provider`, `via`, plus `target_user_id` (F55: the revoked session's user on the admin-revoke row, written by the `0050` definer) (`AuditMetadata.cs:19-41`). Adding a key is a review decision (`AuditMetadata.cs:18`).
+- The allowlist is `email_domain`, `role_code`, `role_id`, `membership_id`, `slug`, `status`, `fields`, `count`, `format`, `range_days`, `reason`, `outcome`, `previous_id`, `mode`, `provider`, `via`, plus `target_user_id` (F55: the revoked session's user on the admin-revoke row, written by the `0050` definer) and `previous_default_sensitivity` (06.2.1: the kind-policy override's stored before-value, one of the two sensitivity names) (`AuditMetadata.AllowedKeys`, `AuditMetadata.cs:35-63`). Adding a key is a review decision (`AuditMetadata.cs:34`).
 - `reason` is free text up to 256 characters (only the credential-shape regex applies), which contradicts the no-free-text rule of [11.9.2](../../plans/features/11-security-compliance/11.9.2-data-subject-requests-pdpl.md) AC9/AC10 — recorded as gap G7 in §7.2.
 
 ## 3. V1 action catalogue

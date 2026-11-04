@@ -2655,36 +2655,185 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
-  /artifacts/{a}/download-url:
+  /artifacts/{a}:
     get:
-      operationId: getArtifactDownloadUrl
+      operationId: getArtifactMetadata
       tags: [artifacts]
-      summary: Short-lived per-view download URL (sensitive issuance audited)
-      description: '`artifact:read`; `sensitive` artifacts additionally need `artifact:read_sensitive` (00 §7, 06).'
+      summary: One artifact's metadata; content-bearing members are gated when it is sensitive
+      description: >-
+        The artifact's descriptive metadata. The base permission is `artifact:read`; the escalation is
+        data-dependent, so the same permission evaluator is asked for `artifact:read_sensitive` and the answer decides
+        whether `object_key`, `checksum` and `bytes` are present. A gated answer is a `200` with
+        `content_gated: true` and the three members **absent** — only content is gated, never the metadata itself. The
+        effective `sensitivity` is `sensitive` when the row was minted sensitive, when the project's kind policy now
+        classifies the kind sensitive (a policy can raise the classification of rows that already exist), or when the
+        secret scan has not proved the artifact clean (`pending` is unscanned, `flagged` found a secret, an unknown
+        state fails closed); reading never lowers a stored classification. An id of another tenant or another project
+        is the one `404 artifact_not_found`: row level security makes it invisible, so it is indistinguishable from an
+        unknown id. A read, so no `Idempotency-Key`.
       x-permission: artifact:read
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ArtifactId'
       responses:
         '200':
-          description: Short-lived download URL
+          description: The artifact's metadata, with the content-bearing members absent when the caller may not see them
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
-                type: object
-                required: [download_url]
-                properties:
-                  download_url:
-                    type: string
+                $ref: '#/components/schemas/ArtifactMetadata'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /artifacts/{a}/download-url:
+    get:
+      operationId: getArtifactDownloadUrl
+      tags: [artifacts]
+      summary: Short-lived per-view download URL (sensitive issuance audited)
+      description: >-
+        A short-lived presigned `GET` for the artifact's bytes, issued to a caller that may read them. `artifact:read`
+        is the pipeline's decision and `artifact:read_sensitive` is asked separately for a row served as sensitive: a
+        caller without it gets `403 sensitivity_forbidden` and no URL. Both halves are audited — a denial writes one
+        row (the artifact's id, the actor, the request id and the outcome) in its own committed unit of work, so it
+        survives the rollback a failing command would cause, and the issuance of a sensitive artifact writes a row
+        too; the URL itself is a bearer credential and is never audited, logged or echoed in an error. Only an
+        artifact in the `ready` state has bytes at its final key, so any other state is `409 artifact_state_conflict`
+        rather than a URL to nothing. An unknown, another-tenant or another-project id is the one `404
+        artifact_not_found`. A read that records an audit row, so no `Idempotency-Key`.
+      x-permission: artifact:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ArtifactId'
+      responses:
+        '200':
+          description: The presigned download URL and its expiry
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactDownloadUrl'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            `artifact_state_conflict` — the artifact is not `ready`, so its final key holds no verified bytes.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/artifact-kind-policy/{kind}:
+    put:
+      operationId: setArtifactKindPolicyOverride
+      tags: [artifacts]
+      summary: Override one artifact kind's capture policy for a project
+      description: >-
+        Upserts the project's `artifact_kind_policy` row for one kind on `(org_id, project_id, kind)`, so two
+        concurrent writes converge and the last committed write wins, and answers the stored policy. This is the only
+        route that can lower a kind whose static default is sensitive: every write appends an audit row naming the
+        previous and the new `default_sensitivity`, so a lowering never happens by omission. A kind outside the closed
+        list is `422 kind_unknown`; `default_sensitivity` outside `normal`/`sensitive`, `max_bytes` not positive, or a
+        media-type list outside one to 64 entries is `422 request_invalid` with a reason, and no row is written. An
+        unknown or other-tenant project is `404`, a project being deleted is `409 project_deleting`.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: kind
+          in: path
+          required: true
+          description: One of the closed-list artifact kinds.
+          schema:
+            type: string
+            enum:
+              [
+                trace,
+                video,
+                screenshot,
+                raw_report,
+                dom_snapshot,
+                a11y_snapshot,
+                patch,
+                ui_hierarchy,
+              ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArtifactKindPolicy'
+      responses:
+        '200':
+          description: The stored policy of the kind
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactKindPolicy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: '`project_deleting` — the project is being deleted, so its policy is not written.'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '400':
+          description: >-
+            `request_invalid` — the body is not a JSON object of the five members. Every member is required: a body
+            that omits `capture_enabled` or `reject_on_secret` is refused here rather than defaulting the switch to
+            `false`, so an incomplete body can never silently disable an existing policy control, and no row is
+            written. A body over the 8192-byte cap is `413 payload_too_large` before parsing.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: >-
+            `kind_unknown` for a kind outside the closed list, or `request_invalid` for a member that breaks the
+            column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a sensitivity
+            that is neither `normal` nor `sensitive`).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -10549,6 +10698,97 @@ components:
           description: >-
             Days the artifact's metadata rows are kept; validated against `RetentionLimits.MinMetadataDays`/
             `MaxMetadataDays` and never shorter than `artifact_days`.
+    ArtifactMetadata:
+      type: object
+      description: >-
+        The `200` answer of `GET /v1/artifacts/{a}`. `sensitivity` is the effective classification every content path
+        enforces; `content_gated` is true when the caller holds `artifact:read` but not `artifact:read_sensitive`, and
+        `object_key`, `checksum` and `bytes` are then absent from the document rather than null, so a redacted field
+        can never be mistaken for a value.
+      additionalProperties: false
+      required:
+        [
+          artifact_id,
+          project_id,
+          run_id,
+          kind,
+          media_type,
+          state,
+          sensitivity,
+          scan_state,
+          content_gated,
+          created_at,
+        ]
+      properties:
+        artifact_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        run_id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum:
+            [trace, video, screenshot, raw_report, dom_snapshot, a11y_snapshot, patch, ui_hierarchy]
+        media_type: { type: string }
+        state:
+          type: string
+          enum: [pending_upload, uploaded, ready, rejected, pending_delete, deleted]
+        sensitivity:
+          type: string
+          enum: [normal, sensitive]
+        scan_state:
+          type: [string, 'null']
+          enum: [pending, clean, flagged, null]
+        bytes:
+          type: [integer, 'null']
+          description: The stored length; absent when `content_gated` is true.
+        checksum:
+          type: [string, 'null']
+          description: The content address; absent when `content_gated` is true.
+        object_key:
+          type: [string, 'null']
+          description: The server-chosen storage key; absent when `content_gated` is true.
+        content_gated:
+          type: boolean
+          description: True when the content-bearing members were withheld from this caller.
+        created_at: { type: string, format: date-time }
+    ArtifactDownloadUrl:
+      type: object
+      description: >-
+        The `200` answer of `GET /v1/artifacts/{a}/download-url`. `download_url` is a bearer credential: it is returned
+        once and never logged or audited.
+      additionalProperties: false
+      required: [artifact_id, download_url, expires_at]
+      properties:
+        artifact_id: { type: string, format: uuid }
+        download_url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+    ArtifactKindPolicy:
+      type: object
+      description: >-
+        The request and the `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored
+        capture policy for one kind. Every member is required — the row's knobs are written as a whole. The answer adds
+        `kind`, so a client can render what the server committed without a second read.
+      additionalProperties: false
+      required: [max_bytes, media_types, default_sensitivity, capture_enabled, reject_on_secret]
+      properties:
+        kind:
+          type: string
+          description: The kind the row belongs to; present on the answer only (the request names it in the path).
+          enum:
+            [trace, video, screenshot, raw_report, dom_snapshot, a11y_snapshot, patch, ui_hierarchy]
+        max_bytes:
+          type: integer
+          minimum: 1
+          description: The largest artifact of the kind the project accepts.
+        media_types:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items: { type: string }
+        default_sensitivity:
+          type: string
+          enum: [normal, sensitive]
+        capture_enabled: { type: boolean }
+        reject_on_secret: { type: boolean }
     NodeDto:
       type: object
       description: >-

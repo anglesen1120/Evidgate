@@ -36,6 +36,14 @@ public static class EvidenceEndpoints
             .Produces<CompleteResponse>(StatusCodes.Status200OK)
             .WithSummary("Verify an uploaded artifact and complete its upload (06.1.2)");
 
+        group.MapGet("/artifacts/{a:guid}", GetArtifactMetadataAsync)
+            .Produces<ArtifactMetadataView>(StatusCodes.Status200OK)
+            .WithSummary("Read one artifact's metadata; content-bearing members are gated when it is sensitive");
+
+        group.MapGet("/artifacts/{a:guid}/download-url", IssueDownloadUrlAsync)
+            .Produces<DownloadUrlResponse>(StatusCodes.Status200OK)
+            .WithSummary("Issue a short-lived presigned download URL for one artifact");
+
         return group;
     }
 
@@ -164,6 +172,51 @@ public static class EvidenceEndpoints
                 principal.CredentialId,
                 principal.CiRun?.ToBindingReference(),
                 IdempotencyKey(context)),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>GET /v1/artifacts/{a}</c>: the metadata of one artifact. The pipeline authorizes <c>artifact:read</c>; the
+    /// shared read model decides whether the caller also holds <c>artifact:read_sensitive</c> and masks the content
+    /// when it does not, so a gated answer is a 200 with <c>content_gated: true</c> and never a 403.
+    /// </summary>
+    private static ValueTask<Result<ArtifactMetadataView>> GetArtifactMetadataAsync(
+        Guid a,
+        IMediator mediator,
+        CancellationToken cancellationToken) =>
+        mediator.Send(new Application.Artifacts.GetArtifactMetadata(a), cancellationToken);
+
+    /// <summary>
+    /// <c>GET /v1/artifacts/{a}/download-url</c>: the gate decides first — it is the only place the
+    /// <c>artifact:read_sensitive</c> answer and the row are read together, and the only place a denial's audit row
+    /// is written and committed before the command transaction exists. The command then presigns the GET the gate
+    /// cleared.
+    /// </summary>
+    private static async Task<Result<DownloadUrlResponse>> IssueDownloadUrlAsync(
+        Guid a,
+        IRequestPrincipalAccessor principals,
+        Application.Artifacts.ArtifactDownloadGate gate,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (principals.Current is not { } principal)
+        {
+            return Result.Failure<DownloadUrlResponse>(Unauthenticated);
+        }
+
+        var authorized = await gate.AuthorizeAsync(a, principal, cancellationToken).ConfigureAwait(false);
+        if (!authorized.IsSuccess)
+        {
+            return Result.Failure<DownloadUrlResponse>(authorized.Error!);
+        }
+
+        var row = authorized.Value;
+
+        return await mediator.Send(
+            new Application.Artifacts.IssueArtifactDownloadUrl(
+                a,
+                row.ObjectKey!,
+                string.Equals(row.EffectiveSensitivity, ArtifactSensitivity.Sensitive, StringComparison.Ordinal)),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -383,3 +436,108 @@ public sealed record CompleteResponse(
     [property: JsonPropertyName("bytes")] long? Bytes,
     [property: JsonPropertyName("scan_state")] string? ScanState,
     [property: JsonPropertyName("failure_code")] string? FailureCode);
+
+/// <summary>
+/// 200 body of <c>GET /v1/artifacts/{a}</c>: the artifact's descriptive metadata. <see cref="Sensitivity"/> is the
+/// effective classification every read path enforces (raised by the project's kind policy and by an unfinished or
+/// flagged scan, never lowered by reading), and <see cref="ContentGated"/> is true when the caller holds only
+/// <c>artifact:read</c>: the storage key, the checksum and the byte count are then absent from the document, not
+/// null-ed in place, so no client can mistake a redacted field for a value.
+/// </summary>
+/// <param name="ArtifactId">The artifact id.</param>
+/// <param name="ProjectId">The owning project.</param>
+/// <param name="RunId">The run the artifact belongs to.</param>
+/// <param name="Kind">One of the eight contract kinds.</param>
+/// <param name="MediaType">The stored media type.</param>
+/// <param name="State">The artifact's lifecycle state.</param>
+/// <param name="Sensitivity"><c>normal</c> or <c>sensitive</c>, as resolved for this read.</param>
+/// <param name="ScanState">The secret-scan state, or null when the row carries none.</param>
+/// <param name="Bytes">The stored length, or null when the content is gated.</param>
+/// <param name="Checksum">The content address, or null when the content is gated.</param>
+/// <param name="ObjectKey">The storage key, or null when the content is gated.</param>
+/// <param name="ContentGated">True when the content-bearing members were withheld from this caller.</param>
+/// <param name="CreatedAt">When the row was created.</param>
+public sealed record ArtifactMetadataView(
+    [property: JsonPropertyName("artifact_id")] Guid ArtifactId,
+    [property: JsonPropertyName("project_id")] Guid ProjectId,
+    [property: JsonPropertyName("run_id")] Guid RunId,
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("media_type")] string MediaType,
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("sensitivity")] string Sensitivity,
+    [property: JsonPropertyName("scan_state")] string? ScanState,
+    [property: JsonPropertyName("bytes"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Bytes,
+    [property: JsonPropertyName("checksum"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Checksum,
+    [property: JsonPropertyName("object_key"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ObjectKey,
+    [property: JsonPropertyName("content_gated")] bool ContentGated,
+    [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt)
+{
+    /// <summary>Renders one row of the shared read model; the masking already happened in its statement.</summary>
+    internal static ArtifactMetadataView From(Application.Artifacts.ArtifactReadRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return new ArtifactMetadataView(
+            row.Id,
+            row.ProjectId,
+            row.RunId,
+            row.Kind,
+            row.MediaType,
+            row.State,
+            row.EffectiveSensitivity,
+            row.ScanState,
+            row.Bytes,
+            row.Checksum,
+            row.ObjectKey,
+            row.ContentGated,
+            row.CreatedAt);
+    }
+}
+
+/// <summary>
+/// 200 body of <c>GET /v1/artifacts/{a}/download-url</c>: a short-lived presigned <c>GET</c> for the artifact's
+/// bytes. The URL is a bearer credential, so it is returned once, never logged and never audited; the audit row
+/// names the artifact and the outcome only.
+/// </summary>
+/// <param name="ArtifactId">The artifact the URL serves.</param>
+/// <param name="DownloadUrl">The presigned <c>GET</c> URL.</param>
+/// <param name="ExpiresAt">When the URL stops being valid.</param>
+public sealed record DownloadUrlResponse(
+    [property: JsonPropertyName("artifact_id")] Guid ArtifactId,
+    [property: JsonPropertyName("download_url")] Uri DownloadUrl,
+    [property: JsonPropertyName("expires_at")] DateTimeOffset ExpiresAt);
+
+/// <summary>
+/// Body of <c>PUT /v1/projects/{p}/artifact-kind-policy/{kind}</c> and its 200 answer: the stored capture policy of
+/// one kind in one project. Every member is required — the row's five knobs are written as a whole, so a caller
+/// never leaves one to a stale value.
+/// </summary>
+/// <param name="MaxBytes">The largest artifact of the kind the project accepts, greater than zero.</param>
+/// <param name="MediaTypes">The accepted media types, between one and 64.</param>
+/// <param name="DefaultSensitivity"><c>normal</c> or <c>sensitive</c>.</param>
+/// <param name="CaptureEnabled">False switches capture of the kind off for the project.</param>
+/// <param name="RejectOnSecret">True makes the project reject an artifact whose scan flags a secret.</param>
+public sealed record ArtifactKindPolicyBody(
+    [property: JsonRequired, JsonPropertyName("max_bytes")] long MaxBytes,
+    [property: JsonRequired, JsonPropertyName("media_types")] string[] MediaTypes,
+    [property: JsonRequired, JsonPropertyName("default_sensitivity")] string DefaultSensitivity,
+    [property: JsonRequired, JsonPropertyName("capture_enabled")] bool CaptureEnabled,
+    [property: JsonRequired, JsonPropertyName("reject_on_secret")] bool RejectOnSecret);
+
+/// <summary>
+/// 200 body of the kind-policy override: the stored policy, including the kind the path named. It repeats the
+/// request's members so a client can render what the server committed without a second read.
+/// </summary>
+/// <param name="Kind">The kind the row belongs to.</param>
+/// <param name="MaxBytes">The stored size cap.</param>
+/// <param name="MediaTypes">The stored media-type allowlist.</param>
+/// <param name="DefaultSensitivity">The stored default sensitivity.</param>
+/// <param name="CaptureEnabled">The stored capture switch.</param>
+/// <param name="RejectOnSecret">The stored secret-rejection switch.</param>
+public sealed record ArtifactKindPolicyView(
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("max_bytes")] long MaxBytes,
+    [property: JsonPropertyName("media_types")] string[] MediaTypes,
+    [property: JsonPropertyName("default_sensitivity")] string DefaultSensitivity,
+    [property: JsonPropertyName("capture_enabled")] bool CaptureEnabled,
+    [property: JsonPropertyName("reject_on_secret")] bool RejectOnSecret);

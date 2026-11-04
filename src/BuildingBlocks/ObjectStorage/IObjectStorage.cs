@@ -32,6 +32,16 @@ public interface IObjectStorage
     PresignedPut PresignPut(PresignPutRequest request);
 
     /// <summary>
+    /// Presigns a <c>GET</c> of one stored object, the read half of the same seam: the download route hands the
+    /// client a short-lived URL for bytes it was authorized to see, so the API never proxies the download. Like
+    /// <see cref="PresignPut"/> it is SigV4 arithmetic only — no network call — and the URL is a bearer credential
+    /// that is never logged, thrown or audited.
+    /// </summary>
+    /// <param name="objectKey">A server-minted final key.</param>
+    /// <returns>The presigned URL and its expiry.</returns>
+    PresignedGet PresignGet(string objectKey);
+
+    /// <summary>
     /// <c>HEAD</c>s one object (06.1.2-T2, T86). Returns <c>null</c> when the object does not exist
     /// (a store 404 is an outcome, not an exception).
     /// </summary>
@@ -142,6 +152,14 @@ public sealed record PresignedPut(
     Uri Url,
     IReadOnlyDictionary<string, string> RequiredHeaders,
     DateTimeOffset ExpiresAt);
+
+/// <summary>
+/// A presigned <c>GET</c> of one stored object. <see cref="Url"/> is a bearer credential: it is returned to the
+/// authorized caller once and never logged, thrown or audited (00 §5.7 S3).
+/// </summary>
+/// <param name="Url">The presigned URL.</param>
+/// <param name="ExpiresAt">When the URL stops being valid.</param>
+public sealed record PresignedGet(Uri Url, DateTimeOffset ExpiresAt);
 
 /// <summary>
 /// What a <c>HEAD</c> reports about a stored object (06.1.2-T2). <see cref="ChecksumSha256Hex"/> is
