@@ -1430,7 +1430,7 @@ export type RetentionPolicy = {
 /**
  * The `200` answer of `GET /v1/artifacts/{a}`. `sensitivity` is the effective classification every content path enforces; `content_gated` is true when the caller holds `artifact:read` but not `artifact:read_sensitive`, and `object_key`, `checksum` and `bytes` are then absent from the document rather than null, so a redacted field can never be mistaken for a value.
  */
-export type ArtifactMetadata = {
+export type ArtifactMetadataView = {
     artifact_id: string;
     project_id: string;
     run_id: string;
@@ -1461,7 +1461,7 @@ export type ArtifactMetadata = {
 /**
  * The `200` answer of `GET /v1/artifacts/{a}/download-url`. `download_url` is a bearer credential: it is returned once and never logged or audited.
  */
-export type ArtifactDownloadUrl = {
+export type DownloadUrlResponse = {
     artifact_id: string;
     download_url: string;
     expires_at: string;
@@ -1470,7 +1470,7 @@ export type ArtifactDownloadUrl = {
 /**
  * The request and the `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored capture policy for one kind. Every member is required — the row's knobs are written as a whole. The answer adds `kind`, so a client can render what the server committed without a second read.
  */
-export type ArtifactKindPolicy = {
+export type ArtifactKindPolicyView = {
     /**
      * The kind the row belongs to; present on the answer only (the request names it in the path).
      */
@@ -2982,6 +2982,11 @@ export type OrgId = string;
 export type MembershipId = string;
 
 export type RoleId = string;
+
+/**
+ * One of the closed-list artifact kinds.
+ */
+export type ArtifactKind = 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
 
 export type ProjectId = string;
 
@@ -5472,7 +5477,7 @@ export type GetArtifactMetadataResponses = {
     /**
      * The artifact's metadata, with the content-bearing members absent when the caller may not see them
      */
-    200: ArtifactMetadata;
+    200: ArtifactMetadataView;
 };
 
 export type GetArtifactMetadataResponse = GetArtifactMetadataResponses[keyof GetArtifactMetadataResponses];
@@ -5519,13 +5524,13 @@ export type GetArtifactDownloadUrlResponses = {
     /**
      * The presigned download URL and its expiry
      */
-    200: ArtifactDownloadUrl;
+    200: DownloadUrlResponse;
 };
 
 export type GetArtifactDownloadUrlResponse = GetArtifactDownloadUrlResponses[keyof GetArtifactDownloadUrlResponses];
 
 export type SetArtifactKindPolicyOverrideData = {
-    body: ArtifactKindPolicy;
+    body: ArtifactKindPolicyView;
     headers?: {
         /**
          * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
@@ -5584,7 +5589,7 @@ export type SetArtifactKindPolicyOverrideResponses = {
     /**
      * The stored policy of the kind
      */
-    200: ArtifactKindPolicy;
+    200: ArtifactKindPolicyView;
 };
 
 export type SetArtifactKindPolicyOverrideResponse = SetArtifactKindPolicyOverrideResponses[keyof SetArtifactKindPolicyOverrideResponses];

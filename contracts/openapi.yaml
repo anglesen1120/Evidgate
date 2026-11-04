@@ -2698,7 +2698,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ArtifactMetadata'
+                $ref: '#/components/schemas/ArtifactMetadataView'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2740,7 +2740,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ArtifactDownloadUrl'
+                $ref: '#/components/schemas/DownloadUrlResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2778,30 +2778,14 @@ paths:
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ProjectId'
-        - name: kind
-          in: path
-          required: true
-          description: One of the closed-list artifact kinds.
-          schema:
-            type: string
-            enum:
-              [
-                trace,
-                video,
-                screenshot,
-                raw_report,
-                dom_snapshot,
-                a11y_snapshot,
-                patch,
-                ui_hierarchy,
-              ]
+        - $ref: '#/components/parameters/ArtifactKind'
         - $ref: '#/components/parameters/XsrfToken'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ArtifactKindPolicy'
+              $ref: '#/components/schemas/ArtifactKindPolicyView'
       responses:
         '200':
           description: The stored policy of the kind
@@ -2811,7 +2795,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ArtifactKindPolicy'
+                $ref: '#/components/schemas/ArtifactKindPolicyView'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -8193,6 +8177,15 @@ components:
       schema:
         type: string
         format: uuid
+    ArtifactKind:
+      name: kind
+      in: path
+      required: true
+      description: One of the closed-list artifact kinds.
+      schema:
+        type: string
+        enum:
+          [trace, video, screenshot, raw_report, dom_snapshot, a11y_snapshot, patch, ui_hierarchy]
     ProjectId:
       name: p
       in: path
@@ -11044,7 +11037,7 @@ components:
           description: >-
             Days the artifact's metadata rows are kept; validated against `RetentionLimits.MinMetadataDays`/
             `MaxMetadataDays` and never shorter than `artifact_days`.
-    ArtifactMetadata:
+    ArtifactMetadataView:
       type: object
       description: >-
         The `200` answer of `GET /v1/artifacts/{a}`. `sensitivity` is the effective classification every content path
@@ -11096,7 +11089,7 @@ components:
           type: boolean
           description: True when the content-bearing members were withheld from this caller.
         created_at: { type: string, format: date-time }
-    ArtifactDownloadUrl:
+    DownloadUrlResponse:
       type: object
       description: >-
         The `200` answer of `GET /v1/artifacts/{a}/download-url`. `download_url` is a bearer credential: it is returned
@@ -11107,7 +11100,7 @@ components:
         artifact_id: { type: string, format: uuid }
         download_url: { type: string, format: uri }
         expires_at: { type: string, format: date-time }
-    ArtifactKindPolicy:
+    ArtifactKindPolicyView:
       type: object
       description: >-
         The request and the `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored
