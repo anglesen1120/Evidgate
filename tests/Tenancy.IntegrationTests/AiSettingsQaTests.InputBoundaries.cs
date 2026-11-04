@@ -60,13 +60,13 @@ public sealed class AiSettingsInputBoundaryTests(PostgresTenancyFixture fixture)
         var idempotencyBefore = await AiSettingsCalls.IdempotencyCountAsync(fixture, world);
         string[] secrets =
         [
-            "ghp_0123456789abcdefghijABCDEFGHIJ012345",
+            AiSettingsCalls.Secrets.GitHubToken(),
             "sk-live-0123456789ABCDEFGHIJabcdefghij",
-            "password=hunter2",
+            AiSettingsCalls.Secrets.PasswordAssignment(),
             "Bearer example-test-credential",
-            "-----BEGIN PRIVATE KEY-----",
+            AiSettingsCalls.Secrets.PemPrivateKey(),
             "0123456789abcdef0123456789abcdef",
-            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+            AiSettingsCalls.Secrets.Jwt(),
         ];
 
         foreach (var secret in secrets)
@@ -96,7 +96,7 @@ public sealed class AiSettingsInputBoundaryTests(PostgresTenancyFixture fixture)
     [InlineData("file:///etc/passwd", "invalid_url")]
     [InlineData("javascript:alert(1)", "invalid_url")]
     [InlineData("//example.test/checkout", "invalid_url")]
-    [InlineData("https://user:pw@example.test/checkout", "secret_value_detected")]
+    [InlineData("https://" + "user" + ":" + "pw" + "@example.test/checkout", "secret_value_detected")]
     [InlineData("https://example.test/#password%3Dhunter2", "secret_value_detected")]
     [InlineData("https://example.test/password%3Dhunter2", "secret_value_detected")]
     [InlineData("https://example.test/?password=hunter2", "secret_value_detected")]

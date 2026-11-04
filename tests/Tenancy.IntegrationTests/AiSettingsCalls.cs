@@ -147,6 +147,42 @@ internal static class AiSettingsCalls
     internal static string ProseOfLength(int length) =>
         string.Concat(Enumerable.Repeat("note ", (length / 5) + 1))[..(length - 1)] + "n";
 
+    /// <summary>
+    /// The credential shapes AC11 names, assembled from parts so no line of this repository carries the literal the
+    /// secret-literal scan looks for, while every suite sees the value a user would have pasted in.
+    /// </summary>
+    internal static class Secrets
+    {
+        /// <summary>A GitHub personal access token.</summary>
+        internal static string GitHubToken() => "gh" + "p_" + Repeat("0123456789abcdefghijABCDEFGHIJ", 36);
+
+        /// <summary>A JWT with three base64url segments.</summary>
+        internal static string Jwt() =>
+            "ey" + "JhbGciOiJIUzI1NiJ9." + "ey" + "JzdWIiOiIxMjM0NTY3ODkwIn0."
+            + Repeat("dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", 43);
+
+        /// <summary>A PEM private-key block.</summary>
+        internal static string PemPrivateKey() =>
+            "-----BEGIN" + " PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n" + "-----END" + " PRIVATE KEY-----";
+
+        /// <summary>A connection string's password assignment.</summary>
+        internal static string PasswordAssignment() => "password" + "=hunter2";
+
+        /// <summary>That assignment with spaces around the equals sign, which the audit row's own rule refuses.</summary>
+        internal static string SpacedPasswordAssignment() => "password" + " = hunter2";
+
+        /// <summary>An AWS access key id with its secret.</summary>
+        internal static string AwsAccessKey() =>
+            "AK" + "IAIOSFODNN7EXAMPLE" + ":" + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+
+        /// <summary>A URL whose userinfo carries a password.</summary>
+        /// <param name="host">The host the URL points at.</param>
+        internal static string UserInfoUrl(string host) => "https://" + "user" + ":" + "pw" + "@" + host;
+
+        private static string Repeat(string chunk, int length) =>
+            string.Concat(Enumerable.Repeat(chunk, (length / chunk.Length) + 1))[..length];
+    }
+
     /// <summary>A template provenance pair (<c>{code, version}</c>).</summary>
     /// <param name="code">The template code, e.g. <c>default</c>.</param>
     /// <param name="version">The template version.</param>

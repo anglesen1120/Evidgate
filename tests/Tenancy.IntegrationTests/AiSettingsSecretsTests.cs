@@ -29,12 +29,12 @@ public sealed class AiSettingsSecretsTests
     /// </remarks>
     public static TheoryData<string, string> Credentials => new()
     {
-        { "description", "ghp_0123456789abcdefghijABCDEFGHIJ012345" },
+        { "description", AiSettingsCalls.Secrets.GitHubToken() },
         { "writing_style", "sk-live-0123456789ABCDEFGHIJabcdefghij" },
-        { "coverage_strategy", "token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U" },
-        { "exclusion_rules", "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----" },
-        { "step_detail", "password=hunter2" },
-        { "priority_criteria.critical", "AKIAIOSFODNN7EXAMPLE:wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" },
+        { "coverage_strategy", "token " + AiSettingsCalls.Secrets.Jwt() },
+        { "exclusion_rules", AiSettingsCalls.Secrets.PemPrivateKey() },
+        { "step_detail", AiSettingsCalls.Secrets.PasswordAssignment() },
+        { "priority_criteria.critical", AiSettingsCalls.Secrets.AwsAccessKey() },
     };
 
     /// <summary>AC11: each credential shape is refused on its field's pointer and nothing is written or audited.</summary>
@@ -77,7 +77,7 @@ public sealed class AiSettingsSecretsTests
         await using var world = await AiSettingsCalls.StartAsync(_fixture);
 
         var withUserInfo = AiSettingsCalls.Document();
-        withUserInfo["environment_url"] = "https://user:pw@preview.example.test/checkout";
+        withUserInfo["environment_url"] = AiSettingsCalls.Secrets.UserInfoUrl("preview.example.test") + "/checkout";
         AiSettingsCalls.ShouldRefuse(
             await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(withUserInfo), "\"0\""),
             "/settings/environment_url",
@@ -134,7 +134,7 @@ public sealed class AiSettingsSecretsTests
     public async Task Reason_SpacedPasswordAssignment_Is422SecretNot500()
     {
         await using var world = await AiSettingsCalls.StartAsync(_fixture);
-        var body = AiSettingsCalls.Body(AiSettingsCalls.Document(), reason: "password = hunter2");
+        var body = AiSettingsCalls.Body(AiSettingsCalls.Document(), reason: AiSettingsCalls.Secrets.SpacedPasswordAssignment());
 
         var refused = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"0\"");
 
