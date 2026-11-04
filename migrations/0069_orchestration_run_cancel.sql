@@ -30,6 +30,8 @@
 -- recorded request can never be repointed at another run, re-reasoned, or given a different window, and no DELETE exists.
 -- The operator keeps its default SELECT (a decision recorded here, not a grant: it holds no policy on this table, so
 -- until 02.8.1's grant-gated operator policy lands it reads zero rows, 0028's posture). The scheduler role holds nothing.
+-- `created_at`, `updated_at` and `version` name no grant: they are taken from their column defaults on insert and moved
+-- by the shared trigger below, so the state-only write path bumps the token without a column privilege (0036).
 --
 -- GUARD: `state` encodes a state machine the app may move, so it gets a trigger (D2) rather than trusting every future
 -- writer: the row's identity, requester, reason and both deadlines are immutable, `requested` moves only forward
@@ -55,6 +57,9 @@ create table if not exists public.run_cancel_request (
   soft_stop_deadline_at timestamptz not null,
   kill_at timestamptz not null,
   state text not null default 'requested',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  version integer not null default 1,
   constraint run_cancel_request_pkey primary key (id),
   constraint run_cancel_request_org_id_key unique (org_id, id),
   constraint run_cancel_request_run_key unique (org_id, run_id),
@@ -66,6 +71,18 @@ create table if not exists public.run_cancel_request (
   constraint run_cancel_request_window_check
     check (soft_stop_deadline_at >= requested_at and kill_at >= soft_stop_deadline_at)
 );
+
+-- 00 §7 / 00 §5.5 C4: the three audit columns are the convention every mutable business table carries, and the database
+-- owns `updated_at` and the `version` increment through 0004's shared function — the same attachment `run` (0031),
+-- `security_event` (0053), `retention_policy` (0062) and `authoring_change` (0067) declare, and the one the state-only
+-- write path needs: `evidgate_app` holds `update (state)` and nothing wider, yet a trigger assignment is not
+-- privilege-checked, so the stop stages bump the token without being able to set it (0036's `run.state` precedent).
+-- The guard below compares an explicit list and never looks at these three, so it neither refuses the convention's
+-- write nor lets a caller move them.
+drop trigger if exists run_cancel_request_set_updated_at_and_version on public.run_cancel_request;
+create trigger run_cancel_request_set_updated_at_and_version
+  before update on public.run_cancel_request
+  for each row execute function public.set_updated_at_and_version();
 
 alter table public.run_cancel_request enable row level security;
 alter table public.run_cancel_request force row level security;
