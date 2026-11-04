@@ -101,7 +101,7 @@
       class="flex-1"
       [groups]="nav.groups()"
       [collapsed]="collapsed()"
-      (itemSelected)="mobile() && closeDrawer(false)"
+      (itemSelected)="onNavigationSelected($event)"
     />
   </aside>
   <div class="main-stack flex min-w-0 flex-col" [attr.inert]="mobile() && drawerOpen() ? '' : null">

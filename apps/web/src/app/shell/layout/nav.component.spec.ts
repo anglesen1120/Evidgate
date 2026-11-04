@@ -55,7 +55,7 @@ describe('NavComponent', () => {
     expect(link.getAttribute('aria-current')).toBe('page');
     expect(link.hasAttribute('hlmBtn')).toBe(true);
     link.click();
-    expect(selected).toHaveBeenCalledOnce();
+    expect(selected).toHaveBeenCalledExactlyOnceWith(['/overview']);
   });
 
   it('retains accessible names in rail mode and renders no invented items for an empty view', async () => {

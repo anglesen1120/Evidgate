@@ -100,16 +100,13 @@ describe('ScopeSwitcherComponent', () => {
     expect(names.map((name) => name.trim())).toContain(SCOPE_ORGANIZATIONS[1].name);
   });
 
-  it.each([0, 1])(
-    'shows scope popup %i without fading its text or delaying dismissal',
-    async (index) => {
-      const { harness } = await createFixture();
-      await (await harness.trigger(index)).click();
-      expect(document.querySelector('hlm-select-content')?.classList.contains('animate-none')).toBe(
-        true,
-      );
-    },
-  );
+  it.each([0, 1])('applies animate-none to scope popup %i', async (index) => {
+    const { harness } = await createFixture();
+    await (await harness.trigger(index)).click();
+    expect(document.querySelector('hlm-select-content')?.classList.contains('animate-none')).toBe(
+      true,
+    );
+  });
 
   it('explores options with arrows and commits only on Enter', async () => {
     const { fixture, harness } = await createFixture();

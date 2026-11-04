@@ -20,6 +20,6 @@ import { ShellIconComponent } from './shell-icon.component';
 export class NavComponent {
   readonly groups = input<readonly NavGroupView[]>([]);
   readonly collapsed = input(false);
-  readonly itemSelected = output<void>();
+  readonly itemSelected = output<readonly string[]>();
   readonly navigationLabel = $localize`:@@shell.layout.primary-navigation:Primary navigation`;
 }

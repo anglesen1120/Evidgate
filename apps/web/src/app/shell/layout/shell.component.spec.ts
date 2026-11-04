@@ -272,6 +272,27 @@ describe('ShellComponent', () => {
     expect(document.activeElement).toBe(root.querySelector('#main-content'));
   });
 
+  it.each(['', '?filter=recent#details'])(
+    'restores opener focus when a drawer link selects the current path from suffix "%s"',
+    async (suffix) => {
+      const router = TestBed.inject(Router);
+      const destination = '/orgs/org-one/projects/project-one/overview';
+      await router.navigateByUrl(destination + suffix);
+      vi.stubGlobal('innerWidth', 360);
+      window.dispatchEvent(new Event('resize'));
+      await fixture.whenStable();
+      fixture.componentInstance.toggleNavigation();
+      await fixture.whenStable();
+      const link = root.querySelector<HTMLAnchorElement>('aside nav a')!;
+      link.focus();
+      link.click();
+      await fixture.whenStable();
+      expect(router.url).toBe(destination);
+      expect(fixture.componentInstance.drawerOpen()).toBe(false);
+      expect(document.activeElement).toBe(root.querySelector('.nav-toggle'));
+    },
+  );
+
   it('keeps a scope placeholder until the deferred mobile switcher is ready', async () => {
     vi.stubGlobal('innerWidth', 360);
     window.dispatchEvent(new Event('resize'));

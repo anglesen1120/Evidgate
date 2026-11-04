@@ -25,7 +25,7 @@
                 [ariaCurrentWhenActive]="'page'"
                 [attr.aria-label]="item.label"
                 [attr.title]="collapsed() ? item.label : null"
-                (click)="itemSelected.emit()"
+                (click)="itemSelected.emit(item.link)"
               >
                 <app-shell-icon [name]="item.icon" />
                 <span class="min-w-0 group-data-[collapsed=true]/nav:sr-only">{{

@@ -98,7 +98,7 @@ export class ShellComponent {
         this.hasNavigated = true;
         this.lastPath = path;
         this.drawerOpen.set(false);
-        this.focusRequest++;
+        if (moveFocus) this.focusRequest++;
         afterNextRender(
           () => {
             const main = this.main()?.nativeElement;
@@ -152,6 +152,12 @@ export class ShellComponent {
     this.drawerOpen.set(false);
     if (restoreOpener) this.focusWhenUnblocked('opener');
     else this.focusRequest++;
+  }
+
+  onNavigationSelected(link: readonly string[]): void {
+    if (!this.mobile()) return;
+    const destination = this.router.serializeUrl(this.router.createUrlTree(link));
+    this.closeDrawer(this.pathOf(destination) === this.pathOf(this.router.url));
   }
 
   /**
