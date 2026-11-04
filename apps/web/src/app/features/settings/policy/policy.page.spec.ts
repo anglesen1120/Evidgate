@@ -4,11 +4,11 @@ import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import type { PolicyRevisionDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { PolicyPage } from './policy.page';
 import { PolicyStore, type PublishResult } from './policy.store';
-import { provideSelectTestLayout } from './select.test-support';
 
-provideSelectTestLayout();
+provideLayoutTestStubs();
 
 const revision: PolicyRevisionDto = {
   id: '182003de-f396-481b-8578-d18baf086204',

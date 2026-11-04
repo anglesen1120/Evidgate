@@ -1,72 +1,130 @@
-<header class="page-header">
-  <h1>{{ copy.title }}</h1>
-  <p>{{ copy.description }}</p>
+<header class="mb-[var(--eg-space-5)] grid min-w-0 gap-[var(--eg-space-3)]">
+  <h1
+    class="m-0 font-[family-name:var(--eg-font-display)] text-[length:clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))] leading-[var(--eg-leading-2xl)] [overflow-wrap:anywhere]"
+    [textContent]="copy.title"
+  ></h1>
+  <p class="m-0 text-muted-foreground [overflow-wrap:anywhere]">{{ copy.description }}</p>
 </header>
 <form
-  class="filters"
+  hlmCard
+  class="mb-[var(--eg-space-5)] grid min-w-0 gap-[var(--eg-space-4)] p-[var(--eg-space-5)]"
   (ngSubmit)="apply()"
   aria-labelledby="run-filters-title"
   [attr.aria-describedby]="'run-filter-hint'"
 >
-  <h2 id="run-filters-title">{{ copy.filters }}</h2>
-  <p id="run-filter-hint">{{ copy.filterHint }}</p>
-  <div class="filter-grid">
-    <label for="run-state"
-      >{{ copy.state }}
-      <select id="run-state" name="state" [(ngModel)]="draft.state">
-        <option value="">{{ copy.any }}</option>
-        <option value="created">{{ copy.created }}</option>
-        <option value="queued">{{ copy.queued }}</option>
-        <option value="running">{{ copy.running }}</option>
-        <option value="collecting">{{ copy.collecting }}</option>
-        <option value="complete">{{ copy.complete }}</option>
-        <option value="incomplete">{{ copy.incomplete }}</option>
-        <option value="canceled">{{ copy.canceled }}</option>
-      </select>
-    </label>
-    <label for="run-decision"
-      >{{ copy.decision }}
-      <select
-        id="run-decision"
-        name="decision"
-        [(ngModel)]="draft.decision"
-        [attr.aria-describedby]="'run-decision-hint'"
-      >
-        <option value="">{{ copy.any }}</option>
-        <option value="pending">{{ copy.pending }}</option>
-        @for (decision of ['PASS', 'FAIL', 'INCONCLUSIVE']; track decision) {
-          <option [value]="decision">{{ decision }}</option>
-        }
-      </select>
-      <span id="run-decision-hint">{{ copy.decisionHint }}</span>
-    </label>
-    <label for="run-scope"
-      >{{ copy.scope }}
-      <select id="run-scope" name="scope" [(ngModel)]="draft.scope">
-        <option value="">{{ copy.any }}</option>
-        <option value="original">{{ copy.original }}</option>
-        <option value="rerun">{{ copy.rerun }}</option>
-        <option value="reprocess">{{ copy.reprocess }}</option>
-      </select>
-    </label>
-    <label for="run-ref"
-      >{{ copy.ref }}
+  <h2 hlmCardTitle id="run-filters-title" class="m-0 text-sm">{{ copy.filters }}</h2>
+  <p id="run-filter-hint" class="m-0 text-muted-foreground [overflow-wrap:anywhere]">
+    {{ copy.filterHint }}
+  </p>
+  <div
+    class="grid min-w-0 items-start gap-[var(--eg-space-4)] min-[768px]:grid-cols-2 min-[1280px]:grid-cols-4"
+  >
+    <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+      <label hlmLabel for="run-state" class="whitespace-normal">{{ copy.state }}</label>
+      <hlm-select name="state" [(ngModel)]="draft.state" [itemToString]="stateLabel">
+        <hlm-select-trigger
+          [buttonId]="'run-state'"
+          class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+        >
+          <hlm-select-value [placeholder]="copy.any" />
+        </hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.state" class="animate-none">
+          @for (option of stateOptions; track option.value) {
+            <hlm-select-item
+              [value]="option.value"
+              class="min-h-[var(--eg-control-touch)] whitespace-normal"
+              >{{ option.label }}</hlm-select-item
+            >
+          }
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+    <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+      <label hlmLabel for="run-decision" class="whitespace-normal">{{ copy.decision }}</label>
+      <hlm-select name="decision" [(ngModel)]="draft.decision" [itemToString]="decisionLabel">
+        <hlm-select-trigger
+          [buttonId]="'run-decision'"
+          [aria-describedby]="'run-decision-hint'"
+          class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+        >
+          <hlm-select-value [placeholder]="copy.any" />
+        </hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.decision" class="animate-none">
+          @for (option of decisionOptions; track option.value) {
+            <hlm-select-item
+              [value]="option.value"
+              class="min-h-[var(--eg-control-touch)] whitespace-normal"
+              >{{ option.label }}</hlm-select-item
+            >
+          }
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+    <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+      <label hlmLabel for="run-scope" class="whitespace-normal">{{ copy.scope }}</label>
+      <hlm-select name="scope" [(ngModel)]="draft.scope" [itemToString]="scopeLabel">
+        <hlm-select-trigger
+          [buttonId]="'run-scope'"
+          class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+        >
+          <hlm-select-value [placeholder]="copy.any" />
+        </hlm-select-trigger>
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.scope" class="animate-none">
+          @for (option of scopeOptions; track option.value) {
+            <hlm-select-item
+              [value]="option.value"
+              class="min-h-[var(--eg-control-touch)] whitespace-normal"
+              >{{ option.label }}</hlm-select-item
+            >
+          }
+        </hlm-select-content>
+      </hlm-select>
+    </div>
+    <div class="grid min-w-0 gap-[var(--eg-space-2)]">
+      <label hlmLabel for="run-ref" class="whitespace-normal">{{ copy.ref }}</label>
       <input
+        hlmInput
+        class="min-h-[var(--eg-control-touch)] min-w-0 w-full"
         id="run-ref"
         name="refName"
         maxlength="255"
         [(ngModel)]="draft.refName"
         [attr.aria-invalid]="store.refRejected() ? 'true' : null"
-        [attr.aria-describedby]="store.refRejected() ? 'run-ref-error' : null"
+        [aria-describedby]="store.refRejected() ? 'run-ref-error' : null"
       />
-    </label>
+    </div>
   </div>
+  <p id="run-decision-hint" class="m-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+    {{ copy.decisionHint }}
+  </p>
   @if (store.refRejected()) {
-    <p class="validation" id="run-ref-error" role="alert">{{ copy.refRejected }}</p>
+    <p
+      class="m-0 text-[var(--eg-danger-fg)] [overflow-wrap:anywhere]"
+      id="run-ref-error"
+      role="alert"
+    >
+      {{ copy.refRejected }}
+    </p>
   }
-  <div class="filter-actions">
-    <button type="submit" class="primary" data-run-apply>{{ copy.apply }}</button>
-    <button type="button" data-run-clear (click)="clear()">{{ copy.clear }}</button>
+  <div class="flex flex-wrap gap-[var(--eg-space-3)]">
+    <button
+      hlmBtn
+      type="submit"
+      class="min-h-[var(--eg-control-touch)] whitespace-normal"
+      data-run-apply
+    >
+      {{ copy.apply }}
+    </button>
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      class="min-h-[var(--eg-control-touch)] whitespace-normal"
+      data-run-clear
+      (click)="clear()"
+    >
+      {{ copy.clear }}
+    </button>
   </div>
 </form>
 <app-request-state
@@ -82,42 +140,68 @@
 >
   <app-run-list-table [rows]="store.visibleRows()" />
 </app-request-state>
-<!-- Keep cursor controls outside the nonempty projection: a filtered page may have zero matches. -->
+<!-- Filtered pages can have no matches while still offering an older cursor page. -->
 @if (status() === 'ready') {
   <section
     #paging
-    class="pagination"
+    class="pagination mt-[var(--eg-space-5)] grid min-w-0 gap-[var(--eg-space-4)] focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
     [attr.aria-label]="copy.pagination"
     [attr.aria-busy]="store.loadingMore()"
   >
-    <p role="status" data-run-loaded-count [attr.data-run-loaded-filtered]="store.isFiltered()">
+    <p
+      class="m-0 text-muted-foreground"
+      role="status"
+      data-run-loaded-count
+      [attr.data-run-loaded-filtered]="store.isFiltered()"
+    >
       {{ loadedText() }}
     </p>
     @if (store.autoLoadCapped() || store.browseCapped()) {
-      <p data-run-browse-capped>{{ copy.capped }}</p>
+      <p class="m-0 text-muted-foreground [overflow-wrap:anywhere]" data-run-browse-capped>
+        {{ copy.capped }}
+      </p>
     }
     @if (store.pagingError(); as failure) {
-      <div class="banner failure" role="alert" data-run-paging-error>
-        <p>{{ failure.message }}</p>
-        <code>{{ failure.code }}</code>
+      <div
+        hlmAlert
+        [variant]="'destructive'"
+        class="grid min-w-0 gap-[var(--eg-space-3)]"
+        role="alert"
+        data-run-paging-error
+      >
+        <p class="m-0 [overflow-wrap:anywhere]">{{ failure.message }}</p>
+        <code class="[overflow-wrap:anywhere]">{{ failure.code }}</code>
         @if (failure.retryable) {
-          <!-- Only the wait disables this control, never its own request. The store clears the paging
-               error when a follow starts, so this button unmounts until the request ends;
-               `handoffAfterLoadMore` then returns focus (the store refuses a second follow meanwhile). -->
-          <button #pagingRetryControl type="button" [disabled]="!retryReady()" (click)="loadMore()">
+          <!-- Focus returns here after a failed follow; only Retry-After disables the control. -->
+          <button
+            #pagingRetryControl
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            class="min-h-[var(--eg-control-touch)] justify-self-start whitespace-normal transition-none"
+            [disabled]="!retryReady()"
+            (click)="loadMore()"
+          >
             {{ copy.retryMore }}
           </button>
         }
       </div>
     }
     @if (store.hasMore() && !store.pagingError()) {
-      <!-- Never disabled for its own request: a disabled element cannot hold focus, and this
-           control is removed once the cursor ends. `loadMore` guards re-entry. -->
-      <button #loadMoreControl type="button" data-run-load-more (click)="loadMore()">
+      <!-- Keep focus during the request; the store guards against duplicate follows. -->
+      <button
+        #loadMoreControl
+        hlmBtn
+        [variant]="'outline'"
+        type="button"
+        class="min-h-[var(--eg-control-touch)] justify-self-start whitespace-normal transition-none"
+        data-run-load-more
+        (click)="loadMore()"
+      >
         {{ copy.more }}
       </button>
     }
-    <p role="status">
+    <p class="m-0 min-h-[var(--eg-leading-sm)] text-muted-foreground" role="status">
       @if (store.loadingMore()) {
         {{ copy.loadingMore }}
       }

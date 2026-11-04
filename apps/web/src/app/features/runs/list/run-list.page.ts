@@ -16,19 +16,38 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { combineLatest } from 'rxjs';
+import { HlmAlert } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { RunListTableComponent } from './run-list-table.component';
 import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
 
 @Component({
   selector: 'app-run-list-page',
-  standalone: true,
-  imports: [FormsModule, RequestStateComponent, RunListTableComponent],
+  imports: [
+    FormsModule,
+    HlmAlert,
+    HlmButton,
+    HlmCard,
+    HlmCardTitle,
+    HlmInput,
+    HlmLabel,
+    HlmSelectImports,
+    RequestStateComponent,
+    RunListTableComponent,
+  ],
   providers: [RunListStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-list.page.html',
-  styleUrl: './run-list.page.css',
-  host: { '[attr.data-run-list-status]': 'store.status()' },
+  host: {
+    class:
+      'block min-w-0 text-foreground font-[family-name:var(--eg-font-body)] text-sm leading-[var(--eg-leading-sm)]',
+    '[attr.data-run-list-status]': 'store.status()',
+  },
 })
 export class RunListPage {
   protected readonly store = inject(RunListStore);
@@ -84,6 +103,35 @@ export class RunListPage {
     retryMore: $localize`:@@runs.list.retry-more:Retry loading more`,
     refRejected: $localize`:@@runs.list.ref-invalid:Ref name not applied: use 1 to 255 characters with no control characters.`,
   };
+  protected readonly stateOptions = [
+    { value: '', label: this.copy.any },
+    { value: 'created', label: this.copy.created },
+    { value: 'queued', label: this.copy.queued },
+    { value: 'running', label: this.copy.running },
+    { value: 'collecting', label: this.copy.collecting },
+    { value: 'complete', label: this.copy.complete },
+    { value: 'incomplete', label: this.copy.incomplete },
+    { value: 'canceled', label: this.copy.canceled },
+  ];
+  protected readonly decisionOptions = [
+    { value: '', label: this.copy.any },
+    { value: 'pending', label: this.copy.pending },
+    { value: 'PASS', label: 'PASS' },
+    { value: 'FAIL', label: 'FAIL' },
+    { value: 'INCONCLUSIVE', label: 'INCONCLUSIVE' },
+  ];
+  protected readonly scopeOptions = [
+    { value: '', label: this.copy.any },
+    { value: 'original', label: this.copy.original },
+    { value: 'rerun', label: this.copy.rerun },
+    { value: 'reprocess', label: this.copy.reprocess },
+  ];
+  protected readonly stateLabel = (value: unknown) =>
+    this.stateOptions.find((option) => option.value === value)?.label ?? this.copy.any;
+  protected readonly decisionLabel = (value: unknown) =>
+    this.decisionOptions.find((option) => option.value === value)?.label ?? this.copy.any;
+  protected readonly scopeLabel = (value: unknown) =>
+    this.scopeOptions.find((option) => option.value === value)?.label ?? this.copy.any;
 
   constructor() {
     // Observe ancestors too: projectId belongs to the shell's project route, not this lazy leaf.
