@@ -152,13 +152,14 @@ function grantOf(permissions: readonly string[]): GrantSet | undefined {
 }
 
 /** The session that reaches a surface: the index's own, every other surface's narrowest match. */
-const WALK: readonly { surface: Surface; grant: GrantSet | undefined }[] = SURFACES.map(
-  (surface) => ({
-    surface,
-    grant:
-      surface.component === 'SettingsNoTabsPage' ? NO_TAB_SESSION : grantOf(surface.permissions),
-  }),
-);
+const WALK: readonly { surface: Surface; grant: GrantSet }[] = SURFACES.map((surface) => {
+  const grant =
+    surface.component === 'SettingsNoTabsPage' ? NO_TAB_SESSION : grantOf(surface.permissions);
+  // A surface whose codes no corpus session holds could only be asserted as a refusal; it must
+  // fail the walk rather than drop out of it.
+  if (grant === undefined) throw new Error(`No corpus session grants ${surface.path}`);
+  return { surface, grant };
+});
 
 /** The server state a surface needs beyond its grant to reach the ready contract. */
 function dataVariants(surface: Surface): readonly string[] {
@@ -248,14 +249,10 @@ test('the walk covers the route table and names every surface', () => {
     expect(READY[surface.component], `${surface.path} renders ${surface.component}`).toBeDefined();
     expect(fillParams(surface.path, IDS), `${surface.path} has no corpus id`).not.toMatch(/:/);
   }
-  // A surface whose codes no corpus session holds could only be asserted as a refusal; it must
-  // fail here rather than drop out of the walk.
-  const uncovered = WALK.filter(({ grant }) => grant === undefined);
-  expect(uncovered.map(({ surface }) => surface.path)).toEqual([]);
   // The Settings index is a surface of its own when the session holds no tab, and it is the one
   // surface whose session cannot be derived from its guards.
   const noTabs = WALK.filter(({ surface }) => surface.component === 'SettingsNoTabsPage');
-  expect(noTabs.map(({ grant }) => grant?.query)).toEqual([SETTINGS_NO_TAB_GRANTS]);
+  expect(noTabs.map(({ grant }) => grant.query)).toEqual([SETTINGS_NO_TAB_GRANTS]);
 });
 
 for (const locale of LOCALES) {
@@ -264,9 +261,7 @@ for (const locale of LOCALES) {
       const errors = await installProbe(page);
       const path = withVariants(localePath(locale, fillParams(surface.path, IDS)), [
         // The wizard seed carries its own grant toggle, so a second one would be ambiguous.
-        ...(grant === undefined || surface.component === 'OnboardingShellComponent'
-          ? []
-          : [grant.query]),
+        ...(surface.component === 'OnboardingShellComponent' ? [] : [grant.query]),
         ...dataVariants(surface),
       ]);
       const response = await page.goto(path);
@@ -275,11 +270,10 @@ for (const locale of LOCALES) {
         `the document of ${path} carries the policy`,
       ).toContain("require-trusted-types-for 'script'");
 
-      const ready = grant === undefined ? 'app-forbidden-page' : READY[surface.component];
+      const ready = READY[surface.component];
       if (ready === undefined) throw new Error(`No readiness contract for ${surface.component}`);
       await expect(page.locator(ready), path).toBeVisible();
-      // A refused route lands on the refusal page, so only its pattern is asserted there.
-      if (grant !== undefined && REPLACES_HISTORY[surface.component] !== true) {
+      if (REPLACES_HISTORY[surface.component] !== true) {
         expect(new URL(page.url()).pathname, `${path} stayed on its own address`).toBe(
           localePath(locale, fillParams(surface.path, IDS)),
         );

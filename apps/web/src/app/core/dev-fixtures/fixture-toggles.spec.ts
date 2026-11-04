@@ -115,7 +115,7 @@ describe('fixture toggles (09.1.1-T12.1)', () => {
     });
 
     it.each([2 ** 53 - 1, 2 ** 53, 2 ** 53 + 2, 1e20])(
-      'clamps the whole value %p at and above 2^53 to the cap',
+      'clamps the whole value %p around and above 2^53 to the cap',
       (value) => {
         const toggles = togglesFor('');
         toggles.setLatency('listRuns', value);
