@@ -41,6 +41,10 @@ describe('LabelChip (FR-09-2/3/4)', () => {
     expect(candidate?.getAttribute('data-variant')).toBe('outline');
     expect(candidate?.classList.contains('whitespace-pre-wrap')).toBe(true);
     expect(candidate?.classList.contains('max-w-full')).toBe(true);
+    expect(candidate?.classList.contains('h-auto')).toBe(true);
+    expect(candidate?.classList.contains('min-h-[var(--eg-space-6)]')).toBe(true);
+    expect(candidate?.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
+    expect(candidate?.classList.contains('h-5')).toBe(false);
     expect(root.querySelector('[tabindex], [role="button"], [role="alert"]')).toBeNull();
   });
 

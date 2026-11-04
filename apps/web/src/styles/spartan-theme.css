@@ -71,10 +71,11 @@ html[data-theme='dark'] {
   --radius-xl: var(--eg-radius-lg);
   --radius-2xl: var(--eg-radius-lg);
   --radius-full: var(--eg-radius-pill);
-  --shadow-xs: var(--eg-elevation-0);
+  /* Bare `none` invalidates Tailwind's composed shadow list, including focus rings. */
+  --shadow-xs: 0 0 #0000;
   --shadow-sm: var(--eg-elevation-1);
-  --shadow-md: var(--eg-elevation-2);
-  --shadow-lg: var(--eg-elevation-2);
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
   --default-transition-duration: var(--eg-duration-fast);
   --default-transition-timing-function: var(--eg-ease);
 }

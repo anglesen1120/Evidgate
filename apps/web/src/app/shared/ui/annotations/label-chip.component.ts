@@ -1,5 +1,8 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { HlmBadge } from '@evidgate/ui/badge';
+import { hlm } from '@evidgate/ui/utils';
+
+import { IDENTITY_BADGE_CLASSES } from '../chips/badge-classes';
 
 export type LabelKind = 'flaky' | 'healed';
 export type HealingMode = 'shadow' | 'official';
@@ -61,7 +64,8 @@ export type HealingMode = 'shadow' | 'official';
           <code
             hlmBadge
             [variant]="'outline'"
-            class="candidate-hash min-w-0 max-w-full rounded-sm bg-secondary font-mono text-xs whitespace-pre-wrap wrap-anywhere"
+            class="candidate-hash"
+            [class]="candidateBadgeClasses"
             >{{ candidateHash() }}</code
           >
         } @else {
@@ -109,4 +113,8 @@ export class LabelChip {
   readonly mode = input<HealingMode>();
   /** Raw pre-healing failure, never rewritten or inferred from the candidate. */
   readonly originalFailure = input('');
+  protected readonly candidateBadgeClasses = hlm(
+    IDENTITY_BADGE_CLASSES,
+    'text-xs whitespace-pre-wrap',
+  );
 }

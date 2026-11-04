@@ -59,6 +59,7 @@ import {
   SETTINGS_NO_TAB_GRANTS,
   THEMES,
   UNKNOWN_ORG,
+  waitForDialogAnimations,
   withVariants,
   type ShellLocale,
 } from './support';
@@ -608,6 +609,7 @@ for (const locale of LOCALES) {
       await dialog.locator(SUBMIT).click();
       const conflict = page.locator(CONFLICT);
       await expect(conflict).toBeVisible();
+      await waitForDialogAnimations(page, CONFLICT);
       await expectNoA11yViolations(page, `Policy conflict dialog ${locale} ${theme}`);
       await expect(page.locator(SERVER_ERROR)).toHaveCount(0);
     });

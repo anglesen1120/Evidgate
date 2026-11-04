@@ -1,6 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmButton } from '@evidgate/ui/button';
+import { hlm } from '@evidgate/ui/utils';
+
+import { BADGE_CLASSES } from '../chips/badge-classes';
 
 /** Presentation data, not a wire response: href exists only when the caller has a real target. */
 export type MissingReason = {
@@ -28,7 +31,8 @@ export type MissingReason = {
             <code
               hlmBadge
               [variant]="'outline'"
-              class="reason-code me-(--eg-space-3) max-w-full font-mono text-xs whitespace-normal"
+              class="reason-code me-(--eg-space-3)"
+              [class]="reasonBadgeClasses"
               >{{ reason.code }}</code
             >
             @if (reason.href) {
@@ -58,6 +62,7 @@ export class MissingReasonList {
   /** Caller-supplied headings must already be localized. */
   readonly heading = input<string>();
   protected readonly listLabel = $localize`:@@shared.missing-reason-list.label:Missing evidence reasons`;
+  protected readonly reasonBadgeClasses = hlm(BADGE_CLASSES, 'font-mono text-xs font-normal');
 
   protected readonly safeReasons = computed(() =>
     this.reasons().map((reason) => {

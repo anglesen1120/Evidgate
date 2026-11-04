@@ -116,7 +116,6 @@ npm packages (direct dependencies/devDependencies, root + workspaces):
 | clsx | 2.1.1 | `engines.node >=6` | MIT | ✅ https://registry.npmjs.org/clsx/2.1.1 — Brain peer and Helm class composition; ADR-0011 |
 | class-variance-authority | 0.7.1 | no engines field | Apache-2.0 | ✅ https://registry.npmjs.org/class-variance-authority/0.7.1 — copied Helm variant definitions; ADR-0011 |
 | tailwind-merge | 3.7.0 | no engines field | MIT | ✅ https://registry.npmjs.org/tailwind-merge/3.7.0 — copied Helm class conflict resolution; ADR-0011 |
-| luxon | 3.7.2 | `engines.node >=12` | MIT | ✅ https://registry.npmjs.org/luxon/3.7.2 — non-optional Brain peer; no date primitive imported; ADR-0011 |
 | tw-animate-css | 1.4.0 | no engines field | MIT | ✅ https://registry.npmjs.org/tw-animate-css/1.4.0 — Brain peer and state animation utilities; ADR-0011 |
 | tailwindcss | 4.3.4 | no engines field; build-time only | MIT | ✅ https://registry.npmjs.org/tailwindcss/4.3.4 — Angular PostCSS route; ADR-0011 |
 | @tailwindcss/postcss | 4.3.4 | no engines field; build-time only | MIT | ✅ https://registry.npmjs.org/@tailwindcss/postcss/4.3.4 — Angular builder plugin; ADR-0011 |

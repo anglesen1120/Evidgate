@@ -28,7 +28,9 @@ The carried item **UI library evaluation ADR (S211)** needed a library decision,
 
 ### Dependencies and provenance
 
-✅ Exact direct versions and licences are registered in [ADR-0002](0002-compatibility-and-licence-matrix.md): Brain 1.9.0, clsx 2.1.1, class-variance-authority 0.7.1, tailwind-merge 3.7.0, Luxon 3.7.2, tw-animate-css 1.4.0, Tailwind/PostCSS packages above. Luxon is a non-optional Brain peer, not an invitation to import date components. No new direct package declares a `postinstall` script; installation used `--ignore-scripts`.
+Exact direct versions and licences are registered in [ADR-0002](0002-compatibility-and-licence-matrix.md): Brain 1.9.0, clsx 2.1.1, class-variance-authority 0.7.1, tailwind-merge 3.7.0, tw-animate-css 1.4.0, Tailwind/PostCSS packages above. [Brain's published metadata](https://registry.npmjs.org/@spartan-ng/brain/1.9.0) declares Luxon an optional peer; it is not installed directly because no adopted primitive imports it. No new direct package declares a `postinstall` script; installation used `--ignore-scripts`.
+
+`lightningcss` (MPL-2.0, unmodified, build-time only, never included in `dist`) is now also reached through [`@tailwindcss/node` 4.3.4](https://registry.npmjs.org/@tailwindcss/node/4.3.4) on the product build path; the existing licence-policy exception is left unchanged, and the owner may refresh its reason text, which still names only the vite/vitest path.
 
 ✅ Helm source and Vega sections came from the published [`@spartan-ng/cli@1.9.0` tarball](https://registry.npmjs.org/@spartan-ng/cli/1.9.0), following the official manual-copy route. The CLI is not a permanent project dependency. The copied MIT notice is `ui/LICENSE.spartan`. Fixed icon geometry came from `@ng-icons/lucide@33.4.0`; its Lucide/Feather notices are retained in `ui/icon/LICENSE`. Neither icon runtime package remains installed as a direct dependency.
 
@@ -94,7 +96,7 @@ Prior art read before implementation:
 Executed in the foundation worktree:
 
 - `npm install --workspace apps/web --save-exact --ignore-scripts ...` and matching dev-dependency installation completed without peer override flags.
-- `npm ls --workspace apps/web @spartan-ng/brain tailwindcss @tailwindcss/postcss clsx class-variance-authority tailwind-merge luxon tw-animate-css postcss --depth=0` exited 0 and showed all nine exact versions above.
+- The initial `npm ls --workspace apps/web @spartan-ng/brain tailwindcss @tailwindcss/postcss clsx class-variance-authority tailwind-merge luxon tw-animate-css postcss --depth=0` exited 0 with the nine pins then installed. Luxon was subsequently removed after confirming that Brain declares it optional and the adopted primitives do not import it.
 - `npx ng build --progress=false` ran once. It failed because `@evidgate/sdk` could not resolve in the fresh worktree, with cascading existing consumer errors. It also exposed three copied-source declaration problems (type-only `HlmCardConfig`, checkbox/radio `forwardRef`), corrected after the run. No Tailwind/PostCSS error was reported. ⚠️ This is not a successful final compilation, and the correction has not been re-built inside this slice.
 - ⚠️ Bundle-budget validation cannot claim a result without a successful current build. No before/after gzip numbers were fabricated. The orchestrator must build the workspace SDK, run the final web build and `node scripts/check-bundle-budget.mjs`.
 - Theme spec written at `apps/web/src/styles/spartan-theme.spec.ts`; not executed inside the implementation slice. Final QA owns its execution and primitive interaction/CSP coverage.

@@ -127,7 +127,14 @@ describe('MissingReasonList (FR-09-2/6)', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.reason')?.classList.contains('reason')).toBe(true);
     expect(root.querySelector('.reason-text')?.textContent).toBe(text);
-    expect(root.querySelector('code')?.textContent).toBe(code);
+    const badge = root.querySelector('code');
+    expect(badge?.textContent).toBe(code);
+    expect(badge?.classList.contains('h-auto')).toBe(true);
+    expect(badge?.classList.contains('min-h-[var(--eg-space-6)]')).toBe(true);
+    expect(badge?.classList.contains('whitespace-normal')).toBe(true);
+    expect(badge?.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
+    expect(badge?.classList.contains('max-w-full')).toBe(true);
+    expect(badge?.classList.contains('h-5')).toBe(false);
     expect(root.querySelector('a, [title]')).toBeNull();
   });
 

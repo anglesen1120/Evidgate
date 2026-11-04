@@ -1,7 +1,14 @@
 // Real-browser coverage for Brain's modal overlay, focus trap, dismissal and restoration.
 import { expect, test, type Page } from '@playwright/test';
 
-import { axeScan, axeViolations, localePath, LOCALES, THEMES } from './support';
+import {
+  axeScan,
+  axeViolations,
+  localePath,
+  LOCALES,
+  THEMES,
+  waitForDialogAnimations,
+} from './support';
 
 const OPENER = '[data-demo="conflict-opener"]';
 const DIALOG = '[role="dialog"]:has(hlm-dialog-content)';
@@ -139,7 +146,7 @@ for (const locale of LOCALES) {
       await expect(
         page
           .locator('app-ui-gallery')
-          .locator('xpath:ancestor-or-self::*[@aria-hidden="true"]')
+          .locator('xpath=ancestor-or-self::*[@aria-hidden="true"]')
           .first(),
       ).toBeAttached();
 
@@ -156,6 +163,7 @@ for (const locale of LOCALES) {
       test(`axe with the dialog open, ${theme}`, async ({ page }) => {
         await openGallery(page, locale, theme);
         await openDialog(page);
+        await waitForDialogAnimations(page, DIALOG);
 
         const results = await axeScan(page);
         const contrast = [...results.passes, ...results.incomplete].filter(

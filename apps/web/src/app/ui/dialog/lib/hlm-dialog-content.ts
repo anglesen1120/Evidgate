@@ -1,6 +1,6 @@
 import type { BooleanInput } from '@angular/cdk/coercion';
 import type { ComponentType } from '@angular/cdk/portal';
-import { NgComponentOutlet } from '@angular/common';
+import { NgComponentOutlet, NgTemplateOutlet } from '@angular/common';
 import {
   booleanAttribute,
   ChangeDetectionStrategy,
@@ -8,6 +8,8 @@ import {
   computed,
   inject,
   input,
+  Injector,
+  type TemplateRef,
 } from '@angular/core';
 import { HlmIcon } from '@evidgate/ui/icon';
 import { BrnDialogRef, injectBrnDialogContext } from '@spartan-ng/brain/dialog';
@@ -18,6 +20,7 @@ import { HlmDialogClose } from './hlm-dialog-close';
 
 type HlmDialogContentContext = {
   $component?: ComponentType<unknown>;
+  $template?: TemplateRef<unknown>;
   $dynamicComponentClass?: string;
   $showCloseButton?: boolean;
   $closeLabel?: string;
@@ -26,7 +29,7 @@ type HlmDialogContentContext = {
 @Component({
   selector: 'hlm-dialog-content',
   exportAs: 'hlmDialogContent',
-  imports: [NgComponentOutlet, HlmButton, HlmDialogClose, HlmIcon],
+  imports: [NgComponentOutlet, NgTemplateOutlet, HlmButton, HlmDialogClose, HlmIcon],
 
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
@@ -36,6 +39,12 @@ type HlmDialogContentContext = {
   template: `
     @if (component) {
       <ng-container [ngComponentOutlet]="component" />
+    } @else if (template) {
+      <ng-container
+        [ngTemplateOutlet]="template"
+        [ngTemplateOutletContext]="templateContext"
+        [ngTemplateOutletInjector]="templateInjector"
+      />
     } @else {
       <ng-content />
     }
@@ -73,6 +82,9 @@ export class HlmDialogContent {
   public readonly state = computed(() => this._dialogRef?.state() ?? 'closed');
 
   public readonly component = this._dialogContext?.$component;
+  public readonly template = this._dialogContext?.$template;
+  public readonly templateContext = { $implicit: this._dialogContext };
+  public readonly templateInjector = inject(Injector);
   private readonly _dynamicComponentClass = this._dialogContext?.$dynamicComponentClass;
 
   constructor() {

@@ -77,6 +77,29 @@ describe('Spartan theme contract', () => {
     }
   });
 
+  it.each([
+    ':root',
+    "html[data-theme='light']",
+    "html[data-theme='dark']",
+    ":root:not([data-theme='light'])",
+  ])('%s keeps every Tailwind shadow composable with focus rings', (selector) => {
+    const shadows = new Map<string, string>();
+    postcss.parse(theme).walkAtRules('theme', (rule) => {
+      rule.walkDecls(/^--shadow-/, (declaration) => {
+        shadows.set(declaration.prop, declaration.value);
+      });
+    });
+    const resolvedTokens = new Map([...rootTokens, ...declarations(tokens, selector)]);
+    expect(shadows.size).toBeGreaterThanOrEqual(4);
+    for (const [name, value] of shadows) {
+      const token = /^var\((--[a-z0-9-]+)\)$/.exec(value)?.[1];
+      const resolved = token ? resolvedTokens.get(token) : value;
+      expect(resolved, name).toBeDefined();
+      expect(resolved?.trim().toLowerCase(), name).not.toBe('none');
+    }
+    expect(shadows.get('--shadow-sm')).toBe('var(--eg-elevation-1)');
+  });
+
   it('rejects a raw value, a non-Evidgate reference and a missing token', () => {
     expect(invalidAliases(new Map([['--background', 'var(--eg-bg)']]), rootTokens)).toEqual([]);
     for (const value of ['red', 'var(--background)', 'var(--eg-not-defined)']) {

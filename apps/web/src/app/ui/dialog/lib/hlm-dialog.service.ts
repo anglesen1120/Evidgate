@@ -1,5 +1,5 @@
 import type { ComponentType } from '@angular/cdk/portal';
-import { inject, Injectable, type TemplateRef } from '@angular/core';
+import { inject, Injectable, TemplateRef } from '@angular/core';
 import {
   type BrnDialogOptions,
   type BrnDialogRef,
@@ -23,7 +23,7 @@ export class HlmDialogService {
   private readonly _brnDialogService = inject(BrnDialogService);
 
   public open<TResult = unknown, TContext = unknown>(
-    component: ComponentType<unknown> | TemplateRef<unknown>,
+    content: ComponentType<unknown> | TemplateRef<unknown>,
     options?: Partial<HlmDialogOptions<TContext>>,
   ): BrnDialogRef<TResult> {
     const mergedOptions = {
@@ -34,7 +34,8 @@ export class HlmDialogService {
       ],
       context: {
         ...(options?.context && typeof options.context === 'object' ? options.context : {}),
-        $component: component,
+        $component: content instanceof TemplateRef ? undefined : content,
+        $template: content instanceof TemplateRef ? content : undefined,
         $dynamicComponentClass: options?.contentClass,
         $showCloseButton: options?.showCloseButton,
         $closeLabel: options?.closeLabel,
