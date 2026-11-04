@@ -5,6 +5,16 @@ import type { IngestTokenView } from '@evidgate/sdk';
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 /**
+ * How long to wait for a boundary `next`, measured from `now`.
+ *
+ * A delay past the timer ceiling is clamped so the wait still happens, just in several capped
+ * steps; a boundary already behind `now` yields a negative delay, which a timer fires at once.
+ */
+export function boundaryDelayMs(next: number, now: number): number {
+  return Math.min(next - now, MAX_TIMEOUT_MS);
+}
+
+/**
  * The clock a credential panel reads, re-armed for the next boundary a status change lands on.
  *
  * A token's status is true only until it expires or its overlap ends, so the panel re-reads the
@@ -28,7 +38,7 @@ export class HealthBoundaryClock {
     this.clock.set(new Date(now));
     const next = nextBoundary(this.tokens(), now);
     if (next === Infinity) return;
-    this.timer = setTimeout(() => this.arm(), Math.min(next - now, MAX_TIMEOUT_MS));
+    this.timer = setTimeout(() => this.arm(), boundaryDelayMs(next, now));
   }
 
   /** Stops the timer; the clock keeps the time it last read. */
