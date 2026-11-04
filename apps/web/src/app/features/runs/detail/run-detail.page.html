@@ -39,7 +39,7 @@
       <p
         class="sr-only"
         role="status"
-        aria-live="polite"
+        [attr.aria-live]="'polite'"
         data-evidence-announcement
         [textContent]="evidenceAnnouncement()"
       ></p>
