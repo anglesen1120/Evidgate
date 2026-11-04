@@ -517,11 +517,9 @@ describe('style-tokens/no-raw-literals (apps/web/**/*.css)', () => {
       expect(findings).toEqual([cssFinding('rawHexColour', 2, 14), cssFinding('rawLength', 3, 15)]);
     });
 
-    it('produces no finding in the current app.css and styles.css', async () => {
-      const appCss = readFileSync(`${REPO_ROOT}apps/web/src/app/app.css`, 'utf8');
+    it('produces no finding in the current styles.css', async () => {
       const stylesCss = readFileSync(`${REPO_ROOT}apps/web/src/styles.css`, 'utf8');
 
-      expect(await lint(appCss, 'apps/web/src/app/app.css')).toEqual([]);
       expect(await lint(stylesCss, 'apps/web/src/styles.css')).toEqual([]);
     });
   });

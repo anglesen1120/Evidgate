@@ -34,6 +34,15 @@
         (retry)="retryAttempts()"
         (loadMore)="loadMoreAttempts()"
       />
+      <!-- One polite region for evidence updates, kept outside both tab panels: the Evidence panel
+           is hidden while the decision tab is active, and a hidden live region is never spoken. -->
+      <p
+        class="sr-only"
+        role="status"
+        [attr.aria-live]="'polite'"
+        data-evidence-announcement
+        [textContent]="evidenceAnnouncement()"
+      ></p>
       <div
         hlmTabs
         [tab]="detailTab()"
@@ -61,9 +70,13 @@
             {{ copy.decision }}
           </button>
         </div>
+        <!-- Brain hardcodes tabindex="0" on every panel and only hides the inactive one, so the
+             page binds the stop itself: the selected panel stays reachable when it renders no
+             control of its own, and the hidden panel leaves the Tab order. -->
         <div
           [hlmTabsContent]="'evidence'"
-          class="min-w-0 focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
+          [attr.tabindex]="detailTab() === 'evidence' ? 0 : -1"
+          class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
         >
           <app-evidence-panel
             [decision]="store.decision()"
@@ -85,7 +98,8 @@
         </div>
         <div
           [hlmTabsContent]="'decision'"
-          class="min-w-0 focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
+          [attr.tabindex]="detailTab() === 'decision' ? 0 : -1"
+          class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
         >
           <app-decision-view
             [decision]="store.decision()"

@@ -119,7 +119,8 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(page.locator('app-attempts-table button')).toHaveCount(0);
 
   // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, the arrow
-  // keys move inside the list, and the panel that follows is a stop of its own.
+  // keys move inside the list, and the selected panel is the next stop. The hidden panel leaves the
+  // order, so the walk never lands on it.
   await page.keyboard.press('Tab');
   const evidenceTab = page.getByRole('tab', { name: 'Evidence' });
   await expect(evidenceTab).toBeFocused();
@@ -127,14 +128,26 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   const decisionTab = page.getByRole('tab', { name: 'Latest live decision' });
   await expect(decisionTab).toBeFocused();
   await expect(decisionTab).toHaveAttribute('aria-selected', 'true');
+  const decisionPanel = page.getByRole('tabpanel');
+  await expect(decisionPanel).toHaveAttribute('tabindex', '0');
+  await expect(page.locator('[role="tabpanel"][hidden]')).toHaveAttribute('tabindex', '-1');
+  await page.keyboard.press('Tab');
+  await expect(decisionPanel).toBeFocused();
+  await expectFocusRing(decisionPanel, '2px');
+
+  // Back to evidence: selection and the roving tabindex follow the arrow in the render, and the
+  // panel stops change over with it.
+  await page.keyboard.press('Shift+Tab');
+  await expect(decisionTab).toBeFocused();
   await page.keyboard.press('ArrowLeft');
   await expect(evidenceTab).toBeFocused();
-  // Brain focuses immediately; selection and the roving tabindex follow in the render.
   await expect(evidenceTab).toHaveAttribute('aria-selected', 'true');
   await expect(decisionTab).toHaveAttribute('tabindex', '-1');
-
+  await expect(page.locator('[role="tabpanel"][hidden]')).toHaveAttribute('tabindex', '-1');
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('tabpanel')).toBeFocused();
+  const evidencePanel = page.getByRole('tabpanel');
+  await expect(evidencePanel).toBeFocused();
+  await expect(evidencePanel).toHaveAttribute('tabindex', '0');
 
   // The selected panel's revision picker is a combobox (the page is pinned to a frozen revision,
   // so it is a real stop of the walk), then the manifest panel's copy button ends the page.
@@ -149,6 +162,52 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('the selected tab panel is a stop of its own when the decision has no control', async ({
+  page,
+}) => {
+  await page.goto(
+    withVariants(
+      localePath(
+        'en',
+        `/dev/run-detail/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/runs/${FIRST_RUN}`,
+      ),
+      [
+        RUN_READ_GRANT,
+        '?fixture.variant.getRun=detail-ready',
+        '?fixture.variant.listRunAttempts=ok',
+        '?fixture.variant.getRunDecision=evaluated-fail-missing-shard',
+        // The decision was evaluated at revision 2, so pinning there raises no mismatch action.
+        '?evidence_revision=2',
+      ],
+    ),
+  );
+  await expect(page.locator('app-run-detail-page')).toHaveAttribute(
+    'data-run-detail-status',
+    'ready',
+  );
+  await page.getByRole('tab', { name: 'Evidence' }).focus();
+  await page.keyboard.press('ArrowRight');
+  const decision = page.getByRole('tab', { name: 'Latest live decision' });
+  await expect(decision).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-decision-mismatch]')).toHaveCount(0);
+  await expect(page.locator('app-decision-view a[href], app-decision-view button')).toHaveCount(0);
+
+  // With no control inside, the panel itself is the only stop between the tab list and the
+  // manifest panel; the hidden evidence panel is out of the order.
+  const panel = page.getByRole('tabpanel');
+  await expect(panel).toHaveCount(1);
+  await expect(panel).toHaveAttribute('tabindex', '0');
+  await expect(page.locator('[role="tabpanel"][hidden]')).toHaveAttribute('tabindex', '-1');
+  await page.keyboard.press('Tab');
+  await expect(panel).toBeFocused();
+  await expectFocusRing(panel, '2px');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Copy full manifest hash' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(panel).toBeFocused();
+  await expectNoA11yViolations(page, 'run detail, decision panel without controls');
 });
 
 test('a filter change keeps the focus that asked for it, and Clear restores the table order', async ({
