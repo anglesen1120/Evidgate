@@ -381,34 +381,6 @@ internal static class AiSettingsCalls
     /// <param name="fixture">The fixture.</param>
     /// <param name="world">The org.</param>
     /// <param name="roleCode">The built-in role code, or null for a member with no role.</param>
-    internal static async Task<Guid> AddMemberAsync(PostgresTenancyFixture fixture, World world, string? roleCode)
-    {
-        var user = Guid.CreateVersion7();
-        var membership = Guid.CreateVersion7();
-
-        await fixture.ExecuteAsync(
-            world.Database,
-            $"""
-            insert into public."user" (id, email) values ('{user}', 'member-{user:N}@example.test');
-            insert into public.membership (id, org_id, user_id, invited_email, status)
-            values ('{membership}', '{world.Org}', '{user}', 'member-{user:N}@example.test', 'active')
-            """);
-
-        if (roleCode is not null)
-        {
-            var role = await fixture.ScalarAsync<Guid>(
-                world.Database, $"select id from public.role where code = '{roleCode}' and org_id is null");
-            var granted = await RegistryApi.SendAsync(
-                world.Client,
-                HttpMethod.Post,
-                $"/v1/orgs/{world.Org}/memberships/{membership}/roles",
-                world.As,
-                new { role_id = role },
-                RegistryApi.NewKey());
-
-            granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
-        }
-
-        return user;
-    }
+    internal static Task<Guid> AddMemberAsync(PostgresTenancyFixture fixture, World world, string? roleCode) =>
+        RegistryApi.AddMemberAsync(fixture, world.Client, world.Database, world.Org, world.As, roleCode);
 }

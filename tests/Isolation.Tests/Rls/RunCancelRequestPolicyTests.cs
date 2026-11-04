@@ -79,8 +79,8 @@ public sealed class RunCancelRequestPolicyTests : HarnessTest
         RlsTableCatalog.MatchesUsing(policy, RlsTableCatalog.TenantPredicate).ShouldBeTrue(
             $"the USING clause must scope the read: {policy.Using}");
         policy.WithCheck.ShouldNotBeNullOrEmpty($"the WITH CHECK clause must scope the write: {policy.Using}");
-        RlsTableCatalog.Matches(policy, RlsTableCatalog.TenantPredicate).ShouldBeTrue(
-            $"both clauses must carry the tenant predicate (00 §5.4.7/T2)");
+        RlsTableCatalog.MatchesWithCheck(policy, RlsTableCatalog.TenantPredicate).ShouldBeTrue(
+            $"the WITH CHECK clause too — a scoped USING with 'with check (true)' leaves the write open: {policy.WithCheck}");
 
         var owner = policies
             .Where(candidate => candidate.Roles.Contains(OwnerRole, StringComparer.Ordinal))

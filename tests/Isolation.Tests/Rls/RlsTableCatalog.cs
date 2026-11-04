@@ -375,6 +375,14 @@ internal static class RlsTableCatalog
     internal static bool MatchesUsing(RlsPolicy policy, string predicate) =>
         policy.Using.Length > 0 && IsolationSelfCheck.MatchesPredicate(policy.Using, predicate);
 
+    /// <summary>
+    /// True when the policy's WITH CHECK clause carries the predicate. Checked separately from USING because a
+    /// policy may scope its read and leave the write open — <c>using (org_id = …) with check (true)</c> passes an
+    /// assertion written with <see cref="Matches"/>, which is the OR of the two clauses (00 §5.4.7/T2).
+    /// </summary>
+    internal static bool MatchesWithCheck(RlsPolicy policy, string predicate) =>
+        policy.WithCheck.Length > 0 && IsolationSelfCheck.MatchesPredicate(policy.WithCheck, predicate);
+
     /// <summary>True when either clause of the policy carries the predicate (the catalogue rule of 02 §4.5).</summary>
     internal static bool Matches(RlsPolicy policy, string predicate) =>
         MatchesUsing(policy, predicate)
