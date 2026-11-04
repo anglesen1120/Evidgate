@@ -5,6 +5,9 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { Mock } from 'vitest';
 
 import { CliQuickstartComponent, buildQuickstartSnippet } from './cli-quickstart.component';
+import cliManifest from '../../../../../../../packages/cli/package.json';
+
+const cliPin = `--package @evidgate/cli@${cliManifest.version}`;
 
 const token = { name: 'ci-main', prefix: 'egt_ab12cd' };
 const binding = { repository_full_name: 'example/widgets' };
@@ -121,8 +124,10 @@ describe('CliQuickstartComponent', () => {
     expect(text).toContain("export EVIDGATE_PROJECT='widgets'");
     expect(text).toContain('non-secret CI variables');
     expect(text).toContain('EVIDGATE_INGEST_TOKEN from your CI masked secret store');
-    expect(text).toContain('npx --yes --package @evidgate/cli -- evidgate auth login');
-    expect(text).toContain('evidgate quickstart --write .github/workflows/evidgate.yml');
+    expect(text).toContain(`npx --yes ${cliPin} -- evidgate auth login`);
+    expect(text).toContain(
+      `npx --yes ${cliPin} -- evidgate quickstart --write .github/workflows/evidgate.yml`,
+    );
     expect(text).not.toContain('EVIDGATE_INGEST_TOKEN=');
   });
 
@@ -282,5 +287,40 @@ describe('buildQuickstartSnippet', () => {
     });
     expect(text).toContain('# Ingest token: ci [201~main evil');
     expect([...text].filter((char) => char !== '\n' && /[\p{Cc}\p{Cf}]/u.test(char))).toEqual([]);
+  });
+
+  it('pins both npx commands to the published CLI package version', () => {
+    expect(cliManifest.version).toMatch(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/);
+    const text = buildQuickstartSnippet({ projectRef: 'widgets', token, binding });
+    const commands = text.split('\n').filter((line) => line.startsWith('npx '));
+    expect(commands).toHaveLength(2);
+    for (const command of commands) expect(command).toContain(`${cliPin} `);
+    expect(text).not.toContain('--package @evidgate/cli --');
+  });
+
+  it('drops control characters from the slug so it cannot start another command line', () => {
+    const hostile = buildQuickstartSnippet({
+      projectRef: 'pro\u0000ject\nrm -rf /\r\u007ftail\u0085\u2028\u2029',
+      token,
+      binding,
+    });
+    const lines = hostile.split('\n');
+    expect(lines).toContain("export EVIDGATE_PROJECT='projectrm -rf /tail'");
+    expect(lines).not.toContain('rm -rf /');
+    expect(lines.filter((line) => line.startsWith('npx '))).toHaveLength(2);
+    expect(hostile.split('\n')).toHaveLength(
+      buildQuickstartSnippet({ projectRef: 'widgets', token, binding }).split('\n').length,
+    );
+  });
+
+  it('keeps spaces, double quotes and shell metacharacters inside one quoted value', () => {
+    const text = buildQuickstartSnippet({
+      projectRef: 'my project "quoted" $(touch /tmp/x) `id` & ;',
+      token: null,
+      binding: null,
+    });
+    expect(text).toContain(
+      `export EVIDGATE_PROJECT='my project "quoted" $(touch /tmp/x) \`id\` & ;'`,
+    );
   });
 });
