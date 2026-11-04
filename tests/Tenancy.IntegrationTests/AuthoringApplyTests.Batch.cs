@@ -246,7 +246,7 @@ public sealed partial class AuthoringApplyTests
 
     /// <summary>
     /// AC7: the overlap is observable, not assumed. A transaction holds the selected change row, the apply blocks on
-    /// it (seen in <c>pg_locks</c>), and once the holder commits the apply lands on the committed row.
+    /// it (seen in <c>pg_blocking_pids</c>), and once the holder commits the apply lands on the committed row.
     /// </summary>
     [Fact]
     public async Task Apply_Concurrent_WaitsOnTheLockedChangeRow_ThenCompletes()
@@ -258,12 +258,13 @@ public sealed partial class AuthoringApplyTests
         var before = await CountVersionsAsync(world, item);
 
         await using var holder = await TenantScope.BeginAsync(world.OwnerConnectionString);
+        var holderPid = await holder.ScalarAsync<int>("select pg_backend_pid()");
         await holder.ScalarAsync<Guid>(
             "select id from public.authoring_change where id = @id for update",
             ("id", change));
 
         var apply = ApplyAsync(world, [change], etag);
-        await WaitForChangeRowWaiterAsync(world);
+        await WaitForChangeRowWaiterAsync(world, holderPid);
 
         // Blocked on the row, not failed: the lock the test holds is the one the handler waits for.
         apply.IsCompleted.ShouldBeFalse();

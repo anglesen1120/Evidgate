@@ -190,25 +190,28 @@ public sealed partial class AuthoringApplyTests
             ("title", "Pay with a saved card"));
 
     /// <summary>
-    /// Waits until some backend is blocked on the <c>authoring_change</c> relation: the observable proof that an apply
-    /// really overlapped the transaction under test, instead of a sleep that only hopes it did.
+    /// Waits until <paramref name="holderPid"/>'s backend is observed blocking another one: the observable proof that
+    /// an apply really overlapped the transaction under test, instead of a sleep that only hopes it did. A row lock's
+    /// waiter parks on the holder's transaction id, so <c>pg_locks</c> carries no relation for it; <c>pg_blocking_pids</c>
+    /// resolves that wait to the holder, and unlike <c>wait_event_type</c> it is not hidden for another role's backend.
+    /// Bounded by attempts, 25 ms apart.
     /// </summary>
     /// <param name="world">The test world.</param>
-    private static async Task WaitForChangeRowWaiterAsync(World world)
+    /// <param name="holderPid">The backend that holds the selected change row.</param>
+    private static async Task WaitForChangeRowWaiterAsync(World world, int holderPid)
     {
-        for (var attempt = 0; attempt < 120; attempt++)
+        for (var attempt = 0; attempt < 800; attempt++)
         {
             var waiting = await IntAsync(
                 world,
                 """
                 select count(*)::int
-                  from pg_locks l
-                  join pg_class c on c.oid = l.relation
-                  join pg_namespace n on n.oid = c.relnamespace
-                 where n.nspname = 'public' and c.relname = 'authoring_change'
-                   and l.database = (select oid from pg_database where datname = current_database())
-                   and not l.granted
-                """);
+                  from pg_stat_activity a
+                 where a.datname = current_database()
+                   and a.pid <> @holder
+                   and @holder = any(pg_blocking_pids(a.pid))
+                """,
+                ("holder", holderPid));
 
             if (waiting > 0)
             {
@@ -218,7 +221,7 @@ public sealed partial class AuthoringApplyTests
             await Task.Delay(25, TestContext.Current.CancellationToken);
         }
 
-        throw new InvalidOperationException("no backend ever waited on the authoring_change row");
+        throw new InvalidOperationException($"no backend was ever observed waiting on a lock held by backend {holderPid}");
     }
 
     /// <summary>A count as the owner connection: the version and row probes the routes cannot read back.</summary>

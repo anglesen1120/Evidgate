@@ -1,4 +1,5 @@
 using System.Net;
+using Evidgate.Modules.Authoring.Domain;
 using Shouldly;
 using Xunit;
 
@@ -66,12 +67,19 @@ public sealed partial class AuthoringApplyTests
         (await AuditCountAsync(world, "authoring.change.apply")).ShouldBe(1);
     }
 
-    /// <summary>Seeds <paramref name="count"/> live checklist items in one statement and answers their ids.</summary>
+    /// <summary>
+    /// Seeds <paramref name="count"/> live checklist items and their initial <c>create</c> version, the state the create
+    /// path leaves behind: the delete writer refuses a row whose new version does not extend its last version row plus
+    /// one, so an item without version 1 would refuse the whole batch instead of deleting it.
+    /// </summary>
     /// <param name="world">The test world.</param>
     /// <param name="count">How many items to seed.</param>
     private static async Task<Guid[]> SeedItemsAsync(World world, int count)
     {
         var ids = Enumerable.Range(0, count).Select(_ => Guid.CreateVersion7()).ToArray();
+        var snapshots = ids
+            .Select(id => new ChecklistItemSnapshot(world.Category, SeededTitle(id), null, "high", "active", 0))
+            .ToArray();
 
         await ExecuteAsync(
             world,
@@ -86,6 +94,29 @@ public sealed partial class AuthoringApplyTests
             ("project", world.Project),
             ("node", world.Category));
 
+        await ExecuteAsync(
+            world,
+            """
+            insert into public.authoring_version
+                   (id, org_id, project_id, entity_kind, entity_id, version_no, batch_id, change_kind, content,
+                    content_hash, source, reason)
+            select version_id, @org, @project, 'checklist_item', item, 1, @batch, 'create', content::jsonb,
+                   content_hash, 'manual', null
+              from unnest(@version_ids::uuid[], @ids::uuid[], @contents::text[], @hashes::text[])
+                   as v(version_id, item, content, content_hash)
+            """,
+            ("version_ids", ids.Select(_ => Guid.CreateVersion7()).ToArray()),
+            ("ids", ids),
+            ("contents", snapshots.Select(AuthoringContent.Serialize).ToArray()),
+            ("hashes", snapshots.Select(AuthoringHashes.ContentHash).ToArray()),
+            ("org", world.Org),
+            ("project", world.Project),
+            ("batch", Guid.CreateVersion7()));
+
         return ids;
     }
+
+    /// <summary>The title the seed's insert writes for an item: <c>'Seeded ' || id</c> as Postgres spells the uuid.</summary>
+    /// <param name="id">The item id.</param>
+    private static string SeededTitle(Guid id) => "Seeded " + id.ToString("D");
 }

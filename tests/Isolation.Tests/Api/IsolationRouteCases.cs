@@ -53,7 +53,8 @@ public sealed record ProbeRequest(HttpMethod Method, string Url, JsonNode? Body 
 /// <param name="Code">The envelope's <c>error.code</c>, or null.</param>
 /// <param name="Text">The body text.</param>
 /// <param name="Json">The parsed body, when it is JSON.</param>
-public sealed record ProbeResponse(int Status, string? Code, string Text, JsonElement? Json)
+/// <param name="ETag">The response <c>ETag</c> as served, quotes included, or null.</param>
+public sealed record ProbeResponse(int Status, string? Code, string Text, JsonElement? Json, string? ETag = null)
 {
     /// <summary>A 2xx status.</summary>
     public bool IsSuccess => Status is >= 200 and < 300;
@@ -467,13 +468,17 @@ public static class IsolationRouteCases
         // The pending-changes queue names a project in {p} and a real object of that project in its body: the queue
         // names an item, the detail and discard name a queued change, and the apply selection names that change.
         // A probe whose body carried the project id as its target would be refused by request validation rather
-        // than by tenancy and would prove nothing. The two write routes have no own control: a granted probe would
-        // queue a change or apply one.
+        // than by tenancy and would prove nothing. Both write routes prove their own project's request succeeds — 201
+        // for the queue and 200 for an apply of the change it queued — on the project's second item: a comment changes
+        // no item and writes no version, so the seeded change and every version tag the other controls send stay valid.
         ProjectCase("GET", "/v1/projects/{p}/authoring/changes", p => new(HttpMethod.Get,
             $"/v1/projects/{p}/authoring/changes?limit=1"), list: true, ownControl: true),
         ProjectBodyCase("POST", "/v1/projects/{p}/authoring/changes",
             p => QueueBody(p.Id, p.AuthoringItemId),
-            () => QueueBody(Guid.CreateVersion7(), Guid.CreateVersion7())),
+            () => QueueBody(Guid.CreateVersion7(), Guid.CreateVersion7()),
+            (route, w) => new(route, "own project queues a change answers 201", runner => runner.OwnObjectAsync(
+                route, "own project queues a change answers 201", OrgBAdmin(w),
+                QueueBody(w.Acme2.Projects[0].Id, w.Acme2.Projects[0].AuthoringSecondItemId), expectedStatus: 201))),
         ObjectCaseWith("GET", "/v1/projects/{p}/authoring/changes/{c}", p => [("queued change", p.AuthoringChangeId)],
             (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{id}"), (_, _) => [],
             own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{p.AuthoringChangeId}")),
@@ -482,7 +487,10 @@ public static class IsolationRouteCases
             own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/changes/{p.AuthoringChangeId}/discard")),
         ProjectBodyCase("POST", "/v1/projects/{p}/authoring/changes:apply",
             p => ApplyBody(p.Id, p.AuthoringChangeId),
-            () => ApplyBody(Guid.CreateVersion7(), Guid.CreateVersion7())),
+            () => ApplyBody(Guid.CreateVersion7(), Guid.CreateVersion7()),
+            (route, w) => new(route, "own project applies the change it queued answers 200", runner => runner.OwnQueuedApplyAsync(
+                route, "own project applies the change it queued answers 200", OrgBAdmin(w),
+                w.Acme2.Projects[0].Id, QueueBody(w.Acme2.Projects[0].Id, w.Acme2.Projects[0].AuthoringSecondItemId)))),
 
         // 13.2.1-T1: the project AI-settings edge. Every route names the project only, so the foreign-project probe is the
         // ordinary one; the save is a well-formed first save (If-Match "0" tags the default) and has no own control
@@ -1068,13 +1076,16 @@ public static class IsolationRouteCases
     /// A project route whose body names a real object of the project in <c>{p}</c>: <paramref name="own"/> builds that
     /// request and <paramref name="random"/> the control whose project and object are both fresh. <see cref="ProjectCase"/>
     /// cannot express it, because its request builder sees only a project id and a body would therefore have to name
-    /// the project itself — refused by request validation rather than by tenancy.
+    /// the project itself — refused by request validation rather than by tenancy. <paramref name="ownControl"/> adds the
+    /// route's positive control on the caller's own project, since a body reference has no other way to prove the
+    /// foreign probes reached the command instead of a validation error.
     /// </summary>
     private static RouteCase ProjectBodyCase(
         string method,
         string template,
         Func<IsolationProject, ProbeRequest> own,
-        Func<ProbeRequest> random) =>
+        Func<ProbeRequest> random,
+        Func<ApiRoute, IsolationWorld, RouteProbe>? ownControl = null) =>
         Case(
             method,
             template,
@@ -1086,6 +1097,11 @@ public static class IsolationRouteCases
                 probes.Add(new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
                     route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderCaller(w), RandomHeaderCaller(w),
                     own(w.Acme.Projects[0]))));
+                if (ownControl is not null)
+                {
+                    probes.Add(ownControl(route, w));
+                }
+
                 return probes;
             },
             (route, w) =>
@@ -2100,7 +2116,7 @@ public sealed class RouteProbeRunner
             // A non-JSON body (the audit export stream, a 204): judged by status and text only.
         }
 
-        return new ProbeResponse((int)response.StatusCode, code, text, json);
+        return new ProbeResponse((int)response.StatusCode, code, text, json, response.Headers.ETag?.ToString());
     }
 
     /// <summary>
@@ -2212,6 +2228,57 @@ public sealed class RouteProbeRunner
         }
 
         violations.AddRange(ForeignIdsIn(response.Text).Select(id => Describe(route, name, caller, $"{request} answered {response} carrying org-A id {id}")));
+        return violations;
+    }
+
+    /// <summary>
+    /// The apply's positive control, which has to build its own state: queue <paramref name="queue"/> in the caller's
+    /// own project (201), read that selection's batch ETag from the list route, then apply the queued change under the
+    /// tag the read served (200). A tag computed here would prove nothing about the route's own tag.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> OwnQueuedApplyAsync(ApiRoute route, string name, ProbeCaller caller, Guid project, ProbeRequest queue)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(caller);
+        ArgumentNullException.ThrowIfNull(queue);
+
+        var violations = new List<string>();
+        var queued = await SendAsync(caller, queue).ConfigureAwait(false);
+        violations.AddRange(ForeignIdsIn(queued.Text).Select(id => Describe(route, name, caller, $"{queue} answered {queued} carrying org-A id {id}")));
+
+        if (queued.Status != 201
+            || queued.Json is not { ValueKind: JsonValueKind.Object } queuedBody
+            || !queuedBody.TryGetProperty("change_id", out var changeIdElement)
+            || !changeIdElement.TryGetGuid(out var changeId))
+        {
+            violations.Add(Describe(route, name, caller, $"{queue} answered {queued}, expected 201 with a change_id (positive control): {Brief(queued)}"));
+            return violations;
+        }
+
+        var selectionUrl = string.Create(CultureInfo.InvariantCulture, $"/v1/projects/{project:D}/authoring/changes?ids={changeId:D}");
+        var selection = await SendAsync(caller, new ProbeRequest(HttpMethod.Get, selectionUrl)).ConfigureAwait(false);
+        violations.AddRange(ForeignIdsIn(selection.Text).Select(id => Describe(route, name, caller, $"GET {selectionUrl} answered {selection} carrying org-A id {id}")));
+
+        if (selection.Status != 200 || selection.ETag is null)
+        {
+            violations.Add(Describe(route, name, caller, $"GET {selectionUrl} answered {selection} without a batch ETag (positive control): {Brief(selection)}"));
+            return violations;
+        }
+
+        var apply = await SendAsync(
+            caller,
+            new ProbeRequest(
+                HttpMethod.Post,
+                string.Create(CultureInfo.InvariantCulture, $"/v1/projects/{project:D}/authoring/changes:apply"),
+                new JsonObject { ["change_ids"] = new JsonArray { changeId } },
+                selection.ETag)).ConfigureAwait(false);
+
+        if (apply.Status != 200)
+        {
+            violations.Add(Describe(route, name, caller, $"applying {changeId:D} under {selection.ETag} answered {apply}, expected 200 (positive control): {Brief(apply)}"));
+        }
+
+        violations.AddRange(ForeignIdsIn(apply.Text).Select(id => Describe(route, name, caller, $"applying {changeId:D} answered {apply} carrying org-A id {id}")));
         return violations;
     }
 
