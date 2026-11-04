@@ -84,7 +84,7 @@ public sealed partial class AuthoringChangeTests
     {
         await using var world = await StartAsync(3);
 
-        var merge = await QueueAsync(world, world.Items[1], "merge", MergeJson(world.Items[0], world.Items[1]));
+        var merge = await QueueAsync(world, world.Items[1], "merge", MergeJson(world.Items[1], world.Items[0]));
         merge.Status.ShouldBe(HttpStatusCode.Created, merge.ErrorMessage);
 
         var stored = await fixture.ScalarAsync<string>(

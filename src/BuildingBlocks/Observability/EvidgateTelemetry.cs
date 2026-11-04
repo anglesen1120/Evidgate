@@ -404,11 +404,19 @@ public static class EvidgateTelemetry
     /// <summary>Histogram of how many changes one committed apply carried.</summary>
     public const string AuthoringChangeApplyBatchSizeMetricName = "evidgate_authoring_apply_batch_size";
 
-    private static readonly Histogram<int> AuthoringChangeApplyBatchSizes = Meter.CreateHistogram<int>(
+    /// <remarks>
+    /// The instrument counts in <see cref="long"/>, like every other count in this class: integral counts are the
+    /// unit the exporters and dashboards read, and every reader of the platform's meters subscribes to int64
+    /// measurements. A <see cref="MeterListener"/> is the sharpest case — it receives exactly the value types whose
+    /// callbacks it registered, so a listener that watches <c>long</c> and <c>double</c> (the two an exporter binds)
+    /// never sees a measurement of an instrument typed <see cref="int"/>. Keeping the instrument int64 and letting
+    /// the call site pass an <see cref="int"/> costs nothing, because the conversion is implicit.
+    /// </remarks>
+    private static readonly Histogram<long> AuthoringChangeApplyBatchSizes = Meter.CreateHistogram<long>(
         AuthoringChangeApplyBatchSizeMetricName,
         unit: "{change}",
         description: "Changes carried by one committed apply. No labels: batches are compared as a distribution, which answers \"do maintainers batch\" without storing a selection.",
-        advice: new InstrumentAdvice<int>
+        advice: new InstrumentAdvice<long>
         {
             HistogramBucketBoundaries = [1, 2, 3, 5, 8, 13, 20, 50, 100, 200],
         });

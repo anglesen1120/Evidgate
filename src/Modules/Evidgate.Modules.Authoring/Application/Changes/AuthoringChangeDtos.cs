@@ -9,7 +9,7 @@ namespace Evidgate.Modules.Authoring.Application.Changes;
 /// <param name="State">Always <c>pending</c> on this answer.</param>
 /// <param name="BaseVersion">The target item's version when the change was queued.</param>
 /// <param name="CreatedAt">The store's instant.</param>
-internal sealed record QueuedChange(
+internal sealed record QueuedAuthoringChangeResponse(
     Guid ChangeId,
     string State,
     int BaseVersion,
@@ -64,7 +64,7 @@ internal sealed record AuthoringChangeListItem(
 /// <param name="Items">The page's rows, ordered <c>(created_at, id)</c> ascending.</param>
 /// <param name="NextCursor">The cursor of the next page, or null on the last one.</param>
 /// <param name="Etag">The batch ETag over the selection's affected items, or null for a filtered page.</param>
-internal sealed record AuthoringChangePage(
+internal sealed record AuthoringChangePageResponse(
     IReadOnlyList<AuthoringChangeListItem> Items,
     string? NextCursor,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Etag);
@@ -85,7 +85,7 @@ internal sealed record AuthoringChangePage(
 /// <param name="AppliedBatchId">The batch it was applied in, or null.</param>
 /// <param name="DiscardedAt">When it was discarded, or null.</param>
 /// <param name="Version">The row's lifecycle version.</param>
-internal sealed record AuthoringChangeView(
+internal sealed record AuthoringChangeDetailResponse(
     Guid ChangeId,
     string TargetKind,
     Guid TargetId,

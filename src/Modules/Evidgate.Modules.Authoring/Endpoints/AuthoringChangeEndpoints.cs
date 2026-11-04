@@ -42,12 +42,12 @@ internal static class AuthoringChangeEndpoints
         ArgumentNullException.ThrowIfNull(authoring);
 
         authoring.MapGet("/changes", ListAsync)
-            .Produces<AuthoringChangePage>(StatusCodes.Status200OK)
+            .Produces<AuthoringChangePageResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .WithSummary("Keyset page of a project's queued authoring changes");
 
         authoring.MapPost("/changes", QueueAsync)
-            .Produces<QueuedChange>(StatusCodes.Status201Created)
+            .Produces<QueuedAuthoringChangeResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound)
@@ -58,12 +58,12 @@ internal static class AuthoringChangeEndpoints
             .WithSummary("Queue a comment, delete, merge or split on a checklist item");
 
         authoring.MapGet("/changes/{c}", GetAsync)
-            .Produces<AuthoringChangeView>(StatusCodes.Status200OK)
+            .Produces<AuthoringChangeDetailResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound)
             .WithSummary("One queued change, with the ETag an apply sends back");
 
         authoring.MapPost("/changes/{c}/discard", DiscardAsync)
-            .Produces<DiscardedAuthoringChange>(StatusCodes.Status200OK)
+            .Produces<DiscardedAuthoringChangeResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict)
@@ -71,7 +71,7 @@ internal static class AuthoringChangeEndpoints
             .WithSummary("Discard one pending change; the state is the precondition");
 
         authoring.MapPost("/changes:apply", ApplyAsync)
-            .Produces<ApplyAuthoringChangesResult>(StatusCodes.Status200OK)
+            .Produces<ApplyAuthoringChangesResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict)
@@ -83,7 +83,7 @@ internal static class AuthoringChangeEndpoints
     }
 
     /// <summary>The page: filters, an optional selection and the keyset cursor.</summary>
-    private static async Task<Result<AuthoringChangePage>> ListAsync(
+    private static async Task<Result<AuthoringChangePageResponse>> ListAsync(
         Guid p,
         HttpContext context,
         IMediator mediator,
@@ -93,17 +93,17 @@ internal static class AuthoringChangeEndpoints
 
         if (AuthoringEndpointSupport.LimitError(context.Request.Query["limit"], out var limit) is { } limitError)
         {
-            return Result.Failure<AuthoringChangePage>(limitError);
+            return Result.Failure<AuthoringChangePageResponse>(limitError);
         }
 
         if (AuthoringEndpointText.OptionalId(context.Request.Query, "target_id", out var targetId) is { } targetError)
         {
-            return Result.Failure<AuthoringChangePage>(targetError);
+            return Result.Failure<AuthoringChangePageResponse>(targetError);
         }
 
         if (OptionalIds(context.Request.Query, out var ids) is { } idsError)
         {
-            return Result.Failure<AuthoringChangePage>(idsError);
+            return Result.Failure<AuthoringChangePageResponse>(idsError);
         }
 
         var result = await mediator.Send(
@@ -126,7 +126,7 @@ internal static class AuthoringChangeEndpoints
     }
 
     /// <summary>The queue write: 201 with the change's identity and the target version it read.</summary>
-    private static async Task<Result<QueuedChange>> QueueAsync(
+    private static async Task<Result<QueuedAuthoringChangeResponse>> QueueAsync(
         Guid p,
         HttpContext context,
         IMediator mediator,
@@ -140,7 +140,7 @@ internal static class AuthoringChangeEndpoints
 
         if (bodyError is not null)
         {
-            return Result.Failure<QueuedChange>(bodyError);
+            return Result.Failure<QueuedAuthoringChangeResponse>(bodyError);
         }
 
         var result = await mediator.Send(
@@ -159,7 +159,7 @@ internal static class AuthoringChangeEndpoints
     }
 
     /// <summary>The detail read: the change plus the <c>ETag</c> its row version carries.</summary>
-    private static async Task<Result<AuthoringChangeView>> GetAsync(
+    private static async Task<Result<AuthoringChangeDetailResponse>> GetAsync(
         Guid p,
         Guid c,
         HttpContext context,
@@ -179,7 +179,7 @@ internal static class AuthoringChangeEndpoints
     }
 
     /// <summary>The discard write: no <c>If-Match</c>, because the state is the precondition.</summary>
-    private static async Task<Result<DiscardedAuthoringChange>> DiscardAsync(
+    private static async Task<Result<DiscardedAuthoringChangeResponse>> DiscardAsync(
         Guid p,
         Guid c,
         HttpContext context,
@@ -194,7 +194,7 @@ internal static class AuthoringChangeEndpoints
     }
 
     /// <summary>The apply write: the selection and the batch tag, in one transaction on the handler's side.</summary>
-    private static async Task<Result<ApplyAuthoringChangesResult>> ApplyAsync(
+    private static async Task<Result<ApplyAuthoringChangesResponse>> ApplyAsync(
         Guid p,
         HttpContext context,
         IMediator mediator,
@@ -206,7 +206,7 @@ internal static class AuthoringChangeEndpoints
 
         if (bodyError is not null)
         {
-            return Result.Failure<ApplyAuthoringChangesResult>(bodyError);
+            return Result.Failure<ApplyAuthoringChangesResponse>(bodyError);
         }
 
         // The header is passed through as sent: the command owns the tag grammar, the 422 `/If-Match` and the 412,
@@ -216,7 +216,7 @@ internal static class AuthoringChangeEndpoints
 
         if (selectionError is not null)
         {
-            return Result.Failure<ApplyAuthoringChangesResult>(selectionError);
+            return Result.Failure<ApplyAuthoringChangesResponse>(selectionError);
         }
 
         return await mediator.Send(

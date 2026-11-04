@@ -34,7 +34,7 @@ internal sealed record ListAuthoringChangesQuery(
     Guid? TargetId,
     IReadOnlyList<Guid>? Ids,
     string? Cursor,
-    int Limit) : IQuery<Result<AuthoringChangePage>>;
+    int Limit) : IQuery<Result<AuthoringChangePageResponse>>;
 
 /// <summary>
 /// Handler of <see cref="ListAuthoringChangesQuery"/>: one keyset statement on the shared-database read scope. The
@@ -51,7 +51,7 @@ internal sealed class ListAuthoringChangesQueryHandler(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
-    IRequestTenantContextAccessor tenant) : IQueryHandler<ListAuthoringChangesQuery, Result<AuthoringChangePage>>
+    IRequestTenantContextAccessor tenant) : IQueryHandler<ListAuthoringChangesQuery, Result<AuthoringChangePageResponse>>
 {
     /// <summary>The closed state set the table's CHECK mirrors.</summary>
     private static readonly string[] States = ["pending", "applied", "discarded"];
@@ -63,7 +63,7 @@ internal sealed class ListAuthoringChangesQueryHandler(
     private static readonly Guid FirstPageId = Guid.Empty;
 
     /// <inheritdoc />
-    public async ValueTask<Result<AuthoringChangePage>> Handle(
+    public async ValueTask<Result<AuthoringChangePageResponse>> Handle(
         ListAuthoringChangesQuery query,
         CancellationToken cancellationToken)
     {
@@ -73,12 +73,12 @@ internal sealed class ListAuthoringChangesQueryHandler(
 
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
         {
-            return Result.Failure<AuthoringChangePage>(scopeError);
+            return Result.Failure<AuthoringChangePageResponse>(scopeError);
         }
 
         if (Filters(query) is { } filterError)
         {
-            return Result.Failure<AuthoringChangePage>(filterError);
+            return Result.Failure<AuthoringChangePageResponse>(filterError);
         }
 
         var cursorCreatedAt = FirstPageCreatedAt;
@@ -87,7 +87,7 @@ internal sealed class ListAuthoringChangesQueryHandler(
         if (query.Cursor is { Length: > 0 } rawCursor
             && !AuthoringVersionCursor.TryDecode(rawCursor, out cursorCreatedAt, out cursorId))
         {
-            return Result.Failure<AuthoringChangePage>(Error.Invalid(
+            return Result.Failure<AuthoringChangePageResponse>(Error.Invalid(
                 "the cursor is not a value this endpoint issued",
                 [new ErrorDetail("/cursor", "malformed")]));
         }
@@ -99,7 +99,7 @@ internal sealed class ListAuthoringChangesQueryHandler(
                 new { org_id = orgId, project_id = query.ProjectId },
                 cancellationToken).ConfigureAwait(false) is null)
         {
-            return Result.Failure<AuthoringChangePage>(AuthoringRules.ProjectNotFound);
+            return Result.Failure<AuthoringChangePageResponse>(AuthoringRules.ProjectNotFound);
         }
 
         return query.Ids is { } ids
@@ -145,7 +145,7 @@ internal sealed class ListAuthoringChangesQueryHandler(
     }
 
     /// <summary>The filtered keyset page: one statement, one row of look-ahead to tell a full page from the last.</summary>
-    private static async ValueTask<Result<AuthoringChangePage>> PageAsync(
+    private static async ValueTask<Result<AuthoringChangePageResponse>> PageAsync(
         ITenantDb db,
         Guid orgId,
         ListAuthoringChangesQuery query,
@@ -177,7 +177,7 @@ internal sealed class ListAuthoringChangesQueryHandler(
             items.Add(AuthoringChangeJson.Item(rows[index], stale: null));
         }
 
-        return Result.Success(new AuthoringChangePage(
+        return Result.Success(new AuthoringChangePageResponse(
             items,
             hasMore ? AuthoringVersionCursor.Encode(rows[size - 1].CreatedAt, rows[size - 1].ChangeId) : null,
             Etag: null));
@@ -188,7 +188,7 @@ internal sealed class ListAuthoringChangesQueryHandler(
     /// name, and the two figures only this shape can answer — the batch ETag over those versions and each change's
     /// <c>stale</c> flag.
     /// </summary>
-    private static async ValueTask<Result<AuthoringChangePage>> SelectionAsync(
+    private static async ValueTask<Result<AuthoringChangePageResponse>> SelectionAsync(
         ITenantDb db,
         Guid orgId,
         ListAuthoringChangesQuery query,
@@ -219,7 +219,7 @@ internal sealed class ListAuthoringChangesQueryHandler(
             items.Add(AuthoringChangeJson.Item(row, moved));
         }
 
-        return Result.Success(new AuthoringChangePage(
+        return Result.Success(new AuthoringChangePageResponse(
             items,
             NextCursor: null,
             AuthoringHashes.OrderHash(current.Select(pair => (pair.Key, pair.Value)))));
@@ -229,7 +229,7 @@ internal sealed class ListAuthoringChangesQueryHandler(
 /// <summary>One change by id (<c>GET /v1/projects/{p}/authoring/changes/{c}</c>); a foreign id is the same 404 as a random one.</summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="ChangeId">The change from the route.</param>
-internal sealed record GetAuthoringChangeQuery(Guid ProjectId, Guid ChangeId) : IQuery<Result<AuthoringChangeView>>;
+internal sealed record GetAuthoringChangeQuery(Guid ProjectId, Guid ChangeId) : IQuery<Result<AuthoringChangeDetailResponse>>;
 
 /// <summary>Handler of <see cref="GetAuthoringChangeQuery"/>: one row of this project, with the payload echoed and the row's own version as the <c>ETag</c>.</summary>
 /// <param name="db">The tenant-scoped data access.</param>
@@ -241,10 +241,10 @@ internal sealed class GetAuthoringChangeQueryHandler(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
-    IRequestTenantContextAccessor tenant) : IQueryHandler<GetAuthoringChangeQuery, Result<AuthoringChangeView>>
+    IRequestTenantContextAccessor tenant) : IQueryHandler<GetAuthoringChangeQuery, Result<AuthoringChangeDetailResponse>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<AuthoringChangeView>> Handle(
+    public async ValueTask<Result<AuthoringChangeDetailResponse>> Handle(
         GetAuthoringChangeQuery query,
         CancellationToken cancellationToken)
     {
@@ -254,7 +254,7 @@ internal sealed class GetAuthoringChangeQueryHandler(
 
         if (AuthoringRules.Project(query.ProjectId, principals, tenant) is { } scopeError)
         {
-            return Result.Failure<AuthoringChangeView>(scopeError);
+            return Result.Failure<AuthoringChangeDetailResponse>(scopeError);
         }
 
         var row = await db.QuerySingleOrDefaultAsync<AuthoringChangeSql.ChangeRow>(
@@ -263,7 +263,7 @@ internal sealed class GetAuthoringChangeQueryHandler(
             cancellationToken).ConfigureAwait(false);
 
         return row is null
-            ? Result.Failure<AuthoringChangeView>(AuthoringErrors.NotFound("no pending change with that id is visible in this project"))
+            ? Result.Failure<AuthoringChangeDetailResponse>(AuthoringErrors.NotFound("no pending change with that id is visible in this project"))
             : Result.Success(AuthoringChangeJson.View(row));
     }
 }

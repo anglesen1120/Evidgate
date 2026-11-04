@@ -27,7 +27,7 @@ public sealed partial class AuthoringChangeTests(PostgresTenancyFixture fixture)
         var comment = await QueueAsync(world, world.Items[0], "comment", """{"body":"Needs a screenshot"}""");
         var deletion = await QueueAsync(world, world.Items[1], "delete", "{}");
         var merge = await QueueAsync(
-            world, world.Items[3], "merge", MergeJson(world.Items[2], world.Items[3]));
+            world, world.Items[3], "merge", MergeJson(world.Items[3], world.Items[2]));
         var split = await QueueAsync(world, world.Items[4], "split", SplitJson("Log in", "Log out"));
 
         foreach (var answer in new[] { comment, deletion, merge, split })
@@ -98,7 +98,7 @@ public sealed partial class AuthoringChangeTests(PostgresTenancyFixture fixture)
     public async Task Queue_OverAnOverlappingPendingStructuralChange_Is409()
     {
         await using var world = await StartAsync(3);
-        (await QueueAsync(world, world.Items[2], "merge", MergeJson(world.Items[1], world.Items[2])))
+        (await QueueAsync(world, world.Items[2], "merge", MergeJson(world.Items[2], world.Items[1])))
             .Status.ShouldBe(HttpStatusCode.Created);
 
         // A merge covers both its survivor and its sources, so a delete of either target is refused.
@@ -268,7 +268,8 @@ public sealed partial class AuthoringChangeTests(PostgresTenancyFixture fixture)
         RowIds(next).Intersect(RowIds(first)).ShouldBeEmpty();
 
         AssertInvalid(await ListAsync(world, "?state=bogus"), "/state", "invalid");
-        AssertInvalid(await ListAsync(world, "?limit=201"), "/limit", "invalid");
+        // The page size is read by the shared paging helper, which blames a value outside 1..200 as a range problem.
+        AssertInvalid(await ListAsync(world, "?limit=201"), "/limit", "out_of_range");
         AssertInvalid(await ListAsync(world, "?cursor=not-a-cursor"), "/cursor", "malformed");
         AssertInvalid(
             await ListAsync(world, $"?ids={queued[0]:D}&state=pending"),
@@ -281,7 +282,7 @@ public sealed partial class AuthoringChangeTests(PostgresTenancyFixture fixture)
     {
         await using var world = await StartAsync(3);
         var comment = (await QueueAsync(world, world.Items[0], "comment", """{"body":"note"}""")).Id("change_id");
-        var merge = (await QueueAsync(world, world.Items[2], "merge", MergeJson(world.Items[1], world.Items[2])))
+        var merge = (await QueueAsync(world, world.Items[2], "merge", MergeJson(world.Items[2], world.Items[1])))
             .Id("change_id");
         var url = $"?ids={comment:D}&ids={merge:D}";
 

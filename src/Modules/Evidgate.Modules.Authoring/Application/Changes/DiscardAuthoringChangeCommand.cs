@@ -26,7 +26,7 @@ namespace Evidgate.Modules.Authoring.Application.Changes;
 internal sealed record DiscardAuthoringChangeCommand(
     Guid ProjectId,
     Guid ChangeId,
-    string IdempotencyKey) : ICommand<Result<DiscardedAuthoringChange>>, IIdempotentCommand;
+    string IdempotencyKey) : ICommand<Result<DiscardedAuthoringChangeResponse>>, IIdempotentCommand;
 
 /// <summary>
 /// Handler of <see cref="DiscardAuthoringChangeCommand"/>. The row state is the whole precondition, so there is no
@@ -41,10 +41,10 @@ internal sealed class DiscardAuthoringChangeCommandHandler(
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant,
     IAuditTrail audit)
-    : ICommandHandler<DiscardAuthoringChangeCommand, Result<DiscardedAuthoringChange>>
+    : ICommandHandler<DiscardAuthoringChangeCommand, Result<DiscardedAuthoringChangeResponse>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<DiscardedAuthoringChange>> Handle(
+    public async ValueTask<Result<DiscardedAuthoringChangeResponse>> Handle(
         DiscardAuthoringChangeCommand command,
         CancellationToken cancellationToken)
     {
@@ -54,7 +54,7 @@ internal sealed class DiscardAuthoringChangeCommandHandler(
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
         {
-            return Result.Failure<DiscardedAuthoringChange>(scopeError);
+            return Result.Failure<DiscardedAuthoringChangeResponse>(scopeError);
         }
 
         var orgId = scopes.Require().OrgId;
@@ -62,13 +62,13 @@ internal sealed class DiscardAuthoringChangeCommandHandler(
         if (await AuthoringProjectProbe.MissingAsync(db, orgId, command.ProjectId, cancellationToken).ConfigureAwait(false)
             is { } missingProject)
         {
-            return Result.Failure<DiscardedAuthoringChange>(missingProject);
+            return Result.Failure<DiscardedAuthoringChangeResponse>(missingProject);
         }
 
         if (await AuthoringRequestScope.ActorMembershipAsync(db, orgId, principals, cancellationToken).ConfigureAwait(false)
             is not { } actor)
         {
-            return Result.Failure<DiscardedAuthoringChange>(
+            return Result.Failure<DiscardedAuthoringChangeResponse>(
                 Error.Forbidden("discarding a pending change needs an active membership in this organization"));
         }
 
@@ -82,7 +82,7 @@ internal sealed class DiscardAuthoringChangeCommandHandler(
 
             if (state is null)
             {
-                return Result.Failure<DiscardedAuthoringChange>(
+                return Result.Failure<DiscardedAuthoringChangeResponse>(
                     AuthoringErrors.NotFound("no change with that id is visible in this project"));
             }
 
@@ -90,7 +90,7 @@ internal sealed class DiscardAuthoringChangeCommandHandler(
             // discard after apply are the same answer and the row keeps its row (state and stamps) unchanged.
             if (!string.Equals(state, AuthoringChangeStates.WireName(AuthoringChangeState.Pending), StringComparison.Ordinal))
             {
-                return Result.Failure<DiscardedAuthoringChange>(Error.Conflict(
+                return Result.Failure<DiscardedAuthoringChangeResponse>(Error.Conflict(
                     ApiErrorCode.InvalidTransition,
                     "this change was already applied or discarded",
                     [new ErrorDetail("/change_id", "change_not_pending")]));
@@ -108,14 +108,14 @@ internal sealed class DiscardAuthoringChangeCommandHandler(
                     ["outcome"] = AuthoringChangeStates.WireName(AuthoringChangeState.Discarded),
                 }));
 
-            return Result.Success(new DiscardedAuthoringChange(
+            return Result.Success(new DiscardedAuthoringChangeResponse(
                 command.ChangeId,
                 AuthoringChangeStates.WireName(AuthoringChangeState.Discarded),
                 discardedAt));
         }
         catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
         {
-            return Result.Failure<DiscardedAuthoringChange>(AuthoringErrors.Unavailable());
+            return Result.Failure<DiscardedAuthoringChangeResponse>(AuthoringErrors.Unavailable());
         }
     }
 }

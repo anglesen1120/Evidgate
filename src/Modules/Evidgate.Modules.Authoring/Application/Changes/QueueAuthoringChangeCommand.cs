@@ -33,7 +33,7 @@ namespace Evidgate.Modules.Authoring.Application.Changes;
 internal sealed record QueueAuthoringChangeCommand(
     Guid ProjectId,
     JsonElement Body,
-    string IdempotencyKey) : ICommand<Result<QueuedChange>>, IIdempotentCommand;
+    string IdempotencyKey) : ICommand<Result<QueuedAuthoringChangeResponse>>, IIdempotentCommand;
 
 /// <summary>
 /// The validated queue request the database half works from: the root members the schema and the shape rules accepted,
@@ -78,10 +78,10 @@ internal sealed class QueueAuthoringChangeCommandHandler(
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant,
     Lazy<ContractSchemaSet> schemas,
-    IAuditTrail audit) : ICommandHandler<QueueAuthoringChangeCommand, Result<QueuedChange>>
+    IAuditTrail audit) : ICommandHandler<QueueAuthoringChangeCommand, Result<QueuedAuthoringChangeResponse>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<QueuedChange>> Handle(
+    public async ValueTask<Result<QueuedAuthoringChangeResponse>> Handle(
         QueueAuthoringChangeCommand command,
         CancellationToken cancellationToken)
     {
@@ -91,13 +91,13 @@ internal sealed class QueueAuthoringChangeCommandHandler(
 
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
         {
-            return Result.Failure<QueuedChange>(scopeError);
+            return Result.Failure<QueuedAuthoringChangeResponse>(scopeError);
         }
 
         var (request, refusal) = Prepare(command);
         if (refusal is not null)
         {
-            return Result.Failure<QueuedChange>(refusal);
+            return Result.Failure<QueuedAuthoringChangeResponse>(refusal);
         }
 
         if (request is null)
@@ -111,7 +111,7 @@ internal sealed class QueueAuthoringChangeCommandHandler(
         }
         catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
         {
-            return Result.Failure<QueuedChange>(AuthoringErrors.Unavailable());
+            return Result.Failure<QueuedAuthoringChangeResponse>(AuthoringErrors.Unavailable());
         }
     }
 
@@ -177,7 +177,7 @@ internal sealed class QueueAuthoringChangeCommandHandler(
     /// <param name="request">The validated request.</param>
     /// <param name="audit">The audit buffer the pipeline appends just before commit.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    private async ValueTask<Result<QueuedChange>> QueueAsync(
+    private async ValueTask<Result<QueuedAuthoringChangeResponse>> QueueAsync(
         Guid projectId,
         QueueRequest request,
         IAuditTrail audit,
@@ -190,7 +190,7 @@ internal sealed class QueueAuthoringChangeCommandHandler(
         if (await AuthoringProjectProbe.MissingAsync(db, orgId, projectId, cancellationToken).ConfigureAwait(false)
             is { } missingProject)
         {
-            return Result.Failure<QueuedChange>(missingProject);
+            return Result.Failure<QueuedAuthoringChangeResponse>(missingProject);
         }
 
         var author = await AuthoringRequestScope
@@ -201,7 +201,7 @@ internal sealed class QueueAuthoringChangeCommandHandler(
         {
             // author_membership_id is NOT NULL and every change names its author, so a service credential without a
             // membership cannot queue one; the refusal is the same 403 the save route answers.
-            return Result.Failure<QueuedChange>(Error.Forbidden(
+            return Result.Failure<QueuedAuthoringChangeResponse>(Error.Forbidden(
                 "queueing a change needs an active membership in this organization"));
         }
 
@@ -211,7 +211,7 @@ internal sealed class QueueAuthoringChangeCommandHandler(
 
         if (affectedRefusal is not null)
         {
-            return Result.Failure<QueuedChange>(affectedRefusal);
+            return Result.Failure<QueuedAuthoringChangeResponse>(affectedRefusal);
         }
 
         if (versions is null)
@@ -222,13 +222,13 @@ internal sealed class QueueAuthoringChangeCommandHandler(
         if (await UnassignedCaseAsync(db, orgId, projectId, request, cancellationToken).ConfigureAwait(false)
             is { } assignmentError)
         {
-            return Result.Failure<QueuedChange>(assignmentError);
+            return Result.Failure<QueuedAuthoringChangeResponse>(assignmentError);
         }
 
         if (await RefuseAsync(db, orgId, projectId, request.TargetId, request.Payload, cancellationToken).ConfigureAwait(false)
             is { } reasoned)
         {
-            return Result.Failure<QueuedChange>(reasoned);
+            return Result.Failure<QueuedAuthoringChangeResponse>(reasoned);
         }
 
         return await InsertAsync(db, orgId, projectId, request, versions, author.Value, audit, cancellationToken)
@@ -406,7 +406,7 @@ internal sealed class QueueAuthoringChangeCommandHandler(
     /// own size bound, or a target that disappeared between the read and the insert are mapped to the refusals the caller
     /// can act on; anything else is a real fault and surfaces.
     /// </summary>
-    private static async ValueTask<Result<QueuedChange>> InsertAsync(
+    private static async ValueTask<Result<QueuedAuthoringChangeResponse>> InsertAsync(
         ITenantDb db,
         Guid orgId,
         Guid projectId,
@@ -449,20 +449,20 @@ internal sealed class QueueAuthoringChangeCommandHandler(
             var baseVersion = TargetVersion(versions, request.TargetId);
 
             return Result.Success(
-                new QueuedChange(id, "pending", baseVersion, inserted.CreatedAt),
+                new QueuedAuthoringChangeResponse(id, "pending", baseVersion, inserted.CreatedAt),
                 201);
         }
         catch (PostgresException exception) when (IsPendingOverlap(exception))
         {
-            return Result.Failure<QueuedChange>(AuthoringChangeErrors.ChangeAlreadyPending());
+            return Result.Failure<QueuedAuthoringChangeResponse>(AuthoringChangeErrors.ChangeAlreadyPending());
         }
         catch (PostgresException exception) when (IsPayloadTooLarge(exception))
         {
-            return Result.Failure<QueuedChange>(AuthoringChangeErrors.PayloadInvalid("/payload"));
+            return Result.Failure<QueuedAuthoringChangeResponse>(AuthoringChangeErrors.PayloadInvalid("/payload"));
         }
         catch (PostgresException exception) when (IsMissingTarget(exception))
         {
-            return Result.Failure<QueuedChange>(AuthoringChangeErrors.TargetDeleted("/target_id"));
+            return Result.Failure<QueuedAuthoringChangeResponse>(AuthoringChangeErrors.TargetDeleted("/target_id"));
         }
     }
 

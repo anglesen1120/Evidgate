@@ -87,11 +87,11 @@ internal static class AuthoringChangeJson
 
     /// <summary>One stored row as the detail route's body, whose <c>ETag</c> is the row's lifecycle version.</summary>
     /// <param name="row">The Dapper row.</param>
-    internal static AuthoringChangeView View(AuthoringChangeSql.ChangeRow row)
+    internal static AuthoringChangeDetailResponse View(AuthoringChangeSql.ChangeRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        return new AuthoringChangeView(
+        return new AuthoringChangeDetailResponse(
             row.ChangeId,
             row.TargetKind,
             row.TargetId,

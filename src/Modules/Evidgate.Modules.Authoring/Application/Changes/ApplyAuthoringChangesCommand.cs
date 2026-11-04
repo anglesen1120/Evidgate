@@ -30,7 +30,7 @@ internal sealed record ApplyAuthoringChangesCommand(
     Guid ProjectId,
     IReadOnlyList<Guid> ChangeIds,
     string? IfMatch,
-    string IdempotencyKey) : ICommand<Result<ApplyAuthoringChangesResult>>, IIdempotentCommand;
+    string IdempotencyKey) : ICommand<Result<ApplyAuthoringChangesResponse>>, IIdempotentCommand;
 
 /// <summary>
 /// Handler of <see cref="ApplyAuthoringChangesCommand"/>: one transaction that locks the changes, locks the union of
@@ -54,10 +54,10 @@ internal sealed class ApplyAuthoringChangesCommandHandler(
     AuthoringVersionWriter writer,
     TimeProvider clock,
     IAuditTrail audit)
-    : ICommandHandler<ApplyAuthoringChangesCommand, Result<ApplyAuthoringChangesResult>>
+    : ICommandHandler<ApplyAuthoringChangesCommand, Result<ApplyAuthoringChangesResponse>>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<ApplyAuthoringChangesResult>> Handle(
+    public async ValueTask<Result<ApplyAuthoringChangesResponse>> Handle(
         ApplyAuthoringChangesCommand command,
         CancellationToken cancellationToken)
     {
@@ -127,7 +127,7 @@ internal sealed class ApplyAuthoringChangesCommandHandler(
         EvidgateTelemetry.RecordAuthoringApply(AuthoringApplyOutcomes.Applied);
         EvidgateTelemetry.RecordAuthoringApplyBatchSize(command.ChangeIds.Count);
 
-        return Result.Success(new ApplyAuthoringChangesResult(
+        return Result.Success(new ApplyAuthoringChangesResponse(
             batchId,
             command.ChangeIds,
             versions,
@@ -265,7 +265,7 @@ internal sealed class ApplyAuthoringChangesCommandHandler(
     /// <param name="actor">The caller's membership.</param>
     /// <param name="plan">The plan of the selection.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    private async ValueTask<(IReadOnlyList<AppliedAuthoringVersion>? Versions, Error? Error)> AppendAsync(
+    private async ValueTask<(IReadOnlyList<AppliedAuthoringVersionDto>? Versions, Error? Error)> AppendAsync(
         Guid orgId,
         Guid projectId,
         Guid batchId,
@@ -284,7 +284,7 @@ internal sealed class ApplyAuthoringChangesCommandHandler(
 
         return appended.IsSuccess
             ? ([
-                .. appended.Value!.Versions.Select(version => new AppliedAuthoringVersion(
+                .. appended.Value!.Versions.Select(version => new AppliedAuthoringVersionDto(
                     AuthoringWireValues.EntityKindName(version.EntityKind),
                     version.EntityId,
                     version.VersionNo)),
@@ -313,7 +313,7 @@ internal sealed class ApplyAuthoringChangesCommandHandler(
 
     /// <summary>Answers a refusal, counting it under the plan's closed outcome vocabulary.</summary>
     /// <param name="error">The refusal.</param>
-    private static Result<ApplyAuthoringChangesResult> Refuse(Error error)
+    private static Result<ApplyAuthoringChangesResponse> Refuse(Error error)
     {
         if (error.Status is 412)
         {
@@ -324,7 +324,7 @@ internal sealed class ApplyAuthoringChangesCommandHandler(
             EvidgateTelemetry.RecordAuthoringApply(AuthoringApplyOutcomes.Conflict);
         }
 
-        return Result.Failure<ApplyAuthoringChangesResult>(error);
+        return Result.Failure<ApplyAuthoringChangesResponse>(error);
     }
 }
 

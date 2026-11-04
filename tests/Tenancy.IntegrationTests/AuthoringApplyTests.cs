@@ -172,7 +172,15 @@ public sealed partial class AuthoringApplyTests
             ("org", world.Org),
             ("action", action));
 
-    /// <summary>Seeds one live manual case on an item, as the owner: the guard only cares that the row exists.</summary>
+    /// <summary>The numeric tail of the next seeded case code; the prefix-number shape is unique per project.</summary>
+    private static int _caseCode;
+
+    /// <summary>
+    /// Seeds one live manual case on an item, as the owner: the guard only cares that the row exists, so the seed must
+    /// satisfy the table's own CHECKs rather than fail on one of them. The code is the <c>&lt;PREFIX&gt;-&lt;n&gt;</c> shape
+    /// <c>manual_test_case_code_check</c> demands (unique per project, hence the counter), the steps document is the
+    /// object <c>authoring-steps.v1</c> stores, and <c>draft</c> is a state the case table accepts.
+    /// </summary>
     /// <param name="world">The test world.</param>
     /// <param name="item">The item the case covers.</param>
     private static Task InsertCaseAsync(World world, Guid item) =>
@@ -180,13 +188,15 @@ public sealed partial class AuthoringApplyTests
             world,
             """
             insert into public.manual_test_case (id, org_id, project_id, checklist_item_id, code, title, steps, priority, state, source)
-            values (@id, @org, @project, @item, @code, @title, '[]'::jsonb, 'high', 'active', 'manual')
+            values (@id, @org, @project, @item, @code, @title,
+                    jsonb_build_object('steps', jsonb_build_array(jsonb_build_object('no', 1, 'action', 'Open', 'expected', 'Shown'))),
+                    'high', 'draft', 'manual')
             """,
             ("id", Guid.CreateVersion7()),
             ("org", world.Org),
             ("project", world.Project),
             ("item", item),
-            ("code", "qa_case_" + Guid.NewGuid().ToString("N")[..8]),
+            ("code", string.Create(System.Globalization.CultureInfo.InvariantCulture, $"APY-{Interlocked.Increment(ref _caseCode):D3}")),
             ("title", "Pay with a saved card"));
 
     /// <summary>

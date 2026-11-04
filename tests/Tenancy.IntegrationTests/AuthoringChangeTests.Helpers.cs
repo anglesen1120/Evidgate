@@ -113,8 +113,13 @@ public sealed partial class AuthoringChangeTests
         return user;
     }
 
-    private static string MergeJson(Guid first, Guid survivor) =>
-        $$"""{"source_item_ids":["{{first}}","{{survivor}}"],"survivor_item_id":"{{survivor}}"}""";
+    /// <summary>
+    /// A merge whose <paramref name="survivor"/> is the route's target and leads the source list, with
+    /// <paramref name="other"/> at index 1. The contract requires the target to equal the survivor and the survivor to be
+    /// one of the sources, so the helper cannot express a payload that breaks either rule.
+    /// </summary>
+    private static string MergeJson(Guid survivor, Guid other) =>
+        $$"""{"source_item_ids":["{{survivor}}","{{other}}"],"survivor_item_id":"{{survivor}}"}""";
 
     private static string SplitJson(string first, string second) =>
         $$"""{"new_items":[{"title":"{{first}}"},{"title":"{{second}}"}]}""";
