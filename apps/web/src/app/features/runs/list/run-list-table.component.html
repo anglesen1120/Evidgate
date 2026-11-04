@@ -1,9 +1,7 @@
-<span #rowProbe class="row-probe" aria-hidden="true"></span>
-<!-- The wrapper is always a keyboard stop: it is the only scroll container with horizontal
-     overflow, so it is how the last columns are reached without a pointer. With more than 200 rows
-     the CDK viewport is a second stop (the vertical scroller), and the two stops carry different
-     names - "Project runs" for the region, "Project runs rows" for the rowgroup - so the table is
-     never announced twice under one name (F-RUN-04). -->
+@if (virtual()) {
+  <span #rowProbe class="row-probe" aria-hidden="true"></span>
+}
+<!-- The outer keyboard stop reaches desktop overflow; the virtual viewport scrolls rows. -->
 <div
   class="table-scroll"
   role="region"
@@ -69,21 +67,23 @@
   </div>
 </div>
 <ng-template #cells let-row>
-  <span role="rowheader" class="identifier">
+  <span role="rowheader" class="identifier" [attr.data-label]="copy.id">
     <a [routerLink]="[row.run_id]" [queryParamsHandling]="'preserve'">
       <abbr [attr.title]="row.run_id" [attr.aria-label]="row.run_id"
         >{{ row.run_id.slice(0, 8) }}…{{ row.run_id.slice(-8) }}</abbr
       >
     </a>
   </span>
-  <span role="cell"><app-run-state-pill [state]="row.state" /></span>
+  <span role="cell" [attr.data-label]="copy.state"><app-run-state-pill [state]="row.state" /></span>
   <!-- RunSummary has no completeness or outcome field. Never infer either from state/decision;
        no completeness filter is offered, and EvidenceBadge deliberately uses unavailable. -->
-  <span role="cell" data-run-evidence><app-evidence-badge /></span>
-  <span role="cell" data-run-decision
-    ><app-decision-chip [decision]="row.decision ?? 'pending'"
+  <span role="cell" data-run-evidence [attr.data-label]="copy.evidence"
+    ><app-evidence-badge
   /></span>
-  <span role="cell" class="ref-cell">
+  <span role="cell" data-run-decision [attr.data-label]="copy.decision"
+    ><app-decision-chip [decision]="row.decision ?? 'unavailable'"
+  /></span>
+  <span role="cell" class="ref-cell" [attr.data-label]="copy.ref">
     <bdi
       ><app-data-table-value
         [value]="row.ref.name === null ? copy.unavailableRef : displayRef(row.ref.name)"
@@ -93,7 +93,7 @@
       <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
     }
   </span>
-  <span role="cell" class="scope-cell">
+  <span role="cell" class="scope-cell" [attr.data-label]="copy.scope">
     @if (row.rerun_label) {
       @let rerunLabel = displayLabel(row.rerun_label);
       <span class="scope scope-rerun" data-run-rerun
@@ -112,7 +112,7 @@
       <span>{{ row.parent_run_id ? copy.child : copy.original }}</span>
     }
   </span>
-  <span role="cell"
+  <span role="cell" [attr.data-label]="copy.created"
     ><time [attr.datetime]="row.created_at">{{ row.created_at }}</time></span
   >
 </ng-template>

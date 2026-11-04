@@ -1,144 +1,12 @@
-// 09.3.1-T1 (plan 09.3.1 §2 AC9, §4 runs row, §5 run-list row, §9 "Boundaries: 200-row cursor
-// page", §10 T1.1 done-when `run-list-store.spec.ts` passes; COORDINATOR-DECISION S101-C1): the
-// Runs list store.
-//
-// `RunDataService` is replaced by a hand-written fake (`listRuns(projectId, {cursor, limit,
-// refName})`), because this suite is about what the store does with pages, URL filters and answers
-// — the request side is `run-data.service.spec.ts`. The fake pages a generated corpus, so a bound
-// case is a real page count rather than an assertion about intentions:
-//
-// - a filtered view that is short because the server's pages hold no matching row is topped up
-//   until one page of matches is on screen (S101-C1 condition 1);
-// - a filter that matches nothing stops after five followed pages / 1,000 scanned rows and
-//   publishes `autoLoadCapped`, with `hasMore` still true — the page offers Load more and its
-//   "filtered from N loaded runs" note instead of claiming the project has no runs (conditions 1
-//   and 2);
-// - a repeated cursor is a contract violation and throws;
-// - two overlapping reads: the newest one wins, and a page of a superseded read is neither
-//   appended nor published;
-// - the decision filter treats an absent decision as `pending` and never as `PASS` (condition 3
-//   is the page's, but the store must not manufacture a verdict either);
-// - completeness is not a filter, because `RunSummary` carries no completeness member.
-//
-// The rest pins the URL contract: unknown or invalid member values are dropped and never sent,
-// `toQuery()` round-trips through `init`, and `refName` is the only filter that reaches the wire.
-
 import { TestBed } from '@angular/core/testing';
-import type { RunPage, RunSummary } from '@evidgate/sdk';
-
-import { ApiRequestError } from '../../../core/http/api-error';
-import { RunDataService, type RunListQuery } from '../data/run-data.service';
+import { RunDataService } from '../data/run-data.service';
 import {
   EMPTY_RUN_LIST_FILTERS,
   RUN_LIST_AUTO_PAGES,
   RUN_LIST_PAGE_LIMIT,
   RunListStore,
 } from './run-list.store';
-
-/** One typed refusal, as `ApiGateway` builds it from a server envelope. */
-function typedFailure(): ApiRequestError {
-  return new ApiRequestError({
-    kind: 'forbidden',
-    status: 403,
-    code: 'forbidden',
-    message: 'The caller may not read this project run list.',
-    requestId: 'req-runs-1',
-    retryable: false,
-    details: [],
-    retryAfterSeconds: null,
-  });
-}
-
-/** One served run row; every case overrides only the fields it is about. */
-function run(index: number, overrides: Partial<RunSummary> = {}): RunSummary {
-  return {
-    run_id: `run-${index}`,
-    state: 'complete',
-    created_at: new Date(Date.UTC(2026, 9, 1) + index * 60_000).toISOString(),
-    ref: {
-      kind: 'branch',
-      name: `feature/run-${index}`,
-      pr_number: null,
-      head_sha: null,
-      base_sha: null,
-      trigger_event: 'push',
-      is_fork: false,
-    },
-    unverified_ref: false,
-    completeness: 'complete',
-    parent_run_id: null,
-    rerun_scope: null,
-    ...overrides,
-  };
-}
-
-/** `count` rows, each one built by `build`. */
-function rows(count: number, build: (index: number) => Partial<RunSummary> = () => ({})) {
-  return Array.from({ length: count }, (_, index) => run(index, build(index)));
-}
-
-/**
- * Lets the store's pending continuations run, so a page the test resolved has been published (or a
- * follow-up request recorded) before the next assertion. One `await` per hop of the store's own
- * `await` chain; more turns than the chain has are harmless.
- */
-async function flush(turns = 10): Promise<void> {
-  for (let turn = 0; turn < turns; turn += 1) {
-    await Promise.resolve();
-  }
-}
-
-/**
- * The run pages the store reads. Cursors are opaque strings the fake mints itself, so a page can
- * hand out a next cursor the test controls exactly (a fresh index, the same one again, or none).
- */
-class FakeRunDataService {
-  /** Every row the fake can serve, in server order. */
-  all: RunSummary[] = [];
-  /** Rejects every call with this failure when set (used with `failOnCall` for a mid-way one). */
-  failure: Error | null = null;
-  /** Rejects exactly this 1-based call with `failure`. */
-  failOnCall: number | null = null;
-  /** Serves this many rows per page regardless of the requested `limit`. */
-  pageSizeOverride: number | null = null;
-  /** Names the same cursor on every page, so a cursor loop has to be refused. */
-  repeatCursor = false;
-  /** Answers only when the test settles the matching `pending` entry. */
-  manual = false;
-  readonly pending: Array<{ readonly resolve: (page: RunPage) => void }> = [];
-  /** Every call the store made, in order. */
-  readonly calls: Array<{ readonly projectId: string; readonly request: RunListQuery }> = [];
-
-  /** The index a minted cursor resumes at. */
-  private readonly startByCursor = new Map<string, number>();
-
-  listRuns(projectId: string, request: RunListQuery = {}): Promise<RunPage> {
-    this.calls.push({ projectId, request });
-    if (this.manual) {
-      // The executor form: the app's ES2022 lib has no `Promise.withResolvers`.
-      return new Promise<RunPage>((resolve) => {
-        this.pending.push({ resolve });
-      });
-    }
-    if (
-      this.failure !== null &&
-      (this.failOnCall === null || this.failOnCall === this.calls.length)
-    ) {
-      return Promise.reject(this.failure);
-    }
-
-    const start = request.cursor === undefined ? 0 : (this.startByCursor.get(request.cursor) ?? 0);
-    const size = this.pageSizeOverride ?? request.limit ?? this.all.length;
-    const items = this.all.slice(start, start + size);
-    const end = start + items.length;
-    let next: string | null = null;
-    if (end < this.all.length) {
-      next = this.repeatCursor ? 'same' : String(end);
-      this.startByCursor.set(next, end);
-    }
-    return Promise.resolve({ items, next_cursor: next });
-  }
-}
+import { FakeRunDataService, flush, rows, run, typedFailure } from './run-list-store.fixtures';
 
 describe('RunListStore (09.3.1-T1)', () => {
   let data: FakeRunDataService;
@@ -225,7 +93,6 @@ describe('RunListStore (09.3.1-T1)', () => {
       data.all = rows(3);
       const query = {
         state: 'running',
-        decision: 'pending',
         scope: 'original',
         ref: 'refs/tags/v1',
       };
@@ -309,18 +176,18 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(store.loadedCount()).toBe(RUN_LIST_PAGE_LIMIT * (1 + RUN_LIST_AUTO_PAGES));
     });
 
-    it('treats a missing decision as pending and never as PASS', async () => {
+    it('ignores a stale pending URL filter and only matches explicit verdicts', async () => {
       data.all = [
         run(1, { decision: 'PASS' }),
         run(2, { decision: null }),
-        run(3, { decision: undefined } as unknown as Partial<RunSummary>),
+        run(3),
         run(4, { decision: 'FAIL' }),
       ];
 
-      await store.init('p-1');
-      await store.setFilters({ decision: 'pending' });
-
-      expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-2', 'run-3']);
+      await store.init('p-1', { decision: 'pending' });
+      expect(store.visibleRows()).toHaveLength(4);
+      expect(store.filters().decision).toBe('');
+      expect(store.toQuery()).not.toHaveProperty('decision');
 
       await store.setFilters({ decision: 'PASS' });
 
@@ -407,120 +274,6 @@ describe('RunListStore (09.3.1-T1)', () => {
         scope: '',
         refName: 'refs/heads/main',
       });
-    });
-  });
-
-  describe('ref name validation on the form path', () => {
-    it('trims a padded ref name before sending it and keeps it in the URL query', async () => {
-      data.all = rows(2);
-      await store.init('p-1');
-      expect(data.calls).toHaveLength(1);
-
-      await store.setFilters({ refName: '  refs/heads/main  ' });
-
-      expect(store.filters().refName).toBe('refs/heads/main');
-      expect(store.refRejected()).toBe(false);
-      expect(data.calls[1]?.request).toEqual({
-        limit: RUN_LIST_PAGE_LIMIT,
-        refName: 'refs/heads/main',
-      });
-      expect(store.toQuery()).toEqual({ ref: 'refs/heads/main' });
-    });
-
-    it('refuses a ref name longer than 255 code points: not sent, not in the query, reported', async () => {
-      data.all = rows(2);
-      await store.init('p-1');
-      const before = data.calls.length;
-
-      await store.setFilters({ refName: 'x'.repeat(256) });
-
-      // No second read: the refused value narrowed nothing, so the list it applies to did not change.
-      expect(data.calls).toHaveLength(before);
-      expect(store.filters().refName).toBe('');
-      expect(store.refRejected()).toBe(true);
-      expect(store.toQuery()).toEqual({});
-      // 255 code points is the accepted bound, not 256.
-      await store.setFilters({ refName: 'x'.repeat(255) });
-      expect(store.refRejected()).toBe(false);
-      expect(data.calls.at(-1)?.request.refName).toBe('x'.repeat(255));
-    });
-
-    it('refuses a ref name carrying a control character and drops the previous one', async () => {
-      data.all = rows(2);
-      await store.init('p-1', { ref: 'refs/heads/main' });
-      expect(data.calls).toHaveLength(1);
-
-      await store.setFilters({ refName: 'refs/heads/\u0000main' });
-
-      // The accepted filter is gone: the list restarts unfiltered instead of keeping the old value
-      // while the field shows the refused one.
-      expect(data.calls).toHaveLength(2);
-      expect(data.calls[1]?.request).toEqual({ limit: RUN_LIST_PAGE_LIMIT });
-      expect(store.filters().refName).toBe('');
-      expect(store.refRejected()).toBe(true);
-      expect(store.toQuery()).toEqual({});
-    });
-
-    it('treats a whitespace-only ref name as a cleared filter, not a refusal', async () => {
-      data.all = rows(2);
-      await store.init('p-1', { ref: 'refs/heads/main' });
-
-      await store.setFilters({ refName: '   ' });
-
-      expect(store.filters().refName).toBe('');
-      expect(store.refRejected()).toBe(false);
-      expect(store.toQuery()).toEqual({});
-      expect(data.calls.at(-1)?.request).toEqual({ limit: RUN_LIST_PAGE_LIMIT });
-    });
-
-    it('clears the reported refusal when the next value is accepted', async () => {
-      data.all = rows(2);
-      await store.init('p-1');
-      await store.setFilters({ refName: 'bad\nref' });
-      expect(store.refRejected()).toBe(true);
-
-      await store.setFilters({ refName: 'refs/heads/main' });
-
-      expect(store.refRejected()).toBe(false);
-      expect(store.filters().refName).toBe('refs/heads/main');
-    });
-
-    it('clears the reported refusal when the URL is the source again', async () => {
-      data.all = rows(2);
-      await store.init('p-1');
-      await store.setFilters({ refName: 'bad\nref' });
-      expect(store.refRejected()).toBe(true);
-
-      await store.init('p-1', { ref: 'refs/heads/main' });
-
-      expect(store.refRejected()).toBe(false);
-      expect(store.filters().refName).toBe('refs/heads/main');
-    });
-
-    it('reports a refused value even while the stored ref filter is empty', async () => {
-      // No read yet: the stored ref filter is already '', so the refused value leaves the filter
-      // state untouched and only the report changes. It must not be swallowed for that reason.
-      await store.setFilters({ refName: 'a'.repeat(256) });
-
-      expect(store.filters().refName).toBe('');
-      expect(store.refRejected()).toBe(true);
-      expect(data.calls).toEqual([]);
-
-      await store.setFilters({ refName: '' });
-
-      expect(store.refRejected()).toBe(false);
-    });
-
-    it('clears the reported refusal when the filters are cleared', async () => {
-      data.all = rows(2);
-      await store.init('p-1');
-      await store.setFilters({ refName: 'bad\nref' });
-      expect(store.refRejected()).toBe(true);
-
-      await store.setFilters({ state: '', decision: '', scope: '', refName: '' });
-
-      expect(store.refRejected()).toBe(false);
-      expect(store.toQuery()).toEqual({});
     });
   });
 

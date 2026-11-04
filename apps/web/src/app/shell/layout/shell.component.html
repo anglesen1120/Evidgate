@@ -55,6 +55,17 @@
         <strong>{{ session.currentProject()?.name }}</strong>
       </div>
     }
+    @if (mobile()) {
+      <app-scope-switcher
+        class="drawer-scope"
+        [organizations]="session.organizations()"
+        [projects]="session.projects()"
+        [currentOrg]="session.currentOrg()"
+        [currentProject]="session.currentProject()"
+        (orgSelected)="selectOrganization($event)"
+        (projectSelected)="selectProject($event)"
+      />
+    }
     <app-shell-nav
       [groups]="nav.groups()"
       [collapsed]="collapsed()"
@@ -74,13 +85,18 @@
       >
         <app-shell-icon [name]="'menu'" />
       </button>
-      <!--
-        Document order is the keyboard order, so it has to be the visual order (WCAG 2.4.3): below
-        768px the topbar reads navigation toggle + theme toggle on the first row and the two scope
-        selects on the second, and the selects keep that last position on every wider screen too.
-        The theme toggle used to sit after the selects and was pulled up beside the navigation
-        toggle by CSS alone, which put it last in the tab order and made Tab jump back up a row.
-      -->
+      @if (!mobile()) {
+        <app-scope-switcher
+          class="topbar-scope"
+          [compact]="true"
+          [organizations]="session.organizations()"
+          [projects]="session.projects()"
+          [currentOrg]="session.currentOrg()"
+          [currentProject]="session.currentProject()"
+          (orgSelected)="selectOrganization($event)"
+          (projectSelected)="selectProject($event)"
+        />
+      }
       <button
         type="button"
         class="icon-button theme-toggle"
@@ -90,15 +106,6 @@
       >
         <app-shell-icon [name]="theme.isDark() ? 'moon' : 'sun'" />
       </button>
-      <app-scope-switcher
-        class="topbar-scope"
-        [organizations]="session.organizations()"
-        [projects]="session.projects()"
-        [currentOrg]="session.currentOrg()"
-        [currentProject]="session.currentProject()"
-        (orgSelected)="selectOrganization($event)"
-        (projectSelected)="selectProject($event)"
-      />
     </header>
     <main #mainContent id="main-content" tabindex="-1">
       <router-outlet />

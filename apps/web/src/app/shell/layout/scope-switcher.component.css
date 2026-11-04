@@ -12,6 +12,17 @@ label {
   line-height: var(--eg-leading-xs);
   overflow-wrap: anywhere;
 }
+:host(.compact) label {
+  position: relative;
+}
+:host(.compact) label > span {
+  position: absolute;
+  width: var(--eg-border-width);
+  height: var(--eg-border-width);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 select {
   box-sizing: border-box;
   width: 100%;

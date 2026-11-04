@@ -79,7 +79,11 @@
                  the derivation, so the placeholder stays as the honest answer instead of an empty
                  region. -->
             @if (store.project(); as project) {
-              <app-onboarding-enable-collection [orgId]="orgId()" [projectId]="project.id" />
+              <app-onboarding-enable-collection
+                [orgId]="orgId()"
+                [projectId]="project.id"
+                (activationConfirmed)="store.recordActivation(orgId(), $event)"
+              />
             } @else {
               <app-onboarding-step-pending />
             }
@@ -115,7 +119,10 @@
             </div>
           </footer>
         </section>
-        <app-onboarding-evidence-panel [step]="store.viewStep()" [project]="store.project()" />
+        <app-onboarding-evidence-panel
+          [progress]="store.progress()"
+          [refreshFailed]="store.refreshFailure() !== null"
+        />
       </div>
     }
   }

@@ -7,7 +7,7 @@ import type { DecisionValue } from './verdict-values';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <span class="verdict verdict--decision" [attr.data-tone]="tone()">
+    <span class="verdict verdict--decision" [attr.data-tone]="tone()" [attr.title]="explanation()">
       <span class="verdict__label" i18n="@@shared.decision-chip.dimension">Decision:</span>
       @if (value(); as decision) {
         <span class="verdict__value">{{ decision }}</span>
@@ -21,7 +21,12 @@ import type { DecisionValue } from './verdict-values';
   styleUrl: './verdict.css',
 })
 export class DecisionChipComponent {
-  readonly decision = input<DecisionValue | 'pending' | null | undefined>();
+  readonly decision = input<DecisionValue | 'pending' | 'unavailable' | null | undefined>();
+  readonly explanation = computed(() =>
+    this.decision() === 'unavailable'
+      ? $localize`:@@shared.decision-chip.list-unavailable:The run list does not carry decisions. Open the run for its stored decision.`
+      : null,
+  );
 
   readonly tone = computed(() => {
     switch (this.decision()) {
