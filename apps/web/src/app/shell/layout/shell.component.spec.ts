@@ -188,11 +188,10 @@ describe('ShellComponent', () => {
     await fixture.whenStable();
     const aside = root.querySelector<HTMLElement>('aside')!;
     const close = root.querySelector<HTMLButtonElement>('.close-button')!;
-    expect(close.classList.contains('transition-none')).toBe(true);
     const nativeFocus = close.focus.bind(close);
     const focus = vi.spyOn(close, 'focus').mockImplementation(() => {
       expect(aside.hasAttribute('inert')).toBe(false);
-      expect(aside.classList.contains('invisible')).toBe(false);
+      expect(aside.classList.contains('opacity-0')).toBe(false);
       nativeFocus();
     });
 

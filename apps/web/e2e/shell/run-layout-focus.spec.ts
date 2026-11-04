@@ -9,7 +9,11 @@ import {
   withVariants,
 } from './support';
 
-const WIDTHS = [320, 1280] as const;
+// 766 and 767 are the last stacked widths and 768 the first table width: a one-pixel gap between
+// the two halves of the breakpoint is exactly what the boundary cases exist to catch.
+const WIDTHS = [320, 766, 767, 768, 1280] as const;
+/** Up to and including this width the run table stacks; from 768 px every part of it is a table. */
+const STACKED_MAX = 767;
 const GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
 
 function listPath(variant: 'runs' | '250-rows'): string {
@@ -48,6 +52,72 @@ async function navigatePin(page: Page, revision: number): Promise<void> {
     .toBe(String(revision));
 }
 
+/** A measured rectangle, in CSS pixels, relative to the viewport. */
+interface Box {
+  x: number;
+  width: number;
+  height: number;
+}
+
+/** Everything the browser answers about the run table at the current viewport width. */
+interface TableGeometry {
+  header: Box;
+  headerPosition: string;
+  headerCells: Box[];
+  cells: Box[];
+  cellDisplays: string[];
+  labels: string[];
+  labelDisplays: string[];
+  row: Box;
+  /** The height the component measures its virtual row size from. */
+  probeHeight: number;
+  /** The whole-list size the virtual scroller asserts, or null without a virtual viewport. */
+  spacerHeight: number | null;
+  rowCount: number;
+  documentWidth: number;
+}
+
+async function tableGeometry(page: Page): Promise<TableGeometry> {
+  return page.locator('app-run-list-table').evaluate((table): TableGeometry => {
+    const header = table.querySelector('table');
+    const headerCells = [...table.querySelectorAll('[role="columnheader"]')];
+    const row = table.querySelector('[data-run-row]');
+    if (!(header instanceof HTMLElement) || !(row instanceof HTMLElement)) {
+      throw new Error('Run table header and body are required');
+    }
+    const cells = [...row.querySelectorAll('[data-label]')];
+    const box = (element: Element): Box => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, width: rect.width, height: rect.height };
+    };
+    const spacer = table.querySelector('cdk-virtual-scroll-viewport .cdk-virtual-scroll-spacer');
+    return {
+      header: box(header),
+      headerPosition: getComputedStyle(header).position,
+      headerCells: headerCells.map(box),
+      cells: cells.map(box),
+      cellDisplays: cells.map((cell) => getComputedStyle(cell).display),
+      labels: cells.map((cell) => getComputedStyle(cell, '::before').content),
+      labelDisplays: cells.map((cell) => getComputedStyle(cell, '::before').display),
+      row: box(row),
+      probeHeight: Number.parseFloat(
+        getComputedStyle(table.querySelector('.row-probe') ?? row).height,
+      ),
+      // The spacer is the size the virtual scroller asserts the whole list has: itemSize × rows.
+      spacerHeight:
+        spacer instanceof HTMLElement ? Number.parseFloat(getComputedStyle(spacer).height) : null,
+      rowCount:
+        Number(table.querySelector('[role="table"]')?.getAttribute('aria-rowcount') ?? '1') - 1,
+      documentWidth: document.documentElement.scrollWidth,
+    };
+  });
+}
+
+/** How far the virtual scroller's total size is from rows × the row height the browser renders. */
+function virtualSizeDrift(layout: TableGeometry): number {
+  return Math.abs((layout.spacerHeight ?? 0) - layout.rowCount * layout.probeHeight);
+}
+
 for (const theme of THEMES) {
   for (const width of WIDTHS) {
     for (const variant of ['runs', '250-rows'] as const) {
@@ -61,37 +131,13 @@ for (const theme of THEMES) {
         );
         const row = page.locator('app-run-list-table [data-run-row]').first();
         await expect(row).toBeVisible();
-        const layout = await page.locator('app-run-list-table').evaluate((table) => {
-          const header = table.querySelector('table');
-          const headerCells = [...table.querySelectorAll('[role="columnheader"]')];
-          const row = table.querySelector('[data-run-row]');
-          if (!(header instanceof HTMLElement) || !(row instanceof HTMLElement)) {
-            throw new Error('Run table header and body are required');
-          }
-          const cells = [...row.querySelectorAll('[data-label]')];
-          const box = (element: Element) => {
-            const rect = element.getBoundingClientRect();
-            return { x: rect.x, width: rect.width, height: rect.height };
-          };
-          return {
-            header: box(header),
-            headerPosition: getComputedStyle(header).position,
-            headerCells: headerCells.map(box),
-            cells: cells.map(box),
-            cellDisplays: cells.map((cell) => getComputedStyle(cell).display),
-            labels: cells.map((cell) => getComputedStyle(cell, '::before').content),
-            labelDisplays: cells.map((cell) => getComputedStyle(cell, '::before').display),
-            row: box(row),
-            probeHeight: Number.parseFloat(
-              getComputedStyle(table.querySelector('.row-probe') ?? row).height,
-            ),
-            documentWidth: document.documentElement.scrollWidth,
-          };
-        });
+        const layout = await tableGeometry(page);
         expect(layout.headerCells).toHaveLength(7);
         expect(layout.cells).toHaveLength(7);
         expect(layout.documentWidth).toBeLessThanOrEqual(width);
-        if (width <= 767) {
+        if (width <= STACKED_MAX) {
+          // One layout per width: the hidden header, the stacked cells, the collapsed row grid and
+          // the row height the virtual viewport measures all have to agree on the same answer.
           expect.soft(layout.header.width, JSON.stringify(layout)).toBeLessThanOrEqual(1);
           expect.soft(layout.headerPosition).toBe('absolute');
           expect.soft(layout.cellDisplays).toEqual(Array(7).fill('grid'));
@@ -100,8 +146,17 @@ for (const theme of THEMES) {
           if (variant === '250-rows') {
             expect.soft(layout.row.height, JSON.stringify(layout)).toBeGreaterThanOrEqual(792);
             expect.soft(layout.probeHeight).toBeGreaterThanOrEqual(792);
+            expect.soft(Math.abs(layout.row.height - layout.probeHeight)).toBeLessThanOrEqual(1);
           }
         } else {
+          expect.soft(layout.header.width, JSON.stringify(layout)).toBeGreaterThan(1);
+          expect.soft(layout.cellDisplays.every((display) => display !== 'grid')).toBe(true);
+          expect.soft(new Set(layout.cells.map((cell) => Math.round(cell.x))).size).toBe(7);
+          if (variant === '250-rows') {
+            // The measured row size is the fixed table row, not the stacked card height.
+            expect.soft(layout.row.height, JSON.stringify(layout)).toBeLessThanOrEqual(200);
+            expect.soft(Math.abs(layout.row.height - layout.probeHeight)).toBeLessThanOrEqual(1);
+          }
           for (let column = 0; column < layout.headerCells.length; column++) {
             const headerCell = layout.headerCells[column];
             const bodyCell = layout.cells[column];
@@ -110,6 +165,12 @@ for (const theme of THEMES) {
             expect(Math.abs(headerCell.width - bodyCell.width)).toBeLessThanOrEqual(1);
           }
           expect(layout.labelDisplays.every((display) => display === 'none')).toBe(true);
+        }
+        if (variant === '250-rows') {
+          // The viewport sizes the whole list from the row it measured: a hardcoded or stale item
+          // size leaves this spacer wrong even while the rendered row looks correct.
+          expect.soft(layout.spacerHeight, JSON.stringify(layout)).not.toBeNull();
+          expect.soft(virtualSizeDrift(layout)).toBeLessThanOrEqual(2);
         }
       });
     }
@@ -145,6 +206,35 @@ for (const theme of THEMES) {
       );
     });
   }
+
+  test(`the virtual row size follows the breakpoint across a resize ${theme}`, async ({ page }) => {
+    await seedStoredTheme(page, theme);
+    await page.setViewportSize({ width: STACKED_MAX, height: 900 });
+    await page.goto(listPath('250-rows'));
+    await expect(page.locator('app-run-list-page')).toHaveAttribute(
+      'data-run-list-status',
+      'ready',
+    );
+    await expect(page.locator('app-run-list-table [data-run-row]').first()).toBeVisible();
+    // The whole-list size is the only observable of the item size the viewport actually uses, and
+    // it must be re-measured when the row changes height, not only read once at startup.
+    await expect
+      .poll(async () => virtualSizeDrift(await tableGeometry(page)))
+      .toBeLessThanOrEqual(2);
+    expect((await tableGeometry(page)).probeHeight).toBeGreaterThanOrEqual(792);
+    await page.setViewportSize({ width: STACKED_MAX + 1, height: 900 });
+    await expect.poll(async () => (await tableGeometry(page)).probeHeight).toBeLessThanOrEqual(200);
+    await expect
+      .poll(async () => virtualSizeDrift(await tableGeometry(page)))
+      .toBeLessThanOrEqual(2);
+    await page.setViewportSize({ width: STACKED_MAX, height: 900 });
+    await expect
+      .poll(async () => (await tableGeometry(page)).probeHeight)
+      .toBeGreaterThanOrEqual(792);
+    await expect
+      .poll(async () => virtualSizeDrift(await tableGeometry(page)))
+      .toBeLessThanOrEqual(2);
+  });
 
   for (const revisions of ['empty', 'unavailable'] as const) {
     test(`no evidence announcement without a selected revision ${revisions} ${theme}`, async ({

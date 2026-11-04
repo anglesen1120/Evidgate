@@ -1,14 +1,14 @@
 @if (virtual()) {
   <span
     #rowProbe
-    class="row-probe pointer-events-none invisible absolute w-0 box-border h-[calc(var(--eg-control-touch)*3)] max-[767px]:h-[calc(var(--eg-control-touch)*18)]"
+    class="row-probe pointer-events-none invisible absolute w-0 box-border h-[calc(var(--eg-control-touch)*3)] [@media(max-width:767px)]:h-[calc(var(--eg-control-touch)*18)]"
     aria-hidden="true"
   ></span>
 }
 <!-- Presentation tables share one semantic table, matching the shared virtual-table pattern. -->
 <div
   hlmTableContainer
-  class="table-scroll max-w-full rounded-[var(--eg-radius-md)] border border-border bg-card [--eg-focus-offset:calc(var(--eg-focus-width)*-1)] max-[767px]:overflow-x-clip focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:-outline-offset-[var(--eg-focus-width)]"
+  class="table-scroll max-w-full rounded-[var(--eg-radius-md)] border border-border bg-card [--eg-focus-offset:calc(var(--eg-focus-width)*-1)] [@media(max-width:767px)]:overflow-x-clip focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:-outline-offset-[var(--eg-focus-width)]"
   role="region"
   tabindex="0"
   [attr.aria-label]="copy.caption"
@@ -21,13 +21,17 @@
     {{ copy.caption }}
   </h2>
   <div
-    class="min-w-0 min-[768px]:min-w-[calc(var(--eg-leading-2xl)*32)]"
+    class="min-w-0 [@media(min-width:768px)]:min-w-[calc(var(--eg-leading-2xl)*32)]"
     role="table"
     aria-labelledby="run-table-caption"
     [attr.aria-rowcount]="rows().length + 1"
     aria-colcount="7"
   >
-    <table hlmTable role="presentation" class="block border-collapse max-[767px]:sr-only">
+    <table
+      hlmTable
+      role="presentation"
+      class="block border-collapse [@media(max-width:767px)]:sr-only"
+    >
       <thead hlmTHead role="rowgroup" class="block">
         <tr
           hlmTr
@@ -59,7 +63,7 @@
             <tr
               hlmTr
               *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow"
-              class="virtual-row box-border h-[calc(var(--eg-control-touch)*3)] max-[767px]:h-[calc(var(--eg-control-touch)*18)] max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)] [&>*]:overflow-hidden"
+              class="virtual-row box-border h-[calc(var(--eg-control-touch)*3)] [@media(max-width:767px)]:h-[calc(var(--eg-control-touch)*18)] [@media(max-width:767px)]:gap-[var(--eg-space-3)] [@media(max-width:767px)]:p-[var(--eg-space-3)] [&>*]:overflow-hidden"
               [class]="rowClasses"
               role="row"
               data-run-row
@@ -80,7 +84,7 @@
           @for (row of rows(); track row.run_id; let index = $index) {
             <tr
               hlmTr
-              class="max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)]"
+              class="[@media(max-width:767px)]:gap-[var(--eg-space-3)] [@media(max-width:767px)]:p-[var(--eg-space-3)]"
               [class]="rowClasses"
               role="row"
               data-run-row

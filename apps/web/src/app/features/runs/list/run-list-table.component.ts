@@ -54,13 +54,14 @@ export class RunListTableComponent {
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
   protected readonly displayRef = escapeFormatChars;
   protected readonly cellClasses =
-    'min-w-0 h-auto box-border p-[var(--eg-space-3)] whitespace-normal text-start font-(weight:--eg-weight-regular) [overflow-wrap:anywhere] max-[767px]:grid max-[767px]:gap-[var(--eg-space-2)] max-[767px]:p-0 before:content-[attr(data-label)] before:text-muted-foreground before:font-[family-name:var(--eg-font-body)] before:font-(weight:--eg-weight-semibold) min-[768px]:before:hidden';
+    'min-w-0 h-auto box-border p-[var(--eg-space-3)] whitespace-normal text-start font-(weight:--eg-weight-regular) [overflow-wrap:anywhere] [@media(max-width:767px)]:grid [@media(max-width:767px)]:gap-[var(--eg-space-2)] [@media(max-width:767px)]:p-0 before:content-[attr(data-label)] before:text-muted-foreground before:font-[family-name:var(--eg-font-body)] before:font-(weight:--eg-weight-semibold) [@media(min-width:768px)]:before:hidden';
   protected readonly columnClasses =
     'h-auto min-w-0 whitespace-normal p-[var(--eg-space-3)] text-xs font-(weight:--eg-weight-semibold) text-muted-foreground';
   /**
    * Header and body rows sit in detached tables, so all three need one identical track template;
-   * character floors keep ids and refs readable before horizontal scrolling. The mobile query is
-   * written exactly because Tailwind's `max-[767px]` compiles to `width < 767px`, not `max-width`.
+   * character floors keep ids and refs readable before horizontal scrolling. Every breakpoint is an
+   * explicit media query here: Tailwind's `max-[767px]` compiles to `width < 767px`, which would
+   * give a 767 px viewport a visible header above a stacked row.
    */
   protected readonly rowClasses =
     'run-row grid grid-cols-[minmax(calc(19ch_+_var(--eg-space-3)*2),1.2fr)_minmax(0,.8fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(19ch,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] [@media(max-width:767px)]:grid-cols-[minmax(0,1fr)]';
