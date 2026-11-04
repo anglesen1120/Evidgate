@@ -20,9 +20,7 @@ public sealed record ManualCaseStepDto(
 
 /// <summary>
 /// One row of <c>GET …/authoring/manual-cases</c> (route 12, 13.1.1 §5). The list projection carries no
-/// <c>description</c>, <c>precondition</c> or <c>steps</c> — a page of 200 cases must stay one bounded statement — and
-/// no coverage field: <c>linked_live_count</c>/<c>linked_case_ids</c> belong to 13.1.1-T4 (AC12), which reads the
-/// <c>manual_case_link</c> table this task does not create.
+/// <c>description</c>, <c>precondition</c> or <c>steps</c> — a page of 200 cases must stay one bounded statement.
 /// </summary>
 /// <param name="CaseId">The <c>manual_test_case.id</c>.</param>
 /// <param name="Code">The allocated, immutable code (<c>&lt;PREFIX&gt;-&lt;n&gt;</c>, AC4).</param>
@@ -32,6 +30,13 @@ public sealed record ManualCaseStepDto(
 /// <param name="Priority"><c>critical</c>, <c>high</c>, <c>medium</c> or <c>low</c>.</param>
 /// <param name="State"><c>draft</c>, <c>approved</c> or <c>retired</c> (§6).</param>
 /// <param name="Version">The row's version, the value a client sends back as <c>If-Match</c>.</param>
+/// <param name="LinkedLiveCount">
+/// How many <em>live</em> catalog cases the case is linked to: archived cases are excluded, so this is the number the
+/// <c>covered</c> filter tests. It is authoring coverage — this manual case is asserted to be proven by those
+/// automated tests — and it is <b>not</b> the execution coverage of 03.1.4, which counts accepted results per case
+/// and variant; the two are never the same number.
+/// </param>
+/// <param name="LinkedCaseIds">The live catalog case ids behind <paramref name="LinkedLiveCount"/>, in ascending id order.</param>
 public sealed record ManualCaseListItemDto(
     Guid CaseId,
     string Code,
@@ -40,7 +45,9 @@ public sealed record ManualCaseListItemDto(
     string Title,
     string Priority,
     string State,
-    int Version);
+    int Version,
+    int LinkedLiveCount,
+    IReadOnlyList<Guid> LinkedCaseIds);
 
 /// <summary>One keyset page of manual test cases (route 12); <paramref name="NextCursor"/> is null on the last page.</summary>
 /// <param name="Items">The page, in the fixed <c>(code, id)</c> order.</param>
@@ -139,3 +146,20 @@ public sealed record MoveManualCaseRequest(Guid ChecklistItemId, string? Reason 
 /// <param name="Version">The case's version after the move; unchanged when it already sat under the target item.</param>
 /// <param name="ChecklistItemId">The item the case is now under.</param>
 public sealed record MoveManualCaseResponse(int Version, Guid ChecklistItemId);
+
+/// <summary>
+/// The body of <c>POST …/manual-cases/{m}/links</c> (route 20, AC11): the catalog case this manual case is asserted to be
+/// proven by. The case must be live and in the same project; the route answers <c>case_not_found</c> or
+/// <c>case_archived</c> under <c>/test_case_id</c> otherwise.
+/// </summary>
+/// <param name="TestCaseId">The <c>test_case.id</c> of the project's catalog.</param>
+public sealed record LinkManualCaseRequest(Guid TestCaseId);
+
+/// <summary>
+/// The answer of route 20 in both of its outcomes: a first link is <c>201</c> with the new <see cref="LinkId"/>, and a
+/// repeat of a link the case already holds is <c>200</c> with <c>changed: false</c> and no id, because nothing was
+/// written and nothing is audited.
+/// </summary>
+/// <param name="LinkId">The new <c>manual_case_link.id</c>, or null when the link already existed.</param>
+/// <param name="Changed">True when this call inserted the link.</param>
+public sealed record LinkManualCaseResponse(Guid? LinkId, bool Changed);
