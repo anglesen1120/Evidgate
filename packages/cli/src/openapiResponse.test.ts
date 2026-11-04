@@ -47,6 +47,7 @@ const runSummary = {
   completeness: null,
   parent_run_id: null,
   rerun_scope: null,
+  decision: 'PASS',
 };
 
 /** A minimal valid `RunPage` body for `GET /v1/projects/{p}/runs` (200). */
@@ -238,6 +239,26 @@ describe('openapi response validator: declared responses', () => {
   it('accepts an evaluated and a pending run decision body', () => {
     expect(validator.validateResponse('getRunDecision', 200, evaluatedDecision).errors).toEqual([]);
     expect(validator.validateResponse('getRunDecision', 200, pendingDecision).errors).toEqual([]);
+  });
+
+  it('accepts every stored verdict and null on a list row', () => {
+    for (const decision of ['PASS', 'FAIL', 'INCONCLUSIVE', null]) {
+      expect(
+        validator.validateResponse('listRuns', 200, {
+          items: [{ ...runSummary, decision }],
+          next_cursor: null,
+        }).errors,
+      ).toEqual([]);
+    }
+  });
+
+  it('refuses a filter token where a list row serves its stored verdict', () => {
+    expect(
+      validator.validateResponse('listRuns', 200, {
+        items: [{ ...runSummary, decision: 'pass' }],
+        next_cursor: null,
+      }).errors,
+    ).not.toEqual([]);
   });
 
   it('refuses the superseded run decision body', () => {

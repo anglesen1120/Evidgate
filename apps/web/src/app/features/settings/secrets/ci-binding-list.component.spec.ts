@@ -1,3 +1,4 @@
+import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { CiBindingView } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
@@ -17,6 +18,30 @@ const failure: ApiError = {
   details: [],
 };
 
+@Component({
+  imports: [CiBindingListComponent],
+  template: `
+    <app-ci-binding-list
+      [rows]="rows"
+      [phase]="'ready'"
+      [hasMore]="hasMore()"
+      [loadingMore]="loadingMore()"
+      (loadMore)="loadPage()"
+    />
+  `,
+})
+class FastPagingHost {
+  readonly rows = rows;
+  readonly hasMore = signal(true);
+  readonly loadingMore = signal(false);
+
+  loadPage(): void {
+    this.loadingMore.set(true);
+    this.hasMore.set(false);
+    this.loadingMore.set(false);
+  }
+}
+
 describe('CiBindingListComponent (09.7.1-F15)', () => {
   afterEach(() => TestBed.resetTestingModule());
 
@@ -34,6 +59,7 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(root.querySelector('section')?.getAttribute('aria-busy')).toBe('true');
     expect(root.querySelector('[role="status"]')?.textContent).toContain('Loading CI bindings');
     expect(root.querySelector('.binding-skeleton')?.getAttribute('aria-hidden')).toBe('true');
+    expect(root.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(3);
     expect(root.querySelector('[data-ci-empty]')).toBeNull();
   });
 
@@ -77,6 +103,10 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(lists[0]?.children).toHaveLength(3);
     expect(lists[1]?.children).toHaveLength(3);
     expect(toggles).toHaveLength(2);
+    expect(toggles[0]?.getAttribute('data-slot')).toBe('button');
+    expect(toggles[0]?.type).toBe('button');
+    toggles[0]?.focus();
+    expect(document.activeElement).toBe(toggles[0]);
     expect(toggles[0]?.getAttribute('aria-expanded')).toBe('false');
     toggles[0]?.click();
     fixture.detectChanges();
@@ -84,7 +114,7 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(lists[1]?.children).toHaveLength(3);
     expect(toggles[0]?.getAttribute('aria-expanded')).toBe('true');
     expect(toggles[0]?.textContent).toContain('Show fewer');
-    expect(lists[0]?.classList.contains('patterns-expanded')).toBe(true);
+    expect(lists[0]?.classList.contains('overflow-y-auto')).toBe(true);
     expect(toggles[0]?.getAttribute('aria-controls')).toBe(lists[0]?.id);
     toggles[0]?.click();
     fixture.detectChanges();
@@ -196,6 +226,22 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(document.activeElement).toBe(root.querySelector('h2'));
   });
 
+  it('restores focus when the last page settles before an intermediate loading render', async () => {
+    const fixture = TestBed.createComponent(FastPagingHost);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const more = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
+    if (!more) throw new Error('Expected Load more');
+    more.focus();
+    expect(document.activeElement).toBe(more);
+    more.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-ci-load-more]')).toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('#ci-bindings-heading'));
+  });
+
   it('leaves focus on Load more when another page remains', async () => {
     const { fixture, root } = await render();
     fixture.componentRef.setInput('hasMore', true);
@@ -264,7 +310,7 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     'keeps the role=status live region mounted in the %s phase',
     async (phase) => {
       const { root } = await render(phase, phase === 'ready' ? rows : []);
-      const region = root.querySelector<HTMLElement>('.binding-status');
+      const region = root.querySelector<HTMLElement>('[data-ci-bindings] > p:last-child');
       expect(region?.getAttribute('role')).toBe('status');
       expect(region?.closest('[data-ci-bindings]')).not.toBeNull();
     },

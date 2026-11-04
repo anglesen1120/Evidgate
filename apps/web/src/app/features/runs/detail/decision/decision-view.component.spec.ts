@@ -114,7 +114,7 @@ describe('DecisionViewComponent', () => {
 
   it('renders pending with the shared pending chip and no verdict, outcome or provenance', () => {
     const { root } = render({ decision: { kind: 'pending' } });
-    expect(text(root, 'app-decision-chip')).toContain('pending');
+    expect(text(root, 'app-decision-chip')).toContain('Not evaluated');
     expect(text(root, '[data-decision-pending]')).toBe('No live evaluation is available yet.');
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.querySelector('[data-decision-provenance]')).toBeNull();

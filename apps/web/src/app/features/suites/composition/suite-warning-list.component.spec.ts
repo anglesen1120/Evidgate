@@ -130,4 +130,14 @@ describe('SuiteWarningListComponent', () => {
       }
     },
   );
+  it('uses a labelled Helm card without adding keyboard stops to read-only warnings', async () => {
+    const warning = 'Cảnh báo bộ kiểm thử rất dài '.repeat(30);
+    const { root } = await render([warning]);
+    const section = root.querySelector('[data-testid="suite-warnings"]');
+    expect(section?.getAttribute('data-slot')).toBe('card');
+    expect(section?.getAttribute('aria-label')).toBe('Suite warnings');
+    expect(root.querySelector('h2')?.getAttribute('data-slot')).toBe('card-title');
+    expect(itemTexts(root)).toEqual([warning]);
+    expect(root.querySelector('button, a, input, [tabindex]')).toBeNull();
+  });
 });

@@ -17,7 +17,7 @@ namespace Tenancy.IntegrationTests;
 /// service credential is the permission stage's 403.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class ListRunsTests
+public sealed partial class ListRunsTests
 {
     private const string ShaOne = "1111111111111111111111111111111111111111";
 

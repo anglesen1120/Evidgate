@@ -8,6 +8,12 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { clipDiffText, diffPolicyBodies, type PolicyDiff } from './policy-diff';
 import { PolicyStore } from './policy.store';
@@ -15,76 +21,103 @@ import { PolicyStore } from './policy.store';
 @Component({
   selector: 'app-revision-diff',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './policy.page.css',
+  imports: [HlmAlertImports, HlmBadge, HlmButton, HlmCardImports, HlmLabel, HlmSelectImports],
+  host: { class: 'block min-w-0' },
   template: `
-    <section aria-labelledby="policy-diff-title">
-      <h3 id="policy-diff-title">{{ copy.title }}</h3>
-      <div class="comparison-pickers">
-        <div class="field">
-          <label for="policy-diff-base">{{ copy.base }}</label>
-          <!--
-            The selection is carried by each option's selected state, never by a value binding on
-            the select: the select exists (with only its placeholder) before the revisions arrive,
-            so a value written then is discarded and the browser would keep showing the placeholder.
-          -->
-          <select
-            id="policy-diff-base"
+    <section hlmCard class="gap-4 p-4" aria-labelledby="policy-diff-title">
+      <h3 hlmCardTitle id="policy-diff-title" class="m-0 text-base">{{ copy.title }}</h3>
+      <div class="grid min-w-0 gap-3 md:grid-cols-2">
+        <div class="grid min-w-0 gap-2">
+          <label hlmLabel for="policy-diff-base">{{ copy.base }}</label>
+          <hlm-select
+            [value]="baseId()"
+            [itemToString]="revisionLabel"
             [disabled]="store.revisions().length < 2"
-            (change)="selectBase($event)"
+            (valueChange)="selectBase($event)"
           >
-            <option value="">{{ copy.choose }}</option>
-            @for (revision of store.revisions(); track revision.id) {
-              <option [value]="revision.id" [selected]="revision.id === baseId()">
-                {{ copy.revision }} {{ revision.revision_no }}
-              </option>
-            }
-          </select>
+            <hlm-select-trigger
+              [buttonId]="'policy-diff-base'"
+              class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+            >
+              <hlm-select-value [placeholder]="copy.choose" />
+            </hlm-select-trigger>
+            <hlm-select-content *hlmSelectPortal [aria-label]="copy.base">
+              @for (revision of store.revisions(); track revision.id) {
+                <hlm-select-item [value]="revision.id"
+                  >{{ copy.revision }} {{ revision.revision_no }}</hlm-select-item
+                >
+              }
+            </hlm-select-content>
+          </hlm-select>
         </div>
-        <div class="field">
-          <label for="policy-diff-target">{{ copy.target }}</label>
-          <select
-            id="policy-diff-target"
+        <div class="grid min-w-0 gap-2">
+          <label hlmLabel for="policy-diff-target">{{ copy.target }}</label>
+          <hlm-select
+            [value]="targetId()"
+            [itemToString]="revisionLabel"
             [disabled]="store.revisions().length === 0"
-            (change)="selectTarget($event)"
+            (valueChange)="selectTarget($event)"
           >
-            <option value="">{{ copy.choose }}</option>
-            @for (revision of store.revisions(); track revision.id) {
-              <option [value]="revision.id" [selected]="revision.id === targetId()">
-                {{ copy.revision }} {{ revision.revision_no }}
-              </option>
-            }
-          </select>
+            <hlm-select-trigger
+              [buttonId]="'policy-diff-target'"
+              class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
+            >
+              <hlm-select-value [placeholder]="copy.choose" />
+            </hlm-select-trigger>
+            <hlm-select-content *hlmSelectPortal [aria-label]="copy.target">
+              @for (revision of store.revisions(); track revision.id) {
+                <hlm-select-item [value]="revision.id"
+                  >{{ copy.revision }} {{ revision.revision_no }}</hlm-select-item
+                >
+              }
+            </hlm-select-content>
+          </hlm-select>
         </div>
       </div>
       <div data-policy-diff [attr.aria-busy]="phase() === 'loading'" [attr.aria-live]="'polite'">
         @switch (phase()) {
           @case ('loading') {
-            <p class="state" role="status">{{ copy.loading }}</p>
+            <p hlmAlert class="m-0 text-muted-foreground" role="status">{{ copy.loading }}</p>
           }
           @case ('error') {
-            <div class="failure" role="alert">
+            <div hlmAlert [variant]="'destructive'" class="mb-3 wrap-anywhere" role="alert">
               <p>{{ error()?.message ?? copy.error }}</p>
               @if (error(); as failure) {
                 <code>{{ failure.code }}</code>
               }
             </div>
-            <button type="button" (click)="load()">{{ copy.retry }}</button>
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              class="min-h-[var(--eg-control-touch)] whitespace-normal"
+              type="button"
+              (click)="load()"
+            >
+              {{ copy.retry }}
+            </button>
           }
           @case ('empty') {
-            <p class="state">{{ copy.empty }}</p>
+            <p hlmAlert class="m-0 text-muted-foreground">{{ copy.empty }}</p>
           }
           @case ('ready') {
             @if (diff().rows.length === 0) {
-              <p class="state">{{ copy.same }}</p>
+              <p hlmAlert class="m-0 text-muted-foreground">{{ copy.same }}</p>
             }
-            <ol class="diff-rows">
+            <ol class="m-0 grid list-none gap-3 p-0 empty:hidden">
               @for (row of diff().rows; track $index) {
-                <li data-diff-row [attr.data-diff-kind]="row.kind" [attr.data-diff-path]="row.path">
-                  <div class="revision-heading">
-                    <strong>{{ kindLabel(row.kind) }}</strong
-                    ><code>{{ pathLabel(row.path) }}</code>
+                <li
+                  class="grid min-w-0 gap-3 rounded-md border border-solid border-border p-3"
+                  data-diff-row
+                  [attr.data-diff-kind]="row.kind"
+                  [attr.data-diff-path]="row.path"
+                >
+                  <div class="flex flex-wrap items-center gap-2">
+                    <strong hlmBadge [variant]="'outline'">{{ kindLabel(row.kind) }}</strong
+                    ><code class="font-mono wrap-anywhere">{{ pathLabel(row.path) }}</code>
                   </div>
-                  <dl class="comparison-values">
+                  <dl
+                    class="m-0 grid min-w-0 gap-3 md:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_pre]:m-0 [&_pre]:whitespace-pre-wrap [&_pre]:font-mono [&_pre]:wrap-anywhere"
+                  >
                     <div>
                       <dt>{{ copy.before }}</dt>
                       <dd>
@@ -102,7 +135,9 @@ import { PolicyStore } from './policy.store';
               }
             </ol>
             @if (diff().truncated) {
-              <p class="notice" data-policy-diff-truncated>{{ copy.truncated }}</p>
+              <p hlmAlert class="mt-3 bg-muted text-muted-foreground" data-policy-diff-truncated>
+                {{ copy.truncated }}
+              </p>
             }
           }
         }
@@ -113,6 +148,10 @@ import { PolicyStore } from './policy.store';
 export class RevisionDiffComponent {
   protected readonly store = inject(PolicyStore);
   readonly targetChanged = output<string | null>();
+  protected readonly revisionLabel = (value: unknown): string => {
+    const revision = this.store.revisions().find((row) => row.id === value);
+    return revision ? `${this.copy.revision} ${revision.revision_no}` : this.copy.choose;
+  };
   protected readonly baseId = signal('');
   protected readonly targetId = signal('');
   protected readonly phase = signal<'empty' | 'loading' | 'ready' | 'error'>('empty');
@@ -171,30 +210,19 @@ export class RevisionDiffComponent {
   protected kindLabel(kind: 'added' | 'removed' | 'changed'): string {
     return this.copy[kind];
   }
-  /**
-   * A row's JSON pointer as the list shows it: clipped to the same budget its two values are (D3).
-   * A pointer can carry a whole key from the body, so an unclipped one would print a body fragment
-   * as a heading. The raw pointer stays on the row's `data-diff-path` attribute, where a test reads
-   * it without going through the rendering budget.
-   */
+  // Pointers can contain a whole body key; keep the visible label within the value budget.
   protected pathLabel(path: string): string {
     return clipDiffText(path);
   }
-  protected selectBase(event: Event): void {
-    const select = event.target;
-    if (
-      select instanceof HTMLSelectElement &&
-      this.store.revisions().some((row) => row.id === select.value)
-    )
-      this.baseId.set(select.value);
+  protected selectBase(value: unknown): void {
+    if (typeof value === 'string' && this.store.revisions().some((row) => row.id === value)) {
+      this.baseId.set(value);
+    }
   }
-  protected selectTarget(event: Event): void {
-    const select = event.target;
-    if (
-      select instanceof HTMLSelectElement &&
-      this.store.revisions().some((row) => row.id === select.value)
-    )
-      this.targetId.set(select.value);
+  protected selectTarget(value: unknown): void {
+    if (typeof value === 'string' && this.store.revisions().some((row) => row.id === value)) {
+      this.targetId.set(value);
+    }
   }
   protected load(): void {
     void this.loadPair(this.baseId(), this.targetId());

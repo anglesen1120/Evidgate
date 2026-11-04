@@ -30,8 +30,6 @@ const THROTTLED = new ApiRequestError({
   retryAfterSeconds: 30,
   details: [],
 });
-const showModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
-const close = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 
 describe('Invite dialogs under a 429 (F12 QA2)', () => {
   let opener: HTMLButtonElement;
@@ -43,18 +41,6 @@ describe('Invite dialogs under a 429 (F12 QA2)', () => {
   const cancelInvite = vi.fn();
 
   beforeEach(async () => {
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     memberships.mockResolvedValue({ items: [MEMBER], next_cursor: null });
     roles.mockResolvedValue([]);
     permissions.mockResolvedValue([]);
@@ -87,10 +73,6 @@ describe('Invite dialogs under a 429 (F12 QA2)', () => {
     TestBed.resetTestingModule();
     opener.remove();
     vi.clearAllMocks();
-    if (showModal) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModal);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (close) Object.defineProperty(HTMLDialogElement.prototype, 'close', close);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
 
@@ -108,9 +90,10 @@ describe('Invite dialogs under a 429 (F12 QA2)', () => {
   it('resend renders the throttled refusal verbatim and sends nothing until the countdown ends', async () => {
     const fixture = TestBed.createComponent(ResendInviteDialogComponent);
     fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
+    const root = document.body;
     fixture.componentInstance.open(MEMBER, opener);
     fixture.detectChanges();
+    await fixture.whenStable();
 
     root.querySelector<HTMLButtonElement>('[data-members-submit]')?.click();
     await fixture.whenStable();
@@ -127,9 +110,10 @@ describe('Invite dialogs under a 429 (F12 QA2)', () => {
   it('cancel renders the throttled refusal verbatim and keeps the dialog open', async () => {
     const fixture = TestBed.createComponent(CancelInviteDialogComponent);
     fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
+    const root = document.body;
     fixture.componentInstance.open(MEMBER, opener);
     fixture.detectChanges();
+    await fixture.whenStable();
 
     root.querySelector<HTMLButtonElement>('[data-members-submit]')?.click();
     await fixture.whenStable();
@@ -138,7 +122,7 @@ describe('Invite dialogs under a 429 (F12 QA2)', () => {
     const submit = expectThrottled(root);
     submit.click();
     expect(cancelInvite).toHaveBeenCalledTimes(1);
-    expect(root.querySelector('dialog')?.open).toBe(true);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(true);
     expect(TestBed.inject(MembersStore).cancelState().phase).toBe('failed');
   });
 });

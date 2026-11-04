@@ -13,6 +13,12 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
@@ -22,15 +28,33 @@ import { AuditStore, EMPTY_AUDIT_FILTERS, type AuditFilters } from './audit.stor
 
 @Component({
   selector: 'app-audit-page',
-  standalone: true,
-  imports: [FormsModule, RequestStateComponent, AuditTableComponent, AuditExportComponent],
+  imports: [
+    FormsModule,
+    HlmAlertImports,
+    HlmButton,
+    HlmCardImports,
+    HlmInput,
+    HlmLabel,
+    HlmSelectImports,
+    RequestStateComponent,
+    AuditTableComponent,
+    AuditExportComponent,
+  ],
   providers: [AuditStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './audit.page.html',
-  styleUrl: './audit.page.css',
-  host: { '[attr.data-audit-phase]': 'store.phase()' },
+  host: {
+    class: 'block min-w-0 text-sm text-foreground [&_p]:m-0 [&_code]:font-mono',
+    '[attr.data-audit-phase]': 'store.phase()',
+  },
 })
 export class AuditPage {
+  protected readonly actorLabel = (value: unknown): string => {
+    if (typeof value !== 'string' || !value) return this.copy.anyActor;
+    return Object.hasOwn(AUDIT_ACTOR_TYPE_LABELS, value)
+      ? AUDIT_ACTOR_TYPE_LABELS[value as keyof typeof AUDIT_ACTOR_TYPE_LABELS]
+      : value;
+  };
   protected readonly store = inject(AuditStore);
   protected readonly session = inject(SessionStore);
   /**

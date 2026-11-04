@@ -1,4 +1,3 @@
-// 09.7.1-T1.1/T1.2 (AC1): unavailable destinations are absent, not disabled or hidden.
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
@@ -73,6 +72,10 @@ describe('SettingsShellPage', () => {
       expect(root.querySelector('select')?.textContent).not.toContain(tab.label);
     }
     expect(root.querySelector('[role="tablist"]')).toBeNull();
+    expect(root.querySelector('a[hlmBtn]')).not.toBeNull();
+    expect(root.querySelector('label[hlmLabel]')?.getAttribute('for')).toBe('settings-destination');
+    expect(root.querySelector('select[hlmInput]')?.id).toBe('settings-destination');
+    expect(root.querySelector('.settings-mobile')?.classList.contains('md:hidden')).toBe(true);
     expect(root.querySelector('[hidden]')).toBeNull();
   });
 

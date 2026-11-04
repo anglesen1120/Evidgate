@@ -10,6 +10,8 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Manifests;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
+using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
+using Evidgate.Modules.Policy.Contracts;
 using Mediator;
 
 namespace Evidgate.Modules.Orchestrator.Application.Queries;
@@ -20,9 +22,11 @@ namespace Evidgate.Modules.Orchestrator.Application.Queries;
 /// caller supplied and the endpoint already validated: <c>ref_name</c> an identity name (1..255 code points, no
 /// control character), <c>pr_number</c> at least 1 and inside <c>int</c>, <c>head_sha</c> a
 /// <c>^[0-9a-f]{40}([0-9a-f]{24})?$</c> commit, <c>trigger_event</c> one of the closed vocabulary,
-/// <c>is_fork</c> a boolean, <c>state</c> one of the seven 00 §8.1 states, <c>decision</c> only
-/// <c>pending</c> (no <c>evaluation</c> row exists before 07.2.2), <c>rerun_scope</c> <c>full</c> or
-/// <c>failed_subset</c>, and <c>parent_run_id</c> a uuid. A null member means "no filter on that column",
+/// <c>is_fork</c> a boolean, <c>state</c> one of the seven 00 §8.1 states, <c>decision</c> <c>pending</c> or one
+/// verdict in lower snake (<c>pass</c>, <c>fail</c>, <c>inconclusive</c>, mapped to the stored 00 §7 verdict by
+/// <see cref="RunListFilterRules.StoredDecision"/>), <c>rerun_scope</c> <c>full</c> or <c>failed_subset</c>, and
+/// <c>parent_run_id</c> a uuid. A null
+/// member means "no filter on that column",
 /// never "match null" — a plain run (no parent, no rerun scope) matches neither of those two filters.
 /// <para>
 /// The four F43 members are declared with a default so a caller that only narrows the recorded identity
@@ -37,9 +41,9 @@ namespace Evidgate.Modules.Orchestrator.Application.Queries;
 /// <param name="IsFork">Exact <c>is_fork</c>.</param>
 /// <param name="State">Exact <c>run.state</c>, one of the seven 00 §8.1 states; not index-served, so it scans.</param>
 /// <param name="Decision">
-/// The run's evaluation decision. Only <c>pending</c> is accepted (F43): no stored decision exists before
-/// 07.2.2, so <c>pending</c> matches every run and contributes no predicate, and every other value is refused
-/// 422 <c>request_invalid</c> by <see cref="RunListFilterRules"/> instead of narrowing to an empty page.
+/// The run's newest live evaluation verdict: <c>PASS</c>, <c>FAIL</c>, <c>INCONCLUSIVE</c>, or <c>pending</c> for a
+/// run with no live evaluation. The verdicts live in Policy, so this filter declares no SQL predicate and is applied
+/// by a bounded chunked scan of the keyset order; any other value is refused 422 <c>request_invalid</c>.
 /// </param>
 /// <param name="RerunScope">Exact <c>run.rerun_scope</c> (0031): <c>full</c> or <c>failed_subset</c>.</param>
 /// <param name="ParentRunId">Exact <c>run.parent_run_id</c> (0031): the run a rerun was created from.</param>
@@ -58,16 +62,35 @@ internal sealed record RunListFilters(
 /// The closed vocabularies of the run list's F43 filters and the one refusal they own (00 §9.2 <c>422
 /// request_invalid</c> with <c>details[].path</c>). The endpoint validates a query-string value with the same
 /// rules, so a malformed value never reaches the handler; the handler re-checks the typed filters because the
-/// contract it serves is the handler's — a <c>decision</c> other than <c>pending</c> must be a 422 and never a
-/// silently narrowed (or silently widened) page, whatever bound the query.
+/// contract it serves is the handler's — a <c>decision</c> outside the vocabulary must be a 422 and never a silently
+/// narrowed (or silently widened) page, whatever bound the query.
 /// </summary>
 internal static class RunListFilterRules
 {
-    /// <summary>The only <c>decision</c> value the contract accepts today (00 §9.3 F43).</summary>
+    /// <summary>The <c>decision</c> value for a run whose newest live evaluation does not exist yet.</summary>
     internal const string PendingDecision = "pending";
 
-    /// <summary>The accepted <c>decision</c> vocabulary; 07.2.2/07.5.2 widen it with the stored verdicts.</summary>
-    internal static readonly IReadOnlyList<string> Decisions = [PendingDecision];
+    /// <summary>
+    /// The accepted <c>decision</c> filter vocabulary, lower snake because a filter is not a stored value: the
+    /// three verdicts plus <c>pending</c> for a run whose newest live evaluation does not exist. Mapped to the
+    /// stored (00 §7 upper case) verdict by <see cref="StoredDecision"/>; upper case is not accepted, so a filter
+    /// can never be confused with the value it selects.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> Decisions = ["pending", "pass", "fail", "inconclusive"];
+
+    /// <summary>
+    /// The single filter-to-stored mapping: <c>pending</c> selects the absence of a live verdict (<c>null</c>),
+    /// every other token its 00 §7 verdict. Callers validate first, so an unknown token throws.
+    /// </summary>
+    internal static string? StoredDecision(string filter) => filter switch
+    {
+        PendingDecision => null,
+        "pass" => "PASS",
+        "fail" => "FAIL",
+        "inconclusive" => "INCONCLUSIVE",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(filter), filter, "not a run-list decision filter"),
+    };
 
     /// <summary>The <c>run.rerun_scope</c> values 0031's <c>run_rerun_scope_check</c> admits.</summary>
     internal static readonly IReadOnlyList<string> RerunScopes = ["full", "failed_subset"];
@@ -122,11 +145,13 @@ internal sealed record ListRunsQuery(Guid ProjectId, RunListFilters Filters, str
 /// Handler of <see cref="ListRunsQuery"/>: the project check, then one keyset statement (one extra row decides the
 /// next page). The list is project-scoped and read-only: <c>run:read</c> is outside the service-role ceiling
 /// (<c>PermissionEvaluator.Service</c>), so a <c>ci_producer</c>/service credential can never hold it and is the
-/// permission stage's <c>403 forbidden</c>. Every F43 filter is a <c>where</c> predicate of that one statement, so
-/// the page is cut from rows that already match — never filtered client-side and never paged before the filter. A
-/// row's <c>completeness</c> is the joined <c>evidence_revision.completeness</c> of the run's current revision and
-/// stays null while the run has none (never a fabricated <c>incomplete</c>); <c>parent_run_id</c> and
-/// <c>rerun_scope</c> are the run's own columns.
+/// permission stage's <c>403 forbidden</c>. <c>state</c>, <c>rerun_scope</c> and <c>parent_run_id</c> are <c>where</c>
+/// predicates of that one statement, so the page is cut from rows that already match. <c>decision</c> is Policy data
+/// and cannot join here, so that filter is applied over the same keyset order in bounded chunks — one Policy batch
+/// read per chunk — and the page carries the newest live verdict Policy names for each row, null while the run has
+/// none; never a per-row read and never a join across module tables. A row's <c>completeness</c> is the joined
+/// <c>evidence_revision.completeness</c> of the run's current revision and stays null while the run has none (never a
+/// fabricated <c>incomplete</c>); <c>parent_run_id</c> and <c>rerun_scope</c> are the run's own columns.
 /// <para>
 /// Order is <c>(created_at, id)</c> ascending and the cursor is the opaque <c>KeysetCursor</c> over the last row of
 /// the page, so <c>(created_at, id) &gt; (cursor)</c> is stable under concurrent inserts: a row created between two
@@ -134,8 +159,10 @@ internal sealed record ListRunsQuery(Guid ProjectId, RunListFilters Filters, str
 /// not signed and carries no tenant: it is bound to the caller's own rows by the query itself, because the
 /// <c>org_id</c> predicate, the project scope and the <c>FORCE</c>d RLS policy are always applied — a well-formed
 /// cursor can only move the page position inside the caller's own project, never read another project's or tenant's
-/// rows. A cursor this codec did not produce is <c>422 request_invalid</c> (<c>cursor</c>, <c>malformed</c>) rather
-/// than a guessed page position.
+/// rows. A <c>decision</c>-filtered scan that ends on its row budget answers the last <em>scanned</em> row as the
+/// cursor rather than the last returned one, so a short page still advances past everything it read; every returned
+/// row sorts before that position. A cursor this codec did not produce is <c>422 request_invalid</c>
+/// (<c>cursor</c>, <c>malformed</c>) rather than a guessed page position.
 /// </para>
 /// <para>
 /// The project must exist and be live, exactly like the module's other project-scoped reads: an unknown id and
@@ -147,22 +174,45 @@ internal sealed record ListRunsQuery(Guid ProjectId, RunListFilters Filters, str
 /// (<c>PermissionEvaluator.Service</c>), so such a caller is refused at the permission stage with
 /// <c>403 forbidden</c> first.
 /// </para>
+/// <para>
+/// One member needs a second permission: a run's <c>decision</c> is <c>decision:read</c> data (00 §9.3), so a caller
+/// holding <c>run:read</c> only gets the page with every item's <c>decision</c> null and Policy is never asked, and
+/// the <c>decision</c> filter answers <c>403 forbidden</c> instead of a page — an empty page would still say which
+/// runs carry a verdict. The gate is asked once per page, inside this handler, because the pipeline sees only the
+/// route's <c>run:read</c>.
+/// </para>
 /// </summary>
 [Permission(Permissions.Run.Read)]
 internal sealed class ListRunsQueryHandler(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
-    IRequestTenantContextAccessor tenant)
+    IRequestTenantContextAccessor tenant,
+    IPermissionEvaluator permissions,
+    IPolicyContracts policy)
     : IQueryHandler<ListRunsQuery, Result<RunPage>>
 {
+    /// <summary>
+    /// The most rows one <c>decision</c>-filtered page may scan. Policy data cannot join the Orchestrator statement
+    /// (module data is private), so the filter reads chunks of runs and asks Policy about each chunk; this cap keeps a
+    /// page whose filter matches almost nothing from scanning the whole project. A page may therefore hold fewer than
+    /// <c>limit</c> items while <c>next_cursor</c> is present.
+    /// </summary>
+    internal const int MaxScannedRows = 1000;
+
+    /// <summary>The smallest chunk the decision scan reads; a page limit of 1 must not cost one round trip per row.</summary>
+    private const int MinScanChunk = 50;
+
+    /// <summary>The largest chunk, equal to the batch read's own bound (the page limit's maximum).</summary>
+    private const int MaxScanChunk = 200;
+
     /// <inheritdoc />
     public async ValueTask<Result<RunPage>> Handle(ListRunsQuery query, CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Orchestrator, nameof(ListRunsQuery));
 
         // The F43 vocabularies are re-checked here, before the project check, because the handler owns the contract
-        // it serves: a `decision` the column cannot hold (anything but `pending`) must be a 422, never a page. The
+        // it serves: a `decision` outside `pending` plus the three verdict tokens must be a 422, never a page. The
         // endpoint refuses the same values first, so this only fires for a caller that did not come through it.
         if (RunListFilterRules.Validate(query.Filters) is { Count: > 0 } filterErrors)
         {
@@ -186,6 +236,23 @@ internal sealed class ListRunsQueryHandler(
             return Result.Failure<RunPage>(OrchestratorErrors.ProjectNotFound);
         }
 
+        // A verdict is decision:read data (00 §9.3) while this page answers under run:read only, so the two are
+        // gated apart here: without decision:read no verdict is read at all (every item's decision stays null and
+        // Policy is never asked) and a `decision` filter is refused — an empty page would still disclose which runs
+        // match a verdict. The project boundary above runs first, so a foreign project keeps its 404.
+        var context = tenant.Require();
+        var verdictsVisible = principals.Current is { } principal
+            && (await permissions
+                .EvaluateAsync(Permissions.Decision.Read, principal, context, cancellationToken)
+                .ConfigureAwait(false))
+                .IsGranted;
+
+        if (query.Filters.Decision is not null && !verdictsVisible)
+        {
+            return Result.Failure<RunPage>(Error.Forbidden(
+                "reading a run's decision needs decision:read, so the decision filter is refused without it"));
+        }
+
         var firstPage = query.Cursor is null;
         DateTimeOffset cursorCreatedAt = default;
         Guid cursorId = default;
@@ -197,36 +264,190 @@ internal sealed class ListRunsQueryHandler(
         }
 
         var orgId = scopes.Require().OrgId;
-        var rows = await db.QueryAsync<RunListRow>(
-                firstPage ? ListRunsSql.FirstPage(query.Filters) : ListRunsSql.NextPage(query.Filters),
-                ListRunsSql.Parameters(orgId, query.ProjectId, query.Filters, firstPage ? null : cursorCreatedAt, cursorId, query.Limit + 1),
+        var page = query.Filters.Decision is { } decision
+            ? await ScanByDecisionAsync(query, orgId, decision, firstPage, cursorCreatedAt, cursorId, cancellationToken)
+                .ConfigureAwait(false)
+            : await ReadPageAsync(
+                    query, orgId, firstPage, cursorCreatedAt, cursorId, verdictsVisible, cancellationToken)
+                .ConfigureAwait(false);
+
+        return Result.Success(new RunPage([.. page.Rows.Select(ToSummary)], page.NextCursor));
+    }
+
+    /// <summary>The wire row of one statement row, with the verdict Policy named for it (null while unevaluated).</summary>
+    private static RunSummary ToSummary(RunListRow row) => new(
+        row.RunId,
+        row.State,
+        row.CreatedAt,
+        new RunRef(
+            row.RefKind,
+            row.RefName,
+            row.PrNumber,
+            row.HeadSha,
+            row.BaseSha,
+            row.TriggerEvent,
+            row.IsFork),
+        row.UnverifiedRef,
+        row.Completeness,
+        row.ParentRunId,
+        row.RerunScope,
+        row.Decision);
+
+    /// <summary>
+    /// The page without a <c>decision</c> filter: one keyset statement (one extra row decides the next page) and,
+    /// only for a caller that holds <c>decision:read</c>, one Policy batch read for the page's decisions — never one
+    /// read per row.
+    /// </summary>
+    private async ValueTask<ScannedPage> ReadPageAsync(
+        ListRunsQuery query,
+        Guid orgId,
+        bool firstPage,
+        DateTimeOffset cursorCreatedAt,
+        Guid cursorId,
+        bool verdictsVisible,
+        CancellationToken cancellationToken)
+    {
+        var rows = await ReadChunkAsync(
+                query,
+                orgId,
+                firstPage ? null : cursorCreatedAt,
+                cursorId,
+                query.Limit + 1,
                 cancellationToken)
             .ConfigureAwait(false);
 
         var hasMore = rows.Count > query.Limit;
         IReadOnlyList<RunListRow> page = hasMore ? [.. rows.Take(query.Limit)] : rows;
+        if (verdictsVisible)
+        {
+            await AttachDecisionsAsync(page, cancellationToken).ConfigureAwait(false);
+        }
 
-        return Result.Success(new RunPage(
-            [.. page.Select(row => new RunSummary(
-                row.RunId,
-                row.State,
-                row.CreatedAt,
-                new RunRef(
-                    row.RefKind,
-                    row.RefName,
-                    row.PrNumber,
-                    row.HeadSha,
-                    row.BaseSha,
-                    row.TriggerEvent,
-                    row.IsFork),
-                row.UnverifiedRef,
-                row.Completeness,
-                row.ParentRunId,
-                row.RerunScope))],
-            hasMore ? KeysetCursor.Encode(page[^1].CreatedAt, page[^1].RunId) : null));
+        return new ScannedPage(
+            page,
+            hasMore ? KeysetCursor.Encode(page[^1].CreatedAt, page[^1].RunId) : null);
     }
 
-    /// <summary>One row as <see cref="ListRunsSql"/> returns it (snake_case columns mapped by Dapper).</summary>
+    /// <summary>
+    /// The page under a <c>decision</c> filter: the same keyset order read in chunks, each chunk's verdicts read in one
+    /// Policy call, until <c>limit + 1</c> matches settle <c>has_more</c> or the runs or the scan budget end. Rows are
+    /// only ever returned forward of the cursor, so paging neither repeats nor skips a run: when the budget ends
+    /// mid-scan the cursor is the last <em>scanned</em> row, which every returned row sorts before.
+    /// </summary>
+    private async ValueTask<ScannedPage> ScanByDecisionAsync(
+        ListRunsQuery query,
+        Guid orgId,
+        string decision,
+        bool firstPage,
+        DateTimeOffset cursorCreatedAt,
+        Guid cursorId,
+        CancellationToken cancellationToken)
+    {
+        var matches = new List<RunListRow>(query.Limit + 1);
+        var scanned = 0;
+        var exhausted = false;
+        var position = firstPage ? (DateTimeOffset?)null : cursorCreatedAt;
+        var lastScannedAt = cursorCreatedAt;
+        var lastScannedId = cursorId;
+
+        while (matches.Count <= query.Limit && !exhausted && scanned < MaxScannedRows)
+        {
+            var take = Math.Min(Math.Clamp(query.Limit * 2, MinScanChunk, MaxScanChunk), MaxScannedRows - scanned);
+            var rows = await ReadChunkAsync(query, orgId, position, lastScannedId, take, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (rows.Count > 0)
+            {
+                await AttachDecisionsAsync(rows, cancellationToken).ConfigureAwait(false);
+                foreach (var row in rows)
+                {
+                    lastScannedAt = row.CreatedAt;
+                    lastScannedId = row.RunId;
+                    if (MatchesDecision(row.Decision, decision))
+                    {
+                        matches.Add(row);
+                    }
+                }
+            }
+
+            scanned += rows.Count;
+            position = lastScannedAt;
+            exhausted = rows.Count < take;
+        }
+
+        var page = matches.Count > query.Limit ? [.. matches.Take(query.Limit)] : matches;
+        string? nextCursor;
+        if (matches.Count > query.Limit)
+        {
+            nextCursor = KeysetCursor.Encode(page[^1].CreatedAt, page[^1].RunId);
+        }
+        else if (exhausted)
+        {
+            nextCursor = null;
+        }
+        else
+        {
+            nextCursor = KeysetCursor.Encode(lastScannedAt, lastScannedId);
+        }
+
+        return new ScannedPage(page, nextCursor);
+    }
+
+    /// <summary>
+    /// One keyset chunk, forward of <paramref name="cursorCreatedAt"/>; a null cursor is the first page. The
+    /// <c>decision</c> filter declares no SQL predicate, because the <c>evaluation</c> table belongs to Policy.
+    /// </summary>
+    private Task<IReadOnlyList<RunListRow>> ReadChunkAsync(
+        ListRunsQuery query,
+        Guid orgId,
+        DateTimeOffset? cursorCreatedAt,
+        Guid cursorId,
+        int limit,
+        CancellationToken cancellationToken) =>
+        db.QueryAsync<RunListRow>(
+            cursorCreatedAt is null ? ListRunsSql.FirstPage(query.Filters) : ListRunsSql.NextPage(query.Filters),
+            ListRunsSql.Parameters(orgId, query.ProjectId, query.Filters, cursorCreatedAt, cursorId, limit),
+            cancellationToken);
+
+    /// <summary>Sets each row's stored verdict from one Policy batch read; a run Policy did not name stays null.</summary>
+    private async ValueTask AttachDecisionsAsync(IReadOnlyList<RunListRow> rows, CancellationToken cancellationToken)
+    {
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        var decisions = await policy
+            .GetLatestLiveDecisionsAsync([.. rows.Select(row => row.RunId)], cancellationToken)
+            .ConfigureAwait(false);
+
+        if (decisions.Count == 0)
+        {
+            return;
+        }
+
+        var byRun = decisions.ToDictionary(item => item.RunId);
+        foreach (var row in rows)
+        {
+            if (byRun.TryGetValue(row.RunId, out var item))
+            {
+                row.Decision = item.Decision;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compares the row's stored (upper case) verdict with the filter's mapped verdict, case-exactly; the
+    /// vocabulary is the contract's and already validated, so <c>pending</c> is the only token that maps to
+    /// <c>null</c> and matches a run without a live evaluation.
+    /// </summary>
+    private static bool MatchesDecision(string? stored, string filter) =>
+        string.Equals(stored, RunListFilterRules.StoredDecision(filter), StringComparison.Ordinal);
+
+    /// <summary>One page of rows plus its next cursor; the rows carry their stored verdicts already.</summary>
+    private sealed record ScannedPage(IReadOnlyList<RunListRow> Rows, string? NextCursor);
+
+    /// <summary>One row as <see cref="ListRunsSql"/> returns it, plus the verdict Policy names for it.</summary>
     private sealed class RunListRow
     {
         public Guid RunId { get; set; }
@@ -257,192 +478,8 @@ internal sealed class ListRunsQueryHandler(
         public Guid? ParentRunId { get; set; }
 
         public string? RerunScope { get; set; }
-    }
-}
 
-/// <summary>
-/// The Dapper statements of the run list (00 §5.5 C5): one parameterised statement per page shape, keyset-paged on
-/// <c>(created_at, id)</c> over <c>run_project_ref_idx</c> when <c>ref_name</c> is filtered, and built from fixed
-/// fragments chosen by the filter shape — a filter value is always a parameter, never concatenated into the text.
-/// The two page shapes and the fragments are <c>internal</c> so <c>ListRunsIndexPlanTests</c> can run
-/// <c>EXPLAIN</c> over the exact statement the handler executes (AC6, §8 P2).
-/// </summary>
-internal static class ListRunsSql
-{
-    private const string Columns = """
-        r.id as run_id,
-               r.state,
-               r.created_at,
-               r.ref_kind,
-               r.ref_name,
-               r.pr_number,
-               r.head_sha,
-               r.base_sha,
-               r.trigger_event,
-               r.is_fork,
-               r.unverified_ref,
-               r.parent_run_id,
-               r.rerun_scope,
-               er.completeness as completeness
-        """;
-
-    /// <summary>
-    /// The one join of the statement: the run's <em>current</em> evidence revision, for its <c>completeness</c>
-    /// only. It is a <c>left join</c> because the pointer is null until the reconciler freezes a revision (0049), so
-    /// a run without one yields one row with a null <c>completeness</c> — no duplicate and no fabricated verdict.
-    /// The join key carries <c>org_id</c> as well as <c>id</c>: the composite FK's shape, and the tenant predicate
-    /// the <c>FORCE</c>d policy of <c>evidence_revision</c> needs on its own side of the join. The fragment starts
-    /// with a line break so it continues the <c>from</c> clause on the next line of both page shapes.
-    /// </summary>
-    private const string EvidenceJoin =
-        "\n  left join public.evidence_revision er"
-        + "\n    on er.org_id = r.org_id"
-        + "\n   and er.id = r.current_evidence_revision_id";
-
-    /// <summary>The project's liveness, for the project-existence check (unknown, other tenant, soft-deleted → 404).</summary>
-    internal const string ProjectExists = "select 1 from public.project where id = @project_id and status <> 'deleted'";
-
-    /// <summary>First page of a project's runs, oldest first.</summary>
-    internal static string FirstPage(RunListFilters filters) => $"""
-        select {Columns}
-          from public.run r{EvidenceJoin}
-         where r.org_id = @org_id
-           and r.project_id = @project_id{Where(filters)}
-         order by r.created_at,
-                  r.id
-         limit @limit
-        """;
-
-    /// <summary>The next page: the same projection and order with the row-comparison cursor (00 §9.1).</summary>
-    internal static string NextPage(RunListFilters filters) => $"""
-        select {Columns}
-          from public.run r{EvidenceJoin}
-         where r.org_id = @org_id
-           and r.project_id = @project_id{Where(filters)}
-           and (r.created_at, r.id) > (@cursor_created_at::timestamptz, @cursor_id::uuid)
-         order by r.created_at,
-                  r.id
-         limit @limit
-        """;
-
-    /// <summary>
-    /// The parameters the chosen statement declares, one per filter that is present — never an extra one, because
-    /// the extended query protocol refuses a bind that supplies a parameter the statement does not use.
-    /// </summary>
-    internal static DynamicParameters Parameters(
-        Guid orgId,
-        Guid projectId,
-        RunListFilters filters,
-        DateTimeOffset? cursorCreatedAt,
-        Guid cursorId,
-        int limit)
-    {
-        var parameters = new DynamicParameters();
-        parameters.Add("org_id", orgId);
-        parameters.Add("project_id", projectId);
-
-        if (filters.RefName is not null)
-        {
-            parameters.Add("ref_name", filters.RefName);
-        }
-
-        if (filters.PrNumber is not null)
-        {
-            parameters.Add("pr_number", filters.PrNumber);
-        }
-
-        if (filters.HeadSha is not null)
-        {
-            parameters.Add("head_sha", filters.HeadSha);
-        }
-
-        if (filters.TriggerEvent is not null)
-        {
-            parameters.Add("trigger_event", filters.TriggerEvent);
-        }
-
-        if (filters.IsFork is not null)
-        {
-            parameters.Add("is_fork", filters.IsFork.Value);
-        }
-
-        if (filters.State is not null)
-        {
-            parameters.Add("state", filters.State);
-        }
-
-        // `decision` declares no parameter: the only value the contract accepts today (`pending`) matches every
-        // run, because no `evaluation` row exists before 07.2.2, so it contributes no predicate.
-        if (filters.RerunScope is not null)
-        {
-            parameters.Add("rerun_scope", filters.RerunScope);
-        }
-
-        if (filters.ParentRunId is not null)
-        {
-            parameters.Add("parent_run_id", filters.ParentRunId.Value);
-        }
-
-        if (cursorCreatedAt is not null)
-        {
-            parameters.Add("cursor_created_at", cursorCreatedAt.Value);
-            parameters.Add("cursor_id", cursorId);
-        }
-
-        parameters.Add("limit", limit);
-
-        return parameters;
-    }
-
-    /// <summary>
-    /// The fixed <c>and …</c> fragments of the present filters, in a stable order; empty when none is set. Every
-    /// column is qualified with the <c>r</c> alias because <see cref="EvidenceJoin"/> brings a second relation into
-    /// scope. <c>decision</c> is deliberately absent: see <see cref="Parameters"/>. The fragments are predicates of
-    /// the statement that carries them, so they narrow the rows the page is cut from, never a page already read.
-    /// </summary>
-    private static string Where(RunListFilters filters)
-    {
-        var fragments = new List<string>(8);
-        if (filters.RefName is not null)
-        {
-            fragments.Add("and r.ref_name = @ref_name");
-        }
-
-        if (filters.PrNumber is not null)
-        {
-            fragments.Add("and r.pr_number = @pr_number");
-        }
-
-        if (filters.HeadSha is not null)
-        {
-            fragments.Add("and r.head_sha = @head_sha");
-        }
-
-        if (filters.TriggerEvent is not null)
-        {
-            fragments.Add("and r.trigger_event = @trigger_event");
-        }
-
-        if (filters.IsFork is not null)
-        {
-            fragments.Add("and r.is_fork = @is_fork");
-        }
-
-        if (filters.State is not null)
-        {
-            fragments.Add("and r.state = @state");
-        }
-
-        if (filters.RerunScope is not null)
-        {
-            fragments.Add("and r.rerun_scope = @rerun_scope");
-        }
-
-        if (filters.ParentRunId is not null)
-        {
-            fragments.Add("and r.parent_run_id = @parent_run_id");
-        }
-
-        return fragments.Count == 0 ? string.Empty : "\n   " + string.Join("\n   ", fragments);
+        /// <summary>The newest stored live verdict, read from Policy; null while the run is not evaluated.</summary>
+        public string? Decision { get; set; }
     }
 }

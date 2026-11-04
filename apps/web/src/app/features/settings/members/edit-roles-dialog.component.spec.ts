@@ -1,7 +1,6 @@
-import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { InteractivityChecker } from '@angular/cdk/a11y';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
 import type { MembershipView, RoleView } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
@@ -57,12 +56,6 @@ class FakeMembersStore {
   }
 }
 
-const showModalDescriptor = Object.getOwnPropertyDescriptor(
-  HTMLDialogElement.prototype,
-  'showModal',
-);
-const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
-
 describe('EditRolesDialogComponent (09.7.1 F6)', () => {
   let fixture: ComponentFixture<EditRolesDialogComponent>;
   let store: FakeMembersStore;
@@ -73,18 +66,6 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
   beforeEach(() => {
     canWrite.set(true);
     store = new FakeMembersStore();
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     TestBed.configureTestingModule({
       imports: [EditRolesDialogComponent],
       providers: [
@@ -93,8 +74,9 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
         { provide: SessionStore, useValue: { has: () => canWrite() } },
       ],
     });
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
     fixture = TestBed.createComponent(EditRolesDialogComponent);
-    root = fixture.nativeElement as HTMLElement;
+    root = document.body;
     opener = document.createElement('button');
     document.body.append(opener);
     fixture.detectChanges();
@@ -102,29 +84,25 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
     opener.remove();
-    if (showModalDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModalDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (closeDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'close', closeDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
 
-  function open(): HTMLDialogElement {
+  async function open(): Promise<HTMLElement> {
     fixture.componentInstance.open(membership, opener);
     fixture.detectChanges();
-    return root.querySelector<HTMLDialogElement>('dialog')!;
+    await fixture.whenStable();
+    const content = root.querySelector<HTMLElement>('[data-members-dialog]');
+    if (!content) throw new Error('Expected role dialog');
+    return content;
   }
-  function option(id: string): HTMLInputElement {
-    return root.querySelector<HTMLInputElement>(
-      `[data-members-role-option][data-role-id="${id}"]`,
+  function option(id: string): HTMLButtonElement {
+    return root.querySelector<HTMLButtonElement>(
+      `[data-members-role-option][data-role-id="${id}"] button[role="checkbox"]`,
     )!;
   }
   function select(id: string, checked: boolean): void {
     const input = option(id);
-    input.checked = checked;
-    input.dispatchEvent(new Event('change'));
+    if ((input.getAttribute('aria-checked') === 'true') !== checked) input.click();
     fixture.detectChanges();
   }
   function save(): HTMLButtonElement {
@@ -139,11 +117,11 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     fixture.detectChanges();
   }
 
-  it('initializes checkboxes from current server roles and enables Save only for a diff', () => {
+  it('initializes checkboxes from current server roles and enables Save only for a diff', async () => {
     store.members.set([{ ...membership, roles: [viewer] }]);
-    open();
-    expect(option(admin.id).checked).toBe(false);
-    expect(option(viewer.id).checked).toBe(true);
+    await open();
+    expect(option(admin.id).getAttribute('aria-checked') === 'true').toBe(false);
+    expect(option(viewer.id).getAttribute('aria-checked') === 'true').toBe(true);
     expect(save().disabled).toBe(true);
     select(admin.id, true);
     expect(save().disabled).toBe(false);
@@ -156,7 +134,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
   it('sends grants before revokes with distinct intents and announces confirmed success', async () => {
     const completed = vi.fn();
     fixture.componentInstance.completed.subscribe(completed);
-    const dialog = open();
+    const dialog = await open();
     select(admin.id, false);
     select(viewer.id, true);
     await submit();
@@ -167,7 +145,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       { kind: 'revoke', roleId: admin.id },
     ]);
     expect(changes[0]!.intent.idempotencyKey).not.toBe(changes[1]!.intent.idempotencyKey);
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
     expect(completed).toHaveBeenCalledOnce();
     expect(document.activeElement).toBe(opener);
   });
@@ -194,10 +172,10 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       store.editState.set({ phase: 'failed', error });
       return Promise.resolve(false);
     });
-    const dialog = open();
+    const dialog = await open();
     select(admin.id, false);
     await submit();
-    expect(dialog.open).toBe(true);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
     expect(root.querySelector('[data-members-error] p')?.textContent).toBe(error.message);
     expect(root.querySelector('[data-members-error-code]')?.textContent).toBe(error.code);
     expect(root.querySelector('[data-members-error] strong, [data-members-error] em')).toBeNull();
@@ -213,14 +191,18 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       store.editState.set({ phase: 'failed', error: lastAdmin });
       return Promise.resolve(false);
     });
-    const dialog = open();
+    const dialog = await open();
     select(admin.id, false);
     await submit();
     await submit();
     const first = store.changeRoles.mock.calls[0]![1][0]!.intent;
     expect(store.changeRoles.mock.calls[1]![1][0]!.intent).toBe(first);
-    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
-    open();
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await open();
     select(admin.id, false);
     await submit();
     expect(store.changeRoles.mock.calls[2]![1][0]!.intent.idempotencyKey).not.toBe(
@@ -237,11 +219,11 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       expect(changes).toHaveLength(2);
       return Promise.resolve(false);
     });
-    const dialog = open();
+    const dialog = await open();
     select(viewer.id, true);
     select(admin.id, false);
     await submit();
-    expect(dialog.open).toBe(true);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
     expect(root.querySelector('[data-members-applied-summary]')).not.toBeNull();
     expect(root.querySelectorAll('[data-members-applied-item]')).toHaveLength(1);
     expect(root.querySelector('[data-members-applied-item]')?.textContent).toContain(viewer.name);
@@ -252,9 +234,9 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     expect(root.querySelector('[data-members-error] p')?.textContent).toBe(lastAdmin.message);
     expect(root.querySelector('[data-members-error-code]')?.textContent).toBe('last_admin');
     expect(root.querySelector('[data-members-last-admin-hint]')).not.toBeNull();
-    expect(option(viewer.id).checked).toBe(true);
-    expect(option(auditor.id).checked).toBe(true);
-    expect(option(admin.id).checked).toBe(false);
+    expect(option(viewer.id).getAttribute('aria-checked') === 'true').toBe(true);
+    expect(option(auditor.id).getAttribute('aria-checked') === 'true').toBe(true);
+    expect(option(admin.id).getAttribute('aria-checked') === 'true').toBe(false);
     await submit();
     const first = store.changeRoles.mock.calls[0]![1];
     const retry = store.changeRoles.mock.calls[1]![1];
@@ -272,7 +254,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       store.editState.set({ phase: 'failed', error: lastAdmin });
       return Promise.resolve(false);
     });
-    open();
+    await open();
     select(viewer.id, true);
     select(auditor.id, true);
     select(admin.id, false);
@@ -281,24 +263,23 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     expect(root.querySelectorAll('[data-members-not-applied-item]')).toHaveLength(2);
   });
 
-  it('traps focus, initially focuses the first checkbox, and returns focus on Escape', () => {
-    const dialog = open();
+  it('traps focus, initially focuses the first checkbox, and returns focus on Escape', async () => {
+    const dialog = await open();
     expect(document.activeElement).toBe(option(admin.id));
-    expect(
-      fixture.debugElement.query(By.directive(CdkTrapFocus)).injector.get(CdkTrapFocus).enabled,
-    ).toBe(true);
-    const cancel = new Event('cancel', { cancelable: true });
+    expect(root.querySelectorAll('.cdk-focus-trap-anchor')).toHaveLength(2);
+    expect(dialog.closest('[role="dialog"]')?.getAttribute('aria-modal')).toBe('true');
+    const cancel = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     dialog.dispatchEvent(cancel);
     fixture.detectChanges();
     expect(cancel.defaultPrevented).toBe(true);
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
     expect(document.activeElement).toBe(opener);
   });
 
-  it('disables saving and focuses Cancel when no roles are available', () => {
+  it('disables saving and focuses Cancel when no roles are available', async () => {
     store.roles.set([]);
     fixture.detectChanges();
-    open();
+    await open();
     expect(root.querySelector('[data-members-role-option]')).toBeNull();
     expect(save().disabled).toBe(true);
     expect(document.activeElement).toBe(root.querySelector('footer button'));
@@ -316,7 +297,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       store.editState.set({ phase: 'submitting', error: null });
       return promise;
     });
-    const dialog = open();
+    const dialog = await open();
     select(viewer.id, true);
     save().click();
     fixture.detectChanges();
@@ -331,7 +312,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     resolve(true);
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
     expect(store.members()[0]!.roles).toEqual([admin, viewer]);
   });
 
@@ -348,7 +329,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       store.editState.set({ phase: 'submitting', error: null });
       return attempt;
     });
-    const dialog = open();
+    const dialog = await open();
     select(viewer.id, true);
     save().click();
     fixture.detectChanges();
@@ -370,7 +351,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
 
     expect(store.changeRoles).toHaveBeenCalledTimes(1);
     expect(completed).toHaveBeenCalledOnce();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
   });
 
   it('ignores Escape and Cancel while the save is in flight, and Escape closes once it settles', async () => {
@@ -382,7 +363,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       store.editState.set({ phase: 'submitting', error: null });
       return attempt;
     });
-    const dialog = open();
+    const dialog = await open();
     select(viewer.id, true);
     save().click();
     fixture.detectChanges();
@@ -390,9 +371,11 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     // Cancel is inert and Escape is refused, so the attempt finishes inside its own dialog and no
     // second attempt can be opened over the row it is about to replace.
     expect(cancelControl().disabled).toBe(true);
-    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
     fixture.detectChanges();
-    expect(dialog.open).toBe(true);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
     expect(store.editState().phase).toBe('submitting');
     expect(store.changeRoles).toHaveBeenCalledTimes(1);
 
@@ -402,12 +385,14 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     resolve(false);
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(dialog.open).toBe(true);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
     expect(cancelControl().disabled).toBe(false);
 
-    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
     fixture.detectChanges();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
     expect(document.activeElement).toBe(opener);
   });
 
@@ -420,7 +405,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       store.editState.set({ phase: 'submitting', error: null });
       return attempt;
     });
-    const dialog = open();
+    const dialog = await open();
     select(viewer.id, true);
     save().click();
     fixture.detectChanges();
@@ -429,7 +414,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     // loaded list is worse than dropping the attempt's view.
     fixture.componentInstance.close();
     fixture.detectChanges();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
     expect(document.activeElement).toBe(opener);
 
     // The abandoned attempt settles into nothing: no further request, no reopened dialog.
@@ -438,7 +423,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(store.changeRoles).toHaveBeenCalledTimes(1);
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
   });
 
   it('moves focus to the first enabled role checkbox when a refusal re-enables the form', async () => {
@@ -450,7 +435,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
       store.editState.set({ phase: 'submitting', error: null });
       return attempt;
     });
-    const dialog = open();
+    const dialog = await open();
     select(admin.id, false);
     save().focus();
     save().click();
@@ -463,7 +448,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(dialog.open).toBe(true);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
     expect(document.activeElement).toBe(option(admin.id));
   });
 
@@ -475,7 +460,7 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
         store.editState.set({ phase: 'failed', error });
         return Promise.resolve(false);
       });
-      open();
+      await open();
       select(viewer.id, true);
       await submit();
       expect(root.querySelector('app-retry-after')).not.toBeNull();
@@ -486,12 +471,14 @@ describe('EditRolesDialogComponent (09.7.1 F6)', () => {
     },
   );
 
-  it('refuses to open without write permission and disables Save if write permission is lost', () => {
+  it('refuses to open without write permission and disables Save if write permission is lost', async () => {
     canWrite.set(false);
-    const dialog = open();
-    expect(dialog.open).toBe(false);
+    fixture.componentInstance.open(membership, opener);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-members-dialog]')).toBeNull();
     canWrite.set(true);
-    open();
+    await open();
     select(viewer.id, true);
     canWrite.set(false);
     fixture.detectChanges();

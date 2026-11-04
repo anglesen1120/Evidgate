@@ -7,6 +7,9 @@ import {
   output,
   viewChild,
 } from '@angular/core';
+import { HlmCardTitle } from '@evidgate/ui/card';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { ConnectStepRevealComponent } from '../../../shared/ui/reveal/connect-step-reveal.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { MEMBERS_COPY } from './member-list.component';
@@ -14,12 +17,12 @@ import { MEMBERS_COPY } from './member-list.component';
 /** Reads only its parent dialog's ephemeral slot; no second copy of the issued value. */
 @Component({
   selector: 'app-invite-reveal',
-  imports: [ConnectStepRevealComponent],
+  imports: [ConnectStepRevealComponent, HlmButton, HlmDialogImports, HlmCardTitle],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './members.page.css',
+  host: { class: 'grid min-w-0 gap-4 wrap-anywhere' },
   template: `
     @if (slot.current(); as entry) {
-      <div class="dialog-body">
+      <div class="dialog-body grid min-w-0 gap-3">
         <app-connect-step-reveal
           [heading]="copy.revealTitle"
           [value]="entry.value"
@@ -31,14 +34,16 @@ import { MEMBERS_COPY } from './member-list.component';
         />
       </div>
     } @else {
-      <header>
-        <h2 #notice tabindex="-1">{{ copy.replayTitle }}</h2>
+      <header hlmDialogHeader>
+        <h2 hlmCardTitle #notice tabindex="-1">{{ copy.replayTitle }}</h2>
       </header>
-      <div class="dialog-body" data-members-invite-replay role="status">
+      <div class="dialog-body grid min-w-0 gap-3" data-members-invite-replay role="status">
         {{ copy.replayNotice }}
       </div>
-      <footer>
-        <button type="button" (click)="dismissed.emit()">{{ copy.close }}</button>
+      <footer hlmDialogFooter>
+        <button hlmBtn [variant]="'outline'" type="button" (click)="dismissed.emit()">
+          {{ copy.close }}
+        </button>
       </footer>
     }
   `,

@@ -231,7 +231,7 @@ public sealed class ListRunsQaTests
 
     /// <summary>
     /// AC6: an unknown query parameter is ignored (the waiver-list precedent), so the page is the unfiltered one.
-    /// <c>decision</c> is no longer an example — F43 (S143) serves it, and any value but <c>pending</c> is a 422
+    /// <c>decision</c> is no longer an example — F43 (S143) serves it, and every value outside its vocabulary is a 422
     /// (see <c>ListRunsFilterTests</c>) — so the unknown members used here are the still-unserved labels.
     /// </summary>
     [Fact]

@@ -115,7 +115,7 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
       'Evidence status unavailable',
     );
-    expect(root.querySelector('app-decision-chip')?.textContent).toContain('pending');
+    expect(root.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
   });
@@ -343,7 +343,7 @@ describe('RunDetailPage', () => {
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
       'Missing evidence reasons unavailable',
     );
-    expect(root.querySelector('app-decision-chip')?.textContent).toContain('pending');
+    expect(root.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
     expect(root.querySelector('app-outcome-pill')).toBeNull();
   });
   it('a failed decision read keeps the run, manifest and attempts and retries only the decision', async () => {
@@ -430,7 +430,7 @@ describe('RunDetailPage', () => {
     decision.resolve(pendingBody());
     await settle(harness);
     expect(harness.routeNativeElement?.querySelector('app-decision-chip')?.textContent).toContain(
-      'pending',
+      'Not evaluated',
     );
   });
   it('lands on the attempt fragment once the rows render, without paging on its own', async () => {

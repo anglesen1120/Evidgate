@@ -29,7 +29,7 @@ namespace Tenancy.IntegrationTests;
 /// <see cref="IPolicyContracts"/>, so both halves are the production ones.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class PolicyContractsTests
+public sealed partial class PolicyContractsTests
 {
     /// <summary>The kinds the ordinal read orders <c>["trace","junit_xml","log"]</c> into (CA1861: no literal arrays as arguments).</summary>
     private static readonly string[] OrdinalKinds = ["junit_xml", "log", "trace"];

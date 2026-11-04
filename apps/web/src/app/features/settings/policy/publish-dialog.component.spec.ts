@@ -1,110 +1,37 @@
 import { signal } from '@angular/core';
-import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import type { PolicyRevisionDto } from '@evidgate/sdk';
-import type { ApiError } from '../../../core/http/api-error';
-import { SessionStore } from '../../../core/session/session.store';
 import { MAX_DIFF_VALUE_CHARS } from './policy-diff';
-import { PolicyStore, type PublishResult } from './policy.store';
+import type { PublishResult } from './policy.store';
 import { PublishDialogComponent } from './publish-dialog.component';
-
-const revision: PolicyRevisionDto = {
-  id: 'head',
-  project_id: 'project',
-  revision_no: 2,
-  hash: 'hash',
-  state: 'active',
-  body: { flaky_budget: 1 },
-  created_by: 'actor',
-  created_at: '2026-10-26T00:00:00Z',
-  version: 1,
-};
-const refused: ApiError = {
-  kind: 'validation',
-  status: 422,
-  code: 'critical_case_not_quarantinable',
-  message: 'Exact server message <img src=x onerror=1>',
-  details: [
-    { path: '/critical_cases/0', reason: 'First reason <b>verbatim</b>' },
-    { path: '/quarantine_ids/1', reason: 'Second reason. Do not paraphrase.' },
-  ],
-  requestId: null,
-  retryable: false,
-  retryAfterSeconds: null,
-};
-const conflict: ApiError = {
-  ...refused,
-  kind: 'precondition_failed',
-  status: 412,
-  code: 'stale_revision',
-  details: [{ path: 'revision_id', reason: 'current-head' }],
-};
-class FakePolicyStore {
-  readonly phase = signal<'ready' | 'error'>('ready');
-  readonly loadError = signal<ApiError | null>(null);
-  readonly publishing = signal(false);
-  readonly loadBody = vi.fn(() => Promise.resolve(revision));
-  readonly publish = vi.fn<(text: string) => Promise<PublishResult>>(() =>
-    Promise.resolve({ kind: 'created', revision }),
-  );
-  readonly reload = vi.fn(() => Promise.resolve());
-}
-const originalShow = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
-const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
+import {
+  conflict,
+  configurePublishDialog,
+  edit,
+  FakePolicyStore,
+  refused,
+  render,
+  revision,
+  waitForConflict,
+} from './publish-dialog.test-support';
 describe('PublishDialogComponent', () => {
   let store: FakePolicyStore;
   const canWrite = signal(true);
   beforeEach(() => {
     store = new FakePolicyStore();
     canWrite.set(true);
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: PolicyStore, useValue: store },
-        {
-          provide: SessionStore,
-          useValue: { has: (code: string) => code === 'policy:write' && canWrite() },
-        },
-      ],
-    });
+    configurePublishDialog(store, canWrite);
   });
   afterEach(() => {
     TestBed.resetTestingModule();
-    if (originalShow) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', originalShow);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
-  async function render() {
-    const fixture = TestBed.createComponent(PublishDialogComponent);
-    fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
-    const opener = document.createElement('button');
-    root.append(opener);
-    await fixture.componentInstance.open(revision.id, opener);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    const textarea = root.querySelector<HTMLTextAreaElement>('#policy-publish-body');
-    const submit = root.querySelector<HTMLButtonElement>('[data-policy-publish-submit]');
-    const dialog = root.querySelector<HTMLDialogElement>('[data-policy-publish-dialog]');
-    if (!textarea || !submit || !dialog) throw new Error('Expected publish controls');
-    return { fixture, root, opener, textarea, submit, dialog };
-  }
-  function edit(textarea: HTMLTextAreaElement, value: string): void {
-    textarea.value = value;
-    textarea.dispatchEvent(new Event('input'));
-  }
+  it('describes the editor with the rendered byte count before validation', async () => {
+    const { root, textarea } = await render();
+    expect(textarea.getAttribute('aria-describedby')).toBe('policy-body-size');
+    expect(root.querySelector('#policy-body-size')?.textContent).toContain('/ 65536');
+    expect(root.querySelector('#policy-local-error')).toBeNull();
+  });
   it.each(['{broken', '[]', 'null', '1', '"string"'])(
     'rejects invalid JSON object %s locally without publishing',
     async (text) => {
@@ -116,6 +43,10 @@ describe('PublishDialogComponent', () => {
       expect(root.querySelector('[data-policy-publish-local-error]')?.textContent).toMatch(/\S/);
       expect(textarea.value).toBe(text);
       expect(textarea.getAttribute('aria-invalid')).toBe('true');
+      expect(textarea.getAttribute('aria-describedby')).toBe('policy-body-size policy-local-error');
+      for (const id of ['policy-body-size', 'policy-local-error']) {
+        expect(root.querySelector(`#${id}`)?.textContent).toMatch(/\S/);
+      }
     },
   );
   it('refuses 65537 UTF-8 bytes locally and shows the byte count versus the limit', async () => {
@@ -140,7 +71,7 @@ describe('PublishDialogComponent', () => {
     await fixture.whenStable();
     expect(store.publish).toHaveBeenCalledExactlyOnceWith(text);
     expect(done).toHaveBeenCalledWith({ revision, created: true });
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected).toBe(false);
   });
   it('retains the draft and renders 422 code, message and every detail verbatim as text', async () => {
     store.publish.mockResolvedValue({ kind: 'refused', error: refused });
@@ -158,7 +89,7 @@ describe('PublishDialogComponent', () => {
     }
     expect(alert?.querySelector('img, b, [onerror]')).toBeNull();
     expect(textarea.value).toBe(text);
-    expect(dialog.open).toBe(true);
+    expect(dialog.isConnected).toBe(true);
   });
   it('opens the shared 412 dialog and Reload reads the list without resubmitting', async () => {
     store.publish.mockResolvedValue({
@@ -170,7 +101,7 @@ describe('PublishDialogComponent', () => {
     submit.click();
     const shared = await waitForConflict(fixture, root);
     expect(shared.textContent).toContain('current-head');
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected).toBe(false);
     const reload = shared.querySelector<HTMLButtonElement>('button.reload');
     expect(reload).not.toBeNull();
     reload?.click();
@@ -185,15 +116,16 @@ describe('PublishDialogComponent', () => {
       error: conflict,
       currentRevisionId: 'current-head',
     });
-    const { fixture, root, textarea, submit, dialog } = await render();
+    const { fixture, root, textarea, submit } = await render();
     edit(textarea, '{"flaky_budget":9}');
     submit.click();
     const shared = await waitForConflict(fixture, root);
     shared.querySelector<HTMLButtonElement>('footer button:not(.reload)')?.click();
     await fixture.whenStable();
-    expect(dialog.open).toBe(true);
-    expect(textarea.value).toBe('{"flaky_budget":9}');
-    expect(document.activeElement).toBe(textarea);
+    const reopened = root.querySelector<HTMLTextAreaElement>('#policy-publish-body');
+    expect(root.querySelector('[data-policy-publish-dialog]')).not.toBeNull();
+    expect(reopened?.value).toBe('{"flaky_budget":9}');
+    expect(document.activeElement).toBe(reopened);
     expect(store.reload).not.toHaveBeenCalled();
     expect(store.publish).toHaveBeenCalledTimes(1);
   });
@@ -217,25 +149,31 @@ describe('PublishDialogComponent', () => {
     expect(shared.textContent).toContain(refused.message);
     expect(store.publish).toHaveBeenCalledTimes(1);
   });
-  it('wraps Tab and Shift+Tab and restores opener focus on cancel', async () => {
+  it('uses one focus trap, wraps both boundaries and restores opener focus on Escape', async () => {
     const { fixture, root, textarea, submit, dialog, opener } = await render();
-    const key = (shiftKey: boolean) =>
-      new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+    // JSDOM has no layout; CDK checks rendered geometry before traversing the real focus trap.
+    vi.spyOn(textarea, 'offsetWidth', 'get').mockReturnValue(100);
+    vi.spyOn(submit, 'offsetWidth', 'get').mockReturnValue(100);
+    const anchors = document.querySelectorAll<HTMLElement>('.cdk-focus-trap-anchor');
+    expect(anchors).toHaveLength(2);
+    const container = dialog.closest('[role="dialog"]');
+    const titleId = container?.getAttribute('aria-labelledby') ?? '';
+    const descriptionId = container?.getAttribute('aria-describedby') ?? '';
+    expect(document.getElementById(titleId)?.textContent).toContain('Publish revision');
+    expect(document.getElementById(descriptionId)?.textContent).toContain('activation mode');
     submit.focus();
-    const forward = key(false);
-    submit.dispatchEvent(forward);
-    expect(forward.defaultPrevented).toBe(true);
+    anchors[1]?.focus();
     expect(document.activeElement).toBe(textarea);
-    const backward = key(true);
-    textarea.dispatchEvent(backward);
-    expect(backward.defaultPrevented).toBe(true);
+    anchors[0]?.focus();
     expect(document.activeElement).toBe(submit);
-    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
     await fixture.whenStable();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected).toBe(false);
     expect(document.activeElement).toBe(opener);
     expect(store.publish).not.toHaveBeenCalled();
-    expect(root.querySelector<HTMLTextAreaElement>('#policy-publish-body')?.value).toBe('');
+    expect(root.querySelector('#policy-publish-body')).toBeNull();
   });
   it('ignores Escape and double submits while publishing', async () => {
     let resolve: ((result: PublishResult) => void) | undefined;
@@ -249,16 +187,16 @@ describe('PublishDialogComponent', () => {
     submit.click();
     submit.click();
     fixture.detectChanges();
-    const cancel = new Event('cancel', { cancelable: true });
-    dialog.dispatchEvent(cancel);
-    expect(cancel.defaultPrevented).toBe(true);
-    expect(dialog.open).toBe(true);
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    expect(dialog.isConnected).toBe(true);
     expect(submit.disabled).toBe(true);
     expect(store.publish).toHaveBeenCalledTimes(1);
     resolve?.({ kind: 'unchanged', revision });
     await Promise.resolve();
     await fixture.whenStable();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected).toBe(false);
   });
   it('does not let a late reload close an editor reopened with Keep editing', async () => {
     let resolve: (() => void) | undefined;
@@ -273,19 +211,21 @@ describe('PublishDialogComponent', () => {
       error: conflict,
       currentRevisionId: 'current-head',
     });
-    const { fixture, root, textarea, submit, dialog } = await render();
+    const { fixture, root, submit } = await render();
     submit.click();
     const shared = await waitForConflict(fixture, root);
     shared.querySelector<HTMLButtonElement>('button.reload')?.click();
     fixture.detectChanges();
     shared.querySelector<HTMLButtonElement>('footer button:not(.reload)')?.click();
     await fixture.whenStable();
-    edit(textarea, '{"flaky_budget":3}');
+    const reopened = root.querySelector<HTMLTextAreaElement>('#policy-publish-body');
+    if (!reopened) throw new Error('Expected reopened editor');
+    edit(reopened, '{"flaky_budget":3}');
     resolve?.();
     await Promise.resolve();
     await fixture.whenStable();
-    expect(dialog.open).toBe(true);
-    expect(textarea.value).toBe('{"flaky_budget":3}');
+    expect(root.querySelector('[data-policy-publish-dialog]')).not.toBeNull();
+    expect(reopened.value).toBe('{"flaky_budget":3}');
     expect(store.publish).toHaveBeenCalledTimes(1);
   });
   it('keeps publish disabled after a seed failure and allows closing without sending', async () => {
@@ -295,9 +235,11 @@ describe('PublishDialogComponent', () => {
     expect(root.querySelector('[role="alert"]')?.textContent).toMatch(/\S/);
     submit.click();
     expect(store.publish).not.toHaveBeenCalled();
-    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
     await fixture.whenStable();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected).toBe(false);
   });
   it('allows cancelling a pending seed and ignores the late body', async () => {
     let resolve: ((value: PolicyRevisionDto) => void) | undefined;
@@ -309,166 +251,38 @@ describe('PublishDialogComponent', () => {
     );
     const fixture = TestBed.createComponent(PublishDialogComponent);
     fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
+    const root = document.body;
     const pending = fixture.componentInstance.open(revision.id, document.createElement('button'));
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-policy-publish-dialog]');
-    dialog?.dispatchEvent(new Event('cancel', { cancelable: true }));
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-policy-publish-dialog]');
+    expect(dialog).not.toBeNull();
+    dialog?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
     resolve?.(revision);
     await pending;
     await fixture.whenStable();
-    expect(dialog?.open).toBe(false);
-    expect(root.querySelector<HTMLTextAreaElement>('#policy-publish-body')?.value).toBe('');
+    expect(dialog?.isConnected).toBe(false);
+    expect(root.querySelector('#policy-publish-body')).toBeNull();
     expect(store.publish).not.toHaveBeenCalled();
   });
   it('closes and clears a draft when write permission is revoked', async () => {
-    const { fixture, textarea, dialog } = await render();
+    const { fixture, dialog } = await render();
     canWrite.set(false);
     await fixture.whenStable();
-    expect(dialog.open).toBe(false);
-    expect(textarea.value).toBe('');
+    expect(dialog.isConnected).toBe(false);
+    expect(document.querySelector('#policy-publish-body')).toBeNull();
     expect(store.publish).not.toHaveBeenCalled();
   });
   it('does not fetch a seed when write permission is missing', async () => {
     canWrite.set(false);
-    const { dialog } = await render();
+    const fixture = TestBed.createComponent(PublishDialogComponent);
+    fixture.detectChanges();
+    await fixture.componentInstance.open(revision.id, document.createElement('button'));
+    await fixture.whenStable();
     expect(store.loadBody).not.toHaveBeenCalled();
-    expect(dialog.open).toBe(false);
-  });
-  /** The 412 path reads the head body before it opens the dialog: wait for that second settle. */
-  async function waitForConflict(
-    fixture: ComponentFixture<unknown>,
-    root: HTMLElement,
-  ): Promise<HTMLElement> {
-    expect(root.querySelector('app-conflict-dialog')).not.toBeNull();
-    await fixture.whenStable();
-    const dialog = document.querySelector<HTMLElement>('[role="dialog"]:has(hlm-dialog-content)');
-    if (dialog === null) throw new Error('the conflict dialog did not open');
-    return dialog;
-  }
-  it('shows the head body as server values for added, removed and changed rows', async () => {
-    const headBody: PolicyRevisionDto = {
-      ...revision,
-      id: 'current-head',
-      body: { flaky_budget: 2, collection_timeout_minutes: 30 },
-    };
-    store.loadBody.mockResolvedValueOnce(revision).mockResolvedValueOnce(headBody);
-    store.publish.mockResolvedValue({
-      kind: 'conflict',
-      error: conflict,
-      currentRevisionId: 'current-head',
-    });
-    const { fixture, root, textarea, submit } = await render();
-    edit(textarea, JSON.stringify({ flaky_budget: 1, late_window_minutes: 15 }, null, 2));
-    submit.click();
-    const shared = await waitForConflict(fixture, root);
-    // The envelope carries no body, so the head the 412 named is read once and compared.
-    expect(store.loadBody).toHaveBeenLastCalledWith('current-head');
-    const fields = [...shared.querySelectorAll('.field')];
-    expect(fields).toHaveLength(3);
-    const field = (path: string): Element => {
-      const found = fields.find((item) => item.querySelector('h3')?.textContent?.includes(path));
-      if (found === undefined) throw new Error(`no conflict field for ${path}`);
-      return found;
-    };
-    // changed: the draft's value on the left, the server's on the right.
-    expect(field('/flaky_budget').querySelector('.local-value')?.textContent).toContain('1');
-    expect(field('/flaky_budget').querySelector('.server-value')?.textContent).toContain('2');
-    // added: nothing on the server, the draft's value on the left.
-    expect(field('/late_window_minutes').querySelector('.server-value')?.textContent).toMatch(/\S/);
-    expect(field('/late_window_minutes').querySelector('.local-value')?.textContent).toContain(
-      '15',
-    );
-    // removed: the server's value on the right, nothing in the draft.
-    expect(
-      field('/collection_timeout_minutes').querySelector('.server-value')?.textContent,
-    ).toContain('30');
-    expect(field('/collection_timeout_minutes').querySelector('.local-value')?.textContent).toMatch(
-      /\S/,
-    );
-  });
-  it('falls back to the envelope fields when the head body cannot be loaded', async () => {
-    store.loadBody
-      .mockResolvedValueOnce(revision)
-      .mockRejectedValueOnce(new Error('head read refused'));
-    store.publish.mockResolvedValue({
-      kind: 'conflict',
-      error: conflict,
-      currentRevisionId: 'current-head',
-    });
-    const { fixture, root, submit } = await render();
-    submit.click();
-    const shared = await waitForConflict(fixture, root);
-    expect(store.loadBody).toHaveBeenLastCalledWith('current-head');
-    // The draft is the only field the envelope can describe; its server side stays uncompared.
-    const fields = [...shared.querySelectorAll('.field')];
-    expect(fields).toHaveLength(1);
-    expect(fields[0]?.querySelector('.local-value')?.textContent).toMatch(/\S/);
-    expect(fields[0]?.querySelector('.server-value')?.textContent).toMatch(/\S/);
-    // Still usable: Reload acts, and nothing is resubmitted on its own.
-    shared.querySelector<HTMLButtonElement>('button.reload')?.click();
-    await fixture.whenStable();
-    expect(store.reload).toHaveBeenCalledTimes(1);
-    expect(store.publish).toHaveBeenCalledTimes(1);
-  });
-  it('caps the conflict comparison at a hundred field rows', async () => {
-    const wideBody = Object.fromEntries(
-      Array.from({ length: 150 }, (_unused, index) => [`field_${index}`, index]),
-    ) as PolicyRevisionDto['body'];
-    store.loadBody
-      .mockResolvedValueOnce(revision)
-      .mockResolvedValueOnce({ ...revision, id: 'current-head', body: wideBody });
-    store.publish.mockResolvedValue({
-      kind: 'conflict',
-      error: conflict,
-      currentRevisionId: 'current-head',
-    });
-    const { fixture, root, textarea, submit } = await render();
-    edit(textarea, '{}');
-    submit.click();
-    const shared = await waitForConflict(fixture, root);
-    // 150 pointers differ; the shared dialog is handed the first hundred and no "N more" row.
-    expect([...shared.querySelectorAll('.field')]).toHaveLength(100);
-  });
-  it('renders every row of an array change even when the rows share one pointer', async () => {
-    store.loadBody.mockResolvedValueOnce(revision).mockResolvedValueOnce({
-      ...revision,
-      id: 'current-head',
-      body: { required_suites: ['checkout', 'search', 'storefront-catalog'] },
-    });
-    store.publish.mockResolvedValue({
-      kind: 'conflict',
-      error: conflict,
-      currentRevisionId: 'current-head',
-    });
-    const { fixture, root, textarea, submit } = await render();
-    // A primitive-set comparison reports one row per removed element at the ARRAY's pointer, so
-    // these two rows share `/required_suites`: the shared dialog tracks by `id` and must not see
-    // duplicated keys.
-    edit(textarea, JSON.stringify({ required_suites: ['checkout'] }));
-    submit.click();
-    const shared = await waitForConflict(fixture, root);
-    const fields = [...shared.querySelectorAll('.field')];
-    expect(fields).toHaveLength(2);
-    for (const field of fields) {
-      expect(field.querySelector('h3')?.textContent).toContain('/required_suites');
-    }
-  });
-  it('falls back to the envelope fields when the head body has no differing field', async () => {
-    store.loadBody
-      .mockResolvedValueOnce(revision)
-      .mockResolvedValueOnce({ ...revision, id: 'current-head' });
-    store.publish.mockResolvedValue({
-      kind: 'conflict',
-      error: conflict,
-      currentRevisionId: 'current-head',
-    });
-    const { fixture, root, submit } = await render();
-    submit.click();
-    const shared = await waitForConflict(fixture, root);
-    // Zero diff rows cannot fill a field list: the envelope's single draft field stands in.
-    expect([...shared.querySelectorAll('.field')]).toHaveLength(1);
-    expect(store.publish).toHaveBeenCalledTimes(1);
+    expect(document.querySelector('[data-policy-publish-dialog]')).toBeNull();
   });
   it('clears a stale server refusal as soon as the draft is edited', async () => {
     store.publish.mockResolvedValue({ kind: 'refused', error: refused });
@@ -481,9 +295,6 @@ describe('PublishDialogComponent', () => {
     expect(root.querySelector('[data-policy-error]')).toBeNull();
   });
   it('clips a conflict field label to the same budget as its values', async () => {
-    // D3: the label handed to the shared dialog is a JSON pointer, and a pointer carries a whole key
-    // of the body — so an unclipped one would print a body fragment as a heading, long after its two
-    // values were cut to the diff's budget.
     const longKey = 'k'.repeat(MAX_DIFF_VALUE_CHARS * 2);
     const headBody: PolicyRevisionDto = { ...revision, id: 'current-head', body: {} };
     store.loadBody.mockResolvedValueOnce(revision).mockResolvedValueOnce(headBody);
@@ -498,7 +309,6 @@ describe('PublishDialogComponent', () => {
     const shared = await waitForConflict(fixture, root);
 
     const heading = shared.querySelector('.field h3');
-    // Only the label's own text node: the heading also carries its "Not compared" marker.
     const label = [...(heading?.childNodes ?? [])]
       .filter((node) => node.nodeType === Node.TEXT_NODE)
       .map((node) => node.textContent ?? '')

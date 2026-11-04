@@ -13,7 +13,8 @@ namespace Evidgate.Modules.Policy.Application;
 internal sealed class PolicyContracts(
     GetActivePolicyQuery query,
     GetRequiredArtifactKindsQuery requiredArtifactKinds,
-    GetLiveEvaluationsQuery liveEvaluations) : IPolicyContracts
+    GetLiveEvaluationsQuery liveEvaluations,
+    GetLatestLiveDecisionsQuery latestLiveDecisions) : IPolicyContracts
 {
     /// <summary>Resolves the revision a new run pins, or null when the project has no active policy.</summary>
     /// <param name="projectId">The project the run is created in.</param>
@@ -39,4 +40,10 @@ internal sealed class PolicyContracts(
         IReadOnlyList<int> evidenceRevisions,
         CancellationToken cancellationToken) =>
         liveEvaluations.GetAsync(runId, evidenceRevisions, cancellationToken);
+
+    /// <inheritdoc />
+    public ValueTask<IReadOnlyList<RunLiveDecision>> GetLatestLiveDecisionsAsync(
+        IReadOnlyList<Guid> runIds,
+        CancellationToken cancellationToken) =>
+        latestLiveDecisions.GetAsync(runIds, cancellationToken);
 }

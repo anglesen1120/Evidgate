@@ -21,7 +21,7 @@
 //
 // Every assertion keys on the tab's DOM contract (plan §10 T6) — `app-audit-page[data-audit-phase]`,
 // `[data-audit-apply]` / `[data-audit-clear]`, `[data-audit-row][data-audit-support]`,
-// `.support-access` + its `[role="tooltip"]` description (`audit-support-<row id>`),
+// native `.support-access` buttons and their portalled `[role="tooltip"]` descriptions,
 // `app-audit-export[data-audit-export-phase]` / `[data-audit-export]` — never on a localized label,
 // so both bundles answer the same. What IS read from the corpus is the row data itself (ids, seqs,
 // timestamps, grant ids): the fixture is the record of what the tab renders, so a row added to the
@@ -42,6 +42,7 @@ import {
   SETTINGS_AUDIT_ONLY_GRANTS,
   settingsTabPath,
   THEMES,
+  waitForDialogAnimations,
   withVariants,
 } from './support';
 
@@ -121,7 +122,6 @@ const TABLE_REGION = 'app-audit-table [role="region"]';
 
 /** The support-access chip of one row, and the tooltip that carries its grant id. */
 const SUPPORT_CHIPS = `${AUDIT_ROWS} .support-access`;
-const SUPPORT_DESCRIPTION = 'app-audit-table .support-description';
 
 /** The tab's own phase hook, awaited before any content claim (loading → ready). */
 async function expectAuditReady(page: Page): Promise<void> {
@@ -137,14 +137,6 @@ async function renderedTimestamps(page: Page, selector: string): Promise<string[
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('datetime') ?? ''));
 }
 
-/**
- * The `aria-describedby` of whatever focus holds, or `''` when focus took an element with none.
- * Only the chip declares one, so the value names which chip the keyboard stopped on.
- */
-async function focusedDescription(page: Page): Promise<string> {
-  return page.evaluate(() => document.activeElement?.getAttribute('aria-describedby') ?? '');
-}
-
 test.describe('AC7: an audit:read session reads the log and exports it', () => {
   for (const locale of LOCALES) {
     test(`the filter form, the default page and the export control render (${locale})`, async ({
@@ -155,17 +147,26 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
       await page.goto(withVariants(settingsTabPath(locale, 'audit'), [SETTINGS_AUDIT_ONLY_GRANTS]));
       await expectAuditReady(page);
 
-      // The filter form: one control per wire filter, plus the two actions. The `actor_type`
-      // select offers the wire's five actor types and "any" — read from the option values, which
-      // are the wire's enums and therefore locale-free.
+      // Portalled options retain the wire enums in data-value, independently of locale.
       const form = page.locator('app-audit-page form');
       await expect(form).toHaveCount(1);
-      await expect(form.locator('select#audit-actor')).toBeVisible();
+      const actor = form.locator('button#audit-actor');
+      await expect(actor).toHaveRole('combobox');
+      await actor.click();
+      const actorOptions = page.getByRole('listbox').getByRole('option');
+      await expect(actorOptions).toHaveCount(6);
       expect(
-        await form
-          .locator('select#audit-actor option')
-          .evaluateAll((options) => options.map((option) => option.getAttribute('value') ?? '')),
+        await actorOptions.evaluateAll((options) =>
+          options.map((option) => option.getAttribute('data-value')),
+        ),
       ).toEqual(['', 'user', 'ci_producer', 'agent', 'platform_operator', 'system']);
+      await expect(page.getByRole('listbox')).toHaveAccessibleName(
+        await page.locator('label[for="audit-actor"]').innerText(),
+      );
+      await waitForDialogAnimations(page, 'hlm-select-content[data-state="open"]');
+      await expectNoA11yViolations(page, `Audit actor options ${locale}`);
+      await page.keyboard.press('Escape');
+      await expect(actor).toHaveAttribute('aria-expanded', 'false');
       await expect(form.locator('input#audit-action')).toBeVisible();
       await expect(form.locator('input#audit-object')).toBeVisible();
       await expect(form.locator('input#audit-from[type="datetime-local"]')).toBeVisible();
@@ -182,7 +183,7 @@ test.describe('AC7: an audit:read session reads the log and exports it', () => {
       expect(
         await page
           .locator(`${AUDIT_ROWS} td:nth-child(3)`)
-          .evaluateAll((cells) => cells.map((cell) => (cell.textContent ?? '').trim())),
+          .evaluateAll((cells) => cells.map((cell) => (cell as HTMLElement).innerText.trim())),
       ).toEqual(DEFAULT_ROWS.map((row) => row.action));
       await expect(page.locator(`${AUDIT_ROWS}[data-audit-support="true"]`)).toHaveCount(0);
       await expect(page.locator(SUPPORT_CHIPS)).toHaveCount(0);
@@ -279,13 +280,25 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
       for (const row of FLAGGED_ROWS) {
         const grantId = supportMarker(row)?.grantId ?? '';
         expect(grantId, `the corpus flags ${row.id} with a grant id`).not.toBe('');
-        const description = page.locator(`#audit-support-${row.id}`);
-        await expect(description).toHaveCount(1);
-        expect(await description.innerText()).toContain(grantId);
+        const chip = page
+          .locator(AUDIT_ROWS, {
+            has: page.locator(`time[datetime="${row.created_at}"]`),
+          })
+          .getByRole('button');
+        await expect(chip).toHaveClass(/support-access/);
+        await expect(chip).toHaveAccessibleName(/\S/);
+        await chip.focus();
+        const tooltip = page.getByRole('tooltip');
+        await expect(tooltip).toBeVisible();
+        await expect(tooltip).toContainText(grantId);
+        await expect(chip).toHaveAttribute(
+          'aria-describedby',
+          (await tooltip.getAttribute('id')) ?? '',
+        );
+        await page.keyboard.press('Escape');
+        await expect(tooltip).not.toBeVisible();
       }
-      // Exactly the flagged rows' descriptions exist: a tooltip per plain row would mean the chip
-      // (and its `aria-describedby`) leaked onto them.
-      await expect(page.locator(SUPPORT_DESCRIPTION)).toHaveCount(FLAGGED_ROWS.length);
+      await expect(page.getByRole('tooltip')).toHaveCount(0);
     });
 
     test(`the chip is reachable from the keyboard and its description is its label (${locale})`, async ({
@@ -299,32 +312,34 @@ test.describe('AC8: the support-access chip marks exactly the flagged rows', () 
       );
       await expectAuditReady(page);
 
-      // Tab from the table's own scroll region. The chip is the first focusable thing inside the
-      // table, so the first two stops are the two flagged rows' chips — and nothing on a plain row
-      // interrupts them (`aria-describedby` exists on the chip alone, so it names what took focus).
+      // Native buttons are the first two keyboard stops inside the table.
       const region = page.locator(TABLE_REGION);
       await expect(region).toHaveCount(1);
       await expect(region).toHaveAttribute('tabindex', '0');
       await region.focus();
 
-      await page.keyboard.press('Tab');
-      const first = await focusedDescription(page);
-      await page.keyboard.press('Tab');
-      const second = await focusedDescription(page);
-
-      expect([first, second]).toEqual(FLAGGED_ROWS.map((row) => `audit-support-${row.id}`));
-
-      // The chip is a named group, and the tooltip it points at carries the grant id as text.
-      const [firstFlagged] = FLAGGED_ROWS;
-      if (firstFlagged === undefined) {
-        throw new Error('fixtures/web-api/audit-list-support holds no support-access row');
+      for (const row of FLAGGED_ROWS) {
+        await page.keyboard.press('Tab');
+        const chip = page
+          .locator(AUDIT_ROWS, {
+            has: page.locator(`time[datetime="${row.created_at}"]`),
+          })
+          .getByRole('button');
+        await expect(chip).toBeFocused();
+        await expect(chip).toHaveClass(/support-access/);
+        await expect(chip).toHaveAccessibleName(/\S/);
+        const tooltip = page.getByRole('tooltip');
+        await expect(tooltip).toBeVisible();
+        const descriptionId = await tooltip.getAttribute('id');
+        expect(descriptionId).toBeTruthy();
+        await expect(chip).toHaveAttribute('aria-describedby', descriptionId ?? '');
+        const grantId = supportMarker(row)?.grantId ?? '';
+        expect(grantId).not.toBe('');
+        await expect(tooltip).toContainText(grantId);
+        await page.keyboard.press('Escape');
+        await expect(tooltip).not.toBeVisible();
+        await expect(chip).toBeFocused();
       }
-      const chip = page.locator(SUPPORT_CHIPS).first();
-      await expect(chip).toHaveAttribute('role', 'group');
-      const described = (await chip.getAttribute('aria-describedby')) ?? 'audit-support-missing';
-      const tooltip = page.locator(`#${described}`);
-      await expect(tooltip).toHaveAttribute('role', 'tooltip');
-      expect(await tooltip.innerText()).toContain(supportMarker(firstFlagged)?.grantId ?? '');
     });
   }
 });
@@ -382,7 +397,7 @@ test.describe('AC1: a caller without audit:read gets the not-found page, not a r
 
 test.describe('the Audit tab is WCAG 2.2 AA clean (00 §5.6 W9)', () => {
   // Every state this build gives the page: the plain page, the one carrying support-access chips
-  // (AC8 — a chip is a focusable group with a tooltip, the kind of element that breaks a scan) and
+  // (a native button with a portalled tooltip) and
   // the empty state, whose shared pattern action is the only control on it.
   const STATES = [
     { name: 'default', variant: '' },
@@ -428,6 +443,23 @@ test.describe('at 360px the page does not scroll sideways', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
+    const caption = region.locator('caption');
+    await expect(caption).toHaveCSS('display', 'block');
+    const captionBox = await caption.boundingBox();
+    const tableBox = await region.locator('table').boundingBox();
+    if (captionBox === null || tableBox === null)
+      throw new Error('audit caption or table has no box');
+    expect(captionBox.width).toBeCloseTo(tableBox.width, 0);
+    for (const row of FLAGGED_ROWS) {
+      const supportRow = page.locator(AUDIT_ROWS, {
+        has: page.locator(`time[datetime="${row.created_at}"]`),
+      });
+      const description = supportRow.locator('.support-access + span');
+      await expect(description).toBeVisible();
+      const grantId = supportMarker(row)?.grantId;
+      if (grantId === undefined || grantId === null) throw new Error('flagged row has no grant id');
+      await expect(description).toContainText(grantId);
+    }
 
     // Keyboard users can still reach the overflow: the region is focusable and reports itself as a
     // named region (its `aria-label` is the table caption).

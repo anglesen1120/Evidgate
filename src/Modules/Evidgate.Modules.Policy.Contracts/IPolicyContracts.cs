@@ -46,6 +46,24 @@ public interface IPolicyContracts
         Guid runId,
         IReadOnlyList<int> evidenceRevisions,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads the newest stored verdict of each named run — the highest <c>evidence_revision</c> <c>live</c> row — in
+    /// one statement over the ambient tenant scope, never one statement per run. A <c>shadow</c> row is a second
+    /// opinion about the same evidence and is never the verdict. A run with no live evaluation is absent from the
+    /// answer, which the caller reads as "not evaluated yet"; empty input performs no query.
+    /// </summary>
+    /// <remarks>
+    /// The caller must pass ids it has already scoped to the project and to the set its own caller may see: the
+    /// tenant predicate is the only boundary this read applies, so an id from another project of the same org —
+    /// or one its caller was not authorized to name — would come back as a verdict. Policy cannot re-derive either
+    /// boundary, and must not guess it.
+    /// </remarks>
+    /// <param name="runIds">At most 200 run ids, one page of a list read.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyList<RunLiveDecision>> GetLatestLiveDecisionsAsync(
+        IReadOnlyList<Guid> runIds,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -55,6 +73,13 @@ public interface IPolicyContracts
 /// <param name="EvidenceRevision">The <c>evaluation.evidence_revision</c> this verdict belongs to.</param>
 /// <param name="EvaluationId">The <c>evaluation.id</c> of that revision's <c>live</c> row.</param>
 public sealed record LiveEvaluation(int EvidenceRevision, Guid EvaluationId);
+
+/// <summary>The newest stored live evaluation of a run, never a shadow verdict.</summary>
+/// <param name="RunId">The evaluated run.</param>
+/// <param name="Decision">PASS, FAIL or INCONCLUSIVE.</param>
+/// <param name="EvidenceRevision">The evaluated evidence revision.</param>
+/// <param name="EvaluationId">The stored evaluation id.</param>
+public sealed record RunLiveDecision(Guid RunId, string Decision, int EvidenceRevision, Guid EvaluationId);
 
 /// <summary>
 /// The active policy revision of a project, as run creation needs it (05.2.1 plan §10 T1 hand-over; ruling T93).

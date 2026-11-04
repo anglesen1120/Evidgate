@@ -88,7 +88,9 @@ for (const locale of LOCALES) {
     await expect(decision.locator('[data-decision-pending]')).toBeVisible();
     const chip = decision.locator('app-decision-chip [data-tone]');
     await expect(chip).toHaveAttribute('data-tone', 'pending');
-    await expect(chip.locator('.verdict__value')).toHaveText('pending');
+    await expect(chip.locator('.verdict__value')).toHaveText(
+      locale === 'vi' ? 'Chưa đánh giá' : 'Not evaluated',
+    );
     await expect(decision.locator('app-outcome-pill')).toHaveCount(0);
     await expect(decision.locator('[data-decision-provenance]')).toHaveCount(0);
     await expect(decision.locator('[data-decision-shadow]')).toHaveCount(0);

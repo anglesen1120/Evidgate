@@ -1,19 +1,24 @@
-<section data-testid="suite-warnings" [attr.aria-label]="copy.title">
-  <h2>{{ copy.title }}</h2>
+<section
+  hlmCard
+  class="min-w-0 gap-3 p-3 wrap-anywhere md:p-4 [&_p]:m-0"
+  data-testid="suite-warnings"
+  [attr.aria-label]="copy.title"
+>
+  <h2 hlmCardTitle class="m-0 text-base">{{ copy.title }}</h2>
   @if (warnings(); as items) {
     @if (items.length === 0) {
       <p data-testid="suite-warnings-empty">{{ copy.empty }}</p>
     } @else {
-      <ul data-testid="suite-warnings-items">
+      <ul class="m-0 grid gap-2 ps-4" data-testid="suite-warnings-items">
         @for (warning of items; track $index) {
           <li>
-            <bdi>{{ warning }}</bdi>
+            <bdi class="whitespace-pre-wrap">{{ warning }}</bdi>
           </li>
         }
       </ul>
     }
   } @else {
-    <div data-testid="suite-warnings-unavailable">
+    <div hlmAlert role="note" class="grid gap-2 bg-muted" data-testid="suite-warnings-unavailable">
       <p>{{ copy.unavailable }}</p>
       <p>{{ copy.unavailableReason }}</p>
     </div>

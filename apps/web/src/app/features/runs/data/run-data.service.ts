@@ -1,20 +1,5 @@
-// The runs feature's request half: the run list's page query and the run-detail decision read.
-//
-// The feature service holds no HTTP of its own. `core/data/runs-data.service.ts` already exposes
-// `list(projectId, query)` over the generated `listRuns` operation through `ApiGateway`, and
-// `apps/web/lint/boundaries.cjs` exempts only `core/{http,data}` from
-// `evidgate/no-http-outside-core` — a second data service that imported the SDK operation would be
-// refused by lint and would duplicate the seam where a typed failure is classified. This module
-// therefore narrows that one call to the query the screen actually owns and does the wire naming
-// in one place:
-//
-// - `refName` keeps its camelCase UI name and is sent as the contract's `ref_name` (the only server
-//   filter this screen exposes: `pr_number`, `head_sha`, `trigger_event` and `is_fork` have no
-//   index without `ref_name`, plan Note at line 228, so they stay unexposed);
-// - `cursor` and `limit` are passed through untouched, because the store owns the cursor walk;
-// - an absent/empty `refName` is omitted rather than sent as `ref_name=` (the serializer would send
-//   the empty string, which the server refuses as a 422 — the same rule
-//   `core/data/audit-data.service.ts` applies to its free-text filters).
+// Reuse the core gateway so list and decision reads share typed error handling.
+// UI refName maps to ref_name, and verdict filters map to lowercase wire values.
 
 import { inject, Injectable } from '@angular/core';
 import type { RunPage } from '@evidgate/sdk';
@@ -22,7 +7,7 @@ import type { RunPage } from '@evidgate/sdk';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { readDecisionBody, type DecisionBody } from './decision-body';
 
-/** One request of the run list: the page position plus the one server-side filter. */
+/** One request of the run list, including its server-side filters. */
 export interface RunListQuery {
   /** The opaque `next_cursor` of the previous page; absent on the first read. */
   readonly cursor?: string;
@@ -30,7 +15,16 @@ export interface RunListQuery {
   readonly limit?: number;
   /** Exact `ref_name` of the run's recorded identity; absent when the screen has none. */
   readonly refName?: string;
+  /** Newest live verdict, or runs without a live evaluation. */
+  readonly decision?: 'pending' | 'PASS' | 'FAIL' | 'INCONCLUSIVE';
 }
+
+const DECISION_QUERY_VALUES = {
+  pending: 'pending',
+  PASS: 'pass',
+  FAIL: 'fail',
+  INCONCLUSIVE: 'inconclusive',
+} as const;
 
 /**
  * The run list's data service (`GET /v1/projects/{p}/runs`, 00 §9.1 cursor page of `RunSummary`).
@@ -73,7 +67,12 @@ export class RunDataService {
  * omitted on the first page for the same reason.
  */
 function wireQuery(request: RunListQuery) {
-  const query: { cursor?: string; limit?: number; ref_name?: string } = {};
+  const query: {
+    cursor?: string;
+    limit?: number;
+    ref_name?: string;
+    decision?: Lowercase<NonNullable<RunListQuery['decision']>>;
+  } = {};
   if (request.cursor !== undefined && request.cursor !== '') {
     query.cursor = request.cursor;
   }
@@ -82,6 +81,9 @@ function wireQuery(request: RunListQuery) {
   }
   if (request.refName !== undefined && request.refName !== '') {
     query.ref_name = request.refName;
+  }
+  if (request.decision !== undefined) {
+    query.decision = DECISION_QUERY_VALUES[request.decision];
   }
   return query;
 }
