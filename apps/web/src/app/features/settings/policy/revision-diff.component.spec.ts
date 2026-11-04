@@ -2,12 +2,12 @@ import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { PolicyRevisionDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MAX_DIFF_VALUE_CHARS } from './policy-diff';
 import { PolicyStore } from './policy.store';
 import { RevisionDiffComponent } from './revision-diff.component';
-import { provideSelectTestLayout } from './select.test-support';
 
-provideSelectTestLayout();
+provideLayoutTestStubs();
 
 const previous: PolicyRevisionDto = {
   id: 'a',

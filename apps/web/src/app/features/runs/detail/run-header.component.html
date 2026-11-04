@@ -1,7 +1,12 @@
 @if (view() === 'summary') {
-  <section class="metadata-panel run-summary" aria-labelledby="run-summary-title">
-    <h2 id="run-summary-title">
-      {{ copy.id }} <bdi class="identifier">{{ display(run().run_id) }}</bdi>
+  <section
+    hlmCard
+    class="run-summary gap-(--eg-space-5) p-(--eg-space-5)"
+    aria-labelledby="run-summary-title"
+  >
+    <h2 hlmCardTitle id="run-summary-title" class="m-0 flex flex-wrap gap-(--eg-space-3)">
+      {{ copy.id }}
+      <bdi class="font-mono font-(weight:--eg-weight-regular)">{{ display(run().run_id) }}</bdi>
     </h2>
     <dl>
       <div>
@@ -27,19 +32,36 @@
       </div>
     </dl>
     @if (run().state === 'incomplete' || runCompleteness() === 'incomplete') {
-      <p class="missing-summary" data-run-missing-summary>
-        {{ copy.incomplete }}
-        <button type="button" (click)="viewEvidence.emit()">{{ copy.viewEvidence }}</button>
-      </p>
+      <div
+        hlmAlert
+        class="flex flex-wrap items-center justify-between gap-(--eg-space-3) border-(--eg-warning-fg) bg-(--eg-warning-bg) text-(--eg-warning-fg)"
+        data-run-missing-summary
+      >
+        <p class="m-0 min-w-0 flex-1">{{ copy.incomplete }}</p>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          class="min-h-(--eg-control-touch) whitespace-normal transition-none"
+          (click)="viewEvidence.emit()"
+        >
+          {{ copy.viewEvidence }}
+        </button>
+      </div>
     }
   </section>
 } @else {
-  <div class="metadata-panel">
+  <section
+    hlmCard
+    class="gap-(--eg-space-5) p-(--eg-space-5)"
+    aria-labelledby="run-environment-title"
+  >
+    <h2 hlmCardTitle id="run-environment-title" class="m-0">{{ copy.context }}</h2>
     <dl>
       <div>
         <dt>{{ copy.id }}</dt>
         <dd data-run-id>
-          <bdi class="identifier">{{ display(run().run_id) }}</bdi>
+          <bdi class="font-mono">{{ display(run().run_id) }}</bdi>
         </dd>
       </div>
       <div>
@@ -59,8 +81,9 @@
       <div>
         <dt>{{ copy.ref }}</dt>
         <dd data-run-ref>
-          @if (run().ref.name !== null) {
-            <bdi>{{ display(run().ref.name!) }}</bdi>
+          @let ref = run().ref.name;
+          @if (ref !== null) {
+            <bdi>{{ display(ref) }}</bdi>
           } @else {
             <app-status-pill [tone]="'neutral'" label="" />
           }
@@ -72,8 +95,9 @@
       <div>
         <dt>{{ copy.refKind }}</dt>
         <dd data-run-ref-kind>
-          @if (run().ref.kind !== null) {
-            <bdi>{{ display(run().ref.kind!) }}</bdi>
+          @let kind = run().ref.kind;
+          @if (kind !== null) {
+            <bdi>{{ display(kind) }}</bdi>
           } @else {
             <app-status-pill [tone]="'neutral'" label="" />
           }
@@ -92,8 +116,9 @@
       <div>
         <dt>{{ copy.head }}</dt>
         <dd>
-          @if (run().ref.head_sha !== null) {
-            <bdi class="identifier">{{ display(run().ref.head_sha!) }}</bdi>
+          @let head = run().ref.head_sha;
+          @if (head !== null) {
+            <bdi class="font-mono">{{ display(head) }}</bdi>
           } @else {
             <app-status-pill [tone]="'neutral'" label="" />
           }
@@ -102,8 +127,9 @@
       <div>
         <dt>{{ copy.base }}</dt>
         <dd>
-          @if (run().ref.base_sha !== null) {
-            <bdi class="identifier">{{ display(run().ref.base_sha!) }}</bdi>
+          @let base = run().ref.base_sha;
+          @if (base !== null) {
+            <bdi class="font-mono">{{ display(base) }}</bdi>
           } @else {
             <app-status-pill [tone]="'neutral'" label="" />
           }
@@ -112,8 +138,9 @@
       <div>
         <dt>{{ copy.trigger }}</dt>
         <dd>
-          @if (run().ref.trigger_event !== null) {
-            <bdi>{{ display(run().ref.trigger_event!) }}</bdi>
+          @let trigger = run().ref.trigger_event;
+          @if (trigger !== null) {
+            <bdi>{{ display(trigger) }}</bdi>
           } @else {
             <app-status-pill [tone]="'neutral'" label="" />
           }
@@ -132,28 +159,24 @@
       <div>
         <dt>{{ copy.evidence }}</dt>
         <dd data-run-evidence-revision>
-          @if (run().current_evidence_revision_id !== null) {
-            <bdi class="identifier">{{ display(run().current_evidence_revision_id!) }}</bdi>
+          @let revision = run().current_evidence_revision_id;
+          @if (revision !== null) {
+            <bdi class="font-mono">{{ display(revision) }}</bdi>
           } @else {
             <span>{{ copy.none }}</span>
           }
         </dd>
       </div>
-    </dl>
-    <app-evidence-badge [completeness]="runCompleteness()" />
-  </div>
-  <section class="metadata-panel" aria-labelledby="run-environment-title">
-    <h2 id="run-environment-title">{{ copy.context }}</h2>
-    <dl>
       <div>
         <dt>{{ copy.environment }}</dt>
         <dd data-run-environment>
-          <bdi class="identifier">{{ display(run().environment.environment_key) }}</bdi>
+          <bdi class="font-mono">{{ display(run().environment.environment_key) }}</bdi>
           <span data-run-environment-revision
             >{{ copy.revision }} {{ run().environment.revision_no }}</span
           >
         </dd>
       </div>
     </dl>
+    <app-evidence-badge [completeness]="runCompleteness()" />
   </section>
 }

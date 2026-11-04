@@ -109,23 +109,42 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(back).toBeFocused();
   expect((await back.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
-  // The manifest panel's copy button follows "Back to runs", then the evidence panel's revision
-  // picker (the page is pinned to a frozen revision, so it is a real stop of the walk), then the
-  // attempts table's scroll region (a named stop); the default attempts page (seven rows, no
-  // further cursor) has no pager or load-more button, so one more Tab after the region leaves the
-  // document.
+  // The attempts table's scroll region follows the header. The default attempts page (seven rows,
+  // no further cursor) has no pager or load-more button, so the region is the last stop of that
+  // section.
   await page.keyboard.press('Tab');
-  const copy = page.getByRole('button', { name: 'Copy full manifest hash' });
-  await expect(copy).toBeFocused();
-  expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  const attemptsRegion = page.getByRole('region', { name: 'Attempts table' });
+  await expect(attemptsRegion).toBeFocused();
   await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
   await expect(page.locator('app-attempts-table button')).toHaveCount(0);
 
+  // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, the arrow
+  // keys move inside the list, and the panel that follows is a stop of its own.
+  await page.keyboard.press('Tab');
+  const evidenceTab = page.getByRole('tab', { name: 'Evidence' });
+  await expect(evidenceTab).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  const decisionTab = page.getByRole('tab', { name: 'Latest live decision' });
+  await expect(decisionTab).toBeFocused();
+  await expect(decisionTab).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowLeft');
+  await expect(evidenceTab).toBeFocused();
+  // Brain focuses immediately; selection and the roving tabindex follow in the render.
+  await expect(evidenceTab).toHaveAttribute('aria-selected', 'true');
+  await expect(decisionTab).toHaveAttribute('tabindex', '-1');
+
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('tabpanel')).toBeFocused();
+
+  // The selected panel's revision picker is a combobox (the page is pinned to a frozen revision,
+  // so it is a real stop of the walk), then the manifest panel's copy button ends the page.
   await page.keyboard.press('Tab');
   await expect(page.getByRole('combobox', { name: 'Evidence revision' })).toBeFocused();
 
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('region', { name: 'Attempts table' })).toBeFocused();
+  const copy = page.getByRole('button', { name: 'Copy full manifest hash' });
+  await expect(copy).toBeFocused();
+  expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
@@ -139,9 +158,9 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
   await listIsReady(page);
   await enterMain(page);
 
-  // The three selects are reached and left by Tab alone; their option lists are a native popup on
-  // this platform, so the value this walk sets is the text filter's — the one a keystroke sequence
-  // can type unambiguously.
+  // The three selects are comboboxes reached and left by Tab alone; their option lists are a
+  // portaled overlay opened with Enter or an arrow key, so the value this walk sets is the text
+  // filter's — the one a keystroke sequence can type unambiguously.
   for (const selector of ['#run-state', '#run-decision', '#run-scope']) {
     await page.keyboard.press('Tab');
     await expect(page.locator(selector)).toBeFocused();
@@ -192,12 +211,15 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
 test('the 250-row table keeps both scroll axes on named stops and the visitor inside it', async ({
   page,
 }) => {
+  // Stay above the stacked-record breakpoint but below the desktop table minimum.
+  await page.setViewportSize({ width: 800, height: 800 });
   await page.goto(listAddress('?fixture.variant.listRuns=250-rows'));
   await listIsReady(page);
   await expect(page.locator('app-run-list-table [data-run-row]').first()).toBeVisible();
-  // Two stops, one per scroll axis, each with its own name: the wrapper holds the horizontal
-  // overflow, the viewport the vertical one (F-RUN-04 - same name, not the stop count).
-  await expect(page.locator('app-run-list-table [tabindex="0"]')).toHaveCount(2);
+  // Both scroll axes have named stops. Truncated values can add their own tooltip stops.
+  await expect(
+    page.locator('app-run-list-table :is([role="region"], [role="rowgroup"])[tabindex="0"]'),
+  ).toHaveCount(2);
 
   await enterMain(page);
   for (const selector of FILTER_STOPS) {

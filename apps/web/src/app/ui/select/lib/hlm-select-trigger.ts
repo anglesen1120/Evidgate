@@ -26,6 +26,7 @@ import type { ClassValue } from 'clsx';
       [id]="buttonId()"
       [class]="_computedClass()"
       [aria-invalid]="ariaInvalidInput()"
+      [aria-describedby]="ariaDescribedBy()"
       [attr.data-size]="size()"
       [attr.data-slot]="'select-trigger'"
     >
@@ -46,6 +47,7 @@ export class HlmSelectTrigger {
   );
 
   public readonly buttonId = input<string>(`hlm-select-trigger-${HlmSelectTrigger._id++}`);
+  public readonly ariaDescribedBy = input<string | null>(null, { alias: 'aria-describedby' });
 
   public readonly size = input<'default' | 'sm'>('default');
 

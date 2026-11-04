@@ -17,6 +17,8 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
+import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmTableImports } from '@evidgate/ui/table';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
@@ -26,13 +28,14 @@ import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
 
 @Component({
   selector: 'app-run-list-table',
-  standalone: true,
   imports: [
     NgTemplateOutlet,
     RouterLink,
     CdkVirtualScrollViewport,
     CdkFixedSizeVirtualScroll,
     CdkVirtualForOf,
+    HlmBadge,
+    HlmTableImports,
     RunStatePillComponent,
     StatusPillComponent,
     DataTableValueComponent,
@@ -42,6 +45,7 @@ import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-list-table.component.html',
   styleUrl: './run-list-table.component.css',
+  host: { class: 'block min-w-0' },
 })
 export class RunListTableComponent {
   readonly rows = input.required<readonly RunSummary[]>();
@@ -50,6 +54,10 @@ export class RunListTableComponent {
   private readonly probe = viewChild<ElementRef<HTMLElement>>('rowProbe');
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
   protected readonly displayRef = escapeFormatChars;
+  protected readonly cellClasses =
+    'min-w-0 h-auto box-border p-[var(--eg-space-3)] whitespace-normal text-start font-(weight:--eg-weight-regular) [overflow-wrap:anywhere] max-[767px]:grid max-[767px]:gap-[var(--eg-space-2)] max-[767px]:p-0 before:content-[attr(data-label)] before:text-muted-foreground before:font-[family-name:var(--eg-font-body)] before:font-(weight:--eg-weight-semibold) min-[768px]:before:hidden';
+  protected readonly columnClasses =
+    'h-auto min-w-0 whitespace-normal p-[var(--eg-space-3)] text-xs font-(weight:--eg-weight-semibold) text-muted-foreground';
   /**
    * The same escaping for `rerun_label` / `reprocess_label`. Both are caller-written strings shown
    * in the row, so neither may reach the cell as a raw value (a U+202E label would reorder the rest

@@ -1,119 +1,174 @@
 @if (virtual()) {
-  <span #rowProbe class="row-probe" aria-hidden="true"></span>
+  <span
+    #rowProbe
+    class="row-probe pointer-events-none invisible absolute w-0 box-border h-[calc(var(--eg-control-touch)*3)] max-[767px]:h-[calc(var(--eg-control-touch)*18)]"
+    aria-hidden="true"
+  ></span>
 }
-<!-- The outer keyboard stop reaches desktop overflow; the virtual viewport scrolls rows. -->
+<!-- Presentation tables share one semantic table, matching the shared virtual-table pattern. -->
 <div
-  class="table-scroll"
+  hlmTableContainer
+  class="table-scroll max-w-full rounded-[var(--eg-radius-md)] border border-border bg-card [--eg-focus-offset:calc(var(--eg-focus-width)*-1)] max-[767px]:overflow-x-clip focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:-outline-offset-[var(--eg-focus-width)]"
   role="region"
   tabindex="0"
   [attr.aria-label]="copy.caption"
   (keydown)="scrollColumns($event)"
 >
-  <h2 id="run-table-caption">{{ copy.caption }}</h2>
+  <h2
+    id="run-table-caption"
+    class="m-0 p-[var(--eg-space-4)] text-sm font-(weight:--eg-weight-semibold)"
+  >
+    {{ copy.caption }}
+  </h2>
   <div
-    class="run-table"
+    class="min-w-0 min-[768px]:min-w-[calc(var(--eg-leading-2xl)*32)]"
     role="table"
     aria-labelledby="run-table-caption"
     [attr.aria-rowcount]="rows().length + 1"
     aria-colcount="7"
   >
-    <div role="rowgroup">
-      <div class="table-row table-header" role="row" aria-rowindex="1">
-        <span role="columnheader">{{ copy.id }}</span>
-        <span role="columnheader">{{ copy.state }}</span>
-        <span role="columnheader">{{ copy.evidence }}</span>
-        <span role="columnheader">{{ copy.decision }}</span>
-        <span role="columnheader">{{ copy.ref }}</span>
-        <span role="columnheader">{{ copy.scope }}</span>
-        <span role="columnheader">{{ copy.created }}</span>
-      </div>
-    </div>
+    <table hlmTable role="presentation" class="block border-collapse max-[767px]:sr-only">
+      <thead hlmTHead role="rowgroup" class="block">
+        <tr hlmTr class="run-row bg-secondary hover:bg-secondary" role="row" aria-rowindex="1">
+          <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.id }}</th>
+          <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.state }}</th>
+          <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.evidence }}</th>
+          <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.decision }}</th>
+          <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.ref }}</th>
+          <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.scope }}</th>
+          <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.created }}</th>
+        </tr>
+      </thead>
+    </table>
     @if (virtual()) {
       <cdk-virtual-scroll-viewport
         [itemSize]="itemSize()"
+        class="block h-[calc(var(--eg-control-touch)*10)] focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:-outline-offset-[var(--eg-focus-width)]"
         role="rowgroup"
         tabindex="0"
         [attr.aria-label]="copy.rows"
       >
-        <div
-          *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow"
-          class="table-row virtual-row"
-          role="row"
-          data-run-row
-          [attr.data-run-id]="row.run_id"
-          [attr.aria-rowindex]="index + 2"
-        >
-          <ng-container [ngTemplateOutlet]="cells" [ngTemplateOutletContext]="{ $implicit: row }" />
-        </div>
+        <table hlmTable role="presentation" class="block border-collapse">
+          <tbody hlmTBody class="block" role="presentation">
+            <tr
+              hlmTr
+              *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow"
+              class="run-row virtual-row box-border h-[calc(var(--eg-control-touch)*3)] max-[767px]:h-[calc(var(--eg-control-touch)*18)] max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)] [&>*]:overflow-hidden"
+              role="row"
+              data-run-row
+              [attr.data-run-id]="row.run_id"
+              [attr.aria-rowindex]="index + 2"
+            >
+              <ng-container
+                [ngTemplateOutlet]="cells"
+                [ngTemplateOutletContext]="{ $implicit: row }"
+              />
+            </tr>
+          </tbody>
+        </table>
       </cdk-virtual-scroll-viewport>
     } @else {
-      <div role="rowgroup">
-        @for (row of rows(); track row.run_id; let index = $index) {
-          <div
-            class="table-row"
-            role="row"
-            data-run-row
-            [attr.data-run-id]="row.run_id"
-            [attr.aria-rowindex]="index + 2"
-          >
-            <ng-container
-              [ngTemplateOutlet]="cells"
-              [ngTemplateOutletContext]="{ $implicit: row }"
-            />
-          </div>
-        }
-      </div>
+      <table hlmTable role="presentation" class="block border-collapse">
+        <tbody hlmTBody class="block" role="rowgroup">
+          @for (row of rows(); track row.run_id; let index = $index) {
+            <tr
+              hlmTr
+              class="run-row max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)]"
+              role="row"
+              data-run-row
+              [attr.data-run-id]="row.run_id"
+              [attr.aria-rowindex]="index + 2"
+            >
+              <ng-container
+                [ngTemplateOutlet]="cells"
+                [ngTemplateOutletContext]="{ $implicit: row }"
+              />
+            </tr>
+          }
+        </tbody>
+      </table>
     }
   </div>
 </div>
 <ng-template #cells let-row>
-  <span role="rowheader" class="identifier" [attr.data-label]="copy.id">
-    <a [routerLink]="[row.run_id]" [queryParamsHandling]="'preserve'">
-      <abbr [attr.title]="row.run_id" [attr.aria-label]="row.run_id"
+  <th
+    hlmTh
+    scope="row"
+    role="rowheader"
+    class="identifier font-[family-name:var(--eg-font-mono)]"
+    [class]="cellClasses"
+    [attr.data-label]="copy.id"
+  >
+    <a
+      class="inline-flex min-h-[var(--eg-control-touch)] items-center text-primary underline underline-offset-[var(--eg-space-1)] hover:text-foreground active:text-foreground focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:-outline-offset-[var(--eg-focus-width)]"
+      [routerLink]="[row.run_id]"
+      [queryParamsHandling]="'preserve'"
+    >
+      <abbr class="no-underline" [attr.title]="row.run_id" [attr.aria-label]="row.run_id"
         >{{ row.run_id.slice(0, 8) }}…{{ row.run_id.slice(-8) }}</abbr
       >
     </a>
-  </span>
-  <span role="cell" [attr.data-label]="copy.state"><app-run-state-pill [state]="row.state" /></span>
-  <!-- RunSummary has no completeness or outcome field. Never infer either from state/decision;
-       no completeness filter is offered, and EvidenceBadge deliberately uses unavailable. -->
-  <span role="cell" data-run-evidence [attr.data-label]="copy.evidence"
-    ><app-evidence-badge
-  /></span>
-  <span role="cell" data-run-decision [attr.data-label]="copy.decision"
-    ><app-decision-chip
+  </th>
+  <td hlmTd role="cell" [class]="cellClasses" [attr.data-label]="copy.state">
+    <app-run-state-pill [state]="row.state" />
+  </td>
+  <!-- List evidence stays unavailable; a collection state or verdict is not completeness. -->
+  <td hlmTd role="cell" [class]="cellClasses" data-run-evidence [attr.data-label]="copy.evidence">
+    <app-evidence-badge />
+  </td>
+  <td hlmTd role="cell" [class]="cellClasses" data-run-decision [attr.data-label]="copy.decision">
+    <app-decision-chip
       [decision]="row.decision === null ? 'pending' : (row.decision ?? 'unavailable')"
-  /></span>
-  <span role="cell" class="ref-cell" [attr.data-label]="copy.ref">
-    <bdi
-      ><app-data-table-value
-        [value]="row.ref.name === null ? copy.unavailableRef : displayRef(row.ref.name)"
-        [truncate]="virtual()"
-    /></bdi>
-    @if (row.unverified_ref) {
-      <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
-    }
-  </span>
-  <span role="cell" class="scope-cell" [attr.data-label]="copy.scope">
-    @if (row.rerun_label) {
-      @let rerunLabel = displayLabel(row.rerun_label);
-      <span class="scope scope-rerun" data-run-rerun
-        ><strong>{{ copy.rerun }}</strong
-        ><bdi><app-data-table-value [value]="rerunLabel" [truncate]="virtual()" /></bdi>
-      </span>
-    }
-    @if (row.reprocess_label) {
-      @let reprocessLabel = displayLabel(row.reprocess_label);
-      <span class="scope scope-reprocess" data-run-reprocess
-        ><strong>{{ copy.reprocess }}</strong
-        ><bdi><app-data-table-value [value]="reprocessLabel" [truncate]="virtual()" /></bdi>
-      </span>
-    }
-    @if (!row.rerun_label && !row.reprocess_label) {
-      <span>{{ row.parent_run_id ? copy.child : copy.original }}</span>
-    }
-  </span>
-  <span role="cell" [attr.data-label]="copy.created"
-    ><time [attr.datetime]="row.created_at">{{ row.created_at }}</time></span
-  >
+    />
+  </td>
+  <td hlmTd role="cell" class="ref-cell" [class]="cellClasses" [attr.data-label]="copy.ref">
+    <div class="flex min-w-0 flex-col items-start gap-[var(--eg-space-2)]">
+      <bdi class="block min-w-0 w-full"
+        ><app-data-table-value
+          [value]="row.ref.name === null ? copy.unavailableRef : displayRef(row.ref.name)"
+          [truncate]="virtual()"
+      /></bdi>
+      @if (row.unverified_ref) {
+        <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
+      }
+    </div>
+  </td>
+  <td hlmTd role="cell" class="scope-cell" [class]="cellClasses" [attr.data-label]="copy.scope">
+    <div class="flex min-w-0 flex-col items-start gap-[var(--eg-space-2)]">
+      @if (row.rerun_label) {
+        @let rerunLabel = displayLabel(row.rerun_label);
+        <span class="scope-rerun block min-w-0 max-w-full" data-run-rerun>
+          <strong
+            hlmBadge
+            [variant]="'outline'"
+            class="max-w-full whitespace-normal bg-[var(--eg-info-bg)] text-[var(--eg-info-fg)] font-(weight:--eg-weight-semibold)"
+            >{{ copy.rerun }}</strong
+          >
+          <bdi class="block min-w-0 w-full"
+            ><app-data-table-value [value]="rerunLabel" [truncate]="virtual()"
+          /></bdi>
+        </span>
+      }
+      @if (row.reprocess_label) {
+        @let reprocessLabel = displayLabel(row.reprocess_label);
+        <span class="scope-reprocess block min-w-0 max-w-full" data-run-reprocess>
+          <strong
+            hlmBadge
+            [variant]="'outline'"
+            class="max-w-full whitespace-normal bg-[var(--eg-neutral-bg)] text-[var(--eg-neutral-fg)] font-(weight:--eg-weight-semibold)"
+            >{{ copy.reprocess }}</strong
+          >
+          <bdi class="block min-w-0 w-full"
+            ><app-data-table-value [value]="reprocessLabel" [truncate]="virtual()"
+          /></bdi>
+        </span>
+      }
+      @if (!row.rerun_label && !row.reprocess_label) {
+        <span>{{ row.parent_run_id ? copy.child : copy.original }}</span>
+      }
+    </div>
+  </td>
+  <td hlmTd role="cell" [class]="cellClasses" [attr.data-label]="copy.created">
+    <time [attr.datetime]="row.created_at">{{ row.created_at }}</time>
+  </td>
 </ng-template>

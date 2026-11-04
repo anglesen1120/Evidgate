@@ -6,6 +6,9 @@ import {
   linkedSignal,
   output,
 } from '@angular/core';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
 
 import type { ApiError } from '../../../../core/http/api-error';
 import { DecisionChipComponent } from '../../../../shared/ui/verdict/decision-chip.component';
@@ -28,6 +31,9 @@ import { refusesAccess } from './decision-refusal';
 @Component({
   selector: 'app-decision-view',
   imports: [
+    HlmAlertImports,
+    HlmButton,
+    HlmCardImports,
     DecisionChipComponent,
     OutcomePillComponent,
     RetryAfterComponent,
@@ -38,7 +44,7 @@ import { refusesAccess } from './decision-refusal';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './decision-view.component.html',
-  styleUrl: './decision-view.component.css',
+  host: { class: 'block min-w-0' },
 })
 export class DecisionViewComponent {
   /** `null` while the first read is in flight, so the region has a loading state of its own. */
