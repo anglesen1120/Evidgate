@@ -44,7 +44,7 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable';
             required
             [readOnly]="state() === 'submitting'"
             [attr.aria-invalid]="state() === 'wrong-secret' ? 'true' : null"
-            [attr.aria-describedby]="
+            [aria-describedby]="
               state() === 'wrong-secret' || state() === 'unavailable'
                 ? 'dev-sign-in-note dev-sign-in-error'
                 : 'dev-sign-in-note'

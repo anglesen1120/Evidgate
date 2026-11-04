@@ -1,7 +1,7 @@
 // 09.1.1-T4.1/T4.2; docs/design/web/layout.md#breakpoints-and-navigation.
 // Real 360px overflow, computed contrast and screen-reader evidence belong to browser QA.
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import type { ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
@@ -46,6 +46,7 @@ describe('ShellComponent', () => {
     vi.stubGlobal('innerWidth', 1440);
     await TestBed.configureTestingModule({
       imports: [ShellComponent],
+      deferBlockBehavior: DeferBlockBehavior.Manual,
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: '**', component: NotFoundPage }]),
@@ -57,6 +58,7 @@ describe('ShellComponent', () => {
     root = fixture.nativeElement as HTMLElement;
     document.body.append(root);
     await fixture.whenStable();
+    await renderScope();
   });
 
   afterEach(() => {
@@ -68,8 +70,16 @@ describe('ShellComponent', () => {
     localStorage.removeItem('evidgate-theme');
   });
 
+  async function renderScope(): Promise<void> {
+    for (const block of await fixture.getDeferBlocks()) {
+      await block.render(DeferBlockState.Complete);
+    }
+    await fixture.whenStable();
+  }
+
   it('provides the skip target, main landmark, named nav and router outlet', () => {
     expect(root.querySelector('a.skip-link')?.getAttribute('href')).toBe('#main-content');
+    expect(root.querySelector('a.skip-link')?.classList.contains('transition-none')).toBe(true);
     expect(root.querySelector('main#main-content')?.getAttribute('tabindex')).toBe('-1');
     expect(root.querySelector('nav[aria-label="Primary navigation"]')).not.toBeNull();
     expect(root.querySelector('router-outlet')).not.toBeNull();
@@ -95,6 +105,7 @@ describe('ShellComponent', () => {
     vi.stubGlobal('innerWidth', width);
     window.dispatchEvent(new Event('resize'));
     await fixture.whenStable();
+    await renderScope();
     const topbar = root.querySelector('header.topbar');
     expect(topbar?.querySelectorAll('[role="combobox"]')).toHaveLength(0);
     expect(topbar?.querySelectorAll('button')).toHaveLength(2);
@@ -121,6 +132,7 @@ describe('ShellComponent', () => {
     vi.stubGlobal('innerWidth', 1440);
     window.dispatchEvent(new Event('resize'));
     await fixture.whenStable();
+    await renderScope();
     expect(root.querySelector('aside app-scope-switcher')).toBeNull();
     expect(root.querySelectorAll('header.topbar [role="combobox"]')).toHaveLength(2);
     expect(root.querySelectorAll('app-scope-switcher')).toHaveLength(1);
@@ -168,6 +180,48 @@ describe('ShellComponent', () => {
     expect(root.querySelector('.main-stack')?.hasAttribute('inert')).toBe(false);
     expect(aside.hasAttribute('inert')).toBe(true);
     expect(document.activeElement).toBe(toggle);
+  });
+
+  it('waits for the visible, non-inert drawer before focusing its close button', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const aside = root.querySelector<HTMLElement>('aside')!;
+    const close = root.querySelector<HTMLButtonElement>('.close-button')!;
+    const focus = vi.spyOn(close, 'focus').mockImplementation(() => {
+      expect(aside.hasAttribute('inert')).toBe(false);
+      expect(aside.classList.contains('invisible')).toBe(false);
+    });
+
+    fixture.componentInstance.toggleNavigation();
+    expect(focus).not.toHaveBeenCalled();
+    await fixture.whenStable();
+    expect(focus).toHaveBeenCalledOnce();
+  });
+
+  it('does not focus the close button if the drawer closes before its render', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const close = root.querySelector<HTMLButtonElement>('.close-button')!;
+    const focus = vi.spyOn(close, 'focus');
+    fixture.componentInstance.toggleNavigation();
+    fixture.componentInstance.closeDrawer();
+    await fixture.whenStable();
+    expect(focus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(root.querySelector('.nav-toggle'));
+  });
+
+  it('keeps a scope placeholder until the deferred mobile switcher is ready', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const aside = root.querySelector<HTMLElement>('aside')!;
+    expect(aside.querySelector('app-scope-switcher')).toBeNull();
+    expect(aside.querySelector('.drawer-scope[aria-hidden="true"]')).not.toBeNull();
+    await renderScope();
+    expect(aside.querySelector('.drawer-scope[aria-hidden="true"]')).toBeNull();
+    expect(aside.querySelectorAll('[role="combobox"]')).toHaveLength(2);
   });
 
   it('closes the modal on resize beyond the drawer boundary', async () => {

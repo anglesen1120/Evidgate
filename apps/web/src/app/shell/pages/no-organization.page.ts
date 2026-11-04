@@ -17,9 +17,8 @@ import { HlmCard, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
       hlmCardTitle
       class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
       id="no-organization-heading"
-    >
-      {{ heading }}
-    </h1>
+      [textContent]="heading"
+    ></h1>
     <p hlmCardDescription class="m-0">{{ explanation }}</p>
     <a
       hlmBtn

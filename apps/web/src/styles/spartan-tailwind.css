@@ -5,3 +5,6 @@
 @source '../app/shell';
 @source '../app/features/auth';
 @source '../app/features/onboarding';
+@source not '../app/**/*.spec.ts';
+@source not '../app/**/*.fixture.ts';
+@source not '../app/**/*.testing.ts';

@@ -157,21 +157,22 @@ export class ShellComponent {
    * The two focus targets sit on opposite sides of the drawer's `inert` boundary, so the browser
    * refuses `focus()` until the attribute change is in the DOM: a real browser silently ignores it
    * while the subtree is still inert and leaves focus on `body` — the visitor then has to tab from
-   * the top of the page, and the drawer's trap never engages. `afterNextRender` is the first attempt
-   * (it is already after change detection in the browser), and the frame retry covers the case where
-   * the attribute is still the previous one at that moment.
+   * the top of the page, and the drawer's trap never engages. Wait for Angular's render, then a
+   * microtask so all render callbacks have completed before handing off focus. Check the current
+   * state again so an open/close or resize in the same turn cannot focus a now-hidden control.
    */
   private focusWhenUnblocked(target: 'drawer' | 'opener'): void {
     afterNextRender(
       () => {
-        const element =
-          target === 'drawer'
-            ? this.closeButton()?.nativeElement
-            : this.toggleButton()?.nativeElement;
-        if (element === undefined) return;
-        element.focus();
-        if (this.document.activeElement === element) return;
-        this.document.defaultView?.requestAnimationFrame(() => element.focus());
+        queueMicrotask(() => {
+          if (target === 'drawer' ? !this.mobile() || !this.drawerOpen() : this.drawerOpen())
+            return;
+          const element =
+            target === 'drawer'
+              ? this.closeButton()?.nativeElement
+              : this.toggleButton()?.nativeElement;
+          if (element?.isConnected && !element.closest('[inert]')) element.focus();
+        });
       },
       { injector: this.injector },
     );

@@ -1,6 +1,6 @@
 <a
   hlmBtn
-  class="skip-link fixed start-(--eg-space-3) top-(--eg-space-3) z-(--eg-z-dialog) max-w-[calc(100%-var(--eg-space-5))] -translate-y-[200%] focus:translate-y-0"
+  class="skip-link fixed start-(--eg-space-3) top-(--eg-space-3) z-(--eg-z-dialog) max-w-[calc(100%-var(--eg-space-5))] -translate-y-[200%] transition-none focus:translate-y-0"
   href="#main-content"
   [attr.inert]="drawerOpen() ? '' : null"
   (click)="skipToMain($event)"
@@ -70,15 +70,32 @@
       </div>
     }
     @if (mobile()) {
-      <app-scope-switcher
-        class="drawer-scope box-border border-0 border-b-(length:--eg-border-width) border-solid border-border p-(--eg-space-4)"
-        [organizations]="session.organizations()"
-        [projects]="session.projects()"
-        [currentOrg]="session.currentOrg()"
-        [currentProject]="session.currentProject()"
-        (orgSelected)="selectOrganization($event)"
-        (projectSelected)="selectProject($event)"
-      />
+      @defer (on idle) {
+        <app-scope-switcher
+          class="drawer-scope box-border border-0 border-b-(length:--eg-border-width) border-solid border-border p-(--eg-space-4)"
+          [organizations]="session.organizations()"
+          [projects]="session.projects()"
+          [currentOrg]="session.currentOrg()"
+          [currentProject]="session.currentProject()"
+          (orgSelected)="selectOrganization($event)"
+          (projectSelected)="selectProject($event)"
+        />
+      } @placeholder {
+        <div
+          class="drawer-scope box-border grid gap-(--eg-space-3) border-0 border-b-(length:--eg-border-width) border-solid border-border p-(--eg-space-4)"
+          aria-hidden="true"
+        >
+          @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
+            <div class="grid min-w-0 gap-(--eg-space-1)">
+              <span class="h-(--eg-leading-xs) w-(--eg-space-12) rounded-md bg-muted"></span>
+              <span
+                class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-md bg-muted px-(--eg-space-3)"
+                ><span class="truncate">{{ scope?.name }}</span></span
+              >
+            </div>
+          }
+        </div>
+      }
     }
     <app-shell-nav
       class="flex-1"
@@ -106,16 +123,30 @@
         <app-shell-icon [name]="'menu'" />
       </button>
       @if (!mobile()) {
-        <app-scope-switcher
-          class="topbar-scope min-w-0 grid-cols-2 basis-[calc(1.5*var(--eg-rail-width))] shrink"
-          [compact]="true"
-          [organizations]="session.organizations()"
-          [projects]="session.projects()"
-          [currentOrg]="session.currentOrg()"
-          [currentProject]="session.currentProject()"
-          (orgSelected)="selectOrganization($event)"
-          (projectSelected)="selectProject($event)"
-        />
+        @defer (on idle) {
+          <app-scope-switcher
+            class="topbar-scope min-w-0 grid-cols-2 basis-[calc(1.5*var(--eg-rail-width))] shrink"
+            [compact]="true"
+            [organizations]="session.organizations()"
+            [projects]="session.projects()"
+            [currentOrg]="session.currentOrg()"
+            [currentProject]="session.currentProject()"
+            (orgSelected)="selectOrganization($event)"
+            (projectSelected)="selectProject($event)"
+          />
+        } @placeholder {
+          <div
+            class="topbar-scope grid min-w-0 basis-[calc(1.5*var(--eg-rail-width))] shrink grid-cols-2 gap-(--eg-space-3)"
+            aria-hidden="true"
+          >
+            @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
+              <span
+                class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-md bg-muted px-(--eg-space-3)"
+                ><span class="truncate">{{ scope?.name }}</span></span
+              >
+            }
+          </div>
+        }
       }
       <button
         type="button"

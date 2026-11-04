@@ -608,16 +608,29 @@ test.describe('theme storage edge cases', () => {
   }
 });
 
-test.describe('drawer edges at 360px', () => {
+test.describe('mobile drawer edges', () => {
   test.use({ viewport: { width: 360, height: 720 } });
 
-  test('the scrim closes the drawer and focus returns to the opener', async ({ page }) => {
+  test('the close button closes the full-width drawer at 360px', async ({ page }) => {
+    await page.goto(withVariant(localePath('en', `/orgs/${ORG_ACME}/audit`), LIMITED_GRANTS));
+    const toggle = page.locator('button.nav-toggle');
+    await toggle.click();
+    await expect(page.locator('aside.navigation')).toHaveAttribute('aria-modal', 'true');
+    await page.locator('button.close-button').click();
+    await expect(page.locator('aside.navigation')).not.toHaveAttribute('aria-modal', 'true');
+    await expect(toggle).toBeFocused();
+  });
+
+  test('the exposed scrim closes the drawer at 600px and focus returns to the opener', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 600, height: 720 });
     await page.goto(withVariant(localePath('en', `/orgs/${ORG_ACME}/audit`), LIMITED_GRANTS));
     const toggle = page.locator('button.nav-toggle');
     await toggle.click();
     await expect(page.locator('aside.navigation')).toHaveAttribute('aria-modal', 'true');
 
-    await page.mouse.click(350, 640);
+    await page.locator('button.scrim').click({ position: { x: 590, y: 640 } });
     await expect(page.locator('aside.navigation')).not.toHaveAttribute('aria-modal', 'true');
     await expect(toggle).toBeFocused();
   });

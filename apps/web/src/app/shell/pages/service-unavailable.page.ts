@@ -19,9 +19,8 @@ import { SessionStore } from '../../core/session/session.store';
       hlmCardTitle
       class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
       id="unavailable-heading"
-    >
-      {{ heading }}
-    </h1>
+      [textContent]="heading"
+    ></h1>
     <p hlmCardDescription class="m-0">{{ explanation }}</p>
     <button
       hlmBtn

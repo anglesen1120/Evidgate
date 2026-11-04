@@ -92,6 +92,8 @@ describe('DevSignInComponent', () => {
     expect(input.autocomplete).toBe('off');
     expect(input.required).toBe(true);
     expect(element('label').getAttribute('for')).toBe(input.id);
+    expect(input.getAttribute('aria-describedby')).toBe('dev-sign-in-note');
+    expect(element('#dev-sign-in-note').textContent).toContain(fixture.componentInstance.note);
     expect(element('form').getAttribute('aria-labelledby')).toBe('dev-sign-in-heading');
     expect(input.hasAttribute('hlmInput')).toBe(true);
     expect(element('label').hasAttribute('hlmLabel')).toBe(true);
@@ -149,6 +151,39 @@ describe('DevSignInComponent', () => {
     await settle();
     expect(session.reload).toHaveBeenCalledOnce();
   });
+
+  it.each([401, 503])(
+    'preserves the description and error association after reopening a failed status %s',
+    async (status) => {
+      open();
+      const originalInput = element<HTMLInputElement>('input');
+      submit();
+      http.expectOne('/v1/dev/session').flush({}, { status, statusText: 'Sign-in failed' });
+      await settle();
+      expect(originalInput.getAttribute('aria-describedby')).toBe(
+        'dev-sign-in-note dev-sign-in-error',
+      );
+
+      const details = element<HTMLDetailsElement>('details');
+      details.open = false;
+      details.dispatchEvent(new Event('toggle'));
+      fixture.detectChanges();
+      expect(root.querySelector('input')).toBeNull();
+
+      open();
+      const reopenedInput = element<HTMLInputElement>('input');
+      expect(reopenedInput).not.toBe(originalInput);
+      expect(reopenedInput.getAttribute('aria-describedby')).toBe(
+        'dev-sign-in-note dev-sign-in-error',
+      );
+      expect(element('#dev-sign-in-note').textContent).toContain(fixture.componentInstance.note);
+      expect(element('#dev-sign-in-error').textContent).toContain(
+        status === 401
+          ? fixture.componentInstance.wrongSecret
+          : fixture.componentInstance.unavailable,
+      );
+    },
+  );
 
   it.each([404, 500, 503, 0])(
     'unavailable: maps status %s to the disabled-server message',

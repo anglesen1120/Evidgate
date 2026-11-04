@@ -63,18 +63,18 @@
                 type="button"
                 hlmBtn
                 [variant]="ghostVariant"
-                class="h-full min-h-(--eg-control-touch) w-full items-start justify-start gap-(--eg-space-3) whitespace-normal border border-input p-(--eg-space-3) text-start group-aria-[current=step]:border-primary group-aria-[current=step]:bg-accent min-[768px]:flex-col"
+                class="h-full min-h-(--eg-control-touch) w-full items-start justify-start gap-(--eg-space-3) whitespace-normal border border-input bg-(--eg-surface) p-(--eg-space-3) text-start text-(--eg-text) hover:bg-(--eg-accent-soft) hover:text-(--eg-text) group-aria-[current=step]:border-primary group-aria-[current=step]:bg-(--eg-accent-soft) min-[768px]:flex-col"
                 [disabled]="!canSelect(step.number)"
                 (click)="store.selectStep(step.number)"
               >
                 <span
-                  class="grid min-h-(--eg-control-sm) min-w-(--eg-control-sm) shrink-0 place-items-center rounded-full bg-muted text-sm text-muted-foreground group-aria-[current=step]:bg-(--eg-info-bg) group-aria-[current=step]:text-(--eg-info-fg)"
+                  class="grid min-h-(--eg-control-sm) min-w-(--eg-control-sm) shrink-0 place-items-center rounded-full bg-(--eg-neutral-bg) text-sm text-(--eg-neutral-fg) group-aria-[current=step]:bg-(--eg-info-bg) group-aria-[current=step]:text-(--eg-info-fg)"
                   aria-hidden="true"
                   >{{ step.number }}</span
                 >
                 <span class="grid min-w-0 gap-(--eg-space-2) [overflow-wrap:anywhere]">
                   <span class="text-sm font-(weight:--eg-weight-semibold)">{{ step.label }}</span>
-                  <span class="text-xs text-muted-foreground">
+                  <span class="text-xs text-(--eg-text-muted)">
                     {{ store.done()[step.number] ? completedLabel : incompleteLabel }}
                   </span>
                 </span>

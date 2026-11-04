@@ -90,9 +90,8 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
           class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring min-[900px]:text-2xl"
           id="login-heading"
           tabindex="-1"
-        >
-          {{ heading }}
-        </h1>
+          [textContent]="heading"
+        ></h1>
         <p class="m-0 text-sm text-muted-foreground">{{ introduction }}</p>
       </header>
       <section
@@ -105,9 +104,8 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
             hlmCardTitle
             class="m-0 font-(family-name:--eg-font-display) text-lg"
             id="provider-heading"
-          >
-            {{ welcome }}
-          </h2>
+            [textContent]="welcome"
+          ></h2>
           <p hlmCardDescription class="m-0">{{ explanation }}</p>
         </header>
 
@@ -197,9 +195,8 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
           hlmCardTitle
           class="m-0 font-(family-name:--eg-font-display) text-lg"
           id="destination-heading"
-        >
-          {{ destinationHeading }}
-        </h2>
+          [textContent]="destinationHeading"
+        ></h2>
         <p class="m-0 text-sm text-muted-foreground">
           {{ auth.returnUrl() === '/' ? defaultDestination : savedDestination }}
         </p>
