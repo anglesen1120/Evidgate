@@ -97,7 +97,7 @@ describe('quickstart independent QA', () => {
   );
 
   it.each([['--json'], ['--verbose'], ['--json', '--verbose']])(
-    'keeps stdout exactly the template with flags %s',
+    'keeps stdout exactly the template with flags %s (case %#)',
     async (...args) => {
       const output = capture();
       expect(await main(['quickstart', ...args], env, output.io)).toBe(0);
