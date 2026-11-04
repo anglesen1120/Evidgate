@@ -24,6 +24,8 @@ describe('NotFoundPage', () => {
       const root = fixture.nativeElement as HTMLElement;
       expect(root.querySelectorAll('h1')).toHaveLength(1);
       expect(root.querySelector('h1')?.textContent).toBe('Not found');
+      expect(root.querySelector('h1')?.classList.contains('sr-only')).toBe(true);
+      expect(root.querySelector('h1')?.hasAttribute('aria-hidden')).toBe(false);
       expect(root.querySelectorAll('app-not-found-pattern')).toHaveLength(1);
       expect(root.querySelector('app-not-found-pattern h2')?.textContent).toBe('Not found');
       expect(root.querySelector('app-not-found-pattern p')?.textContent?.trim()).toBe(

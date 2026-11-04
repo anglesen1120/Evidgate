@@ -92,7 +92,12 @@ describe('DevSignInComponent', () => {
     expect(input.autocomplete).toBe('off');
     expect(input.required).toBe(true);
     expect(element('label').getAttribute('for')).toBe(input.id);
+    expect(input.getAttribute('aria-describedby')).toBe('dev-sign-in-note');
+    expect(element('#dev-sign-in-note').textContent).toContain(fixture.componentInstance.note);
     expect(element('form').getAttribute('aria-labelledby')).toBe('dev-sign-in-heading');
+    expect(input.hasAttribute('hlmInput')).toBe(true);
+    expect(element('label').hasAttribute('hlmLabel')).toBe(true);
+    expect(element('button').hasAttribute('hlmBtn')).toBe(true);
     expect(element<HTMLButtonElement>('button').disabled).toBe(false);
     expect(element('[role="alert"]').textContent?.trim()).toBe('');
   });
@@ -114,6 +119,7 @@ describe('DevSignInComponent', () => {
     expect(input.readOnly).toBe(true);
     expect(document.activeElement).toBe(input);
     expect(element<HTMLButtonElement>('button').disabled).toBe(true);
+    expect(element('form').getAttribute('aria-busy')).toBe('true');
     expect(element('[role="status"]').textContent).toContain(fixture.componentInstance.submitting);
     expect(element('[role="status"]').getAttribute('aria-live')).toBe('polite');
     expect(element('[role="status"]').getAttribute('aria-atomic')).toBe('true');
@@ -145,6 +151,39 @@ describe('DevSignInComponent', () => {
     await settle();
     expect(session.reload).toHaveBeenCalledOnce();
   });
+
+  it.each([401, 503])(
+    'preserves the description and error association after reopening a failed status %s',
+    async (status) => {
+      open();
+      const originalInput = element<HTMLInputElement>('input');
+      submit();
+      http.expectOne('/v1/dev/session').flush({}, { status, statusText: 'Sign-in failed' });
+      await settle();
+      expect(originalInput.getAttribute('aria-describedby')).toBe(
+        'dev-sign-in-note dev-sign-in-error',
+      );
+
+      const details = element<HTMLDetailsElement>('details');
+      details.open = false;
+      details.dispatchEvent(new Event('toggle'));
+      fixture.detectChanges();
+      expect(root.querySelector('input')).toBeNull();
+
+      open();
+      const reopenedInput = element<HTMLInputElement>('input');
+      expect(reopenedInput).not.toBe(originalInput);
+      expect(reopenedInput.getAttribute('aria-describedby')).toBe(
+        'dev-sign-in-note dev-sign-in-error',
+      );
+      expect(element('#dev-sign-in-note').textContent).toContain(fixture.componentInstance.note);
+      expect(element('#dev-sign-in-error').textContent).toContain(
+        status === 401
+          ? fixture.componentInstance.wrongSecret
+          : fixture.componentInstance.unavailable,
+      );
+    },
+  );
 
   it.each([404, 500, 503, 0])(
     'unavailable: maps status %s to the disabled-server message',

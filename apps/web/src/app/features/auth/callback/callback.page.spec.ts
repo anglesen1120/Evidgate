@@ -188,5 +188,11 @@ describe('CallbackPage (09.1.1-T5.1)', () => {
     const pattern = host.querySelector('app-loading-pattern');
     expect(pattern).not.toBeNull();
     expect(pattern?.textContent).toContain('Checking your session…');
+    expect(host.querySelector('main')?.getAttribute('aria-labelledby')).toBe(
+      'auth-callback-heading',
+    );
+    expect(host.querySelectorAll('h1')).toHaveLength(1);
+    expect(host.querySelector('button, a, input')).toBeNull();
+    expect(pattern?.querySelector('[role="status"]')).not.toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import type { NavIconName } from '../nav/nav.models';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <svg
+      class="h-full w-full"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -157,18 +158,7 @@ import type { NavIconName } from '../nav/nav.models';
       }
     </svg>
   `,
-  styles: `
-    :host {
-      display: inline-flex;
-      width: var(--eg-text-lg);
-      height: var(--eg-text-lg);
-      flex: none;
-    }
-    svg {
-      width: 100%;
-      height: 100%;
-    }
-  `,
+  host: { class: 'inline-flex size-(--eg-text-lg) shrink-0' },
 })
 export class ShellIconComponent {
   readonly name = input.required<

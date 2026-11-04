@@ -114,6 +114,12 @@ describe('OnboardingShellComponent', () => {
   }
 
   it('disables Next until the viewed step is done and links its visible reason', async () => {
+    expect(button('next').getAttribute('data-slot')).toBe('button');
+    expect(button('back').getAttribute('data-slot')).toBe('button');
+    expect(
+      root.querySelector('#onboarding-step-title')?.closest('section')?.getAttribute('data-slot'),
+    ).toBe('card');
+    expect(root.querySelector('[aria-current="step"] button')?.getAttribute('type')).toBe('button');
     expect(button('next').disabled).toBe(true);
     expect(button('next').getAttribute('aria-describedby')).toBe('onboarding-next-reason');
     expect(root.querySelector('#onboarding-next-reason')?.textContent?.trim()).not.toBe('');

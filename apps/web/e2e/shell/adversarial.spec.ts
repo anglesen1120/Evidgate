@@ -5,6 +5,7 @@
 // never a redirect off-origin, never a feature page mounted behind a refusal), so the file is
 // meaningful on the fixtures build and on any later bundle.
 import { expect, test, type Page } from '@playwright/test';
+import { chooseScope, expectScopeValue, scopeControl } from './scope-controls';
 
 import {
   ANONYMOUS_SESSION,
@@ -269,7 +270,7 @@ test.describe('session state vs. route state', () => {
         ),
       );
       // Pattern pages are unguarded shell routes; the invariant is that no session fact renders.
-      await expect(page.locator('app-scope-switcher select').first()).toBeDisabled();
+      await expect(scopeControl(page, 0)).toBeDisabled();
       expect(await navSegments(page), `${pattern} showed navigation`).toEqual([]);
       expect(await mainText(page)).not.toContain('Storefront web');
     }
@@ -353,12 +354,12 @@ test.describe('scope switching under load', () => {
     );
     await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
 
-    const orgSelect = page.locator('app-scope-switcher select').first();
+    const orgSelect = scopeControl(page, 0);
     await expect(orgSelect).toBeEnabled();
     // Two changes back to back: the second must win, and the first navigation's scope must not
     // land later and re-point the URL or the navigation links at org 2.
-    await orgSelect.selectOption(ORG_LUMEN);
-    await orgSelect.selectOption(ORG_ACME);
+    await chooseScope(page, orgSelect, ORG_LUMEN);
+    await chooseScope(page, orgSelect, ORG_ACME);
 
     await expect
       .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
@@ -370,7 +371,7 @@ test.describe('scope switching under load', () => {
       `/en/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/overview`,
     );
     await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
-    await expect(orgSelect).toHaveValue(ORG_ACME);
+    await expectScopeValue(orgSelect, ORG_ACME);
     const hrefs = await page
       .locator('app-shell-nav nav a')
       .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
@@ -389,8 +390,8 @@ test.describe('scope switching under load', () => {
     );
     await expect(page.locator('#main-content h1')).toBeVisible();
 
-    const orgSelect = page.locator('app-scope-switcher select').first();
-    await orgSelect.selectOption(ORG_LUMEN);
+    const orgSelect = scopeControl(page, 0);
+    await chooseScope(page, orgSelect, ORG_LUMEN);
     // While the project list is still in flight, the store must already have dropped org 1's scope.
     await page.waitForTimeout(150);
     const href = await page.locator('app-shell-nav nav a').first().getAttribute('href');
@@ -567,7 +568,7 @@ test.describe('the unavailable page’s retry', () => {
 
     // No guard runs on a pattern page, so the reload read nothing: no scope, no navigation.
     expect(await navSegments(page)).toEqual([]);
-    await expect(page.locator('app-scope-switcher select').first()).toBeDisabled();
+    await expect(scopeControl(page, 0)).toBeDisabled();
 
     // The reloaded document carries no toggles, so its retry reads the healthy corpus and the
     // page leaves the failure state for a real route. (Under the default corpus that landing then
@@ -607,16 +608,29 @@ test.describe('theme storage edge cases', () => {
   }
 });
 
-test.describe('drawer edges at 360px', () => {
+test.describe('mobile drawer edges', () => {
   test.use({ viewport: { width: 360, height: 720 } });
 
-  test('the scrim closes the drawer and focus returns to the opener', async ({ page }) => {
+  test('the close button closes the full-width drawer at 360px', async ({ page }) => {
+    await page.goto(withVariant(localePath('en', `/orgs/${ORG_ACME}/audit`), LIMITED_GRANTS));
+    const toggle = page.locator('button.nav-toggle');
+    await toggle.click();
+    await expect(page.locator('aside.navigation')).toHaveAttribute('aria-modal', 'true');
+    await page.locator('button.close-button').click();
+    await expect(page.locator('aside.navigation')).not.toHaveAttribute('aria-modal', 'true');
+    await expect(toggle).toBeFocused();
+  });
+
+  test('the exposed scrim closes the drawer at 600px and focus returns to the opener', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 600, height: 720 });
     await page.goto(withVariant(localePath('en', `/orgs/${ORG_ACME}/audit`), LIMITED_GRANTS));
     const toggle = page.locator('button.nav-toggle');
     await toggle.click();
     await expect(page.locator('aside.navigation')).toHaveAttribute('aria-modal', 'true');
 
-    await page.mouse.click(350, 640);
+    await page.locator('button.scrim').click({ position: { x: 590, y: 640 } });
     await expect(page.locator('aside.navigation')).not.toHaveAttribute('aria-modal', 'true');
     await expect(toggle).toBeFocused();
   });
