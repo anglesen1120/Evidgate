@@ -337,6 +337,8 @@ export const listEvidenceRevisions = <ThrowOnError extends boolean = false>(opti
 
 /**
  * Request run cancellation (202; recorded, not "stopped")
+ *
+ * Records a cancel request for one run and answers `202` with no body (05.4.1). The run moves to `canceled` **now**, through 05.3.1's guarded transition, so a cancel is recorded, not "stopped": execution stops in two later stages on the windows stored with the request (`soft_stop_deadline_at`, then `kill_at`), which act on the producer or agent and never on `run.state`. A request row (`run_cancel_request`: requester, optional reason, both deadlines) is written in the same transaction as the state change, so it survives an API or worker restart; the run's own `unique (org_id, run_id)` is what makes one run hold one request. A run that is already terminal (`complete`, `incomplete`, `canceled`) is an accepted no-op: `202` and nothing written, no second request row. A canceled run never becomes `complete`, and whichever of a cancel and a reconcile verdict commits first owns the terminal state. The optional body is `{"reason": string|null}`, an unknown member is 422 `request_invalid` (`details[].path`) and a body is capped at 4 KiB (`413` `payload_too_large` before it is parsed). Another tenant's run and an unknown id are the one 404 `not_found` body of `GET /v1/runs/{r}` — no existence oracle (00 §5.4). `409` `invalid_transition` is the shared state-guard refusal; `* → canceled` is a declared edge from every non-terminal state, so this route does not produce it today.
  */
 export const cancelRun = <ThrowOnError extends boolean = false>(options: Options<CancelRunData, ThrowOnError>): RequestResult<CancelRunResponses, CancelRunErrors, ThrowOnError> => (options.client ?? client).post<CancelRunResponses, CancelRunErrors, ThrowOnError>({
     security: [{
@@ -345,7 +347,11 @@ export const cancelRun = <ThrowOnError extends boolean = false>(options: Options
             type: 'apiKey'
         }, { scheme: 'bearer', type: 'http' }],
     url: '/runs/{r}/cancel',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

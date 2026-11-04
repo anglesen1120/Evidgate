@@ -1529,15 +1529,45 @@ paths:
       operationId: cancelRun
       tags: [runs]
       summary: Request run cancellation (202; recorded, not "stopped")
+      description: >-
+        Records a cancel request for one run and answers `202` with no body
+        (05.4.1). The run moves to `canceled` **now**, through 05.3.1's guarded
+        transition, so a cancel is recorded, not "stopped": execution stops in
+        two later stages on the windows stored with the request
+        (`soft_stop_deadline_at`, then `kill_at`), which act on the producer or
+        agent and never on `run.state`. A request row
+        (`run_cancel_request`: requester, optional reason, both deadlines) is
+        written in the same transaction as the state change, so it survives an
+        API or worker restart; the run's own `unique (org_id, run_id)` is what
+        makes one run hold one request. A run that is already terminal
+        (`complete`, `incomplete`, `canceled`) is an accepted no-op: `202` and
+        nothing written, no second request row. A canceled run never becomes
+        `complete`, and whichever of a cancel and a reconcile verdict commits
+        first owns the terminal state. The optional body is
+        `{"reason": string|null}`, an unknown member is 422 `request_invalid`
+        (`details[].path`) and a body is capped at 4 KiB (`413`
+        `payload_too_large` before it is parsed). Another tenant's run and an
+        unknown id are the one 404 `not_found` body of `GET /v1/runs/{r}` — no
+        existence oracle (00 §5.4). `409` `invalid_transition` is the shared
+        state-guard refusal; `* → canceled` is a declared edge from every
+        non-terminal state, so this route does not produce it today.
       x-permission: run:cancel
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/RunId'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRunRequest'
       responses:
         '202':
-          description: Cancel request recorded
+          description: >-
+            Cancel request recorded (or the run was already terminal: the same
+            no-op answer)
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -1549,6 +1579,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -9288,6 +9322,22 @@ components:
           type: array
           items: { $ref: '#/components/schemas/EvidenceRevision' }
         next_cursor: { type: [string, 'null'] }
+    CancelRunRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Optional body of `POST /v1/runs/{r}/cancel`. Absent, `{}` and
+        `{"reason": null}` all mean "no reason given".
+      properties:
+        reason:
+          type: [string, 'null']
+          maxLength: 1000
+          description: >-
+            The caller's business context for the cancel, stored untrimmed with
+            the request row. It must be 1..1000 Unicode code points (the unit
+            `maxLength` and the row's check both count) and not blank: a blank
+            string is 422 `request_invalid` (`details[].path` `/reason`, reason
+            `invalid_value`), a longer one `too_long`.
     CreateRunRequest:
       type: object
       additionalProperties: false

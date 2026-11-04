@@ -1366,6 +1366,46 @@
       "note": "resident rate-limit partitions before ended windows are swept. One request needs two: its project's partition and its token's, so the floor is 2 — a smaller map would refuse every request. A token that arrives while every partition is live is charged to the project's budget alone rather than growing the map without bound; a project that cannot get a partition is refused with 429. Option default 10000; the range 2..100000 bounds the map's memory."
     },
     {
+      "key": "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "soft-stop window of an accepted run cancel (05.4.1): run_cancel_request.soft_stop_deadline_at = requested_at + this value. A TimeSpan literal (00:00:30 = 30 s, the default). Bounded at boot to more than 00:00:00 and at most 366 days by RunDurationAttribute, and required to be no longer than EVIDGATE__RUNS__CANCEL__KILLDELAY by RunCancelOptions: an inverted pair would stop execution before the graceful window it is meant to follow."
+    },
+    {
+      "key": "EVIDGATE__RUNS__CANCEL__KILLDELAY",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "kill window of an accepted run cancel (05.4.1): run_cancel_request.kill_at = requested_at + this value, the instant execution is stopped whatever it is doing. A TimeSpan literal (00:02:00 = 2 min, the default, i.e. 90 s after the default soft-stop deadline). Bounded at boot to more than 00:00:00 and at most 366 days by RunDurationAttribute, and required to be at least EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY by RunCancelOptions."
+    },
+    {
       "key": "EVIDGATE__RUNS__DEFAULTCOLLECTIONTIMEOUT",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],
@@ -1383,7 +1423,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "collection deadline offset applied at run create when no policy revision is pinned (05.2.1 AC12, T93): run.collection_deadline_at = created_at + this value, computed on the database clock. A TimeSpan literal (02:00:00 = 2 h, the default; ⚠️ tuned ≈ p95 × 1.5). 07.1.1-T4 replaces it with the pinned policy's collection_timeout once the run-pinning handshake lands. Bounded at boot to more than 00:00:00 and at most 366 days (the scale of the 525600-minute late-window cap) by RunsOptions.CollectionTimeoutAttribute: a non-positive value would place collection_deadline_at at or before created_at on the immutable column, and an extreme value would overflow the interval arithmetic. No constraints block: the lint derives constraints from C# attributes, and no DataAnnotations range carries a TimeSpan."
+      "note": "collection deadline offset applied at run create when no policy revision is pinned (05.2.1 AC12, T93): run.collection_deadline_at = created_at + this value, computed on the database clock. A TimeSpan literal (02:00:00 = 2 h, the default; ⚠️ tuned ≈ p95 × 1.5). 07.1.1-T4 replaces it with the pinned policy's collection_timeout once the run-pinning handshake lands. Bounded at boot to more than 00:00:00 and at most 366 days (the scale of the 525600-minute late-window cap) by RunDurationAttribute: a non-positive value would place collection_deadline_at at or before created_at on the immutable column, and an extreme value would overflow the interval arithmetic. No constraints block: the lint derives constraints from C# attributes, and no DataAnnotations range carries a TimeSpan."
     },
     {
       "key": "EVIDGATE__RUNS__DEFAULTLATEWINDOWMINUTES",

@@ -378,6 +378,19 @@ public sealed class TenantGucTests
             ("manifest_id", manifestId),
             ("suite_revision_id", suiteRevisionId),
             ("environment_revision_id", environmentRevisionId));
+        // The durable cancel table (migration 0069): the request row for the run seeded above, written as the owner
+        // like the rest of this seed. `state` keeps its 'requested' default, `requested_at` its `now()` default, and
+        // the two deadlines keep the table's `kill_at >= soft_stop_deadline_at >= requested_at` order.
+        await scope.ExecuteAsync(
+            """
+            insert into public.run_cancel_request
+                (id, org_id, run_id, requested_by, soft_stop_deadline_at, kill_at)
+            values (@id, @org_id, @run_id, @requested_by, now() + interval '1 minute', now() + interval '2 minutes')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("run_id", runId),
+            ("requested_by", Guid.CreateVersion7()));
         await scope.ExecuteAsync(
             """
             insert into public.planned_execution

@@ -116,4 +116,44 @@ internal static class RegistryApi
 
     /// <summary>A fresh <c>Idempotency-Key</c>.</summary>
     internal static string NewKey() => Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// An active member of <paramref name="org"/> holding one built-in role (or none), seeded with the migration
+    /// role and granted by <paramref name="granter"/> through the membership route; returns the member's user id.
+    /// </summary>
+    internal static async Task<Guid> AddMemberAsync(
+        PostgresTenancyFixture fixture,
+        HttpClient client,
+        string database,
+        Guid org,
+        Action<HttpRequestHeaders> granter,
+        string? roleCode)
+    {
+        var user = Guid.CreateVersion7();
+        var membership = Guid.CreateVersion7();
+
+        await fixture.ExecuteAsync(
+            database,
+            $"""
+            insert into public."user" (id, email) values ('{user}', 'member-{user:N}@example.test');
+            insert into public.membership (id, org_id, user_id, invited_email, status)
+            values ('{membership}', '{org}', '{user}', 'member-{user:N}@example.test', 'active')
+            """);
+
+        if (roleCode is not null)
+        {
+            var role = await fixture.ScalarAsync<Guid>(
+                database, $"select id from public.role where code = '{roleCode}' and org_id is null");
+            var granted = await client.SendAsync(
+                HttpMethod.Post,
+                $"/v1/orgs/{org}/memberships/{membership}/roles",
+                granter,
+                new { role_id = role },
+                NewKey());
+
+            granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
+        }
+
+        return user;
+    }
 }
