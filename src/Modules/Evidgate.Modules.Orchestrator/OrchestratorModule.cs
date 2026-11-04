@@ -50,6 +50,14 @@ internal static class OrchestratorModule
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        // The cancel windows are a group of their own: the soft-stop and kill deadlines are stored on the request row, so
+        // a bad value would put an immutable deadline out of order, and boot validation is what keeps that impossible.
+        services
+            .AddOptions<RunCancelOptions>()
+            .BindConfiguration(RunCancelOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // 05.3.3-T2: the case-attempt writer and the blocked-dependant resolver 04's event-batch commit calls
         // inside its own tenant transaction. Scoped like every other module service; the writer and the resolver
         // take the ambient scope through ITenantDb/ITenantScopeAccessor, never a connection of their own.

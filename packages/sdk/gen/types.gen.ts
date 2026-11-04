@@ -249,6 +249,16 @@ export type EvidenceRevisionPage = {
     next_cursor: string | null;
 };
 
+/**
+ * Optional body of `POST /v1/runs/{r}/cancel`. Absent, `{}` and `{"reason": null}` all mean "no reason given".
+ */
+export type CancelRunRequest = {
+    /**
+     * The caller's business context for the cancel, stored with the request row. Trimmed 1..1000 characters when present; a blank string is 422 `request_invalid` (`details[].path` `/reason`, reason `invalid_value`), a longer one `too_long`.
+     */
+    reason?: string | null;
+};
+
 export type CreateRunRequest = {
     manifest_id: string;
     /**
@@ -4315,7 +4325,7 @@ export type ListEvidenceRevisionsResponses = {
 export type ListEvidenceRevisionsResponse = ListEvidenceRevisionsResponses[keyof ListEvidenceRevisionsResponses];
 
 export type CancelRunData = {
-    body?: never;
+    body?: CancelRunRequest;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -4351,6 +4361,14 @@ export type CancelRunErrors = {
      */
     409: ErrorEnvelope;
     /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
@@ -4364,7 +4382,7 @@ export type CancelRunError = CancelRunErrors[keyof CancelRunErrors];
 
 export type CancelRunResponses = {
     /**
-     * Cancel request recorded
+     * Cancel request recorded (or the run was already terminal: the same no-op answer)
      */
     202: unknown;
 };
