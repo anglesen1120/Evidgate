@@ -31,7 +31,7 @@ export interface RunDetailAddress {
   readonly attempts?: RunAttemptsVariant;
   readonly revisions?: RunRevisionsVariant;
   /** The evidence revision the page pins; omitted, the decision's own revision stays selected. */
-  readonly evidenceRevision?: number;
+  readonly evidenceRevision?: number | undefined;
 }
 
 /**
