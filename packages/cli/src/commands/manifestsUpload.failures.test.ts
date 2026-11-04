@@ -38,7 +38,7 @@ describe('manifests upload', () => {
     return ingestUploadEnv(await tempDir(), extra);
   }
 
-  // 04.2.2-T1.1 / hand-over from 04.2.1-T1 #23: a 401 from the project-scoped command
+  // A 401 from the project-scoped command
   // purges the cached CI token; a 403 (scope mismatch) leaves it in place.
   it('unauthorized_purges_cache', async () => {
     const env = await ingestEnv();
@@ -130,7 +130,7 @@ describe('manifests upload', () => {
     expect(text).not.toContain(mintedToken);
   });
 
-  // 04.2.2-T1.1 / §5: a non-envelope non-2xx and a 2xx with an invalid body are both
+  // A non-envelope non-2xx and a 2xx with an invalid body are both
   // `request_failed`, and the body is never echoed.
   it('bad_response_bodies_request_failed', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
@@ -168,7 +168,7 @@ describe('manifests upload', () => {
     expect(invalidText).not.toContain('nope');
   });
 
-  // 04.2.2-T1.1 / §5: a transport failure is `transport` and never echoes the URL.
+  // A transport failure is `transport` and never echoes the URL.
   it('transport_error_exit3', async () => {
     const file = await manifestFile('{"schema":"manifest.v1"}');
     const env = await devEnv();

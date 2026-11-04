@@ -61,7 +61,7 @@ describe('events send', () => {
     await cleanupSpecState();
   });
 
-  // D-S56-Q8: the reporter holds its own `writer.lock` for the life of a writer; the drain
+  // The reporter holds its own `writer.lock` for the life of a writer; the drain
   // is a chunk reader, so it refuses with `spool_locked` (exit 3) instead of acking events
   // out from under a running test run.
   it('refuses to drain while the reporter still writes the producer (D-S56-Q8)', async () => {
