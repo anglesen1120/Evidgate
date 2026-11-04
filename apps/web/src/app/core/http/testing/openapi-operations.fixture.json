@@ -35,7 +35,7 @@
       "method": "POST",
       "operationId": "cancelRun",
       "path": "/runs/{r}/cancel",
-      "responseStatuses": [202, 401, 403, 404, 409, 429, 503]
+      "responseStatuses": [202, 401, 403, 404, 409, 413, 422, 429, 503]
     },
     {
       "idempotencyKeyRequired": true,
