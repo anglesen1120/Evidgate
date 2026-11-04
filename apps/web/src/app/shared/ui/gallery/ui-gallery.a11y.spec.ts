@@ -1,5 +1,4 @@
 // State sheet: docs/design/web/state-sheet.md#how-the-specs-link-here
-// 09.1.1-T7 AC8: independent verdict presentation; AC9: WCAG gallery audit and negative control.
 import { registerLocaleData } from '@angular/common';
 import localeVi from '@angular/common/locales/vi';
 import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
@@ -94,25 +93,15 @@ describe('UiGalleryComponent axe acceptance (AC8 / AC9)', () => {
             summaries: nodes.map((node) => node.failureSummary),
           })),
         ).toEqual([]);
-        const dialog = root.querySelector('dialog')!;
-        // jsdom lacks native top-layer methods; retain the component's opening and copy logic.
-        Object.defineProperties(dialog, {
-          showModal: {
-            configurable: true,
-            value: () => {
-              dialog.open = true;
-            },
-          },
-          close: {
-            configurable: true,
-            value: () => {
-              dialog.open = false;
-            },
-          },
-        });
+        root.querySelector<HTMLButtonElement>('[data-demo="reveal-opener"]')?.click();
+        await fixture.whenStable();
+        const revealResult = await axe.run(root, axeOptions);
+        expect(revealResult.violations).toEqual([]);
         root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]')?.click();
         await fixture.whenStable();
-        expect(dialog.open).toBe(true);
+        const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+        if (!dialog) throw new Error('Expected Brain dialog overlay');
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
         expect(dialog.textContent).toContain('Not compared');
         const dialogResult = await axe.run(dialog, axeOptions);
         expect(

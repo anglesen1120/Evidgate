@@ -177,7 +177,7 @@ describe('PublishDialogComponent', () => {
     await fixture.whenStable();
     expect(store.reload).toHaveBeenCalledTimes(1);
     expect(store.publish).toHaveBeenCalledTimes(1);
-    expect(shared.open).toBe(false);
+    expect(shared.isConnected).toBe(false);
   });
   it('Keep editing returns to the same textarea draft without any reload or publish', async () => {
     store.publish.mockResolvedValue({
@@ -213,8 +213,8 @@ describe('PublishDialogComponent', () => {
     const shared = await waitForConflict(fixture, root);
     shared.querySelector<HTMLButtonElement>('button.reload')?.click();
     await fixture.whenStable();
-    expect(shared.open).toBe(true);
-    expect(root.querySelector('app-conflict-dialog')?.textContent).toContain(refused.message);
+    expect(shared.isConnected).toBe(true);
+    expect(shared.textContent).toContain(refused.message);
     expect(store.publish).toHaveBeenCalledTimes(1);
   });
   it('wraps Tab and Shift+Tab and restores opener focus on cancel', async () => {
@@ -339,13 +339,10 @@ describe('PublishDialogComponent', () => {
   async function waitForConflict(
     fixture: ComponentFixture<unknown>,
     root: HTMLElement,
-  ): Promise<HTMLDialogElement> {
-    await vi.waitFor(() => {
-      fixture.detectChanges();
-      expect(root.querySelector<HTMLDialogElement>('app-conflict-dialog dialog')?.open).toBe(true);
-    });
+  ): Promise<HTMLElement> {
+    expect(root.querySelector('app-conflict-dialog')).not.toBeNull();
     await fixture.whenStable();
-    const dialog = root.querySelector<HTMLDialogElement>('app-conflict-dialog dialog');
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]:has(hlm-dialog-content)');
     if (dialog === null) throw new Error('the conflict dialog did not open');
     return dialog;
   }

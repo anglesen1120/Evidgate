@@ -77,7 +77,7 @@ const SUBMIT = '[data-policy-publish-submit]';
 const LOCAL_ERROR = '[data-policy-publish-local-error]';
 const SERVER_ERROR = '[data-policy-error]';
 const PUBLISHED = '[data-policy-published]';
-const CONFLICT = 'app-conflict-dialog dialog';
+const CONFLICT = '[role="dialog"]:has(hlm-dialog-content)';
 
 /** The head revision the corpus opens by default (`?revision=…`), and the body it seeds. */
 const HEAD_ID = head.body.id;
