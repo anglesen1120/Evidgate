@@ -56,6 +56,9 @@ public static class AuthoringEndpoints
         AuthoringVersionEndpoints.MapAuthoringVersionEndpoints(authoring);
         AuthoringRestoreEndpoints.MapAuthoringRestoreEndpoints(authoring);
 
+        // The pending-changes queue: queue, list, detail, discard and apply on their own base path under the group.
+        AuthoringChangeEndpoints.MapAuthoringChangeEndpoints(authoring);
+
         // 13.1.1-T5: route 25, the import/export pair (its own file because it takes and answers files, not DTOs).
         AuthoringImportEndpoints.MapAuthoringImportEndpoints(authoring);
 

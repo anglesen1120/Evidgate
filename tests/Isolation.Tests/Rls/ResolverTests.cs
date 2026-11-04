@@ -110,6 +110,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate.session_cleanup"] = "0048_identity_session_routes.sql:479",
         ["evidgate.healing_switch_set_system"] = "0052_healing_switch.sql:211",
         ["evidgate.reconcile_overdue_runs"] = "0058_reconcile_overdue_running.sql:65",
+        ["evidgate.purge_expired_authoring_changes"] = "0067_authoring_authoring_change.sql:283",
     };
 
     /// <summary>

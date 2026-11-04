@@ -1,4 +1,4 @@
--- 0069_catalog_taxonomy.sql
+-- 0068_catalog_taxonomy.sql
 --
 -- WHY: a case has to be able to carry the external requirement it exercises — a pointer to a Jira/Linear/story id —
 -- without that pointer becoming test content (03.1.4, D-A6 §8.1): it is metadata, so it never enters `test_revision`

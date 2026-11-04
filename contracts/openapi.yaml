@@ -6243,6 +6243,268 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/changes:
+    get:
+      operationId: listAuthoringChanges
+      tags: [authoring]
+      summary: Keyset page of the project's queued authoring changes (13.1.2-T1)
+      description: >-
+        13.1.2 §5 (`authoring:read`). Queued, applied and discarded changes in `(created_at, id)`
+        order, narrowed by `state`, `change_type` and the exact `target_id`. When `ids` is present
+        (1..200) the page is the caller's selection instead, every item carries `stale` (true when an
+        affected item's version has moved since the change was queued) and the response carries
+        `ETag: "<batch-etag>"` over the union of every affected item — the value the apply route
+        demands back in `If-Match`. `ids` combined with any other filter is 422 `request_invalid`
+        (`details[].reason = ids_with_filters`), an unknown enum value is 422 with
+        `details[].path` naming the parameter, and a `limit` outside 1..200 is 422 too. Another
+        tenant's project is 404 `not_found`; a credential scoped to a sibling project is 403
+        `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringChangeStateFilter'
+        - $ref: '#/components/parameters/AuthoringChangeTypeFilter'
+        - $ref: '#/components/parameters/AuthoringChangeTargetIdFilter'
+        - $ref: '#/components/parameters/AuthoringChangeIdsFilter'
+        - $ref: '#/components/parameters/AuthoringCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 'Page of queued changes; an `ids` selection also carries `ETag: "<batch-etag>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringChangePageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    post:
+      operationId: queueAuthoringChange
+      tags: [authoring]
+      summary: Queue one comment, delete, merge or split on a checklist item (13.1.2-T1)
+      description: >-
+        13.1.2 §5 (`authoring:write`). The body is the closed `authoring-change.v1` document
+        (`contracts/schemas/authoring-change.v1.json`): `target_kind` is `checklist_item`,
+        `target_id` is the item for `comment`/`delete`, the survivor for `merge` (and must equal
+        `payload.survivor_item_id`) and the split item for `split`. The handler reads the target and
+        every payload item under RLS to stamp `base_version` and the `affected_versions` map and
+        never writes an item, so nothing is versioned until the set is applied (AC1). Refusals
+        write nothing: 404 `not_found` for an unknown, other-tenant or other-project target; 422
+        `request_invalid` with `details[].reason` `payload_invalid`, `target_deleted`,
+        `merge_sources_min`, `merge_sources_max`, `survivor_not_in_sources`, `split_items_min`,
+        `split_items_max` or `comment_body_invalid`; 409 `invalid_transition` with
+        `reason = change_already_pending` when any affected item already has a pending structural
+        change (AC14, also raised by the guard trigger for a racing insert and mapped to this same
+        body); 409 `authoring_not_empty` with `reason = item_has_cases` for a `delete` whose target
+        still holds live manual cases; 429 `quota_exceeded` with `Retry-After` at 500 pending
+        changes. A body over 32 KiB is 413 `payload_too_large`, a missing `Idempotency-Key` 400
+        `request_invalid`, and a replay answers the stored 201 with no second row.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/authoring-change.v1.json'
+      responses:
+        '201':
+          description: 'The queued change, its state, the target version it read, and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueuedAuthoringChangeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/changes/{c}:
+    get:
+      operationId: getAuthoringChange
+      tags: [authoring]
+      summary: One queued change with its payload echoed (13.1.2-T1)
+      description: >-
+        13.1.2 §5 (`authoring:read`). Returns the change with its `payload` echoed (the stored
+        document is capped at 32 KiB by the schema) and `ETag: "<version>"`. Unknown, another
+        tenant's or another project's change id is 404 `not_found` with the same body a random id
+        gets; a credential scoped to a sibling project is 403 `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringChangeId'
+      responses:
+        '200':
+          description: 'The change, its payload, and `ETag: "<version>"`'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoringChangeDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/changes/{c}/discard:
+    post:
+      operationId: discardAuthoringChange
+      tags: [authoring]
+      summary: Discard one pending change without writing an item (13.1.2-T1)
+      description: >-
+        13.1.2 §5 (`authoring:write`). The state is the precondition, so the route takes no
+        `If-Match` (D4): a change that is no longer `pending` is 409 `invalid_transition` with
+        `details[].reason = change_not_pending`, and the same answer covers a second discard, so a
+        retry cannot write twice. 200 `{change_id, state: "discarded", discarded_at}`; unknown,
+        other-tenant or other-project id 404 `not_found`; missing `Idempotency-Key` 400
+        `request_invalid`; lock timeout 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringChangeId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: The discarded change and the instant it was discarded
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscardedAuthoringChangeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/changes:apply:
+    post:
+      operationId: applyAuthoringChanges
+      tags: [authoring]
+      summary: Apply a selected set of pending changes as one version (13.1.2-T1)
+      description: >-
+        13.1.2 §5 (`authoring:write`). One transaction: the affected items are locked in
+        `(target_id, id)` order and then in one `order by id` statement, the batch etag is
+        recomputed over the union of their current versions and compared with `If-Match`, every
+        entry of each change's `affected_versions` is compared with the locked item's version, and
+        the non-empty guard of a `delete`/`merge`/`split` target is re-run before any write — so a
+        case created after queueing is caught even though it did not bump the item's version
+        (AC13). A missing `If-Match` is 422 `request_invalid` with `details[].path = /If-Match` and
+        `reason = required` (never 428); a stale selection is 412 `precondition_failed` with
+        `details[].reason` `batch_stale`, `target_changed` or `target_deleted` and `details[].path`
+        naming the affected item whose version moved, and nothing is written. A selected change that
+        is no longer pending is 409 `invalid_transition` (`change_not_pending`), a
+        `delete`/`merge`/`split` target that holds live cases 409 `authoring_not_empty`
+        (`item_has_cases`), a `change_ids` entry that is not the tenant's 404 `not_found`, more than
+        200 ids 422 `request_invalid` (`too_many_changes`). 200 with the batch id, the applied change
+        ids, one `versions` entry per written entity and the `lineage` rows; `versions` is empty for
+        a comment-only batch. Missing `Idempotency-Key` 400 `request_invalid`, and a replay of the
+        same key returns the stored 200 without a second version. A body over 64 KiB is 413
+        `payload_too_large`, a lock timeout 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyAuthoringChangesRequest'
+      responses:
+        '200':
+          description: The batch, the applied change ids, the versions it wrote and its lineage
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyAuthoringChangesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/authoring/manual-cases:
     get:
       operationId: listManualCases
@@ -8035,6 +8297,59 @@ components:
       schema:
         type: string
         format: uuid
+    AuthoringChangeId:
+      name: c
+      in: path
+      required: true
+      description: The queued authoring change id (13.1.2 §5).
+      schema:
+        type: string
+        format: uuid
+    AuthoringChangeStateFilter:
+      name: state
+      in: query
+      required: false
+      description: >-
+        Queued-change state filter (13.1.2 §5): `pending`, `applied` or `discarded`. Anything else
+        is 422 `request_invalid` with `details[].path = /state`.
+      schema:
+        type: string
+        enum: [pending, applied, discarded]
+    AuthoringChangeTypeFilter:
+      name: change_type
+      in: query
+      required: false
+      description: >-
+        The kind of change to keep (13.1.2 §5): `comment`, `delete`, `merge` or `split`. Anything
+        else is 422 `request_invalid` with `details[].path = /change_type`.
+      schema:
+        type: string
+        enum: [comment, delete, merge, split]
+    AuthoringChangeTargetIdFilter:
+      name: target_id
+      in: query
+      required: false
+      description: The exact checklist item whose change history is listed (13.1.2 §5).
+      schema:
+        type: string
+        format: uuid
+    AuthoringChangeIdsFilter:
+      name: ids
+      in: query
+      required: false
+      description: >-
+        The caller's selection, 1..200 change ids (13.1.2 §5), sent as one comma-separated value.
+        The response then carries `ETag: "<batch-etag>"` and each item `stale`. Combined with any
+        other filter it is 422 `request_invalid` with `details[].reason = ids_with_filters`.
+      style: form
+      explode: false
+      schema:
+        type: array
+        minItems: 1
+        maxItems: 200
+        items:
+          type: string
+          format: uuid
     AuthoringParentIdFilter:
       name: parent_id
       in: query
@@ -11099,6 +11414,159 @@ components:
       properties:
         version: { type: integer, minimum: 1 }
         checklist_item_id: { type: string, format: uuid }
+    AuthoringChangeListItem:
+      type: object
+      description: >-
+        One row of a list or detail answer (13.1.2-T1). `stale` is present only on an `ids`
+        selection read: true when an item of `affected_versions` has moved since the change was
+        queued. `payload` is the stored document echoed, capped at 32 KiB by its own schema.
+      required:
+        [
+          change_id,
+          target_kind,
+          target_id,
+          change_type,
+          payload,
+          state,
+          source,
+          base_version,
+          author_membership_id,
+          created_at,
+        ]
+      properties:
+        change_id: { type: string, format: uuid }
+        target_kind: { type: string, enum: [checklist_item] }
+        target_id: { type: string, format: uuid }
+        change_type: { type: string, enum: [comment, delete, merge, split] }
+        payload: { type: object, additionalProperties: true }
+        state: { type: string, enum: [pending, applied, discarded] }
+        source: { type: string, enum: [manual, ai, import] }
+        base_version: { type: integer, minimum: 1 }
+        author_membership_id: { type: string, format: uuid }
+        reason: { type: [string, 'null'], maxLength: 500 }
+        created_at: { type: string, format: date-time }
+        applied_at: { type: [string, 'null'], format: date-time }
+        applied_batch_id: { type: [string, 'null'], format: uuid }
+        discarded_at: { type: [string, 'null'], format: date-time }
+        stale: { type: boolean }
+    AuthoringChangePageResponse:
+      type: object
+      description: >-
+        00 §9.1 keyset page of `AuthoringChangeListItem`, ordered `(created_at, id)` (13.1.2-T1). A
+        response built from an `ids` selection also carries `ETag: "<batch-etag>"`.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthoringChangeListItem'
+        next_cursor: { type: [string, 'null'] }
+    AuthoringChangeDetailResponse:
+      type: object
+      description: >-
+        The 200 body of the detail read (13.1.2-T1): the list item plus the row `version` the
+        `ETag` header carries.
+      required:
+        [
+          change_id,
+          target_kind,
+          target_id,
+          change_type,
+          payload,
+          state,
+          source,
+          base_version,
+          author_membership_id,
+          created_at,
+          version,
+        ]
+      properties:
+        change_id: { type: string, format: uuid }
+        target_kind: { type: string, enum: [checklist_item] }
+        target_id: { type: string, format: uuid }
+        change_type: { type: string, enum: [comment, delete, merge, split] }
+        payload: { type: object, additionalProperties: true }
+        state: { type: string, enum: [pending, applied, discarded] }
+        source: { type: string, enum: [manual, ai, import] }
+        base_version: { type: integer, minimum: 1 }
+        author_membership_id: { type: string, format: uuid }
+        reason: { type: [string, 'null'], maxLength: 500 }
+        created_at: { type: string, format: date-time }
+        applied_at: { type: [string, 'null'], format: date-time }
+        applied_batch_id: { type: [string, 'null'], format: uuid }
+        discarded_at: { type: [string, 'null'], format: date-time }
+        version: { type: integer, minimum: 1 }
+    QueuedAuthoringChangeResponse:
+      type: object
+      description: >-
+        The 201 body of the queue route (13.1.2-T1): the new change, its state and the version of
+        its target the server read. The change row's own version rides in the `ETag` header only,
+        never in the body.
+      required: [change_id, state, base_version, created_at]
+      properties:
+        change_id: { type: string, format: uuid }
+        state: { type: string, enum: [pending] }
+        base_version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+    DiscardedAuthoringChangeResponse:
+      type: object
+      description: 'The 200 body of the discard route (13.1.2-T1): the change and the instant it was discarded.'
+      required: [change_id, state, discarded_at]
+      properties:
+        change_id: { type: string, format: uuid }
+        state: { type: string, enum: [discarded] }
+        discarded_at: { type: string, format: date-time }
+    ApplyAuthoringChangesRequest:
+      type: object
+      description: >-
+        Body of the apply route (13.1.2-T1): the selected pending changes, 1..200. More is 422
+        `request_invalid` with `details[].reason = too_many_changes`.
+      additionalProperties: false
+      required: [change_ids]
+      properties:
+        change_ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: string, format: uuid }
+    AppliedAuthoringVersionDto:
+      type: object
+      description: One `authoring_version` row the batch wrote (13.1.2-T1).
+      required: [entity_kind, entity_id, version_no]
+      properties:
+        entity_kind: { type: string, enum: [feature_node, checklist_item, manual_test_case] }
+        entity_id: { type: string, format: uuid }
+        version_no: { type: integer, minimum: 1 }
+    AppliedAuthoringLineageDto:
+      type: object
+      description: >-
+        One merge or split relation the batch wrote (13.1.2-T1); a comment or delete batch writes
+        none.
+      required: [from_item_id, to_item_id, relation]
+      properties:
+        from_item_id: { type: string, format: uuid }
+        to_item_id: { type: string, format: uuid }
+        relation: { type: string, enum: [merged_into, split_from] }
+    ApplyAuthoringChangesResponse:
+      type: object
+      description: >-
+        The 200 body of the apply route (13.1.2-T1): the batch id, the change ids it flipped and
+        every version and lineage row it wrote. `versions` is empty for a comment-only batch.
+      required: [batch_id, applied_change_ids, versions, lineage, committed_at]
+      properties:
+        batch_id: { type: string, format: uuid }
+        applied_change_ids:
+          type: array
+          items: { type: string, format: uuid }
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppliedAuthoringVersionDto'
+        lineage:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppliedAuthoringLineageDto'
+        committed_at: { type: string, format: date-time }
     LinkManualCaseRequest:
       type: object
       description: >-

@@ -1,0 +1,5 @@
+{
+  "schema": "authoring-change.v1",
+  "valid": true,
+  "comment": "three new items with explicit case assignments"
+}

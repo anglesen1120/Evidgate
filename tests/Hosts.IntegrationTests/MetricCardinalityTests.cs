@@ -53,6 +53,7 @@ public sealed class MetricCardinalityTests
         "error",
         "provider",
         "outcome",
+        "change_type",
         "trigger",
         "written",
     };
@@ -151,6 +152,7 @@ public sealed class MetricCardinalityTests
         Assert.Contains("normalized_status", observedKeys);
         Assert.Contains("provider", observedKeys);
         Assert.Contains("outcome", observedKeys);
+        Assert.Contains("change_type", observedKeys);
         Assert.Contains("trigger", observedKeys);
         Assert.Contains("written", observedKeys);
 
@@ -257,6 +259,12 @@ public sealed class MetricCardinalityTests
         if (type == typeof(long))
         {
             return 2L;
+        }
+
+        // The apply batch-size histogram counts changes rather than tagging them; 2 is inside its 1..200 range.
+        if (type == typeof(int))
+        {
+            return 2;
         }
 
         if (type == typeof(int?))

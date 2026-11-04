@@ -224,7 +224,19 @@ internal static class ContractPasswordScan
                 trimmed = trimmed[2..].TrimStart(' ');
             }
 
-            var colon = trimmed.IndexOf(':');
+            // A key ends at the first colon followed by a space or the line end: a custom-method path
+            // such as `/x/changes:apply:` carries a colon inside the key itself, so splitting at the
+            // first colon found would record a truncated path.
+            var colon = -1;
+            for (var at = trimmed.IndexOf(':'); at >= 0; at = trimmed.IndexOf(':', at + 1))
+            {
+                if (at + 1 >= trimmed.Length || trimmed[at + 1] == ' ')
+                {
+                    colon = at;
+                    break;
+                }
+            }
+
             if (colon <= 0)
             {
                 continue;

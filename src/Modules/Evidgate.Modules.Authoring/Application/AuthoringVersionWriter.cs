@@ -53,7 +53,7 @@ namespace Evidgate.Modules.Authoring.Application;
 /// 500, so even an order this comment missed degrades to a retry.
 /// </para>
 /// </remarks>
-internal sealed class AuthoringVersionWriter(
+internal sealed partial class AuthoringVersionWriter(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     ManualCaseStepsValidator steps)
@@ -204,6 +204,16 @@ internal sealed class AuthoringVersionWriter(
             }
 
             parsed.Add((change, snapshot));
+        }
+
+        // A batch of checklist-item soft deletes runs as one set of statements for the whole selection: the per-entity
+        // loop would issue four statements per change, which a 200-delete apply cannot afford. Every other batch, and a
+        // mixed one, keeps the per-entity path and its lock order.
+        if (parsed.TrueForAll(entry => entry.Change.EntityKind == AuthoringEntityKind.ChecklistItem
+                && entry.Change.ChangeKind == AuthoringChangeKind.SoftDelete))
+        {
+            return await AppendChecklistItemDeletesAsync(
+                db, orgId, projectId, batchId, actorMembershipId, parsed, settings, cancellationToken).ConfigureAwait(false);
         }
 
         // Every lock this batch can need is taken here, in one global order (rank, then id): the rows it mutates for
