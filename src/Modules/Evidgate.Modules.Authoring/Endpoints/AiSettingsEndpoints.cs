@@ -137,13 +137,31 @@ internal static class AiSettingsEndpoints
             cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>One version by number; the number is the whole address, so the handler decides the 404.</summary>
-    private static Task<Result<AiSettingsVersion>> GetVersionAsync(
+    /// <summary>
+    /// One version by number; the number is the whole address, so the handler decides the 404. A version is
+    /// immutable and this route answers its <c>ETag</c> exactly as the current-get answers the head's, so a client
+    /// can pin the version it just read.
+    /// </summary>
+    private static async Task<Result<AiSettingsVersion>> GetVersionAsync(
         Guid p,
         int version_no,
+        HttpContext context,
         IMediator mediator,
-        CancellationToken cancellationToken) =>
-        mediator.Send(new GetAiSettingsVersionQuery(p, version_no), cancellationToken).AsTask();
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var result = await mediator
+            .Send(new GetAiSettingsVersionQuery(p, version_no), cancellationToken)
+            .ConfigureAwait(false);
+
+        if (result.IsSuccess)
+        {
+            AiSettingsPayload.SetVersionETag(context, result.Value.VersionNo);
+        }
+
+        return result;
+    }
 
     /// <summary>The template catalogue, scoped through its project so a foreign project stays a 404.</summary>
     private static Task<Result<AiSettingsTemplateListResponse>> ListTemplatesAsync(

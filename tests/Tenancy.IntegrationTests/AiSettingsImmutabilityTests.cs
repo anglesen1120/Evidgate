@@ -41,7 +41,7 @@ public sealed class AiSettingsImmutabilityTests
             ?? throw new ShouldAssertException("the guard trigger must refuse the owner's UPDATE");
 
         ownerUpdate.ShouldStartWith("23514", customMessage: "the guard trigger refuses even the table owner");
-        ownerUpdate.ShouldContain("authoring_settings_immutable", customMessage: "the guard names its trigger in the error");
+        ownerUpdate.ShouldContain("settings_immutable:", customMessage: "the guard names its trigger in the error");
         (await AiSettingsCalls.StoredAsync(_fixture, world, 1)).Document["description"]!.GetValue<string>()
             .ShouldBeEmpty("the refused update changed nothing");
 

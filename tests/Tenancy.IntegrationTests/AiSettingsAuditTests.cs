@@ -73,7 +73,7 @@ public sealed class AiSettingsAuditTests
         row.AfterHash.ShouldBe(created.Text("content_hash")!["sha256:".Length..]);
     }
 
-    /// <summary>AC13: the same key replayed answers its stored response and appends no second row.</summary>
+    /// <summary>AC13: the original request replayed answers its stored response and appends no second row.</summary>
     [Fact]
     public async Task ReplayedKey_AuditsNothing()
     {
@@ -84,10 +84,12 @@ public sealed class AiSettingsAuditTests
         var first = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"0\"", key);
         first.Status.ShouldBe(HttpStatusCode.Created, first.ErrorMessage);
 
-        var replay = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"1\"", key);
+        var replay = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"0\"", key);
 
-        replay.Status.ShouldBe(HttpStatusCode.Created, "a replay answers the stored response verbatim");
+        replay.Status.ShouldBe(first.Status, "a replay answers the stored response verbatim");
+        replay.ETag.ShouldBe(first.ETag);
         replay.Text("content_hash").ShouldBe(first.Text("content_hash"));
+        replay.Body.GetProperty("version_no").GetInt32().ShouldBe(first.Body.GetProperty("version_no").GetInt32());
 
         (await AiSettingsCalls.AuditCountAsync(_fixture, world)).ShouldBe(1, "a replay changed nothing, so it audits nothing");
         (await AiSettingsCalls.SettingsCountAsync(_fixture, world)).ShouldBe(1);

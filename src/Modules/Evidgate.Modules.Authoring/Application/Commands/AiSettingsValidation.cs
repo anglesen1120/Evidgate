@@ -159,12 +159,40 @@ internal static partial class AiSettingsValidation
         {
             details.Add("/reason", "secret_value_detected");
         }
+        else if (LooksLikeAuditSecret(prepared))
+        {
+            details.Add("/reason", "secret_value_detected");
+        }
         else
         {
             return prepared;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// True when the audit row's own rule would refuse the reason. The sink treats a credential-shaped metadata
+    /// value as a programming error and throws, which would surface as a 500 on a caller-supplied reason; asking its
+    /// <see cref="AuditMetadata.Validate"/> the same question here turns that into the 422 the other secret checks
+    /// answer, with no second copy of the rule.
+    /// </summary>
+    /// <param name="reason">The prepared reason.</param>
+    private static bool LooksLikeAuditSecret(string reason)
+    {
+        // The exact value the audit row carries: the sink sees the clipped form, so the check must use it too.
+        var audited = new Dictionary<string, string>(StringComparer.Ordinal) { ["reason"] = AuditReason(reason)! };
+
+        try
+        {
+            AuditMetadata.Validate(audited);
+
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
     }
 
     private static byte[]? HashBytes(string? contentHash) =>

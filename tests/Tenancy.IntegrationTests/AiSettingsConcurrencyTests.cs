@@ -104,6 +104,28 @@ public sealed class AiSettingsConcurrencyTests
         (await AiSettingsCalls.SettingsCountAsync(_fixture, world)).ShouldBe(1);
     }
 
+    /// <summary>
+    /// AC6: a weak validator and a bare number are the tag <c>"0"</c> — <c>W/"0"</c> saves version 1 and the unquoted
+    /// <c>1</c> saves version 2, because the comparison is the version, not the header spelling.
+    /// </summary>
+    [Fact]
+    public async Task WeakAndBareIfMatch_AreTheSameVersion()
+    {
+        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+
+        var first = await AiSettingsCalls.SaveAsync(
+            world.Client, world.As, world, AiSettingsCalls.Body(DocumentWith("Weak tag")), "W/\"0\"");
+
+        first.Status.ShouldBe(HttpStatusCode.Created, first.ErrorMessage);
+        first.ETag.ShouldBe("\"1\"");
+
+        var second = await AiSettingsCalls.SaveAsync(
+            world.Client, world.As, world, AiSettingsCalls.Body(DocumentWith("Bare tag")), "1");
+
+        second.Status.ShouldBe(HttpStatusCode.Created, second.ErrorMessage);
+        second.ETag.ShouldBe("\"2\"");
+    }
+
     /// <summary>AC4/AC13: a save without <c>Idempotency-Key</c> is 400 <c>request_invalid</c> on the header's pointer.</summary>
     [Fact]
     public async Task MissingIdempotencyKey_Is400()

@@ -266,10 +266,10 @@ values
        "medium": "Luồng phụ, thông báo kiểm tra dữ liệu hoặc trạng thái rỗng hiển thị sai.",
        "low": "Câu chữ, khoảng cách hoặc khác biệt giao diện không đổi hành vi."
      },
-     "exclusion_rules": "Không tự động hoá hành động xoá dữ liệu mà đội không thể khôi phục: xoá cơ sở dữ liệu sản xuất, xoá dự án sản xuất, thu hồi toàn bộ quản trị viên của tổ chức, hoặc xoay token ingest đang dùng ngoài tổ chức kiểm thử. Hãy kiểm thử thủ công trong môi trường dùng một lần, hoặc không kiểm thử.",
+     "exclusion_rules": "Không tự động hoá hành động xoá dữ liệu mà đội không thể khôi phục: xoá cơ sở dữ liệu sản xuất, xoá dự án sản xuất, thu hồi toàn bộ quản trị viên của tổ chức, hoặc đổi thông tin xác thực ingest đang dùng ngoài tổ chức kiểm thử. Hãy kiểm thử thủ công trong môi trường dùng một lần, hoặc không kiểm thử.",
      "step_detail": "Mỗi bước một hành động và một kết quả mong đợi; chỉ thêm dữ liệu kiểm thử khi giá trị đó quan trọng."
    }$json$::jsonb,
-   'sha256:61f3c11e154d72fb7550391d23b4426b306800595b8c268a6aa9d3a40b126927',
+   'sha256:b6cd3f34b1213f1948a2413d8bef74ec8ee946abe4dded19efa5188b30ec0251',
    false),
   ('01926b1c-4a00-7000-8000-000000000004', 'web-form', 'en', 1,
    'Web form (English)',
@@ -285,10 +285,10 @@ values
        "medium": "A secondary path, a validation message or an empty state is wrong.",
        "low": "Wording, spacing or a cosmetic difference that changes no behaviour."
      },
-     "exclusion_rules": "Do not automate an action that destroys data a team cannot restore: dropping a production database, deleting a production project, revoking every administrator of an org, or rotating a live ingest token outside a test tenant. Test those manually in a disposable environment, or not at all.",
+     "exclusion_rules": "Do not automate an action that destroys data a team cannot restore: dropping a production database, deleting a production project, revoking every administrator of an org, or rotating live ingest credentials outside a test tenant. Test those manually in a disposable environment, or not at all.",
      "step_detail": "One action and one expected result per step; add test data only when the value matters."
    }$json$::jsonb,
-   'sha256:ebdf8d5e5d0a1598f1a1633162f5cca83aaa2ebd9f2a084427cde35657cfb1f7',
+   'sha256:757084c0794308635e8b5659bd9da3ca460d83cb24f822f6506b01cb720548fe',
    false)
 on conflict (code, locale, version) do nothing;
 

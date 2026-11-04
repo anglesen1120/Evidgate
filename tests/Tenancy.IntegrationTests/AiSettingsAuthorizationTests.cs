@@ -78,9 +78,8 @@ public sealed class AiSettingsAuthorizationTests
     {
         await using var world = await AiSettingsCalls.StartAsync(_fixture);
 
-        Action<System.Net.Http.Headers.HttpRequestHeaders> service = headers =>
-            TenancyApiFactory.Resolved(
-                serviceOrg: world.Org, serviceProject: world.Project, servicePermissions: ["authoring:read"]);
+        var service = TenancyApiFactory.Resolved(
+            serviceOrg: world.Org, serviceProject: world.Project, servicePermissions: ["authoring:read"]);
 
         var read = await AiSettingsCalls.GetAsync(world.Client, service, world.Settings);
 

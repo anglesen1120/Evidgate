@@ -60,6 +60,39 @@ public sealed class AiSettingsTemplateTests
         }
     }
 
+    /// <summary>
+    /// AC5/AC11: every seeded template document is storable exactly as published — the migration's own seed text must
+    /// pass the save's validation, so a seeded value that looks like a credential is a migration defect.
+    /// </summary>
+    [Fact]
+    public async Task SeededTemplates_SaveTheirOwnDocument_Unchanged()
+    {
+        await using var catalogueWorld = await AiSettingsCalls.StartAsync(_fixture);
+
+        var catalogue = await AiSettingsCalls.GetAsync(
+            catalogueWorld.Client, catalogueWorld.As, catalogueWorld.Templates);
+
+        catalogue.Status.ShouldBe(HttpStatusCode.OK, catalogue.ErrorMessage);
+
+        var items = catalogue.Body.GetProperty("items").EnumerateArray().ToList();
+        items.Count.ShouldBe(4, "the migration seeds two templates in two locales");
+
+        foreach (var item in items)
+        {
+            var label = $"{item.GetProperty("code").GetString()}/{item.GetProperty("locale").GetString()}"
+                + $" v{item.GetProperty("version").GetInt32()}";
+            var settings = JsonNode.Parse(item.GetProperty("settings").GetRawText())!.AsObject();
+
+            await using var world = await AiSettingsCalls.StartAsync(_fixture);
+            var saved = await AiSettingsCalls.SaveAsync(
+                world.Client, world.As, world, AiSettingsCalls.Body(settings), "\"0\"");
+
+            saved.Status.ShouldBeOneOf(
+                [HttpStatusCode.Created, HttpStatusCode.OK], $"{label} must be storable unchanged: {saved.ErrorMessage}");
+            saved.Text("content_hash").ShouldBe(AiSettingsCalls.HashOf(settings), label);
+        }
+    }
+
     /// <summary>AC5: the catalogue has no write verb — a POST or PUT on it is not a route these callers can reach.</summary>
     [Fact]
     public async Task Catalogue_RefusesWrites()

@@ -2028,7 +2028,7 @@ export type AiSettingsVersionSummary = {
 };
 
 /**
- * 00 §9.1 keyset page of `AiSettingsVersionSummary`, ordered `(created_at desc, id desc)` (13.2.1-T1). A project with no saved version answers an empty page, never the default template.
+ * 00 §9.1 keyset page of `AiSettingsVersionSummary`, ordered `version_no desc` on `project_ai_settings_head_idx` (13.2.1-T1). The order is the chain's own key, so the versions of one project read highest first and the cursor is the version number the page stopped at. A project with no saved version answers an empty page, never the default template.
  */
 export type AiSettingsVersionListResponse = {
     items: Array<AiSettingsVersionSummary>;
@@ -2040,6 +2040,10 @@ export type AiSettingsVersionListResponse = {
  */
 export type AiSettingsVersion = {
     version_no: number;
+    /**
+     * The `project_ai_settings` row id, so a pinned generation's reference is complete.
+     */
+    settings_id: string;
     content_hash: string;
     template: AiSettingsTemplateRef | null;
     author_membership_id: string;
@@ -2638,6 +2642,11 @@ export type Cursor = string;
  * Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
  */
 export type PolicyRevisionCursor = string;
+
+/**
+ * Opaque cursor from `next_cursor`; ordering `version_no desc` (13.2.1-T1, 00 §9.1).
+ */
+export type AiSettingsCursor = string;
 
 export type Limit = number;
 
@@ -10960,7 +10969,7 @@ export type ListProjectAiSettingsVersionsData = {
     };
     query?: {
         /**
-         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         * Opaque cursor from `next_cursor`; ordering `version_no desc` (13.2.1-T1, 00 §9.1).
          */
         cursor?: string;
         limit?: number;

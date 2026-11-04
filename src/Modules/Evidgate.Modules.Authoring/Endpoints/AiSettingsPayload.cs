@@ -12,8 +12,10 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// </summary>
 /// <remarks>
 /// The tag is this route family's own version number, not the authoring entry hash: its absent, quoted or
-/// malformed spelling is a 422 on <c>/If-Match</c> before the handler reads a row, and the stale comparison
+/// malformed spelling is a 422 on <c>If-Match</c> before the handler reads a row, and the stale comparison
 /// (a well-formed tag that no longer names the head) stays a 412 in the handler, where the head is known.
+/// The parse is the Catalog one with the single deviation the virtual version 0 needs: a zero version is a
+/// tag this route issues, so it is accepted here.
 /// </remarks>
 internal static class AiSettingsPayload
 {
@@ -95,29 +97,24 @@ internal static class AiSettingsPayload
 
         if (request.Headers.IfMatch.Count == 0)
         {
-            return Refuse("/If-Match", "required");
+            return Refuse("If-Match", "required");
         }
 
-        if (request.Headers.IfMatch.Count > 1)
+        // The Catalog parse (`CatalogEndpoints.IfMatchError`): trim, strip a weak prefix, trim the quotes, then
+        // read the digits culture-invariantly. One deviation, and the reason it exists: this tag's domain starts
+        // at the virtual version 0 (`ETag: "0"` before the first save), so a zero version is a real tag here.
+        var value = request.Headers.IfMatch.ToString().Trim();
+
+        if (value.StartsWith("W/", StringComparison.OrdinalIgnoreCase))
         {
-            return Refuse("/If-Match", "invalid");
+            value = value[2..];
         }
 
-        var raw = request.Headers.IfMatch[0]?.Trim();
-        if (string.IsNullOrEmpty(raw))
-        {
-            return Refuse("/If-Match", "required");
-        }
+        value = value.Trim('"');
 
-        // `"3"` is the exact spelling a client echoes from GET; the unquoted form is accepted because the
-        // documented tag is the number. A weak tag, a list or a signed number is not this route's tag.
-        var value = raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"' ? raw[1..^1] : raw;
-
-        return value.Length > 0
-            && value.All(static character => character is >= '0' and <= '9')
-            && int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out version)
+        return int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out version) && version >= 0
             ? null
-            : Refuse("/If-Match", "invalid");
+            : Refuse("If-Match", "invalid");
     }
 
     private static (string? Code, int? Version, Error? Error) ReadTemplate(JsonElement body)
@@ -132,7 +129,7 @@ internal static class AiSettingsPayload
             return (null, null, Refuse("/template", "invalid"));
         }
 
-        if (AuthoringEndpointSupport.UnknownMembers(template, TemplateMembers, "AI settings template") is { } unknown)
+        if (AuthoringEndpointSupport.UnknownMembers(template, TemplateMembers, "AI settings template", "/template/") is { } unknown)
         {
             return (null, null, unknown);
         }
@@ -142,9 +139,19 @@ internal static class AiSettingsPayload
             return (null, null, Refuse("/template/code", "required"));
         }
 
-        if (!template.TryGetProperty("version", out var version) || !version.TryGetInt32(out var number))
+        if (!template.TryGetProperty("version", out var version))
         {
             return (null, null, Refuse("/template/version", "required"));
+        }
+
+        // `TryGetInt32` throws for every kind but a number, so the kind is decided first: a string, a
+        // boolean, an object, an array, a fractional number or one outside the int range is the caller's
+        // 422, never a 500.
+        if (version.ValueKind is not JsonValueKind.Number
+            || !version.TryGetInt32(out var number)
+            || number < 1)
+        {
+            return (null, null, Refuse("/template/version", "invalid"));
         }
 
         return (code.GetString(), number, null);

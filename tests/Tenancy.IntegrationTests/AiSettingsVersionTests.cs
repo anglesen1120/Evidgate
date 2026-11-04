@@ -83,6 +83,8 @@ public sealed class AiSettingsVersionTests
 
         var two = await AiSettingsCalls.GetAsync(world.Client, world.As, world.VersionUrl(2));
         two.Status.ShouldBe(HttpStatusCode.OK, two.ErrorMessage);
+        two.ETag.ShouldBe("\"2\"");
+        two.Body.GetProperty("version_no").GetInt32().ShouldBe(2);
         AiSettingsCalls.SettingsOf(two).ToJsonString().ShouldBe(second.ToJsonString());
 
         var missing = await AiSettingsCalls.GetAsync(world.Client, world.As, world.VersionUrl(99));
@@ -131,7 +133,7 @@ public sealed class AiSettingsVersionTests
         secondPage.Body.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
-    /// <summary>AC6: an out-of-range limit is 422, a non-integer limit is 400, and an unissued cursor is 422.</summary>
+    /// <summary>AC6: an out-of-range limit is 422, a non-integer limit is 422 on its own pointer, and an unissued cursor is 422.</summary>
     [Fact]
     public async Task VersionPage_Refuses_BadLimitAndCursor()
     {
@@ -140,8 +142,11 @@ public sealed class AiSettingsVersionTests
         (await AiSettingsCalls.GetAsync(world.Client, world.As, $"{world.Versions}?limit=201")).Status
             .ShouldBe(HttpStatusCode.UnprocessableEntity, "200 is the maximum page size");
 
-        (await AiSettingsCalls.GetAsync(world.Client, world.As, $"{world.Versions}?limit=abc")).Status
-            .ShouldBe(HttpStatusCode.BadRequest, "a non-integer limit is a malformed query, not a validation failure");
+        var malformed = await AiSettingsCalls.GetAsync(world.Client, world.As, $"{world.Versions}?limit=abc");
+        malformed.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, "a non-integer limit is a validation failure, not a 400");
+        malformed.ErrorCode.ShouldBe("request_invalid");
+        AiSettingsCalls.Details(malformed).ShouldContain(
+            ("/limit", "out_of_range"), $"the answer blames the query member: {string.Join(", ", AiSettingsCalls.Details(malformed))}");
 
         var garbage = await AiSettingsCalls.GetAsync(world.Client, world.As, $"{world.Versions}?cursor=not-a-cursor");
         garbage.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, "an unissued cursor is refused");

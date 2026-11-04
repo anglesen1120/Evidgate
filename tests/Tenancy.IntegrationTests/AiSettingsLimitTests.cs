@@ -41,7 +41,7 @@ public sealed class AiSettingsLimitTests
         await using var world = await AiSettingsCalls.StartAsync(_fixture);
 
         var over = AiSettingsCalls.Document();
-        over[field] = new string('a', limit + 1);
+        over[field] = AiSettingsCalls.ProseOfLength(limit + 1);
 
         var refused = await AiSettingsCalls.SaveAsync(
             world.Client, world.As, world, AiSettingsCalls.Body(over), "\"0\"");
@@ -50,7 +50,7 @@ public sealed class AiSettingsLimitTests
         (await AiSettingsCalls.SettingsCountAsync(_fixture, world)).ShouldBe(0, "a refused save stores nothing");
 
         var atLimit = AiSettingsCalls.Document();
-        atLimit[field] = new string('a', limit);
+        atLimit[field] = AiSettingsCalls.ProseOfLength(limit);
 
         var accepted = await AiSettingsCalls.SaveAsync(
             world.Client, world.As, world, AiSettingsCalls.Body(atLimit), "\"0\"");
@@ -70,7 +70,7 @@ public sealed class AiSettingsLimitTests
         await using var world = await AiSettingsCalls.StartAsync(_fixture);
 
         var over = AiSettingsCalls.Document();
-        over["description"] = new string('d', AiSettingsCalls.DescriptionLimit + 1);
+        over["description"] = AiSettingsCalls.ProseOfLength(AiSettingsCalls.DescriptionLimit + 1);
 
         AiSettingsCalls.ShouldRefuse(
             await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(over), "\"0\""),
@@ -80,7 +80,7 @@ public sealed class AiSettingsLimitTests
         (await AiSettingsCalls.SettingsCountAsync(_fixture, world)).ShouldBe(0);
 
         var atLimit = AiSettingsCalls.Document();
-        atLimit["description"] = new string('d', AiSettingsCalls.DescriptionLimit);
+        atLimit["description"] = AiSettingsCalls.ProseOfLength(AiSettingsCalls.DescriptionLimit);
 
         (await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(atLimit), "\"0\""))
             .Status.ShouldBe(HttpStatusCode.Created);
@@ -95,7 +95,7 @@ public sealed class AiSettingsLimitTests
         foreach (var criterion in new[] { "critical", "high", "medium", "low" })
         {
             var over = AiSettingsCalls.Document();
-            over["priority_criteria"]![criterion] = new string('c', AiSettingsCalls.CriterionLimit + 1);
+            over["priority_criteria"]![criterion] = AiSettingsCalls.ProseOfLength(AiSettingsCalls.CriterionLimit + 1);
 
             AiSettingsCalls.ShouldRefuse(
                 await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(over), "\"0\""),
@@ -106,7 +106,7 @@ public sealed class AiSettingsLimitTests
         (await AiSettingsCalls.SettingsCountAsync(_fixture, world)).ShouldBe(0);
 
         var atLimit = AiSettingsCalls.Document();
-        atLimit["priority_criteria"]!["critical"] = new string('c', AiSettingsCalls.CriterionLimit);
+        atLimit["priority_criteria"]!["critical"] = AiSettingsCalls.ProseOfLength(AiSettingsCalls.CriterionLimit);
 
         (await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(atLimit), "\"0\""))
             .Status.ShouldBe(HttpStatusCode.Created);

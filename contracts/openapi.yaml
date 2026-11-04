@@ -7081,7 +7081,7 @@ paths:
       tags: [authoring]
       summary: Keyset page of the project's AI settings versions, newest first (13.2.1-T1)
       description: >-
-        One page of version summaries in the fixed `(created_at desc, id desc)` order, at most
+        One page of version summaries in the fixed `version_no desc` order, at most
         200 items (`limit` defaults to 50). A summary carries `version_no`, `content_hash`, the
         template pair it was copied from, `author_membership_id`, `reason` and `created_at`;
         the document itself is read from `GET /v1/projects/{p}/ai-settings/versions/{version_no}`,
@@ -7093,7 +7093,7 @@ paths:
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/AiSettingsCursor'
         - $ref: '#/components/parameters/Limit'
       responses:
         '200':
@@ -7432,6 +7432,13 @@ components:
       in: query
       required: false
       description: Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
+      schema:
+        type: string
+    AiSettingsCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor from `next_cursor`; ordering `version_no desc` (13.2.1-T1, 00 §9.1).
       schema:
         type: string
     Limit:
@@ -11242,9 +11249,11 @@ components:
     AiSettingsVersionListResponse:
       type: object
       description: >-
-        00 §9.1 keyset page of `AiSettingsVersionSummary`, ordered `(created_at desc, id desc)`
-        (13.2.1-T1). A project with no saved version answers an empty page, never the default
-        template.
+        00 §9.1 keyset page of `AiSettingsVersionSummary`, ordered `version_no desc` on
+        `project_ai_settings_head_idx` (13.2.1-T1). The order is the chain's own key, so the
+        versions of one project read highest first and the cursor is the version number the
+        page stopped at. A project with no saved version answers an empty page, never the
+        default template.
       required: [items, next_cursor]
       properties:
         items:
@@ -11261,11 +11270,24 @@ components:
         `version_no` in quotes and never changes, because a version is immutable.
       additionalProperties: false
       required:
-        [version_no, content_hash, template, author_membership_id, reason, created_at, settings]
+        [
+          version_no,
+          settings_id,
+          content_hash,
+          template,
+          author_membership_id,
+          reason,
+          created_at,
+          settings,
+        ]
       properties:
         version_no:
           type: integer
           minimum: 1
+        settings_id:
+          type: string
+          format: uuid
+          description: The `project_ai_settings` row id, so a pinned generation's reference is complete.
         content_hash:
           type: string
           pattern: '^sha256:[0-9a-f]{64}$'

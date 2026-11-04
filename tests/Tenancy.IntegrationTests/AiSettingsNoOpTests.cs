@@ -45,7 +45,7 @@ public sealed class AiSettingsNoOpTests
             .ShouldBe(auditsAfterCreate + 1, "a no-op is still a successful save, so it is audited once with outcome=noop");
     }
 
-    /// <summary>AC4: two concurrent identical first saves append one row — the loser observes the winner's document.</summary>
+    /// <summary>AC4: two concurrent identical first saves append one row — the loser's tag has moved, so it is 412.</summary>
     [Fact]
     public async Task ConcurrentIdenticalSaves_AppendOneRow()
     {
@@ -61,8 +61,9 @@ public sealed class AiSettingsNoOpTests
 
         answers.Count(answer => answer.Status == HttpStatusCode.Created)
             .ShouldBe(1, "exactly one save creates the version");
-        answers.Count(answer => answer.Status is HttpStatusCode.OK or HttpStatusCode.PreconditionFailed)
-            .ShouldBe(1, "the other observes the head: a no-op, or stale because its tag moved");
+        var loser = answers.Single(answer => answer.Status != HttpStatusCode.Created);
+        loser.Status.ShouldBe(HttpStatusCode.PreconditionFailed, "the winner moved the head, so If-Match \"0\" is stale");
+        loser.ErrorCode.ShouldBe("precondition_failed");
         answers.ShouldAllBe(answer => answer.Status != HttpStatusCode.InternalServerError);
     }
 

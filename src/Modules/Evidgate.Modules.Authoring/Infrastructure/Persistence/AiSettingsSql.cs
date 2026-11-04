@@ -7,9 +7,9 @@ namespace Evidgate.Modules.Authoring.Infrastructure.Persistence;
 /// </summary>
 /// <remarks>
 /// Every statement carries <c>org_id</c> and the project of the URL, so another organization's or another
-/// project's row matches nothing and the route answers 404 without a second lookup. The head and the list
-/// use the two indexes the migration declares (<c>version_no desc</c> and <c>created_at desc, id desc</c>);
-/// the list is a keyset page, never an offset. The template catalogue is read-only and small, so its route
+/// project's row matches nothing and the route answers 404 without a second lookup. The head and the list are
+/// both one backward scan of <c>project_ai_settings_head_idx</c> (<c>version_no desc</c>); the list is a keyset
+/// page on that one column, never an offset. The template catalogue is read-only and small, so its route
 /// issues one ordered select and no cursor.
 /// </remarks>
 internal static class AiSettingsSql
@@ -96,30 +96,32 @@ internal static class AiSettingsSql
 
     /// <summary>The projection of one version summary: no document, the screen fetches two versions to diff.</summary>
     private const string SummaryColumns = """
-        v.id as settings_id, v.version_no, v.content_hash, v.template_code, v.template_version,
+        v.version_no, v.content_hash, v.template_code, v.template_version,
         v.author_membership_id, v.reason, v.created_at
         """;
 
-    /// <summary>The first page of the version list: the list index order, no seek.</summary>
+    /// <summary>The first page of the version list: the head index's order, no seek.</summary>
     internal const string FirstPage = $"""
         select {SummaryColumns}
           from public.project_ai_settings v
          where v.org_id = @org_id
            and v.project_id = @project_id
-         order by v.created_at desc,
-                  v.id desc
+         order by v.version_no desc
          limit @take
         """;
 
-    /// <summary>A later page: the same order, narrowed by the <c>(created_at, id)</c> keyset pair.</summary>
+    /// <summary>
+    /// A later page: the same order, narrowed by the version number the previous page stopped at. The version
+    /// number is the chain's own key — unique per project, monotone and never rewritten — so one column is a
+    /// complete keyset and no row is skipped or repeated at a page boundary.
+    /// </summary>
     internal const string NextPage = $"""
         select {SummaryColumns}
           from public.project_ai_settings v
          where v.org_id = @org_id
            and v.project_id = @project_id
-           and (v.created_at, v.id) < (@cursor_created_at::timestamptz, @cursor_id::uuid)
-         order by v.created_at desc,
-                  v.id desc
+           and v.version_no < @cursor_version_no
+         order by v.version_no desc
          limit @take
         """;
 

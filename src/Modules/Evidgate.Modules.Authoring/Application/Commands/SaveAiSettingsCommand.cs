@@ -15,6 +15,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 using Mediator;
+using Npgsql;
 
 namespace Evidgate.Modules.Authoring.Application.Commands;
 
@@ -114,33 +115,62 @@ internal sealed class SaveAiSettingsCommandHandler(
                 "saving project AI settings needs an active membership in this organization"));
         }
 
-        await db.ExecuteAsync(
-            AiSettingsSql.LockProject,
-            new { lock_key = string.Create(CultureInfo.InvariantCulture, $"authoring_ai_settings:{command.ProjectId:D}") },
-            cancellationToken).ConfigureAwait(false);
-
-        var head = await db.QuerySingleOrDefaultAsync<AiSettingsSql.HeadRow>(
-            AiSettingsSql.Head,
-            new { org_id = orgId, project_id = command.ProjectId },
-            cancellationToken).ConfigureAwait(false);
-
-        var headVersion = head?.VersionNo ?? 0;
-        if (headVersion != command.IfMatchVersion)
-        {
-            EvidgateTelemetry.RecordAiSettingsWrite("stale");
-
-            return Result.Failure<AiSettingsView>(AiSettingsValidation.Stale(headVersion));
-        }
-
-        var contentHash = document.ContentHash();
-
-        if (head is not null && string.Equals(head.ContentHash, contentHash, StringComparison.Ordinal))
-        {
-            return NoOp(document, reason, head, audit);
-        }
-
-        return await AppendAsync(command, document, reason, contentHash, head, orgId, author.Value, audit, cancellationToken)
+        return await WriteAsync(command, document, reason, orgId, author.Value, audit, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The write half of the save under the writer-wide bound: the 5 s <c>lock_timeout</c>, the project's advisory
+    /// lock, the head read and the one append. A lock this command waits on past the bound, or a deadlock, answers
+    /// the retryable 503 the other authoring writers answer instead of surfacing as a 500.
+    /// </summary>
+    private async ValueTask<Result<AiSettingsView>> WriteAsync(
+        SaveAiSettingsCommand command,
+        AiSettingsDocument document,
+        string? reason,
+        Guid orgId,
+        Guid author,
+        IAuditTrail audit,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
+
+            await db.ExecuteAsync(
+                AiSettingsSql.LockProject,
+                new { lock_key = string.Create(CultureInfo.InvariantCulture, $"authoring_ai_settings:{command.ProjectId:D}") },
+                cancellationToken).ConfigureAwait(false);
+
+            var head = await db.QuerySingleOrDefaultAsync<AiSettingsSql.HeadRow>(
+                AiSettingsSql.Head,
+                new { org_id = orgId, project_id = command.ProjectId },
+                cancellationToken).ConfigureAwait(false);
+
+            var headVersion = head?.VersionNo ?? 0;
+            if (headVersion != command.IfMatchVersion)
+            {
+                EvidgateTelemetry.RecordAiSettingsWrite("stale");
+
+                return Result.Failure<AiSettingsView>(AiSettingsValidation.Stale(headVersion));
+            }
+
+            var contentHash = document.ContentHash();
+
+            if (head is not null && string.Equals(head.ContentHash, contentHash, StringComparison.Ordinal))
+            {
+                return NoOp(document, reason, head, audit);
+            }
+
+            return await AppendAsync(command, document, reason, contentHash, head, orgId, author, audit, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        {
+            // 13.1.1 §5 / 00 §9.2: another writer held the advisory lock or a row this save needs past the 5 s bound
+            // (55P03), or the database broke a deadlock (40P01) — the retryable 503, never a 500.
+            return Result.Failure<AiSettingsView>(AuthoringErrors.Unavailable());
+        }
     }
 
     /// <summary>

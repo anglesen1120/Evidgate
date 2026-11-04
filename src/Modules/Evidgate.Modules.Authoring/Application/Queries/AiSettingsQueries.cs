@@ -1,3 +1,4 @@
+using System.Globalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -65,8 +66,9 @@ internal sealed record ListAiSettingsVersionsQuery(Guid ProjectId, string? Curso
 
 /// <summary>
 /// Handler of <see cref="ListAiSettingsVersionsQuery"/>: the project probe and one keyset statement, whatever
-/// the page size. The order is the list index's <c>(created_at desc, id desc)</c>, so the cursor is a searchable
-/// row comparison and no row is skipped or repeated at a page boundary.
+/// the page size. The order is the head index's <c>version_no desc</c>, and the version number is unique per
+/// project and never rewritten, so the cursor is one searchable column comparison and no row is skipped or
+/// repeated at a page boundary.
 /// </summary>
 /// <param name="db">The tenant-scoped data access.</param>
 /// <param name="scopes">The request's tenant scope.</param>
@@ -93,20 +95,13 @@ internal sealed class ListAiSettingsVersionsQueryHandler(
             return Result.Failure<AiSettingsVersionListResponse>(scopeError);
         }
 
-        DateTimeOffset? cursorCreatedAt = null;
-        var cursorId = Guid.Empty;
+        var cursorVersionNo = 0;
 
-        if (!string.IsNullOrEmpty(query.Cursor))
+        if (query.Cursor is { Length: > 0 } cursor && !TryDecodeCursor(cursor, out cursorVersionNo))
         {
-            if (!KeysetCursor.TryDecode(query.Cursor, out var decodedAt, out var decodedId))
-            {
-                return Result.Failure<AiSettingsVersionListResponse>(Error.Invalid(
-                    "the cursor is not a value this endpoint issued",
-                    [new ErrorDetail("/cursor", "malformed")]));
-            }
-
-            cursorCreatedAt = decodedAt;
-            cursorId = decodedId;
+            return Result.Failure<AiSettingsVersionListResponse>(Error.Invalid(
+                "the cursor is not a value this endpoint issued",
+                [new ErrorDetail("/cursor", "malformed")]));
         }
 
         var orgId = scopes.Require().OrgId;
@@ -120,13 +115,12 @@ internal sealed class ListAiSettingsVersionsQueryHandler(
         }
 
         var rows = await db.QueryAsync<AiSettingsSql.VersionRow>(
-            cursorCreatedAt is null ? AiSettingsSql.FirstPage : AiSettingsSql.NextPage,
+            cursorVersionNo == 0 ? AiSettingsSql.FirstPage : AiSettingsSql.NextPage,
             new
             {
                 org_id = orgId,
                 project_id = query.ProjectId,
-                cursor_created_at = cursorCreatedAt,
-                cursor_id = cursorId,
+                cursor_version_no = cursorVersionNo,
                 take = query.Limit + 1,
             },
             cancellationToken).ConfigureAwait(false);
@@ -143,8 +137,22 @@ internal sealed class ListAiSettingsVersionsQueryHandler(
 
         return Result.Success(new AiSettingsVersionListResponse(
             items,
-            hasMore ? KeysetCursor.Encode(rows[size - 1].CreatedAt, rows[size - 1].SettingsId) : null));
+            hasMore ? EncodeCursor(rows[size - 1].VersionNo) : null));
     }
+
+    /// <summary>The cursor of the next page: the version number this page stopped at, in invariant digits.</summary>
+    /// <param name="versionNo">The last returned version.</param>
+    private static string EncodeCursor(int versionNo) =>
+        versionNo.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Reads a cursor this handler issued: a stored version number, so a value that is not one digits-only positive
+    /// integer is refused rather than guessed at. Version numbers start at 1, so 0 is never a position.
+    /// </summary>
+    /// <param name="cursor">The opaque cursor.</param>
+    /// <param name="versionNo">The version to resume below, on success.</param>
+    private static bool TryDecodeCursor(string cursor, out int versionNo) =>
+        int.TryParse(cursor, NumberStyles.None, CultureInfo.InvariantCulture, out versionNo) && versionNo >= 1;
 }
 
 /// <summary>One stored settings version by its number.</summary>

@@ -53,9 +53,11 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// <item><c>static Task&lt;(JsonElement Body, Error? Error)&gt; ReadOptionalBodyAsync(HttpContext context, CancellationToken
 /// cancellationToken)</c> — the same, answering <c>JsonValueKind.Undefined</c> for a bodiless request (the optional
 /// <c>{reason?}</c> of a DELETE).</item>
-/// <item><c>static Error? UnknownMembers(JsonElement body, IReadOnlyCollection&lt;string&gt; allowed, string what)</c> —
-/// 422 <c>/member</c> <c>unknown_field</c> for the first member outside <c>allowed</c> (root level only; a nested
-/// document such as <c>steps</c> is validated by its own schema).</item>
+/// <item><c>static Error? UnknownMembers(JsonElement body, IReadOnlyCollection&lt;string&gt; allowed, string what,
+/// string pathPrefix = "/")</c> — 422 <c>/member</c> <c>unknown_field</c> for the first member outside <c>allowed</c>
+/// (root level only; a nested document such as <c>steps</c> is validated by its own schema). <c>pathPrefix</c> is the
+/// pointer prefix the name is appended to, so a caller that validates a nested object rebases its pointers under the
+/// member the object came from (<c>/template/unexpected</c>).</item>
 /// <item><c>static Error? LimitError(string? raw, out int limit)</c> — the <c>?limit=</c> reader.</item>
 /// <item><c>static void SetVersionETag(HttpContext context, int version)</c> — writes <c>ETag: "&lt;version&gt;"</c>.</item>
 /// <item><c>static Error ToError(AuthoringRefusal refusal)</c> and <c>static Result&lt;T&gt; Failure&lt;T&gt;(Error error)</c>
@@ -227,9 +229,15 @@ internal static class AuthoringEndpointSupport
     /// <param name="body">The parsed request body.</param>
     /// <param name="allowed">The members the route accepts.</param>
     /// <param name="what">The entity name used in the message, e.g. <c>feature node</c>.</param>
-    internal static Error? UnknownMembers(JsonElement body, IReadOnlyCollection<string> allowed, string what)
+    /// <param name="pathPrefix">The pointer prefix the member name is appended to; <c>/</c> for a root member.</param>
+    internal static Error? UnknownMembers(
+        JsonElement body,
+        IReadOnlyCollection<string> allowed,
+        string what,
+        string pathPrefix = "/")
     {
         ArgumentNullException.ThrowIfNull(allowed);
+        ArgumentNullException.ThrowIfNull(pathPrefix);
 
         if (body.ValueKind != JsonValueKind.Object)
         {
@@ -256,7 +264,7 @@ internal static class AuthoringEndpointSupport
             {
                 return Error.Invalid(
                     $"'{Domain.AuthoringText.Brief(name)}' is not a field of a {what}",
-                    [new ErrorDetail("/" + Domain.AuthoringText.Brief(name), "unknown_field")]);
+                    [new ErrorDetail(pathPrefix + Domain.AuthoringText.Brief(name), "unknown_field")]);
             }
         }
 

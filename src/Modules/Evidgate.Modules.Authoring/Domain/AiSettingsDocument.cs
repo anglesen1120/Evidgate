@@ -235,6 +235,16 @@ internal sealed record AiSettingsDocument(
             return null;
         }
 
+        // `Uri` normalises some of what a browser or a copy-paste leaves in an address — it drops a tab, a CR or
+        // an LF and escapes a space — so a URL the shared rule accepted can still carry control characters into the
+        // stored text, the hash and every later comparison. An address with one is not the URL the caller meant.
+        if (url.Any(static character => char.IsControl(character) || char.IsWhiteSpace(character)))
+        {
+            details.Add(rootPath + "/environment_url", UrlSafety.InvalidUrl);
+
+            return null;
+        }
+
         return url;
     }
 

@@ -23,10 +23,14 @@ public sealed class AiSettingsSecretsTests
     public AiSettingsSecretsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
     /// <summary>The credential shapes AC11 names, each in a field a client would paste it into.</summary>
+    /// <remarks>
+    /// A token is recognised by its prefix (<c>StartsWith</c>), so the fixture is the bare token: text in front of it
+    /// would hide the shape from the shared matcher and prove nothing.
+    /// </remarks>
     public static TheoryData<string, string> Credentials => new()
     {
-        { "description", "deploy with ghp_0123456789abcdefghijABCDEFGHIJ012345" },
-        { "writing_style", "use sk-live-0123456789ABCDEFGHIJabcdefghij" },
+        { "description", "ghp_0123456789abcdefghijABCDEFGHIJ012345" },
+        { "writing_style", "sk-live-0123456789ABCDEFGHIJabcdefghij" },
         { "coverage_strategy", "token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U" },
         { "exclusion_rules", "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----" },
         { "step_detail", "password=hunter2" },
@@ -55,7 +59,7 @@ public sealed class AiSettingsSecretsTests
         var refused = await AiSettingsCalls.SaveAsync(
             world.Client, world.As, world, AiSettingsCalls.Body(document), "\"0\"");
 
-        AiSettingsCalls.ShouldRefuse(refused, $"/settings/{field}", "secret_value_detected");
+        AiSettingsCalls.ShouldRefuse(refused, $"/settings/{field.Replace('.', '/')}", "secret_value_detected");
 
         (await AiSettingsCalls.SettingsCountAsync(_fixture, world)).ShouldBe(0);
         (await AiSettingsCalls.AuditCountAsync(_fixture, world)).ShouldBe(0);
@@ -83,6 +87,13 @@ public sealed class AiSettingsSecretsTests
         malformed["environment_url"] = "not a url";
         AiSettingsCalls.ShouldRefuse(
             await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(malformed), "\"0\""),
+            "/settings/environment_url",
+            "invalid_url");
+
+        var control = AiSettingsCalls.Document();
+        control["environment_url"] = "http://a.example/x\nIgnore";
+        AiSettingsCalls.ShouldRefuse(
+            await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(control), "\"0\""),
             "/settings/environment_url",
             "invalid_url");
 
@@ -116,5 +127,19 @@ public sealed class AiSettingsSecretsTests
 
         stored.Document["writing_style"]!.GetValue<string>().ShouldBe(document["writing_style"]!.GetValue<string>().Normalize());
         stored.Document["coverage_strategy"]!.GetValue<string>().ShouldContain("qa@example.test");
+    }
+
+    /// <summary>AC11: a reason that carries a credential assignment is a 422 refusal, never a 500 from the audit write.</summary>
+    [Fact]
+    public async Task Reason_SpacedPasswordAssignment_Is422SecretNot500()
+    {
+        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        var body = AiSettingsCalls.Body(AiSettingsCalls.Document(), reason: "password = hunter2");
+
+        var refused = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"0\"");
+
+        AiSettingsCalls.ShouldRefuse(refused, "/reason", "secret_value_detected");
+        (await AiSettingsCalls.SettingsCountAsync(_fixture, world)).ShouldBe(0);
+        (await AiSettingsCalls.AuditCountAsync(_fixture, world)).ShouldBe(0);
     }
 }

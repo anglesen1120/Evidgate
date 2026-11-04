@@ -139,6 +139,14 @@ internal static class AiSettingsCalls
         ["reason"] = reason,
     };
 
+    /// <summary>
+    /// Prose of exactly <paramref name="length"/> code points: spaces and non-hex letters, so neither the secret-shape
+    /// rules nor the audit trail's credential pattern can match it and a refusal can only be the field's own cap.
+    /// </summary>
+    /// <param name="length">The exact code-point length.</param>
+    internal static string ProseOfLength(int length) =>
+        string.Concat(Enumerable.Repeat("note ", (length / 5) + 1))[..length];
+
     /// <summary>A template provenance pair (<c>{code, version}</c>).</summary>
     /// <param name="code">The template code, e.g. <c>default</c>.</param>
     /// <param name="version">The template version.</param>
