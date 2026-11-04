@@ -1,65 +1,20 @@
+import { InteractivityChecker } from '@angular/cdk/a11y';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { IngestTokenView } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
-import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import { SecretsPage } from './secrets.page';
-import { SecretsStore, type RotationResult, type RotationState } from './secrets.store';
-import type { CiBindingView } from '@evidgate/sdk';
-import type { CiBindingsPhase } from './secrets.store';
+import { SecretsStore, type RotationResult } from './secrets.store';
 import bindingData from '../../../../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
-
-const base = fixtureData.body.items[0] as IngestTokenView;
-const failure: ApiError = {
-  kind: 'conflict',
-  status: 409,
-  code: 'invalid_transition',
-  message: 'Already rotated. <strong>Server text stays verbatim.</strong>',
-  requestId: 'request-rotate',
-  retryable: false,
-  retryAfterSeconds: null,
-  details: [],
-};
-class FakeSecretsStore {
-  readonly rows = signal<readonly IngestTokenView[]>([base]);
-  readonly phase = signal<'loading' | 'ready' | 'error'>('ready');
-  readonly loadError = signal<ApiError | null>(null);
-  readonly hasMore = signal(false);
-  readonly projectId = signal<string | null>(null);
-  readonly rotateState = signal<RotationState>({ phase: 'idle', tokenId: null, error: null });
-  readonly rotating = signal(false);
-  readonly ciBindings = signal<readonly CiBindingView[]>(bindingData.body.items as CiBindingView[]);
-  readonly ciBindingsPhase = signal<CiBindingsPhase>('ready');
-  readonly ciBindingsError = signal<ApiError | null>(null);
-  readonly hasMoreCiBindings = signal(false);
-  readonly loadCiBindings = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
-  readonly loadMoreCiBindings = vi.fn(() => Promise.resolve());
-  readonly resetCiBindings = vi.fn();
-  readonly load = vi.fn((id: string) => {
-    this.projectId.set(id);
-    return Promise.resolve();
-  });
-  readonly loadMore = vi.fn(() => Promise.resolve());
-  readonly rotate = vi.fn<(id: string) => Promise<RotationResult | null>>(() =>
-    Promise.resolve({
-      successorId: 'next',
-      overlapEndsAt: '2026-10-26T00:00:00Z',
-      value: 'new-full-credential-once',
-    }),
-  );
-  resetRotation(): void {
-    this.rotateState.set({ phase: 'idle', tokenId: null, error: null });
-  }
-}
-const showModalDescriptor = Object.getOwnPropertyDescriptor(
-  HTMLDialogElement.prototype,
-  'showModal',
-);
-const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
-
-describe('SecretsPage (09.7.1-T3)', () => {
+import {
+  base,
+  failure,
+  FakeSecretsStore,
+  renderSecretsPage as render,
+  rotateButton,
+} from './secrets-page.testing';
+describe('SecretsPage', () => {
   let store: FakeSecretsStore;
   const projects = signal([
     { id: 'p1', name: 'Storefront' },
@@ -75,18 +30,6 @@ describe('SecretsPage (09.7.1-T3)', () => {
     ]);
     canWrite.set(true);
     canReadBindings.set(false);
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     TestBed.configureTestingModule({
       providers: [
         {
@@ -103,37 +46,19 @@ describe('SecretsPage (09.7.1-T3)', () => {
     TestBed.overrideComponent(SecretsPage, {
       set: { providers: [{ provide: SecretsStore, useValue: store }, RevealSlot] },
     });
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
   });
   afterEach(() => {
     TestBed.resetTestingModule();
-    if (showModalDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModalDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (closeDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'close', closeDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
-  async function render() {
-    const fixture = TestBed.createComponent(SecretsPage);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    return {
-      fixture,
-      root: fixture.nativeElement as HTMLElement,
-      slot: fixture.debugElement.injector.get(RevealSlot),
-    };
-  }
-  function rotateButton(root: HTMLElement): HTMLButtonElement {
-    const button = root.querySelector<HTMLButtonElement>('[data-rotate]');
-    if (!button) throw new Error('Expected Rotate button');
-    return button;
-  }
   it('defaults to the first listed project and never requests an injected unlisted id', async () => {
     const { root, fixture } = await render();
     expect(store.load).toHaveBeenCalledExactlyOnceWith('p1');
     const select = root.querySelector<HTMLSelectElement>('select');
     if (!select) throw new Error('Expected project select');
+    expect(select.getAttribute('data-slot')).toBe('input');
+    expect(root.querySelector(`label[for="${select.id}"]`)?.textContent).toBe('Project');
     const option = document.createElement('option');
     option.value = 'foreign';
     select.append(option);
@@ -178,15 +103,24 @@ describe('SecretsPage (09.7.1-T3)', () => {
       const opener = rotateButton(root);
       opener.click();
       await fixture.whenStable();
-      const input = root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]');
+      const input = document.querySelector<HTMLInputElement>('[data-testid="reveal-value"]');
       expect(input?.value).toBe('new-full-credential-once');
       expect(slot.current()?.source).toBe('ingest-token-rotation');
-      expect(root.querySelector('[data-testid="reveal-copy"]')).not.toBeNull();
-      expect(root.textContent).toContain('2026-10-26T00:00:00Z');
+      expect(document.querySelector('[data-testid="reveal-copy"]')).not.toBeNull();
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+        '2026-10-26T00:00:00Z',
+      );
       if (action === 'dismiss')
-        root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
+        document.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
       if (action === 'escape')
-        root.querySelector('dialog')?.dispatchEvent(new Event('cancel', { cancelable: true }));
+        document.querySelector('[role="dialog"]')?.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Escape',
+            keyCode: 27,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
       if (action === 'project') {
         const select = root.querySelector<HTMLSelectElement>('select');
         if (!select) throw new Error('Expected select');
@@ -200,7 +134,7 @@ describe('SecretsPage (09.7.1-T3)', () => {
       }
       expect(slot.current()).toBeNull();
       expect(input?.value).toBe('');
-      expect(root.outerHTML).not.toContain('new-full-credential-once');
+      expect(document.body.outerHTML).not.toContain('new-full-credential-once');
       expect(
         JSON.stringify({
           rows: store.rows(),
@@ -269,7 +203,7 @@ describe('SecretsPage (09.7.1-T3)', () => {
     expect(root.textContent).toContain('invalid_transition');
     expect(root.querySelector('strong')).toBeNull();
     expect(store.rows()).toBe(original);
-    expect(root.querySelector('[data-testid="reveal-value"]')).toBeNull();
+    expect(document.querySelector('[data-testid="reveal-value"]')).toBeNull();
   });
   it('names pagination distinctly from the reference list', async () => {
     const { root } = await render();

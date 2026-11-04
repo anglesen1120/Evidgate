@@ -162,16 +162,18 @@ describe('RunListPage', () => {
     expect(loaded.getAttribute('data-run-loaded-filtered')).toBe('true');
     expect(root.querySelector('[name="completeness"]')).toBeNull();
   });
-  it('hides the pending filter and explains why list decisions are unavailable', async () => {
+  it('offers not evaluated separately from verdicts and explains server filtering', async () => {
     const { root } = await render();
-    expect(root.querySelector('#run-decision option[value="pending"]')).toBeNull();
+    expect(root.querySelector('#run-decision option[value="pending"]')?.textContent).toBe(
+      'Not evaluated',
+    );
     expect(root.querySelector('#run-decision')?.getAttribute('aria-describedby')).toBe(
       'run-decision-hint',
     );
     expect(root.querySelector('#run-decision-hint')?.textContent).toContain(
-      'The run list does not carry decisions. Open the run for its stored decision.',
+      'Not evaluated means no live evaluation yet.',
     );
-    expect(root.querySelector('[data-run-decision]')?.textContent).not.toContain('pending');
+    expect(root.querySelector('[data-run-decision]')?.textContent).toContain('Not evaluated');
   });
   it('uses the responsive page title scale rather than a section-heading size', async () => {
     const { root } = await render();
@@ -184,22 +186,15 @@ describe('RunListPage', () => {
       expect(getComputedStyle(title).lineHeight).toBe('var(--eg-leading-2xl)');
     }
   });
-  it('removes obsolete pending query filters without dropping the remaining URL context', async () => {
+  it('restores a pending filter from the URL without rewriting its context', async () => {
     query.next(convertToParamMap({ decision: 'pending', ref: 'main' }));
     const { root } = await render();
-    expect(root.querySelector<HTMLSelectElement>('#run-decision')?.value).toBe('');
-    expect(navigate).toHaveBeenCalledWith(
-      [],
-      expect.objectContaining({
-        queryParams: { decision: null },
-        queryParamsHandling: 'merge',
-        replaceUrl: true,
-      }),
-    );
+    expect(root.querySelector<HTMLSelectElement>('#run-decision')?.value).toBe('pending');
+    expect(navigate).not.toHaveBeenCalled();
     expect(store.init).toHaveBeenCalledWith(
       'project-1',
       expect.objectContaining({
-        decision: undefined,
+        decision: 'pending',
         ref: 'main',
       }),
     );
@@ -262,7 +257,7 @@ describe('RunListPage', () => {
     await fixture.whenStable();
     expect(store.setFilters).toHaveBeenLastCalledWith({
       state: 'running',
-      decision: '',
+      decision: 'pending',
       scope: 'original',
       refName: 'main',
     });
@@ -270,11 +265,13 @@ describe('RunListPage', () => {
       [],
       expect.objectContaining({
         queryParamsHandling: 'merge',
-        queryParams: { state: 'running', decision: null, scope: 'original', ref: 'main' },
+        queryParams: { state: 'running', decision: 'pending', scope: 'original', ref: 'main' },
       }),
     );
     const calls = store.init.mock.calls.length;
-    query.next(convertToParamMap({ state: 'running', scope: 'original', ref: 'main' }));
+    query.next(
+      convertToParamMap({ state: 'running', decision: 'pending', scope: 'original', ref: 'main' }),
+    );
     await fixture.whenStable();
     expect(store.init).toHaveBeenCalledTimes(calls);
     root.querySelector<HTMLButtonElement>('[data-run-clear]')!.click();
@@ -312,7 +309,7 @@ describe('RunListPage', () => {
     store.autoLoadCapped.set(true);
     await fixture.whenStable();
     expect(root.textContent).toContain('No matching runs in the loaded rows');
-    expect(root.textContent).toContain('not the entire project');
+    expect(root.textContent).toContain('No loaded runs match these filters.');
     expect(root.querySelector('[data-run-browse-capped]')).not.toBeNull();
     root.querySelector<HTMLButtonElement>('[data-run-load-more]')!.click();
     expect(store.loadMore).toHaveBeenCalledTimes(1);

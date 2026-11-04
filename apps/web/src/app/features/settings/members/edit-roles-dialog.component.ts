@@ -1,4 +1,8 @@
-import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmCheckbox } from '@evidgate/ui/checkbox';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmAlertImports } from '@evidgate/ui/alert';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -18,118 +22,151 @@ import { createIntent, type Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { MEMBERS_COPY } from './member-list.component';
-import { wrapDialogFocus } from './dialog-focus-wrap';
 import { MembersStore, type MutationState, type RoleChange } from './members.store';
 
 type RoleOperation = Pick<RoleChange, 'kind' | 'roleId'>;
 
 @Component({
   selector: 'app-edit-roles-dialog',
-  imports: [CdkTrapFocus, RetryAfterComponent],
+  imports: [
+    HlmCheckbox,
+    HlmLabel,
+    HlmDialogImports,
+    HlmButton,
+    HlmAlertImports,
+    RetryAfterComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './members.page.css',
   template: `
-    <dialog
-      #dialog
-      tabindex="-1"
-      [attr.data-members-dialog]="'edit-roles'"
-      aria-labelledby="members-edit-title"
-      [attr.aria-describedby]="'members-edit-description'"
-      [attr.aria-busy]="busy()"
-      (cancel)="cancel($event)"
-      (keydown.tab)="wrapFocus($event)"
-      (keydown.shift.tab)="wrapFocus($event)"
-      [cdkTrapFocus]="opened()"
+    <hlm-dialog
+      [state]="opened() ? 'open' : 'closed'"
+      [closeOnOutsidePointerEvents]="false"
+      [disableClose]="true"
+      [restoreFocus]="false"
+      [aria-modal]="true"
+      [aria-label]="copy.editTitle"
     >
-      <header>
-        <h2 id="members-edit-title">{{ copy.editTitle }}</h2>
-      </header>
-      <div class="dialog-body">
-        <p id="members-edit-description">{{ copy.editDescription }}</p>
-        <p>
-          <strong>{{ member()?.invited_email }}</strong>
-        </p>
-        <fieldset [disabled]="busy() || !session.has('membership:write')">
-          <legend>{{ copy.editRolesLegend }}</legend>
-          @for (role of store.roles(); track role.id) {
-            <label class="role-option">
-              <input
-                type="checkbox"
-                data-members-role-option
-                [attr.data-role-id]="role.id"
-                [checked]="selected().has(role.id)"
-                (change)="toggle(role.id, $event)"
-              />{{ role.name }}
-            </label>
-          }
-        </fieldset>
-        @if (store.roles().length === 0) {
-          <p>{{ copy.rolesUnavailableEdit }}</p>
-        }
-        <p>{{ copy.authority }}</p>
-        @if (store.editState().error; as error) {
-          <div data-members-error role="alert">
-            <p>{{ error.message }}</p>
-            <code data-members-error-code>{{ error.code }}</code>
-            @if (error.code === 'last_admin') {
-              <p data-members-last-admin-hint>{{ copy.lastAdminHint }}</p>
+      <hlm-dialog-content
+        *hlmDialogPortal
+        #dialog
+        [attr.aria-busy]="busy()"
+        [attr.data-members-dialog]="'edit-roles'"
+        [showCloseButton]="false"
+        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere [&_p]:m-0 [&_code]:font-mono"
+        (keydown.escape)="cancel($event)"
+      >
+        <header hlmDialogHeader>
+          <h2 hlmDialogTitle id="members-edit-title">{{ copy.editTitle }}</h2>
+        </header>
+        <div class="dialog-body grid min-w-0 gap-3 text-sm">
+          <p hlmDialogDescription>{{ copy.editDescription }}</p>
+          <p>
+            <strong>{{ member()?.invited_email }}</strong>
+          </p>
+          <fieldset
+            class="m-0 min-w-0 rounded-md border border-solid border-border p-2"
+            [disabled]="busy() || !session.has('membership:write')"
+          >
+            <legend>{{ copy.editRolesLegend }}</legend>
+            @for (role of store.roles(); track role.id) {
+              <label
+                hlmLabel
+                class="role-option flex min-h-[var(--eg-control-touch)] items-center gap-2"
+                [for]="'edit-role-' + role.id"
+              >
+                <hlm-checkbox
+                  [inputId]="'edit-role-' + role.id"
+                  data-members-role-option
+                  [attr.data-role-id]="role.id"
+                  [disabled]="busy() || !session.has('membership:write')"
+                  [checked]="selected().has(role.id)"
+                  (checkedChange)="toggle(role.id, $event)"
+                />{{ role.name }}
+              </label>
             }
-            @if (store.editState().phase === 'failed' && store.editApplied().length > 0) {
-              <div data-members-applied-summary>
-                <p>{{ copy.partialCurrent }}</p>
-                <div>
-                  <h3>{{ copy.applied }}</h3>
-                  <ul>
-                    @for (change of store.editApplied(); track operationKey(change)) {
-                      <li data-members-applied-item>
-                        {{ change.kind === 'grant' ? copy.roleGranted : copy.roleRevoked }}:
-                        {{ roleName(change.roleId) }}
-                      </li>
-                    }
-                  </ul>
-                </div>
-                <div>
-                  <h3>{{ copy.notApplied }}</h3>
-                  <ul>
-                    @for (change of notApplied(); track operationKey(change)) {
-                      <li data-members-not-applied-item>
-                        {{ change.kind === 'grant' ? copy.roleGranted : copy.roleRevoked }}:
-                        {{ roleName(change.roleId) }}
-                      </li>
-                    }
-                  </ul>
-                </div>
-              </div>
-            }
-          </div>
-          @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
-            <app-retry-after
-              [kind]="error.kind"
-              [retryAfterSeconds]="error.retryAfterSeconds"
-              [retryEligible]="retryReady() && error.retryable && canSave()"
-              [busy]="busy()"
-              [code]="error.code"
-              [requestId]="error.requestId"
-              (retry)="submit()"
-            />
+          </fieldset>
+          @if (store.roles().length === 0) {
+            <p>{{ copy.rolesUnavailableEdit }}</p>
           }
-        }
-      </div>
-      <footer>
-        <button #cancelButton type="button" [disabled]="busy()" (click)="requestClose()">
-          {{ copy.cancel }}
-        </button>
-        <button
-          class="primary"
-          type="button"
-          data-members-submit
-          [disabled]="!canSave()"
-          (click)="submit()"
-        >
-          {{ busy() ? copy.saving : copy.save }}
-        </button>
-      </footer>
-    </dialog>
+          <p>{{ copy.authority }}</p>
+          @if (store.editState().error; as error) {
+            <div
+              hlmAlert
+              [variant]="'destructive'"
+              class="grid gap-2 whitespace-pre-wrap"
+              data-members-error
+              role="alert"
+            >
+              <p>{{ error.message }}</p>
+              <code data-members-error-code>{{ error.code }}</code>
+              @if (error.code === 'last_admin') {
+                <p data-members-last-admin-hint>{{ copy.lastAdminHint }}</p>
+              }
+              @if (store.editState().phase === 'failed' && store.editApplied().length > 0) {
+                <div data-members-applied-summary>
+                  <p>{{ copy.partialCurrent }}</p>
+                  <div>
+                    <h3>{{ copy.applied }}</h3>
+                    <ul>
+                      @for (change of store.editApplied(); track operationKey(change)) {
+                        <li data-members-applied-item>
+                          {{ change.kind === 'grant' ? copy.roleGranted : copy.roleRevoked }}:
+                          {{ roleName(change.roleId) }}
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                  <div>
+                    <h3>{{ copy.notApplied }}</h3>
+                    <ul>
+                      @for (change of notApplied(); track operationKey(change)) {
+                        <li data-members-not-applied-item>
+                          {{ change.kind === 'grant' ? copy.roleGranted : copy.roleRevoked }}:
+                          {{ roleName(change.roleId) }}
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                </div>
+              }
+            </div>
+            @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
+              <app-retry-after
+                [kind]="error.kind"
+                [retryAfterSeconds]="error.retryAfterSeconds"
+                [retryEligible]="retryReady() && error.retryable && canSave()"
+                [busy]="busy()"
+                [code]="error.code"
+                [requestId]="error.requestId"
+                (retry)="submit()"
+              />
+            }
+          }
+        </div>
+        <footer hlmDialogFooter class="mt-4">
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            #cancelButton
+            type="button"
+            [disabled]="busy()"
+            (click)="requestClose()"
+          >
+            {{ copy.cancel }}
+          </button>
+          <button
+            hlmBtn
+            [variant]="'default'"
+            type="button"
+            data-members-submit
+            [disabled]="!canSave()"
+            (click)="submit()"
+          >
+            {{ busy() ? copy.saving : copy.save }}
+          </button>
+        </footer>
+      </hlm-dialog-content>
+    </hlm-dialog>
   `,
 })
 export class EditRolesDialogComponent {
@@ -169,8 +206,9 @@ export class EditRolesDialogComponent {
       this.store.roles().length > 0 &&
       this.diff().length > 0,
   );
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
-  private readonly cancelButton = viewChild.required<ElementRef<HTMLButtonElement>>('cancelButton');
+  private readonly dialog = viewChild<unknown, ElementRef<HTMLElement>>('dialog', {
+    read: ElementRef,
+  });
   private readonly intents = new Map<string, Intent>();
   private readonly injector = inject(Injector);
   /** The edit phase the focus-restore effect saw last, so only a submitting -> failed move acts. */
@@ -198,8 +236,8 @@ export class EditRolesDialogComponent {
       if (!wasSubmitting || phase !== 'failed' || !this.opened()) return;
       afterNextRender(
         () => {
-          const first = this.dialog().nativeElement.querySelector<HTMLInputElement>(
-            '[data-members-role-option]:enabled',
+          const first = this.dialog()?.nativeElement.querySelector<HTMLElement>(
+            '[data-members-role-option] button:not([disabled])',
           );
           first?.focus();
         },
@@ -227,12 +265,6 @@ export class EditRolesDialogComponent {
     this.attempted.set([]);
     this.store.resetMutations();
     this.opened.set(true);
-    const dialog = this.dialog().nativeElement;
-    dialog.showModal();
-    (
-      dialog.querySelector<HTMLInputElement>('[data-members-role-option]') ??
-      this.cancelButton().nativeElement
-    ).focus();
   }
 
   /**
@@ -257,7 +289,6 @@ export class EditRolesDialogComponent {
   private finishClose(): void {
     this.generation++;
     this.opened.set(false);
-    this.dialog().nativeElement.close();
     this.intents.clear();
     if (this.opener?.isConnected) this.opener.focus();
     this.opener = null;
@@ -270,15 +301,10 @@ export class EditRolesDialogComponent {
     this.close();
   }
 
-  /** Tab/Shift+Tab wrap at the dialog's edges; see `wrapDialogFocus`. */
-  protected wrapFocus(event: Event): void {
-    wrapDialogFocus(event, this.dialog().nativeElement);
-  }
-
-  protected toggle(roleId: string, event: Event): void {
-    if (!(event.target instanceof HTMLInputElement) || this.busy()) return;
+  protected toggle(roleId: string, checked: boolean): void {
+    if (this.busy() || !this.session.has('membership:write')) return;
     const selected = new Set(this.selected());
-    if (event.target.checked) selected.add(roleId);
+    if (checked) selected.add(roleId);
     else selected.delete(roleId);
     this.selected.set(selected);
   }

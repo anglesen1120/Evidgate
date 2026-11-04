@@ -15,13 +15,13 @@ describe('DecisionChipComponent', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.each([
-    ['default', undefined, 'pending', 'pending'],
-    ['hover', undefined, 'pending', 'pending'],
-    ['focus-visible', undefined, 'pending', 'pending'],
-    ['active', undefined, 'pending', 'pending'],
-    ['disabled', undefined, 'pending', 'pending'],
-    ['loading', undefined, 'pending', 'pending'],
-    ['empty', null, 'pending', 'pending'],
+    ['default', undefined, 'pending', 'Not evaluated'],
+    ['hover', undefined, 'pending', 'Not evaluated'],
+    ['focus-visible', undefined, 'pending', 'Not evaluated'],
+    ['active', undefined, 'pending', 'Not evaluated'],
+    ['disabled', undefined, 'pending', 'Not evaluated'],
+    ['loading', undefined, 'pending', 'Not evaluated'],
+    ['empty', null, 'pending', 'Not evaluated'],
     ['error', 'FAIL', 'danger', 'FAIL'],
     ['success', 'PASS', 'success', 'PASS'],
   ] as const)(
@@ -47,9 +47,9 @@ describe('DecisionChipComponent', () => {
   );
 
   it.each([
-    [undefined, 'pending', 'pending'],
-    [null, 'pending', 'pending'],
-    ['pending', 'pending', 'pending'],
+    [undefined, 'pending', 'Not evaluated'],
+    [null, 'pending', 'Not evaluated'],
+    ['pending', 'pending', 'Not evaluated'],
     ['unavailable', 'neutral', 'Decision unavailable'],
     ['unknown', 'neutral', 'Decision unavailable'],
     ['pass', 'neutral', 'Decision unavailable'],
@@ -103,22 +103,22 @@ describe('DecisionChipComponent', () => {
 
     fixture.componentRef.setInput('decision', null);
     await fixture.whenStable();
-    expect(root.querySelector('.verdict__value')?.textContent).toBe('pending');
+    expect(root.querySelector('.verdict__value')?.textContent).toBe('Not evaluated');
     expect(root.innerHTML).not.toMatch(/PASS|FAIL/);
     expect(root.querySelector('[data-tone="success"]')).toBeNull();
   });
-  it('explains an unavailable list decision without changing pending detail semantics', async () => {
+  it('explains a failed decision read without confusing it with no evaluation', async () => {
     const fixture = TestBed.createComponent(DecisionChipComponent);
     fixture.componentRef.setInput('decision', 'unavailable');
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('[data-tone="neutral"]')?.getAttribute('title')).toBe(
-      'The run list does not carry decisions. Open the run for its stored decision.',
+      'The decision could not be read. Try again.',
     );
     fixture.componentRef.setInput('decision', null);
     await fixture.whenStable();
     expect(root.querySelector('[title]')).toBeNull();
-    expect(root.querySelector('.verdict__value')?.textContent).toBe('pending');
+    expect(root.querySelector('.verdict__value')?.textContent).toBe('Not evaluated');
   });
 
   it('renders unavailable separately from pending and restores canonical pending', async () => {
@@ -127,7 +127,7 @@ describe('DecisionChipComponent', () => {
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
     const pendingValue = root.querySelector('.verdict__value');
-    expect(pendingValue?.textContent).toBe('pending');
+    expect(pendingValue?.textContent).toBe('Not evaluated');
 
     fixture.componentRef.setInput('decision', 'unknown');
     await fixture.whenStable();
@@ -140,7 +140,7 @@ describe('DecisionChipComponent', () => {
     fixture.componentRef.setInput('decision', null);
     await fixture.whenStable();
     expect(root.querySelector('.verdict__value')).not.toBe(unavailableValue);
-    expect(root.querySelector('.verdict__value')?.textContent).toBe('pending');
+    expect(root.querySelector('.verdict__value')?.textContent).toBe('Not evaluated');
     expect(root.querySelector('[data-tone="pending"]')).not.toBeNull();
   });
 
@@ -174,7 +174,7 @@ describe('DecisionChipComponent', () => {
     await vi.waitFor(() => expect(document.querySelector('[role="tooltip"]')).not.toBeNull());
     await fixture.whenStable();
     expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
-      'The run list does not carry decisions.',
+      'The decision could not be read. Try again.',
     );
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     await vi.waitFor(() => {

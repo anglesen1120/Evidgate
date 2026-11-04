@@ -1,4 +1,3 @@
-// 09.7.1-T1.1/T1.2 (AC1): route navigation exposes only phase-active, server-permitted tabs.
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
@@ -10,17 +9,28 @@ import {
   RouterOutlet,
 } from '@angular/router';
 import { filter, map } from 'rxjs';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmCardImports } from '@evidgate/ui/card';
 
 import { SessionStore } from '../../core/session/session.store';
 import { availableSettingsTabs } from './settings-tabs';
 
 @Component({
   selector: 'app-settings-shell',
-  standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [
+    RouterLink,
+    RouterLinkActive,
+    RouterOutlet,
+    HlmButton,
+    HlmInput,
+    HlmLabel,
+    HlmCardImports,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings-shell.page.html',
-  styleUrl: './settings-shell.page.css',
+  host: { class: 'grid min-w-0 gap-6 font-sans text-foreground' },
 })
 export class SettingsShellPage {
   protected readonly session = inject(SessionStore);

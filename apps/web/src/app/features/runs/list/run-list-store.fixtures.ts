@@ -32,6 +32,7 @@ function run(index: number, overrides: Partial<RunSummary> = {}): RunSummary {
       is_fork: false,
     },
     unverified_ref: false,
+    decision: null,
     completeness: 'complete',
     parent_run_id: null,
     rerun_scope: null,
@@ -96,8 +97,15 @@ class FakeRunDataService {
 
     const start = request.cursor === undefined ? 0 : (this.startByCursor.get(request.cursor) ?? 0);
     const size = this.pageSizeOverride ?? request.limit ?? this.all.length;
-    const items = this.all.slice(start, start + size);
-    const end = start + items.length;
+    const page = this.all.slice(start, start + size);
+    const items = page.filter(
+      (row) =>
+        request.decision === undefined ||
+        (request.decision === 'pending'
+          ? row.decision === null
+          : row.decision === request.decision),
+    );
+    const end = start + page.length;
     let next: string | null = null;
     if (end < this.all.length) {
       next = this.repeatCursor ? 'same' : String(end);

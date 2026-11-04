@@ -22,8 +22,6 @@ const MEMBER: MembershipView = {
 };
 const ONCE = 'recognisable-resend-one-time-value';
 const ISSUED: InviteIssuedView = { ...MEMBER, invite_token: ONCE };
-const showModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
-const close = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 
 describe('ResendInviteDialog one-time lifecycle', () => {
   let fixture: ComponentFixture<ResendInviteDialogComponent>;
@@ -40,18 +38,6 @@ describe('ResendInviteDialog one-time lifecycle', () => {
   };
 
   beforeEach(async () => {
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     allowed = true;
     data = {
       listMemberships: vi.fn().mockResolvedValue({ items: [MEMBER], next_cursor: null }),
@@ -74,19 +60,16 @@ describe('ResendInviteDialog one-time lifecycle', () => {
     await store.load('org1');
     fixture = TestBed.createComponent(ResendInviteDialogComponent);
     fixture.detectChanges();
-    root = fixture.nativeElement as HTMLElement;
+    root = document.body;
     opener = document.createElement('button');
     document.body.append(opener);
     fixture.componentInstance.open(MEMBER, opener);
     fixture.detectChanges();
+    await fixture.whenStable();
   });
   afterEach(() => {
     TestBed.resetTestingModule();
     opener.remove();
-    if (showModal) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModal);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (close) Object.defineProperty(HTMLDialogElement.prototype, 'close', close);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
   function press() {
@@ -110,7 +93,11 @@ describe('ResendInviteDialog one-time lifecycle', () => {
       const slot = fixture.debugElement.injector.get(RevealSlot);
       if (exit === 'destroy') fixture.destroy();
       else if (exit === 'escape')
-        root.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
+        root
+          .querySelector<HTMLElement>('[data-members-dialog]')!
+          .dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+          );
       else root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')!.click();
       if (exit !== 'destroy') fixture.detectChanges();
       expect(slot.current()).toBeNull();
@@ -130,7 +117,7 @@ describe('ResendInviteDialog one-time lifecycle', () => {
     expect(root.querySelector('[data-members-invite-replay]')?.textContent).toContain('Use Resend');
     root.querySelector<HTMLButtonElement>('footer button')!.click();
     fixture.detectChanges();
-    expect(root.querySelector('dialog')?.open).toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(false);
   });
   it('treats an EMPTY served token as the same replay, never as an empty reveal', async () => {
     // F2: the store normalises `''` to `null`, so the dialog must take the replay branch.
@@ -161,7 +148,7 @@ describe('ResendInviteDialog one-time lifecycle', () => {
     );
     expect(root.querySelector('[data-members-error-code]')?.textContent).toBe('invite_not_pending');
     expect(root.querySelector('[data-members-error] b')).toBeNull();
-    expect(root.querySelector('dialog')?.open).toBe(true);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(true);
     // L5: that code means the pending row was stale, so the store re-read the list once.
     expect(data.listMemberships).toHaveBeenCalledTimes(2);
   });
@@ -212,6 +199,7 @@ describe('ResendInviteDialog one-time lifecycle', () => {
     fixture.detectChanges();
     fixture.componentInstance.open(MEMBER, opener);
     fixture.detectChanges();
+    await fixture.whenStable();
     press();
     await settle();
     expect(data.resendInvite.mock.calls[2]?.[2]).not.toBe(data.resendInvite.mock.calls[0]?.[2]);
@@ -228,15 +216,17 @@ describe('ResendInviteDialog one-time lifecycle', () => {
     release(ISSUED);
     await settle();
     expect(fixture.debugElement.injector.get(RevealSlot).current()).toBeNull();
-    expect(root.querySelector('dialog')?.open).toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(false);
   });
-  it('refuses non-pending rows and unauthorized opens', () => {
+  it('refuses non-pending rows and unauthorized opens', async () => {
     fixture.componentInstance.close();
+    fixture.detectChanges();
+    await fixture.whenStable();
     allowed = false;
     fixture.componentInstance.open(MEMBER, opener);
-    expect(root.querySelector('dialog')?.open).toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(false);
     allowed = true;
     fixture.componentInstance.open({ ...MEMBER, status: 'active' }, opener);
-    expect(root.querySelector('dialog')?.open).toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(false);
   });
 });

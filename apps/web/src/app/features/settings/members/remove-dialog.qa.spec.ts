@@ -69,11 +69,6 @@ class FakeData {
 }
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-const showModalDescriptor = Object.getOwnPropertyDescriptor(
-  HTMLDialogElement.prototype,
-  'showModal',
-);
-const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 
 describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   let data: FakeData;
@@ -87,18 +82,6 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
 
   beforeEach(async () => {
     data = new FakeData();
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
@@ -114,7 +97,7 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     await store.load('org1');
     fixture = TestBed.createComponent(RemoveDialogComponent);
     fixture.detectChanges();
-    root = fixture.nativeElement as HTMLElement;
+    root = document.body;
     opener = document.createElement('button');
     document.body.append(opener);
     completed = 0;
@@ -124,12 +107,6 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
     opener.remove();
-    if (showModalDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModalDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (closeDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'close', closeDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
 
@@ -138,24 +115,26 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     if (!value) throw new Error('submit button missing');
     return value;
   }
-  function open(target: MembershipView): void {
+  async function open(target: MembershipView): Promise<void> {
     fixture.componentInstance.open(target, opener);
     fixture.detectChanges();
+    await fixture.whenStable();
   }
   function dialogOpen(): boolean {
-    return root.querySelector('dialog')?.open === true;
+    return root.querySelector('[data-members-dialog][data-state="open"]') !== null;
   }
 
   it('a double click sends one removal and announces one completion', async () => {
     let release!: () => void;
     data.outcomes.push(() => new Promise<void>((resolve) => (release = resolve)));
-    open(ALICE);
+    await open(ALICE);
     submitButton().click();
     submitButton().click();
     await flush();
     expect(data.removals).toHaveLength(1);
     release();
     await flush();
+    await fixture.whenStable();
     expect(data.removals).toHaveLength(1);
     expect(completed).toBe(1);
     expect(dialogOpen()).toBe(false);
@@ -165,7 +144,7 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     data.outcomes.push(() =>
       Promise.reject(refusal('unavailable', 503, 'unavailable', 'Try again shortly.', true)),
     );
-    open(ALICE);
+    await open(ALICE);
     submitButton().click();
     await flush();
     fixture.detectChanges();
@@ -184,10 +163,10 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     data.outcomes.push(() =>
       Promise.reject(refusal('unavailable', 503, 'unavailable', 'Try again shortly.', true)),
     );
-    open(ALICE);
+    await open(ALICE);
     submitButton().click();
     await flush();
-    open(BOB);
+    await open(BOB);
     submitButton().click();
     await flush();
     expect(data.removals.map((r) => r.membershipId)).toEqual(['m-alice', 'm-bob']);
@@ -198,11 +177,11 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     data.outcomes.push(() =>
       Promise.reject(refusal('unavailable', 503, 'unavailable', 'Try again shortly.', true)),
     );
-    open(ALICE);
+    await open(ALICE);
     submitButton().click();
     await flush();
     fixture.componentInstance.close();
-    open(ALICE);
+    await open(ALICE);
     submitButton().click();
     await flush();
     expect(data.removals).toHaveLength(2);
@@ -212,10 +191,10 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   it('a removal is refused while another removal is in flight: open() does not switch the member', async () => {
     let release!: () => void;
     data.outcomes.push(() => new Promise<void>((resolve) => (release = resolve)));
-    open(ALICE);
+    await open(ALICE);
     submitButton().click();
     await flush();
-    open(BOB);
+    await open(BOB);
     fixture.detectChanges();
     expect(root.textContent).toContain('alice@example.test');
     expect(root.textContent).not.toContain('bob@example.test');
@@ -229,7 +208,7 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
         refusal('conflict', 409, 'last_admin', 'The last administrator cannot be removed.', false),
       ),
     );
-    open(ALICE);
+    await open(ALICE);
     submitButton().click();
     await flush();
     fixture.detectChanges();
@@ -244,7 +223,7 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
         refusal('conflict', 409, 'invalid_transition', 'Status <img src=x> blocks removal.', false),
       ),
     );
-    open(ALICE);
+    await open(ALICE);
     submitButton().click();
     await flush();
     fixture.detectChanges();
@@ -255,7 +234,7 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   });
 
   it('revoking membership:write while the dialog is open blocks the submit', async () => {
-    open(ALICE);
+    await open(ALICE);
     data.granted.set(false);
     fixture.detectChanges();
     expect(submitButton().disabled).toBe(true);
@@ -264,9 +243,9 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     expect(data.removals).toHaveLength(0);
   });
 
-  it('open() without membership:write leaves the dialog closed', () => {
+  it('open() without membership:write leaves the dialog closed', async () => {
     data.granted.set(false);
-    open(ALICE);
+    await open(ALICE);
     expect(dialogOpen()).toBe(false);
     expect(root.textContent).not.toContain('alice@example.test');
   });
@@ -277,7 +256,7 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
   it('closing while a removal is in flight still announces its completion', async () => {
     let release!: () => void;
     data.outcomes.push(() => new Promise<void>((resolve) => (release = resolve)));
-    open(ALICE);
+    await open(ALICE);
     submitButton().click();
     fixture.componentInstance.close();
     release();

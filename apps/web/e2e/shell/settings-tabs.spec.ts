@@ -223,6 +223,13 @@ test.describe('the Settings shell is WCAG 2.2 AA clean (AC1, 00 §5.6 W9)', () =
     // table in its ready state rather than of a placeholder (09.7.1-T2).
     const members = page.locator('app-members-page');
     await expect(members).toHaveAttribute('data-members-phase', 'ready');
+    const destination = page.locator('app-settings-shell select#settings-destination');
+    await expect(destination).toBeVisible();
+    await expect(destination).toHaveValue('members');
+    await expect(destination.locator('option')).toHaveCount(G1_TABS.length);
+    for (const link of await page.locator('app-settings-shell [data-settings-tab]').all()) {
+      await expect(link).toBeHidden();
+    }
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

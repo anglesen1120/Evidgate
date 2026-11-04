@@ -7,37 +7,51 @@ import {
   output,
 } from '@angular/core';
 import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
+import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
 
 @Component({
   selector: 'app-policy-revision-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './policy.page.css',
+  imports: [HlmBadge, HlmButton, HlmCardImports],
+  host: { class: 'block min-w-0' },
   template: `
-    <section aria-labelledby="policy-revisions-title" [attr.aria-busy]="busy()">
-      <h3 id="policy-revisions-title">{{ copy.title }}</h3>
+    <section
+      hlmCard
+      class="gap-4 p-4"
+      aria-labelledby="policy-revisions-title"
+      [attr.aria-busy]="busy()"
+    >
+      <h3 hlmCardTitle id="policy-revisions-title" class="m-0 text-base">{{ copy.title }}</h3>
       @if (rows().length === 0) {
-        <p>{{ copy.empty }}</p>
+        <p class="m-0 text-muted-foreground">{{ copy.empty }}</p>
       } @else {
-        <ol class="revisions">
+        <ol class="m-0 grid list-none gap-0 p-0">
           @for (row of rows(); track row.id) {
             <li
+              class="grid min-w-0 gap-3 border-0 border-t border-solid border-border py-4 first:border-t-0 first:pt-0 last:pb-0"
               data-policy-revision
               [attr.data-revision-no]="row.revision_no"
               [attr.data-revision-state]="row.state"
               [attr.data-policy-head]="row.id === headId() ? '' : null"
             >
-              <div class="revision-heading">
+              <div class="flex flex-wrap items-center gap-2">
                 <strong>{{ copy.revision }} {{ row.revision_no }}</strong>
                 @if (row.id === headId()) {
-                  <span class="badge">{{ copy.head }}</span>
+                  <span hlmBadge [variant]="'secondary'">{{ copy.head }}</span>
                 }
-                <span>{{ row.state }}</span>
+                <span hlmBadge [variant]="'outline'">{{ row.state }}</span>
               </div>
-              <dl class="metadata">
+              <dl
+                class="m-0 grid gap-3 [&_dd]:m-0 [&_dd]:wrap-anywhere [&_dt]:text-xs [&_dt]:text-muted-foreground"
+              >
                 <div>
                   <dt>{{ copy.hash }}</dt>
                   <dd>
-                    <code [attr.aria-label]="row.hash">{{ row.hash.slice(0, 12) }}</code>
+                    <code class="font-mono" [attr.aria-label]="row.hash">{{
+                      row.hash.slice(0, 12)
+                    }}</code>
                   </dd>
                 </div>
                 <div>
@@ -52,7 +66,14 @@ import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
         </ol>
       }
       @if (hasMore()) {
-        <button class="pagination" type="button" [disabled]="busy()" (click)="loadMore.emit()">
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          type="button"
+          [disabled]="busy()"
+          (click)="loadMore.emit()"
+        >
           {{ copy.more }}
         </button>
       }

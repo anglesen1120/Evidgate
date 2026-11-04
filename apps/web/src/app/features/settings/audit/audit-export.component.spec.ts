@@ -58,7 +58,7 @@ class FakeAuditDataService {
   });
 }
 
-describe('AuditExportComponent (AC7)', () => {
+describe('AuditExportComponent', () => {
   let data: FakeAuditDataService;
   let click: MockInstance<() => void>;
   let createUrl: Mock<(value: Blob | MediaSource) => string>;
@@ -115,6 +115,21 @@ describe('AuditExportComponent (AC7)', () => {
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
+  it('keeps the export action labelled and focusable, and disables it without an organization', async () => {
+    const { fixture, root } = await render();
+    const action = root.querySelector<HTMLButtonElement>('[data-audit-export]');
+    if (!action) throw new Error('Expected export action');
+    expect(action.getAttribute('data-slot')).toBe('button');
+    expect(action.textContent?.trim()).toBe('Export CSV');
+    action.focus();
+    expect(document.activeElement).toBe(action);
+    fixture.componentRef.setInput('orgId', '');
+    await fixture.whenStable();
+    expect(action.disabled).toBe(true);
+    action.click();
+    expect(data.list).not.toHaveBeenCalled();
+    expect(click).not.toHaveBeenCalled();
+  });
   it('fetches exactly 50 pages of a 15,000 row fixture, downloads once and persistently announces the exact cap', async () => {
     data.rows = Array.from({ length: 15_000 }, (_, index) => entry(index));
     const { fixture, root } = await render();
@@ -220,6 +235,7 @@ describe('AuditExportComponent (AC7)', () => {
     button.click();
     fixture.detectChanges();
     expect(button.disabled).toBe(true);
+    expect(root.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(root.querySelector('[aria-live="polite"]')?.textContent).toContain('Exporting… 0 rows');
     button.click();
     expect(data.list).toHaveBeenCalledTimes(1);
@@ -230,6 +246,7 @@ describe('AuditExportComponent (AC7)', () => {
     fixture.detectChanges();
     expect(TestBed.inject(AuditStore).exportState().phase).toBe('done');
     expect(button.disabled).toBe(false);
+    expect(root.querySelector('[aria-busy="false"]')).not.toBeNull();
   });
   it('does not download an old organization result after switching scope', async () => {
     const pending = deferred<AuditListResponse>();

@@ -1,5 +1,5 @@
 // 09.7.1-F12; plan 09.7.1 §2 AC1/AC2/AC3 and the T3 delivery amendment at §10 :177.
-// Real Chromium, FIXTURES build: these cases exercise the page and native dialogs, not component
+// Real Chromium, FIXTURES build: these cases exercise the page and Helm dialogs, not component
 // internals. FixtureHttpBackend answers in process, so Playwright cannot intercept/count requests
 // or inspect Idempotency-Key. Replay and refusals are separate corpus variants, never inferred
 // from clicking twice. Existing data-* hooks and native semantics work in both locale bundles.
@@ -37,13 +37,14 @@ import {
   seedStoredTheme,
   SETTINGS_ADMIN_GRANTS,
   THEMES,
+  waitForDialogAnimations,
   withVariants,
   type ShellLocale,
 } from './support';
 
-const INVITE = '[data-members-dialog="invite"]';
-const RESEND = '[data-members-dialog="resend"]';
-const CANCEL = '[data-members-dialog="cancel-invite"]';
+const INVITE = '[data-members-dialog="invite"][data-state="open"]';
+const RESEND = '[data-members-dialog="resend"][data-state="open"]';
+const CANCEL = '[data-members-dialog="cancel-invite"][data-state="open"]';
 const ROWS = 'app-members-page [data-members-row]';
 const CREATE_TOKEN = createOk.body.invite_token;
 const RESEND_TOKEN = resendOk.body.invite_token;
@@ -120,13 +121,15 @@ async function expectOnlyOpenReveal(page: Page, dialog: Locator, token: string):
   await expect(dialog.getByTestId('reveal-value')).toHaveValue(token);
   const outside = await page.evaluate(() => {
     const body = document.body.cloneNode(true) as HTMLElement;
-    body.querySelectorAll('dialog[open]').forEach((element) => element.remove());
+    body
+      .querySelectorAll('[data-members-dialog][data-state="open"]')
+      .forEach((element) => element.remove());
     return {
       html: body.innerHTML,
       controls: Array.from(
         document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea'),
       )
-        .filter((control) => control.closest('dialog[open]') === null)
+        .filter((control) => control.closest('[data-members-dialog][data-state="open"]') === null)
         .map((control) => control.value),
       url: decodeURIComponent(location.href),
       local: JSON.stringify(Object.entries(localStorage)),
@@ -365,6 +368,7 @@ for (const locale of LOCALES) {
       await openerFor(page, 'invite').click();
       const invite = page.locator(INVITE);
       await expect(invite).toBeVisible();
+      await waitForDialogAnimations(page, INVITE);
       await expectNoA11yViolations(page, `invite form ${locale}/${theme}`);
       await invite.locator('input[type="email"]').fill(createOk.body.invited_email);
       await invite.locator('[data-members-submit]').click();
@@ -375,6 +379,7 @@ for (const locale of LOCALES) {
       await openerFor(page, 'resend').click();
       const resend = page.locator(RESEND);
       await expect(resend).toBeVisible();
+      await waitForDialogAnimations(page, RESEND);
       await expectNoA11yViolations(page, `resend confirmation ${locale}/${theme}`);
       await resend.locator('[data-members-submit]').click();
       await expect(resend.getByTestId('reveal-value')).toHaveValue(RESEND_TOKEN);
@@ -383,6 +388,7 @@ for (const locale of LOCALES) {
       await expectNoRetainedToken(page);
       await pendingRow(page).locator('[data-members-cancel-invite-open]').click();
       await expect(page.locator(CANCEL)).toBeVisible();
+      await waitForDialogAnimations(page, CANCEL);
       await expectNoA11yViolations(page, `cancel confirmation ${locale}/${theme}`);
     });
   }
@@ -407,7 +413,7 @@ for (const flow of ['invite', 'resend'] as const) {
     // Native browser history is reachable while a modal is open; the inert select is not.
     await page.goForward();
     await expect(page).toHaveURL(/\/forbidden$/);
-    await expect(page.locator('dialog[open]')).toHaveCount(0);
+    await expect(page.locator('[data-members-dialog][data-state="open"]')).toHaveCount(0);
     await expectNoRetainedToken(page);
     await page.goBack();
     await expect(page.locator('app-members-page')).toHaveAttribute('data-members-phase', 'ready');

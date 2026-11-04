@@ -1,12 +1,8 @@
 namespace Evidgate.Modules.Orchestrator.Contracts;
 
 /// <summary>
-/// One row of <c>GET /v1/projects/{p}/runs</c> (05.2.2 §5, §9.3; identity projection added by 05.2.2-T2; F43/S143
-/// adds <c>completeness</c>, <c>parent_run_id</c> and <c>rerun_scope</c>). The wire names are <c>run_id</c>,
-/// <c>state</c>, <c>created_at</c>, <c>ref</c>, <c>unverified_ref</c>, <c>completeness</c>, <c>parent_run_id</c> and
-/// <c>rerun_scope</c> (the host's <c>SnakeCaseLower</c> policy). <c>decision</c>, <c>rerun_label</c> and
-/// <c>reprocess_label</c> stay absent here — they are handed over to 07.2.2/07.5.2 and 05.5.1/05.5.2 and remain
-/// optional in the schema until then.
+/// One row of the project's run list. Decision is the newest stored live verdict — null while the run has none, and
+/// null for every row when the caller may not read decisions; shadow evaluations never count.
 /// </summary>
 /// <param name="RunId">The run.</param>
 /// <param name="State">Its state, one of the 00 §8.1 vocabulary.</param>
@@ -29,6 +25,10 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// The scope the run was created with (<c>run.rerun_scope</c>, 0031): <c>full</c> or <c>failed_subset</c>, null for
 /// an original run. The column-backed form of the rerun label.
 /// </param>
+/// <param name="Decision">
+/// PASS, FAIL or INCONCLUSIVE from the newest live evaluation; null when the run has none and also when the caller
+/// lacks <c>decision:read</c>, the permission the verdict belongs to.
+/// </param>
 public sealed record RunSummary(
     Guid RunId,
     string State,
@@ -37,7 +37,8 @@ public sealed record RunSummary(
     bool UnverifiedRef,
     string? Completeness,
     Guid? ParentRunId,
-    string? RerunScope);
+    string? RerunScope,
+    string? Decision);
 
 /// <summary>Cursor page of <c>GET /v1/projects/{p}/runs</c> (05.2.2 §5, AC6; the 00 §9.1 envelope).</summary>
 /// <param name="Items">Runs in <c>(created_at, id)</c> ascending order.</param>

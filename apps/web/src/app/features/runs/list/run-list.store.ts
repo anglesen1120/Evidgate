@@ -1,5 +1,5 @@
-// The list is a bounded cursor walk; refName is the only server-side filter exposed here.
-// Null list decisions are unavailable, not evidence of a pending evaluation.
+// The list is a bounded cursor walk; refName and decision are server-side filters.
+// A null decision means the run has no live evaluation yet.
 // Project-scoped instances discard superseded reads so scope changes cannot retain stale rows.
 
 import { computed, inject } from '@angular/core';
@@ -7,7 +7,7 @@ import { patchState, signalStore, withComputed, withMethods, withState } from '@
 import type { RunPage, RunSummary } from '@evidgate/sdk';
 
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
-import { RunDataService } from '../data/run-data.service';
+import { RunDataService, type RunListQuery } from '../data/run-data.service';
 
 /** Rows per request (the wire's default page size, 00 §9.1). */
 export const RUN_LIST_PAGE_LIMIT = 50;
@@ -21,13 +21,13 @@ export const RUN_LIST_AUTO_ROWS = 1_000;
 /** One run state filter value: one of the wire's seven, or `''` for "every state". */
 export type RunStateFilter = RunSummary['state'] | '';
 
-/** Only explicit verdicts can be filtered; a missing list decision is not pending. */
-export type RunDecisionFilter = 'PASS' | 'FAIL' | 'INCONCLUSIVE' | '';
+/** Pending selects runs without a live evaluation; empty selects every decision. */
+export type RunDecisionFilter = NonNullable<RunListQuery['decision']> | '';
 
 /** Labels are independent; original requires no parent and neither label. */
 export type RunScopeFilter = '' | 'original' | 'rerun' | 'reprocess';
 
-/** Only refName is sent to the server; other filters apply to loaded rows. */
+/** State and scope filter loaded rows; refName and decision filter the server list. */
 export interface RunListFilters {
   readonly state: RunStateFilter;
   readonly decision: RunDecisionFilter;
@@ -58,7 +58,7 @@ const RUN_STATES: readonly RunSummary['state'][] = [
 ];
 
 /** The decision values `init` accepts in the URL. */
-const RUN_DECISIONS: readonly RunDecisionFilter[] = ['PASS', 'FAIL', 'INCONCLUSIVE'];
+const RUN_DECISIONS: readonly RunDecisionFilter[] = ['pending', 'PASS', 'FAIL', 'INCONCLUSIVE'];
 
 /** The scope values `init` accepts in the URL. */
 const RUN_SCOPES: readonly RunScopeFilter[] = ['original', 'rerun', 'reprocess'];
@@ -182,19 +182,18 @@ function normalizeRefName(value: string | null | undefined): {
     : { refName: '', rejected: true };
 }
 
-/** The request query of one read: the page size, plus `refName` when the screen holds one. */
-function pageQuery(filters: RunListFilters): { limit: number; refName?: string } {
-  return filters.refName === ''
-    ? { limit: RUN_LIST_PAGE_LIMIT }
-    : { limit: RUN_LIST_PAGE_LIMIT, refName: filters.refName };
+/** Server filters travel with every page, including short or empty cursor pages. */
+function pageQuery(filters: RunListFilters): RunListQuery {
+  return {
+    limit: RUN_LIST_PAGE_LIMIT,
+    ...(filters.refName === '' ? {} : { refName: filters.refName }),
+    ...(filters.decision === '' ? {} : { decision: filters.decision }),
+  };
 }
 
 // Scope labels are independent: one run may match both rerun and reprocess.
 function matchesFilters(filters: RunListFilters, row: RunSummary): boolean {
   if (filters.state !== '' && row.state !== filters.state) {
-    return false;
-  }
-  if (filters.decision !== '' && row.decision !== filters.decision) {
     return false;
   }
   if (filters.scope !== '') {
@@ -408,7 +407,10 @@ export const RunListStore = signalStore(
         // and the field is not silently ignored either. `toQuery` writes no `ref` afterwards.
         const ref = normalizeRefName(next.refName);
         const applied: RunListFilters = { ...next, refName: ref.refName };
-        if (applied.refName !== store.filters().refName) {
+        if (
+          applied.refName !== store.filters().refName ||
+          applied.decision !== store.filters().decision
+        ) {
           patchState(store, { filters: applied, refRejected: ref.rejected });
           await restart();
           return;

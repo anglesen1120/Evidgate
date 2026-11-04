@@ -1,4 +1,6 @@
-import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmAlertImports } from '@evidgate/ui/alert';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -17,73 +19,91 @@ import { createIntent, type Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
-import { wrapDialogFocus } from './dialog-focus-wrap';
 import { InviteRevealComponent } from './invite-reveal.component';
 import { MEMBERS_COPY } from './member-list.component';
 import { MembersStore } from './members.store';
 
 @Component({
   selector: 'app-resend-invite-dialog',
-  imports: [CdkTrapFocus, RetryAfterComponent, InviteRevealComponent],
+  imports: [
+    HlmDialogImports,
+    HlmButton,
+    HlmAlertImports,
+    RetryAfterComponent,
+    InviteRevealComponent,
+  ],
   providers: [RevealSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './members.page.css',
   template: `
-    <dialog
-      #dialog
-      tabindex="-1"
-      [attr.data-members-dialog]="'resend'"
-      [attr.aria-labelledby]="revealing() ? null : 'members-resend-title'"
-      [attr.aria-label]="revealing() ? copy.revealTitle : null"
-      [attr.aria-describedby]="revealing() ? null : 'members-resend-description'"
-      (cancel)="cancel($event)"
-      (keydown.tab)="wrapFocus($event)"
-      (keydown.shift.tab)="wrapFocus($event)"
-      [cdkTrapFocus]="opened()"
+    <hlm-dialog
+      [state]="opened() ? 'open' : 'closed'"
+      [closeOnOutsidePointerEvents]="false"
+      [disableClose]="true"
+      [restoreFocus]="false"
+      [aria-modal]="true"
+      [aria-label]="revealing() ? copy.revealTitle : copy.resendTitle"
     >
-      @if (revealing()) {
-        <app-invite-reveal (dismissed)="close()" />
-      } @else {
-        <header>
-          <h2 id="members-resend-title">{{ copy.resendTitle }}</h2>
-        </header>
-        <div class="dialog-body" [attr.aria-busy]="busy()">
-          <p id="members-resend-description">{{ copy.resendDescription }}</p>
-          <p>
-            <strong>{{ member()?.invited_email }}</strong>
-          </p>
-          @if (store.resendState().error; as error) {
-            <div data-members-error role="alert">
-              <p>{{ error.message }}</p>
-              <code data-members-error-code>{{ error.code }}</code>
-            </div>
-            @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
-              <app-retry-after
-                [kind]="error.kind"
-                [retryAfterSeconds]="error.retryAfterSeconds"
-                [retryEligible]="retryReady() && error.retryable"
-                [busy]="busy()"
-                [code]="error.code"
-                [requestId]="error.requestId"
-                (retry)="submit()"
-              />
+      <hlm-dialog-content
+        *hlmDialogPortal
+        #dialog
+        [attr.data-members-dialog]="'resend'"
+        [showCloseButton]="false"
+        class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto wrap-anywhere [&_p]:m-0 [&_code]:font-mono"
+        (keydown.escape)="cancel($event)"
+      >
+        @if (revealing()) {
+          <app-invite-reveal (dismissed)="close()" />
+        } @else {
+          <header hlmDialogHeader>
+            <h2 hlmDialogTitle id="members-resend-title">{{ copy.resendTitle }}</h2>
+          </header>
+          <div class="dialog-body grid min-w-0 gap-3 text-sm" [attr.aria-busy]="busy()">
+            <p hlmDialogDescription>{{ copy.resendDescription }}</p>
+            <p>
+              <strong>{{ member()?.invited_email }}</strong>
+            </p>
+            @if (store.resendState().error; as error) {
+              <div
+                hlmAlert
+                [variant]="'destructive'"
+                class="grid gap-2 whitespace-pre-wrap"
+                data-members-error
+                role="alert"
+              >
+                <p>{{ error.message }}</p>
+                <code data-members-error-code>{{ error.code }}</code>
+              </div>
+              @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
+                <app-retry-after
+                  [kind]="error.kind"
+                  [retryAfterSeconds]="error.retryAfterSeconds"
+                  [retryEligible]="retryReady() && error.retryable"
+                  [busy]="busy()"
+                  [code]="error.code"
+                  [requestId]="error.requestId"
+                  (retry)="submit()"
+                />
+              }
             }
-          }
-        </div>
-        <footer>
-          <button #cancelButton type="button" (click)="close()">{{ copy.cancel }}</button>
-          <button
-            class="primary"
-            type="button"
-            data-members-submit
-            [disabled]="busy() || !retryReady() || !session.has('membership:write')"
-            (click)="submit()"
-          >
-            {{ busy() ? copy.submitting : copy.resend }}
-          </button>
-        </footer>
-      }
-    </dialog>
+          </div>
+          <footer hlmDialogFooter class="mt-4">
+            <button hlmBtn [variant]="'outline'" #cancelButton type="button" (click)="close()">
+              {{ copy.cancel }}
+            </button>
+            <button
+              hlmBtn
+              [variant]="'default'"
+              type="button"
+              data-members-submit
+              [disabled]="busy() || !retryReady() || !session.has('membership:write')"
+              (click)="submit()"
+            >
+              {{ busy() ? copy.submitting : copy.resend }}
+            </button>
+          </footer>
+        }
+      </hlm-dialog-content>
+    </hlm-dialog>
   `,
 })
 export class ResendInviteDialogComponent {
@@ -100,7 +120,9 @@ export class ResendInviteDialogComponent {
     () => this.inFlight() || this.store.resendState().phase === 'submitting',
   );
   protected readonly retryReady = signal(true);
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly dialog = viewChild<unknown, ElementRef<HTMLElement>>('dialog', {
+    read: ElementRef,
+  });
   private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>('cancelButton');
   private opener: HTMLElement | null = null;
   private intent: Intent | null = null;
@@ -131,7 +153,6 @@ export class ResendInviteDialogComponent {
     this.revealing.set(false);
     this.store.resetMutations();
     this.opened.set(true);
-    this.dialog().nativeElement.showModal();
     this.cancelButton()?.nativeElement.focus();
   }
 
@@ -139,13 +160,12 @@ export class ResendInviteDialogComponent {
     this.generation++;
     this.slot.clear();
     this.dialog()
-      .nativeElement.querySelectorAll<HTMLInputElement>('input[readonly]')
+      ?.nativeElement.querySelectorAll<HTMLInputElement>('input[readonly]')
       .forEach((control) => {
         control.value = '';
       });
     this.revealing.set(false);
     this.opened.set(false);
-    this.dialog().nativeElement.close();
     this.intent = null;
     if (this.opener?.isConnected) this.opener.focus();
     this.opener = null;
@@ -154,10 +174,6 @@ export class ResendInviteDialogComponent {
   protected cancel(event: Event): void {
     event.preventDefault();
     this.close();
-  }
-
-  protected wrapFocus(event: Event): void {
-    wrapDialogFocus(event, this.dialog().nativeElement);
   }
 
   protected async submit(): Promise<void> {

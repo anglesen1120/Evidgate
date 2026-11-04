@@ -1236,14 +1236,25 @@ paths:
         further optional, AND-combined, exact-match filters `state`, `decision`,
         `rerun_scope` and `parent_run_id` narrow the same page, and every item
         carries `completeness` (from the run's current evidence revision),
-        `parent_run_id` and `rerun_scope`. `decision` accepts only `pending`
-        today — no `evaluation` row exists until 07.2.2, so no decision is
-        stored to narrow the page with and `pending` matches every run in it,
-        while the `RunSummary.decision` member stays `null` in every item until
-        the evaluator stores one (07.2.2, served by 07.5.2); any other value is
-        422 `request_invalid`, and `rerun_label` and `reprocess_label` are
-        `null` in every item until 05.5.1/05.5.2 serve them. Only `ref_name` is
-        index-served, so the new filters scan the project's rows (05.2.2 note).
+        `parent_run_id`, `rerun_scope` and `decision`. `decision` is the verdict
+        of the run's newest `live` evaluation — `PASS`, `FAIL` or
+        `INCONCLUSIVE`, `null` while the run has none; a `shadow` evaluation is
+        a second opinion and never the verdict. The verdict is
+        `decision:read` data while this page answers under `run:read`: a caller
+        without `decision:read` gets every item with `decision` null and the
+        filter answers 403 `forbidden`, so `null` never claims a run is
+        unevaluated when it only may not be read. The filter speaks its own
+        lower-snake vocabulary — `pending` (no live evaluation), `pass`, `fail`,
+        `inconclusive`, case-exact, mapped to the item's `decision` value — so
+        the stored upper-case verdict is never a filter value; any other value,
+        including `PASS`, is 422 `request_invalid`. A verdict lives in Policy, so a
+        `decision`-filtered page is read as a bounded scan of the keyset order:
+        a page may hold fewer than `limit` items while `next_cursor` is present,
+        and the cursor always advances past every row the scan already read, so
+        concatenating pages yields each matching run exactly once.
+        `rerun_label` and `reprocess_label` are `null` in every item until
+        05.5.1/05.5.2 serve them. Only `ref_name` is index-served, so the new
+        filters scan the project's rows (05.2.2 note).
       x-permission: run:read
       x-version: v1
       parameters:
@@ -7909,19 +7920,24 @@ components:
       in: query
       required: false
       description: >-
-        The run's evaluation decision (F43, S143). Only `pending` is accepted
-        today, and that value stores nothing: no `evaluation` row exists until
-        07.2.2 persists one, so there is no stored decision to narrow the page
-        with and `pending` matches every run in it, while the
-        `RunSummary.decision` member stays `null` in every item until the
-        evaluator stores one (07.2.2 stores it, 07.5.2 serves the read). Any
-        other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422
-        `request_invalid` (`details[].path` = `decision`, reason
-        `invalid_value`) rather than an empty page. Receiver: 07.2.2 (stored
-        decision) with 07.5.2 (the read), which widens this enum.
+        The run's evaluation decision (F43, S143) — `decision:read` data, so a
+        caller without that permission is refused with 403 `forbidden` instead
+        of being answered (an empty page would say which runs carry a verdict).
+        `pending` for a run whose
+        newest `live` evaluation does not exist, otherwise `pass`, `fail` or
+        `inconclusive` for that evaluation's verdict `PASS`, `FAIL` or
+        `INCONCLUSIVE` — filter tokens are lower snake, because a filter is not
+        the stored value it selects. Case-exact and AND-combined with every
+        other present filter. A `shadow` evaluation never matches a verdict
+        here. Any other value is 422 `request_invalid` (`details[].path` =
+        `decision`, reason `invalid_value`) rather than an empty page, and that
+        includes the upper-case verdict itself (`decision=PASS`). The verdict
+        lives in Policy rather than in the run's own rows, so this filter is a
+        bounded scan of the keyset order: a page may hold fewer than `limit`
+        items while `next_cursor` is present.
       schema:
         type: string
-        enum: [pending]
+        enum: [pending, pass, fail, inconclusive]
     RunRerunScope:
       name: rerun_scope
       in: query
@@ -8763,10 +8779,11 @@ components:
         One row of `GET /v1/projects/{p}/runs` (05.2.2 §5). Since 05.2.2-T2 the
         list serves the run's state, `created_at`, the recorded identity `ref`
         and `unverified_ref`; since F43 (S143) it also serves `completeness`
-        (from the run's current evidence revision), `parent_run_id` and
-        `rerun_scope`, while `decision`, `rerun_label` and `reprocess_label`
-        stay `null` until 07.5.2 and 05.5.1/05.5.2 serve them — every value of
-        the row comes from a stored column, never from a placeholder.
+        (from the run's current evidence revision), `parent_run_id`,
+        `rerun_scope` and `decision`, the verdict of the run's newest `live`
+        evaluation, while `rerun_label` and `reprocess_label` stay `null` until
+        05.5.1/05.5.2 serve them — every value of the row comes from a stored
+        row, never from a placeholder.
       required:
         [run_id, state, created_at, ref, unverified_ref, completeness, parent_run_id, rerun_scope]
       properties:
@@ -8813,7 +8830,14 @@ components:
         decision:
           type: [string, 'null']
           enum: [PASS, FAIL, INCONCLUSIVE, null]
-          description: null while pending (00 §9.3); UPPER per 00 §7. Every item is `null` today — no `evaluation` row exists until 07.2.2 stores one (07.5.2 serves the read).
+          description: >-
+            The verdict of the run's newest `live` evaluation (highest
+            evidence revision), UPPER per 00 §7; a `shadow` evaluation never
+            decides this value. `null` has two causes, both read as "no verdict
+            here": the run has no `live` evaluation (00 §9.3), or the caller
+            does not hold `decision:read` — this row answers under `run:read`,
+            so a verdict the caller may not read is never served, not even as
+            a value.
         rerun_label:
           type: [string, 'null']
           description: >-

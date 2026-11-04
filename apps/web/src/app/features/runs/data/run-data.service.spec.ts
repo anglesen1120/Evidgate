@@ -86,6 +86,24 @@ describe('RunDataService (09.3.1-T1)', () => {
     ]);
   });
 
+  it.each([
+    ['pending', 'pending'],
+    ['PASS', 'pass'],
+    ['FAIL', 'fail'],
+    ['INCONCLUSIVE', 'inconclusive'],
+  ] as const)(
+    'maps the %s UI decision to the %s wire filter with ref and cursor',
+    async (decision, wireDecision) => {
+      await service.listRuns('p-1', { decision, refName: 'main', cursor: 'next', limit: 50 });
+      expect(runs.calls[0]?.query).toEqual({
+        decision: wireDecision,
+        ref_name: 'main',
+        cursor: 'next',
+        limit: 50,
+      });
+    },
+  );
+
   it('omits an empty or absent ref filter instead of sending ref_name=', async () => {
     await service.listRuns('p-1', { refName: '' });
     await service.listRuns('p-1', {});

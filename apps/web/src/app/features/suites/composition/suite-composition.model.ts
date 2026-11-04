@@ -39,6 +39,7 @@ export interface DependencyRow {
 export interface FlatMemberRow {
   readonly memberId: string;
   readonly caseRevisionId: string;
+  readonly variantHash: string;
   /** The member's parameter document as `key=value` strings, sorted; empty when it has none. */
   readonly params: readonly string[];
   readonly required: boolean;
@@ -70,7 +71,7 @@ export interface SuiteCompositionView {
   readonly columns: readonly VariantColumn[];
   readonly rows: readonly CompositionRow[];
   readonly layout: MemberLayout;
-  /** The served members for the flat table; empty in `matrix` layout, which renders `rows`. */
+  /** Served members for the narrow-screen records and the oversized-grid flat table. */
   readonly flatMembers: readonly FlatMemberRow[];
   readonly dependencies: readonly DependencyRow[];
   readonly strategy: StrategySummary;
@@ -110,9 +111,7 @@ export function compositionView(revision: CompositionSource): SuiteCompositionVi
     columns,
     rows: grid.rows,
     layout,
-    // The flat rows exist for the layout that renders them; building them in matrix layout would
-    // allocate one object per member for a table the screen never shows.
-    flatMembers: layout === 'flat' ? flatMemberRows(revision.members) : [],
+    flatMembers: flatMemberRows(revision.members),
     dependencies: revision.edges.map((edge) => dependencyRow(edge)),
     strategy: strategySummary(revision.shard_strategy),
     duplicateMembers: grid.duplicateMembers,
@@ -177,6 +176,7 @@ function flatMemberRows(members: readonly SuiteMemberDto[]): readonly FlatMember
   return members.map((member) => ({
     memberId: member.id,
     caseRevisionId: member.case_revision_id,
+    variantHash: member.variant_hash,
     params: variantParameters(member.params),
     required: member.required,
     ordinal: member.ordinal,

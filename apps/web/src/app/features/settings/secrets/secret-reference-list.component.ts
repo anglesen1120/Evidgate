@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import type { IngestTokenView } from '@evidgate/sdk';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { RotationReminderChipComponent } from './rotation-reminder-chip.component';
 
@@ -36,16 +38,19 @@ export const SECRETS_COPY = {
 
 @Component({
   selector: 'app-secret-reference-list',
-  imports: [StatusPillComponent, RotationReminderChipComponent],
+  imports: [StatusPillComponent, RotationReminderChipComponent, HlmButton, HlmCard],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './secrets.page.css',
-  // Inline deliberately: the S3 lint rule scans these bindings, unlike external HTML templates.
+  host: {
+    class:
+      'block min-w-0 [&_h3]:m-0 [&_dd]:m-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_code]:font-mono',
+  },
+  // Inline keeps the explicit metadata bindings visible to the secret-rendering lint rule.
   template: `
-    <ul class="references" [attr.aria-label]="copy.title">
+    <ul class="m-0 grid list-none gap-3 p-0" [attr.aria-label]="copy.title">
       @for (row of rows(); track row.id) {
-        <li data-secret-reference>
-          <div class="reference-heading">
-            <h3>{{ row.name }}</h3>
+        <li hlmCard class="min-w-0 gap-3 p-3 wrap-anywhere md:p-4" data-secret-reference>
+          <div class="flex flex-wrap items-start gap-2 md:items-center">
+            <h3 class="min-w-0 basis-full text-base md:basis-auto md:grow">{{ row.name }}</h3>
             <app-status-pill
               [tone]="
                 row.status === 'active'
@@ -59,12 +64,12 @@ export const SECRETS_COPY = {
             />
             <app-rotation-reminder-chip [reference]="row" />
           </div>
-          <dl class="metadata">
+          <dl class="m-0 grid min-w-0 gap-3 md:grid-cols-2 [&>div]:min-w-0">
             <div>
               <dt>{{ copy.scope }}</dt>
               <dd>
                 @for (scope of row.scopes; track scope) {
-                  <code class="scope">{{ scope }}</code>
+                  <code class="block">{{ scope }}</code>
                 } @empty {
                   {{ copy.unavailable }}
                 }
@@ -115,8 +120,10 @@ export const SECRETS_COPY = {
           </dl>
           @if (canWrite() && row.status === 'active') {
             <button
+              hlmBtn
+              [variant]="'outline'"
               type="button"
-              class="mutation"
+              class="hidden justify-self-start md:inline-flex"
               data-rotate
               [disabled]="busy() || blocked()"
               [attr.data-reference-id]="row.id"

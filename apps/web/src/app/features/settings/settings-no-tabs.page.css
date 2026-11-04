@@ -1,5 +1,0 @@
-/* 09.7.1-T1.1: the shared empty pattern owns its token-based surface and copy. */
-:host {
-  display: block;
-  min-width: 0;
-}

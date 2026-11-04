@@ -1,4 +1,3 @@
-// 09.7.1-T1.1/T1.2: reuse the empty pattern without disclosing unavailable destinations.
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
@@ -15,6 +14,7 @@ describe('SettingsNoTabsPage', () => {
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('app-empty-pattern .state-panel--empty')).not.toBeNull();
+    expect(root.classList.contains('min-w-0')).toBe(true);
     // No way out of the empty state: no destination element, link or control.
     expect(root.querySelector('button, a, [data-settings-tab]')).toBeNull();
     for (const tab of SETTINGS_TABS) {

@@ -16,6 +16,7 @@ import runListEmpty from '../../../../fixtures/web-api/run-list-empty/input.json
 import runListPage1 from '../../../../fixtures/web-api/run-list-page-1/input.json';
 import runListPage2 from '../../../../fixtures/web-api/run-list-page-2/input.json';
 import runListUnavailable from '../../../../fixtures/web-api/run-list-unavailable/input.json';
+import type { FixtureCallRecord } from '../../src/app/core/dev-fixtures/fixture-request-log';
 import {
   expectNoA11yViolations,
   localePath,
@@ -62,7 +63,7 @@ async function ready(page: Page) {
 }
 
 for (const locale of LOCALES) {
-  test(`stored dimensions, unavailable decisions, isolated refs and scope labels (${locale})`, async ({
+  test(`stored dimensions, decisions and not evaluated runs, isolated refs and scope labels (${locale})`, async ({
     page,
   }) => {
     await page.goto(withVariants(path(locale), [VARIANTS.runs]));
@@ -78,7 +79,7 @@ for (const locale of LOCALES) {
     for (const row of runList.body.items) {
       const rendered = page.locator(`${ROWS}[data-run-id="${row.run_id}"]`);
       await expect(rendered.locator('[data-run-decision]')).toContainText(
-        row.decision ?? (locale === 'vi' ? 'Quyết định chưa khả dụng' : 'Decision unavailable'),
+        row.decision ?? (locale === 'vi' ? 'Chưa đánh giá' : 'Not evaluated'),
       );
       await expect(rendered.locator('time')).toHaveAttribute('datetime', row.created_at);
       await expect(rendered.locator('[data-run-unverified]')).toHaveCount(
@@ -113,6 +114,27 @@ for (const locale of LOCALES) {
     ).toHaveCount(0);
   });
 
+  test(`not evaluated filter round-trips through reload and clearing (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(withVariants(path(locale), [VARIANTS.runs, '?decision=pending']));
+    await ready(page);
+    const expected = runList.body.items.filter((row) => row.decision === null);
+    expect(expected.length).toBeGreaterThan(0);
+    await expect(page.locator('#run-decision')).toHaveValue('pending');
+    await expect(page.locator(ROWS)).toHaveCount(expected.length);
+    await expect(page.locator(`${ROWS} [data-run-decision] [data-tone="pending"]`)).toHaveCount(
+      expected.length,
+    );
+    await page.reload();
+    await ready(page);
+    await expect(page.locator('#run-decision')).toHaveValue('pending');
+    await expect(page.locator(ROWS)).toHaveCount(expected.length);
+    await page.locator('[data-run-clear]').click();
+    await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
+    expect(new URL(page.url()).searchParams.has('decision')).toBe(false);
+  });
+
   test(`filter URL survives reload and back/forward (${locale})`, async ({ page }) => {
     await page.goto(withVariants(path(locale), [VARIANTS.runs]));
     await ready(page);
@@ -134,6 +156,16 @@ for (const locale of LOCALES) {
     await page.locator('[data-run-apply]').click();
     await expect(page).toHaveURL(/decision=FAIL/);
     await expect(page.locator(ROWS)).toHaveCount(1);
+    const requests: readonly FixtureCallRecord[] = await page.evaluate(
+      () => window.__evidgateFixtureRequests ?? [],
+    );
+    const listRequest = requests
+      .filter((request) => new URL(request.url, 'http://127.0.0.1').pathname.endsWith('/runs'))
+      .at(-1);
+    expect(listRequest).toBeDefined();
+    expect(new URL(listRequest?.url ?? '', 'http://127.0.0.1').searchParams.get('decision')).toBe(
+      'fail',
+    );
     await page.goBack();
     await ready(page);
     await expect(page.locator('#run-state')).toHaveValue('running');
@@ -259,7 +291,7 @@ for (const locale of LOCALES) {
   for (const theme of THEMES) {
     test(`WCAG, keyboard and mobile containment (${locale}, ${theme})`, async ({ page }) => {
       await seedStoredTheme(page, theme);
-      await page.setViewportSize({ width: 360, height: 800 });
+      await page.setViewportSize({ width: 390, height: 800 });
       await page.goto(withVariants(path(locale), [VARIANTS.runs]));
       await ready(page);
       await page.locator('#run-state').focus();
@@ -298,8 +330,13 @@ for (const locale of LOCALES) {
           .first()
           .evaluate((element) => getComputedStyle(element, '::before').content),
       ).not.toBe('none');
-      await expect(page.locator('#run-decision option[value="pending"]')).toHaveCount(0);
-      await expectNoA11yViolations(page, `run list ${locale}/${theme}/360px`);
+      await expect(page.locator('#run-decision option[value="pending"]')).toHaveCount(1);
+      await expectNoA11yViolations(page, `run list ${locale}/${theme}/390px`);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      await expectNoA11yViolations(page, `run list ${locale}/${theme}/1440px`);
     });
   }
 }
