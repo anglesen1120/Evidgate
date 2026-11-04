@@ -89,4 +89,36 @@ public interface ICatalogContracts
     /// <param name="caseRevisionIds">The revisions the run's planned executions name.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     ValueTask<IReadOnlyDictionary<Guid, EvaluationCaseIdentity>> GetEvaluationCasesAsync(Guid orgId, IReadOnlyCollection<Guid> caseRevisionIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Which of <paramref name="caseIds"/> are <c>archived</c> cases of <paramref name="projectId"/>: the only cases a
+    /// projection over linked ids has to exclude to count a link as live, answered for a caller that may not read
+    /// <c>test_case</c> itself. One statement however many ids, served by the case primary key; an id that is unknown
+    /// or of another project or tenant is simply absent, and an empty batch makes no round trip.
+    /// </summary>
+    /// <param name="orgId">The caller's trusted tenant id, so the read is tenant-exact beyond row level security.</param>
+    /// <param name="projectId">The project the cases must belong to.</param>
+    /// <param name="caseIds">The <c>test_case.id</c> values to test for archived status.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyList<Guid>> GetArchivedCaseIdsAsync(
+        Guid orgId,
+        Guid projectId,
+        IReadOnlyCollection<Guid> caseIds,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The <c>status</c> of each of <paramref name="caseIds"/> that is a case of <paramref name="projectId"/> visible to
+    /// the tenant: one bounded statement however many ids, and an empty batch makes no round trip. Ids that are
+    /// unknown, or belong to another project or tenant, are simply absent — so a caller that must refuse a link to an
+    /// unknown case and to another project's case in the same way cannot tell them apart, which is the point.
+    /// </summary>
+    /// <param name="orgId">The caller's trusted tenant id, so the read is tenant-exact beyond row level security.</param>
+    /// <param name="projectId">The project the cases must belong to.</param>
+    /// <param name="caseIds">The <c>test_case.id</c> values to look up.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyDictionary<Guid, string>> GetCaseStatusesAsync(
+        Guid orgId,
+        Guid projectId,
+        IReadOnlyCollection<Guid> caseIds,
+        CancellationToken cancellationToken);
 }

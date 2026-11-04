@@ -286,6 +286,10 @@ internal sealed class TenantRowFactory
             values[TenantFkScan.TenantColumn] = org;
         }
 
+        // The columns of the foreign key the caller corrupts, so the collision guard below never moves
+        // a value that is the corruption itself.
+        string[] corruptedColumns = [];
+
         foreach (var foreignKey in _schema.ForeignKeysOf(table))
         {
             // MATCH SIMPLE (the only match type in this schema): a composite key with a NULL member
@@ -297,6 +301,10 @@ internal sealed class TenantRowFactory
             // second `feature_node`, whose own parent was followed again (CompositeFkTests.cs:141
             // uses the same `Any` rule).
             var corrupted = corruptedForeignKey is null || string.Equals(corruptedForeignKey, foreignKey.Name, StringComparison.Ordinal);
+            if (corrupted && corruptedForeignKey is not null)
+            {
+                corruptedColumns = foreignKey.Columns;
+            }
             var ownColumns = foreignKey.Columns
                 .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
                 .ToArray();
@@ -398,6 +406,100 @@ internal sealed class TenantRowFactory
             && values.ContainsKey("adjustment_of"))
         {
             values["reason"] = "generated adjustment";
+        }
+
+        // A corrupt row is the valid row with one parent moved to the other org. When that parent is not
+        // part of a unique key of the row's table, the corrupt row duplicates the valid row under that
+        // key, and PostgreSQL answers 23505 before the composite foreign key under test: manual_case_link
+        // moves only linked_by_membership_id, so `manual_case_link_uq` still sees the valid row's project,
+        // manual case and test case. Such a key gets one of the row's other tenant parents regenerated for
+        // the row's own org, so the key differs from the valid row's while the row stays valid everywhere
+        // else (a same-org parent is what the valid row names) and the corrupted key remains the only
+        // rejection. Only a tenant parent can be regenerated here: a catalogue parent is not org-scoped and
+        // a generated scalar already differs from the valid row's.
+        if (corruptedForeignKey is not null && _created.TryGetValue((table, org), out var validRow))
+        {
+            foreach (var uniqueKey in _schema.UniqueKeysOf(table))
+            {
+                var duplicatesValidRow = uniqueKey.Columns.All(column =>
+                    values.TryGetValue(column, out var value)
+                    && validRow.Values.TryGetValue(column, out var validValue)
+                    && Equals(value, validValue));
+                if (!duplicatesValidRow)
+                {
+                    continue;
+                }
+
+                // One parent is enough to move the key, and the narrowest key is the least it can disturb.
+                // A candidate must share a non-tenant column with the key: `org_id` is in every composite key
+                // and in every tenant foreign key, so an overlap on it alone would leave the key exactly as
+                // it was. A foreign key that shares a column with the corruption is never touched.
+                var candidates = _schema.ForeignKeysOf(table)
+                    .Where(foreignKey => foreignKey.Columns.All(values.ContainsKey))
+                    .Where(foreignKey => foreignKey.Columns.Any(column =>
+                        !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal)
+                        && uniqueKey.Columns.Contains(column)))
+                    .Where(foreignKey => _schema.HasOrgId(foreignKey.PrincipalTable))
+                    .Where(foreignKey => !foreignKey.Columns
+                        .Where(column => !string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
+                        .Intersect(corruptedColumns, StringComparer.Ordinal)
+                        .Any())
+                    .OrderBy(foreignKey => foreignKey.Columns.Length)
+                    .ThenBy(foreignKey => foreignKey.Name, StringComparer.Ordinal)
+                    .ToArray();
+
+                var moved = false;
+                foreach (var replacement in candidates)
+                {
+                    // The valid row's own parent cannot be reused: its key is exactly what duplicates. Drop
+                    // the cached row for the length of one create so the generator inserts a second parent
+                    // of the same org, then put the cache back — the factory's memory must keep meaning
+                    // "the valid row".
+                    var hadCachedParent = _created.TryGetValue((replacement.PrincipalTable, org), out var validParent);
+                    _created.Remove((replacement.PrincipalTable, org));
+
+                    GeneratedRow parent;
+                    try
+                    {
+                        parent = await CreateAsync(replacement.PrincipalTable, org, forcedId: null, cancellationToken);
+                    }
+                    finally
+                    {
+                        if (hadCachedParent)
+                        {
+                            _created[(replacement.PrincipalTable, org)] = validParent!;
+                        }
+                        else
+                        {
+                            _created.Remove((replacement.PrincipalTable, org));
+                        }
+                    }
+
+                    for (var index = 0; index < replacement.Columns.Length; index++)
+                    {
+                        if (!string.Equals(replacement.Columns[index], TenantFkScan.TenantColumn, StringComparison.Ordinal))
+                        {
+                            values[replacement.Columns[index]] = parent.Values[replacement.PrincipalColumns[index]];
+                        }
+                    }
+
+                    // The replacement must actually move the key: one that left every key column equal to
+                    // the valid row's would still answer 23505, so the next candidate gets its turn.
+                    moved = !uniqueKey.Columns.All(column =>
+                        values.TryGetValue(column, out var value)
+                        && validRow.Values.TryGetValue(column, out var validValue)
+                        && Equals(value, validValue));
+                    if (moved)
+                    {
+                        break;
+                    }
+                }
+
+                if (moved)
+                {
+                    break;
+                }
+            }
         }
 
         return values;

@@ -18,6 +18,9 @@
          (IParsing.ReadArchiveEntries), the sanctioned module-to-module route: exactly the .Contracts
          project, never another module's implementation (00 §5.5 C7, Architecture.Tests). -->
     <ProjectReference Include="..\Evidgate.Modules.Evidence.Contracts\Evidgate.Modules.Evidence.Contracts.csproj" />
+    <!-- The manual-case links name a catalog `test_case`; the coverage read learns which linked cases are
+         archived through this .Contracts project, never another module's tables (00 §5.5 C7, Architecture.Tests). -->
+    <ProjectReference Include="..\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <!-- 13.1.1-T1.4: the read model runs on Dapper (C1) and the write model on EF Core, both through this block. -->
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />

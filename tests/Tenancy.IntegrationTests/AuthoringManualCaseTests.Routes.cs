@@ -117,8 +117,9 @@ public sealed partial class AuthoringManualCaseTests
         string.Compare(firstItems[0].GetProperty("code").GetString(), firstItems[1].GetProperty("code").GetString(), StringComparison.Ordinal)
             .ShouldBeLessThanOrEqualTo(0, "the page is ordered by code");
         firstItems[0].GetProperty("node_id").GetGuid().ShouldNotBe(Guid.Empty, "the list carries the item's node");
-        // No coverage field of AC12 here: that read model is 13.1.1-T4's.
-        firstItems[0].TryGetProperty("linked_live_count", out _).ShouldBeFalse();
+        // AC12 coverage members (13.1.1-T4): an unlinked case reports 0 live links, and the ids array is empty.
+        firstItems[0].GetProperty("linked_live_count").GetInt32().ShouldBe(0);
+        firstItems[0].GetProperty("linked_case_ids").GetArrayLength().ShouldBe(0);
 
         var cursor = firstPage.Body.GetProperty("next_cursor").GetString();
         cursor.ShouldNotBeNullOrEmpty();
@@ -154,10 +155,20 @@ public sealed partial class AuthoringManualCaseTests
         badState.Body.GetProperty("error").GetProperty("details").EnumerateArray()
             .ShouldContain(detail => detail.GetProperty("path").GetString() == "/state");
 
-        // AC12's filter is not silently ignored.
-        var covered = await client.SendAsync(HttpMethod.Get, CasePath(project) + "?covered=false", caller);
-        covered.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        covered.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+        // AC12's filter is applied, not ignored: with no link anywhere, every case is uncovered, so
+        // `covered=false` returns the whole page and `covered=true` an empty one. A value that is not a boolean
+        // is still refused with a 422 naming the parameter.
+        var uncovered = await client.SendAsync(HttpMethod.Get, CasePath(project) + "?covered=false", caller);
+        uncovered.Status.ShouldBe(HttpStatusCode.OK);
+        uncovered.Body.GetProperty("items").GetArrayLength().ShouldBe(4);
+
+        var coveredOnly = await client.SendAsync(HttpMethod.Get, CasePath(project) + "?covered=true", caller);
+        coveredOnly.Status.ShouldBe(HttpStatusCode.OK);
+        coveredOnly.Body.GetProperty("items").GetArrayLength().ShouldBe(0);
+
+        var badCovered = await client.SendAsync(HttpMethod.Get, CasePath(project) + "?covered=yes", caller);
+        badCovered.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        badCovered.Body.GetProperty("error").GetProperty("details").EnumerateArray()
             .ShouldContain(detail => detail.GetProperty("path").GetString() == "/covered");
     }
 

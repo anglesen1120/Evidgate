@@ -41,8 +41,12 @@ namespace Isolation.Tests;
 /// RLS policy, not the composite FK — a tautology as far as this suite is
 /// concerned. The tenant setting is switched with the same
 /// <c>set_config(…, true)</c> the scope opened with (transaction-local, 00 §5.4.2),
-/// so the corrupt row is otherwise identical to the valid org-B row inserted just
-/// before it: same shape, same constraints, different parent.
+/// so the corrupt row is otherwise the valid org-B row inserted just
+/// before it: same shape, same constraints, different parent. When the corrupted
+/// parent is not part of one of the row's unique keys, the generator gives one of
+/// the row's other same-org parents a second row of its own
+/// (<see cref="TenantRowFactory"/>), so the unique key never answers first and the
+/// composite foreign key is the rejection.
 /// </para>
 /// </summary>
 [Collection(HarnessSuite.Name)]
