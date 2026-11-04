@@ -30,17 +30,19 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
         <span i18n="@@shell.layout.brand">Evidgate</span>
       </div>
       <div class="login-preferences">
-        <button
-          type="button"
-          class="locale-toggle"
-          [disabled]="auth.redirecting()"
-          [attr.aria-label]="localeLabel"
-          (click)="switchLocale()"
-        >
-          <span lang="en" i18n="@@auth.login.locale-en">EN</span>
-          <span aria-hidden="true"> / </span>
-          <span lang="vi" i18n="@@auth.login.locale-vi">VI</span>
-        </button>
+        @if (canSwitchLocale) {
+          <button
+            type="button"
+            class="locale-toggle"
+            [disabled]="auth.redirecting()"
+            [attr.aria-label]="localeLabel"
+            (click)="switchLocale()"
+          >
+            <span lang="en" i18n="@@auth.login.locale-en">EN</span>
+            <span aria-hidden="true"> / </span>
+            <span lang="vi" i18n="@@auth.login.locale-vi">VI</span>
+          </button>
+        }
         <button
           type="button"
           class="theme-toggle"
@@ -129,8 +131,11 @@ export class LoginPage {
   private readonly document = inject(DOCUMENT);
   private readonly locale = inject(LOCALE_ID);
   private readonly navigate = inject(LOCATION_NAVIGATE);
+  private readonly localeBase = new URL(this.document.baseURI).pathname;
+  private readonly localeSegment = /(?:^|\/)(?:en|vi)\/$/.exec(this.localeBase);
+  readonly canSwitchLocale = this.localeSegment !== null;
   readonly darkLabel = $localize`:@@shell.theme.dark-mode:Dark mode`;
-  readonly localeLabel = $localize`:@@auth.login.switch-language:Switch language between English and Vietnamese`;
+  readonly localeLabel = $localize`:@@auth.login.switch-language:EN / VI: Switch language between English and Vietnamese`;
   private readonly loadExtension = inject(LOGIN_EXTENSION_LOADER);
   protected readonly extension = resource({ loader: () => this.loadExtension() });
   private readonly router = inject(Router);
@@ -160,14 +165,13 @@ export class LoginPage {
   }
 
   switchLocale(): void {
-    if (this.auth.redirecting()) return;
+    if (this.auth.redirecting() || this.localeSegment === null) return;
     const target = this.locale.startsWith('vi') ? 'en' : 'vi';
-    const base = new URL(this.document.baseURI);
     // Localized builds are siblings; retain a deployment prefix when one is present.
-    const prefix = base.pathname.replace(/(?:en|vi)\/$/, '');
+    const prefix = this.localeBase.slice(0, this.localeSegment.index);
     const query = new URLSearchParams({ returnUrl: this.auth.returnUrl() });
     if (this.auth.reason() !== 'none') query.set('reason', this.auth.reason());
-    this.navigate(`${prefix}${target}/login?${query.toString()}`);
+    this.navigate(`${prefix}/${target}/login?${query.toString()}`);
   }
 
   readonly introduction = $localize`:@@auth.login.introduction:Return to your workspace to review evidence and make informed release decisions.`;

@@ -220,15 +220,39 @@ describe('RunListTableComponent', () => {
     const rows = Array.from({ length: 250 }, (_, index) => run(index));
     const { fixture, root } = await render(rows.slice(0, 200));
     expect(root.querySelector('cdk-virtual-scroll-viewport')).toBeNull();
+    expect(root.querySelector('.row-probe')).toBeNull();
     expect(root.querySelectorAll('[data-run-row]')).toHaveLength(200);
     fixture.componentRef.setInput('rows', rows);
     await fixture.whenStable();
     expect(root.querySelector('cdk-virtual-scroll-viewport')).not.toBeNull();
+    expect(root.querySelector('.row-probe')).not.toBeNull();
     expect(root.querySelector('[role="table"]')?.getAttribute('aria-rowcount')).toBe('251');
     expect(root.querySelectorAll('[data-run-row]').length).toBeLessThan(100);
     fixture.componentRef.setInput('rows', rows.slice(0, 1));
     await fixture.whenStable();
     expect(root.querySelector('cdk-virtual-scroll-viewport')).toBeNull();
+    expect(root.querySelector('.row-probe')).toBeNull();
     expect(root.querySelectorAll('[data-run-row]')).toHaveLength(1);
+  });
+  it('does not measure a row probe for short lists', async () => {
+    const computedStyle = vi.spyOn(globalThis, 'getComputedStyle');
+    try {
+      const { root } = await render([run(1)]);
+      expect(root.querySelector('.row-probe')).toBeNull();
+      expect(
+        computedStyle.mock.calls.filter(([element]) => element.classList.contains('row-probe')),
+      ).toHaveLength(0);
+    } finally {
+      computedStyle.mockRestore();
+    }
+  });
+  it('keeps the focused virtual row link outline inside its clipped cell', async () => {
+    const { root } = await render(Array.from({ length: 250 }, (_, index) => run(index)));
+    const link = root.querySelector<HTMLAnchorElement>('.virtual-row .identifier a');
+    expect(link).not.toBeNull();
+    if (link) {
+      link.focus();
+      expect(getComputedStyle(link).outlineOffset).toBe('calc(-1 * var(--eg-focus-width))');
+    }
   });
 });

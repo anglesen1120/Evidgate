@@ -32,6 +32,7 @@ import { MEMBERS_COPY } from './member-list.component';
                 </th>
                 @for (role of matrix().columns; track role.id) {
                   <td
+                    class="role-grant"
                     [attr.headers]="
                       'matrix-member-' + row.membership.id + ' matrix-role-' + role.id
                     "

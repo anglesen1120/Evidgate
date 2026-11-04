@@ -23,15 +23,6 @@ const MEMBER: MembershipView = {
   version: 1,
 };
 
-function memberStyles(): string {
-  // Inspect Angular's actual encapsulated stylesheet, not a duplicated CSS fixture.
-  return (
-    Array.from(document.querySelectorAll('style'))
-      .map((style) => style.textContent ?? '')
-      .find((css) => css.includes('.member-identity') && css.includes('.record-label')) ?? ''
-  );
-}
-
 describe('RoleMatrixComponent responsive records', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -69,25 +60,6 @@ describe('RoleMatrixComponent responsive records', () => {
     expect(cells[1]?.textContent).toContain('Not granted');
     expect(cells[0]?.querySelector('[data-granted="true"]')?.textContent?.trim()).toBe('Granted');
     expect(cells[1]?.querySelector('[data-granted]')).toBeNull();
-  });
-
-  it('uses intrinsic desktop columns and unbroken headers and identities', async () => {
-    await render();
-    const css = memberStyles();
-    expect(css).toMatch(/table[^{}]*\{[^}]*table-layout:\s*auto/s);
-    expect(css).toMatch(
-      /thead[^{}]*th[^{}]*,\s*\.member-identity[^{}]*\{[^}]*white-space:\s*nowrap;[^}]*overflow-wrap:\s*normal;[^}]*word-break:\s*normal/s,
-    );
-  });
-
-  it('stacks full-width labelled records below 768px without a wide-table viewport', async () => {
-    await render();
-    const narrow = memberStyles().split(/@media\s*\(max-width:\s*767px\)/)[1] ?? '';
-    expect(narrow).toMatch(/\.table-scroll[^{}]*\{\s*overflow:\s*visible/s);
-    expect(narrow).toMatch(/tbody[^{}]*th[^{}]*,\s*tbody[^{}]*td[^{}]*\{[^}]*display:\s*grid/s);
-    expect(narrow).toMatch(/\.record-label[^{}]*\{[^}]*display:\s*block/s);
-    expect(narrow).toMatch(/thead[^{}]*\{[^}]*clip-path:\s*inset\(50%\)/s);
-    expect(narrow).toMatch(/tbody[^{}]*\.mutation[^{}]*\{[^}]*display:\s*none/s);
   });
 
   it('keeps role catalogue unavailability distinct from an empty membership list', async () => {

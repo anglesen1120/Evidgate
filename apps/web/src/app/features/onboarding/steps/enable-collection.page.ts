@@ -25,6 +25,7 @@ import {
   effect,
   inject,
   input,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
@@ -77,6 +78,7 @@ interface AppendedRevision {
 export class EnableCollectionPage {
   readonly orgId = input.required<string>();
   readonly projectId = input.required<string>();
+  readonly activationConfirmed = output<PolicyActivationStateDto>();
   private readonly data = inject(OnboardingDataService);
   private readonly session = inject(SessionStore);
   private readonly destroyRef = inject(DestroyRef);
@@ -110,7 +112,7 @@ export class EnableCollectionPage {
   protected readonly reading = computed(() => this.activationRead().kind === 'loading');
   protected readonly busy = computed(() => this.activation.status() === 'running');
   protected readonly failure = this.activation.error;
-  readonly enabled = computed(() => {
+  protected readonly enabled = computed(() => {
     const read = this.activationRead();
     return this.activation.result() ?? (read.kind === 'active' ? read.state : null);
   });
@@ -419,6 +421,7 @@ export class EnableCollectionPage {
     if (!current()) return;
     if (read.kind === 'error') this.readWait.start(read.error.retryAfterSeconds);
     this.activationRead.set(read);
+    if (read.kind === 'active') this.activationConfirmed.emit(read.state);
   }
 
   /**
@@ -450,7 +453,11 @@ export class EnableCollectionPage {
     if (this.destroyRef.destroyed || this.orgId() !== orgId || this.projectId() !== projectId) {
       throw new DOMException('The step was left before the activation was sent.', 'AbortError');
     }
-    return this.data.activatePolicy(projectId, revision.id, intent);
+    const activation = await this.data.activatePolicy(projectId, revision.id, intent);
+    if (!this.destroyRef.destroyed && this.orgId() === orgId && this.projectId() === projectId) {
+      this.activationConfirmed.emit(activation);
+    }
+    return activation;
   }
 
   private async appendDefaultPolicy(projectId: string, intent: Intent): Promise<PolicyRevisionDto> {

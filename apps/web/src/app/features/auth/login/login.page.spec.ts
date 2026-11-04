@@ -28,6 +28,7 @@ describe('LoginPage', () => {
   beforeEach(async () => {
     router.navigated = false;
     navigate.mockReset();
+    vi.spyOn(document, 'baseURI', 'get').mockReturnValue('https://evidgate.test/en/');
     flow = {
       returnUrl: signal('/private-target?secret=never-render'),
       reason: signal<LoginReason>('none'),
@@ -57,6 +58,7 @@ describe('LoginPage', () => {
   afterEach(() => {
     document.documentElement.removeAttribute('data-theme');
     localStorage.removeItem('evidgate-theme');
+    vi.restoreAllMocks();
   });
 
   it('separates branded preferences, introduction, provider card and private destination context', () => {
@@ -110,6 +112,40 @@ describe('LoginPage', () => {
     expect(locale?.disabled).toBe(true);
     locale?.click();
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('includes the visible language label in the accessible name', () => {
+    const locale = root.querySelector<HTMLButtonElement>('.locale-toggle');
+    const visibleLabel = locale?.textContent?.replace(/\s+/g, ' ').trim();
+    expect(visibleLabel).toBe('EN / VI');
+    expect(locale?.getAttribute('aria-label')).toMatch(/^EN \/ VI:/);
+  });
+
+  it.each(['/', '/garden/', '/preview/', '/enrichment/'])(
+    'hides language switching for the unlocalized base %s',
+    (path) => {
+      vi.spyOn(document, 'baseURI', 'get').mockReturnValue(`https://evidgate.test${path}`);
+      const unlocalized = TestBed.createComponent(LoginPage);
+      unlocalized.detectChanges();
+      expect((unlocalized.nativeElement as HTMLElement).querySelector('.locale-toggle')).toBeNull();
+      unlocalized.componentInstance.switchLocale();
+      expect(navigate).not.toHaveBeenCalled();
+      unlocalized.destroy();
+    },
+  );
+
+  it('preserves the deployment prefix when switching a localized bundle', () => {
+    vi.spyOn(document, 'baseURI', 'get').mockReturnValue('https://evidgate.test/review/en/');
+    const nested = TestBed.createComponent(LoginPage);
+    nested.detectChanges();
+    (nested.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('.locale-toggle')
+      ?.click();
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(new URL(navigate.mock.calls[0]?.[0] ?? '', document.baseURI).pathname).toBe(
+      '/review/vi/login',
+    );
+    nested.destroy();
   });
 
   it('default: renders one named main, one h1 and provider-only sign-in', () => {

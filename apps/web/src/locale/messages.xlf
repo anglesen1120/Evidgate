@@ -24,7 +24,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="auth.login.switch-language" datatype="html">
-        <source>Switch language between English and Vietnamese</source>
+        <source>EN / VI: Switch language between English and Vietnamese</source>
       </trans-unit>
       <trans-unit id="auth.login.locale-en" datatype="html">
         <source>EN</source>

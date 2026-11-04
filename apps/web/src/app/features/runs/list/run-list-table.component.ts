@@ -47,7 +47,7 @@ export class RunListTableComponent {
   readonly rows = input.required<readonly RunSummary[]>();
   protected readonly virtual = computed(() => this.rows().length > 200);
   protected readonly itemSize = signal(132);
-  private readonly probe = viewChild.required<ElementRef<HTMLElement>>('rowProbe');
+  private readonly probe = viewChild<ElementRef<HTMLElement>>('rowProbe');
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
   protected readonly displayRef = escapeFormatChars;
   /**
@@ -109,13 +109,14 @@ export class RunListTableComponent {
 
   constructor() {
     afterRenderEffect((onCleanup) => {
-      const probe = this.probe().nativeElement;
       const viewport = this.viewport();
+      const probe = this.probe()?.nativeElement;
+      if (!viewport || !probe) return;
       const measure = () => {
         const height = Number.parseFloat(getComputedStyle(probe).height);
         // The probe follows the responsive row size; jsdom leaves token values unresolved.
         this.itemSize.set(height > 0 ? height : 132);
-        viewport?.checkViewportSize();
+        viewport.checkViewportSize();
       };
       measure();
       if (typeof ResizeObserver !== 'undefined') {

@@ -3,6 +3,7 @@
 // opened — without a progress read behind it.
 import { computed, signal, type Signal, type WritableSignal } from '@angular/core';
 import { vi, type Mock } from 'vitest';
+import type { PolicyActivationStateDto } from '@evidgate/sdk';
 
 import type { StepNumber } from '../data/step-derivation';
 import type { OnboardingProgress } from '../data/onboarding-progress.service';
@@ -37,6 +38,7 @@ export interface ShellStore {
   readonly canGoNext: Signal<boolean>;
   readonly canGoBack: Signal<boolean>;
   readonly load: Mock<(orgId: string, projectId: string | null) => Promise<void>>;
+  readonly recordActivation: Mock<(orgId: string, activation: PolicyActivationStateDto) => void>;
   readonly consumeCreated: Mock<(orgId: string, projectId: string | null) => boolean>;
   readonly selectStep: Mock<(step: StepNumber) => void>;
   readonly next: Mock<() => void>;
@@ -71,6 +73,7 @@ export function shellStore(options: ShellStoreOptions = {}): ShellStore {
     failure: signal<'forbidden' | 'not-found' | 'unavailable' | null>(null),
     progress: signal<OnboardingProgress | null>(null),
     refreshFailure: signal<'forbidden' | 'not-found' | 'unavailable' | null>(null),
+    recordActivation: vi.fn<(orgId: string, activation: PolicyActivationStateDto) => void>(),
     viewStep,
     currentStep,
     done,

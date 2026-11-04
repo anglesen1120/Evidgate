@@ -108,6 +108,9 @@ cdk-virtual-scroll-viewport {
   outline: var(--eg-focus-width) solid var(--eg-focus);
   outline-offset: var(--eg-focus-offset);
 }
+.virtual-row .identifier a:focus-visible {
+  outline-offset: calc(-1 * var(--eg-focus-width));
+}
 
 @media (max-width: 767px) {
   .run-table {

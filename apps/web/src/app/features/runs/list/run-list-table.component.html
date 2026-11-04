@@ -1,4 +1,6 @@
-<span #rowProbe class="row-probe" aria-hidden="true"></span>
+@if (virtual()) {
+  <span #rowProbe class="row-probe" aria-hidden="true"></span>
+}
 <!-- The outer keyboard stop reaches desktop overflow; the virtual viewport scrolls rows. -->
 <div
   class="table-scroll"

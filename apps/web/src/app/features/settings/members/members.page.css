@@ -123,6 +123,11 @@ thead th,
   overflow-wrap: normal;
   word-break: normal;
 }
+.role-grant {
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+}
 .record-label {
   display: none;
 }

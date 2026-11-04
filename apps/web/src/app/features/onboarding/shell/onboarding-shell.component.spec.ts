@@ -1,10 +1,4 @@
-import {
-  Component,
-  forwardRef,
-  input,
-  provideZonelessChangeDetection,
-  signal,
-} from '@angular/core';
+import { Component, input, output, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
 import type { PolicyActivationStateDto, ProjectDto } from '@evidgate/sdk';
@@ -40,14 +34,11 @@ class ConnectCiStub {
 @Component({
   selector: 'app-onboarding-enable-collection',
   template: '<div data-testid="enable-collection-page">{{ orgId() }} {{ projectId() }}</div>',
-  providers: [
-    { provide: EnableCollectionPage, useExisting: forwardRef(() => EnableCollectionStub) },
-  ],
 })
 class EnableCollectionStub {
   readonly orgId = input.required<string>();
   readonly projectId = input.required<string>();
-  readonly enabled = signal<PolicyActivationStateDto | null>(null);
+  readonly activationConfirmed = output<PolicyActivationStateDto>();
 }
 
 /**
@@ -430,7 +421,7 @@ describe('OnboardingShellComponent over the real store', () => {
     return { progressLoad, childParams, activate, store: TestBed.inject(OnboardingStore) };
   }
 
-  it('updates the resource ledger when the active step confirms an activation', async () => {
+  it('retains a confirmed activation in the resource ledger after Back destroys the step', async () => {
     const { progressLoad, activate } = await setupRealShell();
     progressLoad.mockResolvedValue({
       ...CREATED,
@@ -440,7 +431,7 @@ describe('OnboardingShellComponent over the real store', () => {
     const fixture = await activate();
     const step = fixture.debugElement.query(By.directive(EnableCollectionStub))
       .componentInstance as EnableCollectionStub;
-    step.enabled.set({
+    step.activationConfirmed.emit({
       project_id: PROJECT.id,
       policy_revision_id: 'newly-confirmed-policy',
       hash: 'sha256:confirmed',
@@ -453,6 +444,10 @@ describe('OnboardingShellComponent over the real store', () => {
     const panel = root.querySelector('[data-testid="onboarding-evidence-panel"]');
     expect(panel?.textContent).toContain('newly-confirmed-policy');
     expect(panel?.querySelector('[data-resource-state="empty"]')).toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-testid="onboarding-back"]')?.click();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-testid="enable-collection-page"]')).toBeNull();
+    expect(panel?.textContent).toContain('newly-confirmed-policy');
   });
 
   it('reads once for the page and once for the create, and reads again on the next visit', async () => {
