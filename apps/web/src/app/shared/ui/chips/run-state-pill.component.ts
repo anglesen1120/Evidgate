@@ -18,13 +18,7 @@ const RUN_STATE_LABELS: Readonly<Record<RunState, string>> = {
   selector: 'app-run-state-pill',
   imports: [StatusPillComponent],
   template: ` <app-status-pill [tone]="tone()" [label]="label()" [dimension]="dimension" /> `,
-  styles: `
-    :host {
-      display: inline-block;
-      min-width: 0;
-      max-width: 100%;
-    }
-  `,
+  host: { class: 'inline-block min-w-0 max-w-full' },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class RunStatePillComponent {

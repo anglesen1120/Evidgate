@@ -1,0 +1,4 @@
+@import 'tailwindcss/utilities.css' source(none);
+
+@source '../app/ui';
+@source '../app/shared/ui';

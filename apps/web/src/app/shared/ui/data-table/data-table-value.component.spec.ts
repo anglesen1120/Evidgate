@@ -83,6 +83,9 @@ describe('DataTableValueComponent', () => {
     expect(value.textContent).toBe(String(fixture.componentInstance.value()));
     const popover = root.querySelector('[popover]');
     expect(popover?.getAttribute('popover')).toBe('manual');
+    expect(popover?.classList.contains('bg-card')).toBe(true);
+    expect(popover?.classList.contains('text-foreground')).toBe(true);
+    expect(value.classList.contains('pointer-coarse:min-h-[var(--eg-control-touch)]')).toBe(true);
     expect(popover?.getAttribute('aria-hidden')).toBe('true');
     expect(popover?.textContent).toBe(fixture.componentInstance.value());
     expect(root.querySelector('[role="tooltip"], .sr-only')).toBeNull();
@@ -150,7 +153,7 @@ describe('DataTableValueComponent', () => {
     expect(value.classList.contains('truncate')).toBe(false);
     expect(value.hasAttribute('tabindex')).toBe(false);
     expect(root.querySelector('[popover]')).toBeNull();
-    expect(getComputedStyle(value).overflowWrap).toBe('anywhere');
+    expect(value.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
   });
 
   it('R4: keeps the popover hoverable while the pointer crosses to its full-value panel', async () => {

@@ -28,3 +28,4 @@
 | [0008-web-integration-fit.md](0008-web-integration-fit.md) | Web integration fit: SDK behind `HttpClient`, zoneless, Trusted Types, CDK tables, SignalStore | accepted | 2026-10-24 |
 | [0009-event-table-partitioning.md](0009-event-table-partitioning.md) | Event-class table partitioning: key, dedupe key and retention windows | proposed | 2026-10-27 |
 | [0010-audit-chain-keyed-hash-and-external-checkpoints.md](0010-audit-chain-keyed-hash-and-external-checkpoints.md) | Audit chain: HMAC-keyed hash, key custody and rotation, signed external checkpoints | proposed | 2026-10-28 |
+| [0011-spartan-tailwind-foundation.md](0011-spartan-tailwind-foundation.md) | Spartan Brain, locally owned Helm and Tailwind v4 | accepted | 2026-11-05 |

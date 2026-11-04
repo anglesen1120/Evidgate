@@ -43,6 +43,23 @@ describe('ErrorPatternComponent', () => {
     root = fixture.nativeElement as HTMLElement;
   });
 
+  it('uses one Helm alert with a native disabled retry inside the state card', () => {
+    expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
+    const alert = root.querySelector('[data-slot="alert"]');
+    expect(alert?.getAttribute('role')).toBe('alert');
+    expect(alert?.getAttribute('aria-atomic')).toBe('true');
+    expect(alert?.querySelector('h2')?.getAttribute('data-slot')).toBe('alert-title');
+    const button = root.querySelector('button');
+    expect(button?.getAttribute('data-slot')).toBe('button');
+    fixture.componentRef.setInput('retryDisabled', true);
+    fixture.detectChanges();
+    expect(button?.disabled).toBe(true);
+    expect(button?.hasAttribute('data-disabled')).toBe(true);
+    fixture.componentRef.setInput('retryDisabled', false);
+    fixture.detectChanges();
+    expect(button?.disabled).toBe(false);
+  });
+
   for (const [state, contract] of rows) {
     describe(`${state}: ${contract}`, () => {
       it('keeps failure context visible and never retries on focus, hover or render', () => {
@@ -180,6 +197,11 @@ describe('ErrorPatternComponent', () => {
     expect(root.querySelector('.state-panel__description')?.textContent).toBe(untrusted);
     expect(root.querySelector('code')?.textContent).toBe(untrusted);
     expect(root.querySelector('.error-pattern__request-id')?.textContent).toContain(untrusted);
-    expect(root.querySelector('script, [style]')).toBeNull();
+    expect(root.querySelector('script, [onerror]')).toBeNull();
+    // Helm suppresses first-render transitions until its animation frame restores them.
+    for (const element of root.querySelectorAll<HTMLElement>('[style]')) {
+      expect(element.hasAttribute('data-slot')).toBe(true);
+      expect(element.getAttribute('style')).toBe('transition: none !important;');
+    }
   });
 });

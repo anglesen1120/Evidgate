@@ -1,0 +1,92 @@
+/* Semantic aliases inherit the existing explicit and OS-selected token themes. */
+:root,
+html[data-theme='light'],
+html[data-theme='dark'] {
+  --background: var(--eg-bg);
+  --foreground: var(--eg-text);
+  --card: var(--eg-surface);
+  --card-foreground: var(--eg-text);
+  --popover: var(--eg-surface);
+  --popover-foreground: var(--eg-text);
+  --primary: var(--eg-accent);
+  --primary-foreground: var(--eg-on-accent);
+  --secondary: var(--eg-surface-raised);
+  --secondary-foreground: var(--eg-text);
+  --muted: var(--eg-neutral-bg);
+  --muted-foreground: var(--eg-text-muted);
+  --accent: var(--eg-accent-soft);
+  --accent-foreground: var(--eg-accent);
+  --destructive: var(--eg-danger-fg);
+  --destructive-foreground: var(--eg-surface);
+  --border: var(--eg-border);
+  --input: var(--eg-border-control);
+  --ring: var(--eg-focus);
+  --radius: var(--eg-radius-md);
+  --font-sans: var(--eg-font-body);
+  --font-mono: var(--eg-font-mono);
+  --scrim: var(--eg-scrim);
+}
+
+@theme inline {
+  --color-*: initial;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-scrim: var(--scrim);
+  --spacing: var(--eg-space-2);
+  --font-sans: var(--eg-font-body);
+  --font-mono: var(--eg-font-mono);
+  --text-xs: var(--eg-text-xs);
+  --text-xs--line-height: var(--eg-leading-xs);
+  --text-sm: var(--eg-text-sm);
+  --text-sm--line-height: var(--eg-leading-sm);
+  --text-base: var(--eg-text-md);
+  --text-base--line-height: var(--eg-leading-md);
+  --text-lg: var(--eg-text-lg);
+  --text-lg--line-height: var(--eg-leading-lg);
+  --text-xl: var(--eg-text-xl);
+  --text-xl--line-height: var(--eg-leading-xl);
+  --text-2xl: var(--eg-text-2xl);
+  --text-2xl--line-height: var(--eg-leading-2xl);
+  --radius-xs: var(--eg-radius-sm);
+  --radius-sm: var(--eg-radius-sm);
+  --radius-md: var(--eg-radius-md);
+  --radius-lg: var(--eg-radius-lg);
+  --radius-xl: var(--eg-radius-lg);
+  --radius-2xl: var(--eg-radius-lg);
+  --radius-full: var(--eg-radius-pill);
+  /* Bare `none` invalidates Tailwind's composed shadow list, including focus rings. */
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: var(--eg-elevation-1);
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+  --default-transition-duration: var(--eg-duration-fast);
+  --default-transition-timing-function: var(--eg-ease);
+}
+
+@custom-variant dark {
+  &:where(html[data-theme='dark'], html[data-theme='dark'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(html:not([data-theme='light']), html:not([data-theme='light']) *) {
+      @slot;
+    }
+  }
+}

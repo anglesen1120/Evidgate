@@ -51,6 +51,20 @@ describe('WaiverBanner (FR-09-2/7)', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('uses the Helm alert recipe as a labelled static region rather than a live error', () => {
+    const fixture = TestBed.createComponent(WaiverBanner);
+    fixture.componentRef.setInput('approver', 'Reviewer-001');
+    fixture.componentRef.setInput('expiresAt', expiry);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const region = root.querySelector('section');
+    expect(region?.getAttribute('data-slot')).toBe('alert');
+    expect(region?.getAttribute('role')).toBe('region');
+    expect(region?.getAttribute('aria-label')).toBe('Waiver details');
+    expect(root.querySelector('h3')?.getAttribute('data-slot')).toBe('alert-title');
+    expect(root.querySelector('[role="alert"], [aria-live]')).toBeNull();
+  });
+
   it.each(states)('covers the %s state as static waiver metadata', (state) => {
     const fixture = TestBed.createComponent(WaiverBanner);
     fixture.componentRef.setInput(
@@ -210,7 +224,8 @@ describe('WaiverBanner (FR-09-2/7)', () => {
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
       expect(root.querySelector('h3')?.textContent?.trim()).toBe('Waiver state unavailable');
-      expect(root.querySelector('section')?.className).toBe('waiver');
+      expect(root.querySelector('section')?.classList.contains('waiver')).toBe(true);
+      expect(root.querySelector('section')?.classList.contains('bg-muted')).toBe(true);
       expect(root.textContent).not.toContain('Approved by waiver');
       expect(
         root.querySelector('[class*="success"], [class*="warning"], [class*="danger"]'),

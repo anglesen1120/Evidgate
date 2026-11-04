@@ -1,18 +1,28 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
 
 @Component({
   selector: 'app-retry-after',
-  standalone: true,
+  imports: [HlmAlertImports, HlmButton],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './retry-after.component.css',
+  host: { class: 'block min-w-0' },
   template: `
-    <section class="retry-panel">
+    <section hlmAlert [attr.role]="'group'" class="retry-panel grid gap-3 wrap-anywhere">
       @if (kind() === 'unavailable') {
-        <h2 i18n="@@shared.retry-after.unavailable-title">503 · Service unavailable</h2>
+        <h2 hlmAlertTitle i18n="@@shared.retry-after.unavailable-title">
+          503 · Service unavailable
+        </h2>
       } @else {
-        <h2 i18n="@@shared.retry-after.title">429 · Rate limited</h2>
+        <h2 hlmAlertTitle i18n="@@shared.retry-after.title">429 · Rate limited</h2>
       }
-      <p role="status" [attr.aria-live]="'polite'" aria-atomic="true">
+      <p
+        hlmAlertDescription
+        class="m-0"
+        role="status"
+        [attr.aria-live]="'polite'"
+        [attr.aria-atomic]="'true'"
+      >
         @let seconds = interval();
         @if (seconds !== null) {
           <span i18n="@@shared.retry-after.interval">Retry after: {{ seconds }} s</span>
@@ -27,7 +37,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
           <span i18n="@@shared.retry-after.waiting">Retry available after the wait</span>
         }
       </p>
-      <dl>
+      <dl class="m-0 grid gap-2 text-sm [&_dd]:m-0 [&_dt]:text-muted-foreground">
         @if (code(); as errorCode) {
           <div>
             <dt i18n="@@shared.retry-after.error-code">Error code</dt>
@@ -45,7 +55,15 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
           </div>
         }
       </dl>
-      <button type="button" [disabled]="!retryEligible() || busy()" (click)="requestRetry()">
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        class="justify-self-start"
+        type="button"
+        [disabled]="!retryEligible() || busy()"
+        [attr.aria-busy]="busy()"
+        (click)="requestRetry()"
+      >
         @if (busy()) {
           <span i18n="@@shared.retry-after.retrying">Retrying…</span>
         } @else if (!retryEligible()) {

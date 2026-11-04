@@ -32,6 +32,22 @@ describe('EmptyPatternComponent', () => {
     root = fixture.nativeElement as HTMLElement;
   });
 
+  it('composes the neutral Helm card with primary button and navigation variants', () => {
+    expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('[data-slot="card-description"]')?.textContent).toBe(
+      'Create the first case from the feature tree.',
+    );
+    fixture.componentRef.setInput('actionLabel', 'Create case');
+    fixture.detectChanges();
+    expect(root.querySelector('button')?.getAttribute('data-slot')).toBe('button');
+    expect(root.querySelector('button')?.classList.contains('whitespace-normal')).toBe(true);
+    fixture.componentRef.setInput('actionHref', '/features');
+    fixture.detectChanges();
+    expect(root.querySelector('a')?.getAttribute('data-slot')).toBe('button');
+    expect(root.querySelector('a')?.getAttribute('href')).toBe('/features');
+    expect(root.querySelector('button')).toBeNull();
+  });
+
   for (const [state, contract] of rows) {
     describe(`${state}: ${contract}`, () => {
       it('retains neutral copy, with only an eligible native child action', () => {
@@ -94,7 +110,11 @@ describe('EmptyPatternComponent', () => {
     fixture.componentRef.setInput('actionLabel', text);
     fixture.detectChanges();
     expect(root.querySelector('h2')?.textContent).toBe(text);
-    expect(root.querySelector('img')).toBeNull();
-    expect(root.querySelector('[style]')).toBeNull();
+    expect(root.querySelector('img, script, [onerror]')).toBeNull();
+    // Helm suppresses first-render transitions until its animation frame restores them.
+    for (const element of root.querySelectorAll<HTMLElement>('[style]')) {
+      expect(element.hasAttribute('data-slot')).toBe(true);
+      expect(element.getAttribute('style')).toBe('transition: none !important;');
+    }
   });
 });

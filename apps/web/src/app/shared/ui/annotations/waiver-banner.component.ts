@@ -1,23 +1,26 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { HlmAlert, HlmAlertDescription, HlmAlertTitle } from '@evidgate/ui/alert';
 
 export type WaiverState = 'active' | 'expired' | 'revoked';
 
 @Component({
   selector: 'app-waiver-banner',
-  standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, HlmAlert, HlmAlertDescription, HlmAlertTitle],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './waiver-banner.component.css',
+  host: { class: 'block min-w-0 font-sans text-sm' },
   template: `
     <section
-      class="waiver"
+      hlmAlert
+      role="region"
+      class="waiver min-w-0 gap-(--eg-space-3) border-s-(length:--eg-space-2) whitespace-normal wrap-anywhere"
+      [class]="tone()"
       [class.waiver-expired]="state() === 'expired'"
       [class.waiver-revoked]="state() === 'revoked'"
       aria-label="Waiver details"
       i18n-aria-label="@@shared.waiver-banner.label"
     >
-      <h3>
+      <h3 hlmAlertTitle class="m-0 text-sm font-semibold">
         @switch (state()) {
           @case ('active') {
             <span i18n="@@shared.waiver-banner.active">Approved by waiver</span>
@@ -34,12 +37,14 @@ export type WaiverState = 'active' | 'expired' | 'revoked';
         }
       </h3>
       @if (!approver().trim() || !utcExpiry()) {
-        <p i18n="@@shared.waiver-banner.details-unavailable">Waiver details unavailable</p>
+        <p class="m-0" i18n="@@shared.waiver-banner.details-unavailable">
+          Waiver details unavailable
+        </p>
       }
-      <dl>
-        <div>
-          <dt i18n="@@shared.waiver-banner.approver">Approved by</dt>
-          <dd class="waiver-approver">
+      <dl class="m-0 flex min-w-0 flex-col gap-(--eg-space-3)">
+        <div class="flex min-w-0 flex-wrap gap-(--eg-space-3)">
+          <dt class="font-semibold" i18n="@@shared.waiver-banner.approver">Approved by</dt>
+          <dd class="waiver-approver m-0 min-w-0 max-w-full">
             @if (approver().trim()) {
               {{ approver() }}
             } @else {
@@ -47,9 +52,9 @@ export type WaiverState = 'active' | 'expired' | 'revoked';
             }
           </dd>
         </div>
-        <div>
-          <dt i18n="@@shared.waiver-banner.expires">Expires</dt>
-          <dd>
+        <div class="flex min-w-0 flex-wrap gap-(--eg-space-3)">
+          <dt class="font-semibold" i18n="@@shared.waiver-banner.expires">Expires</dt>
+          <dd class="m-0 min-w-0 max-w-full">
             @if (utcExpiry(); as expiry) {
               <time [attr.datetime]="expiry">{{ expiry | date: 'medium' : '+0000' }}</time>
             } @else {
@@ -58,15 +63,15 @@ export type WaiverState = 'active' | 'expired' | 'revoked';
           </dd>
         </div>
         @if (utcExpiry(); as expiry) {
-          <div>
-            <dt i18n="@@shared.waiver-banner.utc-timestamp">UTC timestamp</dt>
-            <dd>
-              <code class="waiver-utc">{{ expiry }}</code>
+          <div class="flex min-w-0 flex-wrap gap-(--eg-space-3)">
+            <dt class="font-semibold" i18n="@@shared.waiver-banner.utc-timestamp">UTC timestamp</dt>
+            <dd class="m-0 min-w-0 max-w-full">
+              <code class="waiver-utc font-mono text-xs">{{ expiry }}</code>
             </dd>
           </div>
         }
       </dl>
-      <p i18n="@@shared.waiver-banner.unchanged">
+      <p hlmAlertDescription class="m-0 text-current" i18n="@@shared.waiver-banner.unchanged">
         This waiver does not change the stored outcome or decision.
       </p>
     </section>
@@ -76,6 +81,17 @@ export class WaiverBanner {
   readonly approver = input.required<string>();
   readonly expiresAt = input.required<string | Date>();
   readonly state = input<WaiverState>('active');
+
+  protected readonly tone = computed(() => {
+    switch (this.state()) {
+      case 'expired':
+        return 'bg-(--eg-warning-bg) text-(--eg-warning-fg)';
+      case 'revoked':
+        return 'bg-(--eg-danger-bg) text-(--eg-danger-fg)';
+      default:
+        return 'bg-muted text-(--eg-neutral-fg)';
+    }
+  });
 
   // Render metadata only: never infer active/expired state from the browser clock.
   protected readonly utcExpiry = computed(() => {

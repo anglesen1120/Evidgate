@@ -103,6 +103,17 @@ describe('RequestStateComponent route-level replacement', () => {
     await fixture.whenStable();
   });
 
+  it('keeps the wrapping host neutral while composing the Helm loading state', async () => {
+    const state = root.querySelector('app-request-state');
+    expect(state?.classList.contains('block')).toBe(true);
+    expect(state?.classList.contains('min-w-0')).toBe(true);
+    expect(state?.hasAttribute('role')).toBe(false);
+    host.status.set('loading');
+    await fixture.whenStable();
+    expect(state?.querySelector('[data-slot="card"][aria-busy="true"]')).not.toBeNull();
+    expect(state?.querySelectorAll('[role="status"]')).toHaveLength(1);
+  });
+
   it('projects current content only when ready and nonempty, never while loading or failed', async () => {
     expect(root.querySelector('[data-testid="current-data"]')).not.toBeNull();
     host.status.set('loading');

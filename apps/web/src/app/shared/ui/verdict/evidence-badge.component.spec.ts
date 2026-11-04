@@ -32,6 +32,9 @@ describe('EvidenceBadgeComponent', () => {
     const badge = root.querySelector('span.verdict');
 
     expect(badge?.getAttribute('data-tone')).toBe(tone);
+    expect(badge?.getAttribute('data-slot')).toBe('badge');
+    expect(badge?.classList.contains(`bg-[var(--eg-${tone}-bg)]`)).toBe(true);
+    expect(badge?.classList.contains(`text-[var(--eg-${tone}-fg)]`)).toBe(true);
     expect(root.querySelector('.verdict__label')?.textContent).toBe('Completeness:');
     expect(root.querySelector('.verdict__value')?.textContent).toBe(label);
     expect(root.textContent).not.toMatch(/PASS|FAIL|Passed|passed/);
@@ -90,8 +93,8 @@ describe('EvidenceBadgeComponent', () => {
     const value = root.querySelector<HTMLElement>('.verdict__value');
     expect(value).not.toBeNull();
     if (value) {
-      expect(getComputedStyle(value).whiteSpace).toBe('normal');
-      expect(getComputedStyle(value).overflowWrap).toBe('anywhere');
+      expect(value.classList.contains('whitespace-normal')).toBe(true);
+      expect(value.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
     }
   });
 });

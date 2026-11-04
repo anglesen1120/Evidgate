@@ -1,4 +1,4 @@
-// 09.2.1-T2.2; state sheet: docs/design/web/state-sheet.md#shared-accessibility-and-themes.
+// Read-only credentials remain local to the mounted component.
 import { provideZonelessChangeDetection } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { Mock } from 'vitest';
@@ -107,6 +107,8 @@ describe('ConnectStepRevealComponent', () => {
     ]);
     expect(buttons.every((button) => button.type === 'button' && button.tabIndex === 0)).toBe(true);
     expect(control().readOnly).toBe(true);
+    expect(control().hasAttribute('hlmInput')).toBe(true);
+    expect(buttons.every((button) => button.hasAttribute('hlmBtn'))).toBe(true);
     expect(control().disabled).toBe(false);
     expect(control().tabIndex).toBe(0);
     expect(control().autocomplete).toBe('off');

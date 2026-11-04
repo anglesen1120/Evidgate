@@ -30,6 +30,8 @@ import {
 } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import type { ListRange } from '@angular/cdk/collections';
+import { HlmTable, HlmTableContainer, HlmTd, HlmTh, HlmTr } from '@evidgate/ui/table';
+import { hlm } from '@evidgate/ui/utils';
 
 import { DataTableValueComponent } from './data-table-value.component';
 
@@ -78,11 +80,17 @@ let nextTableId = 0;
     CdkVirtualScrollViewport,
     CdkFixedSizeVirtualScroll,
     DataTableValueComponent,
+    HlmTable,
+    HlmTableContainer,
+    HlmTd,
+    HlmTh,
+    HlmTr,
   ],
   templateUrl: './data-table.component.html',
   styleUrl: './data-table.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
+    class: 'block min-w-0 bg-card font-sans text-sm text-foreground',
     '[class.compact]': 'rowHeight() === "compact"',
     '[class.virtual]': 'virtual()',
   },
@@ -99,6 +107,11 @@ export class DataTableComponent<T> {
   readonly columnIds = computed(() => this.columns().map((column) => column.id));
   readonly virtual = computed(() => this.rows().length > this.virtualThreshold());
   readonly emptyData: readonly T[] = [];
+  protected readonly cellClasses =
+    'box-border min-w-0 h-[var(--eg-table-row)] px-[var(--eg-space-4)] py-[var(--eg-table-inset)] align-top whitespace-normal [overflow-wrap:anywhere] border-b border-border text-start [&.numeric]:text-right [&.numeric]:tabular-nums max-md:data-[eg-mutate]:hidden';
+  protected readonly bodyCellClasses = computed(() =>
+    hlm(this.cellClasses, this.virtual() ? 'py-0 border-b-0 shadow-sm' : ''),
+  );
   readonly viewport = viewChild(CdkVirtualScrollViewport);
   private readonly scrollElement = viewChild.required<ElementRef<HTMLElement>>('scrollElement');
   private readonly tokenProbe = viewChild.required<ElementRef<HTMLElement>>('tokenProbe');
