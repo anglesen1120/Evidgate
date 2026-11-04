@@ -13,6 +13,12 @@ import {
   viewChild,
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSkeleton } from '@evidgate/ui/skeleton';
 import type { PublishedRevision } from '../../../core/data/policy-data.service';
 import { SessionStore } from '../../../core/session/session.store';
 import { PolicyModeChipComponent } from './policy-mode-chip.component';
@@ -24,6 +30,12 @@ import { RevisionListComponent } from './revision-list.component';
 @Component({
   selector: 'app-policy-page',
   imports: [
+    HlmAlertImports,
+    HlmButton,
+    HlmCardImports,
+    HlmInput,
+    HlmLabel,
+    HlmSkeleton,
     PolicyModeChipComponent,
     RevisionListComponent,
     RevisionDiffComponent,
@@ -31,9 +43,11 @@ import { RevisionListComponent } from './revision-list.component';
   ],
   providers: [PolicyStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './policy.page.css',
   templateUrl: './policy.page.html',
-  host: { '[attr.data-policy-phase]': 'store.phase()' },
+  host: {
+    class: 'block min-w-0 text-sm text-foreground [&_p]:m-0 [&_code]:font-mono',
+    '[attr.data-policy-phase]': 'store.phase()',
+  },
 })
 export class PolicyPage {
   protected readonly store = inject(PolicyStore);

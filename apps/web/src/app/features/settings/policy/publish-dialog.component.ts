@@ -1,4 +1,3 @@
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -13,6 +12,11 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
 import type { PublishedRevision } from '../../../core/data/policy-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
@@ -21,106 +25,130 @@ import {
   conflictFromError,
   type ConflictField,
 } from '../../../shared/ui/conflict/conflict-details';
-import { wrapDialogFocus } from '../members/dialog-focus-wrap';
 import { clipDiffText, diffPolicyBodies } from './policy-diff';
 import { POLICY_BODY_MAX_BYTES, policyBodyBytes } from './policy-body-size';
 import { PolicyStore } from './policy.store';
 
-/**
- * The most field rows the shared conflict dialog is handed. A policy body may differ in thousands
- * of pointers and the dialog renders every row it is given; past this cap the comparison is the
- * start of the change, not an inventory (the revision list is one click away), and the shared
- * dialog has no footer slot for an "N more" row, so the list is simply cut here.
- */
+// Bound the field list because the shared conflict dialog renders every supplied row.
 const MAX_CONFLICT_FIELDS = 100;
 
 @Component({
   selector: 'app-policy-publish-dialog',
-  imports: [CdkTrapFocus, ConflictDialogComponent],
+  imports: [
+    HlmAlertImports,
+    HlmButton,
+    HlmDialogImports,
+    HlmInput,
+    HlmLabel,
+    ConflictDialogComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './policy.page.css',
   template: `
-    <dialog
-      #dialog
-      tabindex="-1"
-      data-policy-publish-dialog
-      aria-labelledby="policy-publish-title"
-      [attr.aria-describedby]="'policy-publish-description'"
-      [attr.aria-busy]="busy()"
-      [cdkTrapFocus]="opened()"
-      (cancel)="cancel($event)"
-      (keydown.tab)="wrapFocus($event)"
-      (keydown.shift.tab)="wrapFocus($event)"
+    <hlm-dialog
+      [state]="opened() ? 'open' : 'closed'"
+      [disableClose]="submitting() || store.publishing()"
+      [closeOnOutsidePointerEvents]="false"
+      [restoreFocus]="false"
+      (stateChanged)="onStateChanged($event)"
     >
-      <header>
-        <h2 id="policy-publish-title">{{ copy.title }}</h2>
-      </header>
-      <div class="dialog-body">
-        <p id="policy-publish-description">{{ copy.description }}</p>
-        <label for="policy-publish-body">{{ copy.body }}</label>
-        <textarea
-          #textarea
-          id="policy-publish-body"
-          rows="14"
-          spellcheck="false"
-          [value]="text()"
-          (input)="edit($event)"
-          [disabled]="busy() || !session.has('policy:write')"
-          [attr.aria-invalid]="localError() ? 'true' : null"
-          [attr.aria-describedby]="
-            localError() ? 'policy-body-size policy-local-error' : 'policy-body-size'
-          "
-        ></textarea>
-        <p id="policy-body-size">{{ copy.bytes }}: {{ bytes() ?? '—' }} / {{ maxBytes }}</p>
-        <p role="status">
-          @if (loading()) {
-            {{ copy.loading }}
-          } @else if (store.publishing()) {
-            {{ copy.publishing }}
-          }
-        </p>
-        @if (localError(); as error) {
-          <p class="failure" id="policy-local-error" data-policy-publish-local-error role="alert">
-            {{ error }}
+      <hlm-dialog-content
+        *hlmDialogPortal
+        [showCloseButton]="false"
+        data-policy-publish-dialog
+        [attr.aria-busy]="busy()"
+        class="max-h-[calc(100dvh-var(--eg-space-8))] overflow-y-auto [&_p]:m-0"
+      >
+        <header hlmDialogHeader>
+          <h2 hlmDialogTitle>{{ copy.title }}</h2>
+          <p hlmDialogDescription>{{ copy.description }}</p>
+        </header>
+        <div class="grid min-w-0 gap-2">
+          <label hlmLabel for="policy-publish-body">{{ copy.body }}</label>
+          <textarea
+            hlmInput
+            class="min-h-[var(--eg-space-12)] resize-y font-mono"
+            #textarea
+            id="policy-publish-body"
+            rows="14"
+            spellcheck="false"
+            [value]="text()"
+            (input)="edit($event)"
+            [disabled]="busy() || !session.has('policy:write')"
+            [attr.aria-invalid]="localError() ? 'true' : null"
+            [aria-describedby]="
+              localError() ? 'policy-body-size policy-local-error' : 'policy-body-size'
+            "
+          ></textarea>
+          <p id="policy-body-size" class="text-xs text-muted-foreground">
+            {{ copy.bytes }}: {{ bytes() ?? '—' }} / {{ maxBytes }}
           </p>
-        }
-        @if (seedFailed()) {
-          <p class="failure" role="alert">{{ copy.seedError }}</p>
-        }
-        @if (serverError(); as error) {
-          <div class="failure" data-policy-error [attr.data-error-code]="error.code" role="alert">
-            <code>{{ error.code }}</code>
-            <p>{{ error.message }}</p>
-            <ul>
-              @for (detail of error.details; track $index) {
-                <li>
-                  <code>{{ detail.path }}</code>
-                  <p>{{ detail.reason }}</p>
-                </li>
-              }
-            </ul>
-          </div>
-        }
-      </div>
-      <footer>
-        <button
-          type="button"
-          [disabled]="submitting() || store.publishing()"
-          (click)="requestClose()"
-        >
-          {{ copy.cancel }}
-        </button>
-        <button
-          type="button"
-          class="primary"
-          data-policy-publish-submit
-          [disabled]="busy() || seedFailed() || !session.has('policy:write')"
-          (click)="submit()"
-        >
-          {{ copy.publish }}
-        </button>
-      </footer>
-    </dialog>
+          <p role="status">
+            @if (loading()) {
+              {{ copy.loading }}
+            } @else if (store.publishing()) {
+              {{ copy.publishing }}
+            }
+          </p>
+          @if (localError(); as error) {
+            <p
+              hlmAlert
+              [variant]="'destructive'"
+              id="policy-local-error"
+              data-policy-publish-local-error
+              role="alert"
+            >
+              {{ error }}
+            </p>
+          }
+          @if (seedFailed()) {
+            <p hlmAlert [variant]="'destructive'" role="alert">{{ copy.seedError }}</p>
+          }
+          @if (serverError(); as error) {
+            <div
+              hlmAlert
+              [variant]="'destructive'"
+              class="wrap-anywhere"
+              data-policy-error
+              [attr.data-error-code]="error.code"
+              role="alert"
+            >
+              <code>{{ error.code }}</code>
+              <p>{{ error.message }}</p>
+              <ul>
+                @for (detail of error.details; track $index) {
+                  <li>
+                    <code>{{ detail.path }}</code>
+                    <p>{{ detail.reason }}</p>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        </div>
+        <footer hlmDialogFooter>
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            class="min-h-[var(--eg-control-touch)] whitespace-normal"
+            type="button"
+            [disabled]="submitting() || store.publishing()"
+            (click)="requestClose()"
+          >
+            {{ copy.cancel }}
+          </button>
+          <button
+            type="button"
+            hlmBtn
+            class="min-h-[var(--eg-control-touch)] whitespace-normal"
+            data-policy-publish-submit
+            [disabled]="busy() || seedFailed() || !session.has('policy:write')"
+            (click)="submit()"
+          >
+            {{ copy.publish }}
+          </button>
+        </footer>
+      </hlm-dialog-content>
+    </hlm-dialog>
     <app-conflict-dialog
       [open]="conflictOpen()"
       [fields]="conflictFields()"
@@ -145,10 +173,7 @@ export class PublishDialogComponent {
     () => this.loading() || this.submitting() || this.store.publishing(),
   );
   protected readonly maxBytes = POLICY_BODY_MAX_BYTES;
-  /**
-   * The bytes the request would carry: the COMPACT body (`JSON.stringify(JSON.parse(text))`), not
-   * the pretty-printed text, or `null` while the text is not JSON at all.
-   */
+  // Count the compact wire body, not the editor's pretty-printed whitespace.
   protected readonly bytes = computed(() => policyBodyBytes(this.text()));
   protected readonly localError = signal<string | null>(null);
   protected readonly serverError = signal<ApiError | null>(null);
@@ -158,8 +183,7 @@ export class PublishDialogComponent {
   protected readonly currentRevision = signal<string | null>(null);
   protected readonly reloadState = signal<'idle' | 'loading' | 'error'>('idle');
   protected readonly reloadError = signal<ApiError | null>(null);
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
-  private readonly textarea = viewChild.required<ElementRef<HTMLTextAreaElement>>('textarea');
+  private readonly textarea = viewChild<ElementRef<HTMLTextAreaElement>>('textarea');
   private readonly injector = inject(Injector);
   private opener: HTMLElement | null = null;
   private generation = 0;
@@ -194,8 +218,6 @@ export class PublishDialogComponent {
     this.seedFailed.set(false);
     this.loading.set(true);
     this.opened.set(true);
-    this.dialog().nativeElement.showModal();
-    this.dialog().nativeElement.focus();
     try {
       const revision = await this.store.loadBody(revisionId);
       if (generation !== this.generation) return;
@@ -221,7 +243,6 @@ export class PublishDialogComponent {
     this.serverError.set(null);
     this.localError.set(null);
     this.conflictFields.set([]);
-    if (this.dialog().nativeElement.open) this.dialog().nativeElement.close();
     if (this.opener?.isConnected) this.opener.focus();
     this.opener = null;
   }
@@ -235,20 +256,15 @@ export class PublishDialogComponent {
   protected requestClose(): void {
     if (!this.submitting() && !this.store.publishing()) this.close();
   }
-  protected cancel(event: Event): void {
-    event.preventDefault();
-    this.requestClose();
-  }
-  protected wrapFocus(event: Event): void {
-    wrapDialogFocus(event, this.dialog().nativeElement);
+  protected onStateChanged(state: 'open' | 'closed'): void {
+    if (state === 'closed' && this.opened()) this.requestClose();
   }
   protected async submit(): Promise<void> {
     if (!this.opened() || this.busy() || this.seedFailed() || !this.session.has('policy:write'))
       return;
     this.localError.set(null);
     this.serverError.set(null);
-    // The cap is on the WIRE body: `policyBodyBytes` measures the compact document the request
-    // carries, so a pretty-printed but small body is never refused (review F1/G5).
+    // Pretty-printing must not reject a body that fits the compact wire limit.
     const bytes = policyBodyBytes(this.text());
     if (bytes !== null && bytes > POLICY_BODY_MAX_BYTES) {
       this.localError.set(this.copy.tooLarge);
@@ -299,17 +315,8 @@ export class PublishDialogComponent {
     }
   }
 
-  /**
-   * Hands the shared conflict dialog a comparison the user can act on (AC4: "conflict dialog with
-   * a revision diff").
-   *
-   * The `412` envelope carries metadata, never the current body, so `conflictFromError` alone can
-   * only show `server: null` ("Server value unavailable"). With the head revision id the envelope
-   * named, the current body is read once through the store's bounded body cache and the two bodies
-   * are compared field by field: `before` is the server's value, `after` the draft's. A read that
-   * fails, and a comparison with no rows at all, fall back to the envelope's own fields — the
-   * dialog stays usable and Reload stays the only way forward. Nothing is ever resubmitted here.
-   */
+  // The conflict envelope carries metadata, not the current body. Read that revision once
+  // and compare it with the retained draft; a failed read keeps the envelope's fallback fields.
   private async presentConflict(
     error: ApiError,
     currentRevisionId: string | null,
@@ -323,12 +330,7 @@ export class PublishDialogComponent {
         if (generation !== this.generation) return;
         const differences = diffPolicyBodies(head.body, attempted).rows;
         if (differences.length > 0) {
-          // `id` must be unique: a primitive-set comparison reports every added or removed element
-          // at the ARRAY's own pointer, so several rows can share one path. The shared dialog
-          // tracks fields by `id` and rejects duplicated keys, so the index disambiguates while
-          // the label stays the JSON pointer the user can find in the body. The label is clipped
-          // to the same budget its two values are (D3): a pointer can carry a whole key, so an
-          // unclipped one would render a body fragment as a heading.
+          // Array-set changes share a pointer; include the index to keep tracked keys unique.
           fields = differences.slice(0, MAX_CONFLICT_FIELDS).map((row, index) => ({
             id: `${index}:${row.path}`,
             label: clipDiffText(row.path),
@@ -350,7 +352,6 @@ export class PublishDialogComponent {
     this.reloadState.set('idle');
     this.reloadError.set(null);
     this.opened.set(false);
-    this.dialog().nativeElement.close();
     this.conflictOpen.set(true);
   }
   protected keepEditing(): void {
@@ -362,7 +363,6 @@ export class PublishDialogComponent {
       return;
     }
     this.opened.set(true);
-    this.dialog().nativeElement.showModal();
     this.focusTextarea();
   }
   protected async reload(): Promise<void> {
@@ -384,7 +384,7 @@ export class PublishDialogComponent {
   private focusTextarea(): void {
     afterNextRender(
       () => {
-        if (this.opened()) this.textarea().nativeElement.focus();
+        if (this.opened()) this.textarea()?.nativeElement.focus();
       },
       { injector: this.injector },
     );

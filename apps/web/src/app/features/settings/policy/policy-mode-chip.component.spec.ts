@@ -4,13 +4,13 @@ import { PolicyModeChipComponent } from './policy-mode-chip.component';
 describe('PolicyModeChipComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
   it.each([
-    ['enforcing', 'enforcing', 'mode-gating'],
-    ['advisory', 'advisory', 'mode-advisory'],
-    ['future-mode', 'future-mode', null],
-    ['', 'unavailable', null],
-    [null, 'unavailable', null],
-    [undefined, 'unavailable', null],
-  ])('renders %s as text without inferring a mode', (mode, dataMode, tone) => {
+    ['enforcing', 'enforcing', 'bg-[var(--eg-info-bg)]'],
+    ['advisory', 'advisory', 'bg-[var(--eg-warning-bg)]'],
+    ['future-mode', 'future-mode', 'bg-[var(--eg-neutral-bg)]'],
+    ['', 'unavailable', 'bg-[var(--eg-neutral-bg)]'],
+    [null, 'unavailable', 'bg-[var(--eg-neutral-bg)]'],
+    [undefined, 'unavailable', 'bg-[var(--eg-neutral-bg)]'],
+  ] as const)('renders %s as text without inferring a mode', (mode, dataMode, tone) => {
     const fixture = TestBed.createComponent(PolicyModeChipComponent);
     fixture.componentRef.setInput('mode', mode);
     fixture.detectChanges();
@@ -19,8 +19,9 @@ describe('PolicyModeChipComponent', () => {
     expect(chip?.dataset['mode']).toBe(dataMode);
     expect(chip?.textContent).toMatch(/\S/);
     if (mode) expect(chip?.textContent).toContain(mode);
-    expect(chip?.classList.contains('mode-gating')).toBe(tone === 'mode-gating');
-    expect(chip?.classList.contains('mode-advisory')).toBe(tone === 'mode-advisory');
+    expect(chip?.classList.contains(tone)).toBe(true);
+    expect(chip?.getAttribute('data-slot')).toBe('badge');
+    expect(chip?.classList.contains('whitespace-normal')).toBe(true);
     expect(chip?.hasAttribute('tabindex')).toBe(false);
   });
   it('never advertises the empty string as a mode', () => {

@@ -2797,6 +2797,7 @@
       <trans-unit id="suites.composition.ordinal" datatype="html"><source>Ordinal</source></trans-unit>
       <trans-unit id="suites.composition.no-member" datatype="html"><source>No member</source></trans-unit>
       <trans-unit id="suites.composition.variant-params" datatype="html"><source>Variant parameters</source></trans-unit>
+      <trans-unit id="suites.composition.variant-hash" datatype="html"><source>Variant hash</source></trans-unit>
       <trans-unit id="suites.composition.repeated-variant-cells" datatype="html"><source>Repeated variant members: <x id="count" equiv-text="count"/>; the matrix keeps only the first member of each cell.</source></trans-unit>
       <trans-unit id="suites.composition.flat-matrix-note" datatype="html"><source>This revision has more cells than a matrix can show, so its members are listed as a flat table.</source></trans-unit>
       <trans-unit id="suites.composition.show-more" datatype="html"><source>Show more</source></trans-unit>

@@ -61,23 +61,7 @@ describe('MembersPage paging through the real MembersStore (09.7.1-T2 QA)', () =
   let root: HTMLElement;
   let store: MembersStore;
 
-  const showModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
-  const close = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
-
   beforeEach(() => {
-    // jsdom has no dialog methods; the dialogs under test call both (same shim as members.page.spec).
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     data = new PagedData();
     TestBed.configureTestingModule({
       imports: [MembersPage],
@@ -96,10 +80,6 @@ describe('MembersPage paging through the real MembersStore (09.7.1-T2 QA)', () =
   });
   afterEach(() => {
     TestBed.resetTestingModule();
-    if (showModal) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModal);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (close) Object.defineProperty(HTMLDialogElement.prototype, 'close', close);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
   });
 
   // Zoneless: whenStable() does not wait for the fake's promises, so drain the timer queue

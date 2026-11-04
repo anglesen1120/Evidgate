@@ -1,121 +1,10 @@
+import { InteractivityChecker } from '@angular/cdk/a11y';
 import { provideZonelessChangeDetection, signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { MembershipView, RoleView } from '@evidgate/sdk';
-import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
-import type { Intent } from '../../../core/http/intent';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
-import type { RolePreview } from './role-preview';
-import type { RoleChange } from './members.store';
-import type { IssuedInvite } from './members.store';
-
-const role: RoleView = {
-  id: 'role1',
-  code: 'tenant_admin',
-  name: 'Organization administrator',
-  is_builtin: true,
-  created_at: '2026-10-25T00:00:00Z',
-  version: 1,
-};
-function member(id: string, status: MembershipView['status'] = 'active'): MembershipView {
-  return {
-    id,
-    org_id: 'org1',
-    invited_email: `${id}@example.test`,
-    status,
-    roles: [role],
-    created_at: '2026-10-25T00:00:00Z',
-    updated_at: '2026-10-25T00:00:00Z',
-    version: 1,
-  };
-}
-const lastAdmin: ApiError = {
-  kind: 'conflict',
-  status: 409,
-  code: 'last_admin',
-  message: 'The last tenant administrator cannot be removed. <strong>Keep this text.</strong>',
-  requestId: 'request1',
-  retryable: false,
-  details: [],
-  retryAfterSeconds: null,
-};
-type Mutation = { phase: 'idle' | 'submitting' | 'failed' | 'done'; error: ApiError | null };
-
-/** Deliberately independent of the real store's implementation. */
-class FakeMembersStore {
-  readonly members = signal<readonly MembershipView[]>([
-    member('owner'),
-    member('pending', 'pending'),
-    member('removed', 'removed'),
-  ]);
-  readonly roles = signal<readonly RoleView[]>([role]);
-  readonly catalogue = signal(null);
-  readonly phase = signal<'loading' | 'ready' | 'error'>('ready');
-  readonly loadError = signal<ApiError | null>(null);
-  readonly hasMore = signal(false);
-  readonly inviteState = signal<Mutation>({ phase: 'idle', error: null });
-  readonly removeState = signal<Mutation>({ phase: 'idle', error: null });
-  readonly editState = signal<Mutation>({ phase: 'idle', error: null });
-  readonly resendState = signal<Mutation>({ phase: 'idle', error: null });
-  readonly cancelState = signal<Mutation>({ phase: 'idle', error: null });
-  readonly resend = vi.fn<(id: string, intent: Intent) => Promise<IssuedInvite | null>>(() =>
-    Promise.resolve({ membershipId: 'pending', inviteToken: 'page-resend-once' }),
-  );
-  readonly cancel = vi.fn<(id: string, intent: Intent) => Promise<boolean>>(() =>
-    Promise.resolve(true),
-  );
-  readonly editApplied = signal<readonly Pick<RoleChange, 'kind' | 'roleId'>[]>([]);
-  readonly changeRoles = vi.fn<(id: string, changes: readonly RoleChange[]) => Promise<boolean>>(
-    () => Promise.resolve(true),
-  );
-  readonly memberById = (id: string) => this.members().find((value) => value.id === id);
-  readonly load = vi.fn(() => Promise.resolve());
-  readonly loadMore = vi.fn(() => Promise.resolve());
-  readonly invite = vi.fn<
-    (email: string, roleIds: readonly string[], intent: Intent) => Promise<IssuedInvite | null>
-  >(() => Promise.resolve({ membershipId: 'new', inviteToken: 'page-create-once' }));
-  readonly remove = vi.fn<(id: string, intent: Intent) => Promise<boolean>>(() =>
-    Promise.resolve(true),
-  );
-  readonly matrix = () => ({
-    columns: this.roles(),
-    rows: this.members().map((membership) => ({
-      membership,
-      granted: new Set(membership.roles.map((value) => value.id)),
-    })),
-  });
-  readonly preview = vi.fn((id: string): RolePreview =>
-    id === role.id
-      ? {
-          kind: 'ready',
-          role,
-          omitted: 1,
-          groups: [
-            {
-              resource: 'membership',
-              permissions: [
-                { code: 'membership:read', description: 'Read members', sensitive: true },
-              ],
-            },
-          ],
-        }
-      : { kind: 'unavailable', reason: 'unknown-role' },
-  );
-  resetMutations(): void {
-    this.inviteState.set({ phase: 'idle', error: null });
-    this.removeState.set({ phase: 'idle', error: null });
-    this.editState.set({ phase: 'idle', error: null });
-    this.resendState.set({ phase: 'idle', error: null });
-    this.cancelState.set({ phase: 'idle', error: null });
-    this.editApplied.set([]);
-  }
-}
-const showModalDescriptor = Object.getOwnPropertyDescriptor(
-  HTMLDialogElement.prototype,
-  'showModal',
-);
-const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
+import { FakeMembersStore, lastAdmin, role } from './members-page.test-fixtures';
 
 describe('Members page (09.7.1-T2)', () => {
   let store: FakeMembersStore;
@@ -123,18 +12,6 @@ describe('Members page (09.7.1-T2)', () => {
   beforeEach(() => {
     store = new FakeMembersStore();
     granted = signal(true);
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     TestBed.configureTestingModule({
       imports: [MembersPage],
       providers: [
@@ -154,19 +31,14 @@ describe('Members page (09.7.1-T2)', () => {
   });
   afterEach(() => {
     TestBed.resetTestingModule();
-    if (showModalDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModalDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (closeDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'close', closeDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
   async function render() {
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
     const fixture = TestBed.createComponent(MembersPage);
     fixture.detectChanges();
     await fixture.whenStable();
-    return { fixture, root: fixture.nativeElement as HTMLElement };
+    return { fixture, root: document.body };
   }
   function button(root: ParentNode, selector: string): HTMLButtonElement {
     const value = root.querySelector<HTMLButtonElement>(selector);
@@ -196,7 +68,7 @@ describe('Members page (09.7.1-T2)', () => {
     expect(root.querySelector('[data-members-remove]')).toBeNull();
     expect(root.querySelector('[data-members-edit-open]')).toBeNull();
     expect(root.querySelector('app-edit-roles-dialog')).toBeNull();
-    expect(root.querySelector('dialog')).toBeNull();
+    expect(root.querySelector<HTMLElement>('[data-members-dialog]')).toBeNull();
     granted.set(true);
     fixture.detectChanges();
     expect(root.querySelector('[data-members-invite-open]')).not.toBeNull();
@@ -210,25 +82,32 @@ describe('Members page (09.7.1-T2)', () => {
     const opener = button(root, '[data-members-edit-open]');
     opener.click();
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="edit-roles"]')!;
-    expect(dialog.open).toBe(true);
-    const checkbox = dialog.querySelector<HTMLInputElement>('[data-members-role-option]')!;
-    checkbox.checked = false;
-    checkbox.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog="edit-roles"]')!;
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
+    const checkbox = dialog.querySelector<HTMLButtonElement>(
+      '[data-members-role-option] button[role="checkbox"]',
+    )!;
+    checkbox.click();
     fixture.detectChanges();
     button(dialog, '[data-members-submit]').click();
     await fixture.whenStable();
     fixture.detectChanges();
     expect(store.changeRoles).toHaveBeenCalledTimes(1);
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
     expect(document.activeElement).toBe(opener);
     expect(root.textContent).toContain('Membership updated.');
     opener.click();
     fixture.detectChanges();
+    await fixture.whenStable();
+    expect(
+      root.querySelector('[data-members-dialog="edit-roles"][data-state="open"]'),
+    ).not.toBeNull();
     const session = TestBed.inject(SessionStore);
     (session.currentOrg as unknown as WritableSignal<{ id: string }>).set({ id: 'org2' });
     fixture.detectChanges();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]')).toBeNull();
     expect(store.load).toHaveBeenLastCalledWith('org2');
   });
 
@@ -244,21 +123,24 @@ describe('Members page (09.7.1-T2)', () => {
     const { fixture, root } = await render();
     button(root, '[data-members-edit-open]').click();
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="edit-roles"]')!;
-    const checkbox = dialog.querySelector<HTMLInputElement>('[data-members-role-option]')!;
-    checkbox.checked = false;
-    checkbox.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog="edit-roles"]')!;
+    const checkbox = dialog.querySelector<HTMLButtonElement>(
+      '[data-members-role-option] button[role="checkbox"]',
+    )!;
+    checkbox.click();
     fixture.detectChanges();
     button(dialog, '[data-members-submit]').click();
     fixture.detectChanges();
-    expect(dialog.open).toBe(true);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
 
     // The scope switch wins over the in-flight attempt: the old org's member must not stay on screen
     // over the new org's list.
     const session = TestBed.inject(SessionStore);
     (session.currentOrg as unknown as WritableSignal<{ id: string }>).set({ id: 'org2' });
     fixture.detectChanges();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]')).toBeNull();
     expect(store.load).toHaveBeenLastCalledWith('org2');
 
     // The abandoned attempt settles into nothing: one request for the old org, no reopened dialog.
@@ -267,7 +149,7 @@ describe('Members page (09.7.1-T2)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(store.changeRoles).toHaveBeenCalledTimes(1);
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
   });
 
   it('keeps role chips and the matrix on server data until the role mutation is confirmed', async () => {
@@ -283,10 +165,12 @@ describe('Members page (09.7.1-T2)', () => {
     const { fixture, root } = await render();
     button(root, '[data-members-edit-open]').click();
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="edit-roles"]')!;
-    const checkbox = dialog.querySelector<HTMLInputElement>('[data-members-role-option]')!;
-    checkbox.checked = false;
-    checkbox.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog="edit-roles"]')!;
+    const checkbox = dialog.querySelector<HTMLButtonElement>(
+      '[data-members-role-option] button[role="checkbox"]',
+    )!;
+    checkbox.click();
     fixture.detectChanges();
     button(dialog, '[data-members-submit]').click();
     fixture.detectChanges();
@@ -301,7 +185,7 @@ describe('Members page (09.7.1-T2)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(row.querySelector('.role-name')).toBeNull();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
   });
 
   it('renders the shared empty state rather than a matrix with invented rows', async () => {
@@ -381,11 +265,12 @@ describe('Members page (09.7.1-T2)', () => {
     const { fixture, root } = await render();
     button(root, '[data-members-remove]').click();
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="remove"]')!;
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog="remove"]')!;
     button(dialog, '[data-members-submit]').click();
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(dialog.open).toBe(true);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
     expect(dialog.querySelector('[data-members-error] p')?.textContent).toBe(lastAdmin.message);
     expect(dialog.querySelector('[data-members-error-code]')?.textContent).toBe('last_admin');
     expect(dialog.querySelector('[data-members-error] strong')).toBeNull();
@@ -398,17 +283,21 @@ describe('Members page (09.7.1-T2)', () => {
     opener.focus();
     opener.click();
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="remove"]')!;
-    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog="remove"]')!;
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
     fixture.detectChanges();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
     expect(document.activeElement).toBe(opener);
     opener.click();
     fixture.detectChanges();
-    button(dialog, '[data-members-submit]').click();
+    await fixture.whenStable();
+    button(root, '[data-members-dialog="remove"] [data-members-submit]').click();
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
     expect(document.activeElement).toBe(root.querySelector('.page-header h2'));
   });
 
@@ -416,12 +305,13 @@ describe('Members page (09.7.1-T2)', () => {
     const { fixture, root } = await render();
     button(root, '[data-members-invite-open]').click();
     fixture.detectChanges();
+    await fixture.whenStable();
     expect(root.querySelector('[data-role-preview]')?.getAttribute('data-preview-kind')).toBe(
       'unavailable',
     );
     root
-      .querySelector<HTMLInputElement>('input[type="checkbox"]')!
-      .dispatchEvent(new FocusEvent('focus'));
+      .querySelector<HTMLButtonElement>('hlm-checkbox button[role="checkbox"]')!
+      .dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     fixture.detectChanges();
     const preview = root.querySelector('[data-role-preview]');
     expect(preview?.getAttribute('data-preview-kind')).toBe('ready');
@@ -440,7 +330,8 @@ describe('Members page (09.7.1-T2)', () => {
     const opener = button(root, '[data-members-invite-open]');
     opener.click();
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="invite"]')!;
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog="invite"]')!;
     const form = dialog.querySelector('form')!;
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     expect(store.invite).not.toHaveBeenCalled();
@@ -449,28 +340,36 @@ describe('Members page (09.7.1-T2)', () => {
     email.value = 'invite@example.test';
     email.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    const selectedRole = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
-    selectedRole.checked = true;
-    selectedRole.dispatchEvent(new Event('change'));
+    const selectedRole = dialog.querySelector<HTMLButtonElement>(
+      'hlm-checkbox button[role="checkbox"]',
+    )!;
+    selectedRole.click();
     fixture.detectChanges();
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     await fixture.whenStable();
     fixture.detectChanges();
     expect(dialog.querySelector('[data-members-error-code]')?.textContent).toBe('invite_exists');
+    expect(email.getAttribute('aria-describedby')).toBe('members-invite-error');
+    expect(dialog.querySelector('#members-invite-error')?.getAttribute('role')).toBe('alert');
     expect(store.invite.mock.calls[0]?.slice(0, 2)).toEqual(['invite@example.test', [role.id]]);
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     await fixture.whenStable();
     fixture.detectChanges();
     expect(store.invite.mock.calls[0]?.[2]).toBe(store.invite.mock.calls[1]?.[2]);
-    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
     fixture.detectChanges();
     expect(document.activeElement).toBe(opener);
     opener.click();
     fixture.detectChanges();
-    email.value = 'next@example.test';
-    email.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    const nextEmail = root.querySelector<HTMLInputElement>('#members-invite-email');
+    if (!nextEmail) throw new Error('Expected reopened invitation email');
+    nextEmail.value = 'next@example.test';
+    nextEmail.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    button(root, '[data-members-dialog="invite"] [data-members-submit]').click();
     await fixture.whenStable();
     expect(store.invite.mock.calls[2]?.[2]).not.toBe(store.invite.mock.calls[0]?.[2]);
   });
@@ -479,7 +378,8 @@ describe('Members page (09.7.1-T2)', () => {
     const opener = button(root, '[data-members-invite-open]');
     opener.click();
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="invite"]')!;
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog="invite"]')!;
     const email = dialog.querySelector<HTMLInputElement>('input[type="email"]')!;
     email.value = 'new@example.test';
     email.dispatchEvent(new Event('input'));
@@ -488,13 +388,13 @@ describe('Members page (09.7.1-T2)', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(store.invite).toHaveBeenCalledTimes(1);
-    expect(dialog.open).toBe(true);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
     expect(dialog.querySelector<HTMLInputElement>('[data-testid="reveal-value"]')?.value).toBe(
       'page-create-once',
     );
     button(dialog, '[data-testid="reveal-dismiss"]').click();
     fixture.detectChanges();
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
     expect(document.activeElement).toBe(opener);
     expect(root.textContent).toContain('Membership updated.');
   });
@@ -508,7 +408,8 @@ describe('Members page (09.7.1-T2)', () => {
       error: { ...lastAdmin, kind: 'rate_limited', retryable: true, retryAfterSeconds: 60 },
     });
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="remove"]')!;
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog="remove"]')!;
     expect(dialog.querySelector('app-retry-after')).not.toBeNull();
     expect(button(dialog, '[data-members-submit]').disabled).toBe(true);
     expect(dialog.querySelector('[data-members-error] p')?.textContent).toBe(lastAdmin.message);
@@ -529,7 +430,8 @@ describe('Members page (09.7.1-T2)', () => {
       source === 'invite' ? '[data-members-invite-open]' : '[data-members-resend-open]',
     ).click();
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>(`[data-members-dialog="${source}"]`)!;
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>(`[data-members-dialog="${source}"]`)!;
     if (source === 'invite') {
       const email = dialog.querySelector<HTMLInputElement>('input[type="email"]')!;
       email.value = 'new@example.test';
@@ -553,19 +455,20 @@ describe('Members page (09.7.1-T2)', () => {
     if (exit !== 'destroy') fixture.detectChanges();
     expect(control.value).toBe('');
     expect(root.outerHTML).not.toContain(once);
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
   });
 
   it('wires pending Cancel invite to its own confirmation and closes on success', async () => {
     const { fixture, root } = await render();
     button(root, '[data-members-cancel-invite-open]').click();
     fixture.detectChanges();
-    const dialog = root.querySelector<HTMLDialogElement>('[data-members-dialog="cancel-invite"]')!;
-    expect(dialog.open).toBe(true);
+    await fixture.whenStable();
+    const dialog = root.querySelector<HTMLElement>('[data-members-dialog="cancel-invite"]')!;
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(true);
     button(dialog, '[data-members-submit]').click();
     await fixture.whenStable();
     fixture.detectChanges();
     expect(store.cancel).toHaveBeenCalledWith('pending', expect.anything());
-    expect(dialog.open).toBe(false);
+    expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
   });
 });

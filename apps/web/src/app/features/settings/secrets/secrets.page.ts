@@ -11,6 +11,10 @@ import {
   viewChild,
 } from '@angular/core';
 import type { IngestTokenView } from '@evidgate/sdk';
+import { HlmAlert } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
@@ -28,19 +32,38 @@ import { CiBindingListComponent } from './ci-binding-list.component';
     SecretReferenceListComponent,
     RotateRevealDialogComponent,
     CiBindingListComponent,
+    HlmAlert,
+    HlmButton,
+    HlmInput,
+    HlmLabel,
   ],
   providers: [SecretsStore, RevealSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './secrets.page.css',
+  host: {
+    class:
+      'block min-w-0 font-sans text-sm text-foreground wrap-anywhere [&_p]:m-0 [&_code]:font-mono',
+  },
   template: `
-    <header class="page-header">
-      <h2 #heading tabindex="-1">{{ copy.title }}</h2>
-      <p>{{ copy.description }}</p>
+    <header class="mb-4 grid min-w-0 gap-2">
+      <h2
+        #heading
+        tabindex="-1"
+        class="m-0 font-[family-name:var(--eg-font-display)] text-xl leading-[var(--eg-leading-2xl)] md:text-2xl focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+      >
+        {{ copy.title }}
+      </h2>
+      <p class="text-muted-foreground">{{ copy.description }}</p>
     </header>
     @if (session.projects().length > 0) {
-      <div class="project-field">
-        <label for="secrets-project">{{ copy.project }}</label>
-        <select id="secrets-project" [value]="selectedProject()" (change)="selectProject($event)">
+      <div class="mb-4 grid min-w-0 gap-2">
+        <label hlmLabel for="secrets-project">{{ copy.project }}</label>
+        <select
+          hlmInput
+          class="min-h-[var(--eg-control-touch)]"
+          id="secrets-project"
+          [value]="selectedProject()"
+          (change)="selectProject($event)"
+        >
           @for (project of session.projects(); track project.id) {
             <option [value]="project.id">{{ project.name }}</option>
           }
@@ -48,7 +71,7 @@ import { CiBindingListComponent } from './ci-binding-list.component';
       </div>
     }
     @if (canWrite()) {
-      <p class="narrow-notice">{{ copy.narrow }}</p>
+      <p class="mb-3! text-muted-foreground md:hidden">{{ copy.narrow }}</p>
     }
     <p role="status">
       @if (store.rotateState().phase === 'done') {
@@ -56,7 +79,7 @@ import { CiBindingListComponent } from './ci-binding-list.component';
       }
     </p>
     @if (store.rotateState().error; as error) {
-      <div class="failure" role="alert">
+      <div hlmAlert [variant]="'destructive'" class="my-2 bg-[var(--eg-danger-bg)]" role="alert">
         <p>{{ error.message }}</p>
         <code>{{ error.code }}</code>
       </div>
@@ -75,6 +98,8 @@ import { CiBindingListComponent } from './ci-binding-list.component';
       } @else if (error.kind === 'unavailable') {
         <p>{{ copy.rotateUnavailableHint }}</p>
         <button
+          hlmBtn
+          [variant]="'outline'"
           type="button"
           data-rotation-reload
           [disabled]="busy() || store.rotating() || !readRetryReady()"
@@ -85,7 +110,7 @@ import { CiBindingListComponent } from './ci-binding-list.component';
       }
     }
     @if (store.loadError(); as error) {
-      <div class="failure" role="alert">
+      <div hlmAlert [variant]="'destructive'" class="my-2 bg-[var(--eg-danger-bg)]" role="alert">
         <p>{{ error.message }}</p>
         <code>{{ error.code }}</code>
       </div>
@@ -111,7 +136,9 @@ import { CiBindingListComponent } from './ci-binding-list.component';
           (rotate)="rotate($event)"
         />
         @if (pagingFailure()) {
-          <p class="failure" role="alert">{{ copy.pagingFailure }}</p>
+          <p hlmAlert [variant]="'destructive'" class="my-2! bg-[var(--eg-danger-bg)]" role="alert">
+            {{ copy.pagingFailure }}
+          </p>
         }
         @if (store.loadError(); as error) {
           @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
@@ -126,14 +153,22 @@ import { CiBindingListComponent } from './ci-binding-list.component';
             />
           }
         }
-        <nav class="pagination" [attr.aria-label]="copy.pagesLabel">
+        <nav class="mt-3 flex flex-wrap items-center gap-2" [attr.aria-label]="copy.pagesLabel">
           @if (offset() > 0) {
-            <button type="button" [disabled]="paging() || busy()" (click)="previous()">
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              type="button"
+              [disabled]="paging() || busy()"
+              (click)="previous()"
+            >
               {{ copy.previous }}
             </button>
           }
           @if (hasNext()) {
             <button
+              hlmBtn
+              [variant]="'outline'"
               type="button"
               data-load-more
               [disabled]="paging() || busy() || !readRetryReady()"

@@ -23,6 +23,25 @@ const MEMBER: MembershipView = {
   version: 1,
 };
 
+function expectTableSemantics(root: HTMLElement): void {
+  const roles = [
+    ['table', 'table'],
+    ['thead, tbody', 'rowgroup'],
+    ['tr', 'row'],
+    ['th[scope="col"]', 'columnheader'],
+    ['th[scope="row"]', 'rowheader'],
+    ['td', 'cell'],
+  ] as const;
+  for (const [selector, role] of roles) {
+    const elements = root.querySelectorAll(selector);
+    expect(elements.length).toBeGreaterThan(0);
+    for (const element of elements) expect(element.getAttribute('role')).toBe(role);
+  }
+  for (const label of root.querySelectorAll('.record-label')) {
+    expect(label.hasAttribute('aria-hidden')).toBe(false);
+  }
+}
+
 describe('RoleMatrixComponent responsive records', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -43,12 +62,18 @@ describe('RoleMatrixComponent responsive records', () => {
 
   it('keeps server role names intact in headers and labelled narrow records', async () => {
     const { root } = await render();
+    expectTableSemantics(root);
+    expect(root.querySelector('table[hlmTable]')).not.toBeNull();
+    expect(root.querySelector('[hlmTableContainer]')?.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelector('[hlmTableContainer]')?.getAttribute('aria-label')).toBe(
+      'Organization-wide role matrix',
+    );
     const cells = Array.from(root.querySelectorAll('tbody td'));
     expect(cells).toHaveLength(2);
     for (const [index, cell] of cells.entries()) {
       const label = cell.querySelector('.record-label');
       expect(label?.textContent).toBe(ROLES[index]?.name);
-      expect(label?.getAttribute('aria-hidden')).toBe('true');
+      expect(label?.hasAttribute('aria-hidden')).toBe(false);
       const headers = cell.getAttribute('headers')?.split(' ') ?? [];
       expect(headers).toHaveLength(2);
       expect(root.querySelector(`[id="${headers[0]}"]`)?.textContent).toContain(
@@ -81,6 +106,7 @@ describe('RoleMatrixComponent responsive records', () => {
     fixture.componentRef.setInput('members', [MEMBER]);
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
+    expectTableSemantics(root);
     expect(root.querySelector('.member-identity > span:last-child')?.textContent).toBe(
       MEMBER.invited_email,
     );

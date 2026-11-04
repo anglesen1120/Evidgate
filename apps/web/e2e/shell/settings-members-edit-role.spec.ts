@@ -47,6 +47,7 @@ import {
   seedStoredTheme,
   SETTINGS_ADMIN_GRANTS,
   THEMES,
+  waitForDialogAnimations,
   withVariants,
 } from './support';
 
@@ -139,7 +140,7 @@ const HELD_ANSWER = '?fixture.latency=2000';
 const MEMBER_ROWS = 'app-members-page [data-members-row]';
 
 /** The edit dialog of `app-edit-roles-dialog`, selected by its own `data-members-dialog` value. */
-const EDIT_DIALOG = '[data-members-dialog="edit-roles"]';
+const EDIT_DIALOG = '[data-members-dialog="edit-roles"][data-state="open"]';
 
 /** The tab's own phase hook, awaited before any content claim (loading → ready). */
 async function expectMembersReady(page: Page): Promise<void> {
@@ -187,15 +188,14 @@ interface DialogFocus {
 /**
  * Where a Tab press left focus, relative to the edit dialog. `inside` is the trap's own question;
  * `behind` is the one thing a modal dialog must never allow — focus on a control of the page the
- * dialog covers (the dialog lives inside `app-members-page`, so "behind" is that subtree minus the
- * dialog). `roleId` names a role checkbox, and is `null` on any other stop.
+ * overlay covers. `roleId` names the focused role checkbox's host, and is `null` on any other stop.
  */
 async function focusedIn(page: Page): Promise<DialogFocus> {
   return page.evaluate((selector) => {
     const element = document.activeElement as HTMLElement | null;
     return {
       tag: element?.tagName ?? 'NULL',
-      roleId: element?.getAttribute('data-role-id') ?? null,
+      roleId: element?.closest('[data-members-role-option]')?.getAttribute('data-role-id') ?? null,
       inside: element !== null && element.closest(selector) !== null,
       behind:
         element !== null &&
@@ -227,14 +227,16 @@ test.describe('a role change is the server’s answer, never a local guess', () 
       // the dialog is a draft over server data, not a second source of truth.
       await expect(dialog.locator('[data-members-role-option]')).toHaveCount(ROLES.length);
       const granted = dialog.locator(
-        `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"]`,
+        `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"] button[role="checkbox"]`,
       );
       await expect(granted).not.toBeChecked();
 
       const submit = dialog.locator('[data-members-submit]');
       await expect(submit).toBeDisabled();
 
-      await granted.check();
+      // The custom checkbox renders aria-checked on Angular's next render.
+      await granted.click();
+      await expect(granted).toBeChecked();
       await expect(submit).toBeEnabled();
       await submit.click();
       await expect(dialog).not.toBeVisible();
@@ -264,10 +266,11 @@ test.describe('the last admin cannot be demoted: the server refuses in its own w
       const dialog = page.locator(EDIT_DIALOG);
       await expect(dialog).toBeVisible();
       const option = dialog.locator(
-        `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"]`,
+        `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"] button[role="checkbox"]`,
       );
       await expect(option).toBeChecked();
-      await option.uncheck();
+      await option.click();
+      await expect(option).not.toBeChecked();
       await dialog.locator('[data-members-submit]').click();
 
       await expectRefusal(
@@ -303,9 +306,11 @@ test.describe('a refused grant is the server’s own message, never the client�
 
       const dialog = page.locator(EDIT_DIALOG);
       await expect(dialog).toBeVisible();
-      await dialog
-        .locator(`[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"]`)
-        .check();
+      const granted = dialog.locator(
+        `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"] button[role="checkbox"]`,
+      );
+      await granted.click();
+      await expect(granted).toBeChecked();
       await dialog.locator('[data-members-submit]').click();
 
       await expectRefusal(
@@ -335,9 +340,11 @@ test.describe('a refused grant is the server’s own message, never the client�
       await row.locator('[data-members-edit-open]').click();
       const dialog = page.locator(EDIT_DIALOG);
       await expect(dialog).toBeVisible();
-      await dialog
-        .locator(`[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"]`)
-        .check();
+      const granted = dialog.locator(
+        `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"] button[role="checkbox"]`,
+      );
+      await granted.click();
+      await expect(granted).toBeChecked();
       await dialog.locator('[data-members-submit]').click();
 
       await expectRefusal(
@@ -370,18 +377,20 @@ test.describe('a granted change followed by a refused one is reported as both', 
 
       // Grants are sent before revokes, so this draft is one confirmed change then one refusal.
       const granted = dialog.locator(
-        `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"]`,
+        `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"] button[role="checkbox"]`,
       );
-      await granted.check();
+      await granted.click();
+      await expect(granted).toBeChecked();
       const revokedRole = GRANT_TARGET.roles[0];
       if (revokedRole === undefined) {
         throw new Error('the corpus grant target holds no role to revoke');
       }
       const revoked = dialog.locator(
-        `[data-members-role-option][data-role-id="${revokedRole.id}"]`,
+        `[data-members-role-option][data-role-id="${revokedRole.id}"] button[role="checkbox"]`,
       );
       await expect(revoked).toBeChecked();
-      await revoked.uncheck();
+      await revoked.click();
+      await expect(revoked).not.toBeChecked();
 
       await dialog.locator('[data-members-submit]').click();
 
@@ -425,7 +434,7 @@ test.describe('a membership:read session is offered no role edit at all', () => 
       await expect(page.locator(MEMBER_ROWS)).toHaveCount(MEMBERSHIPS.length);
       // ABSENT from the DOM, not disabled: a disabled button would still confirm the action exists.
       await expect(page.locator('app-members-page [data-members-edit-open]')).toHaveCount(0);
-      await expect(page.locator(`app-members-page ${EDIT_DIALOG}`)).toHaveCount(0);
+      await expect(page.locator('[data-members-dialog="edit-roles"]')).toHaveCount(0);
     });
   }
 });
@@ -434,7 +443,10 @@ test.describe('nothing on the row changes before the server answers', () => {
   test('the old role set stays while the grant is in flight', async ({ page }) => {
     const adminPath = withVariants(membersPath('en'), [SETTINGS_ADMIN_GRANTS]);
     await page.goto(withVariants(adminPath, [HELD_ANSWER]));
-    await expectMembersReady(page);
+    // The fixture delay also holds the sequential session and route reads before the tab exists.
+    await expect(page.locator('app-members-page')).toHaveAttribute('data-members-phase', 'ready', {
+      timeout: 20_000,
+    });
 
     const row = memberRow(page, GRANT_TARGET.id);
     await expect.poll(() => rowRoleNames(row)).toEqual([...ROLE_NAMES_BEFORE].sort());
@@ -442,9 +454,11 @@ test.describe('nothing on the row changes before the server answers', () => {
     await row.locator('[data-members-edit-open]').click();
     const dialog = page.locator(EDIT_DIALOG);
     await expect(dialog).toBeVisible();
-    await dialog
-      .locator(`[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"]`)
-      .check();
+    const granted = dialog.locator(
+      `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"] button[role="checkbox"]`,
+    );
+    await granted.click();
+    await expect(granted).toBeChecked();
     await dialog.locator('[data-members-submit]').click();
 
     // Held: the dialog is busy on the answer, and the row behind it is still the old role set —
@@ -473,17 +487,13 @@ test.describe('the edit dialog is keyboard-operable', () => {
     const dialog = page.locator(EDIT_DIALOG);
     await expect(dialog).toBeVisible();
     // Opening put focus on the first role checkbox, not on the page behind the dialog.
-    await expect(dialog.locator('[data-members-role-option]').first()).toBeFocused();
+    await expect(
+      dialog.locator('[data-members-role-option] button[role="checkbox"]').first(),
+    ).toBeFocused();
 
-    // The dialog is a native modal `<dialog>` (`showModal()`): everything behind it is inert, so no
-    // press can reach a control of the page it covers. Its own order is the role checkboxes, then
-    // Cancel — Save is disabled while the draft equals the server state. Both edges wrap in script
-    // (`dialog-focus-wrap.ts`, the same edge handling the shared conflict dialog applies), because
-    // Chromium otherwise leaves one Tab stop on `<body>` between a modal dialog's last and first
-    // control. The house standard is therefore the conflict-dialog one (`e2e/shell/
-    // conflict-dialog.spec.ts`): walk past the controls in both directions and require every stop to
-    // be inside the dialog — no page control, no `<body>` stop — with the cycle visiting the same
-    // controls in both directions.
+    // The CDK focus trap keeps both edges inside the overlay: every role checkbox, then Cancel
+    // (Save is disabled on an unchanged draft). Walk past both edges and require every stop to
+    // remain inside, with the same controls visited in both directions.
     const step = async (key: 'Tab' | 'Shift+Tab'): Promise<DialogFocus> => {
       await page.keyboard.press(key);
       return focusedIn(page);
@@ -540,7 +550,9 @@ test.describe('the edit dialog is keyboard-operable', () => {
     await opener.click();
     await expect(dialog).toBeVisible();
     await expect(
-      dialog.locator(`[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"]`),
+      dialog.locator(
+        `[data-members-role-option][data-role-id="${TENANT_ADMIN_ROLE.id}"] button[role="checkbox"]`,
+      ),
     ).not.toBeChecked();
   });
 });
@@ -553,6 +565,7 @@ test.describe('the edit dialog is WCAG 2.2 AA clean and not offered on a narrow 
       await expectMembersReady(page);
       await memberRow(page, GRANT_TARGET.id).locator('[data-members-edit-open]').click();
       await expect(page.locator(EDIT_DIALOG)).toBeVisible();
+      await waitForDialogAnimations(page, EDIT_DIALOG);
 
       // The dialog is overlaid content, so it is scanned over the page it covers: a modal that is
       // clean alone and broken over the table would otherwise pass.

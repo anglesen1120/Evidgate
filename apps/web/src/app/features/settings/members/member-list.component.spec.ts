@@ -85,6 +85,31 @@ describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
     expect(root.querySelectorAll('th[scope="col"]')).toHaveLength(3);
     expect(root.querySelector('[data-members-remove]')).toBeNull();
     expect(root.querySelector('[data-members-edit-open]')).toBeNull();
+    expect(root.querySelector('table[hlmTable]')).not.toBeNull();
+    const region = root.querySelector('[hlmTableContainer]');
+    expect(region?.getAttribute('tabindex')).toBe('0');
+    expect(region?.getAttribute('aria-label')).toBe('Members and invitations');
+  });
+
+  it('wraps roles and actions inside their cells and reserves room for status words', () => {
+    const membership = member('pending');
+    fixture.componentRef.setInput('canWrite', true);
+    fixture.componentRef.setInput('members', [membership]);
+    fixture.detectChanges();
+    expect(root.querySelector('table')?.classList.contains('table-fixed')).toBe(true);
+    expect(root.querySelector('#members-status')?.classList.contains('w-1/6')).toBe(true);
+    const actions = root.querySelector('[data-members-edit-open]')?.parentElement;
+    if (actions === null || actions === undefined) throw new Error('row actions not rendered');
+    expect(actions.classList.contains('flex-wrap')).toBe(true);
+    expect(actions.parentElement?.tagName).toBe('TD');
+    expect(actions.querySelectorAll('button')).toHaveLength(4);
+    for (const button of actions.querySelectorAll('button')) {
+      expect(button.classList.contains('whitespace-normal')).toBe(true);
+      expect(button.classList.contains('max-w-full')).toBe(true);
+    }
+    const roles = root.querySelector('td[headers$="members-roles"] > span:last-child');
+    expect(roles?.classList.contains('flex-wrap')).toBe(true);
+    expect(roles?.textContent?.trim()).toBe('No roles assigned');
   });
 
   it.each(['active', 'pending'] as const)(
@@ -98,6 +123,8 @@ describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
       fixture.detectChanges();
       const opener = root.querySelector<HTMLButtonElement>('[data-members-edit-open]')!;
       expect(opener.closest('.mutation')).not.toBeNull();
+      expect(opener.hasAttribute('hlmBtn')).toBe(true);
+      expect(opener.getAttribute('type')).toBe('button');
       opener.click();
       expect(editRoles).toHaveBeenCalledWith({ member: membership, opener });
     },

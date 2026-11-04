@@ -9,6 +9,8 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmAlertImports } from '@evidgate/ui/alert';
 import type { MembershipView } from '@evidgate/sdk';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
@@ -25,6 +27,8 @@ import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
 @Component({
   selector: 'app-members-page',
   imports: [
+    HlmButton,
+    HlmAlertImports,
     RequestStateComponent,
     MemberListComponent,
     RoleMatrixComponent,
@@ -37,8 +41,10 @@ import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
   providers: [MembersStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './members.page.html',
-  styleUrl: './members.page.css',
-  host: { '[attr.data-members-phase]': 'store.phase()' },
+  host: {
+    class: 'block min-w-0 font-sans text-sm text-foreground',
+    '[attr.data-members-phase]': 'store.phase()',
+  },
 })
 export class MembersPage {
   protected readonly store = inject(MembersStore);
