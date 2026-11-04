@@ -22,11 +22,14 @@
       (click)="closeDrawer()"
     ></button>
   }
+  <!-- Closed, the drawer is off-canvas and inert, so it is faded rather than made invisible: an
+       inherited `visibility` flip animates through the spartan buttons' `transition-all`, which
+       would keep the drawer's links hidden on the frame it takes focus and the trap would skip them. -->
   <aside
     #navigation
     id="shell-navigation"
     class="navigation box-border sticky top-0 z-(--eg-z-sticky) flex h-dvh min-w-0 flex-col border-0 border-r-(length:--eg-border-width) border-solid border-border bg-card group-[.mobile]/shell:fixed group-[.mobile]/shell:inset-y-0 group-[.mobile]/shell:start-0 group-[.mobile]/shell:z-(--eg-z-drawer) group-[.mobile]/shell:w-[min(84vw,var(--eg-rail-width))] group-[.mobile]/shell:overflow-y-auto group-[.mobile]/shell:max-[420px]:w-dvw"
-    [class.invisible]="mobile() && !drawerOpen()"
+    [class.opacity-0]="mobile() && !drawerOpen()"
     [class.-translate-x-full]="mobile() && !drawerOpen()"
     [cdkTrapFocus]="mobile() && drawerOpen()"
     tabindex="-1"
@@ -43,7 +46,7 @@
         hlmBtn
         [variant]="'ghost'"
         [size]="'icon'"
-        class="icon-button close-button absolute end-(--eg-space-3) top-(--eg-space-3) min-h-(--eg-control-touch) min-w-(--eg-control-touch) transition-none"
+        class="icon-button close-button absolute end-(--eg-space-3) top-(--eg-space-3) min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
         [attr.aria-label]="closeLabel"
         (click)="closeDrawer()"
       >
