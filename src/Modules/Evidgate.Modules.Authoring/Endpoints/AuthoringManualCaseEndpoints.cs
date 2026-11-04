@@ -98,6 +98,7 @@ internal static class AuthoringManualCaseEndpoints
             .Produces<LinkManualCaseResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .WithSummary("Link a manual test case to a live catalog test case (route 20, AC11)");
 
@@ -106,6 +107,7 @@ internal static class AuthoringManualCaseEndpoints
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
             .WithSummary("Remove a manual test case's link to a catalog test case (route 21)");
     }
 

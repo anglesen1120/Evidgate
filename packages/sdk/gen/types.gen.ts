@@ -10407,6 +10407,10 @@ export type LinkManualCaseErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
      * 413 too large (00 §9.2)
      */
     413: ErrorEnvelope;
@@ -10483,6 +10487,10 @@ export type UnlinkManualCaseErrors = {
      * 404 not found — also for other-tenant ids (00 §9.2)
      */
     404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
     /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */

@@ -91,16 +91,20 @@ public interface ICatalogContracts
     ValueTask<IReadOnlyDictionary<Guid, EvaluationCaseIdentity>> GetEvaluationCasesAsync(Guid orgId, IReadOnlyCollection<Guid> caseRevisionIds, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Every <c>archived</c> case of <paramref name="projectId"/>, as one statement over the project's own rows: the
-    /// complement of the live catalog a caller that may not read <c>test_case</c> needs (the authoring coverage read
-    /// marks a link live unless its case is archived). Archived cases are the minority of a project, and they are the
-    /// only cases a projection over linked ids has to exclude, so this set keeps that caller's own statement one
-    /// bounded query. Another tenant's project, and a project this tenant cannot see, answer empty.
+    /// Which of <paramref name="caseIds"/> are <c>archived</c> cases of <paramref name="projectId"/>: the only cases a
+    /// projection over linked ids has to exclude to count a link as live, answered for a caller that may not read
+    /// <c>test_case</c> itself. One statement however many ids, served by the case primary key; an id that is unknown
+    /// or of another project or tenant is simply absent, and an empty batch makes no round trip.
     /// </summary>
     /// <param name="orgId">The caller's trusted tenant id, so the read is tenant-exact beyond row level security.</param>
-    /// <param name="projectId">The project whose archived cases are wanted.</param>
+    /// <param name="projectId">The project the cases must belong to.</param>
+    /// <param name="caseIds">The <c>test_case.id</c> values to test for archived status.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    ValueTask<IReadOnlyList<Guid>> GetArchivedCaseIdsAsync(Guid orgId, Guid projectId, CancellationToken cancellationToken);
+    ValueTask<IReadOnlyList<Guid>> GetArchivedCaseIdsAsync(
+        Guid orgId,
+        Guid projectId,
+        IReadOnlyCollection<Guid> caseIds,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// The <c>status</c> of each of <paramref name="caseIds"/> that is a case of <paramref name="projectId"/> visible to

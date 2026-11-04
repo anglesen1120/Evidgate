@@ -98,9 +98,9 @@ internal static class CatalogReadSql
         """;
 
     /// <summary>
-    /// Every archived case of one project. The prefix of <c>test_case_list_idx</c> serves the project, and the status
-    /// predicate is the cheap filter that index comment already accepts; <c>missing</c> stays live, which is the
-    /// catalog's own rule for a case a sync has not seen recently.
+    /// Which of the named cases of one project are archived. The id set is the caller's own candidate list, so the
+    /// case primary key decides the whole statement: one probe per candidate, nothing over the project's wider catalog.
+    /// <c>missing</c> stays live, which is the catalog's own rule for a case a sync has not seen recently.
     /// </summary>
     internal const string ArchivedCaseIds = """
         select id
@@ -108,6 +108,7 @@ internal static class CatalogReadSql
          where org_id = @org_id
            and project_id = @project_id
            and status = 'archived'
+           and id = any(@ids::uuid[])
         """;
 
     /// <summary>

@@ -15,11 +15,12 @@ using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 using Evidgate.Modules.Catalog.Contracts;
 using Mediator;
 using Microsoft.AspNetCore.Http;
+using Npgsql;
 
 namespace Evidgate.Modules.Authoring.Application.Commands;
 
 /// <summary>
-/// Links one manual test case to one catalog test case (route 20, AC11): the manual case must be live in this project
+/// Links one manual test case to one catalog test case (route 20): the manual case must be live in this project
 /// and the catalog case live (not <c>archived</c>) in the same project. The pair is unique, so a repeat is a 200
 /// <c>changed:false</c> rather than an error, and nothing is written or audited then.
 /// </summary>
@@ -32,7 +33,7 @@ internal sealed record LinkManualCaseCommand(Guid ProjectId, Guid CaseId, JsonEl
 
 /// <summary>Handler of <see cref="LinkManualCaseCommand"/>.</summary>
 /// <remarks>
-/// The catalog is read through <see cref="ICatalogContracts"/>, never through its tables (N4): the answer distinguishes
+/// The catalog is read through <see cref="ICatalogContracts"/>, never through its tables: the answer distinguishes
 /// an unknown case from an archived one so the caller gets the documented reason, and both are worded without echoing any
 /// catalog content. The insert itself is the arbiter of the pair — <c>manual_case_link_uq</c> plus
 /// <c>on conflict do nothing</c> — so two concurrent links of one pair produce one row and one <c>changed:false</c>.
@@ -62,6 +63,25 @@ internal sealed class LinkManualCaseCommandHandler(
 
         ArgumentNullException.ThrowIfNull(command);
 
+        try
+        {
+            return await HandleCoreAsync(command, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        {
+            // The insert waits on the pair's unique index and on the case row's lock, so 55P03/40P01 of a statement this
+            // command issues itself answer the retryable 503 instead of surfacing as a 500.
+            return Result.Failure<LinkManualCaseResponse>(AuthoringErrors.Unavailable());
+        }
+    }
+
+    /// <summary>The handler body, inside the contention mapping of <see cref="Handle"/>.</summary>
+    /// <param name="command">The request.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async ValueTask<Result<LinkManualCaseResponse>> HandleCoreAsync(
+        LinkManualCaseCommand command,
+        CancellationToken cancellationToken)
+    {
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure<LinkManualCaseResponse>(scopeError);
@@ -89,25 +109,56 @@ internal sealed class LinkManualCaseCommandHandler(
             return Result.Failure<LinkManualCaseResponse>(locked.Error!);
         }
 
-        var statuses = await catalog.GetCaseStatusesAsync(orgId, command.ProjectId, [testCaseId], cancellationToken)
+        if (await CaseRefusalAsync(orgId, command.ProjectId, testCaseId, cancellationToken).ConfigureAwait(false)
+            is { } caseError)
+        {
+            return Result.Failure<LinkManualCaseResponse>(caseError);
+        }
+
+        return await InsertAsync(command, orgId, testCaseId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The catalog case's liveness: null when the pair can be linked, else the documented 422.</summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="projectId">The project from the route.</param>
+    /// <param name="testCaseId">The <c>test_case_id</c> of the request.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async Task<Error?> CaseRefusalAsync(
+        Guid orgId,
+        Guid projectId,
+        Guid testCaseId,
+        CancellationToken cancellationToken)
+    {
+        var statuses = await catalog.GetCaseStatusesAsync(orgId, projectId, [testCaseId], cancellationToken)
             .ConfigureAwait(false);
 
         if (!statuses.TryGetValue(testCaseId, out var status))
         {
-            return Result.Failure<LinkManualCaseResponse>(AuthoringErrors.Invalid(
+            return AuthoringErrors.Invalid(
                 "/test_case_id",
                 "case_not_found",
-                "no test case with that id is visible in this project"));
+                "no test case with that id is visible in this project");
         }
 
-        if (string.Equals(status, "archived", StringComparison.Ordinal))
-        {
-            return Result.Failure<LinkManualCaseResponse>(AuthoringErrors.Invalid(
+        return string.Equals(status, "archived", StringComparison.Ordinal)
+            ? AuthoringErrors.Invalid(
                 "/test_case_id",
                 "case_archived",
-                "an archived test case cannot be linked; a live case supersedes it"));
-        }
+                "an archived test case cannot be linked; a live case supersedes it")
+            : null;
+    }
 
+    /// <summary>The insert itself and the answer it produces.</summary>
+    /// <param name="command">The request.</param>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="testCaseId">The catalog case the link names.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async Task<Result<LinkManualCaseResponse>> InsertAsync(
+        LinkManualCaseCommand command,
+        Guid orgId,
+        Guid testCaseId,
+        CancellationToken cancellationToken)
+    {
         var actor = await ManualCaseActor.MembershipIdAsync(db, principals, orgId, cancellationToken).ConfigureAwait(false);
         var linkId = Guid.CreateVersion7();
 
@@ -172,6 +223,27 @@ internal sealed class UnlinkManualCaseCommandHandler(
 
         ArgumentNullException.ThrowIfNull(command);
 
+        // The delete waits on the link row a concurrent link or another unlink holds, so the command's own bound is set
+        // before it rather than left to the database's default of waiting forever.
+        await AuthoringLockGuard.SetLockTimeoutAsync(db, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return await HandleCoreAsync(command, cancellationToken).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (AuthoringLockGuard.IsContention(exception))
+        {
+            return Result.Failure(AuthoringErrors.Unavailable());
+        }
+    }
+
+    /// <summary>The handler body, inside the bounded wait and contention mapping of <see cref="Handle"/>.</summary>
+    /// <param name="command">The request.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async ValueTask<Result> HandleCoreAsync(
+        UnlinkManualCaseCommand command,
+        CancellationToken cancellationToken)
+    {
         if (AuthoringRules.Project(command.ProjectId, principals, tenant) is { } scopeError)
         {
             return Result.Failure(scopeError);

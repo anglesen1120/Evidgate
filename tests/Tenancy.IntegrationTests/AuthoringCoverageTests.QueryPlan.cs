@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 using Shouldly;
 
@@ -48,7 +47,7 @@ public sealed partial class AuthoringCoverageTests
             ("state", DBNull.Value),
             ("priority", DBNull.Value),
             ("covered", false),
-            ("archived_case_ids", JsonSerializer.Serialize(archived)),
+            ("archived_case_ids", archived.ToArray()),
             ("q", DBNull.Value),
             ("take", 51));
     }

@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -20,9 +19,9 @@ using Microsoft.AspNetCore.Http;
 namespace Evidgate.Modules.Authoring.Application.Queries;
 
 /// <summary>
-/// One keyset page of a project's manual test cases (route 12, 13.1.1 §5).
+/// One keyset page of a project's manual test cases (route 12).
 /// </summary>
-/// <param name="ProjectId">The project from the route; a project of another tenant is a 404 (AC10).</param>
+/// <param name="ProjectId">The project from the route; a project of another tenant is a 404.</param>
 /// <param name="NodeId">Optional filter: the cases whose item sits under this node (an exact node, not its subtree).</param>
 /// <param name="ItemId">Optional filter: the cases of this checklist item.</param>
 /// <param name="State">Optional filter: <c>draft</c>, <c>approved</c> or <c>retired</c>.</param>
@@ -46,22 +45,22 @@ internal sealed record ListManualCasesQuery(
     int Limit) : IQuery<Result<ManualCaseListResponse>>;
 
 /// <summary>
-/// Handler of <see cref="ListManualCasesQuery"/>: three statements (the project probe, the catalog's archived case ids
-/// and one page) in the read-only tenant transaction, the plan's <c>(code, id)</c> order, and a 422 per unsupported
-/// filter value.
+/// Handler of <see cref="ListManualCasesQuery"/>: four statements (the project probe, the project's linked catalog
+/// ids, the catalog's archived subset among them and one page) in the read-only tenant transaction, the plan's
+/// <c>(code, id)</c> order, and a 422 per unsupported filter value.
 /// </summary>
 /// <remarks>
 /// The <c>q</c> filter is <c>position(lower(@q) in lower(title)) &gt; 0</c> rather than <c>ilike '%…%'</c>: a substring
-/// match has no metacharacters, so there is nothing to escape and no wildcard injection to defend against (the plan's
-/// §5 note asks for exactly that outcome). Both sides are lowered by the database's <c>C.UTF-8</c> ctype, which folds
+/// match has no metacharacters, so there is nothing to escape and no wildcard injection to defend against — the
+/// feature plan asks for exactly that outcome. Both sides are lowered by the database's <c>C.UTF-8</c> ctype, which folds
 /// ASCII and keeps Vietnamese diacritics distinct — the same rule the catalog's title search uses. The filter is not
-/// index-served (a substring cannot be), which §4 P4 accepts for the title search on a project-bounded table.
+/// index-served (a substring cannot be), which the feature plan accepts for the title search on a project-bounded table.
 /// </remarks>
 /// <param name="db">The tenant-scoped Dapper seam.</param>
 /// <param name="scopes">The open tenant scope.</param>
 /// <param name="principals">The caller, whose credential may be narrowed to one project.</param>
 /// <param name="tenant">The request's own tenant context.</param>
-/// <param name="catalog">The catalog surface, for which linked cases are archived.</param>
+/// <param name="catalog">The catalog surface, for which of the project's linked cases are archived.</param>
 [Permission(Permissions.Authoring.Read)]
 internal sealed class ListManualCasesQueryHandler(
     ITenantDb db,
@@ -70,7 +69,7 @@ internal sealed class ListManualCasesQueryHandler(
     IRequestTenantContextAccessor tenant,
     ICatalogContracts catalog) : IQueryHandler<ListManualCasesQuery, Result<ManualCaseListResponse>>
 {
-    /// <summary>The longest accepted <c>q</c> (the plan's §5 bound).</summary>
+    /// <summary>The longest accepted <c>q</c>, the plan's bound.</summary>
     internal const int MaximumQueryLength = 200;
 
     /// <inheritdoc />
@@ -94,14 +93,14 @@ internal sealed class ListManualCasesQueryHandler(
         if (query.State is { } state && !ManualTestCaseStateMachine.States.Contains(state, StringComparer.Ordinal))
         {
             return Result.Failure<ManualCaseListResponse>(Error.Invalid(
-                "state is one of draft, approved or retired (13.1.1 §6)",
+                "state is one of draft, approved or retired",
                 [new ErrorDetail("/state", "value_invalid")]));
         }
 
         if (query.Priority is { } priority && !AuthoringPriorities.IsValid(priority))
         {
             return Result.Failure<ManualCaseListResponse>(Error.Invalid(
-                "priority is one of critical, high, medium or low (13.1.1 §3)",
+                "priority is one of critical, high, medium or low",
                 [new ErrorDetail("/priority", "value_invalid")]));
         }
 
@@ -118,7 +117,7 @@ internal sealed class ListManualCasesQueryHandler(
                     [new ErrorDetail("/q", "invalid_text")]));
             }
 
-            // The stored titles are NFC (AC14), so a decomposed query would never match one: compose it first, then
+            // The stored titles are NFC, so a decomposed query would never match one: compose it first, then
             // count code points (the unit the database's char_length and the schema's maxLength count).
             text = AuthoringText.Normalize(raw);
 
@@ -150,10 +149,16 @@ internal sealed class ListManualCasesQueryHandler(
             return Result.Failure<ManualCaseListResponse>(AuthoringRules.ProjectNotFound);
         }
 
-        // The catalog answers which linked cases are archived. The list projection may not read `test_case` itself
-        // (module boundaries), and only archived cases have to be excluded for a link to count as live, so the
-        // minority side travels as one id set into the page statement's own coverage aggregate.
-        var archived = await catalog.GetArchivedCaseIdsAsync(orgId, query.ProjectId, cancellationToken)
+        // Only archived cases have to be excluded for a link to count as live, and the list projection may not read
+        // `test_case` itself (module boundaries): the project's distinct linked ids go to the catalog, which answers
+        // the archived subset. Both reads precede the page, so a link written in between still reads as live — one
+        // request is eventually consistent against the catalog, never torn.
+        var linked = await db.QueryAsync<Guid>(
+            AuthoringManualCaseReadSql.LinkedCaseIds,
+            new { org_id = orgId, project_id = query.ProjectId },
+            cancellationToken).ConfigureAwait(false);
+
+        var archived = await catalog.GetArchivedCaseIdsAsync(orgId, query.ProjectId, linked, cancellationToken)
             .ConfigureAwait(false);
 
         var parameters = new
@@ -165,7 +170,7 @@ internal sealed class ListManualCasesQueryHandler(
             state = query.State,
             priority = query.Priority,
             covered = query.Covered,
-            archived_case_ids = JsonSerializer.Serialize(archived),
+            archived_case_ids = archived.ToArray(),
             q = text,
             cursor_code = cursor?.Code,
             cursor_id = cursor?.Id,
@@ -186,14 +191,14 @@ internal sealed class ListManualCasesQueryHandler(
     }
 }
 
-/// <summary>One manual test case with its steps (route 14, 13.1.1 §5).</summary>
+/// <summary>One manual test case with its steps (route 14).</summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="CaseId">The case from the route.</param>
 internal sealed record GetManualCaseQuery(Guid ProjectId, Guid CaseId) : IQuery<Result<ManualCaseDetailDto>>;
 
 /// <summary>
 /// Handler of <see cref="GetManualCaseQuery"/>: one statement, no separate project probe — the filter carries the
-/// project, so a case of another project or another tenant is one 404 the tenant policy decides (AC10).
+/// project, so a case of another project or another tenant is one 404 the tenant policy decides.
 /// </summary>
 /// <param name="db">The tenant-scoped Dapper seam.</param>
 /// <param name="scopes">The open tenant scope.</param>
@@ -336,7 +341,10 @@ internal static class AuthoringEndpointText
         return null;
     }
 
-    /// <summary>An optional boolean filter: absent → null, anything but <c>true</c>/<c>false</c> → the 422 naming it.</summary>
+    /// <summary>
+    /// An optional boolean filter: absent → null; present but empty, or anything but <c>true</c>/<c>false</c>, is the
+    /// 422 naming it — a value the caller sent is malformed, not the same request as no value.
+    /// </summary>
     /// <param name="query">The request query string.</param>
     /// <param name="name">The query key, e.g. <c>covered</c>.</param>
     /// <param name="value">The parsed flag, or null.</param>
@@ -346,12 +354,12 @@ internal static class AuthoringEndpointText
 
         value = null;
 
-        var raw = Blank(query[name].ToString());
-
-        if (raw is null)
+        if (!query.TryGetValue(name, out var rawValues))
         {
             return null;
         }
+
+        var raw = Blank(rawValues.ToString());
 
         if (string.Equals(raw, "true", StringComparison.Ordinal))
         {

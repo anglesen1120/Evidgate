@@ -159,11 +159,19 @@ internal sealed class CatalogContracts(ITenantDb db) : ICatalogContracts
     public async ValueTask<IReadOnlyList<Guid>> GetArchivedCaseIdsAsync(
         Guid orgId,
         Guid projectId,
-        CancellationToken cancellationToken) =>
-        await db.QueryAsync<Guid>(
+        IReadOnlyCollection<Guid> caseIds,
+        CancellationToken cancellationToken)
+    {
+        if (caseIds.Count == 0)
+        {
+            return [];
+        }
+
+        return await db.QueryAsync<Guid>(
             CatalogReadSql.ArchivedCaseIds,
-            new { org_id = orgId, project_id = projectId },
+            new { org_id = orgId, project_id = projectId, ids = caseIds.ToArray() },
             cancellationToken).ConfigureAwait(false);
+    }
 
     /// <inheritdoc />
     public async ValueTask<IReadOnlyDictionary<Guid, string>> GetCaseStatusesAsync(
