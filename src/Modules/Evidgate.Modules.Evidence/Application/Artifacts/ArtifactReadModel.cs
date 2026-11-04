@@ -1,14 +1,10 @@
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
-using Evidgate.Modules.Evidence.Domain;
 
 namespace Evidgate.Modules.Evidence.Application.Artifacts;
 
 /// <summary>
-/// The one read projection of an artifact row, shared by the metadata read, the run listing and the download
-/// issuance: it resolves the effective sensitivity (the project's current kind-policy default, the row's own
-/// stored value and the scan state) and masks the content-bearing columns for a caller without
-/// <c>artifact:read_sensitive</c>. Keeping the rule in this single statement is what makes every content path
-/// agree; a second copy of it in C# would be a second answer to the same question.
+/// The artifact projection shared by metadata reads and download issuance. It resolves effective sensitivity
+/// from policy, stored classification and scan state, and masks content when sensitivity or deletion gates it.
 /// </summary>
 internal static class ArtifactReadModel
 {
@@ -17,7 +13,8 @@ internal static class ArtifactReadModel
     /// classifies the kind sensitive (raising a policy gates the rows that already exist), when the row was minted
     /// sensitive, or when the scan has not proved it clean (<c>pending</c> is not yet scanned, <c>flagged</c> found
     /// a secret, and an unknown state fails closed). Published or not, the policy can only ever raise: lowering it
-    /// needs the audited override route and never rewrites a stored classification.
+    /// needs the audited override route and never rewrites a stored classification. A row being deleted or already
+    /// deleted gates the same three columns whatever permission the caller holds: its bytes are gone or going.
     /// </summary>
     private const string Projection = """
         select a.id,
@@ -34,26 +31,10 @@ internal static class ArtifactReadModel
                       or a.sensitivity = 'sensitive'
                       or kp.default_sensitivity = 'sensitive'
                     then 'sensitive' else 'normal' end as effective_sensitivity,
-               case when (a.scan_state <> 'clean'
-                          or a.sensitivity = 'sensitive'
-                          or kp.default_sensitivity = 'sensitive')
-                         and not @can_read_sensitive
-                    then true else false end as content_gated,
-               case when (a.scan_state <> 'clean'
-                          or a.sensitivity = 'sensitive'
-                          or kp.default_sensitivity = 'sensitive')
-                         and not @can_read_sensitive
-                    then null else a.object_key end as object_key,
-               case when (a.scan_state <> 'clean'
-                          or a.sensitivity = 'sensitive'
-                          or kp.default_sensitivity = 'sensitive')
-                         and not @can_read_sensitive
-                    then null else a.checksum end as checksum,
-               case when (a.scan_state <> 'clean'
-                          or a.sensitivity = 'sensitive'
-                          or kp.default_sensitivity = 'sensitive')
-                         and not @can_read_sensitive
-                    then null else a.bytes end as bytes
+               gated.content_gated,
+               case when gated.content_gated then null else a.object_key end as object_key,
+               case when gated.content_gated then null else a.checksum end as checksum,
+               case when gated.content_gated then null else a.bytes end as bytes
           from public.artifact a
           join public.project p
             on p.org_id = a.org_id
@@ -62,36 +43,19 @@ internal static class ArtifactReadModel
             on kp.org_id = a.org_id
            and kp.project_id = a.project_id
            and kp.kind = a.kind
+          cross join lateral (
+              select a.state in ('pending_delete', 'deleted')
+                     or ((a.scan_state <> 'clean'
+                          or a.sensitivity = 'sensitive'
+                          or kp.default_sensitivity = 'sensitive')
+                         and not @can_read_sensitive) as content_gated
+          ) gated
         """;
 
     /// <summary>One artifact by id, as the tenant scope sees it (RLS already hides another org's row).</summary>
     private const string ByIdSql = Projection + """
 
          where a.id = @artifact_id
-        """;
-
-    /// <summary>The artifacts of one run, newest last, for any future listing to reuse.</summary>
-    private const string ByRunSql = Projection + """
-
-         where a.run_id = @run_id
-         order by a.created_at, a.id
-        """;
-
-    /// <summary>
-    /// The project's current default sensitivity for <paramref name="kind"/>: the policy row when the project has
-    /// one, the kind's static default otherwise. The resolver every mint and every read resolves through, so a
-    /// project override never applies to one path and not the other.
-    /// </summary>
-    private const string DefaultSensitivitySql = """
-        select kp.default_sensitivity
-          from public.project p
-          left join public.artifact_kind_policy kp
-            on kp.org_id = p.org_id
-           and kp.project_id = p.id
-           and kp.kind = @kind
-         where p.org_id = @org_id
-           and p.id = @project_id
-           and p.status <> 'deleted'
         """;
 
     /// <summary>One artifact's row, or <c>null</c> when the scope cannot see it (unknown, another tenant, another project).</summary>
@@ -109,45 +73,6 @@ internal static class ArtifactReadModel
             new { artifact_id = artifactId, can_read_sensitive = canReadSensitive },
             cancellationToken).ConfigureAwait(false);
 
-    /// <summary>Every artifact of one run the scope can see, with the same gating as <see cref="ReadAsync"/>.</summary>
-    /// <param name="db">The scoped data access of an open tenant scope.</param>
-    /// <param name="runId">The run whose artifacts are listed.</param>
-    /// <param name="canReadSensitive">Whether the caller holds <c>artifact:read_sensitive</c>.</param>
-    /// <param name="cancellationToken">Cancels the statement.</param>
-    internal static async Task<IReadOnlyList<ArtifactReadRow>> ReadRunAsync(
-        ITenantDb db,
-        Guid runId,
-        bool canReadSensitive,
-        CancellationToken cancellationToken) =>
-        await db.QueryAsync<ArtifactReadRow>(
-            ByRunSql,
-            new { run_id = runId, can_read_sensitive = canReadSensitive },
-            cancellationToken).ConfigureAwait(false);
-
-    /// <summary>
-    /// The effective default sensitivity of <paramref name="kind"/> in the project: the stored override when there
-    /// is one, else the kind's static default. A kind with neither answers its static default, which is the
-    /// fail-closed map of the contract for the four kinds that have one.
-    /// </summary>
-    /// <param name="db">The scoped data access of an open tenant scope.</param>
-    /// <param name="orgId">The scope's organization.</param>
-    /// <param name="projectId">The project whose override applies.</param>
-    /// <param name="kind">One of the eight contract kinds.</param>
-    /// <param name="cancellationToken">Cancels the statement.</param>
-    internal static async Task<string> ResolveDefaultSensitivityAsync(
-        ITenantDb db,
-        Guid orgId,
-        Guid projectId,
-        string kind,
-        CancellationToken cancellationToken)
-    {
-        var stored = await db.QuerySingleOrDefaultAsync<string>(
-            DefaultSensitivitySql,
-            new { org_id = orgId, project_id = projectId, kind },
-            cancellationToken).ConfigureAwait(false);
-
-        return stored ?? ArtifactSensitivity.ForKind(kind);
-    }
 }
 
 /// <summary>
@@ -167,7 +92,8 @@ internal static class ArtifactReadModel
 /// <param name="ScanState">The secret-scan state, or null when the row carries none.</param>
 /// <param name="CreatedAt">When the row was created.</param>
 /// <param name="EffectiveSensitivity">The sensitivity every read path enforces.</param>
-/// <param name="ContentGated">True when the caller may not see the content-bearing members.</param>
+/// <param name="ContentGated">True when the caller may not see the content-bearing members, or when the content is
+/// being deleted.</param>
 /// <param name="ObjectKey">The storage key, or null when gated.</param>
 /// <param name="Checksum">The content address, or null when gated.</param>
 /// <param name="Bytes">The stored length, or null when gated.</param>

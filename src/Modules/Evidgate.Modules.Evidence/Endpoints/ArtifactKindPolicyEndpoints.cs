@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Application.Artifacts;
+using Evidgate.Modules.Evidence.Domain;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -10,14 +12,12 @@ namespace Evidgate.Modules.Evidence.Endpoints;
 
 /// <summary>
 /// The per-kind capture-policy override route. The body is a closed object of the row's five knobs, read here under a
-/// small cap; the shape rules live in the command's validator and the named refusals in its handler, while
-/// authorization, the tenant transaction and the envelope stay the pipeline's and the host's.
+/// small cap that counts the bytes as they arrive; the shape rules live in the command's validator and the named
+/// refusals in its handler, while authorization, the tenant transaction and the envelope stay the pipeline's and the
+/// host's.
 /// </summary>
 public static class ArtifactKindPolicyEndpoints
 {
-    /// <summary>Five members, two of them lists; the cap is generous and still bounds the read before parsing.</summary>
-    private const int MaxBodyBytes = 8 * 1024;
-
     /// <summary>Maps the route and returns the <c>/v1</c> group so the host can apply its filters.</summary>
     public static RouteGroupBuilder MapArtifactKindPolicyEndpoints(this IEndpointRouteBuilder routes)
     {
@@ -52,23 +52,32 @@ public static class ArtifactKindPolicyEndpoints
                 StatusCodes.Status415UnsupportedMediaType));
         }
 
-        if (context.Request.ContentLength is { } declared && declared > MaxBodyBytes)
+        if (context.Request.ContentLength is { } declared && declared > UploadUrlLimits.MaxBodyBytes)
         {
-            return Result.Failure<ArtifactKindPolicyView>(new Error(
-                ApiErrorCode.PayloadTooLarge,
-                "the request body is too large",
-                StatusCodes.Status413PayloadTooLarge));
+            return Result.Failure<ArtifactKindPolicyView>(CappedRequestBody.TooLarge);
         }
 
+        // A chunked or length-less body declares nothing the check above could see, so the read itself bounds it:
+        // the cap holds for the bytes that actually arrive, and no byte past it reaches the parser.
         ArtifactKindPolicyBody? body;
+        var inner = context.Request.Body;
         try
         {
+            context.Request.Body = new CappedBodyStream(inner, UploadUrlLimits.MaxBodyBytes);
             body = await context.Request.ReadFromJsonAsync<ArtifactKindPolicyBody>(cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is System.Text.Json.JsonException or NotSupportedException or InvalidOperationException)
+        catch (BadHttpRequestException exception)
+        {
+            return Result.Failure<ArtifactKindPolicyView>(CappedRequestBody.Unreadable(exception));
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         {
             return Result.Failure<ArtifactKindPolicyView>(Error.BadRequest("the request body is not valid JSON"));
+        }
+        finally
+        {
+            context.Request.Body = inner;
         }
 
         if (body is null)

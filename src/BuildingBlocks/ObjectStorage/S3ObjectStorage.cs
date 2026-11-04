@@ -48,7 +48,7 @@ internal sealed class S3ObjectStorage : IObjectStorage, IDisposable
     /// 256 MiB (<c>artifact_kind_policy.max_bytes</c>, D-A9), so one artifact fits and a caller cannot ask for a
     /// buffer the process could not hold.
     /// </summary>
-    internal const long MaxObjectBytes = 256L * 1024 * 1024;
+    internal const long MaxObjectBytes = ObjectStorageLimits.MaxObjectBytes;
 
     private const string ContentLengthHeaderName = "Content-Length";
 

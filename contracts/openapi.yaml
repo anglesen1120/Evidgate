@@ -2668,9 +2668,12 @@ paths:
         effective `sensitivity` is `sensitive` when the row was minted sensitive, when the project's kind policy now
         classifies the kind sensitive (a policy can raise the classification of rows that already exist), or when the
         secret scan has not proved the artifact clean (`pending` is unscanned, `flagged` found a secret, an unknown
-        state fails closed); reading never lowers a stored classification. An id of another tenant or another project
-        is the one `404 artifact_not_found`: row level security makes it invisible, so it is indistinguishable from an
-        unknown id. A read, so no `Idempotency-Key`.
+        state fails closed); reading never lowers a stored classification. A row being deleted or already deleted
+        reads as `content_gated: true` for every caller, whatever permission it holds. An id of another tenant, or of
+        a project other than the one the request is narrowed to, is the one `404 artifact_not_found`: row level
+        security hides another tenant's row and the project scope hides another project's, so both are
+        indistinguishable from an unknown id. A member's request carries no project, so a member of the org reads
+        every project of it. A read, so no `Idempotency-Key`.
       x-permission: artifact:read
       x-version: v1
       parameters:
@@ -2704,12 +2707,15 @@ paths:
         A short-lived presigned `GET` for the artifact's bytes, issued to a caller that may read them. `artifact:read`
         is the pipeline's decision and `artifact:read_sensitive` is asked separately for a row served as sensitive: a
         caller without it gets `403 sensitivity_forbidden` and no URL. Both halves are audited — a denial writes one
-        row (the artifact's id, the actor, the request id and the outcome) in its own committed unit of work, so it
-        survives the rollback a failing command would cause, and the issuance of a sensitive artifact writes a row
-        too; the URL itself is a bearer credential and is never audited, logged or echoed in an error. Only an
-        artifact in the `ready` state has bytes at its final key, so any other state is `409 artifact_state_conflict`
-        rather than a URL to nothing. An unknown, another-tenant or another-project id is the one `404
-        artifact_not_found`. A read that records an audit row, so no `Idempotency-Key`.
+        row (the artifact's id, its run, the actor, the request id and the outcome) in its own committed unit of work,
+        so it survives the rollback a failing command would cause, and the issuance of a sensitive artifact writes a
+        row too with the same run; the URL itself is a bearer credential and is never audited, logged or echoed in an
+        error. Only an artifact in the `ready` state has bytes at its final key, so any other state is
+        `409 artifact_state_conflict` rather than a URL to nothing; a row being deleted or already deleted is that
+        same `409`, whatever permission the caller holds. An unknown id, another tenant's id, or an id of a project
+        other than the one the request is narrowed to is the one `404 artifact_not_found`; a member's request carries
+        no project, so a member of the org reads every project of it. A read that records an audit row, so no
+        `Idempotency-Key`.
       x-permission: artifact:read
       x-version: v1
       parameters:

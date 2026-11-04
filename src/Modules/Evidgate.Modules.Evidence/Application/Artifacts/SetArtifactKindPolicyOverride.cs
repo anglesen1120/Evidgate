@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -40,9 +41,9 @@ internal sealed record SetArtifactKindPolicyOverride(
 
 /// <summary>
 /// Shape validation of <see cref="SetArtifactKindPolicyOverride"/> before the tenant transaction: the sensitivity is
-/// one of the column's two values, the media-type list is within the column's bounds and the size is positive.
-/// Unknown kinds are the handler's named 422 <c>kind_unknown</c>, not a validator reason, because the code has to
-/// survive a mature client.
+/// one of the column's two values, the media-type list is within the column's bounds and the size is positive and no
+/// larger than one stored object can be read. Unknown kinds are the handler's named 422 <c>kind_unknown</c>, not a
+/// validator reason, because the code has to survive a mature client.
 /// </summary>
 internal sealed class SetArtifactKindPolicyOverrideValidator : AbstractValidator<SetArtifactKindPolicyOverride>
 {
@@ -51,6 +52,12 @@ internal sealed class SetArtifactKindPolicyOverrideValidator : AbstractValidator
     {
         RuleFor(command => command.MaxBytes)
             .GreaterThan(0)
+            .WithErrorCode("out_of_range");
+
+        // A cap above the storage ceiling is a row no scan or parse could ever read: the object read refuses it, so
+        // the write is refused here instead of storing a policy that can only fail later.
+        RuleFor(command => command.MaxBytes)
+            .LessThanOrEqualTo(ObjectStorageLimits.MaxObjectBytes)
             .WithErrorCode("out_of_range");
 
         RuleFor(command => command.MediaTypes)
@@ -69,9 +76,10 @@ internal sealed class SetArtifactKindPolicyOverrideValidator : AbstractValidator
 }
 
 /// <summary>
-/// Upserts the project's row for one kind. One select recovers the previous sensitivity for the audit metadata, the
-/// upsert follows on the row's unique key so two concurrent writes converge instead of duplicating, and the answer
-/// carries the stored policy. <c>version</c> and <c>updated_at</c> are the trigger's, never the caller's.
+/// Upserts the project's row for one kind. The writes of one kind serialize on an advisory lock taken before the
+/// previous value is read, so the audit records the value the write it queued behind actually left, an absent row
+/// included. The upsert follows on the row's unique key, and the answer carries the stored policy. <c>version</c>
+/// and <c>updated_at</c> are the trigger's, never the caller's.
 /// </summary>
 [AuditedAction("artifact_kind_policy.set")]
 [Permission(Permissions.Project.Write)]
@@ -90,6 +98,13 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
            and project_id = @project_id
            and kind = @kind
         """;
+
+    /// <summary>
+    /// Serialises the writes of one (org, project, kind) on the logical key, so an absent row is covered too: the
+    /// lock is the transaction's, and the previous read and the upsert both run under it.
+    /// </summary>
+    private const string LockSql =
+        "select pg_advisory_xact_lock(hashtext('evidgate.artifact_kind_policy'), hashtext(@lock_key))";
 
     /// <summary>The project's status, so a missing or deleting project is a named refusal and not a foreign-key error.</summary>
     private const string ProjectStatusSql = """
@@ -149,6 +164,8 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
             org_id = context.OrgId,
             project_id = command.ProjectId,
             kind = command.Kind,
+            // The row's natural key: the writers of one kind queue behind each other on it, absent row included.
+            lock_key = $"{context.OrgId:D}:{command.ProjectId:D}:{command.Kind}",
             max_bytes = command.MaxBytes,
             // A list, so it travels as JSON text: the tenant Dapper path refuses array parameters.
             media_types = JsonSerializer.Serialize(command.MediaTypes),
@@ -169,19 +186,28 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
             return Result.Failure<ArtifactKindPolicyView>(EvidenceErrors.ProjectDeleting);
         }
 
+        // Taken before the previous read: two writers of one kind must not both read the value the other is about to
+        // replace, which is how the audit chain would record a "previous" that never was the row's value.
+        await db.ExecuteAsync(LockSql, parameters, cancellationToken).ConfigureAwait(false);
+
         var previous = await db.QuerySingleOrDefaultAsync<string>(PreviousSql, parameters, cancellationToken)
             .ConfigureAwait(false);
 
         await db.ExecuteAsync(UpsertSql, parameters, cancellationToken).ConfigureAwait(false);
 
         // The chain records which sensitivity the row carried before and which it carries now: a lowering of a
-        // kind whose static default is sensitive is exactly the change an operator has to be able to find.
+        // kind whose static default is sensitive is exactly the change an operator has to be able to find. A project
+        // without a row was running on the kind's default, so that value is what the write replaces.
+        var before = previous
+            ?? ArtifactKindDefaults.Resolve(command.Kind, row: null)?.DefaultSensitivity
+            ?? ArtifactSensitivity.ForKind(command.Kind);
+
         audit.Describe(new AuditObject(
             "artifact_kind_policy",
             $"{command.ProjectId:D}:{command.Kind}",
             Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["previous_default_sensitivity"] = previous ?? "none",
+                ["previous_default_sensitivity"] = before,
                 ["status"] = command.DefaultSensitivity,
             }));
 

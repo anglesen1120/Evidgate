@@ -17,14 +17,15 @@ namespace Evidgate.Modules.Evidence.Application.Artifacts;
 /// <summary>
 /// Issues one short-lived presigned <c>GET</c> for an artifact's content. It is a command rather than a query
 /// because it appends an audit row on a grant and, through <see cref="ArtifactDownloadGate"/>, on a denial — a
-/// read that writes is a command. The object key travels in from the gate, which already masked it for a caller
-/// that may not see the content, so the handler never presigns a key the caller could not have been shown.
+/// read that writes is a command.
 /// </summary>
+/// <remarks>
+/// The command carries the id and nothing else: the handler resolves the key, the lifecycle state and the
+/// classification itself, so no caller can hand it an object key it was never shown or claim a sensitive row is
+/// ordinary.
+/// </remarks>
 /// <param name="ArtifactId">The artifact the route addressed.</param>
-/// <param name="ObjectKey">The final object key the gate resolved for this caller.</param>
-/// <param name="Sensitive">True when the row is served as sensitive (the grant is then audited).</param>
-internal sealed record IssueArtifactDownloadUrl(Guid ArtifactId, string ObjectKey, bool Sensitive)
-    : ICommand<Result<DownloadUrlResponse>>;
+internal sealed record IssueArtifactDownloadUrl(Guid ArtifactId) : ICommand<Result<DownloadUrlResponse>>;
 
 /// <summary>
 /// The endpoint-side decision of one download issuance: the <c>artifact:read_sensitive</c> answer for the caller, the
@@ -119,6 +120,13 @@ internal sealed class ArtifactDownloadGate(
             return Result.Failure<ArtifactReadRow>(EvidenceErrors.ArtifactNotFound);
         }
 
+        // A deleting or deleted row is gated by the read model whatever permission the caller holds, so the
+        // lifecycle answer is asked first: 409, not the 403 a masked sensitive row earns.
+        if (row.State is ArtifactState.PendingDelete or ArtifactState.Deleted)
+        {
+            return Result.Failure<ArtifactReadRow>(EvidenceErrors.ArtifactStateConflict);
+        }
+
         if (row.ContentGated)
         {
             await AuditDenialAsync(context.OrgId, row.ProjectId, row, principal, cancellationToken).ConfigureAwait(false);
@@ -126,8 +134,8 @@ internal sealed class ArtifactDownloadGate(
             return Result.Failure<ArtifactReadRow>(EvidenceErrors.SensitivityForbidden);
         }
 
-        // Only a ready row has bytes at its final key: a pending or rejected upload, or a row being deleted, would
-        // otherwise presign a key that holds nothing or holds a staging object nobody verified.
+        // Only a ready row has bytes at its final key: a pending or rejected upload would otherwise presign a key
+        // that holds nothing or holds a staging object nobody verified.
         return string.Equals(row.State, Ready, StringComparison.Ordinal)
             ? Result.Success(row)
             : Result.Failure<ArtifactReadRow>(EvidenceErrors.ArtifactStateConflict);
@@ -136,8 +144,8 @@ internal sealed class ArtifactDownloadGate(
     /// <summary>
     /// Appends the one audit row a denied sensitive read needs, in its own scope and unit of work, and commits it:
     /// the pipeline writes no audit entry for a failing command and rolls the tenant transaction back, so a denial
-    /// recorded there would never survive. Nothing of the artifact's content is recorded — only its id, the actor
-    /// and the outcome.
+    /// recorded there would never survive. Nothing of the artifact's content is recorded — only its id, its run,
+    /// the actor and the outcome.
     /// </summary>
     private async Task AuditDenialAsync(
         Guid orgId,
@@ -154,7 +162,11 @@ internal sealed class ArtifactDownloadGate(
         audit.Describe(new AuditObject(
             "artifact",
             row.Id.ToString("D"),
-            Metadata: new Dictionary<string, string>(StringComparer.Ordinal) { ["outcome"] = "sensitive_forbidden" }));
+            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["outcome"] = "sensitive_forbidden",
+                ["run_id"] = row.RunId.ToString("D"),
+            }));
         audit.Record(DeniedAction, AuditActorResolver.From(principal));
 
         await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
@@ -165,24 +177,53 @@ internal sealed class ArtifactDownloadGate(
 /// <summary>
 /// Presigns the <c>GET</c> of one artifact the gate already authorized, and audits the issuance of a sensitive
 /// artifact (the grant half of the audited pairs). The URL is a bearer credential: it is never logged, thrown or
-/// recorded — the audit row names the artifact and the outcome, never the URL.
+/// recorded — the audit row names the artifact, its run and the outcome, never the URL.
 /// </summary>
+/// <remarks>
+/// The handler re-reads the row inside the pipeline's tenant transaction instead of receiving the key: the command
+/// carries only the id, so the key, the state and the classification this answer is built from are the database's,
+/// never a caller's. The gate has already refused an unknown, foreign or gated row, so the re-read only re-proves it
+/// for the moment of issuance — a row that became unready or deleted in between is a conflict, not a URL.
+/// </remarks>
+/// <param name="storage">Presigner of the object store's <c>GET</c>.</param>
+/// <param name="db">The scoped data access of the open tenant transaction.</param>
+/// <param name="audit">The audit trail of the successful command.</param>
 [AuditedAction("artifact.download")]
 [Permission(Permissions.Artifact.Read)]
-internal sealed class IssueArtifactDownloadUrlHandler(IObjectStorage storage, IAuditTrail audit)
+internal sealed class IssueArtifactDownloadUrlHandler(IObjectStorage storage, ITenantDb db, IAuditTrail audit)
     : ICommandHandler<IssueArtifactDownloadUrl, Result<DownloadUrlResponse>>
 {
     /// <inheritdoc />
-    public ValueTask<Result<DownloadUrlResponse>> Handle(
+    public async ValueTask<Result<DownloadUrlResponse>> Handle(
         IssueArtifactDownloadUrl command,
         CancellationToken cancellationToken)
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Evidence, nameof(IssueArtifactDownloadUrl));
         cancellationToken.ThrowIfCancellationRequested();
 
+        // `true` asks for the row as the store holds it: the permission was the gate's question, and a masked read
+        // here would withhold the very key this command exists to presign.
+        var row = await ArtifactReadModel
+            .ReadAsync(db, command.ArtifactId, canReadSensitive: true, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (row is null)
+        {
+            return Result.Failure<DownloadUrlResponse>(EvidenceErrors.ArtifactNotFound);
+        }
+
+        // Covers the deleting and deleted rows: with the permission asked for, content_gated is true for those alone.
+        if (row.ContentGated || !string.Equals(row.State, ArtifactState.Ready, StringComparison.Ordinal))
+        {
+            return Result.Failure<DownloadUrlResponse>(EvidenceErrors.ArtifactStateConflict);
+        }
+
+        var sensitive = string.Equals(
+            row.EffectiveSensitivity, ArtifactSensitivity.Sensitive, StringComparison.Ordinal);
+
         // A normal artifact's issuance changes nothing worth the chain, so only the sensitive grant is recorded: the
         // stage would otherwise append a row for every ordinary view.
-        if (!command.Sensitive)
+        if (!sensitive)
         {
             audit.Suppress();
         }
@@ -190,15 +231,17 @@ internal sealed class IssueArtifactDownloadUrlHandler(IObjectStorage storage, IA
         {
             audit.Describe(new AuditObject(
                 "artifact",
-                command.ArtifactId.ToString("D"),
-                Metadata: new Dictionary<string, string>(StringComparer.Ordinal) { ["outcome"] = "sensitive_granted" }));
+                row.Id.ToString("D"),
+                Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["outcome"] = "sensitive_granted",
+                    ["run_id"] = row.RunId.ToString("D"),
+                }));
         }
 
-        var presigned = storage.PresignGet(command.ObjectKey);
+        var presigned = storage.PresignGet(row.ObjectKey ?? throw new InvalidOperationException(
+            "a ready, ungated row always carries its object key"));
 
-        return ValueTask.FromResult(Result.Success(new DownloadUrlResponse(
-            command.ArtifactId,
-            presigned.Url,
-            presigned.ExpiresAt)));
+        return Result.Success(new DownloadUrlResponse(row.Id, presigned.Url, presigned.ExpiresAt));
     }
 }

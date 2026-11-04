@@ -129,6 +129,19 @@ public interface IObjectStorage
 }
 
 /// <summary>
+/// The hard ceiling of one stored object, shared by the adapter that refuses to buffer more and by the kind-policy
+/// route that may not raise an artifact's cap above it. One constant, so the two can never disagree.
+/// </summary>
+public static class ObjectStorageLimits
+{
+    /// <summary>
+    /// The largest object one read may buffer, 256 MiB: the highest kind cap the static defaults set
+    /// (<c>raw_report</c>), so a cap above it would be a policy no scan or parse could ever read.
+    /// </summary>
+    public const long MaxObjectBytes = 256L * 1024 * 1024;
+}
+
+/// <summary>
 /// A presign request (06.1.2-T1). The key is the deterministic staging key
 /// <c>pending/&lt;org_id&gt;/&lt;artifact_id&gt;</c> the handler mints; the checksum is
 /// the lowercase hex SHA-256 of the bytes the client will upload, without the

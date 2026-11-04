@@ -46,6 +46,7 @@ public static partial class AuditMetadata
         "range_days",
         "reason",
         "outcome",
+        "run_id",
         // 07.1.1-T4.1: the activation records which revision it moved the pointer from and the mode it stored.
         "previous_id",
         "mode",

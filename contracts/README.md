@@ -137,10 +137,12 @@ otherwise the envelope filter's default `60` (00 §9.2).
 - `PUT /v1/projects/{p}/retention` — naturally idempotent: the same body
   upserts the same two windows on `(org_id, project_id)`, so a replay creates
   no second row and cannot change the answer (06.4.1 §5).
-- `PUT /v1/projects/{p}/artifact-kind-policy/{kind}` — naturally idempotent:
-  the same body upserts the same five-knob row on
-  `(org_id, project_id, kind)`, so a replay creates no second row, changes no
-  answer, and appends no second audit row.
+- `PUT /v1/projects/{p}/artifact-kind-policy/{kind}` — the row is upserted on
+  `(org_id, project_id, kind)`, so a replay stores the same five knobs and
+  changes no answer; it is not a candidate for `Idempotency-Key` because the
+  write is audited on every successful call — an identical repeated `PUT`
+  writes another `artifact_kind_policy.set` row, recording the previous
+  default it found.
 - `POST /v1/auth/invite-token`, `POST /v1/auth/link/{provider}` — no resource
   is created: the first validates the presented token and stages it in the
   short-lived `__Host-evidgate_invite` cookie, the second answers a state cookie
