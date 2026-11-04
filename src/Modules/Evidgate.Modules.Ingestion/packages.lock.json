@@ -259,6 +259,9 @@
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
         }
       },
+      "evidgate.modules.usage.contracts": {
+        "type": "Project"
+      },
       "Corvus.Json.Validator": {
         "type": "CentralTransitive",
         "requested": "[5.6.1, )",

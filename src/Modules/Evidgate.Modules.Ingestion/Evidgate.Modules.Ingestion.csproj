@@ -18,6 +18,9 @@
     <!-- 04.1.1-T1: the events route is the module's first pipeline-guarded route, so the handler reads the
          ambient caller (IRequestPrincipalAccessor) and declares [Permission] from the C2 building block. -->
     <ProjectReference Include="..\..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
+    <!-- The accepted-batch metering task is the ingest-side emitter of the usage ledger: it calls the Usage module's
+         ledger contract only (00 §5.5 C5, 00 §9.1 internal-only metering). -->
+    <ProjectReference Include="..\Evidgate.Modules.Usage.Contracts\Evidgate.Modules.Usage.Contracts.csproj" />
     <!-- 04.1.1-T1: the per-event payload_hash is the RFC 8785 canonical hash of the received envelope. -->
     <ProjectReference Include="..\..\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
   </ItemGroup>
