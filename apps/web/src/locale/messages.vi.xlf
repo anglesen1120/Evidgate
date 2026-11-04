@@ -3045,6 +3045,7 @@
       <trans-unit id="runs.detail.incomplete-summary" datatype="html"><source>Collection is incomplete. Review the evidence panel for recorded missing reasons.</source><target>Thu thập chưa đầy đủ. Xem bảng bằng chứng để biết các lý do thiếu đã được ghi nhận.</target></trans-unit>
       <trans-unit id="runs.detail.view-evidence" datatype="html"><source>View evidence</source><target>Xem bằng chứng</target></trans-unit>
       <trans-unit id="runs.detail.evidence-completeness" datatype="html"><source>Evidence completeness</source><target>Độ đầy đủ của bằng chứng</target></trans-unit>
+      <trans-unit id="ui.close" datatype="html"><source>Close</source><target>Đóng</target></trans-unit>
     </body>
   </file>
 </xliff>

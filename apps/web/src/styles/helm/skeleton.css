@@ -1,0 +1,5 @@
+@layer components {
+  .spartan-skeleton {
+    @apply bg-muted rounded-md;
+  }
+}

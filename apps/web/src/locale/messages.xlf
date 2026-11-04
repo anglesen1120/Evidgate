@@ -2872,6 +2872,7 @@
       <trans-unit id="runs.detail.incomplete-summary" datatype="html"><source>Collection is incomplete. Review the evidence panel for recorded missing reasons.</source></trans-unit>
       <trans-unit id="runs.detail.view-evidence" datatype="html"><source>View evidence</source></trans-unit>
       <trans-unit id="runs.detail.evidence-completeness" datatype="html"><source>Evidence completeness</source></trans-unit>
+      <trans-unit id="ui.close" datatype="html"><source>Close</source></trans-unit>
     </body>
   </file>
 </xliff>

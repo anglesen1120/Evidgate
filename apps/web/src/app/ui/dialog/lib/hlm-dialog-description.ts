@@ -1,0 +1,15 @@
+import { Directive } from '@angular/core';
+import { BrnDialogDescription } from '@spartan-ng/brain/dialog';
+import { classes } from '@evidgate/ui/utils';
+
+@Directive({
+  selector: '[hlmDialogDescription]',
+  exportAs: 'hlmDialogDescription',
+  hostDirectives: [BrnDialogDescription],
+  host: { 'data-slot': 'dialog-description' },
+})
+export class HlmDialogDescription {
+  constructor() {
+    classes(() => 'spartan-dialog-description');
+  }
+}
