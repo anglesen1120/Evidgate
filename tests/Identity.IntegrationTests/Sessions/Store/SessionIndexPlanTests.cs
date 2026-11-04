@@ -122,6 +122,28 @@ public sealed class SessionIndexPlanTests : SessionHardeningTestBase
             .ShouldContain("fillfactor=80", Case.Sensitive, "the page keeps room for the next tuple version");
     }
 
+    /// <summary>The removed-member probe of the invite path plans the partial index, whose predicate is exactly the probe's status.</summary>
+    [Fact]
+    public async Task The_Removed_Member_Invite_Probe_Plans_The_Partial_Index()
+    {
+        (await OwnerScalarAsync<string>(
+            "select indexdef from pg_indexes where schemaname = 'public' and indexname = 'membership_removed_invited_email_idx'"))
+            .ShouldContain("(org_id, invited_email)", Case.Sensitive);
+
+        (await OwnerScalarAsync<string>(
+            "select pg_get_expr(i.indpred, i.indrelid) from pg_index i " +
+            "join pg_class c on c.oid = i.indexrelid where c.relname = 'membership_removed_invited_email_idx'"))
+            .ShouldBe("(status = 'removed'::text)");
+
+        var plan = await ExplainAsync(
+            "select 1 from public.membership m where m.org_id = @org and m.invited_email = @email " +
+            "and m.status = 'removed' and m.user_id is not null",
+            ("org", Guid.NewGuid()),
+            ("email", "removed-probe@example.com"));
+
+        plan.ShouldContain("membership_removed_invited_email_idx", Case.Sensitive);
+    }
+
     /// <summary>Plans the statement with real parameters, with sequential scans disabled for that transaction only.</summary>
     /// <param name="sql">The statement text the definers run.</param>
     /// <param name="values">Its parameters.</param>
