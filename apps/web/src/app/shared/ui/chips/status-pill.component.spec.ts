@@ -61,6 +61,10 @@ describe('StatusPillComponent', () => {
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
       expect(root.querySelector(`.status-pill--${tone}`)).not.toBeNull();
+      const badge = root.querySelector('[hlmBadge]');
+      expect(badge?.getAttribute('data-slot')).toBe('badge');
+      expect(badge?.classList.contains(`bg-[var(--eg-${tone}-bg)]`)).toBe(true);
+      expect(badge?.classList.contains(`text-[var(--eg-${tone}-fg)]`)).toBe(true);
       expect(root.textContent?.trim()).toBe('Localized domain status');
       expect(root.querySelector('.status-pill__dimension')).toBeNull();
     },
