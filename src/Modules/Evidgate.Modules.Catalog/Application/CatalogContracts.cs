@@ -155,6 +155,39 @@ internal sealed class CatalogContracts(ITenantDb db) : ICatalogContracts
             row => new EvaluationCaseIdentity(row.CaseId, row.CaseKey));
     }
 
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<Guid>> GetArchivedCaseIdsAsync(
+        Guid orgId,
+        Guid projectId,
+        CancellationToken cancellationToken) =>
+        await db.QueryAsync<Guid>(
+            CatalogReadSql.ArchivedCaseIds,
+            new { org_id = orgId, project_id = projectId },
+            cancellationToken).ConfigureAwait(false);
+
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyDictionary<Guid, string>> GetCaseStatusesAsync(
+        Guid orgId,
+        Guid projectId,
+        IReadOnlyCollection<Guid> caseIds,
+        CancellationToken cancellationToken)
+    {
+        if (caseIds.Count == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        var json = System.Text.Json.JsonSerializer.Serialize(caseIds);
+        var rows = await db.QueryAsync<CaseStatusRow>(
+            CatalogReadSql.CaseStatuses,
+            new { org_id = orgId, project_id = projectId, ids = json },
+            cancellationToken).ConfigureAwait(false);
+
+        return rows.ToDictionary(row => row.Id, row => row.Status);
+    }
+
+    private sealed record CaseStatusRow(Guid Id, string Status);
+
     private sealed record CaseRevisionRow(Guid CaseRevisionId, Guid CaseId);
 
     private sealed record CaseIdentityRow(Guid CaseRevisionId, Guid CaseId, string CaseKey);

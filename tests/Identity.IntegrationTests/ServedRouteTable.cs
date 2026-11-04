@@ -867,6 +867,15 @@ internal static class RouteRequests
             new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/versions/{ctx.AuthoringVersionId}/restore",
                 IdempotencyKey: Key()));
 
+        // 13.1.1-T4: routes 20 and 21, the manual-case link pair. The catalog case id is a fresh id, so a granted link
+        // answers 422 `case_not_found` (not 403) and a granted unlink 404 — exactly like the entity ids above.
+        Add("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/links", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}/links",
+                new JsonObject { ["test_case_id"] = Guid.NewGuid().ToString("D") }, IdempotencyKey: Key()));
+        Add("DELETE", "/v1/projects/{p}/authoring/manual-cases/{m}/links/{c}", ctx =>
+            new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}/links/{Guid.NewGuid():D}",
+                IdempotencyKey: Key()));
+
         // 13.1.1-T5: route 25, the import/export pair. The import probe is a dry run of a valid one-row JSON document —
         // a body the readers refuse would answer 422 before the permission stage, so a denied probe could not observe
         // the 403 it asserts — and a dry run writes nothing even for a granted caller.

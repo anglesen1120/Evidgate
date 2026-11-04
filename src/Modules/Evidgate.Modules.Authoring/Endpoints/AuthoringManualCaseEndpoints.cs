@@ -24,10 +24,10 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// allocator, the writer and the steps schema already sit.
 /// </para>
 /// <para>
-/// Not implemented here, on purpose: <c>?covered=</c> and the <c>linked_live_count</c>/<c>linked_case_ids</c> fields of
-/// AC12, and the <c>links</c> member of route 14. All three read <c>manual_case_link</c>, which 13.1.1-T4 creates; the
-/// list rejects <c>covered</c> with a 422 instead of ignoring it, because a silently unfiltered page would look like the
-/// AC12 answer. Restore (route 18) and the link routes (20/21) belong to their own task too.
+/// The coverage members of route 12 (<c>linked_live_count</c>, <c>linked_case_ids</c>, the <c>covered</c> filter) and the
+/// link routes 20/21 read <c>manual_case_link</c>. "Covered" is authoring coverage — the manual case is asserted to be
+/// proven by a live automated test — and it is not the execution coverage of the run report; the two numbers are never
+/// presented as one. The <c>links</c> member of route 14 is still absent.
 /// </para>
 /// </remarks>
 internal static class AuthoringManualCaseEndpoints
@@ -91,6 +91,22 @@ internal static class AuthoringManualCaseEndpoints
             .Produces(StatusCodes.Status412PreconditionFailed)
             .Produces(StatusCodes.Status422UnprocessableEntity)
             .WithSummary("Re-parent a manual test case to another item of the project (route 19, AC22)");
+
+        authoring.MapPost("/manual-cases/{m}/links", LinkAsync)
+            .Accepts<LinkManualCaseRequest>("application/json")
+            .Produces<LinkManualCaseResponse>(StatusCodes.Status201Created)
+            .Produces<LinkManualCaseResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status422UnprocessableEntity)
+            .WithSummary("Link a manual test case to a live catalog test case (route 20, AC11)");
+
+        authoring.MapDelete("/manual-cases/{m}/links/{c}", UnlinkAsync)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound)
+            .WithSummary("Remove a manual test case's link to a catalog test case (route 21)");
     }
 
     /// <summary>Route 12: the page of cases matching the query's filters.</summary>
@@ -117,13 +133,11 @@ internal static class AuthoringManualCaseEndpoints
             return Result.Failure<ManualCaseListResponse>(itemError);
         }
 
-        // AC12 is 13.1.1-T4's: the coverage filter reads manual_case_link, which this task does not create, so an
-        // unfiltered page must never be served as if it were the filtered one.
-        if (AuthoringEndpointText.Blank(context.Request.Query["covered"]) is not null)
+        // AC12: authoring coverage, not the execution coverage of another module's report. An unfiltered page is the
+        // default; an explicit value narrows to linked (true) or unlinked (false) cases.
+        if (AuthoringEndpointText.OptionalBoolean(context.Request.Query, "covered", out var covered) is { } coveredError)
         {
-            return Result.Failure<ManualCaseListResponse>(Error.Invalid(
-                "covered is delivered by 13.1.1-T4 together with the manual_case_link read model",
-                [new ErrorDetail("/covered", "unsupported")]));
+            return Result.Failure<ManualCaseListResponse>(coveredError);
         }
 
         return await mediator.Send(
@@ -133,6 +147,7 @@ internal static class AuthoringManualCaseEndpoints
                 itemId,
                 AuthoringEndpointText.Blank(context.Request.Query["state"]),
                 AuthoringEndpointText.Blank(context.Request.Query["priority"]),
+                covered,
                 AuthoringEndpointText.Blank(context.Request.Query["q"]),
                 AuthoringEndpointText.Blank(context.Request.Query["cursor"]),
                 limit),
@@ -351,5 +366,48 @@ internal static class AuthoringManualCaseEndpoints
         }
 
         return result;
+    }
+
+    /// <summary>Route 20: link the case to a live catalog test case; a repeat is the documented no-op.</summary>
+    private static async Task<Result<LinkManualCaseResponse>> LinkAsync(
+        Guid p,
+        Guid m,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var (body, bodyError) = await AuthoringEndpointSupport.ReadBodyAsync(context, cancellationToken).ConfigureAwait(false);
+
+        if (bodyError is not null)
+        {
+            return Result.Failure<LinkManualCaseResponse>(bodyError);
+        }
+
+        if (AuthoringEndpointSupport.UnknownMembers(body, ManualCaseBody.LinkMembers, "manual test case link") is { } unknown)
+        {
+            return Result.Failure<LinkManualCaseResponse>(unknown);
+        }
+
+        return await mediator.Send(
+            new LinkManualCaseCommand(p, m, body, AuthoringEndpointSupport.IdempotencyKey(context)),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Route 21: remove one link; a pair that is not linked is a 404.</summary>
+    private static async Task<Result> UnlinkAsync(
+        Guid p,
+        Guid m,
+        Guid c,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        return await mediator.Send(
+            new UnlinkManualCaseCommand(p, m, c, AuthoringEndpointSupport.IdempotencyKey(context)),
+            cancellationToken).ConfigureAwait(false);
     }
 }

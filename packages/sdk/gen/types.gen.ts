@@ -1586,7 +1586,7 @@ export type ManualCaseStepDto = {
 };
 
 /**
- * One row of the manual-case list (13.1.1-T2). The list projection carries no `description`, `precondition` or `steps`, and no coverage field: `linked_live_count` belongs to 13.1.1-T4.
+ * One row of the manual-case list (13.1.1-T2 + 13.1.1-T4). The list projection carries no `description`, `precondition` or `steps`; the two coverage members are authoring coverage — the live catalog cases this manual case is linked to — and are not 03.1.4's execution coverage.
  */
 export type ManualCaseListItemDto = {
     case_id: string;
@@ -1600,6 +1600,14 @@ export type ManualCaseListItemDto = {
     priority: 'critical' | 'high' | 'medium' | 'low';
     state: 'draft' | 'approved' | 'retired';
     version: number;
+    /**
+     * How many of the case's links reach a catalog case that is not `archived`; the number the `covered` filter tests (AC12).
+     */
+    linked_live_count: number;
+    /**
+     * The live catalog case ids behind `linked_live_count`, ascending.
+     */
+    linked_case_ids: Array<string>;
 };
 
 /**
@@ -1691,6 +1699,21 @@ export type MoveManualCaseRequest = {
 export type MoveManualCaseResponse = {
     version: number;
     checklist_item_id: string;
+};
+
+/**
+ * Body of route 20 (13.1.1-T4): the catalog case this manual case is asserted to be proven by. The case must be live and in the same project; an archived one is 422 `request_invalid` with `details[].path = /test_case_id` and `reason = case_archived`, an unknown or other-project one the same 422 with `reason = case_not_found`.
+ */
+export type LinkManualCaseRequest = {
+    test_case_id: string;
+};
+
+/**
+ * The answer of route 20 in both outcomes (13.1.1-T4): 201 with the new `link_id` when the link was created (`changed: true`), 200 with `link_id: null` and `changed: false` when the case already held it — a repeat writes nothing and appends no audit row.
+ */
+export type LinkManualCaseResponse = {
+    link_id: string | null;
+    changed: boolean;
 };
 
 /**
@@ -2664,6 +2687,16 @@ export type AuthoringCaseStateFilter = 'draft' | 'approved' | 'retired';
  * Priority filter shared by checklist items and manual test cases (13.1.1).
  */
 export type AuthoringPriorityFilter = 'critical' | 'high' | 'medium' | 'low';
+
+/**
+ * Authoring coverage filter of route 12: `false` keeps the manual cases no live `manual_case_link` reaches (`linked_live_count = 0`), `true` their complement. "Live" means the linked catalog case is not `archived`. This is not 03.1.4's execution coverage. Anything but `true`/`false` is 422 `request_invalid` with `details[].path = /covered` and reason `value_invalid`.
+ */
+export type AuthoringCoveredFilter = boolean;
+
+/**
+ * Catalog test case id of the link (13.1.1 §5 route 21).
+ */
+export type AuthoringCatalogCaseId = string;
 
 /**
  * Case-insensitive title substring, at most 200 code points; `%`, `_` and `\` are escaped so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
@@ -9640,6 +9673,10 @@ export type ListManualCasesData = {
          */
         priority?: 'critical' | 'high' | 'medium' | 'low';
         /**
+         * Authoring coverage filter of route 12: `false` keeps the manual cases no live `manual_case_link` reaches (`linked_live_count = 0`), `true` their complement. "Live" means the linked catalog case is not `archived`. This is not 03.1.4's execution coverage. Anything but `true`/`false` is 422 `request_invalid` with `details[].path = /covered` and reason `value_invalid`.
+         */
+        covered?: boolean;
+        /**
          * Case-insensitive title substring, at most 200 code points; `%`, `_` and `\` are escaped so the term is matched literally (13.1.1 §5 route 12, 13.1.1-T2).
          */
         q?: string;
@@ -10206,6 +10243,144 @@ export type RestoreManualCaseResponses = {
 };
 
 export type RestoreManualCaseResponse = RestoreManualCaseResponses[keyof RestoreManualCaseResponses];
+
+export type LinkManualCaseData = {
+    body: LinkManualCaseRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Manual test case id (13.1.1).
+         */
+        m: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/manual-cases/{m}/links';
+};
+
+export type LinkManualCaseErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type LinkManualCaseError = LinkManualCaseErrors[keyof LinkManualCaseErrors];
+
+export type LinkManualCaseResponses = {
+    /**
+     * The link already existed; nothing was written
+     */
+    200: LinkManualCaseResponse;
+    /**
+     * The link was created
+     */
+    201: LinkManualCaseResponse;
+};
+
+export type LinkManualCaseResponse2 = LinkManualCaseResponses[keyof LinkManualCaseResponses];
+
+export type UnlinkManualCaseData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * Manual test case id (13.1.1).
+         */
+        m: string;
+        /**
+         * Catalog test case id of the link (13.1.1 §5 route 21).
+         */
+        c: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/manual-cases/{m}/links/{c}';
+};
+
+export type UnlinkManualCaseErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type UnlinkManualCaseError = UnlinkManualCaseErrors[keyof UnlinkManualCaseErrors];
+
+export type UnlinkManualCaseResponses = {
+    /**
+     * The link was removed
+     */
+    204: void;
+};
+
+export type UnlinkManualCaseResponse = UnlinkManualCaseResponses[keyof UnlinkManualCaseResponses];
 
 export type ListAuthoringVersionsData = {
     body?: never;

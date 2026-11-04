@@ -6047,13 +6047,20 @@ paths:
       tags: [authoring]
       summary: Cursor page of the project's manual test cases, in code order (13.1.1-T2)
       description: >-
-        13.1.1 §5 route 12 (the `covered` filter and the `linked_live_count` member are
-        13.1.1-T4's and are absent here). Live cases in `(code, id)` order, optionally narrowed
+        13.1.1 §5 route 12 (`authoring:read`). Live cases in `(code, id)` order, optionally narrowed
         by the exact `node_id` and `item_id` filters, by `state` (`draft`, `approved`,
-        `retired`), by `priority` (`critical`, `high`, `medium`, `low`) and by `q` — a
+        `retired`), by `priority` (`critical`, `high`, `medium`, `low`), by `covered` and by `q` — a
         case-insensitive title substring of at most 200 code points, with `%`, `_` and `\`
-        escaped so a caller cannot inject a LIKE wildcard. A present but invalid filter value,
-        a `limit` outside 1..200 or a garbled `cursor` is 422 `request_invalid` with
+        escaped so a caller cannot inject a LIKE wildcard. Every item carries
+        `linked_live_count` and `linked_case_ids`: the catalog cases this manual case is linked to
+        that are not `archived`. `covered=false` keeps the cases whose `linked_live_count` is 0,
+        `covered=true` their complement; the filter is index-served by
+        `manual_case_link_case_idx` and evaluated in the same statement as the page. This is
+        **authoring coverage** — an author's claim that a live automated test proves the case — and
+        it is not the execution coverage of 03.1.4 (declared case × variant executions with an
+        accepted result); the two numbers must never be presented as one. A present but invalid
+        filter value (an unknown `state`/`priority`, a `covered` other than `true`/`false`, a
+        malformed uuid, a `limit` outside 1..200, a garbled `cursor`) is 422 `request_invalid` with
         `details[].path` naming the parameter. Another tenant's project is 404 `not_found`; a
         credential scoped to a sibling project of the same org is 403 `project_scope_mismatch`.
       x-permission: authoring:read
@@ -6064,6 +6071,7 @@ paths:
         - $ref: '#/components/parameters/AuthoringItemIdFilter'
         - $ref: '#/components/parameters/AuthoringCaseStateFilter'
         - $ref: '#/components/parameters/AuthoringPriorityFilter'
+        - $ref: '#/components/parameters/AuthoringCoveredFilter'
         - $ref: '#/components/parameters/AuthoringQuery'
         - $ref: '#/components/parameters/AuthoringCursor'
         - $ref: '#/components/parameters/Limit'
@@ -6483,6 +6491,111 @@ paths:
           $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/manual-cases/{m}/links:
+    post:
+      operationId: linkManualCase
+      tags: [authoring]
+      summary: Link a manual test case to a live catalog test case (13.1.1-T4)
+      description: >-
+        13.1.1 §5 route 20 (`authoring:write`). Creates one `manual_case_link` when the catalog
+        case is live (`status <> 'archived'`) and in the same project, answering 201 with the new
+        `link_id`; the pair `(manual_test_case_id, test_case_id)` is unique, so a repeat — including
+        one that races this call — answers 200 `changed: false` and writes nothing (no version row,
+        no audit row). An unknown or other-project case is 422 `request_invalid` with
+        `details[].path = /test_case_id` and `reason = case_not_found`; an `archived` one is the same
+        422 with `reason = case_archived`; neither echoes any catalog content. Links are many-to-many
+        in both directions. Unknown or soft-deleted manual case 404 `not_found`, another tenant's
+        project or a soft-deleted one 404 too, a credential scoped to a sibling project 403
+        `project_scope_mismatch`, a body over 64 KiB 413 `payload_too_large`, a missing
+        `Idempotency-Key` 400 `request_invalid`, and a lock timeout 503 `unavailable` with
+        `Retry-After`. This is authoring coverage, never the execution coverage of 03.1.4.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringManualCaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkManualCaseRequest'
+      responses:
+        '200':
+          description: The link already existed; nothing was written
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkManualCaseResponse'
+        '201':
+          description: The link was created
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkManualCaseResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/authoring/manual-cases/{m}/links/{c}:
+    delete:
+      operationId: unlinkManualCase
+      tags: [authoring]
+      summary: Remove one manual test case's link to a catalog test case (13.1.1-T4)
+      description: >-
+        13.1.1 §5 route 21 (`authoring:write`). Removes the link the route names and answers 204;
+        the pair is addressed by the manual case and the catalog case, so a caller never needs the
+        link row's own id. A pair that is not linked — including one whose manual case or project is
+        unknown to this tenant — is 404 `not_found` rather than a silent success. Only the link is
+        deleted: the manual case, its versions and its catalog case are untouched. A credential
+        scoped to a sibling project is 403 `project_scope_mismatch`, a missing `Idempotency-Key` 400
+        `request_invalid`, and a lock timeout 503 `unavailable` with `Retry-After`.
+      x-permission: authoring:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AuthoringManualCaseId'
+        - $ref: '#/components/parameters/AuthoringCatalogCaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: The link was removed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -7531,6 +7644,26 @@ components:
       schema:
         type: string
         enum: [critical, high, medium, low]
+    AuthoringCoveredFilter:
+      name: covered
+      in: query
+      required: false
+      description: >-
+        Authoring coverage filter of route 12: `false` keeps the manual cases no live
+        `manual_case_link` reaches (`linked_live_count = 0`), `true` their complement. "Live" means
+        the linked catalog case is not `archived`. This is not 03.1.4's execution coverage. Anything
+        but `true`/`false` is 422 `request_invalid` with `details[].path = /covered` and reason
+        `value_invalid`.
+      schema:
+        type: boolean
+    AuthoringCatalogCaseId:
+      name: c
+      in: path
+      required: true
+      description: Catalog test case id of the link (13.1.1 §5 route 21).
+      schema:
+        type: string
+        format: uuid
     AuthoringQuery:
       name: q
       in: query
@@ -10193,10 +10326,23 @@ components:
     ManualCaseListItemDto:
       type: object
       description: >-
-        One row of the manual-case list (13.1.1-T2). The list projection carries no
-        `description`, `precondition` or `steps`, and no coverage field: `linked_live_count`
-        belongs to 13.1.1-T4.
-      required: [case_id, code, checklist_item_id, node_id, title, priority, state, version]
+        One row of the manual-case list (13.1.1-T2 + 13.1.1-T4). The list projection carries no
+        `description`, `precondition` or `steps`; the two coverage members are authoring coverage —
+        the live catalog cases this manual case is linked to — and are not 03.1.4's execution
+        coverage.
+      required:
+        [
+          case_id,
+          code,
+          checklist_item_id,
+          node_id,
+          title,
+          priority,
+          state,
+          version,
+          linked_live_count,
+          linked_case_ids,
+        ]
       properties:
         case_id: { type: string, format: uuid }
         code:
@@ -10211,6 +10357,16 @@ components:
         priority: { type: string, enum: [critical, high, medium, low] }
         state: { type: string, enum: [draft, approved, retired] }
         version: { type: integer, minimum: 1 }
+        linked_live_count:
+          type: integer
+          minimum: 0
+          description: >-
+            How many of the case's links reach a catalog case that is not `archived`; the number
+            the `covered` filter tests (AC12).
+        linked_case_ids:
+          type: array
+          description: The live catalog case ids behind `linked_live_count`, ascending.
+          items: { type: string, format: uuid }
     ManualCaseListResponse:
       type: object
       description: 00 §9.1 keyset page of `ManualCaseListItemDto`, ordered `(code, id)` (13.1.1-T2).
@@ -10342,6 +10498,27 @@ components:
       properties:
         version: { type: integer, minimum: 1 }
         checklist_item_id: { type: string, format: uuid }
+    LinkManualCaseRequest:
+      type: object
+      description: >-
+        Body of route 20 (13.1.1-T4): the catalog case this manual case is asserted to be proven by.
+        The case must be live and in the same project; an archived one is 422 `request_invalid` with
+        `details[].path = /test_case_id` and `reason = case_archived`, an unknown or other-project
+        one the same 422 with `reason = case_not_found`.
+      additionalProperties: false
+      required: [test_case_id]
+      properties:
+        test_case_id: { type: string, format: uuid }
+    LinkManualCaseResponse:
+      type: object
+      description: >-
+        The answer of route 20 in both outcomes (13.1.1-T4): 201 with the new `link_id` when the link
+        was created (`changed: true`), 200 with `link_id: null` and `changed: false` when the case
+        already held it — a repeat writes nothing and appends no audit row.
+      required: [link_id, changed]
+      properties:
+        link_id: { type: [string, 'null'], format: uuid }
+        changed: { type: boolean }
     InviteTokenRequest:
       type: object
       description: >-

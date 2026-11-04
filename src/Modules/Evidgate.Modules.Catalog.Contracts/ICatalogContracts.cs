@@ -89,4 +89,32 @@ public interface ICatalogContracts
     /// <param name="caseRevisionIds">The revisions the run's planned executions name.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     ValueTask<IReadOnlyDictionary<Guid, EvaluationCaseIdentity>> GetEvaluationCasesAsync(Guid orgId, IReadOnlyCollection<Guid> caseRevisionIds, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every <c>archived</c> case of <paramref name="projectId"/>, as one statement over the project's own rows: the
+    /// complement of the live catalog a caller that may not read <c>test_case</c> needs (the authoring coverage read
+    /// marks a link live unless its case is archived). Archived cases are the minority of a project, and they are the
+    /// only cases a projection over linked ids has to exclude, so this set keeps that caller's own statement one
+    /// bounded query. Another tenant's project, and a project this tenant cannot see, answer empty.
+    /// </summary>
+    /// <param name="orgId">The caller's trusted tenant id, so the read is tenant-exact beyond row level security.</param>
+    /// <param name="projectId">The project whose archived cases are wanted.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyList<Guid>> GetArchivedCaseIdsAsync(Guid orgId, Guid projectId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The <c>status</c> of each of <paramref name="caseIds"/> that is a case of <paramref name="projectId"/> visible to
+    /// the tenant: one bounded statement however many ids, and an empty batch makes no round trip. Ids that are
+    /// unknown, or belong to another project or tenant, are simply absent — so a caller that must refuse a link to an
+    /// unknown case and to another project's case in the same way cannot tell them apart, which is the point.
+    /// </summary>
+    /// <param name="orgId">The caller's trusted tenant id, so the read is tenant-exact beyond row level security.</param>
+    /// <param name="projectId">The project the cases must belong to.</param>
+    /// <param name="caseIds">The <c>test_case.id</c> values to look up.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    ValueTask<IReadOnlyDictionary<Guid, string>> GetCaseStatusesAsync(
+        Guid orgId,
+        Guid projectId,
+        IReadOnlyCollection<Guid> caseIds,
+        CancellationToken cancellationToken);
 }

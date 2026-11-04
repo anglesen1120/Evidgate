@@ -172,7 +172,7 @@ public sealed class RouteCoverageTests
     }
 
     /// <summary>
-    /// The twenty-four authoring operations of 13.1.1 §5 (13.1.1-T2.4, 13.1.1-T3 and 13.1.1-T5), with the permission
+    /// The twenty-six authoring operations of 13.1.1 §5 (13.1.1-T2.4, 13.1.1-T3, 13.1.1-T4 and 13.1.1-T5), with the permission
     /// each documents: reads carry <c>authoring:read</c>, every write <c>authoring:write</c>.
     /// </summary>
     private static readonly (string Method, string Template, string Permission)[] AuthoringOperations =
@@ -203,11 +203,14 @@ public sealed class RouteCoverageTests
         // 13.1.1-T5: route 25, the import/export pair (a file in, a file out; the same permission split as the rest).
         ("POST", "/v1/projects/{p}/authoring/import", "authoring:write"),
         ("GET", "/v1/projects/{p}/authoring/export", "authoring:read"),
+        // 13.1.1-T4: routes 20 and 21, the manual-case link pair.
+        ("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/links", "authoring:write"),
+        ("DELETE", "/v1/projects/{p}/authoring/manual-cases/{m}/links/{c}", "authoring:write"),
     ];
 
     /// <summary>
     /// 13.1.1-T2.4: every operation of <c>contracts/openapi.yaml</c> declares the <c>x-permission</c> that gates it, and
-    /// the twenty-four authoring operations of 13.1.1 §5 are in the inventory with the permission §5 assigns — so an
+    /// the twenty-six authoring operations of 13.1.1 §5 are in the inventory with the permission §5 assigns — so an
     /// authoring route can never ship without its gate, and a spec addition cannot slip in without one.
     /// </summary>
     [Fact]

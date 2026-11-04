@@ -94,6 +94,39 @@ internal static class AuthoringManualCaseReadSql
         """;
 
     /// <summary>
+    /// The authoring coverage of one case, computed in the page's own statement (AC12): the count and ids of the links
+    /// whose catalog case is not archived. A link row names a case of the same project by construction (its composite
+    /// FK and the insert trigger), so the only exclusion left is the catalog's own archived status, and the caller
+    /// passes those ids because it may not read <c>test_case</c> itself.
+    /// </summary>
+    /// <remarks>
+    /// Served by <c>manual_case_link_case_idx</c>: <c>test_case_id</c> is included in its leaf pages, so a case with
+    /// many links is still one index-only lookup, and a case with none costs one empty probe. The archived ids are a
+    /// jsonb array rather than a table reference for the same cross-module reason; a project's archived cases are the
+    /// minority of its catalog, which is why that side, and not the live one, is the set handed over.
+    /// </remarks>
+    private const string CaseCoverage = """
+        left join lateral (
+          select count(*) as linked_live_count,
+                 coalesce(array_agg(l.test_case_id order by l.test_case_id), '{}') as linked_case_ids
+            from public.manual_case_link l
+           where l.org_id = m.org_id
+             and l.project_id = m.project_id
+             and l.manual_test_case_id = m.id
+             and not exists (select 1
+                               from jsonb_array_elements_text(@archived_case_ids::jsonb) archived
+                              where archived.value::uuid = l.test_case_id)
+        ) coverage on true
+        """;
+
+    /// <summary>The <c>covered</c> filter (AC12): the same case-level number the page projects, tested once.</summary>
+    private const string CaseCoveredFilter = """
+        and (@covered::boolean is null
+             or (@covered and coverage.linked_live_count > 0)
+             or (not @covered and coverage.linked_live_count = 0))
+        """;
+
+    /// <summary>
     /// First page of a project's live manual test cases, ordered <c>(code, id)</c> (13.1.1 §5).
     /// </summary>
     /// <remarks>
@@ -104,12 +137,13 @@ internal static class AuthoringManualCaseReadSql
     /// total and stable; a client that wants numeric order sorts the page it holds (it is bounded by <c>limit</c>).
     /// </remarks>
     internal const string CasesFirstPage = $"""
-        select {CaseListColumns}
+        select {CaseListColumns}, coverage.linked_live_count, coverage.linked_case_ids
           from public.manual_test_case m
           join public.checklist_item i
             on i.org_id = m.org_id
            and i.project_id = m.project_id
            and i.id = m.checklist_item_id
+          {CaseCoverage}
          where m.org_id = @org_id
            and m.project_id = @project_id
            and m.deleted_at is null
@@ -118,6 +152,7 @@ internal static class AuthoringManualCaseReadSql
            and (@state::text is null or m.state = @state)
            and (@priority::text is null or m.priority = @priority)
            and (@q::text is null or position(lower(@q) in lower(m.title)) > 0)
+           {CaseCoveredFilter}
          order by m.code, m.id
          limit @take
         """;
@@ -127,12 +162,13 @@ internal static class AuthoringManualCaseReadSql
     /// both members, so the seek is a single index range scan on <c>(org_id, project_id, code)</c>.
     /// </summary>
     internal const string CasesNextPage = $"""
-        select {CaseListColumns}
+        select {CaseListColumns}, coverage.linked_live_count, coverage.linked_case_ids
           from public.manual_test_case m
           join public.checklist_item i
             on i.org_id = m.org_id
            and i.project_id = m.project_id
            and i.id = m.checklist_item_id
+          {CaseCoverage}
          where m.org_id = @org_id
            and m.project_id = @project_id
            and m.deleted_at is null
@@ -142,6 +178,7 @@ internal static class AuthoringManualCaseReadSql
            and (@state::text is null or m.state = @state)
            and (@priority::text is null or m.priority = @priority)
            and (@q::text is null or position(lower(@q) in lower(m.title)) > 0)
+           {CaseCoveredFilter}
          order by m.code, m.id
          limit @take
         """;
@@ -246,8 +283,24 @@ internal sealed class ManualCaseListRow
     /// <summary>The row's version.</summary>
     public int Version { get; set; }
 
+    /// <summary>How many of its links reach a live catalog case (archived cases are not counted).</summary>
+    public int LinkedLiveCount { get; set; }
+
+    /// <summary>The live catalog case ids behind <see cref="LinkedLiveCount"/>, ascending.</summary>
+    public Guid[] LinkedCaseIds { get; set; } = [];
+
     /// <summary>The row as the wire type of route 12.</summary>
-    public ManualCaseListItemDto ToDto() => new(CaseId, Code, ChecklistItemId, NodeId, Title, Priority, State, Version);
+    public ManualCaseListItemDto ToDto() => new(
+        CaseId,
+        Code,
+        ChecklistItemId,
+        NodeId,
+        Title,
+        Priority,
+        State,
+        Version,
+        LinkedLiveCount,
+        LinkedCaseIds);
 }
 
 /// <summary>

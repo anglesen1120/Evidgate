@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -12,6 +13,7 @@ using Evidgate.Modules.Authoring.Contracts;
 using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
+using Evidgate.Modules.Catalog.Contracts;
 using Mediator;
 using Microsoft.AspNetCore.Http;
 
@@ -25,6 +27,10 @@ namespace Evidgate.Modules.Authoring.Application.Queries;
 /// <param name="ItemId">Optional filter: the cases of this checklist item.</param>
 /// <param name="State">Optional filter: <c>draft</c>, <c>approved</c> or <c>retired</c>.</param>
 /// <param name="Priority">Optional filter: <c>critical</c>, <c>high</c>, <c>medium</c> or <c>low</c>.</param>
+/// <param name="Covered">
+/// Optional filter: <c>true</c> keeps the cases linked to at least one live catalog case, <c>false</c> the cases with no
+/// such link. This is authoring coverage, not the execution coverage of another module's report.
+/// </param>
 /// <param name="Q">Optional case-insensitive title substring, at most 200 code points.</param>
 /// <param name="Cursor">The opaque cursor of the previous page, or null for the first page.</param>
 /// <param name="Limit">The page size the route already bounded.</param>
@@ -34,13 +40,15 @@ internal sealed record ListManualCasesQuery(
     Guid? ItemId,
     string? State,
     string? Priority,
+    bool? Covered,
     string? Q,
     string? Cursor,
     int Limit) : IQuery<Result<ManualCaseListResponse>>;
 
 /// <summary>
-/// Handler of <see cref="ListManualCasesQuery"/>: two statements (the project probe and one page) in the read-only
-/// tenant transaction, the plan's <c>(code, id)</c> order, and a 422 per unsupported filter value.
+/// Handler of <see cref="ListManualCasesQuery"/>: three statements (the project probe, the catalog's archived case ids
+/// and one page) in the read-only tenant transaction, the plan's <c>(code, id)</c> order, and a 422 per unsupported
+/// filter value.
 /// </summary>
 /// <remarks>
 /// The <c>q</c> filter is <c>position(lower(@q) in lower(title)) &gt; 0</c> rather than <c>ilike '%…%'</c>: a substring
@@ -51,12 +59,16 @@ internal sealed record ListManualCasesQuery(
 /// </remarks>
 /// <param name="db">The tenant-scoped Dapper seam.</param>
 /// <param name="scopes">The open tenant scope.</param>
+/// <param name="principals">The caller, whose credential may be narrowed to one project.</param>
+/// <param name="tenant">The request's own tenant context.</param>
+/// <param name="catalog">The catalog surface, for which linked cases are archived.</param>
 [Permission(Permissions.Authoring.Read)]
 internal sealed class ListManualCasesQueryHandler(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
-    IRequestTenantContextAccessor tenant) : IQueryHandler<ListManualCasesQuery, Result<ManualCaseListResponse>>
+    IRequestTenantContextAccessor tenant,
+    ICatalogContracts catalog) : IQueryHandler<ListManualCasesQuery, Result<ManualCaseListResponse>>
 {
     /// <summary>The longest accepted <c>q</c> (the plan's §5 bound).</summary>
     internal const int MaximumQueryLength = 200;
@@ -138,6 +150,12 @@ internal sealed class ListManualCasesQueryHandler(
             return Result.Failure<ManualCaseListResponse>(AuthoringRules.ProjectNotFound);
         }
 
+        // The catalog answers which linked cases are archived. The list projection may not read `test_case` itself
+        // (module boundaries), and only archived cases have to be excluded for a link to count as live, so the
+        // minority side travels as one id set into the page statement's own coverage aggregate.
+        var archived = await catalog.GetArchivedCaseIdsAsync(orgId, query.ProjectId, cancellationToken)
+            .ConfigureAwait(false);
+
         var parameters = new
         {
             org_id = orgId,
@@ -146,6 +164,8 @@ internal sealed class ListManualCasesQueryHandler(
             node_id = query.NodeId,
             state = query.State,
             priority = query.Priority,
+            covered = query.Covered,
+            archived_case_ids = JsonSerializer.Serialize(archived),
             q = text,
             cursor_code = cursor?.Code,
             cursor_id = cursor?.Id,
@@ -314,5 +334,41 @@ internal static class AuthoringEndpointText
         id = parsed;
 
         return null;
+    }
+
+    /// <summary>An optional boolean filter: absent → null, anything but <c>true</c>/<c>false</c> → the 422 naming it.</summary>
+    /// <param name="query">The request query string.</param>
+    /// <param name="name">The query key, e.g. <c>covered</c>.</param>
+    /// <param name="value">The parsed flag, or null.</param>
+    internal static Error? OptionalBoolean(IQueryCollection query, string name, out bool? value)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        value = null;
+
+        var raw = Blank(query[name].ToString());
+
+        if (raw is null)
+        {
+            return null;
+        }
+
+        if (string.Equals(raw, "true", StringComparison.Ordinal))
+        {
+            value = true;
+
+            return null;
+        }
+
+        if (string.Equals(raw, "false", StringComparison.Ordinal))
+        {
+            value = false;
+
+            return null;
+        }
+
+        return Error.Invalid(
+            string.Create(CultureInfo.InvariantCulture, $"{name} is true or false"),
+            [new ErrorDetail("/" + name, "value_invalid")]);
     }
 }

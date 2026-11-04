@@ -96,4 +96,29 @@ internal static class CatalogReadSql
                   id desc
          limit @limit
         """;
+
+    /// <summary>
+    /// Every archived case of one project. The prefix of <c>test_case_list_idx</c> serves the project, and the status
+    /// predicate is the cheap filter that index comment already accepts; <c>missing</c> stays live, which is the
+    /// catalog's own rule for a case a sync has not seen recently.
+    /// </summary>
+    internal const string ArchivedCaseIds = """
+        select id
+          from public.test_case
+         where org_id = @org_id
+           and project_id = @project_id
+           and status = 'archived'
+        """;
+
+    /// <summary>
+    /// The status of the named cases of one project. The id set travels as JSON text because the Dapper read path
+    /// refuses array parameters, the same transport the batch contract reads already use.
+    /// </summary>
+    internal const string CaseStatuses = """
+        select id, status
+          from public.test_case
+         where org_id = @org_id
+           and project_id = @project_id
+           and id in (select value::uuid from jsonb_array_elements_text(@ids::jsonb))
+        """;
 }

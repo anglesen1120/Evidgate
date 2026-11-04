@@ -107,9 +107,8 @@ internal static class SchemaConventionScan
             "public.event_batch",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only batch receipts (04.1.1-T1; migration 0034): a batch row is the immutable receipt of the batch that wrote its events (the revoked UPDATE/DELETE say so), so it keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FK and RLS are NOT exempt."),
-        // The plan's third entry, `public.manual_case_link` (created_at only), lands with 13.1.1-T4:
-        // 0039 does not create the table, and this allow-list pins exactly the exemptions of the
-        // tables the executed migrations leave in place.
+        // `public.manual_case_link` (created_at only) lands with 13.1.1-T4 (migration 0063) and is pinned at the
+        // end of this list with the reason its row keeps no updated_at/version.
         new SchemaExemption(
             "public.authoring_version",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
@@ -134,6 +133,10 @@ internal static class SchemaConventionScan
             "public.evaluation",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "A stored verdict (migration 0059) is evidence, not state: the app role holds SELECT + INSERT only and the `evaluation_immutable` trigger refuses every UPDATE and DELETE, so the row keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs, closed token CHECKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.manual_case_link",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "A link is insert-or-delete and never edited (13.1.1-T4; migration 0063): the app role holds SELECT, INSERT and DELETE but UPDATE is revoked, so the row keeps created_at only — no updated_at/version and no version trigger. A repeat link is answered by `manual_case_link_uq` rather than by a version bump. Its tenant key, composite FKs, the same-project trigger and RLS are NOT exempt."),
     ];
 
     /// <summary>

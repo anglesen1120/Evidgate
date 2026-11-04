@@ -935,7 +935,7 @@ public sealed class AuthoringTimelineTests
     /// the plan nests. The relation names let an assertion allow a sequential scan on a small table (the project
     /// liveness probe) while still forbidding one on the version table.
     /// </summary>
-    private static (List<string> NodeTypes, List<string> IndexNames, List<string> SequentialScanRelations) PlanNodes(string json)
+    internal static (List<string> NodeTypes, List<string> IndexNames, List<string> SequentialScanRelations) PlanNodes(string json)
     {
         var nodeTypes = new List<string>();
         var indexNames = new List<string>();

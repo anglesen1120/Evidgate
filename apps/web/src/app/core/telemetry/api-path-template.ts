@@ -68,6 +68,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'label',
   'ledger',
   'link',
+  'links',
   'logout',
   'manifests',
   'me',
