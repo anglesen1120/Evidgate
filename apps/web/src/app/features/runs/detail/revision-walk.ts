@@ -1,9 +1,10 @@
-// The evidence-revision keyset walk, kept out of the store file so the store stays under the
-// 500-line limit: the page limit, the typed refusals both walks share, and the pure helpers the
-// revision computeds reuse. Nothing here reads state or calls the API.
+// The evidence-revision region's own constants, kept out of the store file so the store stays
+// under the 500-line limit: its page limit, the typed refusals its walk raises, and the newest-
+// revision helper its computeds reuse. Nothing here reads state or calls the API.
 
 import type { EvidenceRevision } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
+import type { KeysetRefusals } from '../../../shared/keyset-walk';
 
 /** Rows per revision request: the contract's maximum, so one page covers a normal run. */
 export const REVISIONS_PAGE_LIMIT = 200;
@@ -36,9 +37,14 @@ export const REVISIONS_PAGE_WITHOUT_NEW_ROWS: ApiError = {
   details: [],
   retryAfterSeconds: null,
 };
+/** The pair one walk step refuses with, so a code and its copy are only ever authored here. */
+export const REVISIONS_REFUSALS: KeysetRefusals = {
+  cursorRepeated: REVISIONS_CURSOR_REPEATED,
+  pageWithoutNewRows: REVISIONS_PAGE_WITHOUT_NEW_ROWS,
+};
 export const REVISIONS_WALK_REFUSALS: ReadonlySet<string> = new Set([
-  REVISIONS_CURSOR_REPEATED.code,
-  REVISIONS_PAGE_WITHOUT_NEW_ROWS.code,
+  REVISIONS_REFUSALS.cursorRepeated.code,
+  REVISIONS_REFUSALS.pageWithoutNewRows.code,
 ]);
 
 /** The highest `revision_no` on the loaded pages; the server order is newest first. */
@@ -48,21 +54,4 @@ export function newestRevision(loaded: readonly EvidenceRevision[]): EvidenceRev
       newest === null || revision.revision_no > newest.revision_no ? revision : newest,
     null,
   );
-}
-
-/**
- * The incoming page without the revisions already loaded, in page order, with the first copy
- * kept. Every `revision_no` seen — loaded before this read or new here — is added to `seen`.
- */
-export function takeFreshRevisions(
-  seen: Set<number>,
-  incoming: readonly EvidenceRevision[],
-): EvidenceRevision[] {
-  const fresh: EvidenceRevision[] = [];
-  for (const revision of incoming) {
-    if (seen.has(revision.revision_no)) continue;
-    seen.add(revision.revision_no);
-    fresh.push(revision);
-  }
-  return fresh;
 }
