@@ -61,6 +61,13 @@ internal static class EvidenceModule
         // HEAD/copy with no transaction open, so the writer command's transaction only ever wraps the commit.
         services.TryAddScoped<ArtifactCompletionVerifier>();
 
+        // The download route's endpoint-side decision: it reads the caller's sensitivity permission with the row, and
+        // writes the denial's audit row in its own committed scope before the command transaction exists.
+        services.TryAddScoped<Application.Artifacts.ArtifactDownloadGate>();
+
+        // C2 stage-2 shape validation of the per-kind policy override.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<Application.Artifacts.SetArtifactKindPolicyOverride>, Application.Artifacts.SetArtifactKindPolicyOverrideValidator>());
+
         // 06.1.2-T2: the staging-object delete the completion enqueues. Registered in both hosts like every module
         // piece; only the Worker runs a consumer, and the Api host tolerates the row until it does (T19).
         services.AddTaskHandler<ArtifactStagingDeletePayload, ArtifactStagingDeleteTaskHandler>();

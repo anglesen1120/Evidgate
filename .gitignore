@@ -23,6 +23,8 @@ coverage/
 # Local data and test output
 .local/
 artifacts/
+# The evidence module's C# folder is named Artifacts too; it is source, not build output.
+!src/Modules/**/Application/Artifacts/
 playwright-report/
 # 09.1.1-T4.4: the fixtures-build shell suite writes its own report (playwright.fixtures.config.ts).
 playwright-report-fixtures/

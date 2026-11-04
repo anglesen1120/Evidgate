@@ -52,7 +52,7 @@ internal sealed class SetRetentionPolicyCommandHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Evidence, nameof(SetRetentionPolicyCommand));
 
-        if (RetentionPolicyScope.Project(command.ProjectId, principals, tenant) is { } mismatch)
+        if (EvidenceProjectScope.Project(command.ProjectId, principals.Current?.ProjectScope, tenant.Current?.ProjectId) is { } mismatch)
         {
             return Result.Failure<RetentionPolicy>(mismatch);
         }

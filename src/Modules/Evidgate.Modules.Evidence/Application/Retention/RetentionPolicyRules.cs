@@ -1,6 +1,4 @@
 using System.Globalization;
-using Evidgate.BuildingBlocks.Pipeline.Authorization;
-using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 
@@ -33,33 +31,6 @@ internal static class RetentionPolicyErrors
     /// tenant's project invisible, so the three cases are one answer and never an oracle.
     /// </summary>
     internal static Error ProjectNotFound => Error.NotFound("the project does not exist in this tenant");
-}
-
-/// <summary>
-/// The project-scope rule of the retention routes, the same two members the policy and healing switch routes apply: a
-/// credential scoped to another project, or a request already narrowed to another project, is 403
-/// <c>project_scope_mismatch</c> before any row is read.
-/// </summary>
-internal static class RetentionPolicyScope
-{
-    /// <summary>Null when <paramref name="projectId"/> is inside every scope the request carries.</summary>
-    /// <param name="projectId">The project the route names.</param>
-    /// <param name="principals">The resolved principal.</param>
-    /// <param name="tenant">The request's tenant context.</param>
-    internal static Error? Project(
-        Guid projectId,
-        IRequestPrincipalAccessor principals,
-        IRequestTenantContextAccessor tenant)
-    {
-        if (principals.Current?.ProjectScope is { } tokenScope && tokenScope != projectId)
-        {
-            return Error.Denied(ApiErrorCode.ProjectScopeMismatch, "the project is outside the credential's scope");
-        }
-
-        return tenant.Current?.ProjectId is { } requestProject && requestProject != projectId
-            ? Error.Denied(ApiErrorCode.ProjectScopeMismatch, "the project is outside the request's scope")
-            : null;
-    }
 }
 
 /// <summary>

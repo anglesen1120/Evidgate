@@ -449,6 +449,8 @@ public sealed partial class EvidenceSecretScanTaskTests(PostgresTenancyFixture f
 
         public PresignedPut PresignPut(PresignPutRequest request) => inner.PresignPut(request);
 
+        public PresignedGet PresignGet(string objectKey) => inner.PresignGet(objectKey);
+
         public Task<ObjectHead?> HeadAsync(string objectKey, CancellationToken cancellationToken) =>
             inner.HeadAsync(objectKey, cancellationToken);
 
