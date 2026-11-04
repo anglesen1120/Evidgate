@@ -1,11 +1,17 @@
-<section class="enable" data-testid="enable-collection" [attr.aria-busy]="busy()">
+<section
+  class="grid min-w-0 gap-(--eg-space-5) text-sm text-muted-foreground wrap-anywhere [&_p]:m-0 [&_dl]:m-0 [&_dl>div]:grid [&_dl>div]:min-w-0 [&_dl>div]:gap-(--eg-space-2) [&_dt]:font-(weight:--eg-weight-semibold) [&_dd]:m-0 [&_code]:font-mono [&_code]:text-xs"
+  data-testid="enable-collection"
+  [attr.aria-busy]="busy()"
+>
   <p>{{ intro }}</p>
 
-  <!-- QA-01: the busy line is a live region by `role="status"` alone; a second `aria-live` on the
-       same node is redundant (and the terminal panel below relies on `role="status"` too).
-       `tabindex="-1"` makes it the place the confirm hands focus to: the press disables the very
-       control it was made with, and this node stays mounted until the answer arrives. -->
-  <p class="busy-status" role="status" tabindex="-1" #busyStatus>
+  <!-- The disabled confirm hands focus to this persistent status line until its answer arrives. -->
+  <p
+    class="min-h-(--eg-leading-sm) focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+    role="status"
+    tabindex="-1"
+    #busyStatus
+  >
     @if (busy()) {
       {{ confirmingLabel }}
     } @else if (reading()) {
@@ -15,21 +21,34 @@
 
   @if (enabled(); as activation) {
     <section
-      class="panel panel--done"
+      hlmCard
+      class="min-w-0 gap-(--eg-space-3) overflow-visible border border-solid border-(--eg-success-fg) bg-(--eg-success-bg) p-(--eg-space-4) text-(--eg-success-fg) min-[768px]:p-(--eg-space-5)"
       role="status"
       aria-labelledby="enable-enabled-heading"
       data-testid="enable-collection-enabled"
     >
-      <h3 id="enable-enabled-heading" tabindex="-1" #enabledHeadingTarget>
+      <h3
+        hlmCardTitle
+        class="m-0 text-lg text-inherit focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+        id="enable-enabled-heading"
+        tabindex="-1"
+        #enabledHeadingTarget
+      >
         {{ enabledHeading }}
       </h3>
       <p>{{ terminalIntro() }}</p>
       <!-- Only an advisory server value gets the not-gating sentence: any other mode is reported
            as the wire value below and never described as advisory or as gating on its behalf. -->
       @if (advisoryMode()) {
-        <p class="advisory">{{ notGatingCopy }}</p>
+        <p
+          class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg) font-(weight:--eg-weight-semibold)"
+        >
+          {{ notGatingCopy }}
+        </p>
       }
-      <dl class="metadata">
+      <dl
+        class="grid min-w-0 gap-(--eg-space-4) p-0 min-[768px]:grid-cols-2 min-[1280px]:grid-cols-3"
+      >
         <div>
           <dt>{{ projectLabel }}</dt>
           <dd>
@@ -114,22 +133,35 @@
        not shown beside an activation the server already recorded. -->
   @if (enabled() === null && readFailure() === null) {
     <section
-      class="panel"
+      hlmCard
+      class="min-w-0 gap-(--eg-space-3) overflow-visible p-(--eg-space-4) min-[768px]:p-(--eg-space-5)"
       aria-labelledby="enable-preview-heading"
       data-testid="enable-collection-policy-preview"
     >
-      <h3 id="enable-preview-heading">{{ previewHeading }}</h3>
-      <p class="advisory" data-testid="enable-collection-not-gating">{{ notGatingCopy }}</p>
-      <!-- F1: the confirm is a REPLACE command, so the hazard is stated before the press, not after.
-           It is also part of the confirm's `aria-describedby` in every state (AC-F18-c). -->
+      <h3
+        hlmCardTitle
+        class="m-0 text-lg text-inherit focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+        id="enable-preview-heading"
+      >
+        {{ previewHeading }}
+      </h3>
       <p
-        class="replaces-active"
+        class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg) font-(weight:--eg-weight-semibold)"
+        data-testid="enable-collection-not-gating"
+      >
+        {{ notGatingCopy }}
+      </p>
+      <!-- The replacement hazard is visible before confirmation and describes the button. -->
+      <p
+        class="rounded-sm border border-solid border-(--eg-warning-fg) bg-(--eg-warning-bg) px-(--eg-space-4) py-(--eg-space-3) font-(weight:--eg-weight-semibold) text-(--eg-warning-fg)"
         id="enable-replaces-warning"
         data-testid="enable-collection-replaces-active"
       >
         {{ replacesActiveCopy }}
       </p>
-      <dl class="metadata">
+      <dl
+        class="grid min-w-0 gap-(--eg-space-4) p-0 min-[768px]:grid-cols-2 min-[1280px]:grid-cols-3"
+      >
         <div>
           <dt>{{ lateWindowLabel }}</dt>
           <dd>
@@ -155,10 +187,8 @@
       </dl>
     </section>
 
-    <!-- AC-T5.2-3: the confirm exists only beside a read that permits it, i.e. inside this branch. It
-       is native-disabled until the read settles and stays disabled for an unreadable (403) state;
-       the read answering 200 or failing in any other way removes the whole preview section. -->
-    <form (ngSubmit)="confirm()">
+    <!-- An unreadable activation must never permit a write; only an absent activation can. -->
+    <form class="grid min-w-0 gap-(--eg-space-5)" (ngSubmit)="confirm()">
       @if (!permitted()) {
         <p id="enable-permission" data-testid="enable-collection-ask-approver">{{ askApprover }}</p>
       }
@@ -166,11 +196,11 @@
         <p id="enable-activation-unreadable" data-testid="enable-collection-unreadable">
           {{ activationUnreadable }}
         </p>
-        <!-- AC-F63-c: a refused read gets exactly one way back, and it re-runs the read alone. The
-             control is a native button, so it is in the tab order and Enter/Space activate it; the
-             confirm above stays natively disabled, so no command can start from here. -->
+        <!-- Recovery repeats the read alone; the confirm remains disabled. -->
         <button
-          class="state-panel__action"
+          hlmBtn
+          [variant]="'outline'"
+          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
           data-testid="enable-collection-read-again"
           type="button"
           #readAgainControl
@@ -181,7 +211,8 @@
         </button>
       }
       <button
-        class="state-panel__action primary"
+        hlmBtn
+        class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
         data-testid="enable-collection-confirm"
         type="submit"
         [disabled]="confirmDisabled()"
@@ -194,16 +225,14 @@
 
   @if (failureView(); as error) {
     <section
-      class="read-failure"
+      class="grid min-w-0 gap-(--eg-space-3)"
       data-testid="enable-collection-error"
       [attr.aria-labelledby]="failureHeadingId()"
     >
       @if (readFailure() !== null) {
-        <!-- AC-F63-b: the named target a failed re-read returns focus to. `tabindex="-1"` keeps it
-             out of the tab order — it is an announcement target, not a stop — and the section above
-             takes its name from it while the shared pattern's title drops to level 4. -->
+        <!-- The refusal heading restores the visitor's place without repeating the alert. -->
         <h3
-          class="read-failure__heading"
+          class="m-0 text-lg text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
           id="enable-read-failed-heading"
           tabindex="-1"
           #readFailureHeading
@@ -214,7 +243,7 @@
         <!-- The same contract for a refused confirm: the press disabled the confirm, so this
              heading — outside every alert — is where the visitor's place goes. -->
         <h3
-          class="read-failure__heading"
+          class="m-0 text-lg text-foreground focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
           id="enable-confirm-failed-heading"
           tabindex="-1"
           #confirmFailureHeading
@@ -223,21 +252,25 @@
         </h3>
       }
       <app-error-pattern
+        class="block min-w-0"
         [error]="error"
         [headingLevel]="failureHeadingLevel()"
         [retryDisabled]="retryDisabled()"
         (retry)="retry()"
       />
       @if (readWaitText(); as waitText) {
-        <!-- AC-F63-a: the server's interval and the time left, as text and never as a live region:
-             the state sheet asks for the supplied interval, not a per-second announcement. -->
-        <p class="read-wait" data-testid="enable-collection-read-wait">{{ waitText }}</p>
+        <!-- Keep the supplied wait interval readable without per-second announcements. -->
+        <p class="text-muted-foreground" data-testid="enable-collection-read-wait">
+          {{ waitText }}
+        </p>
       }
       <!-- A read is side-effect free, but the shared pattern only offers Retry for a retryable
            failure; a 401/5xx read therefore gets this page-owned re-read action instead. -->
       @if (readRetryWithoutAction()) {
         <button
-          class="state-panel__action"
+          hlmBtn
+          [variant]="'outline'"
+          class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
           data-testid="enable-collection-retry-read"
           type="button"
           [disabled]="retryDisabled()"
@@ -247,21 +280,24 @@
         </button>
       }
       @if (responseUncertain()) {
-        <p class="notice" data-testid="enable-collection-response-uncertain">
+        <p
+          class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg)"
+          data-testid="enable-collection-response-uncertain"
+        >
           {{ uncertainLabel }}
         </p>
       }
       @if (details().length > 0) {
-        <!-- R3: the shared error pattern renders `message`/`code` itself; these rows are the page's
-             own, so the page sanitises them before they reach the DOM. One labelled alert carries
-             them: a `path`-level reason is otherwise silent for a screen-reader user. -->
+        <!-- One labelled alert speaks the sanitized field-level reasons the shared error omits. -->
         <div
+          hlmAlert
+          [variant]="'destructive'"
           role="alert"
           data-testid="enable-collection-details"
           aria-labelledby="enable-details-label"
         >
-          <p id="enable-details-label" class="validation">{{ detailsLabel }}</p>
-          <ul class="validation">
+          <p id="enable-details-label" class="text-destructive">{{ detailsLabel }}</p>
+          <ul class="text-destructive">
             @for (detail of details(); track $index) {
               <li>{{ clean(detail.path) }} {{ clean(detail.reason) }}</li>
             }
