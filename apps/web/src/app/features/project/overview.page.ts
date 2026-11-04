@@ -12,7 +12,7 @@ import { SessionStore } from '../../core/session/session.store';
   host: { class: 'block min-w-0 font-sans text-foreground' },
   template: `<section
     hlmCard
-    class="min-w-0 items-start gap-(--eg-space-4) px-(--eg-space-4) py-(--eg-space-8) [overflow-wrap:anywhere] min-[768px]:px-(--eg-space-5)"
+    class="min-w-0 items-start gap-(--eg-space-4) px-(--eg-space-4) py-(--eg-space-8) wrap-anywhere min-[768px]:px-(--eg-space-5)"
     aria-labelledby="project-overview-heading"
   >
     @if (project(); as project) {
