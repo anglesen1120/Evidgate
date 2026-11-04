@@ -1,0 +1,12 @@
+{
+  "schema": "ai-settings.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/languages",
+      "reason": "unique_items"
+    }
+  ],
+  "comment": "the same language twice would make the hash depend on nothing"
+}

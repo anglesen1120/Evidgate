@@ -195,6 +195,12 @@ const EXPECTED = [
   // (CSV/XLSX/JSON) and the export is a download, so both carry `x-version: v1` like the rest of 13.1.1 §5.
   ['/projects/{p}/authoring/import', 'post', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/export', 'get', 'authoring:read', 'v1'],
+  // Project AI settings: four reads under `authoring:read`, the save under `project:write`.
+  ['/projects/{p}/ai-settings', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/ai-settings', 'put', 'project:write', 'v1'],
+  ['/projects/{p}/ai-settings/versions', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/ai-settings/versions/{version_no}', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/ai-settings/templates', 'get', 'authoring:read', 'v1'],
   // 13.1.1-T4 (S208): routes 20 and 21, the manual-case link pair. Both are `authoring:write`; route 12 gained the
   // `covered` filter and the two coverage members without changing shape, so it keeps its T2 row above.
   ['/projects/{p}/authoring/manual-cases/{m}/links', 'post', 'authoring:write', 'v1'],

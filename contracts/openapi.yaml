@@ -7072,6 +7072,249 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
 
+  /projects/{p}/ai-settings:
+    get:
+      operationId: getProjectAiSettings
+      tags: [authoring]
+      summary: The project's effective AI settings; ETag is the version number (13.2.1-T1)
+      description: >-
+        The guidance every manual test case and generated script is written from, as the project
+        currently has it. A project that never saved answers the platform default template's
+        document with `version_no` 0, `source` `default_template`, `settings_id` null and
+        `ETag: "0"`; version 0 is never a stored row. After a save the answer is the head
+        version's document with `source` `saved`. The document is the eight-field object of
+        `contracts/schemas/ai-settings.v1.json`, the same shape the save accepts and the
+        template catalogue serves. Another tenant's project and a project this caller cannot
+        see are the same 404 `not_found`; a credential scoped to a sibling project of the same
+        org is 403 `project_scope_mismatch`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: >-
+            The effective settings document with `ETag: "<version_no>"` (`"0"` before the first save)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSettingsView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      operationId: saveProjectAiSettings
+      tags: [authoring]
+      summary: Append one immutable AI settings version (13.2.1-T1)
+      description: >-
+        Appends exactly one `project_ai_settings` row and answers 201 with the new version; a
+        body whose canonical document equals the effective head is a no-op that answers 200 with
+        the existing version and `ETag`, and writes no row. `If-Match` is required and its tag is
+        the version number in quotes, with `"0"` valid before the first save; a stale tag is 412
+        `precondition_failed` with the current `version_no` in `error.details` and **nothing**
+        written — the comparison happens before the no-op or insert decision. Under the
+        per-project advisory lock, two concurrent saves cannot append the same `version_no`; a
+        document equal to an older version is a new version, not a no-op, because the table is
+        append-only and carries no unique constraint on `content_hash`. Every text member is
+        NFC-normalised and end-trimmed before counting and hashing, lengths are Unicode code
+        points (writing_style 250, coverage_strategy 1500, exclusion_rules 1500, step_detail 200
+        are contractual; description 1000, environment_url 2048 and each criterion 250 are the
+        shipped defaults), any text matching the shared secret shape is refused with reason
+        `secret_value_detected`, and `environment_url` is validated by the same rule as an
+        environment revision's `base_urls` (`invalid_url` when malformed, `secret_value_detected`
+        when it carries credentials). `languages` is sorted ascending with no duplicates;
+        `duplicate_value` names the repeated language. `template` is provenance only: the server
+        checks that the pair exists and records it, never requiring the document to equal the
+        template's content. `Idempotency-Key` is required; a replay with the same key and body
+        replays the original answer and audits nothing, a different body is 409
+        `idempotency_conflict`. Body over 32 KiB is 413.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveAiSettingsRequest'
+      responses:
+        '200':
+          description: The effective document already equals the request; the existing version is returned
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSettingsView'
+        '201':
+          description: A new immutable version was appended
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSettingsView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/ai-settings/versions:
+    get:
+      operationId: listProjectAiSettingsVersions
+      tags: [authoring]
+      summary: Keyset page of the project's AI settings versions, newest first (13.2.1-T1)
+      description: >-
+        One page of version summaries in the fixed `version_no desc` order, at most
+        200 items (`limit` defaults to 50). A summary carries `version_no`, `content_hash`, the
+        template pair it was copied from, `author_membership_id`, `reason` and `created_at`;
+        the document itself is read from `GET /v1/projects/{p}/ai-settings/versions/{version_no}`,
+        so two versions can be diffed without paging full documents. A malformed `limit` or a
+        cursor this endpoint did not issue is 422 `request_invalid` with `details[].path` naming
+        the parameter. A project with no saved version answers an empty page, never the default
+        template.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AiSettingsCursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of AI settings version summaries
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSettingsVersionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/ai-settings/versions/{version_no}:
+    get:
+      operationId: getProjectAiSettingsVersion
+      tags: [authoring]
+      summary: One AI settings version with its full document (13.2.1-T1)
+      description: >-
+        The version summary plus `settings`, the stored document exactly as the writer hashed
+        it, so a pinned generation can be re-read byte-identically after later versions land. A
+        version is immutable: the response's `ETag` is the row's `version_no` in quotes and never
+        changes. An unknown version number, another project's version of the same org, another
+        tenant's version and a version of a soft-deleted project are all the same 404 `not_found`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/AiSettingsVersionNo'
+      responses:
+        '200':
+          description: >-
+            One AI settings version with its document and `ETag: "<version_no>"`
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSettingsVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/ai-settings/templates:
+    get:
+      operationId: listProjectAiSettingsTemplates
+      tags: [authoring]
+      summary: The read-only platform AI settings templates (13.2.1-T1)
+      description: >-
+        The built-in, versioned templates in vi and en, at least one per locale and exactly one
+        `is_default` per locale, served in one closed list with `next_cursor` null — the
+        catalogue is small and paging it would only invite a caller to miss the default. A
+        template is platform data: it has no write route and the app role holds `select` only,
+        so a later revision is a new `version` row and can never change a saved settings row.
+        Choosing a template pre-fills a draft; the save records `code` and `version` as
+        provenance while the document travels in `settings`.
+      x-permission: authoring:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: The template catalogue
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSettingsTemplateListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
 components:
   securitySchemes:
     sessionCookie:
@@ -7310,6 +7553,13 @@ components:
       in: query
       required: false
       description: Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
+      schema:
+        type: string
+    AiSettingsCursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor from `next_cursor`; ordering `version_no desc` (13.2.1-T1, 00 §9.1).
       schema:
         type: string
     Limit:
@@ -7917,6 +8167,16 @@ components:
         `request_invalid` with `details[].path = /cursor` and `reason = malformed`.
       schema:
         type: string
+    AiSettingsVersionNo:
+      name: version_no
+      in: path
+      required: true
+      description: >-
+        A saved settings version number, 1 or greater. Version 0 is the virtual default-template
+        state and is answered 404, never a row.
+      schema:
+        type: integer
+        minimum: 1
     IfMatchOrder:
       name: If-Match
       in: header
@@ -11055,6 +11315,244 @@ components:
         kind: { type: string, enum: [node, item, case] }
         outcome: { type: string, enum: [create, update, restore, unchanged] }
         code: { type: [string, 'null'] }
+    AiSettingsTemplateRef:
+      type: object
+      description: >-
+        Provenance of the copy a settings document started from (13.2.1-T1): the template's
+        `code` and `version`. A soft pair on purpose — templates are immutable platform rows, so
+        a code plus version never changes meaning, and a later revision cannot rewrite a saved
+        settings row.
+      additionalProperties: false
+      required: [code, version]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_-]{1,31}$'
+        version:
+          type: integer
+          minimum: 1
+    AiSettingsDocument:
+      description: >-
+        The guidance document of one project. The external JSON Schema remains the single source of the wire shape and
+        of the runtime validation; the second branch only names the `priority_criteria` member's own schema, which the
+        served document carries as a separate component (01.3.2-T3.2 AC4), and adds no constraint the external file
+        does not already state.
+      allOf:
+        - $ref: './schemas/ai-settings.v1.json'
+        - type: object
+          properties:
+            priority_criteria:
+              $ref: '#/components/schemas/AiSettingsPriorityCriteria'
+    AiSettingsPriorityCriteria:
+      description: >-
+        One criterion per checklist priority level, so the same word means the same thing in every item of the
+        project. This component is an alias, not a second definition: it points at the member of
+        `contracts/schemas/ai-settings.v1.json`, which stays the single source of the wire shape, of the limits and of
+        the runtime validation. The name exists because the served document carries the nested member type as its own
+        schema, and every served schema name must exist here (01.3.2-T3.2 AC4).
+      $ref: './schemas/ai-settings.v1.json#/properties/priority_criteria'
+    AiSettingsView:
+      type: object
+      description: >-
+        The 200/201 body of the settings read and save routes (13.2.1-T1): the effective document
+        with its version, origin and provenance. Before the first save the answer is the platform
+        default template's document with `version_no` 0, `source` `default_template`,
+        `settings_id` and `created_at` null, and `ETag: "0"`; version 0 is never a stored row.
+      additionalProperties: false
+      required:
+        [
+          version_no,
+          source,
+          settings_id,
+          content_hash,
+          settings,
+          template,
+          author,
+          reason,
+          created_at,
+        ]
+      properties:
+        version_no:
+          type: integer
+          minimum: 0
+          description: The stored head version, or 0 when the default template is being served.
+        source:
+          type: string
+          enum: [saved, default_template]
+        settings_id:
+          type: [string, 'null']
+          format: uuid
+          description: The `project_ai_settings` row id, null for the virtual default-template state.
+        content_hash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: '`sha256:` over the RFC 8785 canonical settings document.'
+        settings:
+          $ref: '#/components/schemas/AiSettingsDocument'
+        template:
+          anyOf:
+            - $ref: '#/components/schemas/AiSettingsTemplateRef'
+            - type: 'null'
+        author:
+          type: [string, 'null']
+          format: uuid
+          description: The membership that saved the head version, null for the default-template state.
+        reason:
+          type: [string, 'null']
+          maxLength: 500
+        created_at:
+          type: [string, 'null']
+          format: date-time
+    SaveAiSettingsRequest:
+      type: object
+      description: >-
+        Body of the settings save (13.2.1-T1). `settings` is the whole document and is validated
+        against `contracts/schemas/ai-settings.v1.json`; `template` records provenance only and
+        never has to match the document (an edited copy is the normal case); `reason` is shown in
+        the version timeline and never carries the field text into an audit row.
+      additionalProperties: false
+      required: [settings]
+      properties:
+        settings:
+          $ref: '#/components/schemas/AiSettingsDocument'
+        template:
+          $ref: '#/components/schemas/AiSettingsTemplateRef'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    AiSettingsVersionSummary:
+      type: object
+      description: >-
+        One row of the settings version timeline (13.2.1-T1): the version, its content digest,
+        the template pair it was copied from, who saved it and why. The document is read
+        separately from the version detail route, so the list stays small enough to page.
+      additionalProperties: false
+      required: [version_no, content_hash, template, author_membership_id, reason, created_at]
+      properties:
+        version_no:
+          type: integer
+          minimum: 1
+        content_hash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+        template:
+          anyOf:
+            - $ref: '#/components/schemas/AiSettingsTemplateRef'
+            - type: 'null'
+        author_membership_id:
+          type: string
+          format: uuid
+        reason:
+          type: [string, 'null']
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+    AiSettingsVersionListResponse:
+      type: object
+      description: >-
+        00 §9.1 keyset page of `AiSettingsVersionSummary`, ordered `version_no desc` on
+        `project_ai_settings_head_idx` (13.2.1-T1). The order is the chain's own key, so the
+        versions of one project read highest first and the cursor is the version number the
+        page stopped at. A project with no saved version answers an empty page, never the
+        default template.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AiSettingsVersionSummary'
+        next_cursor:
+          type: [string, 'null']
+    AiSettingsVersion:
+      type: object
+      description: >-
+        The 200 body of the settings version detail route (13.2.1-T1): the timeline row plus
+        `settings`, the stored document exactly as the writer hashed it. The response's `ETag` is
+        `version_no` in quotes and never changes, because a version is immutable.
+      additionalProperties: false
+      required:
+        [
+          version_no,
+          settings_id,
+          content_hash,
+          template,
+          author_membership_id,
+          reason,
+          created_at,
+          settings,
+        ]
+      properties:
+        version_no:
+          type: integer
+          minimum: 1
+        settings_id:
+          type: string
+          format: uuid
+          description: The `project_ai_settings` row id, so a pinned generation's reference is complete.
+        content_hash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+        template:
+          anyOf:
+            - $ref: '#/components/schemas/AiSettingsTemplateRef'
+            - type: 'null'
+        author_membership_id:
+          type: string
+          format: uuid
+        reason:
+          type: [string, 'null']
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+        settings:
+          $ref: '#/components/schemas/AiSettingsDocument'
+    AiSettingsTemplateView:
+      type: object
+      description: >-
+        One built-in template (13.2.1-T1): the locale of its own guidance copy — independent of
+        the document's `languages`, which is the output language of generated cases — and the
+        document it pre-fills. `content_hash` is the hash the default settings reference carries
+        when this template is the platform default.
+      additionalProperties: false
+      required: [code, version, locale, name, is_default, content_hash, settings]
+      properties:
+        code:
+          type: string
+          pattern: '^[a-z][a-z0-9_-]{1,31}$'
+        version:
+          type: integer
+          minimum: 1
+        locale:
+          type: string
+          enum: [vi, en]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        is_default:
+          type: boolean
+          description: Exactly one template per locale is the locale's default; the server's own default is the `en` one.
+        content_hash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+        settings:
+          $ref: '#/components/schemas/AiSettingsDocument'
+    AiSettingsTemplateListResponse:
+      type: object
+      description: >-
+        The template catalogue (13.2.1-T1): at least one template per locale, exactly one
+        `is_default` per locale, and `next_cursor` always null because the list is closed.
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AiSettingsTemplateView'
+        next_cursor:
+          type: 'null'
 
 security:
   - sessionCookie: []

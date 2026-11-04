@@ -56,6 +56,8 @@ public static partial class AuditMetadata
         "locale",
         // F55 (02.3.2-T2.1 AC6): the administrative session revoke records whose session it ended — the member's user id, never the session's credential.
         "target_user_id",
+        // The append-only version chain records which version the audited save produced; a number, never content.
+        "version_no",
     };
 
     /// <summary>

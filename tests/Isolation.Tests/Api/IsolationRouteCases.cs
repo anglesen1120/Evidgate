@@ -464,6 +464,45 @@ public static class IsolationRouteCases
             (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{id}/restore"), (_, _) => [],
             own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{p.AuthoringVersionId}/restore")),
 
+        // 13.2.1-T1: the project AI-settings edge. Every route names the project only, so the foreign-project probe is the
+        // ordinary one; the save is a well-formed first save (If-Match "0" tags the default) and has no own control
+        // because a granted probe would write. The history detail takes the project's version 1, which no project in the
+        // world has, so it answers 404 for the org's own project too — the same reason the authoring version detail
+        // carries no own control here.
+        ProjectCase("GET", "/v1/projects/{p}/ai-settings", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/ai-settings"), ownControl: true),
+        ProjectCase("PUT", "/v1/projects/{p}/ai-settings", p => new(HttpMethod.Put,
+            $"/v1/projects/{p}/ai-settings",
+            new JsonObject
+            {
+                ["settings"] = new JsonObject
+                {
+                    ["description"] = string.Empty,
+                    ["environment_url"] = null,
+                    ["languages"] = new JsonArray("en", "vi"),
+                    ["writing_style"] = string.Empty,
+                    ["coverage_strategy"] = string.Empty,
+                    ["priority_criteria"] = new JsonObject
+                    {
+                        ["critical"] = string.Empty,
+                        ["high"] = string.Empty,
+                        ["medium"] = string.Empty,
+                        ["low"] = string.Empty,
+                    },
+                    ["exclusion_rules"] = string.Empty,
+                    ["step_detail"] = string.Empty,
+                },
+                ["template"] = null,
+                ["reason"] = null,
+            },
+            IfMatch: "\"0\"")),
+        ProjectCase("GET", "/v1/projects/{p}/ai-settings/versions", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/ai-settings/versions?limit=1"), list: true, ownControl: true),
+        ProjectCase("GET", "/v1/projects/{p}/ai-settings/versions/{version_no}", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/ai-settings/versions/1")),
+        ProjectCase("GET", "/v1/projects/{p}/ai-settings/templates", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/ai-settings/templates"), ownControl: true),
+
         // 13.1.1-T5: route 25, the import/export pair. The import probe is a dry run of a one-row JSON document, so a
         // caller who turned out to be authorized would still write nothing; an org-B credential naming an org-A project
         // is invisible to the project probe, exactly like the tree routes above (404 `not_found`).

@@ -1,0 +1,12 @@
+{
+  "schema": "ai-settings.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/coverage_strategy",
+      "reason": "max_length"
+    }
+  ],
+  "comment": "1501 code points is one past the contractual cap"
+}

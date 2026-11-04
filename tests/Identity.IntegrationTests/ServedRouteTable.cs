@@ -861,6 +861,42 @@ internal static class RouteRequests
             new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/versions"));
         Add("GET", "/v1/projects/{p}/authoring/versions/{v}", ctx =>
             new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/versions/{ctx.AuthoringVersionId}"));
+
+        // 13.2.1-T1: the project AI-settings edge. No project has a saved version in this host, so the head answers the
+        // platform default and the history answers an empty page; the save probe is a well-formed first save (If-Match
+        // "0" tags that default), which the permission and XSRF stages refuse for this caller before any write.
+        Add("GET", "/v1/projects/{p}/ai-settings", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/ai-settings"));
+        Add("PUT", "/v1/projects/{p}/ai-settings", ctx => new(HttpMethod.Put, $"/v1/projects/{ctx.ProjectId}/ai-settings",
+            new JsonObject
+            {
+                ["settings"] = new JsonObject
+                {
+                    ["description"] = string.Empty,
+                    ["environment_url"] = null,
+                    ["languages"] = new JsonArray("en", "vi"),
+                    ["writing_style"] = string.Empty,
+                    ["coverage_strategy"] = string.Empty,
+                    ["priority_criteria"] = new JsonObject
+                    {
+                        ["critical"] = string.Empty,
+                        ["high"] = string.Empty,
+                        ["medium"] = string.Empty,
+                        ["low"] = string.Empty,
+                    },
+                    ["exclusion_rules"] = string.Empty,
+                    ["step_detail"] = string.Empty,
+                },
+                ["template"] = null,
+                ["reason"] = null,
+            },
+            IfMatch: "\"0\"", IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/ai-settings/versions", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/ai-settings/versions"));
+        Add("GET", "/v1/projects/{p}/ai-settings/versions/{version_no}", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/ai-settings/versions/1"));
+        Add("GET", "/v1/projects/{p}/ai-settings/templates", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/ai-settings/templates"));
         Add("POST", "/v1/projects/{p}/authoring/nodes/{n}/restore", ctx =>
             new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/nodes/{ctx.NodeId}/restore",
                 IfMatch: "\"1\"", IdempotencyKey: Key()));

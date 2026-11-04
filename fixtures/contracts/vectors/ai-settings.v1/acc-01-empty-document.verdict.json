@@ -1,0 +1,5 @@
+{
+  "schema": "ai-settings.v1",
+  "valid": true,
+  "comment": "the smallest accepted document: every text member empty, the platform default template shape"
+}

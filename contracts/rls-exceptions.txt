@@ -40,6 +40,7 @@ public.user            platform   # D12: platform identity, holds no customer bu
 public.user_identity   platform   # D12: identity key (provider, subject); reached through membership
 public.session         platform   # D12: the server-side credential row; scoped to a user, not to an org
 public.permission      platform   # platform catalogue with no org_id column at all (02 §4.5)
+public.ai_settings_template platform # built-in bilingual template catalogue (13.2.1): no org_id, select-only for evidgate_app, written only by the migration and the owner role
 
 public.role            catalogue  # built-in rows have org_id NULL; a tenant-created role carries its own org
 public.role_permission catalogue  # built-in rows have org_id NULL, mirroring their role

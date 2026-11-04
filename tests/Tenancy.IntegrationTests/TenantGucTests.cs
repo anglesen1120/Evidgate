@@ -229,6 +229,27 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("project_id", projectId));
+        var aiAuthor = Guid.CreateVersion7();
+        var aiMembership = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            $"""
+            insert into public."user" (id, email) values ('{aiAuthor}', 'author-{aiAuthor:N}@example.test');
+            insert into public.membership (id, org_id, user_id, invited_email, status)
+            values ('{aiMembership}', '{orgId}', '{aiAuthor}', 'author-{aiAuthor:N}@example.test', 'active')
+            """);
+        await scope.ExecuteAsync(
+            """
+            insert into public.project_ai_settings
+                (id, org_id, project_id, version_no, description, languages, writing_style, coverage_strategy,
+                 priority_criterion_critical, priority_criterion_high, priority_criterion_medium, priority_criterion_low,
+                 exclusion_rules, step_detail, author_membership_id, content_hash)
+            values (@id, @org_id, @project_id, 1, '', array['en', 'vi'], '', '', '', '', '', '', '', '',
+                    @author_membership_id, 'sha256:' || repeat('ab', 32))
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("author_membership_id", aiMembership));
         await scope.ExecuteAsync(
             """
             insert into public.ci_token_issue (id, org_id, project_id, binding_id, provider, jti, repository_id, repository_full_name, ref, sha, run_id, run_attempt, job_workflow_ref, expires_at)

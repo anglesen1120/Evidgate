@@ -1993,6 +1993,123 @@ export type ImportRowDto = {
 };
 
 /**
+ * Provenance of the copy a settings document started from (13.2.1-T1): the template's `code` and `version`. A soft pair on purpose — templates are immutable platform rows, so a code plus version never changes meaning, and a later revision cannot rewrite a saved settings row.
+ */
+export type AiSettingsTemplateRef = {
+    code: string;
+    version: number;
+};
+
+/**
+ * The guidance document of one project. The external JSON Schema remains the single source of the wire shape and of the runtime validation; the second branch only names the `priority_criteria` member's own schema, which the served document carries as a separate component (01.3.2-T3.2 AC4), and adds no constraint the external file does not already state.
+ */
+export type AiSettingsDocument = AiSettingsV1 & {
+    priority_criteria?: AiSettingsPriorityCriteria;
+};
+
+/**
+ * One criterion per checklist priority level, so the same word means the same thing in every item of the project. This component is an alias, not a second definition: it points at the member of `contracts/schemas/ai-settings.v1.json`, which stays the single source of the wire shape, of the limits and of the runtime validation. The name exists because the served document carries the nested member type as its own schema, and every served schema name must exist here (01.3.2-T3.2 AC4).
+ */
+export type AiSettingsPriorityCriteria = PriorityCriteria;
+
+/**
+ * The 200/201 body of the settings read and save routes (13.2.1-T1): the effective document with its version, origin and provenance. Before the first save the answer is the platform default template's document with `version_no` 0, `source` `default_template`, `settings_id` and `created_at` null, and `ETag: "0"`; version 0 is never a stored row.
+ */
+export type AiSettingsView = {
+    /**
+     * The stored head version, or 0 when the default template is being served.
+     */
+    version_no: number;
+    source: 'saved' | 'default_template';
+    /**
+     * The `project_ai_settings` row id, null for the virtual default-template state.
+     */
+    settings_id: string | null;
+    /**
+     * `sha256:` over the RFC 8785 canonical settings document.
+     */
+    content_hash: string;
+    settings: AiSettingsDocument;
+    template: AiSettingsTemplateRef | null;
+    /**
+     * The membership that saved the head version, null for the default-template state.
+     */
+    author: string | null;
+    reason: string | null;
+    created_at: string | null;
+};
+
+/**
+ * Body of the settings save (13.2.1-T1). `settings` is the whole document and is validated against `contracts/schemas/ai-settings.v1.json`; `template` records provenance only and never has to match the document (an edited copy is the normal case); `reason` is shown in the version timeline and never carries the field text into an audit row.
+ */
+export type SaveAiSettingsRequest = {
+    settings: AiSettingsDocument;
+    template?: AiSettingsTemplateRef;
+    reason?: string;
+};
+
+/**
+ * One row of the settings version timeline (13.2.1-T1): the version, its content digest, the template pair it was copied from, who saved it and why. The document is read separately from the version detail route, so the list stays small enough to page.
+ */
+export type AiSettingsVersionSummary = {
+    version_no: number;
+    content_hash: string;
+    template: AiSettingsTemplateRef | null;
+    author_membership_id: string;
+    reason: string | null;
+    created_at: string;
+};
+
+/**
+ * 00 §9.1 keyset page of `AiSettingsVersionSummary`, ordered `version_no desc` on `project_ai_settings_head_idx` (13.2.1-T1). The order is the chain's own key, so the versions of one project read highest first and the cursor is the version number the page stopped at. A project with no saved version answers an empty page, never the default template.
+ */
+export type AiSettingsVersionListResponse = {
+    items: Array<AiSettingsVersionSummary>;
+    next_cursor: string | null;
+};
+
+/**
+ * The 200 body of the settings version detail route (13.2.1-T1): the timeline row plus `settings`, the stored document exactly as the writer hashed it. The response's `ETag` is `version_no` in quotes and never changes, because a version is immutable.
+ */
+export type AiSettingsVersion = {
+    version_no: number;
+    /**
+     * The `project_ai_settings` row id, so a pinned generation's reference is complete.
+     */
+    settings_id: string;
+    content_hash: string;
+    template: AiSettingsTemplateRef | null;
+    author_membership_id: string;
+    reason: string | null;
+    created_at: string;
+    settings: AiSettingsDocument;
+};
+
+/**
+ * One built-in template (13.2.1-T1): the locale of its own guidance copy — independent of the document's `languages`, which is the output language of generated cases — and the document it pre-fills. `content_hash` is the hash the default settings reference carries when this template is the platform default.
+ */
+export type AiSettingsTemplateView = {
+    code: string;
+    version: number;
+    locale: 'vi' | 'en';
+    name: string;
+    /**
+     * Exactly one template per locale is the locale's default; the server's own default is the `en` one.
+     */
+    is_default: boolean;
+    content_hash: string;
+    settings: AiSettingsDocument;
+};
+
+/**
+ * The template catalogue (13.2.1-T1): at least one template per locale, exactly one `is_default` per locale, and `next_cursor` always null because the list is closed.
+ */
+export type AiSettingsTemplateListResponse = {
+    items: Array<AiSettingsTemplateView>;
+    next_cursor: null;
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -2109,6 +2226,85 @@ export type TargetEnv = string;
 
 export type Variant = {
     params: Params;
+};
+
+/**
+ * Project AI settings document v1
+ *
+ * The guidance document of one project: the text every manual test case and generated script is written from. One shape validates the API `settings` member, the template `content` member and the input to `content_hash`, so the three cannot drift. Unknown members are refused at the document level and inside `priority_criteria`, so a typo is a 422 rather than silently stored content. Lengths are Unicode code points (RFC 8259 string length), the same unit as PostgreSQL `char_length` and the server's own counter. The four plan-13 limits are contractual: writing_style 250, coverage_strategy 1500, exclusion_rules 1500, step_detail 200; description 1000, environment_url 2048 and each criterion 250 are the recommended defaults recorded for the owner question on the remaining caps. `languages` is stored sorted ascending with no duplicates; a request naming a language twice is refused by the validator with `duplicate_value`, and the array bound here mirrors that rule. `environment_url` is an absolute http(s) URL without credentials: its scheme, userinfo and secret-shaped segments are checked by the shared URL rule at runtime, which a JSON Schema cannot express faithfully, so this schema bounds its length only.
+ */
+export type AiSettingsV1 = {
+    /**
+     * What the project's AI-written cases should know first: the product area, its users and the flow under test.
+     */
+    description: string;
+    /**
+     * The application origin the guidance is written for, null when the project has not named one. Absolute http(s), no userinfo and no secret-shaped part, checked by the shared URL rule at runtime.
+     */
+    environment_url: string | null;
+    /**
+     * The output languages of generated cases, stored sorted ascending ('en' before 'vi'). Closed to the two G1 locales: widening the set needs a migration, because the table's CHECK carries the same pair.
+     */
+    languages: Array<'vi' | 'en'>;
+    /**
+     * How a step should read: voice, person, what to name and what to leave out (contractual cap: 250 code points).
+     */
+    writing_style: string;
+    /**
+     * What every checklist item must cover: the paths, boundaries, authorization cases and destructive actions the project expects (contractual cap: 1500 code points).
+     */
+    coverage_strategy: string;
+    /**
+     * One criterion per checklist priority level, so the same word means the same thing in every item of the project.
+     */
+    priority_criteria: {
+        /**
+         * What makes a failure critical: the release-blocking class of defect.
+         */
+        critical: string;
+        /**
+         * What makes a failure high: a wrong main path or a missing check that still has a workaround.
+         */
+        high: string;
+        /**
+         * What makes a failure medium: a secondary path, a validation message or an empty state.
+         */
+        medium: string;
+        /**
+         * What makes a failure low: wording, spacing or cosmetics that change no behaviour.
+         */
+        low: string;
+    };
+    /**
+     * What must never be tested automatically, such as destructive actions against real customer data (contractual cap: 1500 code points).
+     */
+    exclusion_rules: string;
+    /**
+     * How much detail a single step carries (contractual cap: 200 code points).
+     */
+    step_detail: string;
+};
+
+/**
+ * One criterion per checklist priority level, so the same word means the same thing in every item of the project.
+ */
+export type PriorityCriteria = {
+    /**
+     * What makes a failure critical: the release-blocking class of defect.
+     */
+    critical: string;
+    /**
+     * What makes a failure high: a wrong main path or a missing check that still has a workaround.
+     */
+    high: string;
+    /**
+     * What makes a failure medium: a secondary path, a validation message or an empty state.
+     */
+    medium: string;
+    /**
+     * What makes a failure low: wording, spacing or cosmetics that change no behaviour.
+     */
+    low: string;
 };
 
 /**
@@ -2502,6 +2698,11 @@ export type Cursor = string;
  */
 export type PolicyRevisionCursor = string;
 
+/**
+ * Opaque cursor from `next_cursor`; ordering `version_no desc` (13.2.1-T1, 00 §9.1).
+ */
+export type AiSettingsCursor = string;
+
 export type Limit = number;
 
 /**
@@ -2761,6 +2962,11 @@ export type AuthoringVersionTo = string;
  * Opaque cursor from `next_cursor` of the version timeline (13.1.1 §5 route 22); the keyset is the `(created_at, id)` pair of the page's last row, ordered `(created_at desc, id desc)`. A value this endpoint did not issue is 422 `request_invalid` with `details[].path = /cursor` and `reason = malformed`.
  */
 export type AuthoringVersionCursor = string;
+
+/**
+ * A saved settings version number, 1 or greater. Version 0 is the virtual default-template state and is answered 404, never a row.
+ */
+export type AiSettingsVersionNo = number;
 
 /**
  * Order tag of the sibling set, `"order:sha256:<hex>"` — `AuthoringHashes.OrderHash` over the sorted `(id, version)` pairs of the parent's live siblings (13.1.1-T2) — never a row `version`. Absent or malformed is 422 `request_invalid` with `details[].path = /If-Match` (`required` / `invalid`); a stale tag is 412 `precondition_failed` with the current tag in `error.details`, and nothing is written.
@@ -10846,3 +11052,270 @@ export type ExportAuthoringResponses = {
 };
 
 export type ExportAuthoringResponse = ExportAuthoringResponses[keyof ExportAuthoringResponses];
+
+export type GetProjectAiSettingsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/ai-settings';
+};
+
+export type GetProjectAiSettingsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetProjectAiSettingsError = GetProjectAiSettingsErrors[keyof GetProjectAiSettingsErrors];
+
+export type GetProjectAiSettingsResponses = {
+    /**
+     * The effective settings document with `ETag: "<version_no>"` (`"0"` before the first save)
+     */
+    200: AiSettingsView;
+};
+
+export type GetProjectAiSettingsResponse = GetProjectAiSettingsResponses[keyof GetProjectAiSettingsResponses];
+
+export type SaveProjectAiSettingsData = {
+    body: SaveAiSettingsRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/ai-settings';
+};
+
+export type SaveProjectAiSettingsErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type SaveProjectAiSettingsError = SaveProjectAiSettingsErrors[keyof SaveProjectAiSettingsErrors];
+
+export type SaveProjectAiSettingsResponses = {
+    /**
+     * The effective document already equals the request; the existing version is returned
+     */
+    200: AiSettingsView;
+    /**
+     * A new immutable version was appended
+     */
+    201: AiSettingsView;
+};
+
+export type SaveProjectAiSettingsResponse = SaveProjectAiSettingsResponses[keyof SaveProjectAiSettingsResponses];
+
+export type ListProjectAiSettingsVersionsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `version_no desc` (13.2.1-T1, 00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/ai-settings/versions';
+};
+
+export type ListProjectAiSettingsVersionsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListProjectAiSettingsVersionsError = ListProjectAiSettingsVersionsErrors[keyof ListProjectAiSettingsVersionsErrors];
+
+export type ListProjectAiSettingsVersionsResponses = {
+    /**
+     * Page of AI settings version summaries
+     */
+    200: AiSettingsVersionListResponse;
+};
+
+export type ListProjectAiSettingsVersionsResponse = ListProjectAiSettingsVersionsResponses[keyof ListProjectAiSettingsVersionsResponses];
+
+export type GetProjectAiSettingsVersionData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * A saved settings version number, 1 or greater. Version 0 is the virtual default-template state and is answered 404, never a row.
+         */
+        version_no: number;
+    };
+    query?: never;
+    url: '/projects/{p}/ai-settings/versions/{version_no}';
+};
+
+export type GetProjectAiSettingsVersionErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetProjectAiSettingsVersionError = GetProjectAiSettingsVersionErrors[keyof GetProjectAiSettingsVersionErrors];
+
+export type GetProjectAiSettingsVersionResponses = {
+    /**
+     * One AI settings version with its document and `ETag: "<version_no>"`
+     */
+    200: AiSettingsVersion;
+};
+
+export type GetProjectAiSettingsVersionResponse = GetProjectAiSettingsVersionResponses[keyof GetProjectAiSettingsVersionResponses];
+
+export type ListProjectAiSettingsTemplatesData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/ai-settings/templates';
+};
+
+export type ListProjectAiSettingsTemplatesErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListProjectAiSettingsTemplatesError = ListProjectAiSettingsTemplatesErrors[keyof ListProjectAiSettingsTemplatesErrors];
+
+export type ListProjectAiSettingsTemplatesResponses = {
+    /**
+     * The template catalogue
+     */
+    200: AiSettingsTemplateListResponse;
+};
+
+export type ListProjectAiSettingsTemplatesResponse = ListProjectAiSettingsTemplatesResponses[keyof ListProjectAiSettingsTemplatesResponses];
