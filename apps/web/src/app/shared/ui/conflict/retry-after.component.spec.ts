@@ -39,6 +39,7 @@ describe('RetryAfterComponent', () => {
     expect(root.textContent).toContain('rate_limited');
     expect(root.textContent).toContain('request-429');
     expect(button.type).toBe('button');
+    expect(button.hasAttribute('hlmBtn')).toBe(true);
     expect(button.disabled).toBe(true);
     expect(button.textContent).toContain('Retry available after the wait');
     button.click();
@@ -52,7 +53,7 @@ describe('RetryAfterComponent', () => {
     fixture.componentRef.setInput('kind', 'unavailable');
     fixture.componentRef.setInput('code', 'unavailable');
     fixture.detectChanges();
-    expect(root.querySelector('h2')?.textContent).toBe('503 · Service unavailable');
+    expect(root.querySelector('h2')?.textContent?.trim()).toBe('503 · Service unavailable');
     expect(root.textContent).not.toContain('429 · Rate limited');
     expect(root.textContent).toContain('Retry after: 30 s');
     expect(button.disabled).toBe(false);
@@ -97,6 +98,7 @@ describe('RetryAfterComponent', () => {
     fixture.componentRef.setInput('code', 'quota_exceeded');
     fixture.detectChanges();
     expect(button.disabled).toBe(true);
+    expect(button.getAttribute('aria-busy')).toBe('true');
     expect(button.textContent).toContain('Retrying…');
     button.click();
     expect(retry).not.toHaveBeenCalled();
@@ -134,11 +136,13 @@ describe('RetryAfterComponent', () => {
     expect(status?.textContent).not.toContain('Retry available after the wait');
   });
 
-  it('does not create timers, count down the supplied interval or retry automatically', () => {
+  it('does not count down the supplied interval or retry automatically after control initialization', async () => {
     vi.useFakeTimers();
     const { fixture, root } = render(30, true);
     const retry = vi.fn();
     fixture.componentInstance.retry.subscribe(retry);
+    // Helm's initial render schedules one-shot control work, not a retry countdown.
+    await vi.runAllTimersAsync();
     expect(vi.getTimerCount()).toBe(0);
     vi.advanceTimersByTime(60_000);
     fixture.detectChanges();

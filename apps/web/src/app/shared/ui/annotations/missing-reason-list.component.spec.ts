@@ -34,6 +34,20 @@ describe('MissingReasonList (FR-09-2/6)', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('composes outlined reason badges and native Helm navigation without making plain reasons controls', () => {
+    const fixture = TestBed.createComponent(MissingReasonList);
+    fixture.componentRef.setInput('reasons', reasons);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelectorAll('[data-slot="badge"]')).toHaveLength(2);
+    const link = root.querySelector('a');
+    expect(link?.getAttribute('data-slot')).toBe('button');
+    expect(link?.getAttribute('href')).toBe(reasons[0]?.href);
+    expect(link?.classList.contains('whitespace-normal')).toBe(true);
+    expect(root.querySelectorAll('a')).toHaveLength(1);
+    expect(root.querySelector('.reason-text')?.hasAttribute('tabindex')).toBe(false);
+  });
+
   it.each(states)('covers the %s state without inferring a verdict', (state) => {
     const fixture = TestBed.createComponent(MissingReasonList);
     fixture.componentRef.setInput('reasons', state === 'empty' ? [] : reasons);
@@ -113,7 +127,14 @@ describe('MissingReasonList (FR-09-2/6)', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.reason')?.classList.contains('reason')).toBe(true);
     expect(root.querySelector('.reason-text')?.textContent).toBe(text);
-    expect(root.querySelector('code')?.textContent).toBe(code);
+    const badge = root.querySelector('code');
+    expect(badge?.textContent).toBe(code);
+    expect(badge?.classList.contains('h-auto')).toBe(true);
+    expect(badge?.classList.contains('min-h-[var(--eg-space-6)]')).toBe(true);
+    expect(badge?.classList.contains('whitespace-normal')).toBe(true);
+    expect(badge?.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
+    expect(badge?.classList.contains('max-w-full')).toBe(true);
+    expect(badge?.classList.contains('h-5')).toBe(false);
     expect(root.querySelector('a, [title]')).toBeNull();
   });
 

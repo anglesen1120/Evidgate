@@ -679,6 +679,14 @@ Vitest owns `src/**/*.spec.ts` through the Angular builder and never collects th
 files: the root `vitest.config.ts` lists only `packages/*` as projects, so `npx vitest run` stays
 E2E-free.
 
+Helm keyboard focus uses the shared unlayered `:focus-visible` rule in
+`src/styles/spartan-base.css`, so layered `outline-none` utilities cannot suppress it.
+The outline reuses `--eg-focus`, `--eg-focus-width` and `--eg-focus-offset` in both themes;
+the checkbox selector targets its inner focusable control rather than its display-only host.
+Keep this real outline even when a recipe also renders a box-shadow ring.
+`spartan-theme.spec.ts` guards the rule and its cascade position; onboarding keyboard e2e
+checks the focused element's computed outline.
+
 ## CI hooks for 01.7.1-T1
 
 Consumed by 01.7.1-T1.3 (`ci.yml`, job wired **non-blocking** — `continue-on-error: true` — until

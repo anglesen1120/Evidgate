@@ -1,0 +1,25 @@
+@layer components {
+  .spartan-alert {
+    @apply grid gap-0.5 rounded-lg border px-4 py-3 text-start text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>hlm-icon]:grid-cols-[auto_1fr] has-[>hlm-icon]:gap-x-2.5 *:[hlm-icon]:row-span-2 *:[hlm-icon]:translate-y-0.5 *:[hlm-icon]:text-current *:[hlm-icon:not([class*='text-'])]:text-[length:--spacing(4)];
+  }
+
+  .spartan-alert-variant-default {
+    @apply bg-card text-card-foreground;
+  }
+
+  .spartan-alert-variant-destructive {
+    @apply text-destructive bg-card *:data-[slot=alert-description]:text-destructive/90 *:[hlm-icon]:text-current;
+  }
+
+  .spartan-alert-title {
+    @apply font-medium group-has-[>hlm-icon]/alert:col-start-2;
+  }
+
+  .spartan-alert-description {
+    @apply text-muted-foreground text-sm text-balance md:text-pretty [&_p:not(:last-child)]:mb-4;
+  }
+
+  .spartan-alert-action {
+    @apply absolute end-3 top-2.5;
+  }
+}

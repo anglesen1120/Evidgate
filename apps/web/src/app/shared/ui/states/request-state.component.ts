@@ -24,7 +24,6 @@ import { patternForError } from './state-pattern';
 
 @Component({
   selector: 'app-request-state',
-  standalone: true,
   imports: [
     LoadingPatternComponent,
     EmptyPatternComponent,
@@ -34,8 +33,7 @@ import { patternForError } from './state-pattern';
     RetryAfterComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './request-state.component.css',
-  host: { '(focusin)': 'noteFocusIn()' },
+  host: { class: 'block min-w-0', '(focusin)': 'noteFocusIn()' },
   template: `
     @switch (status()) {
       @case ('loading') {

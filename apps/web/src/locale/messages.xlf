@@ -2284,6 +2284,21 @@
       <trans-unit id="onboarding.connect.dismiss" datatype="html">
         <source>Dismiss secret</source>
       </trans-unit>
+      <trans-unit id="shared.gallery.reveal-heading" datatype="html">
+        <source>Save your ingest token</source>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reveal-warning" datatype="html">
+        <source>Shown only once. Save this value before leaving this step. If copying fails, select and copy the value manually.</source>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reveal-copy" datatype="html">
+        <source>Copy value</source>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reveal-copied" datatype="html">
+        <source>Value copied.</source>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reveal-dismiss" datatype="html">
+        <source>Dismiss secret</source>
+      </trans-unit>
       <trans-unit id="onboarding.connect.refresh-failed" datatype="html">
         <source>The connection was saved, but progress could not be refreshed. Retry loading metadata; do not create the connection again.</source>
       </trans-unit>
@@ -2872,6 +2887,7 @@
       <trans-unit id="runs.detail.incomplete-summary" datatype="html"><source>Collection is incomplete. Review the evidence panel for recorded missing reasons.</source></trans-unit>
       <trans-unit id="runs.detail.view-evidence" datatype="html"><source>View evidence</source></trans-unit>
       <trans-unit id="runs.detail.evidence-completeness" datatype="html"><source>Evidence completeness</source></trans-unit>
+      <trans-unit id="ui.close" datatype="html"><source>Close</source></trans-unit>
     </body>
   </file>
 </xliff>

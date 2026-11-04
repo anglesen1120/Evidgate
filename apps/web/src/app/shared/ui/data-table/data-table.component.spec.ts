@@ -13,14 +13,8 @@ function tableStyles(): string {
   return (
     Array.from(document.querySelectorAll('style'))
       .map((style) => style.textContent ?? '')
-      .find((css) => css.includes('border-spacing:') && css.includes('.header-table')) ?? ''
+      .find((css) => css.includes('--eg-table-row:') && css.includes('--eg-table-inset:')) ?? ''
   );
-}
-
-function specificity(selector: string): number {
-  // This regression compares class/attribute-only component selectors, not a
-  // general-purpose specificity parser (no :is(), ids or pseudo-elements).
-  return (selector.match(/\.[\w-]+|\[[^\]]+\]/g) ?? []).length;
 }
 
 /**
@@ -88,9 +82,9 @@ describe('DataTableComponent', () => {
       ),
     ).toEqual(['2', '3']);
     expect(root.querySelectorAll('[role="cell"][aria-colindex]')).toHaveLength(8);
-    expect(root.querySelector(`#${table.getAttribute('aria-labelledby')}`)?.textContent).toBe(
-      'Evidence collection / Bộ bằng chứng',
-    );
+    expect(
+      root.querySelector(`#${table.getAttribute('aria-labelledby')}`)?.textContent?.trim(),
+    ).toBe('Evidence collection / Bộ bằng chứng');
   });
 
   it('R1: makes the virtual viewport the body rowgroup, with no nested rowgroup inside it', async () => {
@@ -141,37 +135,27 @@ describe('DataTableComponent', () => {
     expect(header.parentElement).toBe(table);
     expect(table.parentElement).toBe(root.querySelector('.scroll'));
     expect(header.closest('cdk-virtual-scroll-viewport')).toBeNull();
-    expect(getComputedStyle(header).position).toBe('sticky');
-    expect(getComputedStyle(header).top).toBe('0px');
-    expect(tableStyles()).toContain('z-index: var(--eg-z-sticky)');
+    expect(header.classList.contains('sticky')).toBe(true);
+    expect(header.classList.contains('top-0')).toBe(true);
+    expect(header.classList.contains('z-[var(--eg-z-sticky)]')).toBe(true);
+    expect(header.getAttribute('data-slot')).toBe('table');
   });
 
-  it('R3: numeric cells beat the base alignment specificity and use tabular numerals', () => {
+  it('R3: numeric cells override base alignment and use tabular numerals with Helm styling', () => {
     const numeric = root.querySelector('.body-table .cell.numeric') as HTMLElement;
     expect(numeric.getAttribute('aria-colindex')).toBe('3');
-    expect(getComputedStyle(numeric).textAlign).toBe('right');
-    expect(getComputedStyle(numeric).fontVariantNumeric).toBe('tabular-nums');
-    const rules = Array.from(tableStyles().matchAll(/([^{}]+)\{([^{}]+)\}/g));
-    const base = rules.find(
-      (rule) =>
-        rule[1]?.includes('.table') &&
-        /\.cell(?:\[|\s|$)/.test(rule[1]) &&
-        rule[2]?.includes('text-align: start'),
-    );
-    const end = rules.find(
-      (rule) => rule[1]?.includes('.cell.numeric') && rule[2]?.includes('text-align: right'),
-    );
-    expect(base).toBeDefined();
-    expect(end).toBeDefined();
-    expect(specificity(end?.[1] ?? '')).toBeGreaterThanOrEqual(specificity(base?.[1] ?? ''));
+    expect(numeric.getAttribute('data-slot')).toBe('table-cell');
+    expect(numeric.classList.contains('[&.numeric]:text-right')).toBe(true);
+    expect(numeric.classList.contains('[&.numeric]:tabular-nums')).toBe(true);
+    expect(numeric.classList.contains('text-start')).toBe(true);
   });
 
   it('R4: delegates opt-in clipping only and keeps narrative values naturally wrapping', () => {
     const values = root.querySelectorAll('.body-table app-data-table-value');
     expect(values[0]?.querySelector('.value')?.classList.contains('truncate')).toBe(true);
     expect(values[1]?.querySelector('.value')?.classList.contains('truncate')).toBe(false);
-    expect(getComputedStyle(values[1]?.querySelector('.value') as HTMLElement).overflowWrap).toBe(
-      'anywhere',
+    expect(values[1]?.querySelector('.value')?.classList.contains('[overflow-wrap:anywhere]')).toBe(
+      true,
     );
     expect(root.querySelector('[title]')).toBeNull();
     expect(root.querySelector('.body-table')?.textContent).toContain(
@@ -186,8 +170,9 @@ describe('DataTableComponent', () => {
     expect(root.querySelectorAll('th[data-eg-mutate]')).toHaveLength(1);
     expect(root.querySelectorAll('td[data-eg-mutate]')).toHaveLength(2);
     expect(root.querySelectorAll('td:not([data-eg-mutate])')).toHaveLength(6);
-    expect(tableStyles()).toMatch(/@media\s*\(max-width:\s*767px\)/);
-    expect(tableStyles()).toMatch(/\[data-eg-mutate\][^{]*\{\s*display:\s*none/);
+    for (const cell of root.querySelectorAll('[data-eg-mutate]')) {
+      expect(cell.classList.contains('max-md:data-[eg-mutate]:hidden')).toBe(true);
+    }
   });
 
   it('R6: renders all 150 records through the plain CDK table', async () => {
@@ -301,9 +286,17 @@ describe('DataTableComponent', () => {
     fixture.componentRef.setInput('rowHeight', 'default');
     await fixture.whenStable();
     expect(fixture.componentInstance.itemSize()).toBe(44);
-    expect(tableStyles()).toContain('height: var(--eg-row-compact)');
-    expect(tableStyles()).toContain('height: var(--eg-row-default)');
-    expect(tableStyles()).toContain('max-height: var(--eg-row-compact)');
+    expect(tableStyles()).toContain('--eg-table-row: var(--eg-row-compact)');
+    expect(tableStyles()).toContain('--eg-table-row: var(--eg-row-default)');
+    expect(tableStyles()).toContain('@media (pointer: coarse)');
+    fixture.componentRef.setInput('rows', dataTableFixtureRows(201));
+    await fixture.whenStable();
+    const cell = root.querySelector('.body-table .cell');
+    expect(cell?.classList.contains('py-0')).toBe(true);
+    expect(cell?.classList.contains('border-b-0')).toBe(true);
+    expect(
+      root.querySelector('app-data-table-value')?.classList.contains('max-h-[var(--eg-table-row)]'),
+    ).toBe(true);
   });
 
   it('R6: retains focus in overlapping windows and restores it before the focused row is recycled', async () => {
@@ -336,14 +329,19 @@ describe('DataTableComponent', () => {
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b/);
   });
 
-  it('R8: styles the typed demo with existing tokens including the deliberate zero cell gap', () => {
-    const css = tableStyles();
-    expect(css).toContain('border-spacing: var(--eg-space-0)');
-    expect(css).toContain('padding: var(--eg-space-3) var(--eg-space-4)');
-    expect(css).toContain('var(--eg-surface)');
-    // The component's own template carries no style attributes; `CdkTable` writes inline
-    // sticky positioning on its own sticky row groups, which are the only allowed ones.
-    expect(root.querySelector('[style]:not(thead, tbody, tfoot)')).toBeNull();
+  it('R8: composes Helm table styling and token utilities without replacing CDK semantics', () => {
+    expect(root.querySelector('[hlmTableContainer]')?.getAttribute('data-slot')).toBe(
+      'table-container',
+    );
+    expect(root.querySelector('th')?.getAttribute('data-slot')).toBe('table-head');
+    expect(root.querySelector('.body-table tr')?.getAttribute('data-slot')).toBe('table-row');
+    expect(
+      root.querySelector('.body-table')?.classList.contains('border-spacing-[var(--eg-space-0)]'),
+    ).toBe(true);
+    expect(root.querySelector('.body-table td')?.classList.contains('px-[var(--eg-space-4)]')).toBe(
+      true,
+    );
+    expect(root.classList.contains('bg-card')).toBe(true);
   });
 
   it.each([

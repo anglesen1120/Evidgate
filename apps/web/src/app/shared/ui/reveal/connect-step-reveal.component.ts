@@ -1,4 +1,3 @@
-// 09.2.1-T2.2; design: docs/design/web/state-sheet.md (recipes A/W), tokens.md and onboarding.md.
 import {
   ChangeDetectionStrategy,
   Component,
@@ -12,33 +11,50 @@ import {
   viewChild,
   type ElementRef,
 } from '@angular/core';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmInput } from '@evidgate/ui/input';
 
 let nextRevealId = 0;
 
 @Component({
   selector: 'app-connect-step-reveal',
-  standalone: true,
+  imports: [HlmButton, HlmCardImports, HlmInput],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../states/state-panel.css', './connect-step-reveal.component.css'],
+  host: { class: 'block min-w-0' },
   template: `
-    <section class="reveal" [attr.aria-labelledby]="headingId">
-      <h3 #headingControl [id]="headingId" tabindex="-1">{{ heading() }}</h3>
-      <p class="reveal__warning" [id]="warningId">{{ warning() }}</p>
+    <section hlmCard class="reveal gap-3 p-4 wrap-anywhere" [attr.aria-labelledby]="headingId">
+      <h3
+        hlmCardTitle
+        class="focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+        #headingControl
+        [id]="headingId"
+        tabindex="-1"
+      >
+        {{ heading() }}
+      </h3>
+      <p class="reveal__warning m-0 text-sm text-muted-foreground" [id]="warningId">
+        {{ warning() }}
+      </p>
       <input
         #control
-        data-testid="reveal-value"
+        hlmInput
+        class="min-w-0 w-full font-mono"
+        [attr.data-testid]="'reveal-value'"
         type="text"
         readonly
         autocomplete="off"
         spellcheck="false"
         [attr.aria-labelledby]="headingId"
-        [attr.aria-describedby]="warningId"
+        [aria-describedby]="warningId"
         [value]="value()"
       />
-      <div class="reveal__actions">
+      <div class="reveal__actions flex flex-wrap gap-2">
         <button
-          class="state-panel__action"
-          data-testid="reveal-copy"
+          hlmBtn
+          [variant]="'outline'"
+          class="aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:shadow-none"
+          [attr.data-testid]="'reveal-copy'"
           type="button"
           [attr.aria-disabled]="copying()"
           [attr.aria-busy]="copying()"
@@ -47,8 +63,9 @@ let nextRevealId = 0;
           {{ copyLabel() }}
         </button>
         <button
-          class="state-panel__action"
-          data-testid="reveal-dismiss"
+          hlmBtn
+          [variant]="'ghost'"
+          [attr.data-testid]="'reveal-dismiss'"
           type="button"
           (click)="dismissed.emit()"
         >
@@ -56,7 +73,8 @@ let nextRevealId = 0;
         </button>
       </div>
       <p
-        data-testid="reveal-copy-status"
+        class="m-0 min-h-[var(--eg-leading-sm)] text-sm text-muted-foreground"
+        [attr.data-testid]="'reveal-copy-status'"
         role="status"
         [attr.aria-live]="'polite'"
         [attr.aria-atomic]="'true'"

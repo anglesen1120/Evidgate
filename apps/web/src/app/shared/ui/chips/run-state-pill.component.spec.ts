@@ -52,6 +52,9 @@ describe('RunStatePillComponent', () => {
       expect(root.querySelector('.status-pill__label')?.textContent).toBe(label);
       expect(root.querySelector('.status-pill__dimension')?.textContent).toBe('Run status:');
       expect(root.querySelector(`.status-pill--${tone}`)).not.toBeNull();
+      const badge = root.querySelector('[hlmBadge]');
+      expect(badge?.getAttribute('data-slot')).toBe('badge');
+      expect(badge?.classList.contains(`bg-[var(--eg-${tone}-bg)]`)).toBe(true);
       expect(root.querySelector('[tabindex], [role], [aria-disabled], button, a')).toBeNull();
       expect(root.innerHTML).not.toMatch(/\b(?:PASS|FAIL)\b/);
       expect(root.querySelector('.decision-chip, [class*="decision"]')).toBeNull();

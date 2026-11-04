@@ -15,11 +15,21 @@ import {
 /** Internal text renderer. Native popovers enter the top layer, outside scroll clipping. */
 @Component({
   selector: 'app-data-table-value',
+  host: {
+    class:
+      'block min-w-0 focus-within:outline-[length:var(--eg-focus-width)] focus-within:outline-solid focus-within:outline-ring focus-within:outline-offset-[var(--eg-focus-offset)]',
+  },
   template: `
     <span
       #valueElement
-      class="value"
+      class="value block [overflow-wrap:anywhere] focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
       [class.truncate]="truncate()"
+      [class.whitespace-normal]="!truncate()"
+      [class]="
+        clipped()
+          ? 'cursor-help min-h-[var(--eg-control-sm)] pointer-coarse:min-h-[var(--eg-control-touch)]'
+          : ''
+      "
       [class.clipped]="clipped()"
       [attr.tabindex]="clipped() ? 0 : null"
       (focus)="show()"
@@ -36,7 +46,7 @@ import {
         from the accessibility tree so an open popover never announces the value again. -->
       <span
         #popover
-        class="full-value"
+        class="full-value box-border m-auto max-w-[calc(100%-var(--eg-space-5)*2)] max-h-[calc(100%-var(--eg-space-5)*2)] overflow-auto rounded-sm border border-input bg-card p-[var(--eg-space-4)] font-sans text-sm text-foreground whitespace-normal [overflow-wrap:anywhere]"
         popover="manual"
         aria-hidden="true"
         (mouseenter)="cancelHide()"
@@ -46,7 +56,6 @@ import {
       >
     }
   `,
-  styleUrl: './data-table-value.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DataTableValueComponent {

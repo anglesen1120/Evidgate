@@ -5,6 +5,9 @@
   // so the strict flags of tsconfig.base.json apply from the first source file.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "paths": {
+      "@evidgate/ui/*": ["./src/app/ui/*/index.ts"]
+    },
     // 00 §5.6 W1: the browser bundles the sources itself — Node's resolution does not apply.
     "module": "preserve",
     "moduleResolution": "bundler",

@@ -1,18 +1,33 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { HlmBadge } from '@evidgate/ui/badge';
+
+import { BADGE_CLASSES, BADGE_TONE_CLASSES } from '../chips/badge-classes';
 
 import type { Outcome } from './verdict-values';
 
 @Component({
   selector: 'app-outcome-pill',
-  standalone: true,
+  imports: [HlmBadge],
+  host: { class: 'inline-block min-w-0 max-w-full' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <span class="verdict" [attr.data-tone]="tone()">
-      <span class="verdict__label" i18n="@@shared.outcome-pill.dimension">Outcome:</span>
-      <span class="verdict__value">{{ label() }}</span>
+    <span
+      hlmBadge
+      [variant]="'secondary'"
+      class="verdict"
+      [class]="badgeClasses()"
+      [attr.data-tone]="tone()"
+    >
+      <span
+        class="verdict__label min-w-0 whitespace-normal [overflow-wrap:anywhere]"
+        i18n="@@shared.outcome-pill.dimension"
+        >Outcome:</span
+      >
+      <span class="verdict__value min-w-0 whitespace-normal [overflow-wrap:anywhere]">{{
+        label()
+      }}</span>
     </span>
   `,
-  styleUrl: './verdict.css',
 })
 export class OutcomePillComponent {
   readonly outcome = input<Outcome | null | undefined>();
@@ -27,6 +42,9 @@ export class OutcomePillComponent {
         return 'neutral';
     }
   });
+  protected readonly badgeClasses = computed(
+    () => `${BADGE_CLASSES} ${BADGE_TONE_CLASSES[this.tone()]}`,
+  );
 
   readonly label = computed(() => {
     switch (this.outcome()) {

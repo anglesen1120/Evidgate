@@ -1,8 +1,19 @@
-<p class="caption" [id]="captionId">{{ caption() }}</p>
-<span #tokenProbe class="token-probe" aria-hidden="true"></span>
+<p
+  class="caption m-0 px-[var(--eg-space-4)] py-[var(--eg-space-3)] text-muted-foreground [overflow-wrap:anywhere]"
+  [id]="captionId"
+>
+  {{ caption() }}
+</p>
+<span
+  #tokenProbe
+  class="token-probe pointer-events-none invisible absolute h-[var(--eg-table-row)] w-0"
+  aria-hidden="true"
+></span>
 <div
   #scrollElement
-  class="scroll"
+  hlmTableContainer
+  class="scroll min-w-0 rounded-md border border-border focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+  [class]="virtual() ? 'max-h-none' : 'max-h-[calc(var(--eg-row-default)*9)]'"
   [attr.tabindex]="horizontalScrolls() ? 0 : null"
   [attr.role]="horizontalScrolls() ? 'region' : null"
   [attr.aria-labelledby]="horizontalScrolls() ? captionId : null"
@@ -16,8 +27,9 @@
   >
     <table
       cdk-table
+      hlmTable
       role="presentation"
-      class="table header-table"
+      class="table header-table sticky top-0 z-[var(--eg-z-sticky)] table-fixed border-separate border-spacing-[var(--eg-space-0)] bg-secondary shadow-sm"
       [dataSource]="emptyData"
       [fixedLayout]="true"
     >
@@ -25,10 +37,12 @@
         <ng-container [cdkColumnDef]="column.id">
           <th
             cdk-header-cell
+            hlmTh
             *cdkHeaderCellDef
             role="columnheader"
             scope="col"
-            class="cell"
+            class="cell text-xs font-semibold text-muted-foreground"
+            [class]="cellClasses"
             [class.numeric]="column.align === 'end'"
             [attr.aria-colindex]="index + 1"
             [attr.data-eg-mutate]="column.mutates ? '' : null"
@@ -37,7 +51,14 @@
           </th>
         </ng-container>
       }
-      <tr cdk-header-row *cdkHeaderRowDef="columnIds()" role="row" aria-rowindex="1"></tr>
+      <tr
+        hlmTr
+        cdk-header-row
+        *cdkHeaderRowDef="columnIds()"
+        class="border-0 hover:bg-secondary"
+        role="row"
+        aria-rowindex="1"
+      ></tr>
     </table>
     <!-- Virtual mode: the viewport is the body rowgroup. `role="table"` may own only rows and
        rowgroups, and the viewport is focusable when it scrolls (it is also the focus-restore
@@ -51,7 +72,7 @@
         [maxBufferPx]="itemSize() * 8"
         [attr.tabindex]="viewportScrolls() ? 0 : null"
         [attr.aria-labelledby]="viewportScrolls() ? captionId : null"
-        class="viewport"
+        class="viewport block h-[calc(var(--eg-table-row)*8)] w-full focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
       >
         <ng-container [ngTemplateOutlet]="bodyTable" />
       </cdk-virtual-scroll-viewport>
@@ -64,8 +85,9 @@
 <ng-template #bodyTable>
   <table
     cdk-table
+    hlmTable
     role="presentation"
-    class="table body-table"
+    class="table body-table table-fixed border-separate border-spacing-[var(--eg-space-0)]"
     [dataSource]="dataSource"
     [trackBy]="trackRow"
     [fixedLayout]="true"
@@ -74,19 +96,27 @@
       <ng-container [cdkColumnDef]="column.id">
         <td
           cdk-cell
+          hlmTd
           *cdkCellDef="let row"
           role="cell"
           class="cell"
+          [class]="bodyCellClasses()"
           [class.numeric]="column.align === 'end'"
           [attr.aria-colindex]="index + 1"
           [attr.data-eg-mutate]="column.mutates ? '' : null"
         >
-          <app-data-table-value [value]="column.cell(row)" [truncate]="column.truncate ?? false" />
+          <app-data-table-value
+            [class]="virtual() ? 'max-h-[var(--eg-table-row)] overflow-hidden' : ''"
+            [value]="column.cell(row)"
+            [truncate]="column.truncate ?? false"
+          />
         </td>
       </ng-container>
     }
     <tr
       cdk-row
+      hlmTr
+      class="border-0 hover:bg-secondary"
       *cdkRowDef="let row; columns: columnIds(); let index = index"
       role="row"
       [attr.aria-rowindex]="windowStart() + index + 2"
@@ -95,11 +125,17 @@
   </table>
   @if (rows().length === 0) {
     <!-- The empty message is not a data record: rowcount remains one header row. -->
-    <table class="table empty-table" role="presentation">
-      <tr role="presentation">
+    <table
+      hlmTable
+      class="table empty-table table-fixed border-separate border-spacing-[var(--eg-space-0)]"
+      role="presentation"
+    >
+      <tr hlmTr class="border-0" role="presentation">
         <td
+          hlmTd
           role="presentation"
           class="cell"
+          [class]="cellClasses"
           [attr.colspan]="columns().length || 1"
           i18n="@@shared.data-table.no-rows"
         >

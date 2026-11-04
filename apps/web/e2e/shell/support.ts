@@ -245,6 +245,27 @@ export async function expectNoA11yViolations(page: Page, context: string): Promi
   expect(axeViolations(results), `axe violations on ${context}`).toEqual([]);
 }
 
+/**
+ * The Helm dialog fades and zooms in on open (`styles/helm/dialog.css`). axe measures computed
+ * colours, so a run started mid-entrance reads the blended opacity and reports contrast the settled
+ * dialog does not have. Waits for the dialog's finite animations instead; an infinite one (a
+ * progress spinner) never settles and is skipped rather than awaited forever.
+ */
+export async function waitForDialogAnimations(page: Page, dialog: string): Promise<void> {
+  await page.locator(dialog).first().waitFor({ state: 'attached' });
+  await page.evaluate(async (selector) => {
+    const element = document.querySelector(selector);
+    if (element === null) return;
+    // The backdrop animates in the overlay container around the dialog, not inside it.
+    const root = element.closest('.cdk-overlay-container') ?? element;
+    const animations = root.getAnimations({ subtree: true }).filter((animation) => {
+      const timing = animation.effect?.getComputedTiming();
+      return timing !== undefined && Number.isFinite(timing.iterations);
+    });
+    await Promise.all(animations.map((animation) => animation.finished.catch(() => undefined)));
+  }, dialog);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Settings shell (09.7.1-T1). The tab strip's DOM contract is fixed by the plan (09.7.1 §10 T1.1):
 // `app-settings-shell` hosts the strip, each visible tab is a link carrying
