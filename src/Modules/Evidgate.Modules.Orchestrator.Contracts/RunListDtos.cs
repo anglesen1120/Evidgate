@@ -1,8 +1,8 @@
 namespace Evidgate.Modules.Orchestrator.Contracts;
 
 /// <summary>
-/// One row of the project's run list. Decision is the newest stored live verdict,
-/// or null when the run has not been evaluated; shadow evaluations never count.
+/// One row of the project's run list. Decision is the newest stored live verdict — null while the run has none, and
+/// null for every row when the caller may not read decisions; shadow evaluations never count.
 /// </summary>
 /// <param name="RunId">The run.</param>
 /// <param name="State">Its state, one of the 00 §8.1 vocabulary.</param>
@@ -25,7 +25,10 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// The scope the run was created with (<c>run.rerun_scope</c>, 0031): <c>full</c> or <c>failed_subset</c>, null for
 /// an original run. The column-backed form of the rerun label.
 /// </param>
-/// <param name="Decision">PASS, FAIL or INCONCLUSIVE from the newest live evaluation; null before evaluation.</param>
+/// <param name="Decision">
+/// PASS, FAIL or INCONCLUSIVE from the newest live evaluation; null when the run has none and also when the caller
+/// lacks <c>decision:read</c>, the permission the verdict belongs to.
+/// </param>
 public sealed record RunSummary(
     Guid RunId,
     string State,

@@ -1239,7 +1239,11 @@ paths:
         `parent_run_id`, `rerun_scope` and `decision`. `decision` is the verdict
         of the run's newest `live` evaluation — `PASS`, `FAIL` or
         `INCONCLUSIVE`, `null` while the run has none; a `shadow` evaluation is
-        a second opinion and never the verdict. The filter speaks its own
+        a second opinion and never the verdict. The verdict is
+        `decision:read` data while this page answers under `run:read`: a caller
+        without `decision:read` gets every item with `decision` null and the
+        filter answers 403 `forbidden`, so `null` never claims a run is
+        unevaluated when it only may not be read. The filter speaks its own
         lower-snake vocabulary — `pending` (no live evaluation), `pass`, `fail`,
         `inconclusive`, case-exact, mapped to the item's `decision` value — so
         the stored upper-case verdict is never a filter value; any other value,
@@ -7654,7 +7658,10 @@ components:
       in: query
       required: false
       description: >-
-        The run's evaluation decision (F43, S143): `pending` for a run whose
+        The run's evaluation decision (F43, S143) — `decision:read` data, so a
+        caller without that permission is refused with 403 `forbidden` instead
+        of being answered (an empty page would say which runs carry a verdict).
+        `pending` for a run whose
         newest `live` evaluation does not exist, otherwise `pass`, `fail` or
         `inconclusive` for that evaluation's verdict `PASS`, `FAIL` or
         `INCONCLUSIVE` — filter tokens are lower snake, because a filter is not

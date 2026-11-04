@@ -53,6 +53,12 @@ public interface IPolicyContracts
     /// opinion about the same evidence and is never the verdict. A run with no live evaluation is absent from the
     /// answer, which the caller reads as "not evaluated yet"; empty input performs no query.
     /// </summary>
+    /// <remarks>
+    /// The caller must pass ids it has already scoped to the project and to the set its own caller may see: the
+    /// tenant predicate is the only boundary this read applies, so an id from another project of the same org —
+    /// or one its caller was not authorized to name — would come back as a verdict. Policy cannot re-derive either
+    /// boundary, and must not guess it.
+    /// </remarks>
     /// <param name="runIds">At most 200 run ids, one page of a list read.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     ValueTask<IReadOnlyList<RunLiveDecision>> GetLatestLiveDecisionsAsync(

@@ -1,6 +1,7 @@
 #pragma warning disable CA1861
 using System.Text.Json;
 using Evidgate.Modules.Orchestrator.Application.Queries;
+using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 using Npgsql;
 using Shouldly;
 using Xunit;
