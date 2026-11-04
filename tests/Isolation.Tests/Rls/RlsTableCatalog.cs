@@ -311,6 +311,28 @@ internal static class RlsTableCatalog
     }
 
     /// <summary>
+    /// True when the role holds the privilege on one column of the relation. <c>grant update (state)</c> leaves
+    /// <c>has_table_privilege(…, 'UPDATE')</c> false and every other column unwritable — the only way to prove a
+    /// column-scoped grant is to name the column (SEC5).
+    /// </summary>
+    internal static async Task<bool> HasColumnPrivilegeAsync(
+        NpgsqlConnection connection,
+        string role,
+        string table,
+        string column,
+        string privilege,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select has_column_privilege(@role::name, @table, @column, @privilege)";
+        command.Parameters.AddWithValue("role", role);
+        command.Parameters.AddWithValue("table", table);
+        command.Parameters.AddWithValue("column", column);
+        command.Parameters.AddWithValue("privilege", privilege);
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken))!;
+    }
+
+    /// <summary>
     /// True when the role holds the privilege on any column of the relation. A column-level
     /// <c>GRANT</c> is independent of the table-level one — <c>has_table_privilege</c> stays
     /// false — so a read check that only asks the table would miss
