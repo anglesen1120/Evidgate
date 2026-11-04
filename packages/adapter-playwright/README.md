@@ -576,17 +576,19 @@ recorded here because the 1.63 type is nested.
 `npm test -w @evidgate/playwright-reporter` runs the Vitest suite (Node only, no network):
 `sequence`, `spool`, `spool-boundary`, `spool-hardening`, `callbacks`, `ext-filter`,
 `capability` (Ajv 8 against the `contracts/` schemas), `guard`, `guard-boundary`,
-`unicode`, `unknown-fields`, `identity`, `identity-resolve` (the 04.3.2-T1 built-in
-mapping: annotation, sidecar, conflict, `variant_hash`, `target_env`, the warning channel
-and the `onEnd` exit code, with every emitted envelope validated against the envelope
-schema), `identity-perf` (5k parametrised tests resolve in < 500 ms), `variant` (the
-`fixtures/variant-hash/vectors.json` corpus), `sidecar` (the `evidgate.cases.yaml`
-loader), `index`, `memory`, `reporter-boundary`, `reporter-hardening` (the review fixes:
-`printsToStdio`, flush-per-callback, step-title and `duration_ms` policy), `status-map`
-(the 04.3.2-T2 AC6 table, unknown statuses and `error_summary`), `retry` (attempts 1..n,
-flaky and fixme-on-retry through the reporter), `status-reporter` (unknown status warning,
-xfail, `interrupted` vs `timedOut`) and `reporter.e2e` (the real `playwright test` CLI on
-`test-fixtures/`, including an annotated test and a sidecar-mapped test).
+`unicode`, `unknown-fields`, `identity`, `identity-resolve-*` (the built-in identity
+mapping, split by responsibility into `mapping`, `variant-hash`, `target-env`,
+`reporter-envelope` and `reporter-gate`: annotation, sidecar, conflict, `variant_hash`,
+`target_env`, the warning channel and the `onEnd` exit code, with every emitted envelope
+validated against the envelope schema), `identity-perf` (5k parametrised tests resolve in
+< 500 ms), `variant` (the `fixtures/variant-hash/vectors.json` corpus), `sidecar` (the
+`evidgate.cases.yaml` loader), `index`, `memory`, `reporter-boundary`,
+`reporter-hardening` (the review fixes: `printsToStdio`, flush-per-callback, step-title
+and `duration_ms` policy), `status-map` (the 04.3.2-T2 AC6 table, unknown statuses and
+`error_summary`), `retry` (attempts 1..n, flaky and fixme-on-retry through the reporter),
+`status-reporter` (unknown status warning, xfail, `interrupted` vs `timedOut`) and
+`reporter.e2e` (the real `playwright test` CLI on `test-fixtures/`, including an
+annotated test and a sidecar-mapped test).
 
 The 04.3.3-T2 attachment specs are `attach-map` (the AC4 kind table, the MIME check, the
 size-cap boundary), `paths` (the AC6 allow-list: traversal, symlinks, exotic path forms,

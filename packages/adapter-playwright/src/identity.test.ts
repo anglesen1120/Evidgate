@@ -2,7 +2,7 @@
 // resolver seam. The server computes `execution_key` from the manifest (00 §7); the
 // reporter never hashes it (04.3.2 AC4) and keeps emitting the schema-valid placeholder
 // behind the resolver. The built-in 04.3.2-T1 mapping (annotation/sidecar → `ext.case_id`,
-// `variant_hash`, `target_env`) is covered by identity-resolve.test.ts.
+// `variant_hash`, `target_env`) is covered by the identity-resolve.*.test.ts specs.
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
