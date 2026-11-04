@@ -65,4 +65,16 @@ internal sealed class UsageContracts(
 
         return UsageBatchOutcome.Merge(batch, inserted);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The org is the scope's tenant, so the unique index answers one read and row security turns another org's key into
+    /// an absence. No validation runs: the key is the caller's own, and reading it changes nothing.
+    /// </remarks>
+    public Task<UsageEntryRecord?> FindAsync(string billingKey, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(billingKey);
+
+        return store.FindAsync(scopes.Require().OrgId, billingKey, cancellationToken);
+    }
 }

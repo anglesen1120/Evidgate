@@ -44,7 +44,7 @@ public sealed class IngestEventBatchTests
     /// whose value is null are omitted, because the schema declares <c>status</c> and <c>duration_ms</c> as non-nullable
     /// (<c>additionalProperties: false</c>): a JSON null would be a schema error, not an absent member.
     /// </summary>
-    private static Dictionary<string, object?> Event(
+    internal static Dictionary<string, object?> Event(
         Guid eventId,
         string executionKey,
         long sequence,
@@ -85,14 +85,14 @@ public sealed class IngestEventBatchTests
         return envelope;
     }
 
-    private static object Batch(params object[] events) => new { schema_version = 1, events };
+    internal static object Batch(params object[] events) => new { schema_version = 1, events };
 
     /// <summary>The request body of a serialized batch; the synchronous <c>Serialize</c> stays out of the async path (VSTHRD103).</summary>
     private static StringContent JsonBody(object body) =>
         new(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
     /// <summary>One <c>POST /v1/runs/{r}/events</c> as the host's published principal.</summary>
-    private static async Task<ApiAnswer> PostEventsAsync(
+    internal static async Task<ApiAnswer> PostEventsAsync(
         IngestTestWorld world,
         object body,
         Guid? runId = null,
