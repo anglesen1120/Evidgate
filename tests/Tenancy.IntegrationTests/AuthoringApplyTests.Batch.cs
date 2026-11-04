@@ -264,7 +264,7 @@ public sealed partial class AuthoringApplyTests
             ("id", change));
 
         var apply = ApplyAsync(world, [change], etag);
-        await WaitForChangeRowWaiterAsync(world, holderPid);
+        await WaitForChangeRowWaiterAsync(world, holderPid, apply);
 
         // Blocked on the row, not failed: the lock the test holds is the one the handler waits for.
         apply.IsCompleted.ShouldBeFalse();

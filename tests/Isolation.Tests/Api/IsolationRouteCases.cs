@@ -2277,6 +2277,13 @@ public sealed class RouteProbeRunner
         {
             violations.Add(Describe(route, name, caller, $"applying {changeId:D} under {selection.ETag} answered {apply}, expected 200 (positive control): {Brief(apply)}"));
         }
+        else if (apply.Json is not { ValueKind: JsonValueKind.Object } appliedBody
+            || !appliedBody.TryGetProperty("batch_id", out var batchIdElement)
+            || !batchIdElement.TryGetGuid(out _))
+        {
+            // A comment writes no version, so the batch id in the answer is the only proof the route applied the selection.
+            violations.Add(Describe(route, name, caller, $"applying {changeId:D} answered {apply} without a batch_id (positive control): {Brief(apply)}"));
+        }
 
         violations.AddRange(ForeignIdsIn(apply.Text).Select(id => Describe(route, name, caller, $"applying {changeId:D} answered {apply} carrying org-A id {id}")));
         return violations;

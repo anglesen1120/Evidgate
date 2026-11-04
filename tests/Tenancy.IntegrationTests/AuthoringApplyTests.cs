@@ -198,10 +198,21 @@ public sealed partial class AuthoringApplyTests
     /// </summary>
     /// <param name="world">The test world.</param>
     /// <param name="holderPid">The backend that holds the selected change row.</param>
-    private static async Task WaitForChangeRowWaiterAsync(World world, int holderPid)
+    /// <param name="apply">The in-flight apply: a completed answer means it never blocked, so the wait is over.</param>
+    private static async Task WaitForChangeRowWaiterAsync(World world, int holderPid, Task<ApiAnswer> apply)
     {
         for (var attempt = 0; attempt < 800; attempt++)
         {
+            if (apply.IsCompleted)
+            {
+                // A completed apply never blocked, so no waiter will ever appear; report that instead of timing out.
+                // The answer itself stays with the caller, which owns the task (VSTHRD003 forbids awaiting it here).
+                throw new InvalidOperationException(
+                    apply.IsFaulted
+                        ? $"the apply failed instead of waiting on the row: {apply.Exception?.GetBaseException().Message}"
+                        : "the apply completed instead of waiting on the row");
+            }
+
             var waiting = await IntAsync(
                 world,
                 """
