@@ -87,6 +87,7 @@ export class RunDetailPage {
   });
   protected readonly copy = {
     title: $localize`:@@runs.detail.title:Run detail`,
+    sections: $localize`:@@runs.detail.sections:Run sections`,
     back: $localize`:@@runs.detail.back:Back to runs`,
     evidence: $localize`:@@runs.evidence.title:Evidence`,
     decision: $localize`:@@runs.decision.title:Latest live decision`,

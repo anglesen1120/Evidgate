@@ -21,7 +21,7 @@
     {{ copy.caption }}
   </h2>
   <div
-    class="min-w-0 min-[768px]:min-w-[calc(var(--eg-leading-2xl)*25)]"
+    class="min-w-0 min-[768px]:min-w-[calc(var(--eg-leading-2xl)*32)]"
     role="table"
     aria-labelledby="run-table-caption"
     [attr.aria-rowcount]="rows().length + 1"
@@ -29,7 +29,7 @@
   >
     <table hlmTable role="presentation" class="block border-collapse max-[767px]:sr-only">
       <thead hlmTHead role="rowgroup" class="block">
-        <tr hlmTr class="table-row bg-secondary hover:bg-secondary" role="row" aria-rowindex="1">
+        <tr hlmTr class="run-row bg-secondary hover:bg-secondary" role="row" aria-rowindex="1">
           <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.id }}</th>
           <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.state }}</th>
           <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.evidence }}</th>
@@ -53,7 +53,7 @@
             <tr
               hlmTr
               *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow"
-              class="table-row virtual-row box-border h-[calc(var(--eg-control-touch)*3)] max-[767px]:h-[calc(var(--eg-control-touch)*18)] max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)] [&>*]:overflow-hidden"
+              class="run-row virtual-row box-border h-[calc(var(--eg-control-touch)*3)] max-[767px]:h-[calc(var(--eg-control-touch)*18)] max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)] [&>*]:overflow-hidden"
               role="row"
               data-run-row
               [attr.data-run-id]="row.run_id"
@@ -73,7 +73,7 @@
           @for (row of rows(); track row.run_id; let index = $index) {
             <tr
               hlmTr
-              class="table-row max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)]"
+              class="run-row max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)]"
               role="row"
               data-run-row
               [attr.data-run-id]="row.run_id"

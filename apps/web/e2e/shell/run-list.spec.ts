@@ -254,6 +254,61 @@ for (const locale of LOCALES) {
     await expect(page.locator(`${ROWS}[data-run-id="${last.run_id}"]`)).toBeVisible();
     expect(await page.locator(ROWS).count()).toBeLessThan(100);
   });
+
+  for (const mode of ['runs', 'large'] as const) {
+    test(`run identifiers stay unwrapped and columns align at tablet widths (${locale}, ${mode})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 768, height: 800 });
+      await page.goto(withVariants(path(locale), [VARIANTS[mode]]));
+      await ready(page);
+      const row = page.locator(ROWS).first();
+      await expect(row).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      for (const width of [768, 800, 900]) {
+        await page.setViewportSize({ width, height: 800 });
+        const geometry = await row.evaluate((element) => {
+          const cell = element.querySelector<HTMLElement>('.identifier');
+          const id = cell?.querySelector('abbr');
+          const header = element.closest('[role="table"]')?.querySelector('thead tr');
+          if (!cell || !id || !header) throw new Error('Run table geometry is unavailable');
+          const range = document.createRange();
+          range.selectNodeContents(id);
+          const text = range.getBoundingClientRect();
+          const bounds = cell.getBoundingClientRect();
+          const style = getComputedStyle(cell);
+          const headings = [...header.children].map((entry) => entry.getBoundingClientRect());
+          return {
+            lines: range.getClientRects().length,
+            fits:
+              text.left >= bounds.left + parseFloat(style.paddingLeft) - 1 &&
+              text.right <= bounds.right - parseFloat(style.paddingRight) + 1,
+            alignment: [...element.children].map((entry, index) => {
+              const body = entry.getBoundingClientRect();
+              const heading = headings[index];
+              if (!heading) throw new Error('Run column heading is missing');
+              return Math.max(Math.abs(body.x - heading.x), Math.abs(body.width - heading.width));
+            }),
+          };
+        });
+        expect(geometry.lines, `${width}px identifier line count`).toBe(1);
+        expect(geometry.fits, `${width}px identifier fits inside cell padding`).toBe(true);
+        expect(geometry.alignment).toHaveLength(7);
+        for (const difference of geometry.alignment) expect(difference).toBeLessThanOrEqual(1);
+      }
+      await page.setViewportSize({ width: 767, height: 800 });
+      expect(
+        await row.evaluate((element) => {
+          const first = element.children[0]?.getBoundingClientRect();
+          const second = element.children[1]?.getBoundingClientRect();
+          return first !== undefined && second !== undefined && second.top >= first.bottom;
+        }),
+      ).toBe(true);
+      expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      );
+    });
+  }
 }
 
 test('cursor pages preserve server ordering and append without offset pagination', async ({

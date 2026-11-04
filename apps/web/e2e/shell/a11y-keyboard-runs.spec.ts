@@ -211,7 +211,7 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
 test('the 250-row table keeps both scroll axes on named stops and the visitor inside it', async ({
   page,
 }) => {
-  // Stay above the 768px card breakpoint but below the table's 900px desktop minimum.
+  // Stay above the stacked-record breakpoint but below the desktop table minimum.
   await page.setViewportSize({ width: 800, height: 800 });
   await page.goto(listAddress('?fixture.variant.listRuns=250-rows'));
   await listIsReady(page);

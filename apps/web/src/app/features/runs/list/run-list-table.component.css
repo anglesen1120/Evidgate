@@ -1,13 +1,14 @@
 /* Detached header/body tables need identical tracks across the CDK viewport. */
-.table-row {
+.run-row {
   display: grid;
+  /* Character floors keep abbreviated IDs and refs readable before horizontal scrolling. */
   grid-template-columns:
-    minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.1fr)
-    minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr);
+    minmax(calc(19ch + var(--eg-space-3) * 2), 1.2fr) minmax(0, 0.8fr) minmax(0, 1fr)
+    minmax(0, 1.1fr) minmax(19ch, 1fr) minmax(0, 1fr) minmax(0, 1.1fr);
 }
 
 @media (max-width: 767px) {
-  .table-row {
+  .run-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

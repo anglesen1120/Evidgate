@@ -49,6 +49,8 @@ describe('RunListTableComponent', () => {
     expect(root.querySelector('[data-run-decision] [hlmBadge]')).not.toBeNull();
     expect(root.querySelector('[data-run-rerun] [hlmBadge]')).not.toBeNull();
     expect(root.querySelector('tbody')?.getAttribute('role')).toBe('rowgroup');
+    expect(root.querySelectorAll('.run-row')).toHaveLength(2);
+    expect(root.querySelector('.table-row')).toBeNull();
   });
   it('keeps the empty table verdict-free with only the header row counted', async () => {
     const { root } = await render([]);
@@ -243,6 +245,9 @@ describe('RunListTableComponent', () => {
     fixture.componentRef.setInput('rows', rows);
     await fixture.whenStable();
     expect(root.querySelector('cdk-virtual-scroll-viewport')).not.toBeNull();
+    expect(root.querySelector('thead tr')?.classList.contains('run-row')).toBe(true);
+    expect(root.querySelector('.virtual-row')?.classList.contains('run-row')).toBe(true);
+    expect(root.querySelector('.table-row')).toBeNull();
     expect(root.querySelector('.row-probe')).not.toBeNull();
     expect(root.querySelector('[role="table"]')?.getAttribute('aria-rowcount')).toBe('251');
     expect(root.querySelector('tbody')?.getAttribute('role')).toBe('presentation');

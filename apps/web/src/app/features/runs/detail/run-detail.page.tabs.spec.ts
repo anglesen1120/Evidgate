@@ -53,6 +53,9 @@ describe('RunDetailPage evidence and decision tabs', () => {
 
   it('labels both mounted panels and starts with only evidence visible without rereading on selection', async () => {
     const { root, harness, evidence, decision } = await open();
+    const tablist = root.querySelector('[role="tablist"]');
+    expect(tablist?.getAttribute('aria-label')).toBe('Run sections');
+    expect(tablist?.getAttribute('aria-label')).not.toBe(root.querySelector('h1')?.textContent);
     const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
     expect(panels).toHaveLength(2);
     expect(evidence.getAttribute('aria-selected')).toBe('true');
