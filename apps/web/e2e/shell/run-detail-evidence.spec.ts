@@ -358,12 +358,7 @@ for (const locale of LOCALES) {
       await expectNoA11yViolations(page, `run detail incomplete evidence ${locale}/${theme}`);
 
       await page.goto(
-        detailPath(
-          locale,
-          'evaluated-fail-missing-shard',
-          'ok',
-          `?evidence_revision=${OLDEST_REVISION.revision_no}`,
-        ),
+        detailPath(locale, 'evaluated-fail-missing-shard', 'ok', OLDEST_REVISION.revision_no),
       );
       await ready(page);
       await expect(page.locator('#evidence-panel [data-evidence-newer]')).toBeVisible();
