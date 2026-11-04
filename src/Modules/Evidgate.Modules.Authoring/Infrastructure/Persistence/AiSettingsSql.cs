@@ -1,3 +1,8 @@
+using System.Data;
+using Dapper;
+using Npgsql;
+using NpgsqlTypes;
+
 namespace Evidgate.Modules.Authoring.Infrastructure.Persistence;
 
 /// <summary>
@@ -47,6 +52,10 @@ internal static class AiSettingsSql
     /// The append of one version. <c>on conflict do nothing</c> is the last line of defence behind the
     /// advisory lock: a lost race inserts nothing and the command answers the stale precondition.
     /// </summary>
+    /// <remarks>
+    /// <c>@languages</c> is a <c>text[]</c> column, so it travels as <see cref="TextArrayParameter"/> rather than as a
+    /// bare <c>string[]</c> (see its own remarks); every other parameter is a scalar Dapper types itself.
+    /// </remarks>
     internal const string InsertVersion = """
         insert into public.project_ai_settings (
             id, org_id, project_id, version_no, description, environment_url, languages, writing_style,
@@ -335,5 +344,35 @@ internal static class AiSettingsSql
 
         /// <summary>The stored document as JSON text.</summary>
         public string Content { get; init; } = string.Empty;
+    }
+
+    /// <summary>The <c>@languages</c> parameter of <see cref="InsertVersion"/>, typed explicitly as <c>text[]</c>.</summary>
+    /// <remarks>
+    /// <para>
+    /// The tenant Dapper path registers a read-only <c>string[]</c> type handler
+    /// (<see cref="Evidgate.BuildingBlocks.Persistence.Tenancy.StringArrayTypeHandler"/> — array writes belong to the EF
+    /// write model, 00 §5.5 C4), so Dapper's registry throws <see cref="NotSupportedException"/> before the command is
+    /// built and every save would answer a 500. Dapper's custom-parameter hook runs <em>before</em> that registry, so
+    /// the value keeps travelling over the scope's own connection and transaction (C3) with its type spelled out.
+    /// </para>
+    /// <para>
+    /// The same mechanism as <c>ImportSql.TextArrayParameter</c>, the module's other <c>text[]</c> parameter: the block
+    /// that owns the statement owns the parameter, so the insert above needs no second API.
+    /// </para>
+    /// </remarks>
+    internal sealed class TextArrayParameter(string[] values) : SqlMapper.ICustomQueryParameter
+    {
+        /// <inheritdoc />
+        public void AddParameter(IDbCommand command, string name)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+
+            var parameter = (NpgsqlParameter)command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.NpgsqlDbType = NpgsqlDbType.Array | NpgsqlDbType.Text;
+            parameter.Value = values;
+
+            command.Parameters.Add(parameter);
+        }
     }
 }

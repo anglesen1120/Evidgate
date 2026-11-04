@@ -145,7 +145,7 @@ internal static class AiSettingsCalls
     /// </summary>
     /// <param name="length">The exact code-point length.</param>
     internal static string ProseOfLength(int length) =>
-        string.Concat(Enumerable.Repeat("note ", (length / 5) + 1))[..length];
+        string.Concat(Enumerable.Repeat("note ", (length / 5) + 1))[..(length - 1)] + "n";
 
     /// <summary>A template provenance pair (<c>{code, version}</c>).</summary>
     /// <param name="code">The template code, e.g. <c>default</c>.</param>

@@ -229,7 +229,7 @@ internal sealed class SaveAiSettingsCommandHandler(
                 version_no = versionNo,
                 description = document.Description,
                 environment_url = document.EnvironmentUrl,
-                languages = document.Languages.ToArray(),
+                languages = new AiSettingsSql.TextArrayParameter(document.Languages.ToArray()),
                 writing_style = document.WritingStyle,
                 coverage_strategy = document.CoverageStrategy,
                 critical = document.PriorityCriteria.Critical,
