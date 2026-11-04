@@ -433,6 +433,16 @@ import type { FixtureCatalogRow } from './fixture-document';
  * than `403`, so step 5 does not mount under it).
  * Its `X-Request-Id` (`…a10e`) is distinct again, and the body names the same id.
  *
+ * `getPolicyHead` answers the head read the same tab's revision display needs, so the tab can show
+ * the active and the head revision from two small reads instead of summing a list page.
+ * `policy-head-read-ok` is the summary of the revision `policy-revision-head` serves (`…a003`,
+ * revision 3) with the `ETag` that id quoted, exactly as the revision read issues it — the header a
+ * publish sends back as `If-Match`. `policy-head-read-not-found` is the contract's one
+ * undifferentiated `404` (a project with no revision at all, an unknown, soft-deleted or
+ * other-tenant project all read the same envelope), which the client reports as "no revisions",
+ * never as a failed load. Their `X-Request-Id`s (`…a10f`, `…a110`) are distinct from every row
+ * above, and the `404` body names its own.
+ *
  * The seven `suite-revision*` rows answer the pinned revision read (`getSuiteRevision`,
  * `GET /v1/suite-revisions/{r}`) the composition screen mounts: `ok` is a draft whose shard
  * strategy is `count`, `published` is the immutable revision (status and the read-only notice come

@@ -76,6 +76,8 @@ import policyActivationReadNotFound from '../../../../../../fixtures/web-api/pol
 import policyActivationReadOk from '../../../../../../fixtures/web-api/policy-activation-read-ok/input.json';
 import policyActivationReadRateLimited from '../../../../../../fixtures/web-api/policy-activation-read-rate-limited/input.json';
 import policyActivationUnchanged from '../../../../../../fixtures/web-api/policy-activation-unchanged/input.json';
+import policyHeadReadNotFound from '../../../../../../fixtures/web-api/policy-head-read-not-found/input.json';
+import policyHeadReadOk from '../../../../../../fixtures/web-api/policy-head-read-ok/input.json';
 import policyRevisionCreate from '../../../../../../fixtures/web-api/policy-revision-create/input.json';
 import policyRevisionCreateCriticalCaseQuarantined from '../../../../../../fixtures/web-api/policy-revision-create-critical-case-quarantined/input.json';
 import policyRevisionCreatePreconditionFailed from '../../../../../../fixtures/web-api/policy-revision-create-precondition-failed/input.json';
@@ -224,6 +226,8 @@ export const FIXTURE_CATALOG_SESSION_ROWS: readonly FixtureCatalogRow[] = [
     document: policyActivationReadRateLimited,
   },
   { name: 'policy-activation-unchanged', document: policyActivationUnchanged },
+  { name: 'policy-head-read-ok', document: policyHeadReadOk },
+  { name: 'policy-head-read-not-found', document: policyHeadReadNotFound },
   { name: 'policy-revision-create', document: policyRevisionCreate },
   {
     name: 'policy-revision-create-critical-case-quarantined',
