@@ -23,6 +23,10 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+// The `/v1/ci/token` answer shape is shared with the CLI's own specs; the helper is test-only
+// (excluded from the cli build), so it is imported from its source rather than `@evidgate/cli`.
+import { exchangeBody } from '../../cli/src/commands/devExchange.testing.js';
+
 import type { AttachmentRecord } from './attach.js';
 import type { EventEnvelope } from './envelope.js';
 
@@ -122,12 +126,14 @@ beforeAll(async () => {
       const authorization = request.headers.authorization ?? null;
       if (request.method === 'POST' && url.pathname === '/v1/ci/token') {
         store.exchangeBodies.push(body.toString('utf8'));
-        sendJson(response, 200, {
-          token: mintedToken,
-          expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
-          project_id: '0198a000-0000-7000-8000-00000000d002',
-          permission_set: [],
-        });
+        sendJson(
+          response,
+          200,
+          exchangeBody(mintedToken, {
+            expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+            projectId: '0198a000-0000-7000-8000-00000000d002',
+          }),
+        );
         return;
       }
       if (request.method === 'POST' && url.pathname === '/v1/artifacts/upload-url') {
