@@ -41,6 +41,23 @@ describe('RunListTableComponent', () => {
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
+  it('uses Helm tables and badges while retaining a single accessible table', async () => {
+    const { root } = await render([run(1, { decision: 'PASS', rerun_label: 'failed_subset' })]);
+    expect(root.querySelectorAll('[role="table"]')).toHaveLength(1);
+    expect(root.querySelectorAll('table[data-slot="table"][role="presentation"]')).toHaveLength(2);
+    expect(root.querySelector('th[scope="row"] a')).not.toBeNull();
+    expect(root.querySelector('[data-run-decision] [hlmBadge]')).not.toBeNull();
+    expect(root.querySelector('[data-run-rerun] [hlmBadge]')).not.toBeNull();
+    expect(root.querySelector('tbody')?.getAttribute('role')).toBe('rowgroup');
+    expect(root.querySelectorAll('.run-row')).toHaveLength(2);
+    expect(root.querySelector('.table-row')).toBeNull();
+  });
+  it('keeps the empty table verdict-free with only the header row counted', async () => {
+    const { root } = await render([]);
+    expect(root.querySelector('[role="table"]')?.getAttribute('aria-rowcount')).toBe('1');
+    expect(root.querySelector('[data-run-row]')).toBeNull();
+    expect(root.querySelector('app-decision-chip')).toBeNull();
+  });
   it('links the row id to its detail child and preserves the current filter query', async () => {
     await TestBed.inject(Router).navigateByUrl('/?state=complete&ref=main');
     const { root } = await render([run(1)]);
@@ -228,8 +245,15 @@ describe('RunListTableComponent', () => {
     fixture.componentRef.setInput('rows', rows);
     await fixture.whenStable();
     expect(root.querySelector('cdk-virtual-scroll-viewport')).not.toBeNull();
+    expect(root.querySelector('thead tr')?.classList.contains('run-row')).toBe(true);
+    expect(root.querySelector('.virtual-row')?.classList.contains('run-row')).toBe(true);
+    expect(root.querySelector('.table-row')).toBeNull();
     expect(root.querySelector('.row-probe')).not.toBeNull();
     expect(root.querySelector('[role="table"]')?.getAttribute('aria-rowcount')).toBe('251');
+    expect(root.querySelector('tbody')?.getAttribute('role')).toBe('presentation');
+    expect(root.querySelector('cdk-virtual-scroll-viewport')?.getAttribute('role')).toBe(
+      'rowgroup',
+    );
     expect(root.querySelectorAll('[data-run-row]').length).toBeLessThan(100);
     fixture.componentRef.setInput('rows', rows.slice(0, 1));
     await fixture.whenStable();

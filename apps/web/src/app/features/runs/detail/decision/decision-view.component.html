@@ -1,25 +1,45 @@
 <section
-  class="decision-panel"
+  hlmCard
+  class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5) text-(length:--eg-text-sm) leading-(--eg-leading-sm) wrap-anywhere min-[1280px]:p-(--eg-space-7)"
   id="decision-panel"
   aria-labelledby="decision-title"
   [attr.aria-busy]="loading() || updating() ? 'true' : null"
 >
-  <h2 id="decision-title">{{ copy.title }}</h2>
+  <h2
+    hlmCardTitle
+    id="decision-title"
+    class="m-0 font-(family-name:--eg-font-display) text-(length:--eg-text-xl) leading-(--eg-leading-xl)"
+    [textContent]="copy.title"
+  ></h2>
 
   @if (updating() && decision() !== null) {
-    <p class="decision-updating" role="status">{{ copy.updating }}</p>
+    <p class="decision-updating m-0 text-(--eg-text-muted)" role="status">{{ copy.updating }}</p>
   }
   @if (shadowIgnored()) {
-    <div class="decision-notice" role="status" data-decision-shadow>
-      <strong>{{ copy.shadowIgnoredTitle }}</strong>
-      <span>{{ copy.shadowIgnoredDescription }}</span>
+    <div
+      hlmAlert
+      class="grid gap-(--eg-space-2) bg-(--eg-neutral-bg) text-(--eg-neutral-fg)"
+      role="status"
+      data-decision-shadow
+    >
+      <strong hlmAlertTitle>{{ copy.shadowIgnoredTitle }}</strong>
+      <span hlmAlertDescription class="text-inherit">{{ copy.shadowIgnoredDescription }}</span>
     </div>
   }
   @if (stale()) {
-    <p class="decision-notice" role="status" data-decision-stale>{{ copy.refreshFailed }}</p>
+    <p
+      hlmAlert
+      class="m-0 bg-(--eg-neutral-bg) text-(--eg-neutral-fg)"
+      role="status"
+      data-decision-stale
+    >
+      {{ copy.refreshFailed }}
+    </p>
   }
   @if (announcement(); as announcement) {
-    <p class="decision-announcement" role="status" data-decision-announcement>{{ announcement }}</p>
+    <p class="m-0 text-(--eg-text-muted)" role="status" data-decision-announcement>
+      {{ announcement }}
+    </p>
   }
 
   @if (loading()) {
@@ -54,67 +74,85 @@
     }
   } @else {
     @if (pending()) {
-      <p class="decision-summary">
+      <p class="m-0 flex flex-wrap gap-(--eg-space-3)">
         <app-decision-chip [decision]="'pending'" />
       </p>
-      <p class="decision-description" data-decision-pending>{{ copy.pending }}</p>
+      <p class="m-0 text-(--eg-text-muted)" data-decision-pending>{{ copy.pending }}</p>
     }
     @if (evaluated(); as decision) {
-      <p class="decision-summary" data-decision-summary>
+      <p class="m-0 flex flex-wrap gap-(--eg-space-3)" data-decision-summary>
         <app-decision-chip [decision]="decision.decision" />
         <app-outcome-pill [outcome]="decision.outcome" />
       </p>
 
       @if (revisionMismatch(); as mismatch) {
-        <p class="decision-mismatch" data-decision-mismatch role="status">
-          <span class="decision-mismatch__text">{{
+        <div
+          hlmAlert
+          class="flex flex-wrap items-center gap-(--eg-space-3) border-(--eg-warning-fg) bg-(--eg-warning-bg) text-(--eg-text)"
+          data-decision-mismatch
+          role="status"
+        >
+          <span class="min-w-0 flex-1">{{
             copy.revisionMismatch(mismatch.decisionRevision, mismatch.selectedRevision)
           }}</span>
-          <button type="button" class="decision-mismatch__action" (click)="viewEvidence()">
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            class="decision-mismatch__action h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal wrap-anywhere transition-none"
+            (click)="viewEvidence()"
+          >
             {{ copy.viewEvidence }}
           </button>
-        </p>
+        </div>
       }
 
-      <div class="decision-reasons">
-        <h3 id="decision-reasons-title">{{ copy.reasons }}</h3>
+      <div class="grid min-w-0 gap-(--eg-space-3)">
+        <h3
+          class="m-0 font-(family-name:--eg-font-display) text-(length:--eg-text-md) font-(weight:--eg-weight-semibold) leading-(--eg-leading-md)"
+          id="decision-reasons-title"
+        >
+          {{ copy.reasons }}
+        </h3>
         @if (decision.reasons.length === 0) {
-          <p class="decision-description" data-decision-no-reasons>{{ copy.noReasons }}</p>
+          <p class="m-0 text-(--eg-text-muted)" data-decision-no-reasons>{{ copy.noReasons }}</p>
         } @else {
-          <ol class="decision-reason-list" aria-labelledby="decision-reasons-title">
+          <ol
+            class="decision-reason-list m-0 grid list-none gap-(--eg-space-3) p-0"
+            aria-labelledby="decision-reasons-title"
+          >
             @for (reason of decision.reasons; track $index) {
-              <li>
-                <bdi>{{ reason }}</bdi>
+              <li
+                class="rounded-(--eg-radius-sm) border border-solid border-(--eg-border) bg-(--eg-surface-raised) p-(--eg-space-4)"
+              >
+                <bdi class="font-(family-name:--eg-font-mono)">{{ reason }}</bdi>
               </li>
             }
           </ol>
         }
       </div>
 
-      <dl class="decision-provenance" data-decision-provenance>
-        <div
-          class="decision-provenance__field decision-provenance__field--wide"
-          data-decision-revision
-        >
+      <dl
+        class="m-0 grid min-w-0 gap-(--eg-space-4) min-[768px]:grid-cols-2 [&>div]:min-w-0 [&_dt]:text-(length:--eg-text-xs) [&_dt]:leading-(--eg-leading-xs) [&_dt]:text-(--eg-text-muted) [&_dd]:m-0 [&_dd]:mt-(--eg-space-2) [&_dd]:wrap-anywhere [&_code]:font-(family-name:--eg-font-mono)"
+        data-decision-provenance
+      >
+        <div class="col-span-full" data-decision-revision>
           <dt>{{ copy.evidenceRevision }}</dt>
           <dd>{{ decision.evidenceRevision }}</dd>
         </div>
-        <div class="decision-provenance__field" data-decision-status>
+        <div data-decision-status>
           <dt>{{ copy.status }}</dt>
           <dd>
             <code>{{ decision.kind }}</code>
           </dd>
         </div>
-        <div class="decision-provenance__field" data-decision-mode>
+        <div data-decision-mode>
           <dt>{{ copy.mode }}</dt>
           <dd>
             <code>{{ decision.mode }}</code>
           </dd>
         </div>
-        <div
-          class="decision-provenance__field decision-provenance__field--wide"
-          data-decision-policy
-        >
+        <div class="col-span-full" data-decision-policy>
           <dt>{{ copy.policyHash }}</dt>
           <dd>
             <code
@@ -122,10 +160,7 @@
             >
           </dd>
         </div>
-        <div
-          class="decision-provenance__field decision-provenance__field--wide"
-          data-decision-manifest
-        >
+        <div class="col-span-full" data-decision-manifest>
           <dt>{{ copy.manifestHash }}</dt>
           <dd>
             <code
@@ -133,10 +168,7 @@
             >
           </dd>
         </div>
-        <div
-          class="decision-provenance__field decision-provenance__field--wide"
-          data-decision-evaluator
-        >
+        <div class="col-span-full" data-decision-evaluator>
           <dt>{{ copy.evaluatorVersion }}</dt>
           <dd>
             <code
@@ -144,10 +176,7 @@
             >
           </dd>
         </div>
-        <div
-          class="decision-provenance__field decision-provenance__field--wide"
-          data-decision-evaluation-id
-        >
+        <div class="col-span-full" data-decision-evaluation-id>
           <dt>{{ copy.evaluationId }}</dt>
           <dd>
             <code
@@ -158,7 +187,7 @@
       </dl>
     }
     @if (unavailable()) {
-      <p class="decision-description" data-decision-unavailable>{{ copy.unavailable }}</p>
+      <p class="m-0 text-(--eg-text-muted)" data-decision-unavailable>{{ copy.unavailable }}</p>
     }
   }
 </section>

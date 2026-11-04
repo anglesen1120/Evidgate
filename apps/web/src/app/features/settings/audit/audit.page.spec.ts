@@ -5,11 +5,11 @@ import type { AuditEntryDto, AuditListResponse } from '@evidgate/sdk';
 import { AuditDataService, type AuditListQuery } from '../../../core/data/audit-data.service';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
-import { provideSelectTestLayout } from '../policy/select.test-support';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { AuditPage } from './audit.page';
 import { AUDIT_MAX_PAGES, AuditStore, EMPTY_AUDIT_FILTERS } from './audit.store';
 
-provideSelectTestLayout();
+provideLayoutTestStubs();
 
 function entry(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   return {

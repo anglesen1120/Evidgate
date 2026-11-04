@@ -1,5 +1,8 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import type { RunStateDto } from '@evidgate/sdk';
+import { HlmAlert } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { EvidenceBadgeComponent } from '../../../shared/ui/verdict/evidence-badge.component';
@@ -8,10 +11,21 @@ import { escapeFormatChars } from '../list/ref-name-display';
 
 @Component({
   selector: 'app-run-header',
-  imports: [RunStatePillComponent, StatusPillComponent, EvidenceBadgeComponent],
+  imports: [
+    RunStatePillComponent,
+    StatusPillComponent,
+    EvidenceBadgeComponent,
+    HlmAlert,
+    HlmButton,
+    HlmCard,
+    HlmCardTitle,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-header.component.html',
-  styleUrl: './run-detail-metadata.css',
+  host: {
+    class:
+      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-3 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full',
+  },
 })
 export class RunHeaderComponent {
   readonly run = input.required<RunStateDto>();
