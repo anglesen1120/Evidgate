@@ -24,8 +24,10 @@
 --     removal itself is durable. Lock order: this lock first, then the session row locks of the
 --     single UPDATE; none of the three definers takes the audit chain lock, so no cycle exists
 --     with the callers that take `audit:` afterwards.
---   * Signatures, return types, language, `security definer`, `search_path = ''` and grants of
---     the three functions are those of 0045; the bodies differ only by the lock lines.
+--   * Signatures, return types, `security definer`, `search_path = ''` and grants of the three
+--     functions are those of 0045; the bodies differ only by the lock lines (and, for
+--     `session_rotate`, the user-id pre-read). `session_revoke_all_for_user` changes language
+--     from sql to plpgsql so the lock is its own statement and the UPDATE snapshot follows it.
 --   * Index. `InviteMember` refuses an address with a removed membership that carries a user
 --     (`org_id = $1 and invited_email = $2 and status = 'removed' and user_id is not null`);
 --     the partial index below serves that probe. Admin path, low rate.
@@ -262,6 +264,10 @@ revoke all on function evidgate_resolve.session_revoke_all_for_user(uuid, timest
 grant execute on function evidgate_resolve.session_create(uuid, uuid, bytea, integer, text, text, timestamptz, timestamptz, bytea[], timestamptz) to evidgate_app;
 grant execute on function evidgate_resolve.session_rotate(uuid, uuid, bytea, integer, timestamptz, integer, text, text) to evidgate_app;
 grant execute on function evidgate_resolve.session_revoke_all_for_user(uuid, timestamptz) to evidgate_app;
+
+-- A SHARE lock on a busy membership table queues its writers: fail the migration (retryable)
+-- instead of waiting without bound.
+set local lock_timeout = '5s';
 
 create index if not exists membership_removed_invited_email_idx
   on public.membership (org_id, invited_email)
