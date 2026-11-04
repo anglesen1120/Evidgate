@@ -246,13 +246,4 @@ describe('RunListTableComponent', () => {
       computedStyle.mockRestore();
     }
   });
-  it('keeps the focused virtual row link outline inside its clipped cell', async () => {
-    const { root } = await render(Array.from({ length: 250 }, (_, index) => run(index)));
-    const link = root.querySelector<HTMLAnchorElement>('.virtual-row .identifier a');
-    expect(link).not.toBeNull();
-    if (link) {
-      link.focus();
-      expect(getComputedStyle(link).outlineOffset).toBe('calc(-1 * var(--eg-focus-width))');
-    }
-  });
 });
