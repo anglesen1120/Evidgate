@@ -1,3 +1,4 @@
+import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { CiBindingView } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
@@ -16,6 +17,30 @@ const failure: ApiError = {
   retryAfterSeconds: null,
   details: [],
 };
+
+@Component({
+  imports: [CiBindingListComponent],
+  template: `
+    <app-ci-binding-list
+      [rows]="rows"
+      [phase]="'ready'"
+      [hasMore]="hasMore()"
+      [loadingMore]="loadingMore()"
+      (loadMore)="loadPage()"
+    />
+  `,
+})
+class FastPagingHost {
+  readonly rows = rows;
+  readonly hasMore = signal(true);
+  readonly loadingMore = signal(false);
+
+  loadPage(): void {
+    this.loadingMore.set(true);
+    this.hasMore.set(false);
+    this.loadingMore.set(false);
+  }
+}
 
 describe('CiBindingListComponent (09.7.1-F15)', () => {
   afterEach(() => TestBed.resetTestingModule());
@@ -199,6 +224,22 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     await fixture.whenStable();
     expect(root.querySelector('[data-ci-load-more]')).toBeNull();
     expect(document.activeElement).toBe(root.querySelector('h2'));
+  });
+
+  it('restores focus when the last page settles before an intermediate loading render', async () => {
+    const fixture = TestBed.createComponent(FastPagingHost);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const more = root.querySelector<HTMLButtonElement>('[data-ci-load-more]');
+    if (!more) throw new Error('Expected Load more');
+    more.focus();
+    expect(document.activeElement).toBe(more);
+    more.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-ci-load-more]')).toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('#ci-bindings-heading'));
   });
 
   it('leaves focus on Load more when another page remains', async () => {

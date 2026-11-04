@@ -447,7 +447,8 @@ test.describe('members matrix responsive records', () => {
           for (const cell of await cells.all()) {
             await expect(cell).toHaveCSS('display', 'grid');
             await expect(cell.locator('.record-label')).toBeVisible();
-            await expect(cell.locator('.record-label')).toHaveAttribute('aria-hidden', 'true');
+            await expect(cell).toHaveAttribute('role', 'cell');
+            await expect(cell.locator('.record-label')).not.toHaveAttribute('aria-hidden');
           }
           const identity = matrix.locator('tbody th').first();
           await expect(identity.locator('span:last-child')).toHaveText(

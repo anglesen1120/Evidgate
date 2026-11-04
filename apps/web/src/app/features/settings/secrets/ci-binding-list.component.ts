@@ -259,7 +259,7 @@ export class CiBindingListComponent {
   private readonly document = inject(DOCUMENT);
   /** The control whose click started the read; it may be removed before the read settles. */
   private focusAnchor: HTMLElement | null = null;
-  private restoreFocusPending = false;
+  private readonly restoreFocusPending = signal(false);
 
   constructor() {
     // A settled Load more or Retry can remove the control that had focus (the last page, or the
@@ -267,9 +267,11 @@ export class CiBindingListComponent {
     // move focus when the control is really gone, so a surviving control keeps the user's focus.
     afterRenderEffect(() => {
       const busy = this.loading() || this.loadingMore();
+      // A fast response can coalesce loading true → false before the child renders.
+      const pending = this.restoreFocusPending();
       untracked(() => {
-        if (busy || !this.restoreFocusPending) return;
-        this.restoreFocusPending = false;
+        if (busy || !pending) return;
+        this.restoreFocusPending.set(false);
         const anchor = this.focusAnchor;
         this.focusAnchor = null;
         if (anchor?.isConnected) return;
@@ -295,7 +297,7 @@ export class CiBindingListComponent {
   }
   private armFocusRestore(event: Event): void {
     this.focusAnchor = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-    this.restoreFocusPending = true;
+    this.restoreFocusPending.set(true);
   }
 
   protected statusLabel(status: CiBindingView['status']): string {

@@ -40,6 +40,7 @@ import {
   THEMES,
   UNKNOWN_ORG,
   withVariants,
+  waitForDialogAnimations,
   type ShellLocale,
 } from './support';
 
@@ -106,6 +107,7 @@ async function reveal(page: Page): Promise<Locator> {
   const dialog = page.locator(DIALOG);
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId('reveal-value')).toHaveValue(SECRET);
+  await waitForDialogAnimations(page, DIALOG);
   // Plaintext belongs to exactly one live reveal control, never to the metadata list or storage.
   await expect(page.getByTestId('reveal-value')).toHaveCount(1);
   await expect(page.locator('app-secret-reference-list')).not.toContainText(SECRET);
@@ -303,6 +305,12 @@ for (const locale of LOCALES) {
       await visit(page, locale);
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const scopePickers = page.getByRole('banner').getByRole('combobox');
+      await expect(scopePickers).toHaveCount(2);
+      for (const picker of await scopePickers.all()) {
+        await expect(picker).toHaveAttribute('aria-expanded', 'false');
+        await expect(picker).toHaveAccessibleName(/\S/u);
+      }
       await expectNoA11yViolations(page, `Secrets list ${locale} ${theme}`);
       const dialog = await reveal(page);
       await expectNoA11yViolations(page, `Secrets open reveal ${locale} ${theme}`);
