@@ -36,6 +36,16 @@ describe('fixture toggles (09.1.1-T12.1)', () => {
       expect(toggles.latencyFor('anyUnlistedOperation')).toBe(600_000);
     });
 
+    it.each([
+      '9007199254740991',
+      '9007199254740992',
+      '9007199254740993',
+      '100000000000000000000',
+      '9'.repeat(400),
+    ])('clamps the well-formed value %p around and above 2^53 to the cap', (value) => {
+      expect(togglesFor(`?fixture.latency=${value}`).latencyFor('listRuns')).toBe(600_000);
+    });
+
     it.each(['abc', '-5', '1e3', '1.5', ''])('ignores the unusable value %p', (value) => {
       expect(
         togglesFor(`?fixture.latency=${encodeURIComponent(value)}`).latencyFor('listRuns'),
@@ -103,6 +113,16 @@ describe('fixture toggles (09.1.1-T12.1)', () => {
 
       expect(toggles.latencyFor('listRuns')).toBe(600_000);
     });
+
+    it.each([2 ** 53 - 1, 2 ** 53, 2 ** 53 + 2, 1e20])(
+      'clamps the whole value %p around and above 2^53 to the cap',
+      (value) => {
+        const toggles = togglesFor('');
+        toggles.setLatency('listRuns', value);
+
+        expect(toggles.latencyFor('listRuns')).toBe(600_000);
+      },
+    );
 
     it.each([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN, -5, 1.5])(
       'ignores the invalid value %p and keeps the override already set',

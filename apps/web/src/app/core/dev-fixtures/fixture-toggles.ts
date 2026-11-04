@@ -48,7 +48,9 @@ const MAX_LATENCY_MS = 600_000;
  * value, `Infinity`, `NaN` — is not a latency and yields `null`.
  */
 function clampLatency(milliseconds: number): number | null {
-  if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) {
+  // `isInteger`, not `isSafeInteger`: past 2^53 every finite double is whole, and such a value is
+  // well formed but too large, so it clamps like any other value above the cap.
+  if (!Number.isInteger(milliseconds) || milliseconds < 0) {
     return null;
   }
   return Math.min(milliseconds, MAX_LATENCY_MS);
@@ -59,7 +61,9 @@ function parseLatency(value: string | null): number | null {
   if (value === null || !/^\d+$/.test(value)) {
     return null;
   }
-  return clampLatency(Number(value));
+  // A digit string long enough to overflow to `Infinity` is still well formed, only enormous.
+  const milliseconds = Number(value);
+  return clampLatency(Number.isFinite(milliseconds) ? milliseconds : MAX_LATENCY_MS);
 }
 
 /**
