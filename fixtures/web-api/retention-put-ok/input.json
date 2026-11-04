@@ -1,0 +1,13 @@
+{
+  "operation_id": "setRetentionPolicy",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000b10d"
+  },
+  "latency_ms": 0,
+  "body": {
+    "artifact_days": 30,
+    "metadata_days": 90
+  }
+}

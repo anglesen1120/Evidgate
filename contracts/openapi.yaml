@@ -31,6 +31,8 @@ tags:
     description: Event batch ingest
   - name: artifacts
     description: Artifact upload and download
+  - name: evidence
+    description: Retention policy of a project's evidence (06)
   - name: decisions
     description: Run and release decisions
   - name: environments
@@ -2683,6 +2685,137 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /projects/{p}/retention:
+    get:
+      operationId: getRetentionPolicy
+      tags: [evidence]
+      summary: A project's retention windows; platform defaults when it has no row
+      description: >-
+        The project's stored retention policy (06 §4 `retention_policy`, 06.4.1-T1): the artifact window in
+        `artifact_days` and the metadata window in `metadata_days`. A project with no row answers the
+        deployment's platform defaults — 14 and 90 — and this read never creates a row. The windows are
+        bounded by `RetentionLimits` (`MinArtifactDays`/`MaxArtifactDays`, `MinMetadataDays`/`MaxMetadataDays`,
+        documented defaults 1/90/30/90) and `metadata_days` is at least `artifact_days`; those bounds are
+        validated on the write, not advertised here as schema constants, because the owner may tighten or
+        loosen them without a contract change. An unknown, soft-deleted or other-tenant project id is the one
+        `404` (00 §9.2), never another tenant's policy. A read, so no `Idempotency-Key`.
+      x-permission: project:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: The project's retention windows, or the platform defaults when it has no row
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    put:
+      operationId: setRetentionPolicy
+      tags: [evidence]
+      summary: Set a project's retention windows within the configured range
+      description: >-
+        Upserts the project's `retention_policy` row on `(org_id, project_id)` through the standard pipeline
+        (06.4.1-T1), so two concurrent writes converge and the last committed write wins — no duplicate row and
+        no lost update (`UNIQUE (org_id, project_id)` plus `ON CONFLICT … DO UPDATE`). The answer carries the
+        stored windows. A value below `RetentionLimits.MinArtifactDays`/`MinMetadataDays`, above
+        `RetentionLimits.MaxArtifactDays`/`MaxMetadataDays`, or a `metadata_days` shorter than `artifact_days`
+        is `422 retention_out_of_range` with two `error.details[]` entries naming the offending field and the bound it
+        broke (`below_min_artifact_days`/`above_max_artifact_days`/`below_min_metadata_days`/`above_max_metadata_days`/
+        `below_artifact_days`, then `retention_limits.<property>` with the configured bound as its `reason`), and no
+        row is written; a body that parses but is not a closed JSON object of two integers is
+        `422 request_invalid` (`required` for a missing member, `invalid_type` for a non-integer,
+        `additional_properties` with the member's JSON pointer for an unknown one, `invalid_json` for a member given
+        twice; a member name that is not valid text, or is longer than 64 characters, answers `additional_properties`
+        at the fixed pointer `/<invalid-member-name>` because echoing it could throw again or split a character). An
+        empty or unparsable body is `400 request_invalid`; a body over the 4096-byte cap is `413
+        payload_too_large` before parsing, and a `Content-Type` that is neither `application/json` nor a `+json`
+        media type is `415 request_invalid` before the body is read. An out-of-range answer therefore reads
+        `{"error":{"code":"retention_out_of_range",
+        "message":"artifact_days must be between 1 and 90","request_id":"…","retryable":false,
+        "details":[{"path":"artifact_days","reason":"below_min_artifact_days"},
+        {"path":"retention_limits.min_artifact_days","reason":"1"}]}}` — the detail paths carry no leading
+        slash (the Evidence module's own convention) and only the first broken rule is reported. There is no
+        `If-Match` and no `412` by design: a project settings row has no multi-writer contention, and the
+        metadata window being at least as long as the artifact window is the only cross-field rule. `PUT` is
+        naturally idempotent, so the route takes no `Idempotency-Key`. An unknown, soft-deleted or other-tenant
+        project id is the one `404`.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetentionPolicy'
+      responses:
+        '200':
+          description: The stored retention windows
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicy'
+        '400':
+          description: 400 request_invalid — the request body is empty or is not valid JSON
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          description: 413 payload_too_large — the request body exceeds the 4096-byte cap, checked before parsing
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '415':
+          description: >-
+            415 request_invalid — `Content-Type` must be `application/json` or a `+json` media type such as
+            `application/vnd.evidgate+json`, with optional parameters such as `charset=utf-8`; the body is not
+            read or parsed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -9993,6 +10126,28 @@ components:
         bytes: { type: [integer, 'null'] }
         scan_state: { type: [string, 'null'] }
         failure_code: { type: [string, 'null'] }
+    RetentionPolicy:
+      type: object
+      description: >-
+        A project's evidence retention windows (06 §4 `retention_policy`, 06.4.1-T1): the body and the `200`
+        answer of `PUT /v1/projects/{p}/retention`, and the `200` answer of its `GET`. `artifact_days` bounds
+        how long artifacts are kept, `metadata_days` how long their metadata rows outlive the bytes. Both are
+        required and the body is closed. The accepted range comes from `RetentionLimits` at runtime
+        (documented defaults: artifact 1..90, metadata 30..90, with `metadata_days` at least `artifact_days`)
+        and the platform defaults for a project with no stored row are 14 and 90; a value outside that range is
+        `422 retention_out_of_range` whose `error.details[]` names the field and the bound, so the numbers stay
+        configuration and not JSON-Schema constants.
+      additionalProperties: false
+      required: [artifact_days, metadata_days]
+      properties:
+        artifact_days:
+          type: integer
+          description: Days an artifact is kept; validated against `RetentionLimits.MinArtifactDays`/`MaxArtifactDays`.
+        metadata_days:
+          type: integer
+          description: >-
+            Days the artifact's metadata rows are kept; validated against `RetentionLimits.MinMetadataDays`/
+            `MaxMetadataDays` and never shorter than `artifact_days`.
     NodeDto:
       type: object
       description: >-

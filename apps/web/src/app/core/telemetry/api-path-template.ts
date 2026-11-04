@@ -91,6 +91,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'rerun',
   'resend',
   'restore',
+  'retention',
   'revisions',
   'revoke',
   'revoke-all',
