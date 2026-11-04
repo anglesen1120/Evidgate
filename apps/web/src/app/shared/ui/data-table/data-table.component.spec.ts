@@ -9,12 +9,9 @@ import type { DataTableFixtureRow } from './data-table.fixture';
 import type { Mock } from 'vitest';
 
 /**
- * F56: `CdkVirtualScrollViewport.setRenderedRange` publishes the new range synchronously but
- * schedules the re-render from a microtask, so a single `whenStable()` can resolve before the
- * bounded window reaches the DOM under CPU load. Poll with a forced change detection, bounded:
- * the first pass renders the requested window, and that render is what this observes, before
- * the fixed-size strategy's post-render recompute re-expands the range from the jsdom scroll
- * offset. The caller's strict assertions then judge that rendered window.
+ * jsdom performs no layout, so a virtual window exists only through the modelled scroll offset
+ * the fixed-size strategy measures. That strategy recomputes the range from the offset on every
+ * later pass, so this polls the settled window into the DOM instead of racing a single render.
  */
 async function waitForRenderedWindow<T>(
   fixture: ComponentFixture<T>,
@@ -199,8 +196,13 @@ describe('DataTableComponent', () => {
     expect(rendered.length).toBeGreaterThan(0);
     expect(rendered.length).toBeLessThan(100);
     expect(table.getAttribute('aria-rowcount')).toBe('5001');
-    // Set a public CDK rendered range; jsdom cannot prove physical scrolling.
-    viewport.setRenderedRange({ start: 400, end: 420 });
+    // jsdom performs no layout, so model the scroll offset the fixed-size strategy measures:
+    // it keeps minBufferPx (itemSize * 4 in the template) above the first visible row, so
+    // scrolling row 404 into view settles the rendered window on rows 400-419. Driving the
+    // offset instead of the range keeps that window a fixed point of every later recompute.
+    element.scrollTop = 404 * fixture.componentInstance.itemSize();
+    element.dispatchEvent(new Event('scroll'));
+    viewport.checkViewportSize();
     await waitForRenderedWindow(fixture, root, { ariaRowIndex: '402', rowId: 'demo-400' });
     expect(root.querySelector('.body-table [role="row"]')?.getAttribute('aria-rowindex')).toBe(
       '402',
