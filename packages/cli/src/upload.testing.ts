@@ -76,7 +76,7 @@ export function harness(respond: Responder): Harness {
     calls.push(call);
     const parts: Buffer[] = [];
     if (method === 'PUT' && request.body !== null) {
-      for await (const chunk of request.body as unknown as AsyncIterable<Uint8Array>) {
+      for await (const chunk of request.body as AsyncIterable<Uint8Array>) {
         call.chunks.push(chunk.byteLength);
         parts.push(Buffer.from(chunk));
       }

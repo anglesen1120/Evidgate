@@ -1,7 +1,6 @@
 // Path handling for `evidgate manifests upload`: non-UTF-8 bytes travel verbatim with the
 // digest as the idempotency key, a symlink and a relative path are followed, and the
-// non-regular inputs (a device, a FIFO) are refused without a request or a hang.
-import { execFileSync } from 'node:child_process';
+// empty `--file` flag is a usage error before any request.
 import { createHash } from 'node:crypto';
 import { symlink } from 'node:fs/promises';
 import { join, relative } from 'node:path';
@@ -40,7 +39,7 @@ describe('manifests upload — boundaries', () => {
     );
   });
 
-  // ---- path handling: symlink, device, FIFO, relative path, empty flag ----
+  // ---- path handling: symlink, relative path, empty flag ----
 
   it('symlink_to_a_file_is_uploaded', async () => {
     const target = await manifestFile('{"schema":"manifest.v1"}');
@@ -55,53 +54,6 @@ describe('manifests upload — boundaries', () => {
     ).resolves.toBe(0);
     expect(calls).toHaveLength(1);
   });
-
-  it.skipIf(process.platform === 'win32')('dev_zero_is_unreadable_with_zero_requests', async () => {
-    const env = await devEnv();
-    const { fetchImpl, calls } = devStubFetch(ok);
-    const { io, stderr } = capture();
-
-    await expect(
-      main(['manifests', 'upload', '--file', '/dev/zero'], env, io, { fetch: fetchImpl }),
-    ).resolves.toBe(3);
-
-    expect(stderr.join('')).toContain('evidgate: error manifest_unreadable: ');
-    expect(calls).toHaveLength(0);
-  });
-
-  // `open(path, 'r')` on a FIFO blocks until a writer appears, so the non-regular-file
-  // check never ran and the command hung. The open is `O_RDONLY | O_NONBLOCK`, which
-  // returns at once on a FIFO, so the `fstat` check refuses it (contracts/cli.md §8 step 2).
-  it.skipIf(process.platform === 'win32')(
-    'fifo_is_refused_without_hanging',
-    async () => {
-      const fifo = join(await tempDir(), 'manifest.fifo');
-      execFileSync('mkfifo', [fifo]);
-      const env = await devEnv();
-      const { fetchImpl, calls } = devStubFetch(ok);
-      const { io, stderr } = capture();
-
-      const pending = main(['manifests', 'upload', '--file', fifo], env, io, {
-        fetch: fetchImpl,
-      });
-      // Real wall-clock timer on purpose: the hang was a blocked libuv `open()` on the
-      // FIFO, not a scheduled timer, so fake timers cannot observe it. The race is a
-      // bounded liveness probe, not a sleep that masks a race.
-      const outcome = await Promise.race([
-        pending.then(
-          (code) => `settled:${code}`,
-          () => 'settled:threw',
-        ),
-        new Promise<string>((resolve) => setTimeout(() => resolve('hung'), 1500)),
-      ]);
-      await pending;
-
-      expect(outcome).toBe('settled:3');
-      expect(stderr.join('')).toContain('evidgate: error manifest_unreadable: ');
-      expect(calls).toHaveLength(0);
-    },
-    10_000,
-  );
 
   it('empty_file_flag_is_usage_with_zero_requests', async () => {
     const env = await devEnv();

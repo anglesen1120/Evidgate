@@ -3,6 +3,8 @@
 // it. Time comes from the injected seam, so a spec advances the clock and fires what is due
 // itself and nothing races the real file read.
 
+import { Readable } from 'node:stream';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { CliError } from './errors.js';
@@ -203,8 +205,11 @@ describe('uploadFile', () => {
         if (puts === 1) {
           // An early 2xx: the store answers before a single byte and closes the connection,
           // which destroys the request body it never read. `putOnce` hands this fake the
-          // Node Readable it built, so the cast names the real shape rather than BodyInit.
-          const body = request.body as unknown as { destroy(): void };
+          // Node Readable it built, so the guard names the real shape rather than BodyInit.
+          const body: unknown = request.body;
+          if (!(body instanceof Readable)) {
+            throw new Error('the early 2xx did not receive the Node Readable body');
+          }
           body.destroy();
           // The idle timer then aborts the attempt: the body can never make progress.
           clock.now += putStallTimeoutMs;

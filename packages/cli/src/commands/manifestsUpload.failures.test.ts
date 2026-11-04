@@ -1,8 +1,6 @@
 // The failure paths of `evidgate manifests upload`: the 401 that purges the cached CI token
-// and the 403 that must keep it, the swallowed purge failure, redaction of both credentials,
-// and the replies that become `request_failed`/`transport` without echoing the body or URL.
-import { chmod } from 'node:fs/promises';
-
+// and the 403 that must keep it, redaction of both credentials, and the replies that become
+// `request_failed`/`transport` without echoing the body or URL.
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { readCachedToken, writeCachedToken } from '../auth/tokenCache.js';
@@ -104,46 +102,6 @@ describe('manifests upload', () => {
       expiresAt,
     });
   });
-
-  // 04.2.2-T1.1 / §5: a purge failure is swallowed — the server code still surfaces.
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'purge_failure_swallowed',
-    async () => {
-      const env = await ingestEnv();
-      const config = resolveConfig({ env });
-      const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
-      await writeCachedToken(config, { token: 'egt_cached_token', expiresAt });
-      const file = await manifestFile('{"schema":"manifest.v1"}');
-      const { fetchImpl, calls } = stubFetch(() =>
-        jsonResponse(401, {
-          error: {
-            code: 'token_revoked',
-            message: 'the token was revoked',
-            request_id: 'req-1',
-            retryable: false,
-          },
-        }),
-      );
-      const { io, stderr } = capture();
-
-      // A read-only cache directory makes the purge fail (EACCES).
-      await chmod(config.cacheDir, 0o500);
-      try {
-        await expect(
-          main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
-        ).resolves.toBe(3);
-      } finally {
-        await chmod(config.cacheDir, 0o700);
-      }
-
-      const text = stderr.join('');
-      expect(text).toContain('evidgate: error token_revoked: ');
-      expect(text).not.toContain('token_cache_error');
-      // The cached token is fresh, so the upload is the only request: its 401 is the one
-      // whose purge fails, and that failure must not replace the server's code.
-      expect(calls).toHaveLength(1);
-    },
-  );
 
   // A server message that embeds the bearer or the dev credential is redacted; the two are
   // different strings, so neither can hide behind a shared value.

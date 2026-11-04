@@ -1,17 +1,22 @@
 // `evidgate manifests upload` on the binary: the raw-bytes upload, the `manifest_id`/
 // `manifest_hash` output, the `manifest_invalid` details passthrough, the local size cap and
 // the input errors that exit before any request (contracts/cli.md §5/§6).
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { writeCachedToken } from '../auth/tokenCache.js';
+import { resolveConfig } from '../config.js';
 import { main } from '../main.js';
 import { resetSecrets } from '../redact.js';
 
 import { devStubFetch, devToken, mintedToken } from './devExchange.testing.js';
 import {
   capture,
+  createdManifest as ok,
   ingestUploadEnv,
   jsonResponse,
   manifestHash,
@@ -282,4 +287,91 @@ describe('manifests upload', () => {
     expect(text).toContain("evidgate: hint: run 'evidgate --help' for usage");
     expect(calls).toHaveLength(0);
   });
+
+  // 04.2.2-T1.1 / §5: a purge failure is swallowed — the server code still surfaces.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'purge_failure_swallowed',
+    async () => {
+      const env = await ingestEnv();
+      const config = resolveConfig({ env });
+      const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString();
+      await writeCachedToken(config, { token: 'egt_cached_token', expiresAt });
+      const file = await manifestFile('{"schema":"manifest.v1"}');
+      const { fetchImpl, calls } = stubFetch(() =>
+        jsonResponse(401, {
+          error: {
+            code: 'token_revoked',
+            message: 'the token was revoked',
+            request_id: 'req-1',
+            retryable: false,
+          },
+        }),
+      );
+      const { io, stderr } = capture();
+
+      // A read-only cache directory makes the purge fail (EACCES).
+      await chmod(config.cacheDir, 0o500);
+      try {
+        await expect(
+          main(['manifests', 'upload', '--file', file], env, io, { fetch: fetchImpl }),
+        ).resolves.toBe(3);
+      } finally {
+        await chmod(config.cacheDir, 0o700);
+      }
+
+      const text = stderr.join('');
+      expect(text).toContain('evidgate: error token_revoked: ');
+      expect(text).not.toContain('token_cache_error');
+      // The cached token is fresh, so the upload is the only request: its 401 is the one
+      // whose purge fails, and that failure must not replace the server's code.
+      expect(calls).toHaveLength(1);
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')('dev_zero_is_unreadable_with_zero_requests', async () => {
+    const env = await devEnv();
+    const { fetchImpl, calls } = devStubFetch(ok);
+    const { io, stderr } = capture();
+
+    await expect(
+      main(['manifests', 'upload', '--file', '/dev/zero'], env, io, { fetch: fetchImpl }),
+    ).resolves.toBe(3);
+
+    expect(stderr.join('')).toContain('evidgate: error manifest_unreadable: ');
+    expect(calls).toHaveLength(0);
+  });
+
+  // `open(path, 'r')` on a FIFO blocks until a writer appears, so the non-regular-file
+  // check never ran and the command hung. The open is `O_RDONLY | O_NONBLOCK`, which
+  // returns at once on a FIFO, so the `fstat` check refuses it (contracts/cli.md §8 step 2).
+  it.skipIf(process.platform === 'win32')(
+    'fifo_is_refused_without_hanging',
+    async () => {
+      const fifo = join(await tempDir(), 'manifest.fifo');
+      execFileSync('mkfifo', [fifo]);
+      const env = await devEnv();
+      const { fetchImpl, calls } = devStubFetch(ok);
+      const { io, stderr } = capture();
+
+      const pending = main(['manifests', 'upload', '--file', fifo], env, io, {
+        fetch: fetchImpl,
+      });
+      // Real wall-clock timer on purpose: the hang was a blocked libuv `open()` on the
+      // FIFO, not a scheduled timer, so fake timers cannot observe it. The race is a
+      // bounded liveness probe, not a sleep that masks a race.
+      const outcome = await Promise.race([
+        pending.then(
+          (code) => `settled:${code}`,
+          () => 'settled:threw',
+        ),
+        new Promise<string>((resolve) => setTimeout(() => resolve('hung'), 1500)),
+      ]);
+      await pending;
+
+      expect(outcome).toBe('settled:3');
+      expect(stderr.join('')).toContain('evidgate: error manifest_unreadable: ');
+      expect(calls).toHaveLength(0);
+    },
+    10_000,
+  );
 });
