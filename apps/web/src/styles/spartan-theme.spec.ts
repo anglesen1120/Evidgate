@@ -100,6 +100,23 @@ describe('Spartan theme contract', () => {
     expect(shadows.get('--shadow-sm')).toBe('var(--eg-elevation-1)');
   });
 
+  it('keeps token-based keyboard outlines above layered Helm utilities', () => {
+    const base = postcss.parse(source('spartan-base.css'));
+    for (const selector of ['[data-slot]:focus-visible', '.spartan-checkbox:focus-visible']) {
+      const rules: postcss.Rule[] = [];
+      base.walkRules((rule) => {
+        if (rule.selectors.includes(selector)) rules.push(rule);
+      });
+      expect(rules, selector).toHaveLength(1);
+      expect(rules[0]?.parent?.type, selector).toBe('root');
+      const focus = declarations(base.toString(), selector);
+      expect(focus.get('outline')).toBe('var(--eg-focus-width) solid var(--eg-focus)');
+      expect(focus.get('outline-offset')).toBe('var(--eg-focus-offset)');
+    }
+    expect(Number.parseFloat(rootTokens.get('--eg-focus-width') ?? '0')).toBeGreaterThan(0);
+    expect(Number.parseFloat(rootTokens.get('--eg-focus-offset') ?? '0')).toBeGreaterThan(0);
+  });
+
   it('rejects a raw value, a non-Evidgate reference and a missing token', () => {
     expect(invalidAliases(new Map([['--background', 'var(--eg-bg)']]), rootTokens)).toEqual([]);
     for (const value of ['red', 'var(--background)', 'var(--eg-not-defined)']) {

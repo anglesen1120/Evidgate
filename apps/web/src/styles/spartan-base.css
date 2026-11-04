@@ -18,11 +18,6 @@
     height: var(--eg-text-md);
   }
 
-  [data-slot]:focus-visible {
-    outline: var(--eg-focus-width) solid var(--eg-focus);
-    outline-offset: var(--eg-focus-offset);
-  }
-
   @media (pointer: coarse) {
     button[hlmBtn],
     button[hlmTabsTrigger],
@@ -35,6 +30,13 @@
       min-height: var(--eg-control-touch);
     }
   }
+}
+
+/* Keep keyboard outlines above Helm's layered outline-none utilities. */
+[data-slot]:focus-visible,
+.spartan-checkbox:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
 }
 
 @media (prefers-reduced-motion: reduce) {
