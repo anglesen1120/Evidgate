@@ -18,6 +18,8 @@ import {
   Router,
 } from '@angular/router';
 import { combineLatest, distinctUntilChanged, filter, map } from 'rxjs';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
 
 import {
   ErrorPatternComponent,
@@ -36,6 +38,8 @@ import { StepPendingComponent } from './step-pending.component';
 @Component({
   selector: 'app-onboarding-shell',
   imports: [
+    HlmButton,
+    HlmCardImports,
     CreateProjectPage,
     ConnectCiPage,
     EnableCollectionPage,
@@ -48,10 +52,12 @@ import { StepPendingComponent } from './step-pending.component';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './onboarding-shell.component.html',
-  styleUrls: ['../../../shared/ui/states/state-panel.css', './onboarding-shell.component.css'],
+  host: { class: 'block min-w-0 font-sans text-foreground' },
 })
 export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
+  protected readonly outlineVariant = 'outline';
+  protected readonly ghostVariant = 'ghost';
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);

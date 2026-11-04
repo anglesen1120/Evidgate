@@ -46,6 +46,13 @@ describe('EvidencePanelComponent', () => {
     await fixture.whenStable();
   });
 
+  it('keeps the resource card named and read-only without adding keyboard stops', () => {
+    const panel = root.querySelector('aside');
+    expect(panel?.getAttribute('data-slot')).toBe('card');
+    expect(panel?.getAttribute('aria-labelledby')).toBe(root.querySelector('h2')?.id);
+    expect(root.querySelector('button, a, [tabindex]')).toBeNull();
+  });
+
   it('reports unavailable rather than empty before resources are known', () => {
     expect(root.querySelector('[data-resource-state="unavailable"]')?.textContent).toContain(
       'Created resources are unavailable',

@@ -60,6 +60,14 @@ describe('ConnectionHealthComponent', () => {
     await fixture.whenStable();
   });
 
+  it('keeps the empty health card named, read-only and free of assertive announcements', () => {
+    const panel = root.querySelector('section');
+    expect(panel?.getAttribute('data-slot')).toBe('card');
+    expect(panel?.getAttribute('aria-labelledby')).toBe(root.querySelector('h3')?.id);
+    expect(root.textContent).toContain('No connection credentials are recorded.');
+    expect(root.querySelector('button, a, [tabindex], [role="alert"]')).toBeNull();
+  });
+
   it('renders a healthy state with the shared pill, repository and usable explanation', async () => {
     setMetadata('bindings', [BINDING]);
     await fixture.whenStable();

@@ -1,7 +1,18 @@
-<section class="wizard" data-testid="onboarding-shell" aria-labelledby="onboarding-title">
-  <header class="wizard__header">
-    <h1 #pageHeading id="onboarding-title" tabindex="-1">{{ title }}</h1>
-    <p>{{ description }}</p>
+<section
+  class="grid min-w-0 gap-(--eg-space-7)"
+  data-testid="onboarding-shell"
+  aria-labelledby="onboarding-title"
+>
+  <header class="grid gap-(--eg-space-3)">
+    <h1
+      #pageHeading
+      id="onboarding-title"
+      tabindex="-1"
+      class="m-0 font-(family-name:--eg-font-display) text-2xl font-(weight:--eg-weight-semibold) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+    >
+      {{ title }}
+    </h1>
+    <p class="m-0 text-sm text-muted-foreground">{{ description }}</p>
   </header>
 
   @switch (store.status()) {
@@ -19,7 +30,8 @@
         @default {
           <app-error-pattern />
           <button
-            class="state-panel__action"
+            hlmBtn
+            [variant]="outlineVariant"
             type="button"
             data-testid="onboarding-retry"
             (click)="reload()"
@@ -30,25 +42,39 @@
       }
     }
     @case ('ready') {
-      <section class="wizard__progress" aria-labelledby="onboarding-progress-title">
-        <h2 id="onboarding-progress-title">{{ progressLabel }}</h2>
-        <ol class="stepper" data-testid="onboarding-stepper">
+      <section
+        hlmCard
+        class="min-w-0 gap-(--eg-space-5) p-(--eg-space-6)"
+        aria-labelledby="onboarding-progress-title"
+      >
+        <h2 hlmCardTitle id="onboarding-progress-title">{{ progressLabel }}</h2>
+        <ol
+          class="m-0 grid list-none gap-(--eg-space-4) p-0 min-[768px]:grid-cols-2 min-[1280px]:grid-cols-5"
+          data-testid="onboarding-stepper"
+        >
           @for (step of steps; track step.number) {
             <li
+              class="group min-w-0"
               [attr.data-testid]="'onboarding-step-' + step.number"
               [attr.data-done]="store.done()[step.number]"
               [attr.aria-current]="store.viewStep() === step.number ? 'step' : null"
             >
               <button
                 type="button"
-                class="stepper__button"
+                hlmBtn
+                [variant]="ghostVariant"
+                class="h-full min-h-(--eg-control-touch) w-full items-start justify-start gap-(--eg-space-3) whitespace-normal border border-input p-(--eg-space-3) text-start group-aria-[current=step]:border-primary group-aria-[current=step]:bg-accent min-[768px]:flex-col"
                 [disabled]="!canSelect(step.number)"
                 (click)="store.selectStep(step.number)"
               >
-                <span class="stepper__number" aria-hidden="true">{{ step.number }}</span>
-                <span class="stepper__copy">
-                  <span class="stepper__label">{{ step.label }}</span>
-                  <span class="stepper__status">
+                <span
+                  class="grid min-h-(--eg-control-sm) min-w-(--eg-control-sm) shrink-0 place-items-center rounded-full bg-muted text-sm text-muted-foreground group-aria-[current=step]:bg-(--eg-info-bg) group-aria-[current=step]:text-(--eg-info-fg)"
+                  aria-hidden="true"
+                  >{{ step.number }}</span
+                >
+                <span class="grid min-w-0 gap-(--eg-space-2) [overflow-wrap:anywhere]">
+                  <span class="text-sm font-(weight:--eg-weight-semibold)">{{ step.label }}</span>
+                  <span class="text-xs text-muted-foreground">
                     {{ store.done()[step.number] ? completedLabel : incompleteLabel }}
                   </span>
                 </span>
@@ -58,15 +84,29 @@
         </ol>
       </section>
 
-      <div class="wizard__layout">
-        <section class="wizard__content" aria-labelledby="onboarding-step-title">
-          <h2 #stepHeading id="onboarding-step-title" tabindex="-1">
+      <div
+        class="grid min-w-0 items-start gap-(--eg-space-5) min-[1280px]:grid-cols-[minmax(0,1fr)_var(--eg-rail-width)]"
+      >
+        <section
+          hlmCard
+          class="block min-w-0 p-(--eg-space-6)"
+          aria-labelledby="onboarding-step-title"
+        >
+          <h2
+            hlmCardTitle
+            #stepHeading
+            id="onboarding-step-title"
+            tabindex="-1"
+            class="mb-(--eg-space-5)"
+          >
             {{ steps[store.viewStep() - 1]?.label }}
           </h2>
           @if (store.viewStep() === 1) {
             @if (store.project(); as project) {
-              <p class="wizard__project-created">{{ projectCreatedLabel }}</p>
-              <p class="wizard__project-name">{{ project.name }}</p>
+              <p class="mt-(--eg-space-3) text-sm text-muted-foreground">
+                {{ projectCreatedLabel }}
+              </p>
+              <p class="mt-(--eg-space-3) [overflow-wrap:anywhere]">{{ project.name }}</p>
             } @else {
               <app-onboarding-create-project [orgId]="orgId()" />
             }
@@ -75,9 +115,7 @@
               <app-onboarding-connect-ci [orgId]="orgId()" [projectId]="project.id" />
             }
           } @else if (store.viewStep() === 5) {
-            <!-- Step 5 is the enable step. Without a project it cannot be reached from
-                 the derivation, so the placeholder stays as the honest answer instead of an empty
-                 region. -->
+            <!-- Keep an explicit unavailable state when no confirmed project exists. -->
             @if (store.project(); as project) {
               <app-onboarding-enable-collection
                 [orgId]="orgId()"
@@ -90,16 +128,18 @@
           } @else {
             <app-onboarding-step-pending />
           }
-          <footer class="wizard__footer">
+          <footer class="mt-(--eg-space-7) border-t border-border pt-(--eg-space-5)">
             @if (!store.canGoNext()) {
-              <p id="onboarding-next-reason" class="wizard__reason">
+              <p id="onboarding-next-reason" class="m-0 text-sm text-muted-foreground">
                 {{ store.viewStep() === 5 ? finalReason : gatedReason }}
               </p>
             }
-            <div class="wizard__actions">
+            <div class="mt-(--eg-space-4) flex flex-wrap justify-end gap-(--eg-space-3)">
               <button
                 type="button"
-                class="state-panel__action"
+                hlmBtn
+                [variant]="outlineVariant"
+                class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
                 data-testid="onboarding-back"
                 [disabled]="!store.canGoBack()"
                 (click)="store.back()"
@@ -108,7 +148,8 @@
               </button>
               <button
                 type="button"
-                class="state-panel__action"
+                hlmBtn
+                class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
                 data-testid="onboarding-next"
                 [disabled]="!store.canGoNext()"
                 [attr.aria-describedby]="!store.canGoNext() ? 'onboarding-next-reason' : null"

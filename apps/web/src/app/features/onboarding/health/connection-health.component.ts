@@ -1,6 +1,8 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
+import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmAlertImports } from '@evidgate/ui/alert';
 
 import {
   StatusPillComponent,
@@ -14,26 +16,33 @@ import type {
 
 @Component({
   selector: 'app-connection-health',
-  imports: [DatePipe, StatusPillComponent],
+  imports: [DatePipe, StatusPillComponent, HlmCardImports, HlmAlertImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './connection-health.component.css',
   host: {
+    class: 'block min-w-0',
     'data-testid': 'connection-health',
     '[attr.data-health-state]': 'health().state',
   },
   template: `
-    <section aria-labelledby="connection-health-title">
-      <header>
-        <h3 id="connection-health-title">{{ title }}</h3>
+    <section
+      hlmCard
+      class="gap-(--eg-space-4) p-(--eg-space-6) [overflow-wrap:anywhere] [&_p]:m-0 [&_p]:text-sm [&_p]:text-muted-foreground"
+      aria-labelledby="connection-health-title"
+    >
+      <header class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
+        <h3 hlmCardTitle id="connection-health-title">{{ title }}</h3>
         <app-status-pill [tone]="tones[health().state]" [label]="stateLabels[health().state]" />
       </header>
       <p>{{ reasonLabels[health().reason] }}</p>
       @if (health().credentials.length > 0) {
-        <ul class="credentials">
+        <ul class="m-0 grid list-none gap-(--eg-space-4) p-0">
           @for (row of rows(); track row.credential.kind + ':' + row.credential.id) {
-            <li data-testid="connection-health-credential">
-              <div class="credential-heading">
-                <strong>{{ row.credential.label }}</strong>
+            <li
+              class="grid min-w-0 gap-(--eg-space-2) border-t border-border pt-(--eg-space-4) [overflow-wrap:anywhere]"
+              data-testid="connection-health-credential"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
+                <strong class="min-w-0">{{ row.credential.label }}</strong>
                 <app-status-pill
                   [tone]="credentialTone(row.credential)"
                   [label]="statusLabels[row.credential.status]"
@@ -60,7 +69,10 @@ import type {
           }
         </ul>
       }
-      <p class="last-use" data-testid="connection-health-last-use">
+      <p
+        class="grid gap-(--eg-space-2) border-t border-border pt-(--eg-space-4)"
+        data-testid="connection-health-last-use"
+      >
         <strong>{{ lastUseLabel }}</strong>
         @if (health().lastTokenUseAt; as lastUse) {
           <time [attr.datetime]="lastUse">{{
@@ -75,7 +87,7 @@ import type {
         <p>{{ lowerBoundHint }}</p>
       }
       @if (bindingsTruncated() || tokensTruncated()) {
-        <p class="caveat">{{ truncationHint }}</p>
+        <p hlmAlert role="note" class="text-sm">{{ truncationHint }}</p>
       }
     </section>
   `,
