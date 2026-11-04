@@ -53,6 +53,7 @@ public sealed class MetricCardinalityTests
         "error",
         "provider",
         "outcome",
+        "change_type",
         "trigger",
         "written",
     };
@@ -151,6 +152,7 @@ public sealed class MetricCardinalityTests
         Assert.Contains("normalized_status", observedKeys);
         Assert.Contains("provider", observedKeys);
         Assert.Contains("outcome", observedKeys);
+        Assert.Contains("change_type", observedKeys);
         Assert.Contains("trigger", observedKeys);
         Assert.Contains("written", observedKeys);
 
