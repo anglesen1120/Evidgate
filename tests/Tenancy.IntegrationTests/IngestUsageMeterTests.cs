@@ -382,10 +382,9 @@ public sealed class IngestUsageMeterTests
         // A row already on file under this batch's key but with another quantity: the batch was billed as something
         // else, which is never "already done".
         await SeedLedgerAsync(world, await SeededEntryAsync(world, batchId, quantity: 7m));
+        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
         await _fixture.ExecuteAsync(
             world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
-
-        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
         (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
 
         (await TaskStateAsync(world.Database))
@@ -404,10 +403,9 @@ public sealed class IngestUsageMeterTests
 
         // Every compared field but the project matches: the batch names a project, the stored row does not.
         await SeedLedgerAsync(world, (await SeededEntryAsync(world, batchId, quantity: 2m)) with { ProjectId = null });
+        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
         await _fixture.ExecuteAsync(
             world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
-
-        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
         (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
 
         (await TaskStateAsync(world.Database)).ShouldBe("dead_letter");
