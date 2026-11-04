@@ -701,6 +701,8 @@ internal static class RouteRequests
         Add("GET", "/v1/cases/{c}", ctx => new(HttpMethod.Get, $"/v1/cases/{ctx.CaseId}"));
         Add("PATCH", "/v1/cases/{c}", ctx => new(HttpMethod.Patch, $"/v1/cases/{ctx.CaseId}",
             new JsonObject { ["name"] = "Probe" }, IfMatch: "\"1\""));
+        Add("PATCH", "/v1/projects/{p}/cases/{c}", ctx => new(HttpMethod.Patch,
+            $"/v1/projects/{ctx.ProjectId}/cases/{ctx.CaseId}", new JsonObject { ["requirement_ref"] = "REQ-1" }));
         Add("GET", "/v1/cases/{c}/revisions", ctx => new(HttpMethod.Get, $"/v1/cases/{ctx.CaseId}/revisions"));
         Add("POST", "/v1/projects/{p}/suites", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/suites",
             new JsonObject { ["name"] = "Probe", ["slug"] = "probe" }, IdempotencyKey: Key()));
