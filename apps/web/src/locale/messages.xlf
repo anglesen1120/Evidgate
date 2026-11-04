@@ -23,6 +23,33 @@
           <context context-type="linenumber">49</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="auth.login.switch-language" datatype="html">
+        <source>Switch language between English and Vietnamese</source>
+      </trans-unit>
+      <trans-unit id="auth.login.locale-en" datatype="html">
+        <source>EN</source>
+      </trans-unit>
+      <trans-unit id="auth.login.locale-vi" datatype="html">
+        <source>VI</source>
+      </trans-unit>
+      <trans-unit id="auth.login.introduction" datatype="html">
+        <source>Return to your workspace to review evidence and make informed release decisions.</source>
+      </trans-unit>
+      <trans-unit id="auth.login.welcome" datatype="html">
+        <source>Welcome back</source>
+      </trans-unit>
+      <trans-unit id="auth.login.destination-heading" datatype="html">
+        <source>Your return destination</source>
+      </trans-unit>
+      <trans-unit id="auth.login.saved-destination" datatype="html">
+        <source>After sign-in, continue to your saved workspace destination. Access is checked before it opens.</source>
+      </trans-unit>
+      <trans-unit id="auth.login.default-destination" datatype="html">
+        <source>After sign-in, continue to your workspace.</source>
+      </trans-unit>
+      <trans-unit id="auth.login.destination-privacy" datatype="html">
+        <source>Private route details are not displayed on this sign-in page.</source>
+      </trans-unit>
       <trans-unit id="auth.login.heading" datatype="html">
         <source>Sign in to Evidgate</source>
         <context-group purpose="location">
@@ -2062,23 +2089,35 @@
       <trans-unit id="onboarding.evidence.identifier" datatype="html">
         <source>Project ID</source>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.empty" datatype="html">
-        <source>Nothing produced yet for this step.</source>
+      <trans-unit id="onboarding.evidence.no-resources" datatype="html">
+        <source>No setup resources have been created yet.</source>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-1" datatype="html">
-        <source>The created project will appear here.</source>
+      <trans-unit id="onboarding.evidence.unavailable" datatype="html">
+        <source>Created resources are unavailable.</source>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-2" datatype="html">
-        <source>Connection resources will appear here.</source>
+      <trans-unit id="onboarding.evidence.stale" datatype="html">
+        <source>Resources could not be refreshed. Showing the last confirmed resources.</source>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-3" datatype="html">
-        <source>Sample-run evidence will appear here.</source>
+      <trans-unit id="onboarding.evidence.bindings" datatype="html">
+        <source>CI bindings</source>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-4" datatype="html">
-        <source>Comparison resources will appear here.</source>
+      <trans-unit id="onboarding.evidence.tokens" datatype="html">
+        <source>Ingest tokens</source>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-5" datatype="html">
-        <source>Activation resources will appear here. Collection is not enabled by viewing this step.</source>
+      <trans-unit id="onboarding.evidence.sample" datatype="html">
+        <source>Sample run ID</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.revision" datatype="html">
+        <source>Evidence revision ID</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.activation" datatype="html">
+        <source>Activated policy revision</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.activated-at" datatype="html">
+        <source>Activated at</source>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.activation-unavailable" datatype="html">
+        <source>Activation details are unavailable with your current access.</source>
       </trans-unit>
       <trans-unit id="onboarding.create.name" datatype="html">
         <source>Project name</source>
@@ -2586,7 +2625,7 @@
       <trans-unit id="settings.secrets.ci.more" datatype="html"><source>Load more CI bindings</source></trans-unit>
       <trans-unit id="settings.secrets.ci.loading-more" datatype="html"><source>Loading more CI bindings…</source></trans-unit>
       <trans-unit id="runs.list.title" datatype="html"><source>Runs</source></trans-unit>
-      <trans-unit id="runs.list.description" datatype="html"><source>Review collection state and stored decisions. Evidence completeness is not provided by this list.</source></trans-unit>
+      <trans-unit id="runs.list.description" datatype="html"><source>Review collection state. Open a run for its stored decision and evidence completeness.</source></trans-unit>
       <trans-unit id="runs.list.filters" datatype="html"><source>Filter loaded runs</source></trans-unit>
       <trans-unit id="runs.list.filter-hint" datatype="html"><source>State, decision and run scope filter loaded runs only. Ref name filters the server list. Load more to search older runs.</source></trans-unit>
       <trans-unit id="runs.list.state-filter" datatype="html"><source>State in loaded runs</source></trans-unit>
@@ -2829,6 +2868,10 @@
       <trans-unit id="auth.dev.submitting" datatype="html"><source>Signing in and checking your session…</source></trans-unit>
       <trans-unit id="auth.dev.wrong-secret" datatype="html"><source>The dev-login secret is incorrect. Try again.</source></trans-unit>
       <trans-unit id="auth.dev.unavailable" datatype="html"><source>Dev sign-in is not enabled. Check the development server configuration.</source></trans-unit>
+      <trans-unit id="shared.decision-chip.list-unavailable" datatype="html"><source>The run list does not carry decisions. Open the run for its stored decision.</source></trans-unit>
+      <trans-unit id="runs.detail.incomplete-summary" datatype="html"><source>Collection is incomplete. Review the evidence panel for recorded missing reasons.</source></trans-unit>
+      <trans-unit id="runs.detail.view-evidence" datatype="html"><source>View evidence</source></trans-unit>
+      <trans-unit id="runs.detail.evidence-completeness" datatype="html"><source>Evidence completeness</source></trans-unit>
     </body>
   </file>
 </xliff>

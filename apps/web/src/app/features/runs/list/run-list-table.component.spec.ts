@@ -68,12 +68,29 @@ describe('RunListTableComponent', () => {
       'Decision:PASS',
       'Decision:FAIL',
       'Decision:INCONCLUSIVE',
-      'Decision:pending',
-      'Decision:pending',
+      'Decision: Decision unavailable',
+      'Decision: Decision unavailable',
     ]);
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-27T00:00:00Z');
     expect(root.querySelector('abbr')?.getAttribute('aria-label')).toBe(run(1).run_id);
+    expect(root.querySelectorAll('[data-run-decision] [data-tone="neutral"]')).toHaveLength(2);
+    expect(root.querySelector('[data-run-decision] [data-tone="pending"]')).toBeNull();
+    expect(root.querySelector('[data-run-decision] [title]')?.getAttribute('title')).toContain(
+      'Open the run for its stored decision',
+    );
+  });
+  it('supplies localized field labels for every stacked record without changing table semantics', async () => {
+    const { root } = await render([run(1)]);
+    const labels = [...root.querySelectorAll('[data-run-row] > [data-label]')].map((cell) =>
+      cell.getAttribute('data-label'),
+    );
+    const headings = [...root.querySelectorAll('[role="columnheader"]')].map((cell) =>
+      cell.textContent?.trim(),
+    );
+    expect(labels).toEqual(headings);
+    expect(labels).toHaveLength(7);
+    expect(root.querySelectorAll('[data-run-row] [role="cell"]')).toHaveLength(6);
   });
   it('escapes every Cf code point, isolates Unicode refs and only marks unverified rows', async () => {
     const special = 'release/việt\u202e\u200d<script>';

@@ -1,122 +1,159 @@
-<div class="metadata-panel">
-  <dl>
-    <div>
-      <dt>{{ copy.id }}</dt>
-      <dd data-run-id>
-        <bdi class="identifier">{{ display(run().run_id) }}</bdi>
-      </dd>
-    </div>
-    <div>
-      <dt>{{ copy.state }}</dt>
-      <dd><app-run-state-pill [state]="run().state" /></dd>
-    </div>
-    <div>
-      <dt>{{ copy.version }}</dt>
-      <dd data-run-version>{{ run().version }}</dd>
-    </div>
-    <div>
-      <dt>{{ copy.purpose }}</dt>
-      <dd data-run-purpose>
-        <bdi>{{ display(run().purpose) }}</bdi>
-      </dd>
-    </div>
-    <div>
-      <dt>{{ copy.ref }}</dt>
-      <dd data-run-ref>
-        @if (run().ref.name !== null) {
-          <bdi>{{ display(run().ref.name!) }}</bdi>
-        } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
-        }
-        @if (run().unverified_ref) {
-          <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
-        }
-      </dd>
-    </div>
-    <div>
-      <dt>{{ copy.refKind }}</dt>
-      <dd data-run-ref-kind>
-        @if (run().ref.kind !== null) {
-          <bdi>{{ display(run().ref.kind!) }}</bdi>
-        } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
-        }
-      </dd>
-    </div>
-    <div>
-      <dt>{{ copy.pr }}</dt>
-      <dd>
-        @if (run().ref.pr_number !== null) {
-          {{ run().ref.pr_number }}
-        } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
-        }
-      </dd>
-    </div>
-    <div>
-      <dt>{{ copy.head }}</dt>
-      <dd>
-        @if (run().ref.head_sha !== null) {
-          <bdi class="identifier">{{ display(run().ref.head_sha!) }}</bdi>
-        } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
-        }
-      </dd>
-    </div>
-    <div>
-      <dt>{{ copy.base }}</dt>
-      <dd>
-        @if (run().ref.base_sha !== null) {
-          <bdi class="identifier">{{ display(run().ref.base_sha!) }}</bdi>
-        } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
-        }
-      </dd>
-    </div>
-    <div>
-      <dt>{{ copy.trigger }}</dt>
-      <dd>
-        @if (run().ref.trigger_event !== null) {
-          <bdi>{{ display(run().ref.trigger_event!) }}</bdi>
-        } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
-        }
-      </dd>
-    </div>
-    <div>
-      <dt>{{ copy.fork }}</dt>
-      <dd data-run-fork>
-        @if (run().ref.is_fork !== null) {
-          {{ run().ref.is_fork ? copy.yes : copy.no }}
-        } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
-        }
-      </dd>
-    </div>
-    <div>
-      <dt>{{ copy.evidence }}</dt>
-      <dd data-run-evidence-revision>
-        @if (run().current_evidence_revision_id !== null) {
-          <bdi class="identifier">{{ display(run().current_evidence_revision_id!) }}</bdi>
-        } @else {
-          <span>{{ copy.none }}</span>
-        }
-      </dd>
-    </div>
-  </dl>
-  <app-evidence-badge [completeness]="runCompleteness()" />
-</div>
-<section class="metadata-panel" aria-labelledby="run-environment-title">
-  <h2 id="run-environment-title">{{ copy.context }}</h2>
-  <dl>
-    <div>
-      <dt>{{ copy.environment }}</dt>
-      <dd data-run-environment>
-        <bdi class="identifier">{{ display(run().environment.environment_key) }}</bdi>
-        <span data-run-environment-revision
-          >{{ copy.revision }} {{ run().environment.revision_no }}</span
-        >
-      </dd>
-    </div>
-  </dl>
-</section>
+@if (view() === 'summary') {
+  <section class="metadata-panel run-summary" aria-labelledby="run-summary-title">
+    <h2 id="run-summary-title">
+      {{ copy.id }} <bdi class="identifier">{{ display(run().run_id) }}</bdi>
+    </h2>
+    <dl>
+      <div>
+        <dt>{{ copy.state }}</dt>
+        <dd><app-run-state-pill [state]="run().state" /></dd>
+      </div>
+      <div>
+        <dt>{{ copy.ref }}</dt>
+        <dd>
+          @if (run().ref.name; as ref) {
+            <bdi>{{ display(ref) }}</bdi>
+          } @else {
+            <app-status-pill [tone]="'neutral'" label="" />
+          }
+          @if (run().unverified_ref) {
+            <app-status-pill [tone]="'warning'" [label]="copy.unverified" />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.completeness }}</dt>
+        <dd><app-evidence-badge [completeness]="runCompleteness()" /></dd>
+      </div>
+    </dl>
+    @if (run().state === 'incomplete' || runCompleteness() === 'incomplete') {
+      <p class="missing-summary" data-run-missing-summary>
+        {{ copy.incomplete }}
+        <button type="button" (click)="viewEvidence.emit()">{{ copy.viewEvidence }}</button>
+      </p>
+    }
+  </section>
+} @else {
+  <div class="metadata-panel">
+    <dl>
+      <div>
+        <dt>{{ copy.id }}</dt>
+        <dd data-run-id>
+          <bdi class="identifier">{{ display(run().run_id) }}</bdi>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.state }}</dt>
+        <dd><app-run-state-pill [state]="run().state" /></dd>
+      </div>
+      <div>
+        <dt>{{ copy.version }}</dt>
+        <dd data-run-version>{{ run().version }}</dd>
+      </div>
+      <div>
+        <dt>{{ copy.purpose }}</dt>
+        <dd data-run-purpose>
+          <bdi>{{ display(run().purpose) }}</bdi>
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.ref }}</dt>
+        <dd data-run-ref>
+          @if (run().ref.name !== null) {
+            <bdi>{{ display(run().ref.name!) }}</bdi>
+          } @else {
+            <app-status-pill [tone]="'neutral'" label="" />
+          }
+          @if (run().unverified_ref) {
+            <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.refKind }}</dt>
+        <dd data-run-ref-kind>
+          @if (run().ref.kind !== null) {
+            <bdi>{{ display(run().ref.kind!) }}</bdi>
+          } @else {
+            <app-status-pill [tone]="'neutral'" label="" />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.pr }}</dt>
+        <dd>
+          @if (run().ref.pr_number !== null) {
+            {{ run().ref.pr_number }}
+          } @else {
+            <app-status-pill [tone]="'neutral'" label="" />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.head }}</dt>
+        <dd>
+          @if (run().ref.head_sha !== null) {
+            <bdi class="identifier">{{ display(run().ref.head_sha!) }}</bdi>
+          } @else {
+            <app-status-pill [tone]="'neutral'" label="" />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.base }}</dt>
+        <dd>
+          @if (run().ref.base_sha !== null) {
+            <bdi class="identifier">{{ display(run().ref.base_sha!) }}</bdi>
+          } @else {
+            <app-status-pill [tone]="'neutral'" label="" />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.trigger }}</dt>
+        <dd>
+          @if (run().ref.trigger_event !== null) {
+            <bdi>{{ display(run().ref.trigger_event!) }}</bdi>
+          } @else {
+            <app-status-pill [tone]="'neutral'" label="" />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.fork }}</dt>
+        <dd data-run-fork>
+          @if (run().ref.is_fork !== null) {
+            {{ run().ref.is_fork ? copy.yes : copy.no }}
+          } @else {
+            <app-status-pill [tone]="'neutral'" label="" />
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>{{ copy.evidence }}</dt>
+        <dd data-run-evidence-revision>
+          @if (run().current_evidence_revision_id !== null) {
+            <bdi class="identifier">{{ display(run().current_evidence_revision_id!) }}</bdi>
+          } @else {
+            <span>{{ copy.none }}</span>
+          }
+        </dd>
+      </div>
+    </dl>
+    <app-evidence-badge [completeness]="runCompleteness()" />
+  </div>
+  <section class="metadata-panel" aria-labelledby="run-environment-title">
+    <h2 id="run-environment-title">{{ copy.context }}</h2>
+    <dl>
+      <div>
+        <dt>{{ copy.environment }}</dt>
+        <dd data-run-environment>
+          <bdi class="identifier">{{ display(run().environment.environment_key) }}</bdi>
+          <span data-run-environment-revision
+            >{{ copy.revision }} {{ run().environment.revision_no }}</span
+          >
+        </dd>
+      </div>
+    </dl>
+  </section>
+}

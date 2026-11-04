@@ -1,52 +1,6 @@
-// 09.3.1-T1 (plan 09.3.1 §2 AC9, §4 runs row, §5 run-list row, §8 "the list is a cursor page",
-// §10 T1.1; plan Notes lines 226-228; COORDINATOR-DECISION S101-C1): the Runs list's view state, as
-// a `@ngrx/signals` SignalStore — the package the web contract names (`plans/features/README.md`
-// §12 table, ADR-0008 (d)), shaped like `features/settings/audit/audit.store.ts`.
-//
-// One instance per page (`providers: [RunListStore]` on the run-list page, never `providedIn:
-// 'root'`): a project switch must not inherit another project's rows, cursor or filters.
-//
-// What shapes every method:
-//
-// 1. **`ref_name` is the only server filter.** `GET /v1/projects/{p}/runs` accepts `cursor`,
-//    `limit`, `ref_name`, `pr_number`, `head_sha`, `trigger_event` and `is_fork`; only `ref_name` is
-//    indexed, so `pr_number`/`head_sha`/`trigger_event`/`is_fork` are not exposed at all (plan Note
-//    line 228) and nothing here can send them. `state`, `decision` and the rerun/reprocess scope are
-//    URL signals applied to the rows already loaded — never a verdict computation, never a request
-//    parameter the server could filter on.
-// 2. **The list is a cursor page, never "load all"** (00 §9.1, W7). `init`/`reload` read the first
-//    page at `RUN_LIST_PAGE_LIMIT`; `loadMore` follows `next_cursor`. A repeated cursor is a
-//    contract violation and a `throw` — the same refusal as `AuditStore` and `MembersStore` — so a
-//    broken cursor surfaces as a bug instead of an endless walk.
-// 3. **Client-side filters top up, bounded** (COORDINATOR-DECISION S101-C1). A filtered view can
-//    be short while the server still names pages, so after a page lands the store keeps following
-//    pages while the filtered view is below one page — at most `RUN_LIST_AUTO_PAGES` extra pages or
-//    `RUN_LIST_AUTO_ROWS` scanned rows per trigger (a filter change or a `loadMore` click), then it
-//    stops and publishes `autoLoadCapped`. That is a bounded list, not an error: `hasMore` stays
-//    true so the page can offer its "Load more" control, and `loadedCount` lets it say "filtered
-//    from N loaded runs". `browseCapped` is the same signal under the shared name.
-// 4. **Newest call wins.** Two reads overlap easily (a project switch, a ref filter applied while
-//    the first page is still in flight). Every restart bumps a per-instance sequence, and an answer
-//    whose sequence is no longer the newest — success or failure — publishes nothing. A page that
-//    arrives after a restart is dropped without being appended.
-// 5. **The server's failure is the server's.** A typed `ApiError` reaches `loadError` (or
-//    `pagingError`) verbatim: no client-side mapping, no invented message. A rejection that is not
-//    the server's answer — an adapter cancellation, a bug — becomes the fixed
-//    `UNRESOLVED_FAILURE` of `AuditStore`: `unexpected`, `status: 0`, no text taken from the thrown
-//    value, so the screen is never left loading forever. `loadMore` re-throws it, because a paging
-//    bug is not a refusal an operator can dismiss.
-// 6. **A missing decision is `pending`, never `PASS`.** `RunSummary.decision` is optional and
-//    nullable while the evaluation is pending (00 §9.3). The store keeps it as it arrived and the
-//    `pending` filter matches `null`/absent rows; nothing here derives a verdict from state or
-//    outcome.
-// 7. **Completeness has no field on this wire.** `RunSummary` carries no completeness member, so no
-//    completeness filter is offered (there is nothing to filter on) and the page renders
-//    `EvidenceBadge`'s explicit unavailable copy in that column instead of a success tone.
-// 8. **Format characters are escaped for display only.** `ref_name` may carry Unicode Cf characters
-//    (the U+202E bidi override among them, plan Note line 226). The store keeps the served value;
-//    `escapeFormatChars` (`./ref-name-display.ts`) is what the template renders, and the row's
-//    `rerun_label` / `reprocess_label` take the same escaping through the module's
-//    `escapeFormatLabel` alias.
+// The list is a bounded cursor walk; refName is the only server-side filter exposed here.
+// Null list decisions are unavailable, not evidence of a pending evaluation.
+// Project-scoped instances discard superseded reads so scope changes cannot retain stale rows.
 
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
@@ -58,42 +12,22 @@ import { RunDataService } from '../data/run-data.service';
 /** Rows per request (the wire's default page size, 00 §9.1). */
 export const RUN_LIST_PAGE_LIMIT = 50;
 
-/**
- * How many further pages one trigger (a filter change, a `loadMore` click) may follow to fill the
- * filtered view (COORDINATOR-DECISION S101-C1). Bounded on purpose: a filter that matches nothing
- * must not walk a 100,000-row project.
- */
+/** Bound automatic top-ups so an unmatched filter cannot walk the entire project. */
 export const RUN_LIST_AUTO_PAGES = 5;
 
-/**
- * The row half of the same bound: one trigger follows pages until it has scanned this many rows,
- * whichever of the two bounds is reached first. A server that answers 200-row pages reaches this
- * before {@link RUN_LIST_AUTO_PAGES}.
- */
+/** Stop at the row bound even when the server returns larger pages. */
 export const RUN_LIST_AUTO_ROWS = 1_000;
 
 /** One run state filter value: one of the wire's seven, or `''` for "every state". */
 export type RunStateFilter = RunSummary['state'] | '';
 
-/**
- * One decision filter value: the three verdicts, `pending` for a run whose decision is absent or
- * `null` (00 §9.3), or `''` for "every decision".
- */
-export type RunDecisionFilter = 'PASS' | 'FAIL' | 'INCONCLUSIVE' | 'pending' | '';
+/** Only explicit verdicts can be filtered; a missing list decision is not pending. */
+export type RunDecisionFilter = 'PASS' | 'FAIL' | 'INCONCLUSIVE' | '';
 
-/**
- * One rerun-scope filter value. The three members are independent label tests, as the wire defines
- * them: `rerun` is a row whose `rerun_label` is set, `reprocess` a row whose `reprocess_label` is
- * set (a row may carry both, and then it matches both), and `original` is a row with no
- * `parent_run_id` and neither label. A row with a parent and no label matches none of the three —
- * its provenance is unknown, so it is not silently reported as one of them.
- */
+/** Labels are independent; original requires no parent and neither label. */
 export type RunScopeFilter = '' | 'original' | 'rerun' | 'reprocess';
 
-/**
- * The list's filter set as the store holds it. `refName` is the one member the server filters on;
- * the other three are URL signals applied client-side (header 1).
- */
+/** Only refName is sent to the server; other filters apply to loaded rows. */
 export interface RunListFilters {
   readonly state: RunStateFilter;
   readonly decision: RunDecisionFilter;
@@ -124,7 +58,7 @@ const RUN_STATES: readonly RunSummary['state'][] = [
 ];
 
 /** The decision values `init` accepts in the URL. */
-const RUN_DECISIONS: readonly RunDecisionFilter[] = ['PASS', 'FAIL', 'INCONCLUSIVE', 'pending'];
+const RUN_DECISIONS: readonly RunDecisionFilter[] = ['PASS', 'FAIL', 'INCONCLUSIVE'];
 
 /** The scope values `init` accepts in the URL. */
 const RUN_SCOPES: readonly RunScopeFilter[] = ['original', 'rerun', 'reprocess'];
@@ -255,22 +189,13 @@ function pageQuery(filters: RunListFilters): { limit: number; refName?: string }
     : { limit: RUN_LIST_PAGE_LIMIT, refName: filters.refName };
 }
 
-/**
- * One row against the client-side filters. The decision arm treats a missing member and `null`
- * alike: both are `pending`, and a `pending` filter never matches a row that carries a verdict
- * (header 6). The scope arm tests the selected label directly, because the two labels are
- * independent on the wire: a row carrying both a `rerun_label` and a `reprocess_label` matches
- * either scope, and `original` needs the absence of the parent AND of both labels.
- */
+// Scope labels are independent: one run may match both rerun and reprocess.
 function matchesFilters(filters: RunListFilters, row: RunSummary): boolean {
   if (filters.state !== '' && row.state !== filters.state) {
     return false;
   }
-  if (filters.decision !== '') {
-    const decision = row.decision ?? null;
-    if (filters.decision === 'pending' ? decision !== null : decision !== filters.decision) {
-      return false;
-    }
+  if (filters.decision !== '' && row.decision !== filters.decision) {
+    return false;
   }
   if (filters.scope !== '') {
     const hasRerun = typeof row.rerun_label === 'string' && row.rerun_label !== '';
@@ -355,20 +280,8 @@ export const RunListStore = signalStore(
     /** The cursors this list already followed since the last restart (header 2). */
     const followedCursors = new Set<string>();
 
-    /**
-     * Follows pages until the filtered view holds one page, the server stops naming a cursor, or the
-     * trigger's bound is reached (header 3). `sequence` is the restart this walk belongs to: after
-     * any `await` an older sequence publishes nothing and requests no further page.
-     *
-     * `forceFirst` is the Load more click: a user who asked for the next page gets it even when the
-     * filtered view already holds a page, so the first follow is unconditional and the top-up checks
-     * start with the second one. An automatic top-up (a fresh read or a filter change) passes
-     * `false` and stops as soon as the view is full.
-     *
-     * A repeated cursor throws — a contract violation, deliberately not converted into an
-     * `ApiError`. A typed refusal keeps the rows in hand and lands in `pagingError`; a rejection
-     * that is not the server's answer is re-thrown.
-     */
+    // Automatic top-ups stop at one page of matches; an explicit click always follows once.
+    // Superseded walks stop publishing, and repeated cursors remain contract errors.
     async function fill(projectId: string, sequence: number, forceFirst = false): Promise<void> {
       let pages = 0;
       let scanned = 0;
@@ -429,14 +342,7 @@ export const RunListStore = signalStore(
       patchState(store, { autoLoadCapped: capped });
     }
 
-    /**
-     * Reads the first page of the CURRENT filters and then tops the filtered view up (header 3).
-     * The rows are cleared as the read starts, because a row of the previous filter must never be
-     * rendered as a result of the new one.
-     *
-     * Never rejects for a server answer: a typed failure is the `error` status. A repeated cursor
-     * (a server contract violation) and a rejection that is not the server's answer still reject.
-     */
+    // Clear prior-filter rows before reading so old results never appear under new filters.
     async function restart(): Promise<void> {
       newestRead += 1;
       const sequence = newestRead;
@@ -484,14 +390,7 @@ export const RunListStore = signalStore(
     }
 
     return {
-      /**
-       * Opens the list for `projectId` with the filters the URL query carries.
-       *
-       * Unknown or invalid member values are dropped and never sent (a `state` outside the wire's
-       * seven, an empty or over-long `ref`, a control character in it). Calling it again is how the
-       * page follows a route query change: the previous rows, cursor and paging state are replaced,
-       * and a refusal a previous form submission reported is cleared — the URL says what applies.
-       */
+      // A URL change replaces paging state and clears any previous form validation failure.
       async init(
         projectId: string,
         query: Record<string, string | null | undefined> = {},
@@ -501,17 +400,7 @@ export const RunListStore = signalStore(
         await restart();
       },
 
-      /**
-       * Applies a filter patch and keeps the list consistent with it.
-       *
-       * A `refName` change is a SERVER filter: the rows and the cursor belong to the previous
-       * value, so the list restarts from the first page. The value is trimmed first, and one the
-       * contract refuses is not applied at all — it narrows nothing, is never sent, is not written
-       * by `toQuery`, and sets `refRejected` for the form to explain. Every other member is a
-       * client-side filter over the rows already loaded: the rows stay, the view re-filters
-       * immediately, and pages are followed only if the filtered view is short (header 3). With no
-       * project loaded yet (a page that has not called `init`) only the filter state changes.
-       */
+      // Server-filter changes restart paging; local filters reuse rows and top up within bounds.
       async setFilters(patch: Partial<RunListFilters>): Promise<void> {
         const next = { ...store.filters(), ...patch };
         // The form path takes the value as typed: it is trimmed, and dropped (with `refRejected`
@@ -543,12 +432,7 @@ export const RunListStore = signalStore(
         await fill(projectId, newestRead);
       },
 
-      /**
-       * Follows the next page (or pages) for the CURRENT filters, so the table keeps the rows it
-       * already shows while more are on their way. Ignored while a page is in flight, before the
-       * first read, and when the server named no cursor. Each click is a fresh trigger with its own
-       * bound (header 3), which is why a capped list can still be extended by one click at a time.
-       */
+      // Each explicit click receives a fresh bound, allowing deliberate browsing after a cap.
       async loadMore(): Promise<void> {
         const projectId = ownerProject;
         if (

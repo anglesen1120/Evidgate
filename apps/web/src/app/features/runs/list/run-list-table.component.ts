@@ -108,11 +108,21 @@ export class RunListTableComponent {
   };
 
   constructor() {
-    afterRenderEffect(() => {
-      const height = Number.parseFloat(getComputedStyle(this.probe().nativeElement).height);
-      // jsdom does not resolve CSS tokens; 132 mirrors three 44px touch rows in tokens.css.
-      this.itemSize.set(height > 0 ? height : 132);
-      this.viewport()?.checkViewportSize();
+    afterRenderEffect((onCleanup) => {
+      const probe = this.probe().nativeElement;
+      const viewport = this.viewport();
+      const measure = () => {
+        const height = Number.parseFloat(getComputedStyle(probe).height);
+        // The probe follows the responsive row size; jsdom leaves token values unresolved.
+        this.itemSize.set(height > 0 ? height : 132);
+        viewport?.checkViewportSize();
+      };
+      measure();
+      if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(measure);
+        observer.observe(probe);
+        onCleanup(() => observer.disconnect());
+      }
     });
     effect((onCleanup) => {
       const viewport = this.viewport();

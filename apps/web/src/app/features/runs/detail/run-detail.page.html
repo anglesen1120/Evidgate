@@ -9,8 +9,20 @@
   (retry)="reload()"
 >
   @if (store.run(); as run) {
-    <app-run-header [run]="run" [runCompleteness]="store.latestRevisionCompleteness()" />
-    <app-manifest-panel [summary]="store.manifest()" />
+    <app-run-header
+      [run]="run"
+      [runCompleteness]="store.latestRevisionCompleteness()"
+      (viewEvidence)="showEvidence()"
+    />
+    <app-attempts-table
+      [attempts]="store.attempts()"
+      [status]="attemptsStatus()"
+      [error]="store.attemptsError()"
+      [hasMore]="store.hasMoreAttempts()"
+      [loadingMore]="store.attemptsLoadingMore()"
+      (retry)="retryAttempts()"
+      (loadMore)="loadMoreAttempts()"
+    />
     <div class="evidence-regions">
       <app-evidence-panel
         [decision]="store.decision()"
@@ -40,14 +52,11 @@
         (viewDecisionEvidence)="viewDecisionEvidence($event)"
       />
     </div>
-    <app-attempts-table
-      [attempts]="store.attempts()"
-      [status]="attemptsStatus()"
-      [error]="store.attemptsError()"
-      [hasMore]="store.hasMoreAttempts()"
-      [loadingMore]="store.attemptsLoadingMore()"
-      (retry)="retryAttempts()"
-      (loadMore)="loadMoreAttempts()"
+    <app-run-header
+      [run]="run"
+      [runCompleteness]="store.latestRevisionCompleteness()"
+      [view]="'context'"
     />
+    <app-manifest-panel [summary]="store.manifest()" />
   }
 </app-request-state>
